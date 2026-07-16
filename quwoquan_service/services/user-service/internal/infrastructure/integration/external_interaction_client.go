@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	rtauth "quwoquan_service/runtime/auth"
 	"quwoquan_service/services/user-service/internal/application"
 )
 
@@ -16,9 +17,10 @@ type ExternalInteractionClient struct {
 	baseURL string
 	client  *http.Client
 	env     string
+	signer  *rtauth.Signer
 }
 
-func NewExternalInteractionClient(baseURL string, env string, client *http.Client) (*ExternalInteractionClient, error) {
+func NewExternalInteractionClient(baseURL string, env string, client *http.Client, signer *rtauth.Signer) (*ExternalInteractionClient, error) {
 	normalized := strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	if normalized == "" {
 		normalized = "https://integration-service.local"
@@ -29,10 +31,14 @@ func NewExternalInteractionClient(baseURL string, env string, client *http.Clien
 	if client == nil {
 		client = &http.Client{Timeout: 3 * time.Second}
 	}
+	if signer == nil {
+		return nil, fmt.Errorf("integration service principal signer is required")
+	}
 	return &ExternalInteractionClient{
 		baseURL: normalized,
 		client:  client,
 		env:     env,
+		signer:  signer,
 	}, nil
 }
 
@@ -50,6 +56,7 @@ func (c *ExternalInteractionClient) SubmitSMSOTP(ctx context.Context, req applic
 		"expiresAt":      req.ExpiresAt.UTC().Format(time.RFC3339),
 		"payload": map[string]string{
 			"challengeId":     req.ChallengeID,
+			"codeRef":         req.CodeRef,
 			"phoneHash":       req.PhoneHash,
 			"maskedRecipient": req.MaskedPhone,
 			"templateId":      "sms_otp_login",
@@ -64,6 +71,15 @@ func (c *ExternalInteractionClient) SubmitSMSOTP(ctx context.Context, req applic
 		return application.ExternalInteractionAccepted{}, err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	serviceToken, err := c.signer.Sign(rtauth.TokenSubject{
+		AccountID: "service:user-service",
+		Roles:     []string{"service"},
+		Scopes:    []string{"integration.external_interaction.submit"},
+	})
+	if err != nil {
+		return application.ExternalInteractionAccepted{}, fmt.Errorf("sign integration service principal: %w", err)
+	}
+	httpReq.Header.Set("Authorization", "Bearer "+serviceToken)
 	resp, err := c.client.Do(httpReq)
 	if err != nil {
 		return application.ExternalInteractionAccepted{}, err

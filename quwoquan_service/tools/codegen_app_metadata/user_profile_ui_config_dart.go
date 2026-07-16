@@ -31,13 +31,19 @@ func renderUserProfileUIConfigDart(uc *uiConfigFile) string {
 	b.WriteString("  final String id;\n")
 	b.WriteString("  final String labelKey;\n")
 	b.WriteString("  final String? contentType;\n")
-	b.WriteString("  final String? lifeCategory;\n\n")
+	b.WriteString("  final String? lifeCategory;\n")
+	b.WriteString("  final bool isDefault;\n")
+	b.WriteString("  /// 限制该二级 Tab 仅在指定主页模式（mine/other）可见；空表示全模式可见。\n")
+	b.WriteString("  final List<String> modes;\n\n")
 	b.WriteString("  const UserProfileSubTabConfig({\n")
 	b.WriteString("    required this.id,\n")
 	b.WriteString("    required this.labelKey,\n")
 	b.WriteString("    this.contentType,\n")
 	b.WriteString("    this.lifeCategory,\n")
+	b.WriteString("    this.isDefault = false,\n")
+	b.WriteString("    this.modes = const <String>[],\n")
 	b.WriteString("  });\n")
+	b.WriteString("  bool visibleInMode(String mode) => modes.isEmpty || modes.contains(mode);\n")
 	b.WriteString("}\n\n")
 
 	b.WriteString("class UserProfileHeaderLayoutConfig {\n")
@@ -126,11 +132,21 @@ func renderUserProfileUIConfigDart(uc *uiConfigFile) string {
 	writeSubTabList := func(name string, tabs []profileSubTabDef) {
 		b.WriteString(fmt.Sprintf("  static const List<UserProfileSubTabConfig> %s = <UserProfileSubTabConfig>[\n", name))
 		for _, tab := range sortSubTabs(tabs) {
-			b.WriteString(fmt.Sprintf("    UserProfileSubTabConfig(id: %s, labelKey: %s, contentType: %s, lifeCategory: %s),\n",
+			modesLiteral := "<String>[]"
+			if len(tab.Modes) > 0 {
+				parts := make([]string, 0, len(tab.Modes))
+				for _, mode := range tab.Modes {
+					parts = append(parts, dartStringLiteral(mode))
+				}
+				modesLiteral = "<String>[" + strings.Join(parts, ", ") + "]"
+			}
+			b.WriteString(fmt.Sprintf("    UserProfileSubTabConfig(id: %s, labelKey: %s, contentType: %s, lifeCategory: %s, isDefault: %v, modes: %s),\n",
 				dartStringLiteral(tab.ID),
 				dartStringLiteral(tab.LabelKey),
 				dartStringOrNull(tab.ContentType),
-				dartStringOrNull(tab.LifeCategory)))
+				dartStringOrNull(tab.LifeCategory),
+				tab.Default,
+				modesLiteral))
 		}
 		b.WriteString("  ];\n\n")
 	}

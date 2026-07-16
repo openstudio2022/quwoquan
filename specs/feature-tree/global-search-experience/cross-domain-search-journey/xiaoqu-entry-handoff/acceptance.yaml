@@ -50,7 +50,7 @@ gwt_acceptance:
       recorded:
       - file: quwoquan_service/services/assistant-service/internal/application/tool_coordinator__local_contract_test.go
       - file: quwoquan_service/services/assistant-service/internal/application/service__local_contract_test.go
-      - file: quwoquan_service/services/assistant-service/tests/api_integration/search_xiaoqu_contract__api_integration_test.go
+      - file: quwoquan_service/services/assistant-service/tests/local_contract/search_xiaoqu_contract__local_contract_test.go
     status: implemented
     test_evidence:
       primary:
@@ -65,17 +65,11 @@ gwt_acceptance:
         cases:
         - local_contract.global_search_experience.cross_domain_search_journey.xiaoqu_entry_handoff.gwt1_local_contract
         envs: *id001
-      supporting:
-      - layer: api_integration
-        suite: gwt1_api_integration
-        cases:
-        - api_integration.global_search_experience.cross_domain_search_journey.xiaoqu_entry_handoff.gwt1_api_integration
-        envs:
-        - beta
-        - gamma
+      supporting: []
     notes:
     - '[migrated_from_planned] quwoquan_service/services/assistant-service/tests/search_xiaoqu_contract_test.go'
     - '[migrated_from_planned] quwoquan_app/test/common/search/search_to_xiaoqu_journey_test.dart'
+    - Beta/Gamma 真实搜索 provider 集成证据尚未建立，当前仅准出本地 HTTP 合同。
 execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh

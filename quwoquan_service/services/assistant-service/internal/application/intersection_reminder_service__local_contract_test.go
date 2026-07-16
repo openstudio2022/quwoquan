@@ -21,11 +21,12 @@ func (r *fakeIntersectionInboxReader) ListNewIntersectionReasons(_ context.Conte
 }
 
 func TestTickIntersectionRemindersCreatesStructuredAppMessageForFactReason(t *testing.T) {
+	notifications := newRecordingNotificationCommandWriter()
 	service := NewAssistantService(
 		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
-		WithAppMessageStore(persistence.NewMemoryAppMessageStore()),
+		WithNotificationAppMessageCommandWriter(notifications),
 		WithIntersectionInboxReader(&fakeIntersectionInboxReader{reasons: []IntersectionReminderReason{{
 			ReasonID:    "reason_1",
 			TargetID:    "user_2",
@@ -43,15 +44,12 @@ func TestTickIntersectionRemindersCreatesStructuredAppMessageForFactReason(t *te
 	if result.ProcessedCount != 1 || len(result.CreatedMessageIDs) != 1 {
 		t.Fatalf("result=%+v", result)
 	}
-	messages, err := service.ListAppMessages(context.Background(), "user_1", 20, "")
-	if err != nil {
-		t.Fatalf("ListAppMessages error: %v", err)
+	messages := notifications.CommandsForUser("user_1")
+	if len(messages) != 1 {
+		t.Fatalf("notification commands=%d, want 1", len(messages))
 	}
-	if len(messages.Items) != 1 {
-		t.Fatalf("messages=%d, want 1", len(messages.Items))
-	}
-	message := messages.Items[0]
-	if message.Target.TargetType != "route" || message.Target.RouteID != "myIntersections" || message.Target.Query["dimension"] != "content" {
+	message := messages[0]
+	if message.Target.TargetType != "route" || message.Target.RouteID != "myIntersections" || message.Target.Dimension != "content" {
 		t.Fatalf("structured target=%+v", message.Target)
 	}
 	if strings.Contains(message.Summary, "收藏") || strings.Contains(message.Summary, "稍后看") || strings.Contains(message.Summary, "关注内容") {
@@ -72,7 +70,7 @@ func TestTickIntersectionRemindersSkipsAffinityOnlyReason(t *testing.T) {
 		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
-		WithAppMessageStore(persistence.NewMemoryAppMessageStore()),
+		WithNotificationAppMessageCommandWriter(newRecordingNotificationCommandWriter()),
 		WithIntersectionInboxReader(&fakeIntersectionInboxReader{reasons: []IntersectionReminderReason{{
 			ReasonID:    "reason_affinity",
 			TargetID:    "post_1",
@@ -97,7 +95,7 @@ func TestTickIntersectionRemindersUsesConfiguredPolicyLimit(t *testing.T) {
 		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
-		WithAppMessageStore(persistence.NewMemoryAppMessageStore()),
+		WithNotificationAppMessageCommandWriter(newRecordingNotificationCommandWriter()),
 		WithIntersectionInboxReader(reader),
 		WithIntersectionReminderPolicy(IntersectionReminderPolicy{
 			DefaultLimit: 3,

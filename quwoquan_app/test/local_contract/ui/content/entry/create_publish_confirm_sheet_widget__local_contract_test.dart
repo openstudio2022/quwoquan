@@ -2,12 +2,23 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/core/application/content/create_location_coordinator.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
 import 'package:quwoquan_app/ui/content/models/publish_settings_models.dart';
-import 'package:quwoquan_app/ui/content/entry/services/publish_settings_services.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_publish_confirm_sheet.dart';
+import '../../../../support/fake_location_gateway.dart';
+import '../../../../support/fake_location_readers.dart';
+
+CreateLocationCoordinator _locationCoordinator() {
+  final query = FakeLocationQueryAdapter();
+  return CreateLocationCoordinator(
+    nearbyReader: query,
+    searchReader: query,
+    locationGateway: FakeLocationGateway(),
+  );
+}
 
 Widget _buildApp({
   PublishSettings initialSettings = const PublishSettings(),
@@ -43,7 +54,7 @@ class _Host extends StatelessWidget {
               CupertinoPageRoute<PublishSettings>(
                 builder: (_) => CreatePublishConfirmSheet(
                   initialSettings: initialSettings,
-                  locationService: MockCreateLocationService(),
+                  locationCoordinator: _locationCoordinator(),
                   joinedCircles: const <CreateCircleOption>[],
                   recommendedCircles: const <CreateCircleOption>[],
                 ),
@@ -67,20 +78,19 @@ Future<void> _openSheet(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('仅渲染四项核心设置：谁可以看 / 所在位置 / 关联主页 / 发布到圈子', (
-    tester,
-  ) async {
+  testWidgets('仅渲染四项核心设置：谁可以看 / 所在位置 / 关联主页 / 发布到圈子', (tester) async {
     await _openSheet(tester);
 
     expect(find.text(UITextConstants.whoCanSeeLabel), findsOneWidget);
     expect(find.text(UITextConstants.locationLabel), findsOneWidget);
     expect(find.text(UITextConstants.attachHomepageTitle), findsOneWidget);
-    expect(find.text(UITextConstants.selectPublishCirclesLabel), findsOneWidget);
+    expect(
+      find.text(UITextConstants.selectPublishCirclesLabel),
+      findsOneWidget,
+    );
   });
 
-  testWidgets('已移除内容摘要/标签/关联地点和事物/小趣推荐/小趣使用/圈子内形式/内容概览', (
-    tester,
-  ) async {
+  testWidgets('已移除内容摘要/标签/关联地点和事物/小趣推荐/小趣使用/圈子内形式/内容概览', (tester) async {
     await _openSheet(tester);
 
     // 已删区块标题不得再出现，确保发布页保持整洁。
@@ -88,7 +98,10 @@ void main() {
     expect(find.text('AI 摘要'), findsNothing);
     expect(find.text('标签'), findsNothing);
     expect(find.text('关联地点和事物'), findsNothing);
-    expect(find.text(UITextConstants.publishAssistantSuggestTitle), findsNothing);
+    expect(
+      find.text(UITextConstants.publishAssistantSuggestTitle),
+      findsNothing,
+    );
     expect(find.text('小趣使用'), findsNothing);
     expect(find.text('内容概览'), findsNothing);
     expect(find.text(UITextConstants.circlePublishModeLabel), findsNothing);
@@ -104,7 +117,9 @@ void main() {
 
   testWidgets('确认发布返回初始设置，不再注入/编辑摘要', (tester) async {
     PublishSettings? confirmed;
-    await tester.pumpWidget(_buildApp(onConfirm: (settings) => confirmed = settings));
+    await tester.pumpWidget(
+      _buildApp(onConfirm: (settings) => confirmed = settings),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('打开发布确认'));
     await tester.pumpAndSettle();
@@ -118,7 +133,9 @@ void main() {
 
   testWidgets('切换可见性为私密后确认返回 isPublic=false', (tester) async {
     PublishSettings? confirmed;
-    await tester.pumpWidget(_buildApp(onConfirm: (settings) => confirmed = settings));
+    await tester.pumpWidget(
+      _buildApp(onConfirm: (settings) => confirmed = settings),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('打开发布确认'));
     await tester.pumpAndSettle();

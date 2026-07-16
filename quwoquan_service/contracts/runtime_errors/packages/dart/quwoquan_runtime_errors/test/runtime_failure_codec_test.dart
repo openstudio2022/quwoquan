@@ -5,6 +5,8 @@ void main() {
   test('RuntimeErrorResponse round trips string context attributes', () {
     const failure = RuntimeFailure(
       code: 'ASSISTANT.MIDDLEWARE.llm_timeout',
+      semanticReason: 'llm_timeout',
+      transportStatus: 504,
       origin: RuntimeFailureOrigin.remoteDependency,
       kind: RuntimeFailureKind.timeout,
       nature: RuntimeFailureNature.transient,
@@ -32,11 +34,31 @@ void main() {
     final parsed = RuntimeErrorResponse.fromJson(response.toJson());
 
     expect(parsed.failure.code, failure.code);
+    expect(parsed.failure.semanticReason, 'llm_timeout');
+    expect(parsed.failure.transportStatus, 504);
     expect(parsed.failure.location.businessObject, 'assistant_turn');
     expect(parsed.failure.context.attributes.single.value, '504');
     expect(parsed.failure.recovery.action, 'retry');
     expect(parsed.failure.recovery.afterSeconds, 5);
     expect(parsed.failure.recovery.disruptionLevel, 'snackbar');
+  });
+
+  test('response maps server reason and actual transport status', () {
+    final response = RuntimeErrorResponse.fromJson(<String, dynamic>{
+      'code': 'CONTENT.POST.post_not_found',
+      'reason': 'post_not_found',
+      'origin': 'user',
+      'kind': 'not_found',
+      'nature': 'permanent',
+      'location': <String, dynamic>{
+        'businessObject': 'post',
+        'functionModule': 'query',
+      },
+      'context': <String, dynamic>{'attributes': <Object>[]},
+    }, transportStatus: 404);
+
+    expect(response.failure.semanticReason, 'post_not_found');
+    expect(response.failure.transportStatus, 404);
   });
 
   test('missing context defaults to empty attributes', () {

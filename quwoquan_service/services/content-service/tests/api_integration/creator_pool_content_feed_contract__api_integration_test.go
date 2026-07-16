@@ -48,7 +48,7 @@ func loadCreatorContentSeed(t *testing.T) creatorContentSeed {
 	return seed
 }
 
-func publishCreatorPost(t *testing.T, post creatorContentPost) {
+func publishCreatorPost(t *testing.T, post creatorContentPost) string {
 	t.Helper()
 	var payload string
 	switch post.Carrier {
@@ -68,7 +68,12 @@ func publishCreatorPost(t *testing.T, post creatorContentPost) {
 			post.Title, post.Summary, post.Summary,
 		)
 	}
-	createPostWithAuthor(t, post.AuthorID, payload)
+	published := createPostWithAuthor(t, post.AuthorID, payload)
+	postID, _ := published["_id"].(string)
+	if strings.TrimSpace(postID) == "" {
+		t.Fatalf("published creator post %s is missing canonical _id: %+v", post.PostID, published)
+	}
+	return postID
 }
 
 // TestCreatorPoolAuthoredContentFlowsToFeed publishes the canonical creator-bound
@@ -94,6 +99,7 @@ func TestCreatorPoolAuthoredContentFlowsToFeed(t *testing.T) {
 
 	authors := map[string]bool{}
 	carriers := map[string]bool{}
+	expectedByPublishedID := map[string]creatorContentPost{}
 	for _, post := range seed.Posts {
 		if !strings.HasPrefix(post.AuthorID, "sys_") || !strings.HasSuffix(post.AuthorID, "_sub_01") {
 			t.Fatalf("post %s bound to non-canonical creator author %q", post.PostID, post.AuthorID)
@@ -103,7 +109,11 @@ func TestCreatorPoolAuthoredContentFlowsToFeed(t *testing.T) {
 		}
 		authors[post.AuthorID] = true
 		carriers[post.Carrier] = true
-		publishCreatorPost(t, post)
+		publishedID := publishCreatorPost(t, post)
+		if _, duplicate := expectedByPublishedID[publishedID]; duplicate {
+			t.Fatalf("publish pipeline returned duplicate post id %q", publishedID)
+		}
+		expectedByPublishedID[publishedID] = post
 	}
 	if len(authors) != len(seed.Posts) {
 		t.Fatalf("expected distinct authors per post, got %d authors for %d posts", len(authors), len(seed.Posts))
@@ -127,25 +137,25 @@ func TestCreatorPoolAuthoredContentFlowsToFeed(t *testing.T) {
 		t.Fatalf("decode feed: %v", err)
 	}
 
-	feedByTitle := map[string]map[string]any{}
+	feedByPostID := map[string]map[string]any{}
 	for _, item := range page.Items {
-		if title, ok := item["title"].(string); ok && title != "" {
-			feedByTitle[title] = item
+		if postID, ok := item["_id"].(string); ok && postID != "" {
+			feedByPostID[postID] = item
 		}
 	}
-	for _, post := range seed.Posts {
-		item, ok := feedByTitle[post.Title]
+	for publishedID, post := range expectedByPublishedID {
+		item, ok := feedByPostID[publishedID]
 		if !ok {
-			t.Fatalf("creator post %q (%s) not found in discovery feed", post.Title, post.Carrier)
+			t.Fatalf("creator post %s / %q (%s) not found in discovery feed", publishedID, post.Title, post.Carrier)
 		}
 		gotAuthor, _ := item["authorId"].(string)
 		if gotAuthor != post.AuthorID {
-			t.Fatalf("feed item %q author %q != bound author %q", post.Title, gotAuthor, post.AuthorID)
+			t.Fatalf("feed item %s / %q author %q != bound author %q", publishedID, post.Title, gotAuthor, post.AuthorID)
 		}
 		gotType, _ := item["type"].(string)
 		gotContentType, _ := item["contentType"].(string)
 		if gotType != post.ContentType && gotContentType != post.ContentType {
-			t.Fatalf("feed item %q type %q/%q != %q", post.Title, gotType, gotContentType, post.ContentType)
+			t.Fatalf("feed item %s / %q type %q/%q != %q", publishedID, post.Title, gotType, gotContentType, post.ContentType)
 		}
 	}
 }

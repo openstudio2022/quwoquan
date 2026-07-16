@@ -97,31 +97,14 @@ final messageHomeRowsStateProvider =
       }
     });
 
-final messageHomeRowsProvider =
-    FutureProvider.family<List<ChatListItemViewModel>, String>((
-      ref,
-      filter,
-    ) async {
-      final state = await ref.watch(
-        messageHomeRowsStateProvider(filter).future,
-      );
-      return state.items;
-    });
-
 int totalUnreadMessages(Iterable<ChatListItemViewModel> rows) {
   return rows.fold<int>(0, (total, row) => total + row.unreadCount);
 }
-
-final messageHomeUnreadBadgeCountProvider = Provider<int?>((ref) {
-  final unreadRows = ref.watch(messageHomeRowsProvider('unread'));
-  return unreadRows.maybeWhen(data: totalUnreadMessages, orElse: () => null);
-});
 
 void refreshMessageReadState(WidgetRef ref, String conversationId) {
   ref.read(chatInboxListProvider.notifier).markConversationRead(conversationId);
   for (final filter in messageHomeFilters) {
     ref.invalidate(messageHomeRowsStateProvider(filter));
-    ref.invalidate(messageHomeRowsProvider(filter));
   }
 }
 

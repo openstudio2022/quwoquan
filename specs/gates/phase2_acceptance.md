@@ -33,7 +33,7 @@
 | recommendation 投影 | `go test …/internal/infrastructure/recommendation/...` | ok（projector 改动不回退） |
 | content-service 编译 | `go build ./services/content-service/...` | exit 0 |
 | 端 behavior 契约 | `flutter test test/local_contract/cloud/behavior/contract/behavior_repository_contract__local_contract_test.dart` | All tests passed（含 `toJson 使用 tagRefs wire key`） |
-| **真实灌库端到端 T3** | `cmd/import --publish-root <P1 真实 publish> --sample-bundle alpha.json` 灌临时 `mongo:7` | `posts` 659/659 带 `sourceTaskId`；`rm_discovery_feed` 659 全 `published/public` + 659 带 `sourceTaskId`；`entities` 359/359 带 `sourceTaskId`（`conditionProfile` 0 = 旅行实体未落盘，符合边界） |
+| **真实灌库端到端 api_integration（历史证据）** | 当前命令为 `cmd/import --publish-root <canonical publish> --release-root <immutable release>` 灌临时 `mongo:7`；旧 sample-bundle 入口已退役 | 历史基线 `posts` 659/659、`rm_discovery_feed` 659、`entities` 359/359；新 release-first 契约由 importer local_contract 与临时 Mongo 复验 |
 
 ## 分层测试映射
 
@@ -52,11 +52,11 @@
 ## 与 Phase 1 并发边界
 
 - **A 组（本凭证，已完成）**：仅触碰 `quwoquan_service`（content-service / metadata）+ `quwoquan_app`（behavior + codegen 产物），与 Phase 1 的 `quwoquan_data` 文件零交叉。
-- **真实灌库验证（P1 阻塞已解除）**：P1 已产出 publish（≈ 6.6k posts / 3.3k entities，均带 `sourceTaskId`；`sample_bundles/{alpha,beta,gamma,prod}.json` 已生成）。本次用 alpha bundle（659 posts / 359 entities）灌临时 `mongo:7` 端到端跑通：三集合 + `sourceTaskId` 100% 贯通、`rm_discovery_feed` 全部 `published/public` 可召回、`tagRefs`（Topic/Entity/Format 路径）完整。
+- **真实灌库验证（历史 P1 证据）**：旧 alpha 选择集曾以 659 posts / 359 entities 灌临时 `mongo:7` 跑通；当前选择集已归一为 immutable release `desired_state.json`，旧 sample bundle 文件与 importer 参数均已删除。
 - **B 组残留项（随 P1 收口，均不阻断 Phase 3 准入）**：
   - `entities` 当前 `conditionProfile` 为 0（旅行实体未落 region/season；校园实体不需要）。`cmd/import.conditionProfileIndex` join 代码 + 单测/集成测试已就绪，待 P1 旅行实体落 `conditionProfile` 后地域/季节召回自然生效。
   - manifest 补 `authorId`/`coverUrl`/`publishedAt`：用于 feed 卡封面/作者展示与 `author_recall`；缺省**不阻断 `tag`/`hot`/`explore` 召回**。
-  - `sampler.py`/`build_publish_lookup_indexes.py` 的 `sourceTaskId` 由 P1 维护（manifest 已带 `sourceTaskId`，loader 直接读取，bundle 内无需冗余）。
+  - `sourceTaskId` 属 object manifest 事实；release desired state/index 不复制该字段，loader 从自治对象读取。
 
 ## Phase 3 准入对照判定
 

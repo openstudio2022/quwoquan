@@ -61,7 +61,7 @@ entries:
       - path: specs/feature-tree/global-search-experience/acceptance.yaml
         sections:
           - C4
-      - path: specs/feature-tree/global-search-experience/plan.yaml
+      - path: specs/feature-tree/global-search-experience/content.execution.planning.yaml
         sections:
           - P4
           - P5
@@ -79,7 +79,7 @@ entries:
       - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/acceptance.yaml
         sections:
           - J2
-      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/plan.yaml
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/content.execution.planning.yaml
         sections:
           - P1
           - P4
@@ -97,7 +97,7 @@ entries:
           - A1
           - A2
           - S1
-      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/local-chat-search-contract/plan.yaml
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/local-chat-search-contract/content.execution.planning.yaml
         sections:
           - slices
       - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/spec.md
@@ -114,7 +114,7 @@ entries:
           - J1
           - J2
           - J3
-      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/plan.yaml
+      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/content.execution.planning.yaml
         sections:
           - slices
       - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract/spec.md
@@ -212,7 +212,7 @@ entries:
       - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/social-relationship-search-contract/acceptance.yaml
         sections:
           - deleted
-      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/social-relationship-search-contract/plan.yaml
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/social-relationship-search-contract/content.execution.planning.yaml
         sections:
           - deleted
       - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/social-relationship-search-contract/tasks.md
@@ -257,7 +257,7 @@ entries:
       - path: specs/feature-tree/global-search-experience/acceptance.yaml
         sections:
           - C4
-      - path: specs/feature-tree/global-search-experience/plan.yaml
+      - path: specs/feature-tree/global-search-experience/content.execution.planning.yaml
         sections:
           - P4
       - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/spec.md
@@ -274,7 +274,7 @@ entries:
       - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/acceptance.yaml
         sections:
           - J1
-      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/plan.yaml
+      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/content.execution.planning.yaml
         sections:
           - P1
       - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract/spec.md
@@ -293,7 +293,7 @@ entries:
       - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract/acceptance.yaml
         sections:
           - A1
-      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract/plan.yaml
+      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract/content.execution.planning.yaml
         sections:
           - P1
       - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-object-taxonomy-and-provider-registry/spec.md
@@ -307,7 +307,7 @@ entries:
       - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-object-taxonomy-and-provider-registry/acceptance.yaml
         sections:
           - A1
-      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-object-taxonomy-and-provider-registry/plan.yaml
+      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-object-taxonomy-and-provider-registry/content.execution.planning.yaml
         sections:
           - P1
     impact:

@@ -49,45 +49,38 @@ void main() {
     );
 
     test(
-      'circle visible content keeps scoped app deep link and public landing URL',
+      'retired circle visibility is rejected instead of generating a scoped link',
       () {
-        final template = ContentShareTemplateBuilder.build(
-          surfaceView: ContentSurfaceViewMapper.fromDto(
-            ArticlePostDto(
-              id: 'work_circle_link',
-              type: 'article',
-              identity: 'work',
-              assistantUsePolicy: 'inherit',
-              authorId: 'user_circle_link',
-              displayName: '洛白',
-              avatarUrl: '',
-              authorRoleLabel: '',
-              authorIdentityTags: const <String>[],
-              authorVerified: false,
-              title: '圈内可见作品',
-              body: '站外分享只给受控落地页，App deep link 保留 scope。',
-              summary: '站外分享只给受控落地页',
-              coverUrl: '',
-              articleTemplate: 'gentle',
-              articleFontPreset: 'clean',
-              likeCount: 0,
-              commentCount: 0,
-              shareCount: 0,
-              createdAt: DateTime(2026, 6, 2),
+        expect(
+          () => ContentShareTemplateBuilder.build(
+            surfaceView: ContentSurfaceViewMapper.fromDto(
+              ArticlePostDto(
+                id: 'work_circle_link',
+                type: 'article',
+                identity: 'work',
+                assistantUsePolicy: 'inherit',
+                authorId: 'user_circle_link',
+                displayName: '洛白',
+                avatarUrl: '',
+                authorRoleLabel: '',
+                authorIdentityTags: const <String>[],
+                authorVerified: false,
+                title: '已退役可见性',
+                body: '该值必须失败关闭。',
+                summary: '该值必须失败关闭',
+                coverUrl: '',
+                articleTemplate: 'gentle',
+                articleFontPreset: 'clean',
+                likeCount: 0,
+                commentCount: 0,
+                shareCount: 0,
+                createdAt: DateTime(2026, 6, 2),
+              ),
             ),
+            enableIdentityTemplate: true,
+            visibility: 'circle-visible',
           ),
-          enableIdentityTemplate: true,
-          visibility: 'circle-visible',
-        );
-
-        expect(
-          template.landingUrl,
-          startsWith(AppPublicContentLinks.postWebUrl('work_circle_link')),
-        );
-        expect(template.landingUrl, contains('share_id='));
-        expect(
-          template.deeplink,
-          'quwoquan://content/post/work_circle_link?scope=circle',
+          throwsArgumentError,
         );
       },
     );

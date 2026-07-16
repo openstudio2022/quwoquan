@@ -23,7 +23,8 @@ description: 基础设施 · 实施开发（按规划执行基础设施改进）
 - 不能为极致体验无限制增加成本（CDN 预热全量 vs 热内容）
 
 ### 存储无关
-- 所有存储操作必须通过抽象层（`MediaStore`/`Repository[T]`/`BulkImportStore`）
+- 所有存储操作必须通过对象专属端口（`MediaStore` / `PostAggregateStore` /
+  `ReportCaseStore` / `BulkImportStore`），禁止通用 `Repository[T]`
 - 新增适配器必须实现完整 interface，含健康检查和指标上报
 - 切换存储只需修改配置，不改业务代码
 

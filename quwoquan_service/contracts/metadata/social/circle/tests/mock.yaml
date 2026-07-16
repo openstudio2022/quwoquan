@@ -14,7 +14,9 @@ scenarios:
 
   - name: error_code_mapping
     cases:
-      - http_status: 409, code: CIRCLE.USER.already_member
+      - http_status: 409
+        code: CIRCLE.USER.already_member
         expected_dart_const: alreadyMember
-      - http_status: 403, code: CIRCLE.USER.join_approval_required
+      - http_status: 403
+        code: CIRCLE.USER.join_approval_required
         expected_dart_const: joinApprovalRequired

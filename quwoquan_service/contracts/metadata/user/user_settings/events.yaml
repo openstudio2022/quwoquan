@@ -1,0 +1,9 @@
+version: 1
+aggregate: UserSettings
+events:
+  - name: UserSettingsChanged
+    producer: user-service
+    consumers: [projection-workers]
+    channel: event_store
+    payload_entity: UserSetting
+    payload_fields: [userId]

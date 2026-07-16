@@ -14,7 +14,7 @@ import (
 	"time"
 
 	rterr "quwoquan_service/runtime/errors"
-	"quwoquan_service/runtime/repository"
+	messaging "quwoquan_service/runtime/messaging"
 	rtsearch "quwoquan_service/runtime/search"
 	"quwoquan_service/runtime/search/es"
 	"quwoquan_service/services/circle-service/internal/application"
@@ -116,7 +116,7 @@ func publicCircle() model.Circle {
 	}
 }
 
-func newProjectorWithFakeES(t *testing.T, f *fakeES, reader CircleReader) *Projector {
+func newProjectorWithFakeES(t *testing.T, f *fakeES, reader application.CircleReader) *Projector {
 	t.Helper()
 	srv := httptest.NewServer(f.handler())
 	t.Cleanup(srv.Close)
@@ -133,7 +133,7 @@ func TestProjectorUpsertsOnCreate(t *testing.T) {
 	f := newFakeES()
 	proj := newProjectorWithFakeES(t, f, fakeReader{byID: map[string]model.Circle{circle.ID: circle}})
 
-	if err := proj.Publish(context.Background(), repository.DomainEvent{
+	if err := proj.Publish(context.Background(), messaging.DomainEvent{
 		Type: "CircleCreated", AggregateType: "Circle", AggregateID: circle.ID,
 	}); err != nil {
 		t.Fatalf("Publish err=%v", err)
@@ -156,7 +156,7 @@ func TestProjectorSharesProjectionWithNativeSurface(t *testing.T) {
 	circle := publicCircle()
 	f := newFakeES()
 	proj := newProjectorWithFakeES(t, f, fakeReader{byID: map[string]model.Circle{circle.ID: circle}})
-	if err := proj.Publish(context.Background(), repository.DomainEvent{
+	if err := proj.Publish(context.Background(), messaging.DomainEvent{
 		Type: "CircleUpdated", AggregateID: circle.ID,
 	}); err != nil {
 		t.Fatalf("Publish err=%v", err)
@@ -177,7 +177,7 @@ func TestProjectorDeletesOnArchive(t *testing.T) {
 	f := newFakeES()
 	proj := newProjectorWithFakeES(t, f, fakeReader{})
 
-	if err := proj.Publish(context.Background(), repository.DomainEvent{
+	if err := proj.Publish(context.Background(), messaging.DomainEvent{
 		Type: "CircleArchived", AggregateID: "circle_1",
 	}); err != nil {
 		t.Fatalf("Publish err=%v", err)
@@ -193,7 +193,7 @@ func TestProjectorDeletesWhenNoLongerEligible(t *testing.T) {
 	f := newFakeES()
 	proj := newProjectorWithFakeES(t, f, fakeReader{byID: map[string]model.Circle{circle.ID: circle}})
 
-	if err := proj.Publish(context.Background(), repository.DomainEvent{
+	if err := proj.Publish(context.Background(), messaging.DomainEvent{
 		Type: "CircleUpdated", AggregateID: circle.ID,
 	}); err != nil {
 		t.Fatalf("Publish err=%v", err)
@@ -210,7 +210,7 @@ func TestProjectorDeletesWhenCircleMissing(t *testing.T) {
 	f := newFakeES()
 	proj := newProjectorWithFakeES(t, f, fakeReader{}) // store returns not-found
 
-	if err := proj.Publish(context.Background(), repository.DomainEvent{
+	if err := proj.Publish(context.Background(), messaging.DomainEvent{
 		Type: "CircleCreated", AggregateID: "circle_gone",
 	}); err != nil {
 		t.Fatalf("Publish err=%v", err)
@@ -226,7 +226,7 @@ func TestProjectorIgnoresCounterOnlyEvents(t *testing.T) {
 	proj := newProjectorWithFakeES(t, f, fakeReader{byID: map[string]model.Circle{circle.ID: circle}})
 
 	for _, et := range []string{"CircleMemberJoined", "CircleMemberLeft", "CircleBehaviorReported", "SomethingElse"} {
-		if err := proj.Publish(context.Background(), repository.DomainEvent{Type: et, AggregateID: circle.ID}); err != nil {
+		if err := proj.Publish(context.Background(), messaging.DomainEvent{Type: et, AggregateID: circle.ID}); err != nil {
 			t.Fatalf("Publish(%s) err=%v", et, err)
 		}
 	}
@@ -243,7 +243,7 @@ func TestProjectorESOutageDoesNotBlock(t *testing.T) {
 	f.writeFailStatus = http.StatusServiceUnavailable
 	proj := newProjectorWithFakeES(t, f, fakeReader{byID: map[string]model.Circle{circle.ID: circle}})
 
-	if err := proj.Publish(context.Background(), repository.DomainEvent{
+	if err := proj.Publish(context.Background(), messaging.DomainEvent{
 		Type: "CircleCreated", AggregateID: circle.ID,
 	}); err != nil {
 		t.Fatalf("ES outage must not propagate to the write path, got err=%v", err)
@@ -252,11 +252,11 @@ func TestProjectorESOutageDoesNotBlock(t *testing.T) {
 
 func TestProjectorNilIndexerIsNoOp(t *testing.T) {
 	var proj *Projector // nil receiver
-	if err := proj.Publish(context.Background(), repository.DomainEvent{Type: "CircleCreated", AggregateID: "x"}); err != nil {
+	if err := proj.Publish(context.Background(), messaging.DomainEvent{Type: "CircleCreated", AggregateID: "x"}); err != nil {
 		t.Fatalf("nil projector must be a no-op, got %v", err)
 	}
 	proj = NewProjector(nil, fakeReader{}) // nil indexer
-	if err := proj.Publish(context.Background(), repository.DomainEvent{Type: "CircleCreated", AggregateID: "x"}); err != nil {
+	if err := proj.Publish(context.Background(), messaging.DomainEvent{Type: "CircleCreated", AggregateID: "x"}); err != nil {
 		t.Fatalf("nil indexer must be a no-op, got %v", err)
 	}
 }

@@ -1,7 +1,7 @@
 version: 1
 domain: user
-entity_name: InviteRecord
-aggregate_root: false
+entity: InviteRecord
+object_kind: aggregate_root
 
 description: |
   邀请归因记录。归属于发起邀请的 SubAccount（子账号）。
@@ -22,9 +22,13 @@ business_rules:
     description: 邀请有效期 7 天（expireAt = generatedAt + 7d）
   - id: owner_internal_only
     description: inviterOwnerAccountId 仅内部审计，API 层不暴露
+lifecycle:
+  states: [generated, accepted, expired, revoked]
+  optimistic_concurrency: version
+  idempotency: command_receipt
 
 ddd_layer_mapping:
   domain_model: internal/domain/user/model
-  repository: internal/domain/user/repository
+  ports: internal/domain/user/invite_record/ports
   application: internal/application/user
   adapter_rest: internal/adapter/rest/user

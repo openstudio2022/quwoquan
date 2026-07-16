@@ -54,6 +54,32 @@ class HiveRuntime {
     }
   }
 
+  static Future<Box<String>?> openEncryptedStringBoxOrNull(
+    String boxName, {
+    required List<int> encryptionKey,
+  }) async {
+    if (encryptionKey.length != 32) {
+      throw ArgumentError.value(
+        encryptionKey.length,
+        'encryptionKey',
+        'Hive AES key must contain 32 bytes',
+      );
+    }
+    if (Hive.isBoxOpen(boxName)) {
+      return Hive.box<String>(boxName);
+    }
+    final ready = await ensureInitialized();
+    if (!ready) return null;
+    try {
+      return await Hive.openBox<String>(
+        boxName,
+        encryptionCipher: HiveAesCipher(encryptionKey),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   static Future<bool> _initialize() async {
     try {
       await Hive.initFlutter();

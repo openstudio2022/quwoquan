@@ -2,19 +2,20 @@ version: 1
 read_model: CircleFeed
 
 description: |
-  圈子动态流 ReadModel。聚合圈子内 Post + 成员行为。
+  圈子动态流 ReadModel。仅由已发布 Post 与 CirclePostPlacement 投影，
+  成员关系不直接改变 Feed，禁止从 Post.circleIds 或成员行为反推放置关系。
 
 storage_backend: mongodb
 collection: rm_circle_feed
 
 source_entities:
   - Post
-  - Circle
-  - CircleMember
+  - CirclePostPlacement
 
 source_events:
-  - PostCreated
-  - CircleMemberJoined
+  - PostPublished
+  - CirclePostPlaced
+  - CirclePostPlacementRemoved
 
 consumers:
   - app (circle feed)

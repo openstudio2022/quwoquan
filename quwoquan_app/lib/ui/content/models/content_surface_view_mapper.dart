@@ -9,8 +9,9 @@ import 'package:quwoquan_app/ui/content/services/post_view_projection.dart';
 /// 统一展示模型的唯一映射器：`PostBaseDto (+ wire)` → [ContentSurfaceView]。
 ///
 /// 标题/正文/封面/长文模板字段复用 metadata 对齐的 [PostReadPresentation]，
-/// 媒体/作者/统计复用 `PostBaseDto` 的契约派生 getter，确保四 surface 同源、
-/// 字段口径与 metadata 投影一致。禁止对 DTO 子类做 `is/as/whereType`。
+/// 媒体 URL 在此展示边界解析，作者/统计复用 `PostBaseDto` 的契约派生 getter，
+/// 确保四 surface 同源、字段口径与 metadata 投影一致。禁止对 DTO 子类做
+/// `is/as/whereType`。
 class ContentSurfaceViewMapper {
   const ContentSurfaceViewMapper._();
 
@@ -25,21 +26,29 @@ class ContentSurfaceViewMapper {
     final body = read.body.trim().isEmpty ? null : read.body.trim();
 
     final projectedCoverUrl = resolveContentMediaUrl(read.coverUrl);
+    final mediaCoverUrl = resolveContentMediaUrl(dto.mediaCoverUrl);
+    final mediaThumbnailUrl = resolveContentMediaUrl(dto.mediaThumbnailUrl);
+    final mediaVideoUrl = resolveContentVideoUrl(dto.mediaVideoUrl);
+    final mediaVideoCoverUrl = mediaThumbnailUrl.isNotEmpty
+        ? mediaThumbnailUrl
+        : mediaCoverUrl;
     final coverUrl = dto.isVideoLike
-        ? dto.mediaVideoCoverUrl
-        : (projectedCoverUrl.isEmpty ? dto.mediaCoverUrl : projectedCoverUrl);
+        ? mediaVideoCoverUrl
+        : (projectedCoverUrl.isEmpty ? mediaCoverUrl : projectedCoverUrl);
     final cover = coverUrl.isEmpty
         ? null
         : ContentCoverRef(url: coverUrl, aspectRatio: dto.aspectRatio);
 
     final images = dto.mediaImageUrls
+        .map(resolveContentMediaUrl)
+        .where((url) => url.isNotEmpty)
         .map((url) => ContentImageRef(url: url, aspectRatio: dto.aspectRatio))
         .toList(growable: false);
 
-    final ContentVideoRef? video = dto.hasVideo
+    final ContentVideoRef? video = mediaVideoUrl.isNotEmpty
         ? ContentVideoRef(
-            url: dto.mediaVideoUrl,
-            thumbnailUrl: dto.mediaVideoCoverUrl,
+            url: mediaVideoUrl,
+            thumbnailUrl: mediaVideoCoverUrl,
             durationMs: dto.durationMs,
             aspectRatio: dto.aspectRatio,
           )

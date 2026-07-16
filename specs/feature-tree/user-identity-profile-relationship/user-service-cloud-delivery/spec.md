@@ -23,8 +23,10 @@
 
 基于 `contracts/metadata/user/` 已有 metadata，实现完整的 Go 服务：
 
-- **Domain 层**：UserProfile 聚合根（含 Persona、UserSetting、UserWork、UserLifeItem 子实体）、FollowEdge 实体、BlockEdge 实体；Repository 接口；领域事件（UserProfileUpdated、PersonaCreated、UserFollowed、UserUnfollowed、UserBlocked、UserUnblocked）
-- **Application 层**：ProfileService（档案读写、统计）、FollowService（关注/取关/列表/关系查询）、BlockService（屏蔽/取消/检查）、PersonaService（CRUD + Activate 事务）
+- **Domain 层**：按 D0 对象裁决实现 UserAccount、Persona、Relationship 等聚合/
+  对象模型、对象专属 AggregateStore 端口与 typed 领域事件。
+- **Application 层**：按对象拆分 command/query Facade；command 绑定 aggregate owner，
+  query 绑定 named Reader/Slice 且不加载 aggregate。
 - **Adapter 层**：HTTP Handler，对齐 `service.yaml` 定义的 20+ 路由
 - **Infrastructure 层**：PostgreSQL（user_profiles、personas、user_settings、block_edges、user_works、user_life_items）、MongoDB（follow_edges）、Redis 缓存（profile 600s、setting 600s、block_set 3600s）
 
@@ -51,12 +53,12 @@
 - CI 流水线增加构建/测试/镜像步骤
 - 配置版本快照 + 灰度阶段（50% auto → 100% 审批）
 
-### F5: 四层测试覆盖
+### F5: 三层测试覆盖
 
-- **L1（端侧契约）**：补充 codegen DTO 字段契约、UserErrorCode 枚举契约
-- **L2（云侧契约）**：Profile CRUD、Follow、Block、Persona、Cache、Error -- 使用 embedded-postgres + testcontainers-mongodb + miniredis
-- **L3（端云集成）**：Remote 实际调通测试（user-service 运行态）
-- **L4（用户旅程）**：关注/取关旅程、编辑资料旅程、分身管理旅程、屏蔽旅程
+- **local_contract**：metadata/codegen、对象边界、Facade/Ports、端侧 DTO 与错误码。
+- **api_integration**：Profile、Follow、Block、Persona、Cache、Error 使用真实
+  PostgreSQL/MongoDB/Redis 与运行态 HTTP。
+- **user_acceptance**：关注/取关、编辑资料、分身管理与屏蔽旅程。
 
 ## 不做什么（Out of Scope）
 
@@ -83,7 +85,10 @@
 ### 技术约束
 
 - **DDD 分层**：domain ← application ← adapters ← infrastructure（单向依赖）；domain 层禁止 import 数据库驱动
-- **runtime 统一**：必须使用 `runtime/errors.AppError`、`runtime/repository.Repository[T]`、`runtime/config.RuntimeConfigProvider`
+- **runtime 统一**：必须使用 `RuntimeFailure/RuntimeRecoveryPolicy`、
+  `runtime/config.RuntimeConfigProvider` 与统一 observability；数据访问只经
+  UserAccount/Persona/Relationship 对象专属 Store/Reader port，禁止跨对象泛型
+  CRUD、动态查询和运行时对象注册
 - **codegen 保护**：`DO NOT EDIT` 文件禁止手改，`make gate` 通过 hash 比对守护
 - **metadata-first**：任何新实体/字段/事件必须先更新 YAML → verify → codegen → 业务逻辑
 - **错误码 metadata 约束**：errors.yaml 定义 code/l10n_key/user_message，禁止硬编码
@@ -100,10 +105,10 @@
 
 | 维度 | content-service 做法 | 借鉴 | 适用边界 |
 |------|---------------------|------|---------|
-| DDD 四层 | `domain/{entity}/model` + `repository` + `event` → `application/` → `adapters/http/` → `infrastructure/persistence/` | **完全借鉴** | user-service 按相同模式组织 |
+| DDD 四层 | object model/ports → object command/query Facade → transport → infrastructure adapters | **完全借鉴** | user-service 按相同模式组织 |
 | main.go 启动流 | resolveRuntimeIdentity → loadRuntimeConfig → validate → 依赖注入 → HTTP handler → ListenAndServe | **完全借鉴** | user-service 增加 PostgreSQL/MongoDB/Redis 初始化 |
-| 双存储实现 | 内存 PostStore（本地/测试） + MongoDB MongoPostStore（契约测试/生产） | **借鉴** | user-service 对 PostgreSQL/MongoDB 各自提供内存和真实实现 |
-| 契约测试 | 按 CRUD/Feed/Behavior/Comment/Reaction/Error/Compat 维度拆分 | **借鉴** | user-service 按 Profile/Follow/Block/Persona/Cache/Error 拆分 |
+| 双存储实现 | 对象专属 Mongo/PG adapter + 显式 composition root | **借鉴** | test adapter 仅用于 local contract，beta/gamma/prod 使用真实实现 |
+| 三层测试 | local_contract + api_integration + user_acceptance | **借鉴** | user-service 按 Profile/Follow/Block/Persona/Cache/Error 拆分 |
 | 配置分层 | default → env → version 三层合并 | **完全借鉴** | user-service 同模式 |
 | Kustomize 部署 | seed-box base + overlays(dev/integration/prod) | **完全借鉴** | user-service 作为 sidecar 加入 seed-box Pod |
 

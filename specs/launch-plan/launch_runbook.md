@@ -1,7 +1,7 @@
 # 上线运行手册（Launch Runbook）— 三周双引擎发布
 
 > 真相源：本文件冻结发布日的 Go/No-Go 判定、降级预案、官方内容排产、用户创作激活规则、客服与值班安排。
-> 关联：`specs/launch-plan/release_scope_whitelist.md`、`[.cursor/plans/三周双引擎发布_ddae7322.plan.md]`、`specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md`。
+> 关联：`specs/launch-plan/release_scope_whitelist.md`、`[.cursor/plans/三周双引擎发布_ddae7322.content.execution.planning.md]`、`specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md`。
 
 ## 1. Go/No-Go 判定清单（W2 周日 + W3 周日各执行一次）
 

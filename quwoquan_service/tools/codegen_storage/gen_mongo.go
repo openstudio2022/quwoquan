@@ -9,7 +9,7 @@ import (
 	"sort"
 	"text/template"
 
-	"quwoquan_service/runtime/codegen"
+	"quwoquan_service/internal/metadata/codegen"
 )
 
 type mongoStoreData struct {
@@ -35,7 +35,7 @@ type mongoKeyData struct {
 }
 
 func generateMongoStore(ctx *genContext, collName string, coll CollectionDef) error {
-	dir := filepath.Join(ctx.outputDir(), "infrastructure", "persistence")
+	dir := filepath.Join(ctx.outputDir(), ctx.source.infrastructurePath("persistence"))
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
 	}
@@ -50,7 +50,7 @@ func generateMongoStore(ctx *genContext, collName string, coll CollectionDef) er
 		ShortName:   shortName,
 		BaseName:    "mongo" + shortName + "StoreBase",
 		DomainPkg:   ctx.domainPkg(),
-		ModelImport: ctx.modulePath() + "/domain/" + ctx.domainPkg() + "/model",
+		ModelImport: ctx.source.modelImport(ctx.modulePath()),
 	}
 
 	for _, idx := range coll.Indexes {

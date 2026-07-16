@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"strings"
+	"time"
 )
 
 // 社交登录提供方标识（与 metadata CredentialType 对齐的子集）。
@@ -45,15 +46,22 @@ func (i ExternalIdentity) hasIdentity() bool {
 }
 
 // ExternalAuthProviderClient 抽象社交登录票据置换。App 只上传短期授权码，
-// 服务端用它换取稳定身份与公开资料。按环境注入：
-//   - alpha/beta：mock 实现（离线确定性身份，发布安全、非测试代码）；
-//   - gamma：sandbox 包装（命中测试账号 allowlist 返回沙箱身份，否则委托真实实现）；
-//   - prod：真实 HTTP 实现（调用厂商 OAuth 接口）。
+// 服务端用它换取稳定身份与公开资料。运行时只装配真实 HTTP provider；
+// provider 凭据不完整时必须返回结构化 unavailable，不能生成测试身份。
 type ExternalAuthProviderClient interface {
 	// Exchange 用短期授权码换取稳定外部身份。
 	Exchange(ctx context.Context, provider, authCode, platform, appVersion string) (ExternalIdentity, error)
 	// Supports 报告该实现是否支持指定提供方（用于能力探测与降级）。
 	Supports(provider string) bool
+}
+
+// ExternalAuthAuthorizationIssuer 为需要服务端签名的原生授权 SDK 生成短期请求。
+// 当前仅支付宝 authV2 需要该能力；私钥永远不进入客户端。
+type ExternalAuthAuthorizationIssuer interface {
+	CreateAuthorizationRequest(
+		ctx context.Context,
+		provider string,
+	) (authorizationPayload string, expiresAt time.Time, err error)
 }
 
 // NormalizeSocialProvider 归一化提供方标识，返回是否受支持。

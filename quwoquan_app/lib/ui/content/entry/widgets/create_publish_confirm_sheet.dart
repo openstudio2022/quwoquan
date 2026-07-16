@@ -3,13 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/navigation/page_access_internal_routes.dart';
+import 'package:quwoquan_app/core/application/content/create_location_coordinator.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/ui/content/models/publish_settings_models.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/publish_circle_select_page.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/publish_location_selector_page.dart';
-import 'package:quwoquan_app/ui/content/entry/services/publish_settings_services.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_publish_confirm_sheet_widgets.dart';
 import 'package:quwoquan_app/ui/entity/models/homepage_route_models.dart';
 
@@ -22,13 +22,13 @@ class CreatePublishConfirmSheet extends ConsumerStatefulWidget {
   const CreatePublishConfirmSheet({
     super.key,
     required this.initialSettings,
-    required this.locationService,
+    required this.locationCoordinator,
     required this.joinedCircles,
     required this.recommendedCircles,
   });
 
   final PublishSettings initialSettings;
-  final CreateLocationService locationService;
+  final CreateLocationCoordinator locationCoordinator;
   final List<CreateCircleOption> joinedCircles;
   final List<CreateCircleOption> recommendedCircles;
 
@@ -197,7 +197,7 @@ class _CreatePublishConfirmSheetState
           name: PageAccessInternalRoutes.createPageLocationPicker,
         ),
         builder: (_) => PublishLocationSelectorPage(
-          locationService: widget.locationService,
+          locationCoordinator: widget.locationCoordinator,
         ),
       ),
     );

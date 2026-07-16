@@ -155,47 +155,6 @@ void main() {
       expect(messages, isList);
     });
 
-    test('sendMessage 返回 messageId 和 seq', () async {
-      final conversations = await repo.listConversations();
-      final convId = conversations.first.id;
-      final result = await repo.sendMessage(
-        conversationId: convId,
-        type: 'text',
-        content: '测试消息',
-        clientMsgId: 'test-client-uuid-001',
-      );
-      expect(result.id, isNotEmpty);
-      expect(result.seq, greaterThan(0));
-      expect(result.timestamp, isNotNull);
-    });
-
-    test('sendMessage card 更新最近聊天预览和时间戳', () async {
-      final conversations = await repo.listConversations();
-      final convId = conversations.first.id;
-      final before = conversations.first.lastMessageTime;
-
-      await repo.sendMessage(
-        conversationId: convId,
-        type: 'card',
-        content: 'fixture_user_current 的二维码',
-        cardPayload: const <String, dynamic>{
-          'forwardKind': 'profileQr',
-          'title': 'fixture_user_current 的二维码',
-        },
-        clientMsgId: 'test-forward-card-001',
-      );
-
-      final after = (await repo.listConversations()).firstWhere(
-        (conversation) => conversation.id == convId,
-      );
-      expect(after.lastMessageType, 'card');
-      expect(after.lastMessagePreview, 'fixture_user_current 的二维码');
-      expect(after.lastMessageTime, isNotNull);
-      if (before != null) {
-        expect(after.lastMessageTime!.isAfter(before), isTrue);
-      }
-    });
-
     test('recallMessage 不抛出异常', () async {
       await expectLater(
         repo.recallMessage(conversationId: 'conv_001', messageId: 'msg_001'),

@@ -1,15 +1,21 @@
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/core/platform/native_bridge.dart';
+import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/core/platform/platform_providers.dart';
 import 'package:quwoquan_app/ui/share/forward_share_models.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:uuid/uuid.dart';
 
 enum ForwardExternalShareTarget { wechatFriend, wechatMoments }
 
 enum ForwardExternalShareDelivery {
-  targetedWechat,
+  wechatAccepted,
+  wechatCompleted,
   systemShareFallback,
+  cancelled,
   unavailable,
 }
 
@@ -17,10 +23,12 @@ class ForwardExternalShareResult {
   const ForwardExternalShareResult({
     required this.target,
     required this.delivery,
+    this.requestId = '',
   });
 
   final ForwardExternalShareTarget target;
   final ForwardExternalShareDelivery delivery;
+  final String requestId;
 }
 
 abstract interface class ForwardSystemShareGateway {
@@ -28,7 +36,7 @@ abstract interface class ForwardSystemShareGateway {
 }
 
 abstract interface class ForwardWechatShareGateway {
-  Future<bool> share({
+  Future<NativeShareResult> share({
     required AppForwardPayload payload,
     required ForwardExternalShareTarget target,
   });
@@ -67,19 +75,34 @@ class NativeBridgeForwardWechatShareGateway
   final NativeShareBridge bridge;
 
   @override
-  Future<bool> share({
+  Future<NativeShareResult> share({
     required AppForwardPayload payload,
     required ForwardExternalShareTarget target,
   }) async {
-    final text = payload.shareText.trim().isNotEmpty
-        ? payload.shareText.trim()
-        : payload.messagePreview;
-    final result = await bridge.shareText(
-      target: _nativeTargetFor(target),
-      text: text,
-      subject: payload.title,
+    final referralId = payload.extra['shareId']?.toString().trim() ?? '';
+    final landingUrl = _httpsLandingUrl(payload);
+    return bridge.shareWebpageCard(
+      NativeShareWebpageCard(
+        requestId: const Uuid().v4(),
+        target: _nativeTargetFor(target),
+        title: payload.title,
+        description: payload.subtitle,
+        webpageUrl: landingUrl,
+        referralDigest: referralId.isEmpty
+            ? ''
+            : sha256.convert(utf8.encode(referralId)).toString(),
+      ),
     );
-    return result.isDelivered;
+  }
+
+  String _httpsLandingUrl(AppForwardPayload payload) {
+    for (final candidate in <String>[payload.landingUrl, payload.deeplink]) {
+      final uri = Uri.tryParse(candidate.trim());
+      if (uri != null && uri.scheme == 'https' && uri.host.isNotEmpty) {
+        return uri.toString();
+      }
+    }
+    return payload.landingUrl.trim();
   }
 
   NativeShareTarget _nativeTargetFor(ForwardExternalShareTarget target) {
@@ -110,15 +133,32 @@ class SharePlusForwardExternalShareService
   }) async {
     final wechatGateway = wechatShareGateway;
     if (capabilities.wechatTargetedShare && wechatGateway != null) {
-      final delivered = await wechatGateway.share(
+      final nativeResult = await wechatGateway.share(
         payload: payload,
         target: target,
       );
-      if (delivered) {
-        return ForwardExternalShareResult(
-          target: target,
-          delivery: ForwardExternalShareDelivery.targetedWechat,
-        );
+      switch (nativeResult.outcome) {
+        case NativeShareOutcome.accepted:
+          return ForwardExternalShareResult(
+            target: target,
+            delivery: ForwardExternalShareDelivery.wechatAccepted,
+            requestId: nativeResult.requestId,
+          );
+        case NativeShareOutcome.completed:
+          return ForwardExternalShareResult(
+            target: target,
+            delivery: ForwardExternalShareDelivery.wechatCompleted,
+            requestId: nativeResult.requestId,
+          );
+        case NativeShareOutcome.cancelled:
+          return ForwardExternalShareResult(
+            target: target,
+            delivery: ForwardExternalShareDelivery.cancelled,
+            requestId: nativeResult.requestId,
+          );
+        case NativeShareOutcome.unavailable:
+        case NativeShareOutcome.failed:
+          break;
       }
     }
     if (!capabilities.systemShareSheet) {

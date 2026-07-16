@@ -7,24 +7,28 @@ import 'package:quwoquan_app/ui/welcome/welcome_appearance.dart';
 
 /// 欢迎页与应用图标共用的花瓣标识。
 ///
+/// 花瓣 `bloomAmount` 语义为「绽放度」：0 = 历史花苞态、1 = 全开。
+/// 花瓣始终保持原始宽高比，只做以花心为原点的同比例二维缩放；尺寸、透明度
+/// 与花瓣中心半径同步增长，形成从花心向外舒展的逐瓣开放感。
+///
 /// 后续花瓣路径、花蕊、渐变或 bloom 调整都应在这里完成，再重新生成图标，
 /// 避免欢迎页与 launcher icon 产生两套视觉。
 class WelcomeFlowerMark extends StatelessWidget {
   const WelcomeFlowerMark({
     super.key,
     required this.appearance,
-    this.petalProgresses = const [1, 1, 1, 1, 1, 1, 1, 1],
+    this.petalBloomAmounts = const [1, 1, 1, 1, 1, 1, 1, 1],
   });
 
   final WelcomeAppearance appearance;
-  final List<double> petalProgresses;
+  final List<double> petalBloomAmounts;
 
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
       painter: WelcomeFlowerMarkPainter(
         appearance: appearance,
-        petalProgresses: petalProgresses,
+        petalBloomAmounts: petalBloomAmounts,
       ),
       size: const Size.square(AppSpacing.welcomeGraphicDiameter),
     );
@@ -34,11 +38,12 @@ class WelcomeFlowerMark extends StatelessWidget {
 class WelcomeFlowerMarkPainter extends CustomPainter {
   const WelcomeFlowerMarkPainter({
     required this.appearance,
-    required this.petalProgresses,
+    required this.petalBloomAmounts,
     this.graphicExtent = AppSpacing.welcomeGraphicDiameter,
   });
 
   static const int petalCount = 8;
+  static const double historicalBudVisualFactor = 0.561024;
   static const double flowerVisualDiameter =
       (AppSpacing.welcomePetalRadialOffset +
           AppSpacing.welcomePetalHeight / 2) *
@@ -55,8 +60,28 @@ class WelcomeFlowerMarkPainter extends CustomPainter {
   ];
 
   final WelcomeAppearance appearance;
-  final List<double> petalProgresses;
+  final List<double> petalBloomAmounts;
   final double graphicExtent;
+
+  static double visualFactorFor(double bloomAmount) {
+    return historicalBudVisualFactor +
+        (1 - historicalBudVisualFactor) * bloomAmount.clamp(0.0, 1.0);
+  }
+
+  static WelcomePetalGeometry geometryFor({
+    required double bloomAmount,
+    double scale = 1,
+  }) {
+    final visualFactor = visualFactorFor(bloomAmount);
+    return WelcomePetalGeometry(
+      visualFactor: visualFactor,
+      size: Size(
+        AppSpacing.welcomePetalWidth * scale * visualFactor,
+        AppSpacing.welcomePetalHeight * scale * visualFactor,
+      ),
+      centerRadius: AppSpacing.welcomePetalRadialOffset * scale * visualFactor,
+    );
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -66,7 +91,7 @@ class WelcomeFlowerMarkPainter extends CustomPainter {
       center: Offset(size.width / 2, size.height / 2),
       scale: scale,
       appearance: appearance,
-      petalProgresses: petalProgresses,
+      petalBloomAmounts: petalBloomAmounts,
     );
   }
 
@@ -75,17 +100,16 @@ class WelcomeFlowerMarkPainter extends CustomPainter {
     required Offset center,
     required double scale,
     required WelcomeAppearance appearance,
-    required List<double> petalProgresses,
+    required List<double> petalBloomAmounts,
   }) {
     _paintBloomPlate(canvas, center, scale, appearance);
     for (var i = 0; i < petalCount; i++) {
-      final rawProgress = i < petalProgresses.length ? petalProgresses[i] : 1.0;
-      final progress = Curves.easeOutCubic.transform(
-        rawProgress.clamp(0.0, 1.0),
-      );
-      if (progress <= 0) continue;
-      _paintPetal(canvas, center, scale, appearance, i, progress);
+      final bloomAmount = i < petalBloomAmounts.length
+          ? petalBloomAmounts[i].clamp(0.0, 1.0)
+          : 1.0;
+      _paintPetal(canvas, center, scale, appearance, i, bloomAmount);
     }
+    _paintStamen(canvas, center, scale, appearance);
   }
 
   static Path petalPath(Size size) {
@@ -122,7 +146,7 @@ class WelcomeFlowerMarkPainter extends CustomPainter {
     double scale,
     WelcomeAppearance appearance,
     int index,
-    double progress,
+    double bloomAmount,
   ) {
     final petalSize = Size(
       AppSpacing.welcomePetalWidth * scale,
@@ -130,13 +154,16 @@ class WelcomeFlowerMarkPainter extends CustomPainter {
     );
     final path = petalPath(petalSize);
     final petalRect = Offset.zero & petalSize;
-    final opacity = progress * appearance.petalOpacity;
+    final visualFactor = visualFactorFor(bloomAmount);
+    final opacity = visualFactor * appearance.petalOpacity;
     final rotation = petalRotations[index] * math.pi / 180;
 
     canvas.save();
     canvas.translate(center.dx, center.dy);
     canvas.rotate(rotation);
-    canvas.scale(progress);
+    if (visualFactor < 1) {
+      canvas.scale(visualFactor);
+    }
     canvas.translate(
       -petalSize.width / 2,
       -AppSpacing.welcomePetalRadialOffset * scale - petalSize.height / 2,
@@ -147,7 +174,7 @@ class WelcomeFlowerMarkPainter extends CustomPainter {
     canvas.drawPath(
       path,
       Paint()
-        ..color = _withMultipliedAlpha(appearance.petalShadow, progress)
+        ..color = _withMultipliedAlpha(appearance.petalShadow, visualFactor)
         ..maskFilter = MaskFilter.blur(BlurStyle.normal, AppSpacing.xs * scale),
     );
     canvas.restore();
@@ -206,6 +233,29 @@ class WelcomeFlowerMarkPainter extends CustomPainter {
     canvas.restore();
   }
 
+  static void _paintStamen(
+    Canvas canvas,
+    Offset center,
+    double scale,
+    WelcomeAppearance appearance,
+  ) {
+    final haloRadius = AppSpacing.welcomeStamenHaloDiameter * scale / 2;
+    final haloRect = Rect.fromCircle(center: center, radius: haloRadius);
+    canvas.drawCircle(
+      center,
+      haloRadius,
+      Paint()..shader = appearance.stamenHaloGradient.createShader(haloRect),
+    );
+
+    final coreRadius = AppSpacing.welcomeStamenCoreDiameter * scale / 2;
+    final coreRect = Rect.fromCircle(center: center, radius: coreRadius);
+    canvas.drawCircle(
+      center,
+      coreRadius,
+      Paint()..shader = appearance.stamenCoreGradient.createShader(coreRect),
+    );
+  }
+
   static Color _withMultipliedAlpha(Color color, double multiplier) {
     return color.withValues(alpha: color.a * multiplier);
   }
@@ -214,11 +264,11 @@ class WelcomeFlowerMarkPainter extends CustomPainter {
   bool shouldRepaint(covariant WelcomeFlowerMarkPainter oldDelegate) {
     if (oldDelegate.appearance != appearance ||
         oldDelegate.graphicExtent != graphicExtent ||
-        oldDelegate.petalProgresses.length != petalProgresses.length) {
+        oldDelegate.petalBloomAmounts.length != petalBloomAmounts.length) {
       return true;
     }
-    for (var i = 0; i < petalProgresses.length; i++) {
-      if (oldDelegate.petalProgresses[i] != petalProgresses[i]) {
+    for (var i = 0; i < petalBloomAmounts.length; i++) {
+      if (oldDelegate.petalBloomAmounts[i] != petalBloomAmounts[i]) {
         return true;
       }
     }
@@ -263,7 +313,7 @@ class WelcomeAppIconPainter extends CustomPainter {
       center: Offset(size.width / 2, size.height / 2),
       scale: scale,
       appearance: appearance,
-      petalProgresses: const [1, 1, 1, 1, 1, 1, 1, 1],
+      petalBloomAmounts: const [1, 1, 1, 1, 1, 1, 1, 1],
     );
   }
 
@@ -272,4 +322,17 @@ class WelcomeAppIconPainter extends CustomPainter {
     return oldDelegate.appearance != appearance ||
         oldDelegate.flowerDiameterRatio != flowerDiameterRatio;
   }
+}
+
+@immutable
+class WelcomePetalGeometry {
+  const WelcomePetalGeometry({
+    required this.visualFactor,
+    required this.size,
+    required this.centerRadius,
+  });
+
+  final double visualFactor;
+  final Size size;
+  final double centerRadius;
 }

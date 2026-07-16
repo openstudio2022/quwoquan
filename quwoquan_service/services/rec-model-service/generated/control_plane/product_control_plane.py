@@ -72,6 +72,51 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
     },
     {
       "deployment_profile": "audit_heavy",
+      "label": "举报运营队列",
+      "object_kind": "operational_queue",
+      "object_type": "report_queue",
+      "operations": [
+        {
+          "method": "GET",
+          "operation": "ListReports",
+          "path": "/v1/content/reports",
+          "scopes": [
+            "ops.case.read"
+          ]
+        },
+        {
+          "method": "GET",
+          "operation": "GetReport",
+          "path": "/v1/content/reports/{reportId}",
+          "scopes": [
+            "ops.case.read"
+          ]
+        },
+        {
+          "method": "POST",
+          "operation": "BeginReportReview",
+          "path": "/v1/content/reports/{reportId}/review",
+          "scopes": [
+            "ops.case.write"
+          ]
+        },
+        {
+          "approval_mode": "single",
+          "danger_level": "high",
+          "method": "PATCH",
+          "operation": "ResolveReport",
+          "path": "/v1/content/reports/{reportId}",
+          "scopes": [
+            "ops.case.write"
+          ]
+        }
+      ],
+      "risk_level": "high",
+      "source_entity": "Report",
+      "view_model": "ReportQueue"
+    },
+    {
+      "deployment_profile": "audit_heavy",
       "label": "账号恢复案例",
       "object_kind": "workflow_case",
       "object_type": "recovery_case",
@@ -143,6 +188,7 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
       "object_type": "experiment",
       "operations": [
         {
+          "contract_operation_id": "ops.experiment.ListExperiments",
           "method": "GET",
           "operation": "ListExperiments",
           "path": "/v1/control-plane/product/experiments",
@@ -152,6 +198,7 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
         },
         {
           "approval_mode": "single",
+          "contract_operation_id": "ops.experiment.UpdateExperimentRollout",
           "danger_level": "high",
           "method": "POST",
           "operation": "UpdateExperimentRollout",
@@ -162,7 +209,7 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
         }
       ],
       "risk_level": "medium",
-      "source_entity": "ExperimentBucket",
+      "source_entity": "Experiment",
       "view_model": "Experiment"
     },
     {

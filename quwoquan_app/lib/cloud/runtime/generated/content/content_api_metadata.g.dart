@@ -8,33 +8,41 @@ class ContentApiMetadata {
 
   static const String domain = 'content';
   static const List<String> apiPrefixes = <String>[
+    '/internal/v1',
     '/v1/config',
     '/v1/content',
   ];
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
     'AbortMediaUpload': '/v1/content/media/uploads/{sessionId}:abort',
+    'BeginReportReview': '/v1/content/reports/{reportId}/review',
     'BindMediaAssetsToComment': '/v1/content/comments/{commentId}/media:bind',
     'BindMediaAssetsToPost': '/v1/content/posts/{postId}/media:bind',
     'CompleteMediaUpload': '/v1/content/media/uploads/{sessionId}:complete',
     'CreateComment': '/v1/content/posts/{postId}/comments',
+    'CreateOutboundShare': '/v1/content/posts/{postId}/outbound-shares',
     'CreatePost': '/v1/content/posts',
     'CreateReport': '/v1/content/reports',
+    'DecidePostModeration': '/internal/v1/content/posts/{postId}:moderate',
     'DeleteComment': '/v1/content/posts/{postId}/comments/{commentId}',
     'DeletePost': '/v1/content/posts/{postId}',
     'GenerateArticleSummary': '/v1/content/articles/summary:generate',
     'GetAppConfig': '/v1/config/app',
     'GetAuthorImpact': '/v1/content/sub-accounts/{subAccountId}/author-impact',
-    'GetCommentCountsDelta': '/v1/content/posts/{postId}/comments/counts-delta',
+    'GetContentReactionState': '/v1/content/posts/{postId}/reactions',
     'GetCounters': '/v1/content/posts/{postId}/counters',
     'GetFeed': '/v1/content/feed',
     'GetHelperRead': '/v1/content/helper-read/{contentId}',
     'GetMediaAsset': '/v1/content/media/{mediaId}',
+    'GetMediaAssetDeliveryReference': '/internal/v1/content/media/{mediaId}:delivery-reference',
+    'GetMediaAssetReference': '/internal/v1/content/media/{mediaId}:reference',
+    'GetMediaUploadSession': '/v1/content/media/uploads/{sessionId}',
     'GetMyFootprint': '/v1/content/footprint',
     'GetMyIntersectionSummary': '/v1/content/intersections/summary',
     'GetObjectIntersections': '/v1/content/intersections/object',
+    'GetOwnedMediaAsset': '/internal/v1/content/media/{mediaId}',
     'GetPost': '/v1/content/posts/{postId}',
-    'GetReactionState': '/v1/content/posts/{postId}/reactions',
+    'GetPostPublicationEligibility': '/internal/v1/content/posts/{postId}/publication-eligibility',
     'GetReport': '/v1/content/reports/{reportId}',
     'InitMediaUpload': '/v1/content/media/uploads:init',
     'LikePost': '/v1/content/posts/{postId}/like',
@@ -46,52 +54,60 @@ class ContentApiMetadata {
     'ListMyIntersections': '/v1/content/intersections',
     'ListProfileInteractionActivitiesReceived': '/v1/content/sub-accounts/{subAccountId}/interactions/received',
     'ListProfileInteractionActivitiesSent': '/v1/content/sub-accounts/{subAccountId}/interactions/sent',
+    'ListReports': '/v1/content/reports',
     'ListUserPosts': '/v1/content/sub-accounts/{subAccountId}/posts',
-    'MarkIntersectionsVisited': '/v1/content/intersections/visit',
+    'OpenPostModerationCase': '/internal/v1/content/posts/{postId}:open-moderation-case',
     'PinComment': '/v1/content/posts/{postId}/comments/{commentId}/pin',
     'PromotePostToWork': '/v1/content/posts/{postId}:promoteToWork',
     'PublishPost': '/v1/content/posts/{postId}/publish',
-    'QuoteToCircle': '/v1/content/posts/{postId}/quote',
     'ReactToComment': '/v1/content/comments/{commentId}/reaction',
+    'RecordMediaProcessingResult': '/internal/v1/content/media/{mediaId}:processing-result',
     'ReportBehaviors': '/v1/content/behaviors',
-    'RepostToCircle': '/v1/content/posts/{postId}/repost',
     'RequestOriginalImageAccess': '/v1/content/media/{mediaId}/original:access',
     'ResolveReport': '/v1/content/reports/{reportId}',
+    'ReviewPostModerationCase': '/internal/v1/content/posts/{postId}:review-moderation',
     'SearchPosts': '/v1/content/posts/search',
     'SelectAutoVideoCover': '/v1/content/media/{mediaId}/cover:auto',
     'SelectManualVideoCover': '/v1/content/media/{mediaId}/cover:manual',
-    'SharePost': '/v1/content/posts/{postId}/share',
+    'SupersedePostModerationCase': '/internal/v1/content/posts/{postId}:supersede-moderation',
     'UnlikePost': '/v1/content/posts/{postId}/like',
     'UnpinComment': '/v1/content/posts/{postId}/comments/{commentId}/pin',
-    'UnsharePost': '/v1/content/posts/{postId}/share',
+    'UpdateMediaAssetAccessPolicy': '/internal/v1/content/media/{mediaId}:access-policy',
     'UpdatePost': '/v1/content/posts/{postId}',
-    'UpdatePostCircles': '/v1/content/posts/{postId}/circles',
     'UpdatePostSettings': '/v1/content/posts/{postId}/settings',
+    'UpdateProfileInteractionState': '/v1/content/sub-accounts/{subAccountId}/interactions/{interactionId}/state',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
     'AbortMediaUpload': 'POST',
+    'BeginReportReview': 'POST',
     'BindMediaAssetsToComment': 'POST',
     'BindMediaAssetsToPost': 'POST',
     'CompleteMediaUpload': 'POST',
     'CreateComment': 'POST',
+    'CreateOutboundShare': 'POST',
     'CreatePost': 'POST',
     'CreateReport': 'POST',
+    'DecidePostModeration': 'POST',
     'DeleteComment': 'DELETE',
     'DeletePost': 'DELETE',
     'GenerateArticleSummary': 'POST',
     'GetAppConfig': 'GET',
     'GetAuthorImpact': 'GET',
-    'GetCommentCountsDelta': 'GET',
+    'GetContentReactionState': 'GET',
     'GetCounters': 'GET',
     'GetFeed': 'GET',
     'GetHelperRead': 'GET',
     'GetMediaAsset': 'GET',
+    'GetMediaAssetDeliveryReference': 'GET',
+    'GetMediaAssetReference': 'GET',
+    'GetMediaUploadSession': 'GET',
     'GetMyFootprint': 'GET',
     'GetMyIntersectionSummary': 'GET',
     'GetObjectIntersections': 'GET',
+    'GetOwnedMediaAsset': 'GET',
     'GetPost': 'GET',
-    'GetReactionState': 'GET',
+    'GetPostPublicationEligibility': 'GET',
     'GetReport': 'GET',
     'InitMediaUpload': 'POST',
     'LikePost': 'POST',
@@ -103,132 +119,167 @@ class ContentApiMetadata {
     'ListMyIntersections': 'GET',
     'ListProfileInteractionActivitiesReceived': 'GET',
     'ListProfileInteractionActivitiesSent': 'GET',
+    'ListReports': 'GET',
     'ListUserPosts': 'GET',
-    'MarkIntersectionsVisited': 'POST',
+    'OpenPostModerationCase': 'POST',
     'PinComment': 'POST',
     'PromotePostToWork': 'POST',
     'PublishPost': 'POST',
-    'QuoteToCircle': 'POST',
     'ReactToComment': 'POST',
+    'RecordMediaProcessingResult': 'POST',
     'ReportBehaviors': 'POST',
-    'RepostToCircle': 'POST',
     'RequestOriginalImageAccess': 'POST',
     'ResolveReport': 'PATCH',
+    'ReviewPostModerationCase': 'POST',
     'SearchPosts': 'GET',
     'SelectAutoVideoCover': 'POST',
     'SelectManualVideoCover': 'POST',
-    'SharePost': 'POST',
+    'SupersedePostModerationCase': 'POST',
     'UnlikePost': 'DELETE',
     'UnpinComment': 'DELETE',
-    'UnsharePost': 'DELETE',
+    'UpdateMediaAssetAccessPolicy': 'PATCH',
     'UpdatePost': 'PATCH',
-    'UpdatePostCircles': 'PATCH',
     'UpdatePostSettings': 'PATCH',
+    'UpdateProfileInteractionState': 'PATCH',
   };
 
   /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
   static const Map<String, String> operationToAuthMode = <String, String>{
     'AbortMediaUpload': 'required',
+    'BeginReportReview': 'required',
     'BindMediaAssetsToComment': 'required',
     'BindMediaAssetsToPost': 'required',
     'CompleteMediaUpload': 'required',
     'CreateComment': 'required',
+    'CreateOutboundShare': 'optional',
     'CreatePost': 'required',
     'CreateReport': 'required',
+    'DecidePostModeration': 'required',
     'DeleteComment': 'required',
     'DeletePost': 'required',
     'GenerateArticleSummary': 'required',
     'GetAppConfig': 'public',
     'GetAuthorImpact': 'required',
-    'GetCommentCountsDelta': 'public',
-    'GetCounters': 'public',
+    'GetContentReactionState': 'optional',
+    'GetCounters': 'required',
     'GetFeed': 'optional',
-    'GetHelperRead': 'public',
-    'GetMediaAsset': 'public',
+    'GetHelperRead': 'required',
+    'GetMediaAsset': 'optional',
+    'GetMediaAssetDeliveryReference': 'required',
+    'GetMediaAssetReference': 'required',
+    'GetMediaUploadSession': 'required',
     'GetMyFootprint': 'required',
     'GetMyIntersectionSummary': 'required',
     'GetObjectIntersections': 'required',
-    'GetPost': 'public',
-    'GetReactionState': 'optional',
-    'GetReport': 'public',
+    'GetOwnedMediaAsset': 'required',
+    'GetPost': 'optional',
+    'GetPostPublicationEligibility': 'required',
+    'GetReport': 'required',
     'InitMediaUpload': 'required',
     'LikePost': 'optional',
     'ListAuthorImpactEvidence': 'required',
-    'ListCommentReplies': 'public',
-    'ListComments': 'public',
+    'ListCommentReplies': 'optional',
+    'ListComments': 'optional',
     'ListCommentsByAuthor': 'required',
     'ListCommentsForPostAuthor': 'required',
     'ListMyIntersections': 'required',
     'ListProfileInteractionActivitiesReceived': 'required',
     'ListProfileInteractionActivitiesSent': 'required',
-    'ListUserPosts': 'public',
-    'MarkIntersectionsVisited': 'required',
+    'ListReports': 'required',
+    'ListUserPosts': 'optional',
+    'OpenPostModerationCase': 'required',
     'PinComment': 'required',
     'PromotePostToWork': 'required',
     'PublishPost': 'required',
-    'QuoteToCircle': 'required',
     'ReactToComment': 'required',
-    'ReportBehaviors': 'public',
-    'RepostToCircle': 'required',
+    'RecordMediaProcessingResult': 'required',
+    'ReportBehaviors': 'required',
     'RequestOriginalImageAccess': 'required',
-    'ResolveReport': 'public',
+    'ResolveReport': 'required',
+    'ReviewPostModerationCase': 'required',
     'SearchPosts': 'required',
     'SelectAutoVideoCover': 'required',
     'SelectManualVideoCover': 'required',
-    'SharePost': 'optional',
+    'SupersedePostModerationCase': 'required',
     'UnlikePost': 'optional',
     'UnpinComment': 'required',
-    'UnsharePost': 'optional',
+    'UpdateMediaAssetAccessPolicy': 'required',
     'UpdatePost': 'required',
-    'UpdatePostCircles': 'required',
     'UpdatePostSettings': 'required',
+    'UpdateProfileInteractionState': 'required',
   };
 
-  /// 响应读模型：operation -> 端侧 DTO 类名（service.yaml response_body 真相源，仅 object/page 形态）。
+  /// 已绑定端侧强类型的响应读模型：operation -> Dart 契约类名。
   static const Map<String, String> operationToResponseModel = <String, String>{
     'GetAuthorImpact': 'AuthorImpactSummary',
+    'GetMyFootprint': 'ContentFootprintEntry',
     'GetMyIntersectionSummary': 'IntersectionInboxSummary',
     'GetObjectIntersections': 'IntersectionReason',
+    'GetPost': 'ContentPostDetailSlice',
     'ListAuthorImpactEvidence': 'AuthorImpactEvidencePage',
+    'ListCommentReplies': 'ContentCommentReplyPageSlice',
+    'ListComments': 'ContentCommentPageSlice',
+    'ListCommentsByAuthor': 'ContentAuthorCommentPageSlice',
+    'ListCommentsForPostAuthor': 'ContentReceivedCommentPageSlice',
     'ListMyIntersections': 'IntersectionReason',
     'ListProfileInteractionActivitiesReceived': 'ProfileInteractionActivityWireDto',
     'ListProfileInteractionActivitiesSent': 'ProfileInteractionActivityWireDto',
+    'ListUserPosts': 'ContentPostProjection',
+    'SearchPosts': 'PostSearchItemView',
   };
 
   /// 响应体形态：object 单对象 | page 分页列表（items） | ack 仅状态确认（无读模型）。
   static const Map<String, String> operationToResponseKind = <String, String>{
+    'BeginReportReview': 'object',
     'GetAuthorImpact': 'object',
+    'GetMyFootprint': 'page',
     'GetMyIntersectionSummary': 'object',
     'GetObjectIntersections': 'page',
+    'GetPost': 'object',
+    'GetReport': 'object',
     'ListAuthorImpactEvidence': 'object',
+    'ListCommentReplies': 'page',
+    'ListComments': 'page',
+    'ListCommentsByAuthor': 'page',
+    'ListCommentsForPostAuthor': 'page',
     'ListMyIntersections': 'page',
     'ListProfileInteractionActivitiesReceived': 'page',
     'ListProfileInteractionActivitiesSent': 'page',
-    'MarkIntersectionsVisited': 'ack',
+    'ListReports': 'page',
+    'ListUserPosts': 'page',
+    'ResolveReport': 'object',
+    'SearchPosts': 'page',
   };
 
   static const String abortMediaUploadOperation = 'AbortMediaUpload';
+  static const String beginReportReviewOperation = 'BeginReportReview';
   static const String bindMediaAssetsToCommentOperation = 'BindMediaAssetsToComment';
   static const String bindMediaAssetsToPostOperation = 'BindMediaAssetsToPost';
   static const String completeMediaUploadOperation = 'CompleteMediaUpload';
   static const String createCommentOperation = 'CreateComment';
+  static const String createOutboundShareOperation = 'CreateOutboundShare';
   static const String createPostOperation = 'CreatePost';
   static const String createReportOperation = 'CreateReport';
+  static const String decidePostModerationOperation = 'DecidePostModeration';
   static const String deleteCommentOperation = 'DeleteComment';
   static const String deletePostOperation = 'DeletePost';
   static const String generateArticleSummaryOperation = 'GenerateArticleSummary';
   static const String getAppConfigOperation = 'GetAppConfig';
   static const String getAuthorImpactOperation = 'GetAuthorImpact';
-  static const String getCommentCountsDeltaOperation = 'GetCommentCountsDelta';
+  static const String getContentReactionStateOperation = 'GetContentReactionState';
   static const String getCountersOperation = 'GetCounters';
   static const String getFeedOperation = 'GetFeed';
   static const String getHelperReadOperation = 'GetHelperRead';
   static const String getMediaAssetOperation = 'GetMediaAsset';
+  static const String getMediaAssetDeliveryReferenceOperation = 'GetMediaAssetDeliveryReference';
+  static const String getMediaAssetReferenceOperation = 'GetMediaAssetReference';
+  static const String getMediaUploadSessionOperation = 'GetMediaUploadSession';
   static const String getMyFootprintOperation = 'GetMyFootprint';
   static const String getMyIntersectionSummaryOperation = 'GetMyIntersectionSummary';
   static const String getObjectIntersectionsOperation = 'GetObjectIntersections';
+  static const String getOwnedMediaAssetOperation = 'GetOwnedMediaAsset';
   static const String getPostOperation = 'GetPost';
-  static const String getReactionStateOperation = 'GetReactionState';
+  static const String getPostPublicationEligibilityOperation = 'GetPostPublicationEligibility';
   static const String getReportOperation = 'GetReport';
   static const String initMediaUploadOperation = 'InitMediaUpload';
   static const String likePostOperation = 'LikePost';
@@ -240,32 +291,39 @@ class ContentApiMetadata {
   static const String listMyIntersectionsOperation = 'ListMyIntersections';
   static const String listProfileInteractionActivitiesReceivedOperation = 'ListProfileInteractionActivitiesReceived';
   static const String listProfileInteractionActivitiesSentOperation = 'ListProfileInteractionActivitiesSent';
+  static const String listReportsOperation = 'ListReports';
   static const String listUserPostsOperation = 'ListUserPosts';
-  static const String markIntersectionsVisitedOperation = 'MarkIntersectionsVisited';
+  static const String openPostModerationCaseOperation = 'OpenPostModerationCase';
   static const String pinCommentOperation = 'PinComment';
   static const String promotePostToWorkOperation = 'PromotePostToWork';
   static const String publishPostOperation = 'PublishPost';
-  static const String quoteToCircleOperation = 'QuoteToCircle';
   static const String reactToCommentOperation = 'ReactToComment';
+  static const String recordMediaProcessingResultOperation = 'RecordMediaProcessingResult';
   static const String reportBehaviorsOperation = 'ReportBehaviors';
-  static const String repostToCircleOperation = 'RepostToCircle';
   static const String requestOriginalImageAccessOperation = 'RequestOriginalImageAccess';
   static const String resolveReportOperation = 'ResolveReport';
+  static const String reviewPostModerationCaseOperation = 'ReviewPostModerationCase';
   static const String searchPostsOperation = 'SearchPosts';
   static const String selectAutoVideoCoverOperation = 'SelectAutoVideoCover';
   static const String selectManualVideoCoverOperation = 'SelectManualVideoCover';
-  static const String sharePostOperation = 'SharePost';
+  static const String supersedePostModerationCaseOperation = 'SupersedePostModerationCase';
   static const String unlikePostOperation = 'UnlikePost';
   static const String unpinCommentOperation = 'UnpinComment';
-  static const String unsharePostOperation = 'UnsharePost';
+  static const String updateMediaAssetAccessPolicyOperation = 'UpdateMediaAssetAccessPolicy';
   static const String updatePostOperation = 'UpdatePost';
-  static const String updatePostCirclesOperation = 'UpdatePostCircles';
   static const String updatePostSettingsOperation = 'UpdatePostSettings';
+  static const String updateProfileInteractionStateOperation = 'UpdateProfileInteractionState';
 
   static const String abortMediaUploadPathTemplate = '/v1/content/media/uploads/{sessionId}:abort';
   static String abortMediaUploadPath({required String sessionId}) {
     return _fillPath(abortMediaUploadPathTemplate, <String, String>{
       'sessionId': sessionId,
+    });
+  }
+  static const String beginReportReviewPathTemplate = '/v1/content/reports/{reportId}/review';
+  static String beginReportReviewPath({required String reportId}) {
+    return _fillPath(beginReportReviewPathTemplate, <String, String>{
+      'reportId': reportId,
     });
   }
   static const String bindMediaAssetsToCommentPathTemplate = '/v1/content/comments/{commentId}/media:bind';
@@ -292,8 +350,20 @@ class ContentApiMetadata {
       'postId': postId,
     });
   }
+  static const String createOutboundSharePathTemplate = '/v1/content/posts/{postId}/outbound-shares';
+  static String createOutboundSharePath({required String postId}) {
+    return _fillPath(createOutboundSharePathTemplate, <String, String>{
+      'postId': postId,
+    });
+  }
   static const String createPostPath = '/v1/content/posts';
   static const String createReportPath = '/v1/content/reports';
+  static const String decidePostModerationPathTemplate = '/internal/v1/content/posts/{postId}:moderate';
+  static String decidePostModerationPath({required String postId}) {
+    return _fillPath(decidePostModerationPathTemplate, <String, String>{
+      'postId': postId,
+    });
+  }
   static const String deleteCommentPathTemplate = '/v1/content/posts/{postId}/comments/{commentId}';
   static String deleteCommentPath({required String postId, required String commentId}) {
     return _fillPath(deleteCommentPathTemplate, <String, String>{
@@ -315,9 +385,9 @@ class ContentApiMetadata {
       'subAccountId': subAccountId,
     });
   }
-  static const String getCommentCountsDeltaPathTemplate = '/v1/content/posts/{postId}/comments/counts-delta';
-  static String getCommentCountsDeltaPath({required String postId}) {
-    return _fillPath(getCommentCountsDeltaPathTemplate, <String, String>{
+  static const String getContentReactionStatePathTemplate = '/v1/content/posts/{postId}/reactions';
+  static String getContentReactionStatePath({required String postId}) {
+    return _fillPath(getContentReactionStatePathTemplate, <String, String>{
       'postId': postId,
     });
   }
@@ -340,18 +410,42 @@ class ContentApiMetadata {
       'mediaId': mediaId,
     });
   }
+  static const String getMediaAssetDeliveryReferencePathTemplate = '/internal/v1/content/media/{mediaId}:delivery-reference';
+  static String getMediaAssetDeliveryReferencePath({required String mediaId}) {
+    return _fillPath(getMediaAssetDeliveryReferencePathTemplate, <String, String>{
+      'mediaId': mediaId,
+    });
+  }
+  static const String getMediaAssetReferencePathTemplate = '/internal/v1/content/media/{mediaId}:reference';
+  static String getMediaAssetReferencePath({required String mediaId}) {
+    return _fillPath(getMediaAssetReferencePathTemplate, <String, String>{
+      'mediaId': mediaId,
+    });
+  }
+  static const String getMediaUploadSessionPathTemplate = '/v1/content/media/uploads/{sessionId}';
+  static String getMediaUploadSessionPath({required String sessionId}) {
+    return _fillPath(getMediaUploadSessionPathTemplate, <String, String>{
+      'sessionId': sessionId,
+    });
+  }
   static const String getMyFootprintPath = '/v1/content/footprint';
   static const String getMyIntersectionSummaryPath = '/v1/content/intersections/summary';
   static const String getObjectIntersectionsPath = '/v1/content/intersections/object';
+  static const String getOwnedMediaAssetPathTemplate = '/internal/v1/content/media/{mediaId}';
+  static String getOwnedMediaAssetPath({required String mediaId}) {
+    return _fillPath(getOwnedMediaAssetPathTemplate, <String, String>{
+      'mediaId': mediaId,
+    });
+  }
   static const String getPostPathTemplate = '/v1/content/posts/{postId}';
   static String getPostPath({required String postId}) {
     return _fillPath(getPostPathTemplate, <String, String>{
       'postId': postId,
     });
   }
-  static const String getReactionStatePathTemplate = '/v1/content/posts/{postId}/reactions';
-  static String getReactionStatePath({required String postId}) {
-    return _fillPath(getReactionStatePathTemplate, <String, String>{
+  static const String getPostPublicationEligibilityPathTemplate = '/internal/v1/content/posts/{postId}/publication-eligibility';
+  static String getPostPublicationEligibilityPath({required String postId}) {
+    return _fillPath(getPostPublicationEligibilityPathTemplate, <String, String>{
       'postId': postId,
     });
   }
@@ -402,13 +496,19 @@ class ContentApiMetadata {
       'subAccountId': subAccountId,
     });
   }
+  static const String listReportsPath = '/v1/content/reports';
   static const String listUserPostsPathTemplate = '/v1/content/sub-accounts/{subAccountId}/posts';
   static String listUserPostsPath({required String subAccountId}) {
     return _fillPath(listUserPostsPathTemplate, <String, String>{
       'subAccountId': subAccountId,
     });
   }
-  static const String markIntersectionsVisitedPath = '/v1/content/intersections/visit';
+  static const String openPostModerationCasePathTemplate = '/internal/v1/content/posts/{postId}:open-moderation-case';
+  static String openPostModerationCasePath({required String postId}) {
+    return _fillPath(openPostModerationCasePathTemplate, <String, String>{
+      'postId': postId,
+    });
+  }
   static const String pinCommentPathTemplate = '/v1/content/posts/{postId}/comments/{commentId}/pin';
   static String pinCommentPath({required String postId, required String commentId}) {
     return _fillPath(pinCommentPathTemplate, <String, String>{
@@ -428,25 +528,19 @@ class ContentApiMetadata {
       'postId': postId,
     });
   }
-  static const String quoteToCirclePathTemplate = '/v1/content/posts/{postId}/quote';
-  static String quoteToCirclePath({required String postId}) {
-    return _fillPath(quoteToCirclePathTemplate, <String, String>{
-      'postId': postId,
-    });
-  }
   static const String reactToCommentPathTemplate = '/v1/content/comments/{commentId}/reaction';
   static String reactToCommentPath({required String commentId}) {
     return _fillPath(reactToCommentPathTemplate, <String, String>{
       'commentId': commentId,
     });
   }
-  static const String reportBehaviorsPath = '/v1/content/behaviors';
-  static const String repostToCirclePathTemplate = '/v1/content/posts/{postId}/repost';
-  static String repostToCirclePath({required String postId}) {
-    return _fillPath(repostToCirclePathTemplate, <String, String>{
-      'postId': postId,
+  static const String recordMediaProcessingResultPathTemplate = '/internal/v1/content/media/{mediaId}:processing-result';
+  static String recordMediaProcessingResultPath({required String mediaId}) {
+    return _fillPath(recordMediaProcessingResultPathTemplate, <String, String>{
+      'mediaId': mediaId,
     });
   }
+  static const String reportBehaviorsPath = '/v1/content/behaviors';
   static const String requestOriginalImageAccessPathTemplate = '/v1/content/media/{mediaId}/original:access';
   static String requestOriginalImageAccessPath({required String mediaId}) {
     return _fillPath(requestOriginalImageAccessPathTemplate, <String, String>{
@@ -457,6 +551,12 @@ class ContentApiMetadata {
   static String resolveReportPath({required String reportId}) {
     return _fillPath(resolveReportPathTemplate, <String, String>{
       'reportId': reportId,
+    });
+  }
+  static const String reviewPostModerationCasePathTemplate = '/internal/v1/content/posts/{postId}:review-moderation';
+  static String reviewPostModerationCasePath({required String postId}) {
+    return _fillPath(reviewPostModerationCasePathTemplate, <String, String>{
+      'postId': postId,
     });
   }
   static const String searchPostsPath = '/v1/content/posts/search';
@@ -472,9 +572,9 @@ class ContentApiMetadata {
       'mediaId': mediaId,
     });
   }
-  static const String sharePostPathTemplate = '/v1/content/posts/{postId}/share';
-  static String sharePostPath({required String postId}) {
-    return _fillPath(sharePostPathTemplate, <String, String>{
+  static const String supersedePostModerationCasePathTemplate = '/internal/v1/content/posts/{postId}:supersede-moderation';
+  static String supersedePostModerationCasePath({required String postId}) {
+    return _fillPath(supersedePostModerationCasePathTemplate, <String, String>{
       'postId': postId,
     });
   }
@@ -491,10 +591,10 @@ class ContentApiMetadata {
       'commentId': commentId,
     });
   }
-  static const String unsharePostPathTemplate = '/v1/content/posts/{postId}/share';
-  static String unsharePostPath({required String postId}) {
-    return _fillPath(unsharePostPathTemplate, <String, String>{
-      'postId': postId,
+  static const String updateMediaAssetAccessPolicyPathTemplate = '/internal/v1/content/media/{mediaId}:access-policy';
+  static String updateMediaAssetAccessPolicyPath({required String mediaId}) {
+    return _fillPath(updateMediaAssetAccessPolicyPathTemplate, <String, String>{
+      'mediaId': mediaId,
     });
   }
   static const String updatePostPathTemplate = '/v1/content/posts/{postId}';
@@ -503,16 +603,17 @@ class ContentApiMetadata {
       'postId': postId,
     });
   }
-  static const String updatePostCirclesPathTemplate = '/v1/content/posts/{postId}/circles';
-  static String updatePostCirclesPath({required String postId}) {
-    return _fillPath(updatePostCirclesPathTemplate, <String, String>{
-      'postId': postId,
-    });
-  }
   static const String updatePostSettingsPathTemplate = '/v1/content/posts/{postId}/settings';
   static String updatePostSettingsPath({required String postId}) {
     return _fillPath(updatePostSettingsPathTemplate, <String, String>{
       'postId': postId,
+    });
+  }
+  static const String updateProfileInteractionStatePathTemplate = '/v1/content/sub-accounts/{subAccountId}/interactions/{interactionId}/state';
+  static String updateProfileInteractionStatePath({required String subAccountId, required String interactionId}) {
+    return _fillPath(updateProfileInteractionStatePathTemplate, <String, String>{
+      'subAccountId': subAccountId,
+      'interactionId': interactionId,
     });
   }
 

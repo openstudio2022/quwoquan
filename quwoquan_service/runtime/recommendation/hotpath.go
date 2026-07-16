@@ -149,7 +149,7 @@ type BehaviorSignal struct {
 	ContentVertical string `json:"contentVertical,omitempty"`
 	SupplySource    string `json:"supplySource,omitempty"`
 	// 交集转化归因（S6）：触发该行为的交集维度（identity/location/content/interest/relationship）
-	// 与路径制 tagRef 锚点（唯一真相源 publish/tags），供推荐回流与交集转化漏斗按维度/tagRef 下钻。
+	// 与路径制 tagRef 锚点（唯一真相源 control_plane/governance/taxonomy），供推荐回流与交集转化漏斗按维度/tagRef 下钻。
 	IntersectionDimension string   `json:"intersectionDimension,omitempty"`
 	IntersectionTagRefs   []string `json:"intersectionTagRefs,omitempty"`
 	// 交集漏斗归因（曝光/点击/转化）：交集稳定标识 IntersectionID 与类别 IntersectionClass

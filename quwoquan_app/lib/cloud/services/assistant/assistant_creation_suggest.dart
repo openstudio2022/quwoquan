@@ -13,24 +13,24 @@ abstract class AssistantConversationRepository {
     throw UnimplementedError('getAssistantConversation');
   }
 
-  Future<AssistantTurnEnvelopeWire> createAssistantTurn({
+  Future<AssistantTurnEnvelopeWire> startAssistantRun({
     required String conversationId,
     required String text,
     String turnType = 'user',
     String skillId = '',
     String domainId = '',
   }) {
-    throw UnimplementedError('createAssistantTurn');
+    throw UnimplementedError('startAssistantRun');
   }
 
-  Future<AssistantTurnEnvelopeWire> getAssistantTurn({required String turnId}) {
-    throw UnimplementedError('getAssistantTurn');
+  Future<AssistantTurnEnvelopeWire> getAssistantRun({required String runId}) {
+    throw UnimplementedError('getAssistantRun');
   }
 
-  Stream<AssistantStreamEventWire> streamAssistantTurn({
-    required String turnId,
+  Stream<AssistantStreamEventWire> watchAssistantRunEvents({
+    required String runId,
   }) {
-    throw UnimplementedError('streamAssistantTurn');
+    throw UnimplementedError('watchAssistantRunEvents');
   }
 }
 

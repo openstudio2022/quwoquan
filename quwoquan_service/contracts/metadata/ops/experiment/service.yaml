@@ -1,0 +1,69 @@
+version: 1
+
+service:
+  name: product-ops-service
+  domain: ops
+  owner: platform-ops-team
+  commercial_defaults:
+    status: blocked
+    block_reason: canonical operation awaits object-centered commercial migration
+    gap_id: OPS_EXPERIMENT_COMMERCIAL_EVIDENCE
+    target_story: app-cloud-business-object-commercial-closure
+
+api_routes:
+  - method: GET
+    path: /v1/control-plane/product/experiments
+    operation: ListExperiments
+    actor: account
+    auth: required
+    response_entity: ExperimentCatalogSlice
+    authorization:
+      principal: operator
+      scopes: [ops.experiment.read]
+      ownership_policy: operator_scope
+    reliability: { timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none }
+    error_codes: [OPS.USER.unauthorized, OPS.USER.forbidden, OPS.SYSTEM.storage_read_failed]
+    privacy: { request_classification: INTERNAL, response_classification: INTERNAL, log_policy: redacted }
+    telemetry: { metric: ops_experiment_list, trace: true, attributes: [operation, outcome] }
+    slo: { latency_p95_ms: 800, availability_percent: 99.9 }
+    commercial:
+      status: ready
+    application:
+      kind: query
+      facet: ExperimentQueryFacade
+      method: listExperiments
+      reader: ExperimentCatalogReader
+      slice: ExperimentCatalogSlice
+    description: 读取实验聚合目录和当前策略版本统计。
+
+  - method: POST
+    path: /v1/control-plane/product/experiments/{experimentId}:rollout
+    operation: UpdateExperimentRollout
+    actor: account
+    auth: required
+    request_entity: UpdateExperimentRolloutRequest
+    request_body_kind: object
+    response_entity: UpdateExperimentRolloutResult
+    authorization:
+      principal: operator
+      scopes: [ops.experiment.write]
+      ownership_policy: operator_scope
+    reliability: { timeout_ms: 2000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required }
+    error_codes: [OPS.USER.unauthorized, OPS.USER.forbidden, OPS.USER.invalid_argument, OPS.USER.experiment_not_found, OPS.USER.version_conflict, OPS.USER.idempotency_conflict, OPS.SYSTEM.storage_read_failed, OPS.SYSTEM.storage_write_failed]
+    privacy: { request_classification: INTERNAL, response_classification: INTERNAL, log_policy: redacted }
+    telemetry: { metric: ops_experiment_rollout, trace: true, attributes: [operation, experiment_id, outcome] }
+    slo: { latency_p95_ms: 1000, availability_percent: 99.9 }
+    commercial:
+      status: ready
+    application:
+      kind: command
+      facet: ExperimentCommandFacade
+      method: updateRollout
+      aggregate_owner: Experiment
+      mutation_target: Experiment
+      invariant_target: Experiment
+    description: 通过 Experiment 聚合根更新流量、变体和启停状态。
+
+consumers:
+  - name: platform-ops
+    capabilities: [list_experiments, update_experiment_rollout]

@@ -6,6 +6,17 @@ description: |
   entity 域共享主页错误码。格式：MODULE.KIND.REASON。
 
 errors:
+  - code: ENTITY.USER.invalid_argument
+    kind: USER
+    reason: invalid_argument
+    http_status: 400
+    recovery_action: surface
+    dart_const: invalidArgument
+    go_const: ErrInvalidArgument
+    user_message:
+      zh: "请求参数有误，请检查后重试"
+      en: "Request parameters are invalid"
+
   - code: ENTITY.USER.homepage_not_found
     kind: USER
     reason: not_found

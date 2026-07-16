@@ -1,6 +1,6 @@
 {
   "schemaVersion": "assistant.scenario-fixtures",
-  "description": "端云 alpha/beta/gamma 共享测试场景。alpha 端侧使用 mock repository 读取 alphaMockStream，beta/gamma 端侧通过 remote repository 访问云侧服务，云侧每次测试前重置并加载 seedRefs。 [alpha-dev-lite subset]",
+  "description": "端云 alpha/beta/gamma 共享测试场景。alpha 端侧使用 mock repository 读取 alphaMockStream；beta/gamma 由显式幂等环境预制命令按 manifest 加载 seedRefs 后，通过 remote repository 访问真实存储。 [alpha-dev-lite subset]",
   "repositoryExpectations": {
     "alpha": "mock",
     "beta": "remote",
@@ -94,12 +94,12 @@
         "beta": {
           "enabled": true,
           "repository": "remote",
-          "requiresSeedReset": true
+          "requiresSeedReset": false
         },
         "gamma": {
           "enabled": true,
           "repository": "remote",
-          "requiresSeedReset": true
+          "requiresSeedReset": false
         }
       }
     },
@@ -153,12 +153,12 @@
         "beta": {
           "enabled": true,
           "repository": "remote",
-          "requiresSeedReset": true
+          "requiresSeedReset": false
         },
         "gamma": {
           "enabled": true,
           "repository": "remote",
-          "requiresSeedReset": true
+          "requiresSeedReset": false
         }
       }
     },
@@ -214,12 +214,12 @@
         "beta": {
           "enabled": true,
           "repository": "remote",
-          "requiresSeedReset": true
+          "requiresSeedReset": false
         },
         "gamma": {
           "enabled": true,
           "repository": "remote",
-          "requiresSeedReset": true
+          "requiresSeedReset": false
         }
       }
     },
@@ -275,12 +275,12 @@
         "beta": {
           "enabled": true,
           "repository": "remote",
-          "requiresSeedReset": true
+          "requiresSeedReset": false
         },
         "gamma": {
           "enabled": true,
           "repository": "remote",
-          "requiresSeedReset": true
+          "requiresSeedReset": false
         }
       }
     },
@@ -337,12 +337,12 @@
         "beta": {
           "enabled": true,
           "repository": "remote",
-          "requiresSeedReset": true
+          "requiresSeedReset": false
         },
         "gamma": {
           "enabled": true,
           "repository": "remote",
-          "requiresSeedReset": true
+          "requiresSeedReset": false
         }
       }
     }

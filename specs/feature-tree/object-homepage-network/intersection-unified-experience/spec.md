@@ -76,7 +76,7 @@
 ## Out of Scope
 
 - 不新增交易/支付/预约闭环。
-- 不新增第二套标签枚举；标签真相源仍为 `publish/tags` + metadata `tagRef`。
+- 不新增第二套标签枚举；标签真相源为 `control_plane/governance/taxonomy`，metadata 只声明 `tagRef` 契约。
 - 不保留端侧拼接交集整句、旧 demo dock、`TodayIntersectionRail` 死代码分支。
 
 ## 验收重点

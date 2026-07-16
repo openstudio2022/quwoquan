@@ -276,7 +276,7 @@
 
 ### 明确禁止的第二真相源
 
-- 禁止在 `AgentLoop`、`ReactRuntime`、`ChatDetailPage` 中硬编码“天气要怎样”“购物要怎样”的策略判断。
+- 禁止在 `AgentLoop`、`ReactRuntime`、`ChatConversationPage` 中硬编码“天气要怎样”“购物要怎样”的策略判断。
 - 禁止 UI 自行拼装过程区业务语义；过程摘要应由结构化结果提供。
 - 禁止在多个位置并行维护 domain → tool override 表。
 
@@ -641,7 +641,7 @@ flowchart TB
 ```
 
 - 适用范围与约束：覆盖 5 类问题分型，不覆盖后台批处理任务。
-- 当前实现映射：`agent_loop.dart`、`react_runtime.dart`、`skill/*`、`capability_gateway.dart`、`openclaw_bridge.dart`、`chat_detail_page.dart`。
+- 当前实现映射：`personal_assistant_conversation_page.dart`、`personal_assistant_stream_controller.dart`、Assistant typed contract/Remote、`agent_loop.dart`、`react_runtime.dart`、`skill/*`、`capability_gateway.dart`、`openclaw_bridge.dart`；普通 Chat 页面不参与 Assistant Run。
 - 验收映射：A1、A3、A5、A6、A9、A10、A12。
 
 ### 流程图（主流程 + 失败流程）

@@ -47,19 +47,73 @@ spec:
                 secretKeyRef:
                   name: product-ops-service-secrets
                   key: MONGO_URI
-                  optional: true
+                  optional: false
+            - name: POSTGRES_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: product-ops-service-secrets
+                  key: POSTGRES_DSN
+                  optional: false
             - name: PRODUCT_OPS_REDIS_REC_ADDR
               valueFrom:
                 secretKeyRef:
                   name: product-ops-service-secrets
                   key: PRODUCT_OPS_REDIS_REC_ADDR
-                  optional: true
+                  optional: false
             - name: PRODUCT_OPS_REDIS_GENERAL_ADDR
               valueFrom:
                 secretKeyRef:
                   name: product-ops-service-secrets
                   key: PRODUCT_OPS_REDIS_GENERAL_ADDR
-                  optional: true
+                  optional: false
+            - name: AUTH_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: product-ops-service-secrets
+                  key: AUTH_JWT_SECRET
+                  optional: false
+            - name: AUTH_JWT_ISSUER
+              valueFrom:
+                secretKeyRef:
+                  name: product-ops-service-secrets
+                  key: AUTH_JWT_ISSUER
+                  optional: false
+            - name: AUTH_JWT_AUDIENCE
+              valueFrom:
+                secretKeyRef:
+                  name: product-ops-service-secrets
+                  key: AUTH_JWT_AUDIENCE
+                  optional: false
+            - name: AUTH_JWT_TOKEN_VERSION
+              valueFrom:
+                secretKeyRef:
+                  name: product-ops-service-secrets
+                  key: AUTH_JWT_TOKEN_VERSION
+                  optional: false
+            - name: AUTH_DEVICE_TICKET_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: product-ops-service-secrets
+                  key: AUTH_DEVICE_TICKET_SECRET
+                  optional: false
+            - name: AUTH_DEVICE_TICKET_ISSUER
+              valueFrom:
+                secretKeyRef:
+                  name: product-ops-service-secrets
+                  key: AUTH_DEVICE_TICKET_ISSUER
+                  optional: false
+            - name: AUTH_DEVICE_TICKET_AUDIENCE
+              valueFrom:
+                secretKeyRef:
+                  name: product-ops-service-secrets
+                  key: AUTH_DEVICE_TICKET_AUDIENCE
+                  optional: false
+            - name: AUTH_DEVICE_TICKET_TOKEN_VERSION
+              valueFrom:
+                secretKeyRef:
+                  name: product-ops-service-secrets
+                  key: AUTH_DEVICE_TICKET_TOKEN_VERSION
+                  optional: false
           readinessProbe:
             httpGet:
               path: /healthz

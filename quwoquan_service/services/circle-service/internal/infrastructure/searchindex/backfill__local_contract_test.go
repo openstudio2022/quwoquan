@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"quwoquan_service/runtime/search/es"
+	"quwoquan_service/services/circle-service/internal/application"
 	model "quwoquan_service/services/circle-service/internal/domain/circle/model"
-	"quwoquan_service/services/circle-service/internal/infrastructure/persistence"
 )
 
 // recordingBulk captures backfill writes through the BulkIndexer contract.
@@ -43,7 +43,7 @@ type pagedLister struct {
 	circles []model.Circle
 }
 
-func (l pagedLister) List(_ context.Context, opts persistence.ListCirclesOpts) ([]model.Circle, string) {
+func (l pagedLister) List(_ context.Context, opts application.ListCirclesQuery) ([]model.Circle, string) {
 	start := 0
 	if opts.Cursor != "" {
 		if _, err := fmt.Sscanf(opts.Cursor, "off:%d", &start); err != nil {

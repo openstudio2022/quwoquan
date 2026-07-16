@@ -21,10 +21,24 @@ func (c *countingTermHeat) RelatedTerms(_ context.Context, _ string, _ int) ([]q
 	return c.terms, c.err
 }
 
+type recordingCacheObserver struct {
+	hits   atomic.Int64
+	misses atomic.Int64
+}
+
+func (o *recordingCacheObserver) ObserveRelatedTermsCache(hit bool) {
+	if hit {
+		o.hits.Add(1)
+		return
+	}
+	o.misses.Add(1)
+}
+
 func TestCachedTermHeatServesHitWithinTTL(t *testing.T) {
 	inner := &countingTermHeat{terms: []queryheat.TermHeat{{NormalizedTerm: "火锅", Relevance: 9}}}
+	observer := &recordingCacheObserver{}
 	now := time.Unix(0, 0)
-	c := NewCachedTermHeat(inner, time.Second, 16)
+	c := NewCachedTermHeat(inner, time.Second, 16, observer)
 	c.now = func() time.Time { return now }
 
 	for i := 0; i < 5; i++ {
@@ -39,12 +53,15 @@ func TestCachedTermHeatServesHitWithinTTL(t *testing.T) {
 	if inner.calls.Load() != 1 {
 		t.Fatalf("inner calls=%d, want 1 (4 served from cache)", inner.calls.Load())
 	}
+	if observer.misses.Load() != 1 || observer.hits.Load() != 4 {
+		t.Fatalf("cache observations misses=%d hits=%d, want 1/4", observer.misses.Load(), observer.hits.Load())
+	}
 }
 
 func TestCachedTermHeatRefetchesAfterTTL(t *testing.T) {
 	inner := &countingTermHeat{terms: []queryheat.TermHeat{{NormalizedTerm: "火锅", Relevance: 9}}}
 	now := time.Unix(0, 0)
-	c := NewCachedTermHeat(inner, time.Second, 16)
+	c := NewCachedTermHeat(inner, time.Second, 16, nil)
 	c.now = func() time.Time { return now }
 
 	if _, err := c.RelatedTerms(context.Background(), "成都", 8); err != nil {
@@ -63,7 +80,7 @@ func TestCachedTermHeatRefetchesAfterTTL(t *testing.T) {
 // is not pinned for the whole TTL window.
 func TestCachedTermHeatDoesNotCacheErrors(t *testing.T) {
 	inner := &countingTermHeat{err: errors.New("mongo down")}
-	c := NewCachedTermHeat(inner, time.Second, 16)
+	c := NewCachedTermHeat(inner, time.Second, 16, nil)
 
 	if _, err := c.RelatedTerms(context.Background(), "成都", 8); err == nil {
 		t.Fatalf("expected error to pass through")
@@ -79,7 +96,7 @@ func TestCachedTermHeatDoesNotCacheErrors(t *testing.T) {
 func TestCachedTermHeatBoundsKeys(t *testing.T) {
 	inner := &countingTermHeat{terms: []queryheat.TermHeat{{NormalizedTerm: "x", Relevance: 1}}}
 	now := time.Unix(0, 0)
-	c := NewCachedTermHeat(inner, time.Hour, 4)
+	c := NewCachedTermHeat(inner, time.Hour, 4, nil)
 	c.now = func() time.Time { return now }
 
 	for i := 0; i < 50; i++ {
@@ -97,7 +114,7 @@ func TestCachedTermHeatBoundsKeys(t *testing.T) {
 }
 
 func TestNewCachedTermHeatNilInner(t *testing.T) {
-	if c := NewCachedTermHeat(nil, time.Second, 16); c != nil {
+	if c := NewCachedTermHeat(nil, time.Second, 16, nil); c != nil {
 		t.Fatalf("expected nil wrapper for nil inner, got %v", c)
 	}
 }

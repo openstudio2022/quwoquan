@@ -4,60 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"sort"
-	"strings"
 
 	"quwoquan_service/runtime/controlplane"
 )
-
-type runtimeConfigSnapshotResponse struct {
-	Scope         controlplane.ConfigResolutionScope `json:"scope"`
-	ResolvedAt    string                             `json:"resolvedAt"`
-	EffectiveHash string                             `json:"effectiveHash"`
-	DesiredHash   string                             `json:"desiredHash"`
-	Values        []controlplane.ResolvedConfigValue `json:"values"`
-	Source        string                             `json:"source"`
-	DriftSummary  controlplane.ConfigDriftSummary    `json:"driftSummary"`
-}
-
-func (s *platformService) handleResolveConfig(w http.ResponseWriter, r *http.Request) {
-	scope := controlplane.ConfigResolutionScope{
-		Environment: strings.TrimSpace(r.URL.Query().Get("env")),
-		Cluster:     strings.TrimSpace(r.URL.Query().Get("cluster")),
-		Service:     strings.TrimSpace(r.URL.Query().Get("service")),
-	}
-	configLayers, err := s.store.ListDocuments("config_layers")
-	if err != nil {
-		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
-		return
-	}
-	configKeys, err := s.store.ListDocuments("config_keys")
-	if err != nil {
-		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
-		return
-	}
-	values := controlplane.ResolveEffectiveConfig(configLayers, configKeys, scope)
-	hash := controlplane.EffectiveConfigHash(values)
-	desiredHash, err := s.lookupConfigPackageDesiredHash(scope, hash)
-	if err != nil {
-		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
-		return
-	}
-	reports, err := s.store.ListDocuments("config_instance_reports")
-	if err != nil {
-		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
-		return
-	}
-	filteredReports := filterConfigInstanceReports(reports, scope)
-	writeJSON(w, http.StatusOK, runtimeConfigSnapshotResponse{
-		Scope:         scope,
-		ResolvedAt:    nowRFC3339(),
-		EffectiveHash: hash,
-		DesiredHash:   desiredHash,
-		Values:        values,
-		Source:        "control-plane",
-		DriftSummary:  controlplane.SummarizeConfigDrift(filteredReports),
-	})
-}
 
 func (s *platformService) handleListConfigInstanceReports(w http.ResponseWriter, r *http.Request) {
 	items, err := s.store.ListDocuments("config_instance_reports")

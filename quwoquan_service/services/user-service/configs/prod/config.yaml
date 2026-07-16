@@ -19,20 +19,9 @@ redis:
 
 integration:
   external_interaction_base_url: "https://integration-service.prod"
-  # 生产严格：无全局放通、无受控放通白名单、无 debugCode；社交走真实厂商 OAuth（凭证经密钥注入）。
-  sms_otp:
-    pass_through_enabled: false
-    pass_through_debt_id: ""
-    pass_through_owner: ""
-    pass_through_expires_at: ""
-    debug_reveal_enabled: false
-    sandbox_allowlist:
-      enabled: false
+  otp:
+    mode: provider
   social:
-    sandbox_allowlist:
-      enabled: false
     providers: {}
   one_tap:
-    resolver: carrier
-    sandbox_allowlist:
-      enabled: false
+    resolver: aliyun

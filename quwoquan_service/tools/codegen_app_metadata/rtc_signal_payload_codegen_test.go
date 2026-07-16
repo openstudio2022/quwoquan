@@ -7,8 +7,9 @@ import (
 )
 
 func TestRtcSignalPayloadGeneration_containsAllEventPayloadClasses(t *testing.T) {
-	eventsPath := filepath.Join("..", "..", "contracts", "metadata", "rtc", "call_session", "events.yaml")
-	fieldsPath := filepath.Join("..", "..", "contracts", "metadata", "rtc", "call_session", "fields.yaml")
+	metadataDir := initializeTestContractGraph(t)
+	eventsPath := filepath.Join(metadataDir, "rtc", "call_session", "events.yaml")
+	fieldsPath := filepath.Join(metadataDir, "rtc", "call_session", "fields.yaml")
 	ff, err := readFields(fieldsPath)
 	if err != nil {
 		t.Fatal(err)

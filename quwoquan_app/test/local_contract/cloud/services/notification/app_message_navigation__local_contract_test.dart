@@ -1,25 +1,28 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/notification/app_message_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/notification/app_message_navigation.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
   test('AppMessage target resolves my intersections dimension route', () {
-    const message = AppMessageWire(
+    final message = AppMessage(
       messageId: 'msg_1',
       userId: 'user_1',
+      messageType: 'assistant',
       source: 'assistant/proactive_intersection',
       sourceId: 'reason_1',
+      destination: const AppMessageDestination(type: 'user', id: 'user_1'),
       title: '小趣提醒',
       summary: '你有了新的交集：共同讨论',
-      target: AppMessageTargetWire(
+      target: const AppMessageTarget(
         targetType: 'route',
         targetId: 'myIntersections',
         routeId: 'myIntersections',
         routePath: AppRoutePaths.myIntersectionsPathTemplate,
-        query: <String, dynamic>{'dimension': 'content'},
+        query: AppMessageRouteQuery(dimension: 'content'),
       ),
-      createdAt: '2026-06-12T00:00:00Z',
+      read: false,
+      createdAt: DateTime.utc(2026, 6, 12),
     );
 
     final target = AppMessageNavigationTarget.fromMessage(message);
@@ -31,15 +34,21 @@ void main() {
   });
 
   test('AppMessage target gracefully ignores unknown target', () {
-    const message = AppMessageWire(
+    final message = AppMessage(
       messageId: 'msg_2',
       userId: 'user_1',
+      messageType: 'assistant',
       source: 'assistant',
       sourceId: 'unknown',
+      destination: const AppMessageDestination(type: 'user', id: 'user_1'),
       title: '小趣提醒',
       summary: '你关注的主题有新进展。',
-      target: AppMessageTargetWire(targetType: 'unknown', targetId: 'unknown'),
-      createdAt: '2026-06-12T00:00:00Z',
+      target: const AppMessageTarget(
+        targetType: 'unknown',
+        targetId: 'unknown',
+      ),
+      read: false,
+      createdAt: DateTime.utc(2026, 6, 12),
     );
 
     expect(AppMessageNavigationTarget.fromMessage(message), isNull);

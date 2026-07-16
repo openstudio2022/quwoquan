@@ -24,7 +24,7 @@ SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
 if str(SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_ROOT))
 
-from _common import prompt_render as pr  # noqa: E402
+from core import prompt_render as pr  # noqa: E402
 
 FAMILIES = (
     "article_author",
@@ -32,12 +32,22 @@ FAMILIES = (
     "homepage_source_judge",
     "image_curation",
     "review_repair",
+    # P4 checkpoint/controller prompt 外置（commercial closeout）。
+    "source_plan_homepage",
+    "source_plan_article",
+    "source_plan_image",
+    "checkpoint_build_homepage",
+    "checkpoint_content_plan",
+    "checkpoint_author_image",
+    "checkpoint_author_article",
+    "homepage_independent_review",
 )
 
 # scripts 中允许出现 prompt 渲染调用、但禁止硬编码 prompt 正文的迁移函数（必须经 render()）。
 RENDER_CALLERS = {
-    "quwoquan_data/scripts/_common/writing_pack.py": ("render_prompt_md", "_render_image_task_prompt"),
-    "quwoquan_data/scripts/build/homepage.py": ("_render_entity_page_prompt",),
+    "quwoquan_data/scripts/content/post/writing_pack.py": ("render_prompt_md", "_render_image_task_prompt"),
+    "quwoquan_data/scripts/content/homepage/homepage_prompt.py": ("_render_entity_page_prompt",),
+    "quwoquan_data/scripts/content/execution/agent/agent_checkpoint.py": ("_checkpoint_prompts",),
 }
 
 
@@ -64,7 +74,7 @@ def _check_family(name: str, errors: list[str]) -> None:
     task_text = task_path.read_text(encoding="utf-8")
 
     # 2) 模板用到的变量必须在 schema 声明；声明的必填变量必须真的出现在模板里。
-    for section, text in ((pr.SYSTEM_DIR, system_text), (pr.TASK_DIR, task_text)):
+    for section, text in ((pr.SYSTEM_KEY, system_text), (pr.TASK_KEY, task_text)):
         used = pr.template_variables(text)
         declared = set(schema[section]["required"]) | set(schema[section]["optional"])
         undeclared = sorted(used - declared)
@@ -83,8 +93,8 @@ def _check_family(name: str, errors: list[str]) -> None:
         _fail(errors, f"[{name}.task] {task_lines} lines > budget {pr.TASK_LINE_BUDGET}")
 
     # 1) 用必填变量（dummy）渲染必须通过，且无残留占位符。
-    system_vars = {v: f"<{v}>" for v in schema[pr.SYSTEM_DIR]["required"]}
-    task_vars = {v: f"<{v}>" for v in schema[pr.TASK_DIR]["required"]}
+    system_vars = {v: f"<{v}>" for v in schema[pr.SYSTEM_KEY]["required"]}
+    task_vars = {v: f"<{v}>" for v in schema[pr.TASK_KEY]["required"]}
     try:
         rendered = pr.render(name, system_vars=system_vars, task_vars=task_vars)
     except pr.PromptTemplateError as exc:
@@ -121,7 +131,7 @@ def _check_script_ratchets(repo_root: Path, errors: list[str]) -> None:
             _fail(errors, f"render caller file missing: {rel}")
             continue
         text = path.read_text(encoding="utf-8")
-        if "prompt_render import" not in text and "from _common.prompt_render" not in text:
+        if "prompt_render import" not in text and "from core.prompt_render" not in text:
             _fail(errors, f"{rel}: must import prompt_render.render to consume templates")
         for fn in funcs:
             marker = f"def {fn}("

@@ -1,0 +1,40 @@
+id: CR-20260713-089-homepage-media-completeness
+title: 双省实体主页图片完整性与三段投影收口
+slug: homepage-media-completeness
+revision: 1
+status: in_progress
+
+affected_nodes:
+  - specs/feature-tree/discovery-content/object-homepage-coverage-scaling/zhejiang-sichuan-province-coverage
+
+entries:
+  - timestamp: "2026-07-13T12:00:00+08:00"
+    summary: |
+      统一 MediaWiki 页面 bundle、强类型图片 placement/download/disposition，删除页面图片
+      数量 cap 与 fetch 第二枚举路径；修复 Gallery 模板、尺寸伪图注、封面正文主题重复、
+      groupMember 正文误置和 Python 首节全资产投影。新增 homepage media completeness 门。
+    reason: |
+      旧普陀山执行枚举 17 张却只保留 8 张，东钱湖 Gallery 四图未进入 IR；封面按下载
+      首图选择且 291x291px 污染 assetId，导致图片遗漏、重复和端云投影不一致。
+    change_type:
+      - architecture
+      - contract
+      - breaking
+      - testing
+      - data
+    changed_documents:
+      - path: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/zhejiang-sichuan-province-coverage/spec.md
+        sections: [功能范围, 验收重点]
+      - path: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/zhejiang-sichuan-province-coverage/acceptance.yaml
+        sections: [GWT2, GWT3]
+      - path: docs/outstanding_risks_backlog.md
+        sections: [R-HSE06]
+    impact:
+      replan_required: false
+      redesign_required: true
+      retest_layers: [local_contract, api_integration, user_acceptance]
+      rollout_impact: high
+      breaking_contract: true
+    notes:
+      - 旧双省 execution 与 release 已删除，不迁移、不兼容；新金丝雀必须重新生成。
+      - Cursor 仓外 key file 未配置前保持 GATE_BLOCK，不能形成 aggregate release 或启动扩量。

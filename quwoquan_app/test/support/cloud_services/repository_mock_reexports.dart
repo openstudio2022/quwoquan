@@ -11,12 +11,8 @@ export 'package:quwoquan_app/cloud/services/circle/circle_repository.dart'
     show MockCircleRepository;
 export 'package:quwoquan_app/cloud/services/content/content_repository.dart'
     show MockContentRepository;
-export 'package:quwoquan_app/cloud/services/content/report_repository.dart'
-    show MockReportRepository;
 export 'package:quwoquan_app/cloud/services/entity/entity_repository.dart'
     show MockHomepageRepository;
-export 'package:quwoquan_app/cloud/services/integration/integration_repository.dart'
-    show MockIntegrationRepository;
 export 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart'
     show MockOpsEventRepository;
 export 'package:quwoquan_app/cloud/services/ops/ops_visit_repository.dart'
@@ -25,16 +21,12 @@ export 'package:quwoquan_app/cloud/services/rtc/rtc_repository.dart'
     show MockRtcRepository;
 export 'package:quwoquan_app/cloud/services/user/appearance_settings_repository.dart'
     show MockAppearanceSettingsRepository;
-export 'package:quwoquan_app/cloud/services/user/auth_repository.dart'
-    show MockAuthRepository;
 export 'package:quwoquan_app/cloud/services/user/block_repository.dart'
     show MockBlockRepository;
 export 'package:quwoquan_app/cloud/services/user/call_settings_repository.dart'
     show MockCallSettingsRepository;
 export 'package:quwoquan_app/cloud/services/user/greeting_repository.dart'
     show MockGreetingRepository;
-export 'package:quwoquan_app/cloud/services/user/invite_repository.dart'
-    show MockInviteRepository;
 export 'package:quwoquan_app/cloud/services/user/keyword_block_repository.dart'
     show MockKeywordBlockRepository;
 export 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart'

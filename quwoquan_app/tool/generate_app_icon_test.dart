@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -99,8 +101,58 @@ void main() {
       await _resize(master.path, '$iosIconDir/Icon-App-76x76@2x.png', 152);
       await _resize(master.path, '$iosIconDir/Icon-App-83.5x83.5@2x.png', 167);
       await _resize(master.path, '$iosIconDir/Icon-App-1024x1024@1x.png', 1024);
+
+      await _resize(master.path, 'web/icons/Icon-192.png', 192);
+      await _resize(master.path, 'web/icons/Icon-512.png', 512);
+      await _resize(master.path, 'web/icons/Icon-maskable-192.png', 192);
+      await _resize(master.path, 'web/icons/Icon-maskable-512.png', 512);
+      await _resize(master.path, 'web/favicon.png', 32);
+
+      await _writeAssetManifest();
     });
   });
+}
+
+const _generatedAssetPaths = <String>[
+  'assets/brand/app_icon_1024.png',
+  'assets/brand/app_icon_square.png',
+  'android/app/src/main/res/mipmap-mdpi/ic_launcher.png',
+  'android/app/src/main/res/mipmap-hdpi/ic_launcher.png',
+  'android/app/src/main/res/mipmap-xhdpi/ic_launcher.png',
+  'android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png',
+  'android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png',
+  'ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-20x20@1x.png',
+  'ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-20x20@2x.png',
+  'ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-20x20@3x.png',
+  'ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-29x29@1x.png',
+  'ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-29x29@2x.png',
+  'ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-29x29@3x.png',
+  'ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-40x40@1x.png',
+  'ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-40x40@2x.png',
+  'ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-40x40@3x.png',
+  'ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-60x60@2x.png',
+  'ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-60x60@3x.png',
+  'ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-76x76@1x.png',
+  'ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-76x76@2x.png',
+  'ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-83.5x83.5@2x.png',
+  'ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-1024x1024@1x.png',
+  'web/icons/Icon-192.png',
+  'web/icons/Icon-512.png',
+  'web/icons/Icon-maskable-192.png',
+  'web/icons/Icon-maskable-512.png',
+  'web/favicon.png',
+];
+
+Future<void> _writeAssetManifest() async {
+  final hashes = <String, String>{};
+  for (final path in _generatedAssetPaths) {
+    hashes[path] = sha256.convert(await File(path).readAsBytes()).toString();
+  }
+  final manifest = File('assets/brand/app_icon_asset_manifest.json');
+  await manifest.writeAsString(
+    '${const JsonEncoder.withIndent('  ').convert(<String, Object>{'schemaVersion': 1, 'source': 'WelcomeAppIconPainter', 'assets': hashes})}\n',
+    flush: true,
+  );
 }
 
 Future<void> _resize(String source, String target, int size) async {

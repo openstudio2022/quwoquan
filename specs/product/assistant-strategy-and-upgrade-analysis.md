@@ -559,8 +559,8 @@ Local Engine <-> Remote Engine (OpenClaw/Cloud)
 
 ### 4.1 架构概览
 
-- **端侧**：`ChatDetailPage` 在 `conversationId == assistantConversationId` 时走助理分支；输入 → `CapabilityGateway.runStream()` → 消费 `AssistantRunStreamEvent`（trace / completed / failed）→ 展示最终回复并写回 `_messages`。
-- **能力路由**：`CapabilityGateway` 支持 `remotePreferred`（商用默认）、`localOnly`、`hybrid`。`remotePreferred` 下先调 OpenClaw 远端，满足 `_isRemoteResponseCommercialReady()` 则用远端结果，否则回退本地 AgentLoop。
+- **端侧**：路由按 `assistantConversationId` 直接进入独立 `PersonalAssistantConversationPage`；输入由 `PersonalAssistantStreamController` 调用 Assistant 对象入口创建 Conversation、启动 Run 并消费 typed stream event，普通 `ChatConversationPage` 不承载助理运行逻辑。
+- **能力路由**：生产路径必须经 Assistant Remote composition；本地 AgentLoop/OpenClaw bridge 仅属于独立 alpha/开发运行器，不允许在生产请求失败后回退。
 - **本地引擎**：`AssistantRuntime` → `PersonalAssistantAgentLoop`（ReAct++）→ `ReactRuntime` + `SwitchableAssistantLlmProvider`，工具链含 WebSearch、UnifiedRetrieval、LocalContext、MediaGallery、IntentBridge 等。
 - **远端**：`OpenClawBridge.runRemote()` POST `baseUrl/v1/run`，请求体含 messages、sessionId、contextScopeHint、privacyPolicy 等；响应解析为 `AssistantRunResponse`，含 `finalText`、`structuredResponse`、`traces`。
 

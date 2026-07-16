@@ -1,0 +1,45 @@
+id: CR-20260716-107
+title: 登录入口状态清晰化与单主动作转场收口
+date: 2026-07-16
+status: implemented
+journey: identity-entry-and-continuation
+scenario: identity-entry-persona-continuation
+feature_path:
+  l1: user-identity-profile-relationship
+  l2: onboarding-and-identity-entry
+  l3: two-state-one-tap-login--commercial-login-entry
+change:
+  summary: >-
+    将返回会话恢复与运营商一键登录拆成独立语义；只有可识别且可执行的账号摘要才展示返回账号，
+    运营商能力缺失时静默进入短信，显式失败后以无嵌套动作的紧凑表单卡降级；验证码发送后折叠手机号。
+  public_contracts:
+    - OneTapLoginProbe 使用强类型 availability，完整可提交能力才允许展示运营商入口。
+    - LoginEntryPresentation 使用 LoginPrimaryAction 表达继续会话、运营商、短信和社交动作。
+    - AppFormErrorCard 增加 compact 密度，既有调用默认行为不变。
+  api_compatibility: API path、HTTP 状态和 wire shape 不变；仅修订既有 carrier 错误的安全用户文案。
+acceptance:
+  - 空摘要不展示“欢迎回来/上次使用的账号/一键登录”幽灵态。
+  - 返回会话显示“继续登录”，运营商才显示“本机号码一键登录”。
+  - 运营商显式失败降级后只有手机号表单主动作，不出现错误卡内重复短信按钮。
+  - 发码后手机号折叠为脱敏摘要，可更换手机号，验证码主按钮为“验证并登录”。
+verification:
+  local_contract:
+    - 登录、共享错误语义与商业登录恢复定向测试 70/70 通过。
+    - App 全量 local_contract 3053/3053 通过。
+    - 登录防循环、页面横向质量、页面对象矩阵、Mock 隔离和 prod 包纯度门禁通过。
+  api_integration:
+    - metadata verify、OpenAPI 与 ContractGraph 校验通过，App codegen 已从 metadata 重新生成。
+    - user-service 登录相关 application、integration、API integration 测试通过。
+  build_and_environment:
+    - iOS simulator、Android APK、Web Debug 构建通过。
+    - alpha、beta、gamma、prod 四环境 package/verify 通过。
+  user_acceptance:
+    status: partial
+    note: 正式运营商和社交 provider 的真实设备证据未齐，不得据此放行商业登录。
+release:
+  decision: GATE_BLOCK
+  note: 本 CR 的登录 UX 与状态机实现完成；生产协议、正式 provider、真实设备 UAT 及 SLO/告警证据仍是独立准入条件。
+risks:
+  - id: R-AUTH-001
+    status: open
+    note: 正式 provider 凭据、受控 SDK 与真实设备 UAT 未齐，本 CR 不改变商业准入结论。

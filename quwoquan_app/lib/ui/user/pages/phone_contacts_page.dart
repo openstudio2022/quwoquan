@@ -14,6 +14,7 @@ import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/services/app_permission_coordinator.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_search_field.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
@@ -53,28 +54,50 @@ class _PhoneContactsPageState extends ConsumerState<PhoneContactsPage> {
 
   Future<void> _requestAndLoad() async {
     setState(() => _status = _PhoneContactsStatus.loading);
-    PermissionStatus status;
+    AppPermissionEnsureOutcome outcome;
     try {
-      status = await FlutterContacts.permissions.request(PermissionType.read);
+      outcome = await AppPermissionCoordinator.current.ensure(
+        context,
+        AppPermissionKind.contacts,
+        surface: AppPermissionSurface.page,
+        showUiOnFailure: false,
+      );
     } catch (_) {
-      status = PermissionStatus.denied;
+      outcome = AppPermissionEnsureOutcome.denied;
     }
     if (!mounted) {
       return;
     }
-    final granted =
-        status == PermissionStatus.granted ||
-        status == PermissionStatus.limited;
-    if (!granted) {
+    if (outcome != AppPermissionEnsureOutcome.granted) {
       setState(() {
         _permanentlyDenied =
-            status == PermissionStatus.permanentlyDenied ||
-            status == PermissionStatus.restricted;
+            outcome == AppPermissionEnsureOutcome.settingsRequired ||
+            outcome == AppPermissionEnsureOutcome.restricted;
         _status = _PhoneContactsStatus.denied;
       });
       return;
     }
     await _load();
+  }
+
+  Future<void> _openContactsSettings() async {
+    setState(() => _status = _PhoneContactsStatus.loading);
+    final opened = await AppPermissionCoordinator.current.openSettings(
+      AppPermissionKind.contacts,
+      onReturn: (granted) {
+        if (!mounted) {
+          return;
+        }
+        if (granted) {
+          unawaited(_load());
+          return;
+        }
+        setState(() => _status = _PhoneContactsStatus.denied);
+      },
+    );
+    if (!opened && mounted) {
+      setState(() => _status = _PhoneContactsStatus.denied);
+    }
   }
 
   Future<void> _load() async {
@@ -270,7 +293,7 @@ class _PhoneContactsPageState extends ConsumerState<PhoneContactsPage> {
               ? UITextConstants.openSettings
               : UITextConstants.phoneContactsPermissionCta,
           onPressed: _permanentlyDenied
-              ? () => unawaited(FlutterContacts.permissions.openSettings())
+              ? () => unawaited(_openContactsSettings())
               : () => unawaited(_requestAndLoad()),
         );
       case _PhoneContactsStatus.ready:

@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "source": "WelcomeAppIconPainter",
+  "assets": {
+    "assets/brand/app_icon_1024.png": "2ee24d67a433f66df37ab33d27f8c2a8d81760761751cbee74359fdbb4f2216a",
+    "assets/brand/app_icon_square.png": "2ee24d67a433f66df37ab33d27f8c2a8d81760761751cbee74359fdbb4f2216a",
+    "android/app/src/main/res/mipmap-mdpi/ic_launcher.png": "fe99a5ae1b878c685dcd91313245f0dd77f5527de38c359c83daf20c441bbe19",
+    "android/app/src/main/res/mipmap-hdpi/ic_launcher.png": "31baff8a2db69ed54751623a289295bab259ab26a5ca876c628c91c5b139e67a",
+    "android/app/src/main/res/mipmap-xhdpi/ic_launcher.png": "2dd21322181ad7a897b27a48ce7263f09b2b6c367f53ad6eb1f138c6b72929d4",
+    "android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png": "bdaec8afcc0b1aa345165ee6cab0747396efad6da75c30b1e0661eeebf28dfd8",
+    "android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png": "49b8cca764f15c55890ea811207a1b29b8f05c6ac51d0de7283466fcf05afee4",
+    "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-20x20@1x.png": "782856d651376f36b55d885e7dcb9485575adab89a77696522aeb4f8ca063df4",
+    "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-20x20@2x.png": "20469481379738cb1eadff6dc675e894d79961df50a4fe6b835f7ca54d250e1f",
+    "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-20x20@3x.png": "afecafe991abf099cf2c4557c6224c77d6d32990b5ac41f65ff8876fff485a68",
+    "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-29x29@1x.png": "43f233bae5d338c19af6b1dba0e48c772883c210435e7b0f98643aecc851260a",
+    "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-29x29@2x.png": "ec2a4727e88286241b0335f51cbc2c525025b62b6fabef5dee10410404551a81",
+    "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-29x29@3x.png": "569f1d1b001b3b0672bb85ecccbe05f478768a1763f051193747fb95e6fe4350",
+    "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-40x40@1x.png": "20469481379738cb1eadff6dc675e894d79961df50a4fe6b835f7ca54d250e1f",
+    "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-40x40@2x.png": "040bf79b1db185cd8b5fa66ad21c6dc6c003e675e67606512e1ee05c1e98366b",
+    "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-40x40@3x.png": "f17b2feef032d40fa93c5ae2c4dcb654f09378d9f092a54d6478321cf5f44070",
+    "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-60x60@2x.png": "f17b2feef032d40fa93c5ae2c4dcb654f09378d9f092a54d6478321cf5f44070",
+    "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-60x60@3x.png": "28ee1a0c4766f069ac4550a725b5fb2196ec1aa0d42a57ed45b1323f459efc99",
+    "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-76x76@1x.png": "545fad304a3ab72c195f0e61721c91a1ffd95e80f595cca74dd5013fd8377bd6",
+    "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-76x76@2x.png": "86561e82e19ed2f9ebafc92851f3f31851d021206fe037667f7f44fa6496010c",
+    "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-83.5x83.5@2x.png": "8d7a0fe78e5ebd2333aa4f16990327621834c8155a9bc374f7660effa8fbe8ff",
+    "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-1024x1024@1x.png": "2ee24d67a433f66df37ab33d27f8c2a8d81760761751cbee74359fdbb4f2216a",
+    "web/icons/Icon-192.png": "49b8cca764f15c55890ea811207a1b29b8f05c6ac51d0de7283466fcf05afee4",
+    "web/icons/Icon-512.png": "809ebbb765a2e13dcc59c651a0463e7409c7d3d94c8423ef1a11ab77cf796583",
+    "web/icons/Icon-maskable-192.png": "49b8cca764f15c55890ea811207a1b29b8f05c6ac51d0de7283466fcf05afee4",
+    "web/icons/Icon-maskable-512.png": "809ebbb765a2e13dcc59c651a0463e7409c7d3d94c8423ef1a11ab77cf796583",
+    "web/favicon.png": "2fb70be5a68c4b2835c9c0da2af12fdcd55760d3f83f2b8103928c92324592ec"
+  }
+}

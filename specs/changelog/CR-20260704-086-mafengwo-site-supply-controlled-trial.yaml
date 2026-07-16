@@ -22,7 +22,7 @@ policy:
   - 当天 robots、服务协议和 /i/ WAF/captcha 探测必须作为每轮前置证据留档。
 evidence:
   local_contract:
-    - python3 -m py_compile quwoquan_data/scripts/site_supply/core.py quwoquan_data/scripts/vertical/source_registry.py quwoquan_data/scripts/task/target_selection.py quwoquan_data/scripts/task/trial_review.py
+    - python3 -m py_compile quwoquan_data/scripts/site_supply/core.py quwoquan_data/scripts/governance/coverage/source_registry.py quwoquan_data/scripts/task/target_selection.py quwoquan_data/scripts/task/trial_review.py
     - quwoquan_data/.venv/bin/pytest quwoquan_data/tests/local_contract/template/test_source_catalog__local_contract_test.py quwoquan_data/tests/local_contract/vertical/test_travel_source_registry__local_contract_test.py quwoquan_data/tests/local_contract/site_supply/test_frontier_rollup__local_contract_test.py quwoquan_data/tests/local_contract/task/test_target_selection__local_contract_test.py quwoquan_data/tests/local_contract/task/test_trial_review__local_contract_test.py -q
   runtime_e2e:
     - /tmp/qwq_mfw_rollout_20260704/.qwq_output/data/runs/mfw_site100_20260704_site_trial.json

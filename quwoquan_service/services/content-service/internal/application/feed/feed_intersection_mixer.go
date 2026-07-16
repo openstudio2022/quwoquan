@@ -23,13 +23,40 @@ const (
 
 // attachFeedIntersections 按 70/20/10 给 feed item 附着交集理由。
 // 槽位由 (userID, postID) 稳定散列决定，保证同一用户分页/刷新间配比与落点一致；
-// reason 按 weightTier 与槽位轻重匹配，池中无对应等级时该槽位保持无交集。
+// reason 必须先证明 target 指向当前 post，70/20/10 只决定有效候选是否曝光。
 func attachFeedIntersections(views []FeedItemView, reasons []intersection.IntersectionReasonView, userID string) {
 	if len(views) == 0 || len(reasons) == 0 {
 		return
 	}
+	for i := range views {
+		postID := strings.TrimSpace(views[i].PostID)
+		if postID == "" {
+			postID = strings.TrimSpace(views[i].ID)
+		}
+		if postID == "" {
+			continue
+		}
+		lightPool, heavyPool := feedReasonPoolsForPost(reasons, postID)
+		bucket := stableFeedBucket(userID, postID)
+		switch {
+		case bucket < feedIntersectionHeavyPercent && len(heavyPool) > 0:
+			views[i].IntersectionReasons = []intersection.IntersectionReasonView{
+				applyFeedHostContext(heavyPool[int(stableFeedHash(userID, postID))%len(heavyPool)], postID),
+			}
+		case bucket < feedIntersectionHeavyPercent+feedIntersectionLightPercent && len(lightPool) > 0:
+			views[i].IntersectionReasons = []intersection.IntersectionReasonView{
+				applyFeedHostContext(lightPool[int(stableFeedHash(userID, postID))%len(lightPool)], postID),
+			}
+		}
+	}
+}
+
+func feedReasonPoolsForPost(reasons []intersection.IntersectionReasonView, postID string) ([]intersection.IntersectionReasonView, []intersection.IntersectionReasonView) {
 	var lightPool, heavyPool []intersection.IntersectionReasonView
 	for _, r := range reasons {
+		if !feedReasonTargetsPost(r, postID) {
+			continue
+		}
 		switch r.WeightTier {
 		case "heavy":
 			heavyPool = append(heavyPool, r)
@@ -37,19 +64,29 @@ func attachFeedIntersections(views []FeedItemView, reasons []intersection.Inters
 			lightPool = append(lightPool, r)
 		}
 	}
-	for i := range views {
-		bucket := stableFeedBucket(userID, views[i].PostID)
-		switch {
-		case bucket < feedIntersectionHeavyPercent && len(heavyPool) > 0:
-			views[i].IntersectionReasons = []intersection.IntersectionReasonView{
-				heavyPool[int(stableFeedHash(userID, views[i].PostID))%len(heavyPool)],
-			}
-		case bucket < feedIntersectionHeavyPercent+feedIntersectionLightPercent && len(lightPool) > 0:
-			views[i].IntersectionReasons = []intersection.IntersectionReasonView{
-				lightPool[int(stableFeedHash(userID, views[i].PostID))%len(lightPool)],
-			}
-		}
+	return lightPool, heavyPool
+}
+
+func feedReasonTargetsPost(r intersection.IntersectionReasonView, postID string) bool {
+	targetID := strings.TrimSpace(r.ActionTargetID)
+	if targetID == "" {
+		targetID = strings.TrimSpace(r.RelationObjectID)
 	}
+	return strings.TrimSpace(postID) != "" && targetID == strings.TrimSpace(postID)
+}
+
+func applyFeedHostContext(r intersection.IntersectionReasonView, postID string) intersection.IntersectionReasonView {
+	host := &intersection.IntersectionTargetView{
+		ObjectType: "post",
+		ObjectID:   strings.TrimSpace(postID),
+		ObjectKind: "content",
+		RouteID:    "contentDetail",
+	}
+	return intersection.ApplyDisplayContext(r, intersection.DisplayContext{
+		Surface:    intersection.DisplaySurfaceFeed,
+		HostTarget: host,
+		Binding:    intersection.DisplayBindingHostImplicit,
+	})
 }
 
 func stableFeedHash(userID, postID string) uint32 {

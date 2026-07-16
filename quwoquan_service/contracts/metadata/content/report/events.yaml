@@ -7,11 +7,11 @@ events:
     producer: content-service
     consumers: [notification-service]
     channel: event_store
-    payload_fields: [id, reporterId, targetType, targetId, reason]
+    payload_fields: [id, version, reporterId, targetType, targetId, reason, idempotencyKey]
 
   - name: ReportResolved
     description: 举报处理完成
     producer: content-service
     consumers: [notification-service, user-service]
     channel: event_store
-    payload_fields: [id, targetType, targetId, resolution, reviewerId]
+    payload_fields: [id, version, targetType, targetId, resolution, reviewerId, idempotencyKey]

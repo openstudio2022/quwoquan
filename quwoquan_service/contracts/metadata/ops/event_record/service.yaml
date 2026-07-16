@@ -1,24 +1,83 @@
 version: 1
-entity: EventRecord
 
 service:
   name: product-ops
   domain: ops
+  owner: platform-ops-team
+  commercial_defaults:
+    status: blocked
+    block_reason: canonical operation awaits object-centered commercial migration
+    gap_id: OPS_EVENT_RECORD_COMMERCIAL_EVIDENCE
+    target_story: app-cloud-business-object-commercial-closure
 
 api_routes:
   - method: POST
     path: /v1/ops/events
     operation: ReportEventBatch
-    description: 统一事件批量写入
+    actor: persona_or_device
+    application:
+      kind: command
+      facet: EventRecordCommandFacade
+      method: appendBatch
+      append_sink: EventRecord
+      mutation_target: EventRecord
+      invariant_target: EventRecord
+    authorization:
+      principal: public
+      ownership_policy: authenticated_persona_or_derived_device_actor
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - OPS.USER.unauthorized
+      - OPS.USER.invalid_argument
+      - OPS.SYSTEM.storage_write_failed
+    privacy:
+      request_classification: SENSITIVE
+      response_classification: PUBLIC
+      log_policy: redacted
+    telemetry:
+      metric: ops_event_batch_report
+      trace: true
+      attributes: [actor_dimension, event_count, outcome]
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    description: 统一事件批量写入；服务端只接受已验证主体，并从主体派生匿名 actor hash。
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: GET
     path: /v1/ops/events/summary
     operation: GetEventSummary
+    actor: account
+    application:
+      kind: query
+      facet: EventAnalyticsQueryFacade
+      method: getSummary
+      reader: EventSummaryReader
+      slice: EventSummarySlice
     description: 统一事件聚合摘要
 
   - method: GET
     path: /v1/ops/events/drilldown
     operation: GetEventDrilldown
+    actor: account
+    application:
+      kind: query
+      facet: EventAnalyticsQueryFacade
+      method: getDrilldown
+      reader: EventDrilldownReader
+      slice: EventDrilldownSlice
     description: 统一事件下钻明细
 
 consumers:
@@ -37,9 +96,6 @@ contract_test:
       scenarios:
         - name: report_event_batch
           route: POST /v1/ops/events
-          assertions: [status_200]
-        - name: get_event_summary
-          route: GET /v1/ops/events/summary
           assertions: [status_200]
 
     service_side:

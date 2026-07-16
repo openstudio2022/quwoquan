@@ -2,13 +2,13 @@ package http
 
 import (
 	"context"
-	followrepo "quwoquan_service/services/user-service/internal/domain/follow/repository"
+	relmodel "quwoquan_service/services/user-service/internal/domain/relationship/persona_relationship/model"
 )
 
 func (h *UserHandler) buildRelationshipCapabilityView(
 	ctx context.Context,
 	viewerID, targetID string,
-	rel *followrepo.Relationship,
+	rel relmodel.RelationshipState,
 	isBlocked, isBlockedBy bool,
 ) map[string]any {
 	relationState := "not_following"
@@ -29,7 +29,7 @@ func (h *UserHandler) buildRelationshipCapabilityView(
 		relationState = "self"
 		canFollow = false
 		canGreet = false
-	case rel != nil && rel.IsMutual:
+	case rel.IsMutual:
 		relationState = "mutual"
 		isMutual = true
 		canFollow = false
@@ -39,11 +39,11 @@ func (h *UserHandler) buildRelationshipCapabilityView(
 		canSendMessage = true
 		canStartVoiceCall = true
 		canStartVideoCall = true
-	case rel != nil && rel.IsFollowing:
+	case rel.IsFollowing:
 		relationState = "following"
 		canFollow = false
 		canUnfollow = true
-	case rel != nil && rel.IsFollowedBy:
+	case rel.IsFollowedBy:
 		relationState = "followed_by"
 		canFollowBack = true
 	}

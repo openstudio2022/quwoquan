@@ -2,11 +2,62 @@ package api_integration
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"regexp"
 	"strings"
 	"testing"
 )
+
+func TestAuth_SocialLogin_WechatAlipayQqExchangeStableServerIdentity(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+	cases := []struct {
+		name  string
+		path  string
+		field string
+		code  string
+	}{
+		{name: "wechat", path: "/v1/auth/login/wechat", field: "wechatCode", code: "wechat-code"},
+		{name: "alipay", path: "/v1/auth/login/alipay", field: "alipayAuthCode", code: "alipay-code"},
+		{name: "qq", path: "/v1/auth/login/qq", field: "qqAuthCode", code: qqAuthorizationTicket("qq-access-token", "qq-open-id")},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			requestBody, err := json.Marshal(map[string]string{
+				tc.field:     tc.code,
+				"deviceId":   "social-device-" + tc.name,
+				"platform":   "ios",
+				"appVersion": "1.0.0",
+			})
+			if err != nil {
+				t.Fatalf("marshal request: %v", err)
+			}
+			first := doRequest(t, http.MethodPost, tc.path, string(requestBody), nil)
+			if first.Code != http.StatusOK {
+				t.Fatalf("%s login: expected 200, got %d: %s", tc.name, first.Code, first.Body.String())
+			}
+			firstBody := parseJSON(t, first)
+			ownerID, _ := firstBody["ownerId"].(string)
+			if ownerID == "" {
+				t.Fatalf("%s login missing ownerId: %#v", tc.name, firstBody)
+			}
+			accountHint, ok := firstBody["accountHint"].(map[string]any)
+			if !ok {
+				t.Fatalf("%s login missing accountHint: %#v", tc.name, firstBody)
+			}
+			if accountHint["nicknameCustomized"] != true {
+				t.Fatalf("%s provider nickname must be marked customized: %#v", tc.name, accountHint)
+			}
+			second := doRequest(t, http.MethodPost, tc.path, string(requestBody), nil)
+			if second.Code != http.StatusOK {
+				t.Fatalf("%s repeat login failed: %d: %s", tc.name, second.Code, second.Body.String())
+			}
+			if parseJSON(t, second)["ownerId"] != ownerID {
+				t.Fatalf("%s repeat login must resolve the same owner", tc.name)
+			}
+		})
+	}
+}
 
 func TestAuth_AnonymousLogin_ReusesOwnerAndCreatesSingleDeviceBinding(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
@@ -204,6 +255,21 @@ func TestAuth_RefreshToken_RotatesAndLogoutRevokes(t *testing.T) {
 	if storedToken != refreshToken {
 		t.Fatalf("stored refresh token mismatch")
 	}
+	if _, err := pgPool.Exec(
+		context.Background(),
+		`UPDATE user_profiles
+		    SET nickname = $1,
+		        owner_display_name = $1,
+		        nickname_customized = true,
+		        avatar_url = $2,
+		        avatar_version = 1
+		  WHERE user_id = $3`,
+		"刷新后的昵称",
+		"https://cdn.example.com/avatar-refresh.png",
+		ownerID,
+	); err != nil {
+		t.Fatalf("update refresh account hint fixture: %v", err)
+	}
 
 	refresh := doRequest(
 		t,
@@ -220,12 +286,46 @@ func TestAuth_RefreshToken_RotatesAndLogoutRevokes(t *testing.T) {
 	if rotatedToken == "" || rotatedToken == refreshToken {
 		t.Fatalf("expected rotated refresh token, got %q", rotatedToken)
 	}
+	refreshedHint, ok := refreshBody["accountHint"].(map[string]any)
+	if !ok {
+		t.Fatalf("refresh missing accountHint: %#v", refreshBody)
+	}
+	if refreshedHint["displayName"] != "刷新后的昵称" || refreshedHint["nicknameCustomized"] != true {
+		t.Fatalf("refresh accountHint nickname mismatch: %#v", refreshedHint)
+	}
+	if avatarURL, _ := refreshedHint["avatarUrl"].(string); !strings.Contains(avatarURL, "avatar-refresh.png") {
+		t.Fatalf("refresh accountHint avatar mismatch: %#v", refreshedHint)
+	}
+
+	if _, err := pgPool.Exec(
+		context.Background(),
+		`UPDATE user_profiles SET avatar_url = '', avatar_version = 2 WHERE user_id = $1`,
+		ownerID,
+	); err != nil {
+		t.Fatalf("delete refresh account hint avatar fixture: %v", err)
+	}
+	refreshAfterAvatarDelete := doRequest(
+		t,
+		http.MethodPost,
+		"/v1/auth/token/refresh",
+		`{"refreshToken":"`+rotatedToken+`"}`,
+		nil,
+	)
+	if refreshAfterAvatarDelete.Code != http.StatusOK {
+		t.Fatalf("refresh after avatar delete: expected 200, got %d: %s", refreshAfterAvatarDelete.Code, refreshAfterAvatarDelete.Body.String())
+	}
+	refreshAfterDeleteBody := parseJSON(t, refreshAfterAvatarDelete)
+	rotatedAfterDelete, _ := refreshAfterDeleteBody["refreshToken"].(string)
+	deletedAvatarHint, ok := refreshAfterDeleteBody["accountHint"].(map[string]any)
+	if !ok || deletedAvatarHint["avatarUrl"] != "" || deletedAvatarHint["nicknameCustomized"] != true {
+		t.Fatalf("refresh must clear deleted avatar and preserve nickname marker: %#v", refreshAfterDeleteBody)
+	}
 
 	logout := doRequest(
 		t,
 		http.MethodPost,
 		"/v1/auth/logout",
-		`{"refreshToken":"`+rotatedToken+`","deviceId":"ios-1"}`,
+		`{"refreshToken":"`+rotatedAfterDelete+`","deviceId":"ios-1"}`,
 		authHeaders(ownerID),
 	)
 	if logout.Code != http.StatusOK {
@@ -236,7 +336,7 @@ func TestAuth_RefreshToken_RotatesAndLogoutRevokes(t *testing.T) {
 		t,
 		http.MethodPost,
 		"/v1/auth/token/refresh",
-		`{"refreshToken":"`+rotatedToken+`"}`,
+		`{"refreshToken":"`+rotatedAfterDelete+`"}`,
 		nil,
 	)
 	if reuse.Code == http.StatusOK {
@@ -297,6 +397,9 @@ func TestAuth_OneTapLogin_UsesServerResolvedPhone(t *testing.T) {
 	if accountHint["maskedPhone"] != "180****3901" {
 		t.Fatalf("expected accountHint masked phone, got %#v", accountHint)
 	}
+	if accountHint["nicknameCustomized"] != false {
+		t.Fatalf("new one-tap account must use system nickname marker: %#v", accountHint)
+	}
 
 	var deviceCount int
 	if err := pgPool.QueryRow(
@@ -336,8 +439,12 @@ func TestAuth_OneTapLogin_UsesServerResolvedPhone(t *testing.T) {
 	if registeredBody["registered"] != true {
 		t.Fatalf("expected registered hint after login, got %#v", registeredBody)
 	}
-	if _, ok := registeredBody["accountHint"].(map[string]any); !ok {
+	registeredHint, ok := registeredBody["accountHint"].(map[string]any)
+	if !ok {
 		t.Fatalf("expected accountHint for registered phone, got %#v", registeredBody)
+	}
+	if registeredHint["nicknameCustomized"] != false {
+		t.Fatalf("one-tap hint nickname marker mismatch: %#v", registeredHint)
 	}
 }
 
@@ -376,6 +483,13 @@ func TestAuth_FirstLogin_UsesCloudDefaultNicknamePattern(t *testing.T) {
 	}
 	if nicknameCustomized {
 		t.Fatalf("expected first-login nicknameCustomized=false, got true")
+	}
+	accountHint, ok := loginBody["accountHint"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected accountHint in first phone login, got %#v", loginBody)
+	}
+	if accountHint["nicknameCustomized"] != false {
+		t.Fatalf("expected accountHint nicknameCustomized=false, got %#v", accountHint)
 	}
 }
 

@@ -1,24 +1,15 @@
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_message_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_message_card_dto.g.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/utils/chat_time_formatter.dart';
 
 export 'package:quwoquan_app/cloud/runtime/generated/chat/chat_message_dto.g.dart'
     show ChatMessageDto;
+export 'package:quwoquan_app/cloud/runtime/generated/chat/chat_message_card_dto.g.dart'
+    show ChatMessageCardDto;
 
 /// 记录别名；wire 模型为 metadata 投影 [ChatMessageDto]（`chat_message_client.yaml`）。
 typedef MessageDto = ChatMessageDto;
-
-class ChatTaskCardEntry {
-  const ChatTaskCardEntry({
-    required this.title,
-    required this.time,
-    required this.status,
-  });
-
-  final String title;
-  final String time;
-  final String status;
-}
 
 class ChatMessageDisplayItem {
   const ChatMessageDisplayItem({
@@ -42,7 +33,7 @@ class ChatMessageDisplayItem {
     required this.thumbnailUrl,
     required this.audioDurationMs,
     required this.audioWaveform,
-    required this.tasks,
+    this.card,
   });
 
   final String id;
@@ -65,7 +56,7 @@ class ChatMessageDisplayItem {
   final String thumbnailUrl;
   final int audioDurationMs;
   final List<double> audioWaveform;
-  final List<ChatTaskCardEntry> tasks;
+  final ChatMessageCardDto? card;
 }
 
 /// 气泡与长按菜单使用的展示模型（仅 UI；契约字段仍以 [ChatMessageDto] 为准）。
@@ -77,27 +68,8 @@ extension ChatMessageDtoDisplay on ChatMessageDto {
     final timeStr = timestamp != null
         ? ChatTimeFormatter.format(timestamp!)
         : '';
-    final mediaMap = media;
-    final imageFromMedia = mediaMap != null
-        ? (mediaMap['url'] as String? ?? mediaMap['thumbnailUrl'] as String?)
-        : null;
-    final thumbnailFromMedia = mediaMap != null
-        ? (mediaMap['thumbnailUrl'] as String? ??
-            mediaMap['thumbnail'] as String? ??
-            imageFromMedia)
-        : null;
-    final audioUrl =
-        (mediaMap?['url'] as String?)?.trim() ??
-        (mediaUrl?.trim() ?? '');
-    final durationMs = (mediaMap?['durationMs'] as num?)?.toInt() ?? 0;
-    final waveformRaw = mediaMap?['waveform'];
-    final waveform = waveformRaw is List
-        ? waveformRaw
-              .whereType<num>()
-              .map((value) => value.toDouble())
-              .toList(growable: false)
-        : const <double>[];
-    final taskEntries = _taskEntriesFromMetadata(metadata);
+    final deliveryUrl = mediaDeliveryUrl?.trim() ?? '';
+    final imageUrl = type == 'image' || type == 'video' ? deliveryUrl : '';
     return ChatMessageDisplayItem(
       id: id,
       conversationId: conversationId,
@@ -106,7 +78,7 @@ extension ChatMessageDtoDisplay on ChatMessageDto {
       senderId: senderId,
       senderName: senderName?.trim() ?? '',
       senderAvatar: resolveAvatarImageUrl(senderAvatar),
-      senderSubAccountId: senderSubAccountId?.trim() ?? '',
+      senderSubAccountId: senderId,
       type: type,
       content: content?.trim() ?? '',
       status: status,
@@ -114,29 +86,12 @@ extension ChatMessageDtoDisplay on ChatMessageDto {
       sentAtIso: timestamp?.toIso8601String() ?? '',
       isSelf: isSelf,
       isRead: true,
-      mediaUrl: audioUrl,
-      imageUrl: (imageFromMedia ?? '').trim(),
-      thumbnailUrl: (thumbnailFromMedia ?? '').trim(),
-      audioDurationMs: durationMs,
-      audioWaveform: waveform,
-      tasks: taskEntries,
+      mediaUrl: deliveryUrl,
+      imageUrl: imageUrl,
+      thumbnailUrl: imageUrl,
+      audioDurationMs: 0,
+      audioWaveform: const <double>[],
+      card: card,
     );
   }
-}
-
-List<ChatTaskCardEntry> _taskEntriesFromMetadata(Map<String, dynamic>? metadata) {
-  final rawTasks = metadata?['tasks'];
-  if (rawTasks is! List) {
-    return const <ChatTaskCardEntry>[];
-  }
-  return rawTasks
-      .whereType<Map>()
-      .map(
-        (item) => ChatTaskCardEntry(
-          title: item['title']?.toString().trim() ?? '',
-          time: item['time']?.toString().trim() ?? '',
-          status: item['status']?.toString().trim() ?? 'pending',
-        ),
-      )
-      .toList(growable: false);
 }

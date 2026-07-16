@@ -6,7 +6,6 @@ package recimpactmeta
 
 import (
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 
@@ -39,18 +38,13 @@ type Defaults struct {
 
 // Registry 镜像 impact_help_type_registry.yaml。
 type Registry struct {
-	ToneLegend   []string          `yaml:"toneLegend"`
-	ToneByIcon   map[string]string `yaml:"toneByIconKey"`
-	HelpTypes    []HelpTypeDef     `yaml:"helpTypes"`
-	Defaults     Defaults          `yaml:"defaults"`
+	ToneLegend []string          `yaml:"toneLegend"`
+	ToneByIcon map[string]string `yaml:"toneByIconKey"`
+	HelpTypes  []HelpTypeDef     `yaml:"helpTypes"`
+	Defaults   Defaults          `yaml:"defaults"`
 }
 
-// Read 读取并反序列化注册表 yaml。
-func Read(path string) (*Registry, error) {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
+func Parse(raw []byte) (*Registry, error) {
 	var out Registry
 	if err := yaml.Unmarshal(raw, &out); err != nil {
 		return nil, err

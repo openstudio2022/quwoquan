@@ -1,0 +1,9 @@
+version: 1
+entity: RecommendationIntersectionVisitState
+events:
+  - name: IntersectionVisited
+    producer: recommendation-service
+    consumers: [recommendation-engine]
+    channel: event_store
+    payload_entity: RecommendationIntersectionVisitState
+    payload_fields: [id, personaId, targetType, targetId, state, version, visitedAt, updatedAt]

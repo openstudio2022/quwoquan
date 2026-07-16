@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
@@ -19,6 +18,11 @@ import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 typedef ApiLatencyObserver =
     void Function(String method, String path, int elapsedMs, int statusCode);
 
+typedef CloudUnauthorizedRefresh =
+    Future<bool> Function(Future<void> abortTrigger);
+
+final Future<void> _neverAbort = Completer<void>().future;
+
 class CloudHttpClient {
   CloudHttpClient({
     http.Client? client,
@@ -33,9 +37,90 @@ class CloudHttpClient {
 
   final http.Client _client;
   final CloudAuthTokenProvider _authTokenProvider;
-  final Future<bool> Function()? _onUnauthorizedRefresh;
+  final CloudUnauthorizedRefresh? _onUnauthorizedRefresh;
   final Duration _timeout;
   final ApiLatencyObserver? _latencyObserver;
+
+  /// Executes exactly one generated-operation network attempt.
+  ///
+  /// Retry, deadline and cancellation ownership stays in
+  /// [AppGeneratedCloudOperationExecutor]. This method deliberately bypasses
+  /// [RetryHttpClient.send].
+  Future<CloudHttpDecodedJson> sendOperationJson({
+    required String method,
+    required Uri uri,
+    required Uri gatewayOrigin,
+    required Map<String, String> headers,
+    required bool requireAuth,
+    required Future<void> abortTrigger,
+    CloudJsonMap? body,
+  }) async {
+    if (!_sameOrigin(uri, gatewayOrigin)) {
+      throw CloudErrorMapper.invalidResponse(
+        message: 'Generated Cloud operation must target the Gateway origin',
+        requestPath: uri.path,
+        functionModule: 'cloud_http_client',
+      );
+    }
+    final stopwatch = Stopwatch()..start();
+    var latencyRecorded = false;
+    final request = http.AbortableRequest(
+      method.toUpperCase(),
+      uri,
+      abortTrigger: abortTrigger,
+    );
+    try {
+      request.headers.addAll(
+        await _completeBeforeAbort(
+          _mergeHeaders(
+            headers,
+            requireAuth: requireAuth,
+            requestPath: uri.path,
+            abortTrigger: abortTrigger,
+          ),
+          abortTrigger: abortTrigger,
+          requestPath: uri.path,
+        ),
+      );
+      if (body != null) {
+        request.headers['Content-Type'] = 'application/json';
+        request.body = jsonEncode(body);
+      }
+      final streamed = await _sendSingleAttempt(request);
+      final response = await http.Response.fromStream(streamed);
+      stopwatch.stop();
+      _latencyObserver?.call(
+        request.method,
+        uri.path,
+        stopwatch.elapsedMilliseconds,
+        response.statusCode,
+      );
+      latencyRecorded = true;
+      _guardStatus(response, uri.path);
+      return _decodeBody(response.body, uri.path);
+    } catch (error) {
+      stopwatch.stop();
+      if (!latencyRecorded) {
+        _latencyObserver?.call(
+          request.method,
+          uri.path,
+          stopwatch.elapsedMilliseconds,
+          error is CloudException ? error.statusCode ?? -1 : -1,
+        );
+      }
+      rethrow;
+    }
+  }
+
+  Future<bool> refreshOperationAuthorization({
+    required Future<void> abortTrigger,
+  }) {
+    return _completeBeforeAbort(
+      _attemptUnauthorizedRefresh(abortTrigger: abortTrigger),
+      abortTrigger: abortTrigger,
+      requestPath: '/auth/refresh',
+    );
+  }
 
   // ── http.Client 兼容底层 API（不自动根据状态码抛错；见 [getJson]/[postJson]）────────
 
@@ -144,6 +229,8 @@ class CloudHttpClient {
     try {
       final merged = await _mergeHeaders(
         Map<String, String>.from(request.headers),
+        requireAuth: false,
+        requestPath: request.url.path,
       );
       request.headers
         ..clear()
@@ -158,15 +245,6 @@ class CloudHttpClient {
       );
       return response;
     } on TimeoutException catch (e) {
-      sw.stop();
-      _latencyObserver?.call(
-        request.method,
-        request.url.path,
-        sw.elapsedMilliseconds,
-        -1,
-      );
-      throw CloudErrorMapper.fromException(e, requestPath: request.url.path);
-    } on SocketException catch (e) {
       sw.stop();
       _latencyObserver?.call(
         request.method,
@@ -192,12 +270,14 @@ class CloudHttpClient {
   Future<CloudHttpDecodedJson> getJson(
     Uri uri, {
     required Map<String, String> headers,
+    bool requireAuth = false,
   }) async {
     final res = await _requestWithRefreshRetry(
       requestPath: uri.path,
       method: 'GET',
       headers: headers,
       shouldAttemptRefresh: true,
+      requireAuth: requireAuth,
       run: (mergedHeaders) => _guardRequest(
         () => _client.get(uri, headers: mergedHeaders).timeout(_timeout),
         requestPath: uri.path,
@@ -213,6 +293,7 @@ class CloudHttpClient {
     Uri uri, {
     required Map<String, String> headers,
     required CloudJsonMap body,
+    bool requireAuth = false,
   }) async {
     final payload = jsonEncode(body);
     final res = await _requestWithRefreshRetry(
@@ -220,6 +301,7 @@ class CloudHttpClient {
       method: 'POST',
       headers: headers,
       shouldAttemptRefresh: true,
+      requireAuth: requireAuth,
       run: (mergedHeaders) {
         final requestHeaders = <String, String>{
           ...mergedHeaders,
@@ -242,6 +324,7 @@ class CloudHttpClient {
     Uri uri, {
     required Map<String, String> headers,
     required CloudJsonMap body,
+    bool requireAuth = false,
   }) async {
     final payload = jsonEncode(body);
     final res = await _requestWithRefreshRetry(
@@ -249,6 +332,7 @@ class CloudHttpClient {
       method: 'PATCH',
       headers: headers,
       shouldAttemptRefresh: true,
+      requireAuth: requireAuth,
       run: (mergedHeaders) {
         final requestHeaders = <String, String>{
           ...mergedHeaders,
@@ -271,6 +355,7 @@ class CloudHttpClient {
     Uri uri, {
     required Map<String, String> headers,
     required CloudJsonMap body,
+    bool requireAuth = false,
   }) async {
     final payload = jsonEncode(body);
     final res = await _requestWithRefreshRetry(
@@ -278,6 +363,7 @@ class CloudHttpClient {
       method: 'PUT',
       headers: headers,
       shouldAttemptRefresh: true,
+      requireAuth: requireAuth,
       run: (mergedHeaders) {
         final requestHeaders = <String, String>{
           ...mergedHeaders,
@@ -321,17 +407,31 @@ class CloudHttpClient {
   Future<CloudHttpDecodedJson> deleteJson(
     Uri uri, {
     required Map<String, String> headers,
+    CloudJsonMap? body,
+    bool requireAuth = false,
   }) async {
+    final payload = body == null ? null : jsonEncode(body);
     final res = await _requestWithRefreshRetry(
       requestPath: uri.path,
       method: 'DELETE',
       headers: headers,
       shouldAttemptRefresh: true,
-      run: (mergedHeaders) => _guardRequest(
-        () => _client.delete(uri, headers: mergedHeaders).timeout(_timeout),
-        requestPath: uri.path,
-        method: 'DELETE',
-      ),
+      requireAuth: requireAuth,
+      run: (mergedHeaders) {
+        final requestHeaders = body == null
+            ? mergedHeaders
+            : <String, String>{
+                ...mergedHeaders,
+                'Content-Type': 'application/json',
+              };
+        return _guardRequest(
+          () => _client
+              .delete(uri, headers: requestHeaders, body: payload)
+              .timeout(_timeout),
+          requestPath: uri.path,
+          method: 'DELETE',
+        );
+      },
     );
     _guardStatus(res, uri.path);
     if (res.body.isEmpty) return const <String, dynamic>{};
@@ -363,7 +463,11 @@ class CloudHttpClient {
           .toList(growable: false);
     }
     final object = CloudResponseDecoder.asObject(decoded, context: context);
-    return CloudResponseDecoder.mapListFirstNonEmpty(object, listKeys);
+    return CloudResponseDecoder.mapListFirstNonEmpty(
+      object,
+      listKeys,
+      context: context,
+    );
   }
 
   /// [postJson] 后立即 [CloudResponseDecoder.asObject]。
@@ -388,10 +492,31 @@ class CloudHttpClient {
     return CloudResponseDecoder.asObject(decoded, context: context);
   }
 
-  Future<Map<String, String>> _mergeHeaders(Map<String, String> headers) async {
-    final token = await _authTokenProvider.getAccessToken();
-    if (token == null || token.isEmpty) return headers;
-    return <String, String>{...headers, 'Authorization': 'Bearer $token'};
+  Future<Map<String, String>> _mergeHeaders(
+    Map<String, String> headers, {
+    required bool requireAuth,
+    required String requestPath,
+    Future<void>? abortTrigger,
+  }) async {
+    final sanitizedHeaders = Map<String, String>.from(headers)
+      ..removeWhere((key, _) => key.toLowerCase() == 'authorization');
+    var token = await _authTokenProvider.getAccessToken();
+    if ((token == null || token.isEmpty) && requireAuth) {
+      final refreshed = await _attemptUnauthorizedRefresh(
+        abortTrigger: abortTrigger,
+      );
+      if (refreshed) {
+        token = await _authTokenProvider.getAccessToken();
+      }
+      if (token == null || token.isEmpty) {
+        throw CloudErrorMapper.fromStatusCode(401, requestPath: requestPath);
+      }
+    }
+    if (token == null || token.isEmpty) return sanitizedHeaders;
+    return <String, String>{
+      ...sanitizedHeaders,
+      'Authorization': 'Bearer $token',
+    };
   }
 
   Future<http.Response> _requestWithRefreshRetry({
@@ -399,10 +524,15 @@ class CloudHttpClient {
     required String method,
     required Map<String, String> headers,
     required bool shouldAttemptRefresh,
+    bool requireAuth = false,
     required Future<http.Response> Function(Map<String, String> mergedHeaders)
     run,
   }) async {
-    final initialHeaders = await _mergeHeaders(headers);
+    final initialHeaders = await _mergeHeaders(
+      headers,
+      requireAuth: requireAuth,
+      requestPath: requestPath,
+    );
     final first = await run(initialHeaders);
     if (!_shouldRefreshAfterResponse(
       response: first,
@@ -416,7 +546,11 @@ class CloudHttpClient {
     if (!refreshed) {
       return first;
     }
-    final retryHeaders = await _mergeHeaders(headers);
+    final retryHeaders = await _mergeHeaders(
+      headers,
+      requireAuth: requireAuth,
+      requestPath: requestPath,
+    );
     return run(retryHeaders);
   }
 
@@ -438,16 +572,53 @@ class CloudHttpClient {
     return method != 'AUTH_REFRESH';
   }
 
-  Future<bool> _attemptUnauthorizedRefresh() async {
+  Future<bool> _attemptUnauthorizedRefresh({Future<void>? abortTrigger}) async {
     final refresh = _onUnauthorizedRefresh;
     if (refresh == null) {
       return false;
     }
-    try {
-      return await refresh();
-    } catch (_) {
-      return false;
+    return refresh(abortTrigger ?? _neverAbort);
+  }
+
+  Future<http.StreamedResponse> _sendSingleAttempt(http.BaseRequest request) {
+    final client = _client;
+    if (client is RetryHttpClient) {
+      return client.sendSingleAttempt(request);
     }
+    return client.send(request);
+  }
+
+  Future<T> _completeBeforeAbort<T>(
+    Future<T> operation, {
+    required Future<void> abortTrigger,
+    required String requestPath,
+  }) {
+    final completer = Completer<T>();
+    operation.then(
+      (value) {
+        if (!completer.isCompleted) completer.complete(value);
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        if (!completer.isCompleted) {
+          completer.completeError(error, stackTrace);
+        }
+      },
+    );
+    abortTrigger.then(
+      (_) {
+        if (!completer.isCompleted) {
+          completer.completeError(
+            http.RequestAbortedException(Uri(path: requestPath)),
+          );
+        }
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        if (!completer.isCompleted) {
+          completer.completeError(error, stackTrace);
+        }
+      },
+    );
+    return completer.future;
   }
 
   Future<http.Response> _guardRequest(
@@ -470,10 +641,6 @@ class CloudHttpClient {
       sw.stop();
       _latencyObserver?.call(method, requestPath, sw.elapsedMilliseconds, -1);
       throw CloudErrorMapper.fromException(e, requestPath: requestPath);
-    } on SocketException catch (e) {
-      sw.stop();
-      _latencyObserver?.call(method, requestPath, sw.elapsedMilliseconds, -1);
-      throw CloudErrorMapper.fromException(e, requestPath: requestPath);
     } catch (e) {
       sw.stop();
       _latencyObserver?.call(method, requestPath, sw.elapsedMilliseconds, -1);
@@ -488,6 +655,7 @@ class CloudHttpClient {
       res.statusCode,
       body: res.body,
       requestPath: path,
+      retryAfter: res.headers['retry-after'],
     );
   }
 
@@ -499,4 +667,19 @@ class CloudHttpClient {
       throw CloudErrorMapper.fromException(e, requestPath: path);
     }
   }
+
+  void close() {
+    _client.close();
+  }
+}
+
+bool _sameOrigin(Uri left, Uri right) {
+  return left.scheme.toLowerCase() == right.scheme.toLowerCase() &&
+      left.host.toLowerCase() == right.host.toLowerCase() &&
+      _effectivePort(left) == _effectivePort(right);
+}
+
+int _effectivePort(Uri uri) {
+  if (uri.hasPort) return uri.port;
+  return uri.scheme.toLowerCase() == 'https' ? 443 : 80;
 }

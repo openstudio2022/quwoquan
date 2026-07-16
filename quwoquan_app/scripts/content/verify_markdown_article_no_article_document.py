@@ -11,11 +11,13 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[3]
 DATA_ROOT = Path(os.getenv("QWQ_DATA_ROOT", ROOT / "quwoquan_data")).resolve()
-RUNTIME_ROOT = Path(os.getenv("QWQ_RUNTIME_ROOT", DATA_ROOT / "runtime")).resolve()
+OUTPUT_ROOT = Path(os.getenv("QWQ_OUTPUT_ROOT", ROOT / ".qwq_output")).resolve()
+PUBLISH_ROOT = Path(os.getenv("QWQ_PUBLISH_ROOT", DATA_ROOT / "publish")).resolve()
 SCAN_ROOTS = [
     ROOT / "quwoquan_service/contracts/metadata/content/test_fixtures/scenarios",
-    RUNTIME_ROOT / "publish",
-    RUNTIME_ROOT / "out",
+    PUBLISH_ROOT,
+    OUTPUT_ROOT / "data" / "tasks",
+    OUTPUT_ROOT / "data" / "releases",
 ]
 
 

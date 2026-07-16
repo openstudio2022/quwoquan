@@ -9,6 +9,7 @@ import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
 
 import 'package:quwoquan_app/core/media/content_media_url.dart';
+import 'package:quwoquan_app/core/media/media_candidate_failure.dart';
 import 'package:quwoquan_app/core/platform/video_player_controller_factory.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';
@@ -57,11 +58,16 @@ class VideoPlayerWidget extends ConsumerStatefulWidget {
 }
 
 class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget> {
+  /// Soft cap on concurrent ExoPlayer/MediaCodec instances (OEM hard-decode slots).
+  static int _activeControllerCount = 0;
+  static const int _maxConcurrentControllers = 2;
+
   VideoPlayerController? _controller;
   ChewieController? _chewieController;
   bool _isInitialized = false;
   bool _hasError = false;
   int _videoInitGeneration = 0;
+  bool _holdingControllerSlot = false;
 
   @override
   void initState() {
@@ -120,6 +126,37 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget> {
     _chewieController = null;
     _controller?.dispose();
     _controller = null;
+    _releaseControllerSlot();
+  }
+
+  bool _acquireControllerSlot() {
+    if (_holdingControllerSlot) {
+      return true;
+    }
+    if (_activeControllerCount >= _maxConcurrentControllers) {
+      return false;
+    }
+    _activeControllerCount += 1;
+    _holdingControllerSlot = true;
+    return true;
+  }
+
+  void _releaseControllerSlot() {
+    if (!_holdingControllerSlot) {
+      return;
+    }
+    _holdingControllerSlot = false;
+    if (_activeControllerCount > 0) {
+      _activeControllerCount -= 1;
+    }
+  }
+
+  bool _looksLikeDecoderInitFailure(Object error) {
+    final text = error.toString();
+    return text.contains('MediaCodec') ||
+        text.contains('DecoderInitialization') ||
+        text.contains('Video codec error') ||
+        text.contains('OMX.');
   }
 
   void _replaceVideoController() {
@@ -166,10 +203,25 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget> {
     }
     // 任务 B · 自动播放启动时延：从初始化起算，命中候选时上报耗时与序号。
     final startupStopwatch = Stopwatch()..start();
+    if (!_acquireControllerSlot()) {
+      developer.log(
+        'video init deferred: concurrent MediaCodec slot limit '
+        '($_maxConcurrentControllers)',
+        name: 'VideoPlayerWidget',
+      );
+      if (mounted && generation == _videoInitGeneration) {
+        setState(() {
+          _hasError = false;
+          _isInitialized = false;
+        });
+      }
+      return;
+    }
     for (var index = 0; index < candidates.length; index++) {
       final candidate = candidates[index];
       final sources = await _playableSourcesForCandidate(candidate);
       if (!mounted || generation != _videoInitGeneration) {
+        _releaseControllerSlot();
         return;
       }
       for (final source in sources) {
@@ -180,10 +232,17 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget> {
         } catch (error, stackTrace) {
           await controller?.dispose();
           // 任务 B · 候选源失败结构化归因：逐个回退、记录失败序号，禁止静默吞错。
+          final failureKind = classifyMediaCandidateLoadFailure(
+            error,
+            candidateUrl: candidate,
+          );
+          final kindLabel = _looksLikeDecoderInitFailure(error)
+              ? 'decoder_init'
+              : failureKind.name;
           developer.log(
             'video candidate init failed '
             '(index=${index + 1}/${candidates.length}, '
-            'source=${source.label})',
+            'source=${source.label}, kind=$kindLabel)',
             name: 'VideoPlayerWidget',
             error: error,
             stackTrace: stackTrace,
@@ -191,12 +250,14 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget> {
           debugPrint(
             '[VideoPlayerWidget] candidate init failed '
             'index=${index + 1}/${candidates.length}; '
-            'source=${source.label}; candidate=$candidate; error=$error',
+            'source=${source.label}; candidate=$candidate; '
+            'kind=$kindLabel; error=$error',
           );
           continue;
         }
         if (!mounted || generation != _videoInitGeneration) {
           await controller.dispose();
+          _releaseControllerSlot();
           return;
         }
         _controller = controller;
@@ -239,6 +300,7 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget> {
       }
     }
     startupStopwatch.stop();
+    _releaseControllerSlot();
     if (mounted && generation == _videoInitGeneration) {
       setState(() {
         _hasError = true;

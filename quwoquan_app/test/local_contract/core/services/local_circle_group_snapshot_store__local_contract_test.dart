@@ -5,7 +5,9 @@ import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/services/cache/local_circle_group_snapshot_store.dart';
+import 'package:quwoquan_app/core/services/cache/local_circle_group_snapshot_record.dart';
 import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../support/sqflite_ffi_test_support.dart';
 
@@ -59,26 +61,32 @@ void main() {
       () async {
         await store.upsertGroups(
           namespace: ownerNamespace,
-          groups: const <Map<String, dynamic>>[
-            <String, dynamic>{
-              'circleId': 'fixture_circle_photo',
-              'groupId': 'group_photo',
-              'name': '光影摄影社主群',
-              'description': '摄影讨论',
-              'circleName': '光影摄影社',
-            },
+          groups: const <LocalCircleGroupSnapshotRecord>[
+            LocalCircleGroupSnapshotRecord(
+              circleId: 'fixture_circle_photo',
+              groupId: 'group_photo',
+              name: '光影摄影社主群',
+              description: '摄影讨论',
+              circleName: '光影摄影社',
+              groupType: 'public_group',
+              visibility: 'public',
+              updatedAt: '2026-07-14T00:00:00.000Z',
+            ),
           ],
         );
         await store.upsertGroups(
           namespace: subNamespace,
-          groups: const <Map<String, dynamic>>[
-            <String, dynamic>{
-              'circleId': 'circle_trip_01',
-              'groupId': 'group_trip',
-              'name': '旅行手账主群',
-              'description': '旅行讨论',
-              'circleName': '旅行手账',
-            },
+          groups: const <LocalCircleGroupSnapshotRecord>[
+            LocalCircleGroupSnapshotRecord(
+              circleId: 'circle_trip_01',
+              groupId: 'group_trip',
+              name: '旅行手账主群',
+              description: '旅行讨论',
+              circleName: '旅行手账',
+              groupType: 'public_group',
+              visibility: 'public',
+              updatedAt: '2026-07-14T00:00:00.000Z',
+            ),
           ],
         );
 
@@ -106,11 +114,13 @@ void main() {
       'ensureSeeded is deduped per namespace and reseeds new namespace',
       () async {
         final repo = _CountingCircleRepository();
+        const groups = _CountingCircleGroupQuery();
 
         expect(
           await store.ensureSeeded(
             namespace: ownerNamespace,
             circleRepository: repo,
+            circleGroupQuery: groups,
           ),
           isTrue,
         );
@@ -118,6 +128,7 @@ void main() {
           await store.ensureSeeded(
             namespace: ownerNamespace,
             circleRepository: repo,
+            circleGroupQuery: groups,
           ),
           isTrue,
         );
@@ -127,6 +138,7 @@ void main() {
           await store.ensureSeeded(
             namespace: subNamespace,
             circleRepository: repo,
+            circleGroupQuery: groups,
           ),
           isTrue,
         );
@@ -164,4 +176,41 @@ class _CountingCircleRepository extends MockCircleRepository {
       sort: sort,
     );
   }
+}
+
+final class _CountingCircleGroupQuery implements CircleGroupQueryReader {
+  const _CountingCircleGroupQuery();
+
+  CircleGroupSlice _group(String circleId) => CircleGroupSlice(
+    groupId: '${circleId}_group_default',
+    version: 1,
+    circleId: circleId,
+    parentGroupId: null,
+    groupType: CircleGroupType.publicGroup,
+    nodeType: null,
+    name: '默认公共群',
+    description: '',
+    visibility: CircleGroupVisibility.public,
+    joinPolicy: CircleGroupJoinPolicy.applyOnly,
+    conversationId: 'conversation_$circleId',
+    storageEnabled: true,
+    noticeEnabled: true,
+    isDefaultPublicGroup: true,
+    status: CircleGroupStatus.active,
+    memberCount: 1,
+    createdAt: DateTime.utc(2026, 7, 14),
+    updatedAt: DateTime.utc(2026, 7, 14),
+  );
+
+  @override
+  Future<CircleGroupSlice> get(CircleGroupQuery query) async =>
+      _group(query.circleId);
+
+  @override
+  Future<CircleGroupPageSlice> list(CircleGroupListQuery query) async =>
+      CircleGroupPageSlice(items: <CircleGroupSlice>[_group(query.circleId)]);
+
+  @override
+  Future<CircleGroupPageSlice> search(CircleGroupSearchQuery query) async =>
+      CircleGroupPageSlice(items: <CircleGroupSlice>[_group(query.circleId)]);
 }

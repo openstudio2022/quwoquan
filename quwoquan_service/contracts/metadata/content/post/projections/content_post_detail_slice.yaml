@@ -1,0 +1,9 @@
+version: 1
+read_model: ContentPostDetailSlice
+description: |
+  GetPost 返回的单对象详情 Slice，组合 Post 公开字段与详情扩展；
+  端侧使用同名 pure contract 严格解码。
+consumers: [app]
+client_projection:
+  dart_class: ContentPostDetailSlice
+  external_dart_path: quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/post_reader_models.dart

@@ -11,12 +11,14 @@ import (
 )
 
 func writeFile(path string, content string) {
+	data := []byte(content)
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		exitErr(err)
 	}
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(path, data, 0644); err != nil {
 		exitErr(err)
 	}
+	recordGeneratedFile(path, data)
 	fmt.Printf("generated: %s\n", path)
 }
 

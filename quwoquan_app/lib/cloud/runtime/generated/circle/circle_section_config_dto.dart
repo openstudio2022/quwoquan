@@ -24,11 +24,11 @@ class CircleSectionConfigDto {
   }
 
   Map<String, dynamic> toMap() => {
-        'sectionType': sectionType,
-        'visible': visible,
-        'order': order,
-        if (customTitle != null) 'customTitle': customTitle,
-      };
+    'sectionType': sectionType,
+    'visible': visible,
+    'order': order,
+    if (customTitle != null) 'customTitle': customTitle,
+  };
 
   CircleSectionConfigDto copyWith({
     String? sectionType,

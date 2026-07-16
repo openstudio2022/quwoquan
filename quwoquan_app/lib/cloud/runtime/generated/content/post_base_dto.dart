@@ -8,7 +8,6 @@
 //   MicroPostDto  ← micro_post_dto.g.dart
 
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
-import 'package:quwoquan_app/core/media/content_media_url.dart';
 
 /// 所有类型化帖子 DTO 的抽象基类。
 ///
@@ -97,16 +96,22 @@ abstract class PostBaseDto {
 
   String get normalizedBody => (body ?? '').trim();
 
+  /// 供展示层解析的原始图片 media reference。
+  ///
+  /// DTO 只承载 wire contract；CDN/Gateway URL 解析属于 UI/展示 mapper。
   List<String> get mediaImageUrls => imageUrls
-      .map(resolveContentMediaUrl)
+      .map((url) => url.trim())
       .where((url) => url.isNotEmpty)
       .toList(growable: false);
 
-  String get mediaCoverUrl => resolveContentMediaUrl(coverUrl);
+  /// 供展示层解析的原始封面 media reference。
+  String get mediaCoverUrl => coverUrl?.trim() ?? '';
 
-  String get mediaVideoUrl => resolveContentVideoUrl(videoUrl);
+  /// 供展示层解析的原始视频 media reference。
+  String get mediaVideoUrl => videoUrl?.trim() ?? '';
 
-  String get mediaThumbnailUrl => resolveContentMediaUrl(thumbnailUrl);
+  /// 供展示层解析的原始缩略图 media reference。
+  String get mediaThumbnailUrl => thumbnailUrl?.trim() ?? '';
 
   /// 兼容旧调用口径：视频展示封面优先缩略图，再回退显式 cover。
   String get mediaVideoCoverUrl {

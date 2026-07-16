@@ -56,7 +56,7 @@
 - 社交：`conversationId`、`messageId`、`rtcSessionId`
 - 实体：`entityType`、`entityId`、`bindPosition`
 - 学习：`runId`、`traceId`、`scorecardType`、`feedbackTarget`
-- 交集：`intersectionDimension`（identity/location/content/interest/relationship 五维之一）、`intersectionTagRef`（路径制 tagRef，唯一真相源 `quwoquan_data/publish/tags`）
+- 交集：`intersectionDimension`（identity/location/content/interest/relationship 五维之一）、`intersectionTagRef`（路径制 tagRef，唯一真相源 `quwoquan_data/control_plane/governance/taxonomy`）
 
 ## 指标定义原则
 

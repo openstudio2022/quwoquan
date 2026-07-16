@@ -6,7 +6,7 @@ status: implemented
 
 affected_nodes:
   - specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity
-  - quwoquan_data/scripts/_common/source_unit.py
+  - quwoquan_data/scripts/core/source_unit.py
   - quwoquan_data/scripts/download
   - quwoquan_data/scripts/produce
   - quwoquan_data/scripts/task

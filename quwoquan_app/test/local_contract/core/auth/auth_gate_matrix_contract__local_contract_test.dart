@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/auth/auth_policy.g.dart';
 import 'package:quwoquan_app/core/auth/auth_gate.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
   group('AuthGate 矩阵与 API 鉴权快照交叉校验', () {
@@ -12,7 +13,9 @@ void main() {
           if (mode == null) {
             violations.add('${entry.reason.name}: operation $op 不存在于鉴权快照');
           } else if (mode != 'required') {
-            violations.add('${entry.reason.name}: operation $op 鉴权模式为 $mode，应为 required');
+            violations.add(
+              '${entry.reason.name}: operation $op 鉴权模式为 $mode，应为 required',
+            );
           }
         }
       }
@@ -37,9 +40,20 @@ void main() {
     });
 
     test('AuthApiPolicy 辅助判定一致', () {
-      expect(AuthApiPolicy.isRequired('CreatePost'), isTrue);
-      expect(AuthApiPolicy.isPublic('CreatePost'), isFalse);
-      expect(AuthApiPolicy.isOptional('GetFeed'), isTrue);
+      expect(
+        AuthApiPolicy.isRequired(AppCloudOperationIds.contentPostCreatePost),
+        isTrue,
+      );
+      expect(
+        AuthApiPolicy.isPublic(AppCloudOperationIds.contentPostCreatePost),
+        isFalse,
+      );
+      expect(
+        AuthApiPolicy.isOptional(
+          AppCloudOperationIds.integrationLocationSearchLocations,
+        ),
+        isTrue,
+      );
     });
   });
 }

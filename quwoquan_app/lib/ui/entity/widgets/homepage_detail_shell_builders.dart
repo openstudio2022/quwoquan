@@ -1,21 +1,32 @@
 part of 'homepage_detail_shell.dart';
 
 extension _HomepageBuilders on _HomepageDetailShellState {
-  /// 「我的交集」预览卡：与圈子/用户主页同构，消费 [ObjectIntersectionPreviewCard]。
+  /// 「我的交集」区块：与圈子/用户主页直接消费同一 [ObjectIntersectionSection]。
   Widget _buildIntersectionCard(bool isDark) {
     final objectId = (_reference?.id ?? '').trim();
     if (objectId.isEmpty) {
       return const SizedBox.shrink();
     }
-    return ObjectIntersectionPreviewCard(
-      objectId: objectId,
-      objectType: 'homepage',
-      title: UITextConstants.objectMyIntersectionsTitle,
-      emptyText: UITextConstants.objectIntersectionEmptyEntity,
-      referralSource: ReferralSource.entityPage,
-      cardKey: const ValueKey<String>('homepage-my-intersection-card'),
-      emptyKey: const ValueKey<String>('homepage-my-intersection-empty'),
-      topPadding: false,
+    return Consumer(
+      builder: (context, ref, _) {
+        final query = ObjectIntersectionQuery(
+          objectAId: ref.watch(currentUserIdProvider),
+          objectAType: 'user',
+          objectBId: objectId,
+          objectBType: 'homepage',
+        );
+        if (!query.isResolvable) {
+          return const SizedBox.shrink();
+        }
+        return ObjectIntersectionSection(
+          key: const ValueKey<String>('homepage-my-intersection-card'),
+          query: query,
+          title: UITextConstants.objectMyIntersectionsTitle,
+          isDark: isDark,
+          emptyText: UITextConstants.objectIntersectionEmptyEntity,
+          emptyKey: const ValueKey<String>('homepage-my-intersection-empty'),
+        );
+      },
     );
   }
 

@@ -4,11 +4,9 @@
 
 from __future__ import annotations
 
-import os
+import shutil
 
 import sys
-
-import tempfile
 
 import struct
 
@@ -18,6 +16,8 @@ from io import BytesIO
 
 from pathlib import Path
 
+import pytest
+
 DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
 
 SCRIPTS_ROOT = DATA_ROOT / "scripts"
@@ -26,25 +26,37 @@ for _path in (DATA_ROOT, SCRIPTS_ROOT):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
-_TMP = tempfile.mkdtemp(prefix="qwq_content_plan_test_")
+from content.post import object_index as content_object, content_plan as cp
+from content.post import content_plan_state
 
-os.environ["QWQ_RUNTIME_ROOT"] = _TMP
+from core import ops_governance as og
 
-from _common import content_object, content_plan as cp
+from content.post.base_draft import assign_base_draft, base_draft_candidates, extract_base_draft_body, load_base_draft_text
+from content.post.fidelity import base_draft_fidelity_issues
 
-from _common import ops_governance as og
+from core.io import write_json
 
-from _common.base_draft import assign_base_draft, base_draft_candidates, base_draft_fidelity_issues, extract_base_draft_body, load_base_draft_text
+from core.paths import STAGE_COMPOSE, execution_content_plan_packet_path, execution_results_dir, execution_root
 
-from _common.io import write_json
+from content.source.source_unit import resolve_entity_object_dir, write_source_unit
+from support.execution_manifest_fixture import build_execution_fixture
 
-from _common.paths import STAGE_COMPOSE, batch_content_plan_packet_path, batch_results_dir, batch_root
+EXECUTION_ID = "20260711--travel-article-contract--test-content-plan--canary-903"
+IMAGE_EXECUTION_ID = "20260711--travel-image-contract--test-content-plan--canary-904"
 
-from _common.source_unit import resolve_entity_object_dir, write_source_unit
 
-TASK = "旅行/地域/四川省/景区/景区精选"
-
-BATCH = "test_batch_reject"
+@pytest.fixture(autouse=True)
+def isolated_content_plan_execution():
+    """每个合约用例拥有干净的 execution 工作包，禁止跨用例复用运行证据。"""
+    root = execution_root(EXECUTION_ID)
+    image_root = execution_root(IMAGE_EXECUTION_ID)
+    shutil.rmtree(root, ignore_errors=True)
+    shutil.rmtree(image_root, ignore_errors=True)
+    build_execution_fixture(EXECUTION_ID)
+    build_execution_fixture(IMAGE_EXECUTION_ID)
+    yield
+    shutil.rmtree(root, ignore_errors=True)
+    shutil.rmtree(image_root, ignore_errors=True)
 
 def _real_jpeg(seed: int = 0) -> bytes:
     from PIL import Image
@@ -108,7 +120,7 @@ def _write_article_source_asset(source_dir: Path, *, label: str) -> Path:
     return asset_file
 
 def _seed():
-    reject_dir = batch_results_dir(TASK, BATCH, "download", "source_screen")
+    reject_dir = execution_results_dir(EXECUTION_ID, "source", "source_screen")
     write_json(reject_dir / "reject1.json", {"sourceId": "reject1", "decision": "reject"})
     write_json(reject_dir / "keep1.json", {"sourceId": "keep1", "decision": "retain"})
     packet = {
@@ -126,9 +138,8 @@ def _seed():
             }
         ],
     }
-    write_json(batch_content_plan_packet_path(TASK, BATCH), packet)
+    write_json(execution_content_plan_packet_path(EXECUTION_ID), packet)
 
 
 
 __all__ = sorted(name for name in globals() if name != "__all__" and not name.startswith("__"))
-

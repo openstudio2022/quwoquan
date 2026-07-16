@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Ensure contracts/metadata/**/service.yaml request_entity / response_entity names
-are defined in the sibling fields.yaml (entities.* or current top-level entity + fields).
+are defined in the owning bundle's fields.yaml or projections/*.yaml.
 """
 from __future__ import annotations
 
@@ -27,6 +27,21 @@ def entity_names_from_fields_yaml(data: dict) -> set[str]:
     single = data.get("entity")
     if isinstance(single, str) and single.strip():
         out.add(single.strip())
+    return out
+
+
+def entity_names_from_projections(bundle_dir: Path) -> set[str]:
+    out: set[str] = set()
+    projections_dir = bundle_dir / "projections"
+    if not projections_dir.is_dir():
+        return out
+    for projection_path in sorted(projections_dir.glob("*.yaml")):
+        raw = yaml.safe_load(projection_path.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            continue
+        read_model = raw.get("read_model")
+        if isinstance(read_model, str) and read_model.strip():
+            out.add(read_model.strip())
     return out
 
 
@@ -63,6 +78,7 @@ def main() -> int:
         if not need:
             continue
         have = entity_names_from_fields_yaml(fld_raw)
+        have.update(entity_names_from_projections(parent))
         missing = sorted(need - have)
         if missing:
             rel = svc_path.relative_to(ROOT)

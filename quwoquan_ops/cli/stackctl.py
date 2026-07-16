@@ -3,10 +3,13 @@ from __future__ import annotations
 
 import argparse
 import codecs
+import contextlib
+import hashlib
 import json
 import os
 import selectors
 import shlex
+import shutil
 import socket
 import ssl
 import subprocess
@@ -15,6 +18,7 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+import urllib.parse
 from pathlib import Path
 from typing import Any
 
@@ -38,6 +42,11 @@ from quwoquan_ops.cli.lib.environment_topology import (
     get_target,
     load_environment_topology,
 )
+from quwoquan_ops.cli.lib.local_gamma_auth import (
+    open_local_gamma_acceptance_session,
+    prepare_local_gamma_auth,
+)
+from quwoquan_ops.cli.lib.local_gamma_object_storage import prepare_local_gamma_object_storage
 from quwoquan_ops.cli.lib.dev_up import (
     DEV_UP_ENVS,
     DEV_UP_STACK_TARGETS,
@@ -58,10 +67,12 @@ from quwoquan_ops.cli.lib.observability import (
 )
 from quwoquan_ops.cli.lib.output_paths import (
     app_release_dir,
+    env_observability_run_dir,
+    env_release_root,
     env_runs_root,
     repo_local_dir,
     service_release_dir,
-    target_local_dir,
+    target_process_dir,
 )
 
 
@@ -89,6 +100,96 @@ DEFAULT_TARGET_BY_ENV = {
     "gamma": "gamma-local",
     "prod": "prod-hosted",
 }
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return f"sha256:{digest.hexdigest()}"
+
+
+def _build_runtime_shared_package(env_name: str) -> Path:
+    """将运行栈共享静态配置封装为环境 package，禁止启动期直读仓内源文件。"""
+    package_dir = env_release_root(env_name) / "runtime-shared"
+    if package_dir.exists():
+        shutil.rmtree(package_dir)
+    package_dir.mkdir(parents=True, exist_ok=True)
+    sources = (
+        ROOT / "quwoquan_ops" / "environments" / "reliable_task_module_catalog.yaml",
+        ROOT / "quwoquan_ops" / "environments" / "reliable_task_retention_policy.yaml",
+    )
+    files: dict[str, dict[str, str]] = {}
+    for source in sources:
+        if not source.is_file():
+            raise FileNotFoundError(f"missing runtime shared package source: {source}")
+        destination = package_dir / source.name
+        shutil.copy2(source, destination)
+        files[source.name] = {
+            "source": relpath(source),
+            "sha256": _sha256_file(destination),
+        }
+    write_json(
+        package_dir / "manifest.json",
+        {
+            "schemaVersion": "qwq.runtime_shared_package/v1",
+            "environment": env_name,
+            "createdAt": utc_now(),
+            "files": files,
+        },
+    )
+    return package_dir
+
+
+def _materialize_prod_release_artifact() -> str:
+    """把 CI 已验证的不可变 release artifact 物化进 prod 环境包。"""
+    artifact_root_value = os.environ.get("QWQ_PROD_RELEASE_ARTIFACT_ROOT", "").strip()
+    if not artifact_root_value:
+        return ""
+    artifact_root = Path(artifact_root_value).expanduser()
+    if not artifact_root.is_absolute():
+        artifact_root = ROOT / artifact_root
+    manifest_path = artifact_root / "manifest.json"
+    if not manifest_path.is_file():
+        raise FileNotFoundError(f"prod release artifact manifest missing: {manifest_path}")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    config_version = str((manifest.get("versions") or {}).get("configVersion") or "").strip()
+    release_files = manifest.get("releaseFiles")
+    if not config_version or not isinstance(release_files, dict):
+        raise ValueError(f"invalid prod release artifact manifest: {manifest_path}")
+    package_root = env_release_root("prod") / "service"
+    artifact_digest = _sha256_file(manifest_path)
+    for service, relative_path in release_files.items():
+        source = artifact_root / str(relative_path)
+        if not source.is_file():
+            raise FileNotFoundError(f"prod release artifact file missing: {source}")
+        destinations = [package_root / str(service)]
+        if service == "recommendation-service":
+            destinations.append(package_root / "rec-model-service")
+        for destination_dir in destinations:
+            report_path = destination_dir / "report.json"
+            if not report_path.is_file():
+                raise FileNotFoundError(f"prod service package missing: {destination_dir}")
+            release_dir = destination_dir / "releases"
+            release_dir.mkdir(parents=True, exist_ok=True)
+            destination = release_dir / f"{config_version}.yaml"
+            shutil.copy2(source, destination)
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            provenance = report.get("provenance")
+            if not isinstance(provenance, dict):
+                raise ValueError(f"service package provenance missing: {report_path}")
+            release_digests = provenance.setdefault("releaseFiles", {})
+            if not isinstance(release_digests, dict):
+                raise ValueError(f"service package release provenance invalid: {report_path}")
+            release_digests[destination.name] = _sha256_file(destination)
+            provenance["releaseArtifact"] = {
+                "manifest": relpath(manifest_path),
+                "manifestSha256": artifact_digest,
+                "configVersion": config_version,
+            }
+            write_json(report_path, report)
+    return config_version
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -127,6 +228,7 @@ def build_parser() -> argparse.ArgumentParser:
     up_parser.add_argument("--env", choices=DEV_UP_ENVS, default="")
     up_parser.add_argument("--device-id", default="")
     up_parser.add_argument("--skip-app", action="store_true")
+    up_parser.add_argument("--skip-build", action="store_true")
     up_parser.add_argument("--rollout-mode", choices=["gray-initial", "carry-on", "full"], default="")
 
     down_parser = subparsers.add_parser("down", parents=[report_dir_compat_parser])
@@ -555,6 +657,8 @@ def _tail_gamma_container_logs() -> dict[str, Any]:
             "assistant-service": "quwoquan_service_assistant-service_1",
             "user-service": "quwoquan_service_user-service_1",
             "chat-service": "quwoquan_service_chat-service_1",
+            "integration-service": "quwoquan_service_integration-service_1",
+            "notification-service": "quwoquan_service_notification-service_1",
         }
         log_paths: list[tuple[str, Path]] = []
         with tempfile.TemporaryDirectory(prefix="gamma-tail-") as tmp_dir:
@@ -601,7 +705,15 @@ def _tail_gamma_container_logs() -> dict[str, Any]:
     if subprocess.run(["docker", "compose", "version"], text=True, capture_output=True, check=False).returncode != 0:
         return {"followed": False, "reason": "docker-compose-missing", "backend": "docker"}
 
-    services = ["gamma-proxy", "content-service", "assistant-service", "user-service", "chat-service"]
+    services = [
+        "gamma-proxy",
+        "content-service",
+        "assistant-service",
+        "user-service",
+        "chat-service",
+        "integration-service",
+        "notification-service",
+    ]
     with tempfile.TemporaryDirectory(prefix="gamma-tail-") as tmp_dir:
         tmp_root = Path(tmp_dir)
         log_paths = [(f"gamma-{service}", tmp_root / f"{service}.log") for service in services]
@@ -644,6 +756,18 @@ def _tail_gamma_container_logs() -> dict[str, Any]:
                     process.kill()
             for handle in handles.values():
                 handle.close()
+
+
+def _local_runtime_log_root(target: str) -> Path:
+    state_path = target_process_dir(target) / "local_run.json"
+    try:
+        payload = json.loads(state_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"local run state unavailable for {target}: {state_path}: {exc}") from exc
+    observability_root = Path(str(payload.get("observabilityRoot") or ""))
+    if not observability_root.is_absolute():
+        raise RuntimeError(f"local run observabilityRoot must be absolute: {state_path}")
+    return observability_root / "logs" / "service"
 
 
 def _write_summary_bundle(
@@ -961,10 +1085,8 @@ def _environment_page_smoke_tier_command(
     runtime_env = str(target.get("env") or env_name or "alpha")
     if target_name in {"prod-sim", "prod-hosted"}:
         runtime_env = "prod"
-    data_source = "mock" if target_name in {"alpha-local", "prod-sim"} else "remote"
-    token = _resolve_test_auth_token(runtime_env)
-    if not token and target_name != "prod-hosted":
-        token = f"local-{target_name}-token"
+    data_source = "mock" if target_name == "alpha-local" else "remote"
+    token = "" if target_name == "gamma-local" else _resolve_test_auth_token(runtime_env)
     smoke_report = (
         report_dir / "environment-page-smoke" / "report.json"
         if report_dir is not None
@@ -976,7 +1098,7 @@ def _environment_page_smoke_tier_command(
         "--report",
         str(smoke_report),
         "--env-name",
-        target_name,
+        "local-gamma" if target_name == "gamma-local" else target_name,
         "--runtime-env",
         runtime_env,
         "--api-contract-env",
@@ -989,8 +1111,6 @@ def _environment_page_smoke_tier_command(
         str(public_bases["productOps"]),
         "--media-base-url",
         str(public_bases["mediaImage"]),
-        "--test-auth-token",
-        token,
         "--target",
         "test/user_acceptance/patrol/environment/basic_viability__user_acceptance_test.dart",
     ]
@@ -1002,13 +1122,28 @@ def _environment_page_smoke_tier_command(
         argv.extend(["--device-id", device_id])
     if os.environ.get("STACKCTL_PAGE_SMOKE_DRY_RUN", "").strip() in {"1", "true", "yes"}:
         argv.append("--dry-run")
-    return {
+    command_env: dict[str, str] = {}
+    if target_name != "gamma-local":
+        if token:
+            command_env["TEST_AUTH_TOKEN"] = token
+        for key in (
+            "TEST_REFRESH_TOKEN",
+            "APP_CURRENT_OWNER_ID",
+            "APP_CURRENT_SUB_ACCOUNT_ID",
+        ):
+            value = os.environ.get(key, "").strip()
+            if value:
+                command_env[key] = value
+    command = {
         "name": f"{target_name}-environment-page-smoke",
         "argv": argv,
         "cwd": ROOT,
         "blocking": target_name != "alpha-local",
         "reportPath": relpath(smoke_report),
     }
+    if command_env:
+        command["env"] = command_env
+    return command
 
 
 def fetch_url(
@@ -1018,6 +1153,7 @@ def fetch_url(
     retry_attempts: int = 2,
     retry_sleep_seconds: float = 2.0,
     headers: dict[str, str] | None = None,
+    resolve_host: str = "",
 ) -> tuple[bool, int | None, str]:
     retry_markers = (
         "timed out",
@@ -1029,11 +1165,20 @@ def fetch_url(
     for attempt in range(1, total_attempts + 1):
         try:
             request = urllib.request.Request(url, headers=headers or {})
-            with urllib.request.urlopen(
-                request,
-                timeout=timeout,
-                context=ssl._create_unverified_context(),
-            ) as response:
+            with _temporary_host_resolution(url, resolve_host):
+                if resolve_host:
+                    opener = urllib.request.build_opener(
+                        urllib.request.ProxyHandler({}),
+                        urllib.request.HTTPSHandler(context=ssl._create_unverified_context()),
+                    )
+                    response = opener.open(request, timeout=timeout)
+                else:
+                    response = urllib.request.urlopen(
+                        request,
+                        timeout=timeout,
+                        context=ssl._create_unverified_context(),
+                    )
+            with response:
                 body = response.read().decode("utf-8", errors="replace")
                 return True, int(response.status), body[:500]
         except urllib.error.HTTPError as exc:
@@ -1045,6 +1190,45 @@ def fetch_url(
                 return False, None, message
             time.sleep(max(0.0, retry_sleep_seconds) * attempt)
     return False, None, "unknown fetch failure"
+
+
+@contextlib.contextmanager
+def _temporary_host_resolution(url: str, resolve_host: str):
+    """Connect a local public host to loopback while retaining its TLS SNI name."""
+    expected_host = urllib.parse.urlparse(url).hostname or ""
+    if not resolve_host or not expected_host:
+        yield
+        return
+
+    original_getaddrinfo = socket.getaddrinfo
+
+    def getaddrinfo(host: str | bytes | None, *args: Any, **kwargs: Any) -> Any:
+        if host == expected_host:
+            return original_getaddrinfo(resolve_host, *args, **kwargs)
+        return original_getaddrinfo(host, *args, **kwargs)
+
+    socket.getaddrinfo = getaddrinfo
+    try:
+        yield
+    finally:
+        socket.getaddrinfo = original_getaddrinfo
+
+
+def _local_public_connect_host(
+    topology: dict[str, Any],
+    target_name: str,
+    url: str,
+) -> str:
+    if target_name != "gamma-local":
+        return ""
+    hostname = urllib.parse.urlparse(url).hostname or ""
+    public_bases = get_target(topology, target_name).get("publicBases") or {}
+    public_hosts = {
+        urllib.parse.urlparse(str(base)).hostname
+        for base in public_bases.values()
+        if urllib.parse.urlparse(str(base)).hostname
+    }
+    return "127.0.0.1" if hostname in public_hosts else ""
 
 
 def _read_json_payload(path: Path) -> Any | None:
@@ -1151,7 +1335,32 @@ def _run_environment_integration_probe(
     product_ops = str(public_bases.get("productOps") or "").strip()
     if product_ops:
         argv.extend(["--product-ops-base-url", product_ops])
+    if target_name == "gamma-local":
+        argv.extend(["--resolve-host", "127.0.0.1"])
     token = _resolve_test_auth_token(env_name)
+    if target_name == "gamma-local" and not token:
+        try:
+            token = open_local_gamma_acceptance_session(
+                str(public_bases["api"]),
+                resolve_host="127.0.0.1",
+            ).access_token
+        except (RuntimeError, ValueError) as exc:
+            finding = f"gamma-local integration auth failed: {exc}"
+            return (
+                {
+                    "name": "integration-readonly",
+                    "scope": "full",
+                    "type": "script",
+                    "argv": argv,
+                    "ok": False,
+                    "statusCode": 1,
+                    "bodyPreview": finding,
+                    "skipped": False,
+                    "reportPath": relpath(report_file),
+                },
+                finding,
+                [finding],
+            )
     probe_env: dict[str, str] | None = None
     if token:
         probe_env = {"TEST_AUTH_TOKEN": token}
@@ -1498,6 +1707,58 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
                     **timing,
                 }
             details.append(f"service package ready: {relpath(service_release_dir(env_name, service))}")
+
+    if env_name == "prod":
+        try:
+            materialized_config_version = _materialize_prod_release_artifact()
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            timing = _finish_timing(started_monotonic, started_at)
+            write_json(report_dir / "report.json", {"status": "failed", "steps": reports, **timing})
+            _write_summary_bundle(
+                report_dir,
+                command="package",
+                target=target_name,
+                status="failed",
+                summary="stackctl package failed while materializing prod release artifact",
+                details=[str(exc)],
+                extra={"env": env_name},
+                timing=timing,
+            )
+            return {
+                "exitCode": 1,
+                "summary": "stackctl package failed while materializing prod release artifact",
+                "details": [str(exc)],
+                "reportDir": relpath(report_dir),
+                **timing,
+            }
+        if materialized_config_version:
+            details.append(
+                f"prod release artifact materialized: configVersion={materialized_config_version}"
+            )
+
+    try:
+        shared_package_dir = _build_runtime_shared_package(env_name)
+    except (OSError, FileNotFoundError) as exc:
+        timing = _finish_timing(started_monotonic, started_at)
+        write_json(report_dir / "report.json", {"status": "failed", "steps": reports, **timing})
+        _write_summary_bundle(
+            report_dir,
+            command="package",
+            target=target_name,
+            status="failed",
+            summary=f"stackctl package failed while building shared runtime package for {env_name}",
+            details=[str(exc)],
+            extra={"env": env_name},
+            timing=timing,
+        )
+        return {
+            "exitCode": 1,
+            "summary": f"stackctl package failed while building shared runtime package for {env_name}",
+            "details": [str(exc)],
+            "reportDir": relpath(report_dir),
+            **timing,
+        }
+    details.append(f"runtime shared package ready: {relpath(shared_package_dir)}")
 
     timing = _finish_timing(started_monotonic, started_at)
     payload = {
@@ -1857,39 +2118,39 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
         }
 
     def tail_beta_background_logs() -> dict[str, Any]:
-        beta_log_dir = target_local_dir("beta-local")
+        beta_log_dir = _local_runtime_log_root("beta-local")
         return _tail_multiple_logs_for_startup(
             [
-                ("beta-app", beta_log_dir / "app-beta.log"),
-                ("beta-product-ops", beta_log_dir / "product-ops.log"),
-                ("beta-platform-ops", beta_log_dir / "platform-ops.log"),
-                ("beta-ops-portal", beta_log_dir / "ops-portal.log"),
+                ("beta-app", beta_log_dir / "app-beta" / "local" / "runtime.log"),
+                ("beta-product-ops", beta_log_dir / "product-ops" / "local" / "runtime.log"),
+                ("beta-platform-ops", beta_log_dir / "platform-ops" / "local" / "runtime.log"),
+                ("beta-ops-portal", beta_log_dir / "ops-portal" / "local" / "runtime.log"),
             ],
             idle_timeout_seconds=4.0,
             max_follow_seconds=35.0,
         )
 
     def tail_alpha_background_logs() -> dict[str, Any]:
-        alpha_log_dir = target_local_dir("alpha-local")
+        alpha_log_dir = _local_runtime_log_root("alpha-local")
         return _tail_multiple_logs_for_startup(
             [
-                ("alpha-api-edge", alpha_log_dir / "api-edge.log"),
-                ("alpha-product-ops", alpha_log_dir / "product-ops.log"),
-                ("alpha-media-edge", alpha_log_dir / "media-edge.log"),
-                ("alpha-media-origin", alpha_log_dir / "media-origin.log"),
+                ("alpha-api-edge", alpha_log_dir / "api-edge" / "local" / "runtime.log"),
+                ("alpha-product-ops", alpha_log_dir / "product-ops" / "local" / "runtime.log"),
+                ("alpha-media-edge", alpha_log_dir / "media-edge" / "local" / "runtime.log"),
+                ("alpha-media-origin", alpha_log_dir / "media-origin" / "local" / "runtime.log"),
             ],
             idle_timeout_seconds=4.0,
             max_follow_seconds=20.0,
         )
 
     def tail_prod_sim_background_logs() -> dict[str, Any]:
-        prod_sim_log_dir = target_local_dir("prod-sim")
+        prod_sim_log_dir = _local_runtime_log_root("prod-sim")
         return _tail_multiple_logs_for_startup(
             [
-                ("prod-sim-api-edge", prod_sim_log_dir / "api-edge.log"),
-                ("prod-sim-product-ops", prod_sim_log_dir / "product-ops.log"),
-                ("prod-sim-media-edge", prod_sim_log_dir / "media-edge.log"),
-                ("prod-sim-media-origin", prod_sim_log_dir / "media-origin.log"),
+                ("prod-sim-api-edge", prod_sim_log_dir / "api-edge" / "local" / "runtime.log"),
+                ("prod-sim-product-ops", prod_sim_log_dir / "product-ops" / "local" / "runtime.log"),
+                ("prod-sim-media-edge", prod_sim_log_dir / "media-edge" / "local" / "runtime.log"),
+                ("prod-sim-media-origin", prod_sim_log_dir / "media-origin" / "local" / "runtime.log"),
             ],
             idle_timeout_seconds=4.0,
             max_follow_seconds=20.0,
@@ -1915,7 +2176,7 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
         )
         if result.returncode == 0:
             beta_ready_tail = _tail_file_for_startup(
-                target_local_dir("beta-local") / "app-beta.log",
+                _local_runtime_log_root("beta-local") / "app-beta" / "local" / "runtime.log",
                 prefix="[beta app-beta] ",
                 idle_timeout_seconds=8.0,
                 max_follow_seconds=180.0,
@@ -2016,9 +2277,44 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
                         stderr=f"log={relpath(app_launch['log_path'])}",
                     )
     elif requested_target == "gamma-local":
-        cmd = ["bash", "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"]
         env = _gamma_env_from_port_manifest(topology, requested_target)
-        result = run_stage("gamma-local", cmd, env=env, live_prefix="[gamma-local] ")
+        # All Gamma child reports share stackctl's explicit run identity.  Static
+        # deployment inputs remain in source/deploy work roots, never in output.
+        gamma_run_id = report_dir.name
+        env["QWQ_RUN_ROOT"] = str(report_dir.resolve())
+        env["QWQ_OBSERVABILITY_RUN_ROOT"] = str(
+            env_observability_run_dir(env_name, gamma_run_id).resolve()
+        )
+        package_cmd = [
+            "python3",
+            "quwoquan_ops/cli/stackctl.py",
+            "package",
+            "--env",
+            "gamma",
+            "--include-services",
+        ]
+        package_result = run(package_cmd, env=env)
+        steps.append(
+            {
+                "name": "gamma-package",
+                "argv": package_cmd,
+                "exitCode": package_result.returncode,
+                "stdout": package_result.stdout,
+                "stderr": package_result.stderr,
+            }
+        )
+        cmd = ["bash", "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"]
+        if getattr(args, "skip_build", False):
+            cmd.append("--skip-build")
+        if package_result.returncode != 0:
+            result = subprocess.CompletedProcess(
+                cmd,
+                package_result.returncode,
+                stdout=package_result.stdout,
+                stderr=package_result.stderr,
+            )
+        else:
+            result = run_stage("gamma-local", cmd, env=env, live_prefix="[gamma-local] ")
         if result.returncode == 0 and not args.skip_app:
             args.device_id = maybe_resolve_device_id(include_web=True)
             try:
@@ -2389,7 +2685,7 @@ def command_down(args: argparse.Namespace) -> dict[str, Any]:
         result = run(cmd)
     elif args.target == "gamma-local":
         cmd = ["bash", "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh", "--down"]
-        result = run(cmd)
+        result = run(cmd, env=_gamma_env_from_port_manifest(topology, args.target))
     elif args.target == "alpha-local":
         cmd = ["bash", "quwoquan_ops/cli/alpha/start_alpha_mock_stack.sh", "down"]
         result = run(cmd)
@@ -2507,6 +2803,7 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
             retry_attempts=retry_attempts,
             retry_sleep_seconds=retry_sleep_seconds,
             headers=item.get("headers"),
+            resolve_host=_local_public_connect_host(topology, args.target, item["url"]),
         )
         expected_status = item.get("expectedStatus")
         if ok and expected_status is not None and status_code != int(expected_status):
@@ -2767,7 +3064,16 @@ def command_repair(args: argparse.Namespace) -> dict[str, Any]:
         return payload
     if args.fix == "restart-stack":
         down_args = argparse.Namespace(command="down", target=args.target, output_format="json", report_dir=str(report_dir / "down"))
-        up_args = argparse.Namespace(command="up", target=args.target, device_id="", skip_app=False, output_format="json", report_dir=str(report_dir / "up"))
+        up_args = argparse.Namespace(
+            command="up",
+            env="",
+            target=args.target,
+            device_id="",
+            skip_app=True,
+            rollout_mode="",
+            output_format="json",
+            report_dir=str(report_dir / "up"),
+        )
         down_payload = command_down(down_args)
         up_payload = command_up(up_args)
         steps = [down_payload, up_payload]
@@ -2853,6 +3159,23 @@ def command_deploy(args: argparse.Namespace) -> dict[str, Any]:
                 "exitCode": 2,
                 "summary": "stackctl deploy prod-hosted requires service/image/config/step/SLO arguments",
                 "details": [],
+                **timing,
+            }
+        package_cmd = [
+            "python3",
+            "quwoquan_ops/cli/stackctl.py",
+            "package",
+            "--env",
+            "prod",
+            "--include-services",
+        ]
+        package_result = run(package_cmd)
+        if package_result.returncode != 0:
+            timing = _finish_timing(started_monotonic, started_at)
+            return {
+                "exitCode": package_result.returncode,
+                "summary": "stackctl deploy blocked: prod environment package failed",
+                "details": [package_result.stderr.strip() or package_result.stdout.strip()],
                 **timing,
             }
         cmd = [
@@ -3211,20 +3534,20 @@ def _gamma_env_from_port_manifest(topology: dict[str, Any], target_name: str) ->
     ports = profile_ports(manifest, profile_name)
     target = get_target(topology, target_name)
     public_bases = target.get("publicBases") or {}
-    return {
+    environment = {
         "LOCAL_GAMMA_HTTP_PORT": str(ports["api-edge"]),
         "LOCAL_GAMMA_PRODUCT_OPS_PORT": str(ports["product-ops-edge"]),
         "LOCAL_GAMMA_PLATFORM_OPS_PORT": str(ports["platform-ops-edge"]),
         "LOCAL_GAMMA_MEDIA_EDGE_PORT": str(ports["media-edge"]),
-        "LOCAL_GAMMA_MEDIA_ORIGIN_PORT": str(ports["media-origin"]),
+        "LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT": str(ports["object-storage-edge"]),
         "LOCAL_GAMMA_MEDIA_PUBLIC_BASE_URL": str(public_bases["mediaImage"]),
         "LOCAL_GAMMA_MEDIA_BASE_URL": str(public_bases["mediaImage"]),
-        # local-gamma 默认直接服务挂载的 curated media bundle；不要把容器内回源指向宿主 loopback。
-        "LOCAL_GAMMA_MEDIA_ORIGIN_BASE_URL": "",
         "LOCAL_GAMMA_CONTENT_PORT": str(ports["content-service"]),
         "LOCAL_GAMMA_CHAT_PORT": str(ports["chat-service"]),
         "LOCAL_GAMMA_USER_PORT": str(ports["user-service"]),
         "LOCAL_GAMMA_ASSISTANT_PORT": str(ports["assistant-service"]),
+        "LOCAL_GAMMA_INTEGRATION_PORT": str(ports["integration-service"]),
+        "LOCAL_GAMMA_NOTIFICATION_PORT": str(ports["notification-service"]),
         "LOCAL_GAMMA_REC_MODEL_PORT": str(ports["rec-model-service"]),
         "LOCAL_GAMMA_PRODUCT_OPS_SERVICE_PORT": str(ports["product-ops-service"]),
         "LOCAL_GAMMA_PLATFORM_OPS_SERVICE_PORT": str(ports["platform-ops-service"]),
@@ -3235,6 +3558,15 @@ def _gamma_env_from_port_manifest(topology: dict[str, Any], target_name: str) ->
         "LOCAL_GAMMA_POSTGRES_PORT": str(ports["postgres"]),
         "LOCAL_GAMMA_ES_PORT": str(ports["elasticsearch"]),
     }
+    environment.update(
+        prepare_local_gamma_auth().environment
+    )
+    environment.update(
+        prepare_local_gamma_object_storage(
+            edge_port=ports["object-storage-edge"],
+        ).environment
+    )
+    return environment
 
 
 def _health_checks_for_target(topology: dict[str, Any], target_name: str, scope: str) -> list[dict[str, Any]]:
@@ -3479,10 +3811,7 @@ def _expected_local_roles(target_name: str) -> list[str]:
         "gamma-local": [
             "api-edge",
             "product-ops-edge",
-            "platform-ops-edge",
-            "ops-portal",
             "media-edge",
-            "media-origin",
             "chat-service",
             "user-service",
             "content-service",
@@ -3494,6 +3823,8 @@ def _expected_local_roles(target_name: str) -> list[str]:
             "search-service",
             "entity-service",
             "circle-service",
+            "integration-service",
+            "notification-service",
             "postgres",
             "mongodb",
             "redis",
@@ -3549,11 +3880,11 @@ def _prod_rollout_workloads() -> list[dict[str, Any]]:
 
 def _local_log_report(target_name: str) -> dict[str, Any]:
     candidates: dict[str, Path] = {
-        "alpha-state": target_local_dir("alpha-local"),
-        "beta-state": target_local_dir("beta-local"),
-        "beta-manual": target_local_dir("beta-local") / "app-beta-manual",
+        "alpha-state": target_process_dir("alpha-local"),
+        "beta-state": target_process_dir("beta-local"),
+        "beta-manual": target_process_dir("beta-local") / "app-beta-manual",
         "app-instances": repo_local_dir("app-instances"),
-        "local-gamma": target_local_dir("gamma-local"),
+        "local-gamma": target_process_dir("gamma-local"),
         "release-state": repo_local_dir("release-state"),
     }
     hits = []

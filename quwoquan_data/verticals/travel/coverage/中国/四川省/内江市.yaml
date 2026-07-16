@@ -1,11 +1,10 @@
 # 全国地点主清单 · 四川省内江市（discovery_seed/2，WP2 区县级全量枚举）
-# schema: quwoquan_data/schema/coverage/master_list.schema.json
-# 门禁: qwq-data verify coverage-master-list
+# schema: quwoquan_data/schema/governance/master_list.schema.json
+# 门禁: qwq-data verify coverage-static-identity
 schemaVersion: quwoquan_data.discovery_seed/2
 country: 中国
 province: 四川省
 city: 内江市
-generatedBy: wp2_enumeration_20260708
 districts:
 - district: 东兴区
   leaves:
@@ -19,7 +18,6 @@ districts:
     - 范长江故居
     - 范长江文化旅游园区
     selectionPriority: 1
-    sourceReadiness: ready
   - name: 东兴老街
     canonicalName: 内江东兴老街
     entityType: 地点/打卡地
@@ -27,7 +25,6 @@ districts:
     - Entity/地点/打卡地
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/东兴区
     selectionPriority: 2
-    sourceReadiness: ready
   - name: 大千欢乐世界
     canonicalName: 内江大千欢乐世界
     entityType: 地点/主题乐园
@@ -35,14 +32,12 @@ districts:
     - Entity/地点/主题乐园/综合主题乐园
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/东兴区
     selectionPriority: 3
-    sourceReadiness: ready
   - name: 大治永興寺
     canonicalName: 大治永興寺
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/东兴区
-    sourceReadiness: pending
     selectionPriority: 4
   - name: 普陀岩摩崖造像
     canonicalName: 普陀岩摩崖造像
@@ -50,7 +45,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/东兴区
-    sourceReadiness: pending
     selectionPriority: 5
   - name: 般若寺及石刻
     canonicalName: 般若寺及石刻
@@ -58,7 +52,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/东兴区
-    sourceReadiness: pending
     selectionPriority: 6
   - name: 西林寺 (四川)
     canonicalName: 西林寺 (四川)
@@ -66,7 +59,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/东兴区
-    sourceReadiness: pending
     selectionPriority: 7
   - name: 順河崖墓群
     canonicalName: 順河崖墓群
@@ -74,7 +66,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/东兴区
-    sourceReadiness: pending
     selectionPriority: 8
   - name: 高峰寺塔及石刻
     canonicalName: 高峰寺塔及石刻
@@ -82,7 +73,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/东兴区
-    sourceReadiness: pending
     selectionPriority: 9
   - name: 鷺瀾洞崖墓
     canonicalName: 鷺瀾洞崖墓
@@ -90,7 +80,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/东兴区
-    sourceReadiness: pending
     selectionPriority: 10
 - district: 威远县
   leaves:
@@ -103,7 +92,6 @@ districts:
     aliases:
     - 石板河旅游区
     selectionPriority: 1
-    sourceReadiness: ready
   - name: 静宁寺
     canonicalName: 威远静宁寺
     entityType: 地点/宗教场所
@@ -111,7 +99,6 @@ districts:
     - Entity/地点/宗教场所
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/威远县
     selectionPriority: 2
-    sourceReadiness: ready
   - name: 罗世文烈士史料陈列馆
     canonicalName: 罗世文烈士史料陈列馆
     entityType: 地点/博物馆
@@ -119,14 +106,12 @@ districts:
     - Entity/地点/博物馆
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/威远县
     selectionPriority: 3
-    sourceReadiness: ready
   - name: 佛爾岩摩崖造像
     canonicalName: 佛爾岩摩崖造像
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/威远县
-    sourceReadiness: pending
     selectionPriority: 4
   - name: 坭黄铁路
     canonicalName: 坭黄铁路
@@ -134,7 +119,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/威远县
-    sourceReadiness: pending
     selectionPriority: 5
   - name: 威远城墙
     canonicalName: 威远城墙
@@ -142,7 +126,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/威远县
-    sourceReadiness: pending
     selectionPriority: 6
   - name: 威遠白塔
     canonicalName: 威遠白塔
@@ -150,7 +133,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/威远县
-    sourceReadiness: pending
     selectionPriority: 7
   - name: 威遠穹窿古寨群
     canonicalName: 威遠穹窿古寨群
@@ -158,7 +140,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/威远县
-    sourceReadiness: pending
     selectionPriority: 8
   - name: 威遠老君山石刻
     canonicalName: 威遠老君山石刻
@@ -166,7 +147,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/威远县
-    sourceReadiness: pending
     selectionPriority: 9
   - name: 威遠靜寧寺
     canonicalName: 威遠靜寧寺
@@ -174,7 +154,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/威远县
-    sourceReadiness: pending
     selectionPriority: 10
   - name: 紅村石油會戰舊址
     canonicalName: 紅村石油會戰舊址
@@ -182,7 +161,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/威远县
-    sourceReadiness: pending
     selectionPriority: 11
   - name: 羅世文故居
     canonicalName: 羅世文故居
@@ -190,7 +168,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/威远县
-    sourceReadiness: pending
     selectionPriority: 12
   - name: 胡馭垓烈士墓
     canonicalName: 胡馭垓烈士墓
@@ -198,7 +175,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/威远县
-    sourceReadiness: pending
     selectionPriority: 13
 - district: 市中区
   leaves:
@@ -213,7 +189,6 @@ districts:
     - 张大千纪念馆
     - 张大千博物馆
     selectionPriority: 1
-    sourceReadiness: pending
   - name: 圣水寺
     canonicalName: 内江圣水寺
     entityType: 地点/宗教场所
@@ -221,7 +196,6 @@ districts:
     - Entity/地点/宗教场所
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/市中区
     selectionPriority: 2
-    sourceReadiness: ready
   - name: 翔龙山摩崖造像
     canonicalName: 内江翔龙山摩崖造像
     entityType: 地点/遗址
@@ -229,7 +203,6 @@ districts:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/市中区
     selectionPriority: 3
-    sourceReadiness: pending
   - name: 甜城湖
     canonicalName: 内江甜城湖
     entityType: 地点/自然景观
@@ -238,7 +211,6 @@ districts:
     - Entity/地点/打卡地
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/市中区
     selectionPriority: 4
-    sourceReadiness: pending
   - name: 三元塔
     canonicalName: 内江三元塔
     entityType: 地点/遗址
@@ -248,14 +220,12 @@ districts:
     aliases:
     - 乐贤半岛三元塔
     selectionPriority: 5
-    sourceReadiness: ready
   - name: 內江三元塔
     canonicalName: 內江三元塔
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/市中区
-    sourceReadiness: pending
     selectionPriority: 6
   - name: 內江聖水寺
     canonicalName: 內江聖水寺
@@ -263,7 +233,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/市中区
-    sourceReadiness: pending
     selectionPriority: 7
   - name: 內江鐘樓
     canonicalName: 內江鐘樓
@@ -271,7 +240,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/市中区
-    sourceReadiness: pending
     selectionPriority: 8
   - name: 成渝铁路筑路民工纪念堂、碑
     canonicalName: 成渝铁路筑路民工纪念堂、碑
@@ -279,7 +247,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/市中区
-    sourceReadiness: pending
     selectionPriority: 9
   - name: 翔龍山摩崖造像及石刻
     canonicalName: 翔龍山摩崖造像及石刻
@@ -287,7 +254,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/市中区
-    sourceReadiness: pending
     selectionPriority: 10
   - name: 雲霞古剎石牌坊
     canonicalName: 雲霞古剎石牌坊
@@ -295,7 +261,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/市中区
-    sourceReadiness: pending
     selectionPriority: 11
 - district: 资中县
   leaves:
@@ -306,7 +271,6 @@ districts:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/资中县
     selectionPriority: 1
-    sourceReadiness: pending
   - name: 资中武庙
     canonicalName: 资中武庙
     entityType: 地点/遗址
@@ -314,7 +278,6 @@ districts:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/资中县
     selectionPriority: 2
-    sourceReadiness: pending
   - name: 罗泉古镇
     canonicalName: 罗泉古镇
     entityType: 地点/古镇
@@ -324,7 +287,6 @@ districts:
     aliases:
     - 罗泉镇
     selectionPriority: 3
-    sourceReadiness: ready
   - name: 圣灵山
     canonicalName: 资中圣灵山
     entityType: 地点/自然景观
@@ -334,7 +296,6 @@ districts:
     aliases:
     - 圣灵山大溶洞
     selectionPriority: 4
-    sourceReadiness: pending
   - name: 重龙山
     canonicalName: 资中重龙山
     entityType: 地点/自然景观
@@ -344,7 +305,6 @@ districts:
     aliases:
     - 重龙山风景区
     selectionPriority: 5
-    sourceReadiness: pending
   - name: 宁国寺
     canonicalName: 资中宁国寺
     entityType: 地点/宗教场所
@@ -352,14 +312,12 @@ districts:
     - Entity/地点/宗教场所
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/资中县
     selectionPriority: 6
-    sourceReadiness: pending
   - name: 唐明渡雙塔
     canonicalName: 唐明渡雙塔
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/资中县
-    sourceReadiness: pending
     selectionPriority: 7
   - name: 壽音閣
     canonicalName: 壽音閣
@@ -367,7 +325,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/资中县
-    sourceReadiness: pending
     selectionPriority: 8
   - name: 宏仁醫院
     canonicalName: 宏仁醫院
@@ -375,7 +332,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/资中县
-    sourceReadiness: pending
     selectionPriority: 9
   - name: 寧國寺
     canonicalName: 寧國寺
@@ -383,7 +339,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/资中县
-    sourceReadiness: pending
     selectionPriority: 10
   - name: 新正街民居
     canonicalName: 新正街民居
@@ -391,7 +346,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/资中县
-    sourceReadiness: pending
     selectionPriority: 11
   - name: 永慶寺
     canonicalName: 永慶寺
@@ -399,7 +353,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/资中县
-    sourceReadiness: pending
     selectionPriority: 12
   - name: 秦家岩摩崖造像
     canonicalName: 秦家岩摩崖造像
@@ -407,7 +360,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/资中县
-    sourceReadiness: pending
     selectionPriority: 13
   - name: 羅泉劉家大院
     canonicalName: 羅泉劉家大院
@@ -415,7 +367,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/资中县
-    sourceReadiness: pending
     selectionPriority: 14
   - name: 羅泉會議會址
     canonicalName: 羅泉會議會址
@@ -423,7 +374,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/资中县
-    sourceReadiness: pending
     selectionPriority: 15
   - name: 羅泉鍾氏宗祠
     canonicalName: 羅泉鍾氏宗祠
@@ -431,7 +381,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/资中县
-    sourceReadiness: pending
     selectionPriority: 16
   - name: 興禪寺
     canonicalName: 興禪寺
@@ -439,7 +388,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/资中县
-    sourceReadiness: pending
     selectionPriority: 17
   - name: 西岩摩崖造像
     canonicalName: 西岩摩崖造像
@@ -447,7 +395,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/资中县
-    sourceReadiness: pending
     selectionPriority: 18
   - name: 資中南華宮
     canonicalName: 資中南華宮
@@ -455,7 +402,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/资中县
-    sourceReadiness: pending
     selectionPriority: 19
   - name: 資中文廟
     canonicalName: 資中文廟
@@ -463,7 +409,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/资中县
-    sourceReadiness: pending
     selectionPriority: 20
   - name: 資中武廟
     canonicalName: 資中武廟
@@ -471,7 +416,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/资中县
-    sourceReadiness: pending
     selectionPriority: 21
   - name: 資中王家祠
     canonicalName: 資中王家祠
@@ -479,7 +423,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/资中县
-    sourceReadiness: pending
     selectionPriority: 22
   - name: 資中甘露寺
     canonicalName: 資中甘露寺
@@ -487,7 +430,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/资中县
-    sourceReadiness: pending
     selectionPriority: 23
   - name: 資中禹王宮木牌坊
     canonicalName: 資中禹王宮木牌坊
@@ -495,7 +437,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/资中县
-    sourceReadiness: pending
     selectionPriority: 24
   - name: 资中城墙
     canonicalName: 资中城墙
@@ -503,7 +444,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/资中县
-    sourceReadiness: pending
     selectionPriority: 25
   - name: 趙雄墓
     canonicalName: 趙雄墓
@@ -511,7 +451,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/资中县
-    sourceReadiness: pending
     selectionPriority: 26
   - name: 重龍天主堂
     canonicalName: 重龍天主堂
@@ -519,7 +458,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/资中县
-    sourceReadiness: pending
     selectionPriority: 27
   - name: 重龍山摩崖造像
     canonicalName: 重龍山摩崖造像
@@ -527,7 +465,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/资中县
-    sourceReadiness: pending
     selectionPriority: 28
   - name: 鹽神廟
     canonicalName: 鹽神廟
@@ -535,7 +472,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/资中县
-    sourceReadiness: pending
     selectionPriority: 29
   - name: 龙水县城遗址
     canonicalName: 龙水县城遗址
@@ -543,7 +479,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/内江市/资中县
-    sourceReadiness: pending
     selectionPriority: 30
 - district: 隆昌市
   leaves:
@@ -556,9 +491,6 @@ districts:
     aliases:
     - 隆昌石牌坊群
     selectionPriority: 1
-    sourceReadiness: ready
-    sourceScreenedAt: '2026-07-09T11:35:37Z'
-    sourceScreenEvidence: zh.wikipedia.org:隆昌石牌坊 extract=285ch
   - name: 古宇湖
     canonicalName: 古宇湖
     entityType: 地点/自然景观
@@ -568,7 +500,6 @@ districts:
     aliases:
     - 古宇湖景区
     selectionPriority: 2
-    sourceReadiness: ready
   - name: 云顶寨
     canonicalName: 隆昌云顶寨
     entityType: 地点/古镇
@@ -578,4 +509,3 @@ districts:
     aliases:
     - 云顶古寨
     selectionPriority: 3
-    sourceReadiness: pending

@@ -1,16 +1,27 @@
 version: 1
-aggregate: AssistantRun
 
 service:
   name: assistant-service
   domain: assistant
   owner: backend-team
+  commercial_defaults:
+    status: blocked
+    block_reason: canonical operation awaits object-centered commercial migration
+    gap_id: ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE
+    target_story: app-cloud-business-object-commercial-closure
   description: 小趣助手执行、上下文感知、Skill 路由与学习反馈
 
 api_routes:
   - method: POST
     path: /v1/assistant/search/xiaoqu
     operation: SearchXiaoquResults
+    actor: persona
+    application:
+      kind: query
+      facet: AssistantSearchQueryFacade
+      method: searchXiaoquResults
+      reader: AssistantSearchReader
+      slice: AssistantSearchResultView
     description: 小趣搜网络结果 tab 查询（返回 AI 总结与引用，不直接创建完整对话页 UI）
     request_entity: AssistantSearchXiaoquRequestWire
     request_fields: [userQuery, searchIntensity, subAccountId, personaContextVersion, sourceSurfaceId, fromGlobalSearch, contextSnapshot]
@@ -23,35 +34,18 @@ api_routes:
       visibility: private
 
   - method: POST
-    path: /v1/assistant/conversations
-    operation: CreateAssistantConversation
-    description: M4 云端 Assistant Service Shell 创建连续对话
-    request_fields: [summary]
-    response_entity: AssistantConversation
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-
-  - method: GET
-    path: /v1/assistant/conversations/{conversationId}
-    operation: GetAssistantConversation
-    description: M4 云端 Assistant Service Shell 读取连续对话
-    response_entity: AssistantConversation
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-
-  - method: POST
-    path: /v1/assistant/conversations/{conversationId}/turns
-    operation: CreateAssistantTurn
-    description: M4 云端 Assistant Service Shell 创建对话轮次
-    request_fields: [turnType, skillId, domainId, input, trigger]
+    path: /v1/assistant/conversations/{conversationId}/runs
+    operation: StartAssistantRun
+    actor: persona
+    application:
+      kind: command
+      facet: AssistantRunCommandFacade
+      method: startRun
+      aggregate_owner: AssistantRun
+      mutation_target: AssistantRun
+      invariant_target: AssistantRun
+    description: 统一启动助手执行；流式结果是该 Run 的 transport，不存在 CreateTurn/StreamTurn 第二主线
+    request_fields: [skillId, domainId, input, trigger, clientRequestId]
     response_entity: AssistantTurnEnvelope
     security:
       auth_mode: required
@@ -61,9 +55,16 @@ api_routes:
       visibility: private
 
   - method: GET
-    path: /v1/assistant/turns/{turnId}
-    operation: GetAssistantTurn
-    description: M4 云端 Assistant Service Shell 读取对话轮次
+    path: /v1/assistant/runs/{runId}
+    operation: GetAssistantRun
+    actor: persona
+    application:
+      kind: query
+      facet: AssistantTurnQueryFacade
+      method: getRun
+      reader: AssistantRunReader
+      slice: AssistantTurnEnvelope
+    description: 读取已启动助手 Run 的当前信封与恢复状态。
     response_entity: AssistantTurnEnvelope
     security:
       auth_mode: required
@@ -72,11 +73,19 @@ api_routes:
       anonymous_policy: deny
       visibility: private
 
-  - method: POST
-    path: /v1/assistant/turns/{turnId}/stream
-    operation: StreamAssistantTurn
-    description: M4 云端 Assistant Service Shell typed fake stream
-    request_fields: []
+  - method: GET
+    path: /v1/assistant/runs/{runId}/events
+    operation: StreamAssistantRunEvents
+    actor: persona
+    application:
+      kind: query
+      facet: AssistantRunEventTransport
+      method: streamEvents
+      reader: AssistantRunEventReader
+      slice: AssistantStreamEvent
+    description: 已启动助手 Run 的只读 SSE 事件 transport；不是第二条创建或执行主线。
+    response_entity: AssistantStreamEvent
+    transport: sse
     security:
       auth_mode: required
       principal: owner
@@ -87,6 +96,14 @@ api_routes:
   - method: POST
     path: /v1/assistant/page-context
     operation: ReportPageContext
+    actor: persona
+    application:
+      kind: command
+      facet: AssistantContextCommandFacade
+      method: reportPageContext
+      aggregate_owner: AssistantRun
+      mutation_target: AssistantRun
+      invariant_target: AssistantRun
     description: 页面上下文上报
     request_entity: AssistantReportPageContextRequestWire
     request_fields: [pageType, businessObjects, contextSnapshot, userAction, userActions, subAccountId, personaContextVersion]
@@ -101,6 +118,13 @@ api_routes:
   - method: GET
     path: /v1/assistant/personalization
     operation: GetEntryPersonalization
+    actor: persona
+    application:
+      kind: query
+      facet: AssistantPersonalizationQueryFacade
+      method: getEntryPersonalization
+      reader: AssistantEntryPersonalizationReader
+      slice: AssistantEntryPersonalizationView
     description: 私助半屏入口的欢迎语、chips 与建议行云下发
     query_params: [source, pageType, tab, dimension, objectId, objectType, experienceLevel]
     response_entity: AssistantEntryPersonalizationView
@@ -114,6 +138,13 @@ api_routes:
   - method: GET
     path: /v1/assistant/suggested-actions
     operation: GetSuggestedActions
+    actor: persona
+    application:
+      kind: query
+      facet: AssistantSuggestionQueryFacade
+      method: getSuggestedActions
+      reader: AssistantSuggestedActionReader
+      slice: SuggestedActionListView
     description: 获取当前页面建议操作
     query_params: [pageType, objectId]
     response_entity: SuggestedActionListView
@@ -124,39 +155,29 @@ api_routes:
       anonymous_policy: deny
       visibility: private
 
-  - method: POST
-    path: /v1/assistant/learning/events
-    operation: ReportInteractionEvent
-    description: 交互事件上报
-    request_entity: InteractionEvent
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-
-  - method: POST
-    path: /v1/assistant/learning/scorecards
-    operation: ReportScorecard
-    description: 评分卡上报
-    request_entity: Scorecard
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-
   - method: GET
     path: /v1/assistant/policy
     operation: GetPolicy
+    actor: none
+    application:
+      kind: query
+      facet: AssistantPolicyQueryFacade
+      method: getPolicy
+      reader: AssistantPolicyReader
+      slice: AssistantPolicyView
     description: 策略拉取
     response_entity: AssistantPolicyView
 
   - method: GET
     path: /v1/assistant/skills
     operation: ListSkills
+    actor: none
+    application:
+      kind: query
+      facet: AssistantSkillCatalogQueryFacade
+      method: listSkills
+      reader: AssistantSkillCatalogReader
+      slice: AssistantSkillCatalogListView
     description: 可用 Skill 列表（技能目录）
     query_params: [limit]
     response_entity: AssistantSkillCatalogListView
@@ -164,6 +185,13 @@ api_routes:
   - method: POST
     path: /v1/assistant/skills/creation-suggest
     operation: SuggestCreationAssistance
+    actor: persona
+    application:
+      kind: query
+      facet: AssistantCreationQueryFacade
+      method: suggestCreationAssistance
+      reader: AssistantCreationSuggestionReader
+      slice: AssistantCreationSuggestResponse
     description: |
       创作辅助建议：基于草稿摘要、已绑定圈子与主关联主页，返回可溯源标签、关联主页、标题与摘要建议。
       不生成收藏、稍后看、关注内容等已退场动作建议。
@@ -178,72 +206,15 @@ api_routes:
       visibility: private
 
   - method: GET
-    path: /v1/assistant/skill-subscriptions
-    operation: ListSkillSubscriptions
-    description: M8 主动式 Skill 订阅列表
-    query_params: [limit, status]
-    response_entity: SkillSubscriptionListView
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-
-  - method: POST
-    path: /v1/assistant/skill-subscriptions
-    operation: CreateSkillSubscription
-    description: M8 创建主动式 Skill 订阅
-    request_fields: [skillId, domainId, tagRefs, searchQueryPlan, trigger, destination]
-    response_entity: SkillSubscription
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-
-  - method: GET
-    path: /v1/assistant/skill-subscriptions/{subscriptionId}
-    operation: GetSkillSubscription
-    description: M8 读取主动式 Skill 订阅详情
-    response_entity: SkillSubscription
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-
-  - method: PATCH
-    path: /v1/assistant/skill-subscriptions/{subscriptionId}/status
-    operation: UpdateSkillSubscriptionStatus
-    description: M8 暂停、恢复或归档主动式 Skill 订阅
-    request_fields: [status]
-    response_entity: SkillSubscription
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-
-  - method: POST
-    path: /v1/assistant/skill-subscriptions/cron/tick
-    operation: TickSkillSubscriptionCron
-    description: M8 本地测试或内部调度触发 cron 扫描
-    request_fields: [now]
-    response_entity: SkillSubscriptionCronTickResult
-    security:
-      auth_mode: required
-      principal: service
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: internal
-
-  - method: GET
     path: /v1/assistant/tasks
     operation: ListAssistantTasks
+    actor: persona
+    application:
+      kind: query
+      facet: AssistantPersonalDataQueryFacade
+      method: listTasks
+      reader: AssistantTaskReader
+      slice: AssistantUserTaskListView
     description: 用户助手任务/待办列表（日程 tab 等）
     query_params: [limit, status]
     response_entity: AssistantUserTaskListView
@@ -257,6 +228,13 @@ api_routes:
   - method: GET
     path: /v1/assistant/memories
     operation: ListAssistantMemories
+    actor: persona
+    application:
+      kind: query
+      facet: AssistantPersonalDataQueryFacade
+      method: listMemories
+      reader: AssistantMemoryReader
+      slice: AssistantUserMemoryListView
     description: 用户助手记忆条目列表（摘要级）
     query_params: [limit]
     response_entity: AssistantUserMemoryListView
@@ -270,6 +248,13 @@ api_routes:
   - method: GET
     path: /v1/assistant/ops/learning-summary
     operation: GetLearningOpsSummary
+    actor: account
+    application:
+      kind: query
+      facet: AssistantLearningOpsQueryFacade
+      method: getLearningSummary
+      reader: AssistantLearningOpsReader
+      slice: AssistantLearningOpsSummaryView
     description: 运营侧读取指定用户的学习画像摘要与低分指标下钻摘要
     response_entity: AssistantLearningOpsSummaryView
     security:
@@ -278,28 +263,6 @@ api_routes:
       token_transport: bearer
       anonymous_policy: deny
       visibility: internal
-
-  - method: POST
-    path: /v1/assistant/skills/{skillId}/consent
-    operation: GrantSkillConsent
-    description: 授权 Skill
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-
-  - method: DELETE
-    path: /v1/assistant/skills/{skillId}/consent
-    operation: RevokeSkillConsent
-    description: 撤销 Skill 授权
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
 
 consumers:
   - name: app

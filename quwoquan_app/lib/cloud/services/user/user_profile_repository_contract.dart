@@ -19,21 +19,6 @@ abstract class ProfileReadRepository {
   });
   Future<List<UserWorkItem>> listUserWorks(String userId);
   Future<List<UserLifeItem>> listUserLifeItems(String userId);
-  Future<CursorPage<CircleDto>> listUserCirclesPage(
-    String userId, {
-    String? query,
-    String? cursor,
-    int limit = CloudApiDefaults.userCirclesLimit,
-  });
-  Future<List<CircleDto>> listUserCircles(
-    String userId, {
-    String? query,
-    int limit = CloudApiDefaults.userCirclesLimit,
-  }) async {
-    final page = await listUserCirclesPage(userId, query: query, limit: limit);
-    return page.items;
-  }
-
   Future<UserProfileStatsViewData> getUserStats(String userId);
 
   /// 创作者打动摘要（GetAuthorImpact，codegen DTO；displayText 云侧产出端只读直出）。
@@ -173,14 +158,33 @@ abstract class ProfileRelationshipRepository {
 /// R02：单接口 ≤10 方法。
 abstract class ProfilePersonaRepository {
   // ── 分身 ──────────────────────────────────────────────────────────────────
-  Future<List<PersonaDto>> listPersonas();
-  Future<PersonaDto> createPersona(PersonaCreateRequestDto request);
+  Future<List<PersonaManagementItemWireDto>> listPersonas();
+  Future<PersonaManagementItemWireDto> createPersona(
+    PersonaCreateRequestDto request,
+  );
   Future<void> updatePersona(
     String subAccountId,
     PersonaUpdateRequestDto request,
   );
   Future<void> deletePersona(String subAccountId);
   Future<void> activatePersona(String subAccountId);
+}
+
+/// 当前 owner 的私有互动历史。独立接口避免继续扩大关系 Repository（R02）。
+abstract class ProfileInteractionRepository {
+  Future<CursorPage<ProfileInteractionActivityViewData>>
+  listProfileShareInteractions(
+    String subAccountId, {
+    required String direction,
+    String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  });
+
+  Future<void> markProfileShareInteractionState(
+    String subAccountId,
+    String interactionId, {
+    required String state,
+  });
 }
 
 /// 用户主页 Repository。
@@ -196,30 +200,14 @@ abstract class UserProfileRepository
         ProfileReadRepository,
         ProfileEditRepository,
         ProfileRelationshipRepository,
-        ProfilePersonaRepository {
+        ProfilePersonaRepository,
+        ProfileInteractionRepository {
   const UserProfileRepository();
 
   Future<SubAccountProfileViewData> getSubAccountProfile(String userId) async {
     final profile = await getUserProfile(userId);
     final stats = await getUserStats(userId);
     return profile.mergeStats(stats);
-  }
-
-  Future<List<CircleDto>> listProfileCircles(
-    String userId, {
-    int limit = CloudApiDefaults.userCirclesLimit,
-  }) async {
-    return listUserCircles(userId, limit: limit);
-  }
-
-  @override
-  Future<List<CircleDto>> listUserCircles(
-    String userId, {
-    String? query,
-    int limit = CloudApiDefaults.userCirclesLimit,
-  }) async {
-    final page = await listUserCirclesPage(userId, query: query, limit: limit);
-    return page.items;
   }
 
   @override

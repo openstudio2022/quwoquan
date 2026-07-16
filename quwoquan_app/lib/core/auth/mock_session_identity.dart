@@ -1,7 +1,7 @@
 /// alpha / mock 环境下「当前用户」的标准身份。
 ///
-/// T3 切流后指向 creator pool `currentUserVariant` 槽位；`fixture_user_current`
-/// 保留为 archive alias，经 [PrefabUserResolver] 双读解析。
+/// 指向 creator pool `currentUserVariant` 槽位；身份由
+/// `_shared/prefab_user_provenance.yaml` 经 codegen 派生，设备运行时不读取仓库文件。
 ///
 /// 设计约定：
 /// - mock 不区分 owner 与主分身（user 主体即主分身），故 owner 与 subAccount

@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
-import 'package:quwoquan_app/core/services/app_content_repository.dart';
+import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 
 const String assistantScenarioFixtureName =
     'assistant/test_fixtures/scenarios/assistant_scenarios.json';
@@ -245,7 +245,7 @@ class ScenarioMockAssistantRepository extends MockAssistantRepository {
   }
 
   @override
-  Future<AssistantTurnEnvelopeWire> createAssistantTurn({
+  Future<AssistantTurnEnvelopeWire> startAssistantRun({
     required String conversationId,
     required String text,
     String turnType = 'user',
@@ -269,9 +269,10 @@ class ScenarioMockAssistantRepository extends MockAssistantRepository {
   }
 
   @override
-  Stream<AssistantStreamEventWire> streamAssistantTurn({
-    required String turnId,
+  Stream<AssistantStreamEventWire> watchAssistantRunEvents({
+    required String runId,
   }) async* {
+    final turnId = runId;
     final scenario = _turnScenarios[turnId] ?? _scenarios.values.first;
     final createdAt = DateTime.now().toUtc().toIso8601String();
     final toolName = scenario.alphaMockStream.toolName.isEmpty

@@ -2,17 +2,15 @@ package api_integration
 
 import (
 	"context"
-	"fmt"
 	"net/http"
-	"net/url"
 	"os"
 	"testing"
+	"time"
 
-	mongomod "github.com/testcontainers/testcontainers-go/modules/mongodb"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
-	mongoopts "go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	"quwoquan_service/internal/platform/testinfra"
 	httpadapter "quwoquan_service/services/tag-service/internal/adapters/http"
 	"quwoquan_service/services/tag-service/internal/application"
 	"quwoquan_service/services/tag-service/internal/infrastructure/persistence"
@@ -21,69 +19,44 @@ import (
 var (
 	testHandler  http.Handler
 	mongoDB      *mongo.Database
-	mongoClient  *mongo.Client
 	tagNodeStore *persistence.MongoTagNodeStore
 	objStore     *persistence.MongoObjectTagIndexStore
 )
 
 func TestMain(m *testing.M) {
-	ctx := context.Background()
-
-	var mongoContainer *mongomod.MongoDBContainer
-	mongoURI := os.Getenv("TEST_MONGO_URI")
-	if mongoURI == "" {
-		container, runErr := tryRunMongoContainer(ctx)
-		if runErr != nil {
-			if os.Getenv("CI") == "true" || os.Getenv("GITHUB_ACTIONS") == "true" {
-				panic("CI: failed to start mongo testcontainer: " + runErr.Error())
-			}
-			fmt.Fprintf(os.Stderr,
-				"\n[L2] WARN: Docker unavailable, skipping tag-service L2 tests.\n"+
-					"  Set TEST_MONGO_URI=mongodb://localhost:27017 to run without Docker.\n"+
-					"  Error: %v\n\n", runErr)
-			os.Exit(0)
-		}
-		mongoContainer = container
-		uri, connErr := container.ConnectionString(ctx)
-		if connErr != nil {
-			panic("failed to get mongo connection string: " + connErr.Error())
-		}
-		mongoURI = uri
-	}
-	mongoURI = normalizeMongoURI(mongoURI)
-
-	var err error
-	mongoClient, err = mongo.Connect(mongoopts.Client().ApplyURI(mongoURI))
+	startupCtx, startupCancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	mongoRuntime, err := testinfra.StartRealMongo(
+		startupCtx,
+		testinfra.UniqueDatabaseName("tag_api_integration"),
+	)
+	startupCancel()
 	if err != nil {
-		panic("failed to connect to mongo: " + err.Error())
+		panic("tag-service api_integration requires real MongoDB: " + err.Error())
 	}
-	mongoDB = mongoClient.Database("tag_test")
+	mongoDB = mongoRuntime.Database
 
 	tagNodeStore = persistence.NewMongoTagNodeStore(mongoDB.Collection("tag_nodes"))
 	objStore = persistence.NewMongoObjectTagIndexStore(mongoDB.Collection("object_tag_index"))
-	_ = tagNodeStore.EnsureIndexes(ctx)
-	_ = objStore.EnsureIndexes(ctx)
+	indexCtx, indexCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	if err := tagNodeStore.EnsureIndexes(indexCtx); err != nil {
+		indexCancel()
+		panic("ensure tag node indexes: " + err.Error())
+	}
+	if err := objStore.EnsureIndexes(indexCtx); err != nil {
+		indexCancel()
+		panic("ensure object tag indexes: " + err.Error())
+	}
+	indexCancel()
 
 	svc := application.NewTagService(tagNodeStore, objStore)
 	testHandler = httpadapter.NewTagHandler(svc).Routes()
 
 	code := m.Run()
 
-	_ = mongoClient.Disconnect(ctx)
-	if mongoContainer != nil {
-		_ = mongoContainer.Terminate(ctx)
-	}
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	_ = mongoRuntime.Close(shutdownCtx)
+	shutdownCancel()
 	os.Exit(code)
-}
-
-func tryRunMongoContainer(ctx context.Context) (c *mongomod.MongoDBContainer, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err = fmt.Errorf("testcontainers panic (Docker unavailable?): %v", r)
-		}
-	}()
-	c, err = mongomod.Run(ctx, "mongo:7-jammy")
-	return
 }
 
 func cleanCollections(t *testing.T) {
@@ -94,21 +67,4 @@ func cleanCollections(t *testing.T) {
 	for _, coll := range []string{"tag_nodes", "object_tag_index"} {
 		mongoDB.Collection(coll).DeleteMany(context.Background(), bson.M{})
 	}
-}
-
-// normalizeMongoURI 让本地 / 容器测试 URI 走直连，避免 server selection 长时间挂起。
-func normalizeMongoURI(raw string) string {
-	parsed, err := url.Parse(raw)
-	if err != nil {
-		return raw
-	}
-	if parsed.Path == "" {
-		parsed.Path = "/"
-	}
-	query := parsed.Query()
-	query.Set("directConnection", "true")
-	query.Set("serverSelectionTimeoutMS", "5000")
-	query.Set("connectTimeoutMS", "5000")
-	parsed.RawQuery = query.Encode()
-	return parsed.String()
 }

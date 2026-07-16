@@ -1,11 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/cloud/content/generated/content_error_code_ext.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
 
 /// L1a 契约测试：ContentErrorCode — 覆盖 mock.yaml error_scenarios
 ///
 /// 三维度覆盖：
 ///   常规契约  — 每个已知错误码正确解析，错误码解析与状态码正确
-///   兼容性契约 — 未知 code 字符串 → unknown 降级；enum 数量稳定
+///   演进契约 — 未知 code 字符串 → unknown 降级；全部生成 enum 可回环
 ///   异常/边界契约 — 空字符串/null-like 输入不崩溃
 void main() {
   // ──────────────────────────────────────────────────────────────────
@@ -71,6 +72,13 @@ void main() {
       expect(code, ContentErrorCode.storageWriteFailed);
     });
 
+    test('parse_storage_read_failed → storageReadFailed', () {
+      final code = ContentErrorCode.fromCode(
+        'CONTENT.SYSTEM.storage_read_failed',
+      );
+      expect(code, ContentErrorCode.storageReadFailed);
+    });
+
     test('parse_internal_error → internalError', () {
       final code = ContentErrorCode.fromCode('CONTENT.SYSTEM.internal_error');
       expect(code, ContentErrorCode.internalError);
@@ -111,6 +119,7 @@ void main() {
       'CONTENT.USER.content_too_long': 400,
       'CONTENT.USER.media_not_ready': 400,
       'CONTENT.SYSTEM.storage_write_failed': 500,
+      'CONTENT.SYSTEM.storage_read_failed': 500,
       'CONTENT.SYSTEM.internal_error': 500,
       'CONTENT.MIDDLEWARE.upstream_timeout': 504,
     };
@@ -141,6 +150,7 @@ void main() {
     test('SYSTEM errors map to 5xx HTTP status codes', () {
       const systemErrors = {
         'CONTENT.SYSTEM.storage_write_failed': 500,
+        'CONTENT.SYSTEM.storage_read_failed': 500,
         'CONTENT.SYSTEM.internal_error': 500,
       };
       for (final entry in systemErrors.entries) {
@@ -176,18 +186,10 @@ void main() {
         reason: 'unauthorized MUST be 401 (auth), not 403 (authz)',
       );
     });
-
-    test('all 13 error codes have an HTTP status in the mapping contract', () {
-      expect(
-        expectedHttpStatuses.length,
-        equals(13),
-        reason: 'All 13 named error codes must have an HTTP status contract',
-      );
-    });
   });
 
   // ──────────────────────────────────────────────────────────────────
-  // 兼容性契约：未知 code → unknown 降级；enum 数量稳定
+  // 演进契约：未知 code → unknown 降级；enum 与字符串映射完整
   // ──────────────────────────────────────────────────────────────────
   group('ContentErrorCode — 兼容性契约', () {
     test('fallback_unknown_code → unknown', () {
@@ -195,29 +197,26 @@ void main() {
       expect(code, ContentErrorCode.unknown);
     });
 
-    test('all 13 named error codes have distinct enum values', () {
-      final allCodes = [
-        'CONTENT.USER.post_not_found',
-        'CONTENT.USER.comment_not_found',
-        'CONTENT.USER.forbidden_edit',
-        'CONTENT.USER.forbidden_delete',
-        'CONTENT.USER.unauthorized',
-        'CONTENT.USER.invalid_argument',
-        'CONTENT.USER.invalid_content_type',
-        'CONTENT.USER.rate_limited',
-        'CONTENT.USER.content_too_long',
-        'CONTENT.USER.media_not_ready',
-        'CONTENT.SYSTEM.storage_write_failed',
-        'CONTENT.SYSTEM.internal_error',
-        'CONTENT.MIDDLEWARE.upstream_timeout',
-      ];
-      final enums = allCodes.map(ContentErrorCode.fromCode).toSet();
-      expect(
-        enums.length,
-        equals(13),
-        reason: 'Each error code must map to a distinct enum value',
-      );
-    });
+    test(
+      'every generated named error code round-trips through its stable code',
+      () {
+        final namedCodes = ContentErrorCode.values.where(
+          (errorCode) => errorCode != ContentErrorCode.unknown,
+        );
+        for (final errorCode in namedCodes) {
+          expect(
+            errorCode.code,
+            isNotEmpty,
+            reason: '$errorCode must expose a code',
+          );
+          expect(
+            ContentErrorCode.fromCode(errorCode.code),
+            errorCode,
+            reason: '$errorCode must round-trip through its stable code',
+          );
+        }
+      },
+    );
   });
 
   // ──────────────────────────────────────────────────────────────────

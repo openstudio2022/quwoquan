@@ -25,6 +25,19 @@ schema:
       - acceptance_refs
 
 journeys:
+  - id: identity-entry-and-continuation
+    title: 身份进入与动作续接
+    user_goal: 游客完成欢迎、同意、商业登录、Persona 选择与账号安全后，登录成功继续原动作，关闭登录则回到安全状态且不循环。
+    scenario_refs:
+      - identity-entry-persona-continuation
+    domain_services:
+      - user-identity-profile-relationship
+      - runtime
+      - integration
+    uat_refs:
+      - UAT_BUSINESS_OBJECT_COMMERCIALIZATION
+    status: specified
+
   - id: content-discovery-to-consumption
     title: 内容发现到消费
     user_goal: 用户从发现页进入内容详情，并完成阅读、互动或跳转作者主页。
@@ -86,6 +99,20 @@ journeys:
       - UAT_MESSAGE_SOCIAL_CONNECTION
     status: specified
 
+  - id: circle-entity-group-collaboration
+    title: 圈子、实体主页与讨论协作
+    user_goal: 用户从实体主页或搜索进入圈子与组织节点，完成加入、群单元进入、内容协作和权限治理，且主页、圈子、群与会话边界清晰。
+    scenario_refs:
+      - circle-entity-group-handoff
+    domain_services:
+      - circle-community
+      - shared-homepage-network
+      - chat-conversation
+      - discovery-content
+    uat_refs:
+      - UAT_BUSINESS_OBJECT_COMMERCIALIZATION
+    status: specified
+
   - id: assistant-omnipresent-private-assistant
     title: 无处不在的小趣私人助理
     user_goal: 用户在首页、内容页、搜索页、个人页和群聊中都能唤起同一个小趣；小趣理解当前对象、最近会话、站内搜索、社交关系、画像与标签，并能在授权后主动把有价值的信息投递给用户或会话。
@@ -145,7 +172,44 @@ journeys:
       - 2026-07-01「交集 v3 商用化基线」：产品主轴「别人帮你刷内容，我们帮你遇到对的人」，商用滩头旅行+摄影同趣搭子，北极星为可行动交集完成/关系形成（非 DAU）；v3 先落 C0 最薄闭环「共同想去→约伴」（coWishlistedEntity + start_companion，复用已有 wishlist/关注/交集信号，不依赖新 LBS/实时），附近/实时/线下局真实聚合仍 deferred。真相源 specs/product/intersection-definition-and-application.md §24，验收见 intersection-unified-experience/acceptance.yaml SIT5。前台概念收敛为「交集 / 打动」两维度，入口统一「交集配对」、收件箱统一「今日交集」（旧兴趣配对/找同趣/同趣机会/影响力前台退场，机器标识 interest_match/impact 保留），详见 00_GLOBAL_TERMINOLOGY.md §18.7。
     status: draft
 
+  - id: profile-private-activity-history
+    title: 我的主页私有互动历史
+    user_goal: 当前用户在自己的主页按互动类型和方向查看可靠、可恢复且不向他人公开的互动历史。
+    scenario_refs:
+      - profile-share-interaction-history
+    domain_services:
+      - user-identity-profile-relationship
+      - discovery-content
+    uat_refs:
+      - UAT_PROFILE_SHARE_INTERACTION
+    status: specified
+
 scenarios:
+  - id: identity-entry-persona-continuation
+    title: 欢迎、授权、商业登录、Persona 与原动作续接
+    parent_journey: identity-entry-and-continuation
+    domain_services:
+      - user-identity-profile-relationship
+      - runtime
+      - integration
+    business_capabilities:
+      - user-identity-profile-relationship/onboarding-and-identity-entry
+      - user-identity-profile-relationship/auth-profile-snapshot
+      - user-identity-profile-relationship/persona-follow-graph
+      - runtime/runtime-client-foundation
+    stories:
+      - user-identity-profile-relationship/onboarding-and-identity-entry/two-state-one-tap-login--commercial-login-entry
+      - user-identity-profile-relationship/onboarding-and-identity-entry/post-login-landing
+      - user-identity-profile-relationship/onboarding-and-identity-entry/onboarding-consent-flow
+      - user-identity-profile-relationship/persona-follow-graph/persona-management
+      - runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure
+    acceptance_refs:
+      - specs/feature-tree/acceptance.yaml#UAT_BUSINESS_OBJECT_COMMERCIALIZATION
+    boundary_notes:
+      - UserAccount 只承担账号/认证/安全，公开业务动作使用 Persona；ActorContext 明确 accountId/personaId/deviceActorId。
+      - 登录关闭回安全状态，登录成功通过 AuthContinuation 恢复目标动作；不得通过旧路由或 fallback 绕过双目标合同。
+    status: specified
+
   - id: global-route-edge-pop-contract
     title: 全局无底栏页面边缘返回
     parent_journey: app-root-navigation-safety
@@ -155,8 +219,10 @@ scenarios:
       - runtime/native-edge-gesture-navigation
     stories:
       - runtime/native-edge-gesture-navigation/global-route-edge-pop-contract
+      - runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure
     acceptance_refs:
       - specs/feature-tree/acceptance.yaml#UAT_EDGE_SWIPE
+      - specs/feature-tree/acceptance.yaml#UAT_BUSINESS_OBJECT_COMMERCIALIZATION
     boundary_notes:
       - runtime 负责平台防腐策略、Page 工厂与根壳返回状态机；业务页面只声明路由类型和可选返回 guard。
     status: specified
@@ -181,8 +247,10 @@ scenarios:
       - discovery-content/exposure-governance/dynamic-exposure-budget
       - discovery-content/exposure-governance/content-lifecycle-resurfacing
       - discovery-content/content-display-journey-consistency/viewer-profile-state-sync-contract
+      - runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure
     acceptance_refs:
       - specs/feature-tree/acceptance.yaml#UAT1
+      - specs/feature-tree/acceptance.yaml#UAT_BUSINESS_OBJECT_COMMERCIALIZATION
     boundary_notes:
       - 发现流排序归 discovery-content；作者关系与画像归 user-identity-profile-relationship。
       - 曝光记忆、动态曝光预算、生命周期复活与曝光健康归 exposure-governance；feed-orchestration-recommendation 只消费其业务边界，不维护第二套曝光真相源。
@@ -209,6 +277,26 @@ scenarios:
       - 内容详情只传递 referralSource 与 subject id，不拥有主页 IA。
     status: draft
 
+  - id: profile-share-interaction-history
+    title: 我的主页转发互动双向历史
+    parent_journey: profile-private-activity-history
+    domain_services:
+      - user-identity-profile-relationship
+      - discovery-content
+    business_capabilities:
+      - user-identity-profile-relationship/profile-homepage-redesign
+    stories:
+      - user-identity-profile-relationship/profile-homepage-redesign/owner-subaccount-homepage-unification
+      - runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure
+    acceptance_refs:
+      - specs/feature-tree/acceptance.yaml#UAT_PROFILE_SHARE_INTERACTION
+      - specs/feature-tree/acceptance.yaml#UAT_BUSINESS_OBJECT_COMMERCIALIZATION
+      - specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-subaccount-homepage-unification/acceptance.yaml
+    boundary_notes:
+      - 主页能力拥有 IA、双方向缓存和 owner/sub-account 隔离；content-service 拥有转发 occurrence、分页、seen/read 与 impact 投影。
+      - 不创建独立转发页面或第二套转发列表 API，不改变点赞、评论、浏览列表。
+    status: specified
+
   - id: global-search-query-and-filter
     title: 全局搜索查询与筛选
     parent_journey: cross-domain-search
@@ -225,8 +313,10 @@ scenarios:
       - global-search-experience/cross-domain-search-journey/full-screen-search-shell-and-entry
       - global-search-experience/cross-domain-search-journey/search-intersection-consumption
       - global-search-experience/search-provider-routing-and-storage-topology/search-execution-routing-policy
+      - runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure
     acceptance_refs:
       - specs/feature-tree/acceptance.yaml#UAT1
+      - specs/feature-tree/acceptance.yaml#UAT_BUSINESS_OBJECT_COMMERCIALIZATION
     boundary_notes:
       - global-search-experience 负责入口、路由和聚合体验；各领域服务负责本域结果契约。
     status: draft
@@ -244,8 +334,10 @@ scenarios:
     stories:
       - chat-conversation/contact-and-session-governance/greeting-request-inbox-and-upgrade
       - chat-conversation/contact-and-session-governance/conversation-entry-matrix
+      - runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure
     acceptance_refs:
       - specs/feature-tree/acceptance.yaml#UAT_MESSAGE_SOCIAL_CONNECTION
+      - specs/feature-tree/acceptance.yaml#UAT_BUSINESS_OBJECT_COMMERCIALIZATION
       - specs/feature-tree/chat-conversation/contact-and-session-governance/acceptance.yaml
     boundary_notes:
       - 关注/互关/拉黑与打招呼状态归 user-identity-profile-relationship；正式会话、消息收发和只读态归 chat-conversation。
@@ -273,6 +365,33 @@ scenarios:
       - 圈子与组织型关系主页负责群单元和成员治理；chat-conversation 只负责 group conversation 与消息链路。
       - 共享主页只输出 related groups 摘要；不得直接拥有 conversation 创建语义。
       - 学校下的班级群是组织节点 CircleGroup 绑定 group conversation，不是新的会话类型。
+    status: specified
+
+  - id: circle-entity-group-handoff
+    title: 实体主页到圈子、组织节点、群单元与会话协作
+    parent_journey: circle-entity-group-collaboration
+    domain_services:
+      - circle-community
+      - shared-homepage-network
+      - chat-conversation
+      - discovery-content
+    business_capabilities:
+      - circle-community/activity-member-governance
+      - circle-community/circle-collaboration-tools
+      - shared-homepage-network/homepage-discovery-and-attach-journey
+      - chat-conversation/group-creation-member-management
+    stories:
+      - circle-community/activity-member-governance/circle-lifecycle
+      - circle-community/activity-member-governance/member-role-permission
+      - shared-homepage-network/homepage-discovery-and-attach-journey/homepage-entry-and-preview
+      - chat-conversation/group-creation-member-management/group-create-flow
+      - runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure
+    acceptance_refs:
+      - specs/feature-tree/acceptance.yaml#UAT_BUSINESS_OBJECT_COMMERCIALIZATION
+      - specs/feature-tree/circle-community/activity-member-governance/acceptance.yaml
+    boundary_notes:
+      - Homepage 只提供主档和 related group Slice；Circle/CircleGroup 负责社区与组织群单元治理；Conversation 负责消息。
+      - 只有绑定 Circle 或组织节点的群是 CircleGroup；ad-hoc group 只属于 Conversation。
     status: specified
 
   - id: message-assistant-in-conversation
@@ -310,8 +429,10 @@ scenarios:
     stories:
       - assistant-run-learning/run-stream-policy/run-sync-contract
       - runtime/runtime-assistant/context-grounded-answering
+      - runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure
     acceptance_refs:
       - specs/feature-tree/acceptance.yaml#UAT_ASSISTANT_OMNIPRESENT_PRIVATE_ASSISTANT
+      - specs/feature-tree/acceptance.yaml#UAT_BUSINESS_OBJECT_COMMERCIALIZATION
       - specs/feature-tree/runtime/runtime-assistant/acceptance.yaml
     boundary_notes:
       - 页面只上报结构化 context snapshot；小趣 grounding、检索与回答归 assistant-run-learning/runtime-assistant。
@@ -435,8 +556,10 @@ scenarios:
       - product-ops-growth/outbound-share-distribution/object-share-cards
       - product-ops-growth/outbound-share-distribution/share-channel-panel
       - product-ops-growth/outbound-share-distribution/share-attribution-and-token
+      - runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure
     acceptance_refs:
       - specs/feature-tree/acceptance.yaml#UAT_EXTERNAL_ACQUISITION
+      - specs/feature-tree/acceptance.yaml#UAT_BUSINESS_OBJECT_COMMERCIALIZATION
     boundary_notes:
       - 分享面板、渠道编排、卡片视觉与归因口令归 product-ops-growth；各对象的可分享字段与分享落库计数归各自领域（content/circle/user/entity）。
     status: draft
@@ -486,8 +609,10 @@ scenarios:
       - object-homepage-network/intersection-unified-experience/intersection-algorithm-closure
       - object-homepage-network/intersection-unified-experience/entity-homepage-intersection-redesign
       - object-homepage-network/intersection-unified-experience/home-recommend-intersection-redesign
+      - runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure
     acceptance_refs:
       - specs/feature-tree/object-homepage-network/intersection-unified-experience/acceptance.yaml
+      - specs/feature-tree/acceptance.yaml#UAT_BUSINESS_OBJECT_COMMERCIALIZATION
     boundary_notes:
       - 交集 kind/actionKey/objectKind 闭集真相源在 intersection_kind_registry.yaml；对象页行动区只读分发新增 actionHints，不维护第二套行动表。
       - 行动阶梯 L3-L6（同趣/同行/线下/实时）新增 actionKey 已登记 metadata；无稳定数据源的 kind 先 status:deferred，不产出。

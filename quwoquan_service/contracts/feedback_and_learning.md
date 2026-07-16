@@ -140,14 +140,12 @@
 
 #### 5.2.2 Orchestrator（聚合接口，直接影响页面 TTCR）
 
-- `GET /v1/orch/discovery/feed`（`orch.discovery_feed.list`）
-  - SLO：成功率 ≥ 99.5%，p95 ≤ 600ms，p99 ≤ 1200ms
 - `GET /v1/orch/circles/{circleId}/activities`
   - SLO：成功率 ≥ 99.5%，p95 ≤ 600ms，p99 ≤ 1200ms
 
 #### 5.2.3 Content（核心业务对象：Post/Comment/Reaction/Feed）
 
-- `GET /v1/content/feed`（候选/非编排路径）
+- `GET /v1/content/feed`（`content.feed.list`，发现页唯一 canonical 路径）
   - SLO：成功率 ≥ 99.5%，p95 ≤ 400ms
 - `GET /v1/content/posts/{postId}/comments`
   - SLO：成功率 ≥ 99.5%，p95 ≤ 300ms
@@ -172,7 +170,7 @@
 
 - `POST /v1/ops/events`（体验/行为事件接收）
   - SLO：成功率 ≥ 99.9%，p95 ≤ 200ms（写入可异步落库，但必须幂等）
-- `GET /v1/ops/experiments/{experimentId}/bucket`
+- `GET /v1/ops/experiments/{experimentId}/assignments/{subjectKey}`
   - SLO：成功率 ≥ 99.9%，p95 ≤ 80ms（建议强缓存）
 
 #### 5.2.7 Assistant（自学习与推理）

@@ -12,11 +12,13 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+	operationsecurity "quwoquan_service/generated/operationsecurity"
+	rtmongo "quwoquan_service/internal/platform/mongodb"
+	rtauth "quwoquan_service/runtime/auth"
 	rtgov "quwoquan_service/runtime/governance"
 	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
 	rtmetrics "quwoquan_service/runtime/metrics"
-	rtmongo "quwoquan_service/runtime/mongodb"
 	robs "quwoquan_service/runtime/observability"
 	rtotel "quwoquan_service/runtime/otel"
 	httpadapter "quwoquan_service/services/entity-service/internal/adapters/http"
@@ -110,7 +112,7 @@ func main() {
 	}
 	rootMux.HandleFunc("/healthz", healthChecker.Handler())
 	rootMux.Handle("/metrics", rtmetrics.Handler())
-	rootMux.Handle("/", handler)
+	rootMux.Handle("/", generatedEntityOperationHandler(handler))
 	serverCfg := rthttp.HTTPServerMiddlewareConfig{
 		Service:           "entity-service",
 		Origin:            "cloud",
@@ -138,6 +140,12 @@ func main() {
 	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {
 		log.Fatalf("entity-service: %v", err)
 	}
+}
+
+func generatedEntityOperationHandler(next http.Handler) http.Handler {
+	return rtauth.RequireGeneratedOperationAuthorization(
+		operationsecurity.ForDomain("entity"),
+	)(next)
 }
 
 func loadRuntimeConfig() (config, error) {

@@ -41,7 +41,7 @@ entries:
           - A6
           - A7
           - A8
-      - path: specs/feature-tree/discovery-content/content-type-framework/creation-mode-and-surface-ia-unification/plan.yaml
+      - path: specs/feature-tree/discovery-content/content-type-framework/creation-mode-and-surface-ia-unification/content.execution.planning.yaml
         sections:
           - slices
     impact:
@@ -77,7 +77,7 @@ entries:
           - A6
           - A7
           - A8
-      - path: specs/feature-tree/discovery-content/content-type-framework/creation-mode-and-surface-ia-unification/plan.yaml
+      - path: specs/feature-tree/discovery-content/content-type-framework/creation-mode-and-surface-ia-unification/content.execution.planning.yaml
         sections:
           - slices
       - path: specs/feature-tree/discovery-content/content-type-framework/creation-mode-and-surface-ia-unification/tasks.md

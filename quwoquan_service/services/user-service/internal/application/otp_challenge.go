@@ -27,6 +27,7 @@ type OtpChallenge struct {
 	ConsumedAt     *time.Time
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+	FailedAttempts int
 }
 
 type OtpChallengeStore interface {
@@ -35,6 +36,7 @@ type OtpChallengeStore interface {
 	MarkChallengeDelivered(ctx context.Context, requestID string, status string) error
 	MarkChallengeFailed(ctx context.Context, requestID string, reason string) error
 	ConsumeChallenge(ctx context.Context, challengeID string, now time.Time) error
+	RecordFailedAttempt(ctx context.Context, challengeID string, maxAttempts int, now time.Time) (attempts int, exhausted bool, err error)
 }
 
 type ExternalInteractionClient interface {
@@ -44,10 +46,9 @@ type ExternalInteractionClient interface {
 type SMSOTPDispatchRequest struct {
 	RequestID      string
 	ChallengeID    string
-	Phone          string
 	PhoneHash      string
 	MaskedPhone    string
-	Code           string
+	CodeRef        string
 	IdempotencyKey string
 	CallbackURL    string
 	ExpiresAt      time.Time

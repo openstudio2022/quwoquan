@@ -8,7 +8,7 @@
 
 趣聊聊天的核心消息收发链路已基本实现，但与微信等商用产品对比，存在以下交互体验缺口：
 
-- **引用回复**：`Message` 已有 `replyToMessageId` 字段，`SendMessageRequest` 已支持该字段，但 ChatDetailPage 气泡中**无引用块渲染**，用户看不到回复上下文
+- **引用回复**：`Message` 已有 `replyToMessageId` 字段，`SendMessageRequest` 已支持该字段，但 ChatConversationPage 气泡中**无引用块渲染**，用户看不到回复上下文
 - **@提及**：`Message` 已有 `mentions` 数组字段，但消息文本中的 `@用户名` **无高亮渲染**，点击无响应
 - **语音听筒/扬声器**：当前语音消息始终从扬声器播放，公共场合体验差；微信默认贴耳切换听筒
 - **语音倍速播放**：当前仅支持 1x 播放速度，长语音（60~120s）收听效率低；Telegram 支持 0.5x/1x/1.5x/2x

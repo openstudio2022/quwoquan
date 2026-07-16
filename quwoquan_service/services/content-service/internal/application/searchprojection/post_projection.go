@@ -47,12 +47,6 @@ func ProjectPostToSearchDocument(stored postmodel.Post) rtsearch.Document {
 	if visibility == "" {
 		visibility = "public"
 	}
-	primaryCircleID := strings.TrimSpace(post.CircleId)
-	if primaryCircleID == "" {
-		if ids := stringSlice(post.CircleIds); len(ids) > 0 {
-			primaryCircleID = strings.TrimSpace(ids[0])
-		}
-	}
 	doc := rtsearch.Document{
 		ObjectType:   rtsearch.ObjectTypeContentPost,
 		ObjectID:     post.ID,
@@ -72,7 +66,6 @@ func ProjectPostToSearchDocument(stored postmodel.Post) rtsearch.Document {
 			"authorName":        post.AuthorDisplayNameSnapshot,
 			"authorDisplayName": post.AuthorDisplayNameSnapshot,
 			"placeName":         post.LocationName,
-			"circleId":          primaryCircleID,
 		},
 	}
 	if post.Location.Latitude != 0 || post.Location.Longitude != 0 {

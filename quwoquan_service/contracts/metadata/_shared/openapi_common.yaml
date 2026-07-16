@@ -45,6 +45,84 @@ components:
       schema:
         type: string
       description: 异步触发载体 ID（messageId/topicOffset 的安全编码/jobRunId 等）
+    XClientAccountId:
+      name: X-Client-Account-Id
+      in: header
+      required: false
+      schema:
+        type: string
+      description: 账号安全主体归因提示；authz 必须以网关校验后的 token principal 为准，不信任客户端裸值
+    XClientPersonaId:
+      name: X-Client-Persona-Id
+      in: header
+      required: false
+      schema:
+        type: string
+      description: 当前公开业务主体归因提示；服务必须验证其归属与 operation 权限
+    XClientDeviceActorId:
+      name: X-Client-Device-Actor-Id
+      in: header
+      required: false
+      schema:
+        type: string
+      description: 游客设备事实主体；只能用于 metadata 明确允许 device actor 的 operation
+    XClientOperationId:
+      name: X-Client-Operation-Id
+      in: header
+      required: false
+      schema:
+        type: string
+        pattern: '^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\.[A-Z][A-Za-z0-9]+$'
+      description: ContractGraph 中的 canonical operation_id
+    XClientSurfaceId:
+      name: X-Client-Surface-Id
+      in: header
+      required: false
+      schema:
+        type: string
+      description: metadata codegen 的 surface_id，独立于 route/page/operation
+    XClientRouteId:
+      name: X-Client-Route-Id
+      in: header
+      required: false
+      schema:
+        type: string
+      description: metadata codegen 的 route_id，独立于 URL 与 operation
+    XReferralSource:
+      name: X-Referral-Source
+      in: header
+      required: false
+      schema:
+        type: string
+      description: 用户旅程来源，用于曝光、点击和转化归因
+    XFeedRequestId:
+      name: X-Feed-Request-Id
+      in: header
+      required: false
+      schema:
+        type: string
+      description: 服务端生成的 Feed 请求归因 ID，翻页与后续行为需原样透传
+    XShareId:
+      name: X-Share-Id
+      in: header
+      required: false
+      schema:
+        type: string
+      description: 服务端 OutboundShareFact ID，用于站外分享传播链归因
+    XModelId:
+      name: X-Model-Id
+      in: header
+      required: false
+      schema:
+        type: string
+      description: 产生当前推荐或推理结果的模型版本标识
+    XExperimentBucket:
+      name: X-Experiment-Bucket
+      in: header
+      required: false
+      schema:
+        type: string
+      description: 稳定实验分桶，用于指标切分和回滚归因
     XClientUserId:
       name: X-Client-User-Id
       in: header
@@ -93,7 +171,15 @@ components:
       required: false
       schema:
         type: string
+        enum: [android, ios, ohos, web, desktop]
       description: 端侧平台（android/ios/web/desktop 等）
+    XClientLocale:
+      name: X-Client-Locale
+      in: header
+      required: false
+      schema:
+        type: string
+      description: BCP 47 客户端区域语言标识
     XClientAppVersion:
       name: X-Client-App-Version
       in: header
@@ -165,6 +251,7 @@ components:
             - RTC
             - OPS
             - ASSISTANT
+            - NOTIFICATION
             - DB
             - MQ
             - CACHE

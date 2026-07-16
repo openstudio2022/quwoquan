@@ -18,12 +18,15 @@ type DeadTaskRecord struct {
 }
 
 type DeadNotificationRecord struct {
-	NotificationID string          `json:"notificationId"`
-	EventType      string          `json:"eventType"`
-	AggregateID    string          `json:"aggregateId"`
-	Attempts       int             `json:"attempts"`
-	LastFailure    *RuntimeFailure `json:"lastFailure,omitempty"`
-	UpdatedAt      time.Time       `json:"updatedAt"`
+	NotificationID        string          `json:"notificationId"`
+	SubjectNotificationID string          `json:"subjectNotificationId"`
+	Channel               string          `json:"channel"`
+	EventType             string          `json:"eventType"`
+	AggregateID           string          `json:"aggregateId"`
+	Attempts              int             `json:"attempts"`
+	AttemptEpoch          int             `json:"attemptEpoch"`
+	LastFailure           *RuntimeFailure `json:"lastFailure,omitempty"`
+	UpdatedAt             time.Time       `json:"updatedAt"`
 }
 
 type DLQRecoveryStore interface {

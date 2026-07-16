@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// 登录后续接（post-login continuation）的统一真相源。
 ///
@@ -20,14 +21,14 @@ class SubmitCommentContinuation extends AuthContinuation {
     this.postId,
     this.replyToCommentId,
     this.attachmentMediaIds = const <String>[],
-    this.mentions = const <Map<String, dynamic>>[],
+    this.mentions = const <ContentCommentMention>[],
   });
 
   final String content;
   final String? postId;
   final String? replyToCommentId;
   final List<String> attachmentMediaIds;
-  final List<Map<String, dynamic>> mentions;
+  final List<ContentCommentMention> mentions;
 }
 
 /// 续接「关注用户主页」。
@@ -88,22 +89,40 @@ class OpenHomeChannelContinuation extends AuthContinuation {
 
 /// 单槽位续接控制器：set 登记、take 按类型取出并清空。
 class AuthContinuationController extends Notifier<AuthContinuation?> {
+  String? _ownerToken;
+
   @override
   AuthContinuation? build() => null;
 
-  void set(AuthContinuation continuation) => state = continuation;
+  /// 已有待续接动作时拒绝被另一个入口静默覆盖。
+  bool set(AuthContinuation continuation, {String? ownerToken}) {
+    if (state != null) {
+      return false;
+    }
+    _ownerToken =
+        ownerToken ??
+        '${continuation.runtimeType}:${DateTime.now().microsecondsSinceEpoch}';
+    state = continuation;
+    return true;
+  }
 
-  void clear() => state = null;
+  void clear() {
+    _ownerToken = null;
+    state = null;
+  }
 
   /// 取出并清空与 [T] 匹配的待续接动作；类型不匹配则返回 null 且不清空。
   T? take<T extends AuthContinuation>() {
     final current = state;
     if (current is T) {
+      _ownerToken = null;
       state = null;
       return current;
     }
     return null;
   }
+
+  String? get ownerToken => _ownerToken;
 }
 
 final authContinuationProvider =

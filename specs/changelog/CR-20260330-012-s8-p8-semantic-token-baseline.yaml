@@ -10,9 +10,9 @@ summary: |
 artifacts:
   - specs/feature-tree/runtime/runtime-client-foundation/s8-p8-semantic-token/spec.md
   - specs/feature-tree/runtime/runtime-client-foundation/s8-p8-semantic-token/design.md
-  - specs/feature-tree/runtime/runtime-client-foundation/s8-p8-semantic-token/plan.yaml
+  - specs/feature-tree/runtime/runtime-client-foundation/s8-p8-semantic-token/content.execution.planning.yaml
   - specs/feature-tree/runtime/runtime-client-foundation/s8-p8-semantic-token/acceptance.yaml
   - specs/feature-tree/tree_index.yaml
   - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/spec.md
-  - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/plan.yaml
+  - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/content.execution.planning.yaml
   - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/acceptance.yaml

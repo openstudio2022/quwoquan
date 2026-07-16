@@ -2,72 +2,54 @@
 name: /crawl-topic
 id: crawl-topic
 category: Workflow
-description: quwoquan_data 单任务/单批次局部复核入口
+description: quwoquan_data 单 execution 局部诊断与恢复入口
 ---
 
 ## 目标
 
-`/crawl-topic` 仅用于把一个对象、一个任务或一个批次的缺口带回当前
-`qwq-data task` 编排链。它不是第二套 worker，也不直接写旧
-`quwoquan_data/runtime/**`。
+诊断一个 `.qwq_output/data/tasks/<executionId>/` 工作包，并通过原始
+`task geo-homepages` 命令 resume。禁止创建 stage runner、退役的双层运行身份、手写阶段产物
+或并行状态根。
 
 ## 自然语言等价触发
 
-当用户说“处理这个 topic”“复核这个对象”“重跑这个批次的某阶段”等价于 `/crawl-topic`。
+用户说“复核这个 execution”“恢复这个内容任务”“重试这个实体任务”时，均按本命令语义执行。
 
 ## Spec Entry
 
-- AppRoot Journey/Scenario：`runtime/system-architecture-and-engineering-guide`
-- L1/L2/L3：按当前数据任务或目录治理 Story 绑定。
-- 验收意图：`SIT + contract`
-- 测试证据：`local_contract + api_integration`
+- L1/L2/L3：沿用 execution manifest 绑定的特性树节点。
+- 验收意图：`contract + SIT`，涉及环境消费时追加 `UAT`。
+- 测试证据：`local_contract + api_integration`，涉及 App 时追加 `user_acceptance`。
 
 ## Pre-work Reflection
 
-- metadata-first：对象字段、错误码、服务路径来自 `quwoquan_service/contracts/metadata/**`。
-- data CLI-first：只通过 `python3 quwoquan_data/scripts/cli.py task ...` 回到主编排链。
-- mock 隔离：不得用 fixture 或手写 JSON 冒充真实批次证据。
-- output-first：运行态只能写 `.qwq_output/**`。
+- 先读 `execution_manifest.json`、阶段结果和 `evidence/`，不猜测失败原因。
+- 同 ID 只允许 resume；输入目标变化或需要新尝试时必须递增 sequence 并声明 `retryOf`。
+- 不补写缺失 source、rights、review 或 release 证据。
 
-## 当前入口
+## 恢复
 
-查看任务与批次：
-
-```bash
-python3 quwoquan_data/scripts/cli.py task show <task-id>
-python3 quwoquan_data/scripts/cli.py task status <task-id> --batch <batch-id>
-python3 quwoquan_data/scripts/cli.py task trace <task-id> --batch <batch-id>
-```
-
-重跑可恢复阶段：
+使用创建该 execution 的同一门面与相同参数再次执行 `--stage run`。新尝试示例：
 
 ```bash
-python3 quwoquan_data/scripts/cli.py task retry-stage \
-  --task <task-id> \
-  --batch <batch-id> \
-  --stage <stage>
+python3 quwoquan_data/scripts/cli.py task geo-homepages \
+  --execution-id YYYYMMDD--travel-homepage-coverage--cn-zhejiang--canary-002 \
+  --retry-of YYYYMMDD--travel-homepage-coverage--cn-zhejiang--canary-001 \
+  --milestone canary \
+  --country 中国 \
+  --province 浙江省 \
+  --discovery quwoquan_data/verticals/travel/coverage/中国/浙江省 \
+  --limit 1 \
+  --stage run
 ```
-
-补齐对象选择或批次审计：
-
-```bash
-python3 quwoquan_data/scripts/cli.py task select-targets --help
-python3 quwoquan_data/scripts/cli.py task audit-batch --help
-```
-
-## 输出边界
-
-- 运行态只允许在 `.qwq_output/local/data-runtime/**`。
-- 发布真相源只允许在 `quwoquan_data/publish/**`。
-- 摘要和报告只允许在 `.qwq_output/runs/data/**`。
-- 禁止回写 `artifacts/**`、`.qwq_sandbox/**` 或顶层 `runtime/**`。
 
 ## Exit Review
 
-- 规格达成：缺口已通过 `trace/status/audit-batch` 回指到当前任务和批次。
-- 测试证据：至少完成 `verify output-root-isolation`，必要时补 `task lint`。
-- 剩余风险：真实下载、创作、ship/import 未执行时必须如实列明。
+```bash
+python3 quwoquan_data/scripts/cli.py verify execution-readiness --execution-id <executionId>
+python3 quwoquan_data/scripts/cli.py verify content-execution-layout
+python3 quwoquan_data/scripts/cli.py verify output-root-isolation
+```
 
-## 输出
-
-输出只允许是 `.qwq_output/**` 报告、当前任务状态摘要和必要的人工复核列表。
+输出只允许进入该 execution 工作包、对应 data release 或环境 run；失败必须保留
+明确阶段与原因，不得迁移、兼容或伪造通过。

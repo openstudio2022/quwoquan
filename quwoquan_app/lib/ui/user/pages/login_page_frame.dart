@@ -6,6 +6,9 @@ class LoginFrame extends StatelessWidget {
     required this.reason,
     required this.presentation,
     required this.agreementAccepted,
+    required this.showAgreementError,
+    required this.socialMethodAvailability,
+    required this.socialMethodFeedback,
     required this.onAgreementToggle,
     required this.onDismiss,
     required this.onPrimary,
@@ -15,15 +18,20 @@ class LoginFrame extends StatelessWidget {
     required this.phoneController,
     required this.otpController,
     required this.onPhoneChanged,
+    required this.onPhoneEditingComplete,
     required this.onOtpChanged,
     required this.onResendOtp,
-    this.allowGuestDismissPop = true,
+    required this.onChangePhone,
+    this.dismissPolicy = LoginDismissPolicy.popPrevious,
     this.isInline = false,
   });
 
   final String? reason;
   final LoginEntryPresentation presentation;
   final bool agreementAccepted;
+  final bool showAgreementError;
+  final Map<String, NativeAuthCapability> socialMethodAvailability;
+  final String socialMethodFeedback;
   final VoidCallback onAgreementToggle;
   final VoidCallback onDismiss;
   final VoidCallback onPrimary;
@@ -33,12 +41,13 @@ class LoginFrame extends StatelessWidget {
   final TextEditingController phoneController;
   final TextEditingController otpController;
   final ValueChanged<String> onPhoneChanged;
+  final VoidCallback onPhoneEditingComplete;
   final ValueChanged<String> onOtpChanged;
   final VoidCallback onResendOtp;
+  final VoidCallback onChangePhone;
 
-  /// 关闭语义：强登录入口（`allowGuestDismissPop == false`，关闭走安全兜底而非
-  /// 原路 pop）按 iOS Modal leading 语义用 `xmark`；可 pop 回上一页的软入口用 `back`。
-  final bool allowGuestDismissPop;
+  /// 导航语义由入口决定；错误状态不得改变返回或关闭图标。
+  final LoginDismissPolicy dismissPolicy;
   final bool isInline;
 
   @override
@@ -72,7 +81,7 @@ class LoginFrame extends StatelessWidget {
                         children: <Widget>[
                           _LoginTopBar(
                             onDismiss: onDismiss,
-                            allowGuestDismissPop: allowGuestDismissPop,
+                            dismissPolicy: dismissPolicy,
                           ),
                           const SizedBox(
                             height: AppSpacing.loginTopBarToHeroGap,
@@ -89,15 +98,17 @@ class LoginFrame extends StatelessWidget {
                             phoneController: phoneController,
                             otpController: otpController,
                             onPhoneChanged: onPhoneChanged,
+                            onPhoneEditingComplete: onPhoneEditingComplete,
                             onOtpChanged: onOtpChanged,
                             onResendOtp: onResendOtp,
+                            onChangePhone: onChangePhone,
                           ),
-                          if (_showsTopLevelError(presentation)) ...<Widget>[
+                          if (_showsProcessFeedback(presentation)) ...<Widget>[
                             const SizedBox(height: AppSpacing.sm),
-                            // 入口级（returning/carrier）失败均为可恢复降级提示，用中性语气；
-                            // 真正阻断态（锁定/封禁/注销）已路由到验证码面板按 phase 取红色。
                             _TopLevelErrorBanner(
-                              message: presentation.message,
+                              message:
+                                  presentation.feedback?.message ??
+                                  presentation.message,
                               tone: LoginMessageTone.neutral,
                             ),
                           ],
@@ -116,6 +127,7 @@ class LoginFrame extends StatelessWidget {
                           ),
                           LoginAgreementRow(
                             accepted: agreementAccepted,
+                            showError: showAgreementError,
                             onToggle: onAgreementToggle,
                             onAgreementTap: onAgreementTap,
                             onPrivacyTap: onPrivacyTap,
@@ -124,8 +136,37 @@ class LoginFrame extends StatelessWidget {
                           const SizedBox(
                             height: AppSpacing.loginAgreementToOtherGap,
                           ),
+                          if (socialMethodFeedback
+                              .trim()
+                              .isNotEmpty) ...<Widget>[
+                            AppFormErrorCard(
+                              key: const ValueKey<String>(
+                                'login-social-method-feedback',
+                              ),
+                              semantic: UiErrorSemantic(
+                                category: UiErrorCategory.submit,
+                                scope: UiErrorScope.form,
+                                title:
+                                    UITextConstants.loginSocialUnavailableTitle,
+                                message: socialMethodFeedback,
+                                presentation:
+                                    UiErrorPresentation.formInlineCard,
+                                tone: UiErrorTone.caution,
+                              ),
+                              density: AppFormErrorCardDensity.compact,
+                            ),
+                            const SizedBox(height: AppSpacing.sm),
+                          ],
                           OtherLoginMethodGrid(
                             onTap: onOtherMethod,
+                            enabled:
+                                presentation.kind != LoginEntryKind.submitting,
+                            availableMethods: socialMethodAvailability,
+                            excludedMethod:
+                                presentation.resolvedPrimaryAction ==
+                                    LoginPrimaryAction.socialReauth
+                                ? presentation.primaryProvider
+                                : '',
                             mode: presentation.kind == LoginEntryKind.phoneOtp
                                 ? OtherLoginMethodMode.phoneOtp
                                 : OtherLoginMethodMode.returning,
@@ -161,13 +202,16 @@ class LoginFrame extends StatelessWidget {
   }
 }
 
-/// 顶层（非手机号输入）态的错误是否需要就近横幅展示。
-/// phoneOtp 由 PhoneOtpPanel 内部自带 message，不在此重复。
-bool _showsTopLevelError(LoginEntryPresentation presentation) {
-  if (presentation.kind == LoginEntryKind.phoneOtp) {
+/// 历史会话与一键登录失败共用 Account Area 下方的唯一流程反馈槽。
+bool _showsProcessFeedback(LoginEntryPresentation presentation) {
+  final feedback = presentation.feedback;
+  final message = feedback?.message ?? presentation.message;
+  if (message.trim().isEmpty || feedback?.isSilent == true) {
     return false;
   }
-  return presentation.message.trim().isNotEmpty;
+  return feedback == null ||
+      feedback.surface == LoginErrorSurface.topLevel ||
+      feedback.surface == LoginErrorSurface.fallbackNotice;
 }
 
 class _TopLevelErrorBanner extends StatelessWidget {
@@ -184,26 +228,19 @@ class _TopLevelErrorBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = loginMessageToneColor(context, tone);
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
+    return AppFormErrorCard(
+      key: const ValueKey<String>('login-process-feedback'),
+      semantic: UiErrorSemantic(
+        category: UiErrorCategory.submit,
+        scope: UiErrorScope.form,
+        title: UITextConstants.loginSocialUnavailableTitle,
+        message: message,
+        presentation: UiErrorPresentation.formInlineCard,
+        tone: tone == LoginMessageTone.blocking
+            ? UiErrorTone.critical
+            : UiErrorTone.caution,
       ),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(AppSpacing.loginInputRadius),
-      ),
-      child: Text(
-        message,
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          fontSize: AppTypography.iosFootnote,
-          height: AppSpacing.textLineHeightBody,
-          color: color,
-        ),
-      ),
+      density: AppFormErrorCardDensity.compact,
     );
   }
 }
@@ -212,21 +249,7 @@ LoginReasonCopy _loginHeroCopyForPresentation(
   LoginEntryPresentation presentation,
   String? routeReason,
 ) {
-  return switch (presentation.kind) {
-    LoginEntryKind.returningAccount => LoginReasonCopy(
-      title: UITextConstants.loginReturningHeroTitle,
-      subtitle: presentation.oneTapCredentialAvailable
-          ? UITextConstants.loginReturningHeroSubtitle
-          : UITextConstants.loginSessionExpiredHint,
-      source: LoginReasonCopySource.localSession,
-    ),
-    LoginEntryKind.carrierPhone => const LoginReasonCopy(
-      title: UITextConstants.loginCarrierHeroTitle,
-      subtitle: UITextConstants.loginCarrierHeroSubtitle,
-      source: LoginReasonCopySource.cloudHint,
-    ),
-    _ => loginReasonCopyForName(routeReason),
-  };
+  return loginReasonCopyForName(routeReason);
 }
 
 class LoginHeroBrand extends StatelessWidget {
@@ -312,16 +335,20 @@ class LoginAccountArea extends StatelessWidget {
     required this.phoneController,
     required this.otpController,
     required this.onPhoneChanged,
+    required this.onPhoneEditingComplete,
     required this.onOtpChanged,
     required this.onResendOtp,
+    required this.onChangePhone,
   });
 
   final LoginEntryPresentation presentation;
   final TextEditingController phoneController;
   final TextEditingController otpController;
   final ValueChanged<String> onPhoneChanged;
+  final VoidCallback onPhoneEditingComplete;
   final ValueChanged<String> onOtpChanged;
   final VoidCallback onResendOtp;
+  final VoidCallback onChangePhone;
 
   @override
   Widget build(BuildContext context) {
@@ -332,16 +359,27 @@ class LoginAccountArea extends StatelessWidget {
       LoginEntryKind.carrierPhone => CarrierPhonePanel(
         hint: presentation.carrierHint,
       ),
-      LoginEntryKind.phoneOtp => PhoneOtpPanel(
-        state: presentation.phoneOtpState ?? const LoginPhoneOtpState.idle(),
-        phoneController: phoneController,
-        otpController: otpController,
-        onPhoneChanged: onPhoneChanged,
-        onOtpChanged: onOtpChanged,
-        onResend: onResendOtp,
-      ),
-      LoginEntryKind.resolving ||
-      LoginEntryKind.submitting => const _ResolvingPanel(),
+      LoginEntryKind.phoneOtp =>
+        (presentation.phoneOtpState?.isBlocked ?? false)
+            ? AccountBlockedPanel(
+                state:
+                    presentation.phoneOtpState ??
+                    const LoginPhoneOtpState.idle(),
+              )
+            : PhoneOtpPanel(
+                state:
+                    presentation.phoneOtpState ??
+                    const LoginPhoneOtpState.idle(),
+                phoneController: phoneController,
+                otpController: otpController,
+                onPhoneChanged: onPhoneChanged,
+                onPhoneEditingComplete: onPhoneEditingComplete,
+                onOtpChanged: onOtpChanged,
+                onResend: onResendOtp,
+                onChangePhone: onChangePhone,
+              ),
+      LoginEntryKind.submitting => _submittingPanel(),
+      LoginEntryKind.resolving => const _ResolvingPanel(),
       LoginEntryKind.error => UnavailablePanel(message: presentation.message),
       LoginEntryKind.unavailable => UnavailablePanel(
         message: presentation.message,
@@ -354,11 +392,67 @@ class LoginAccountArea extends StatelessWidget {
     return SizedBox(height: areaHeight, child: child);
   }
 
+  Widget _submittingPanel() {
+    if (presentation.accountHint != null) {
+      return ReturningAccountPanel(hint: presentation.accountHint);
+    }
+    if (presentation.carrierHint != null) {
+      return CarrierPhonePanel(hint: presentation.carrierHint);
+    }
+    if (presentation.phoneOtpState != null) {
+      return PhoneOtpPanel(
+        state: presentation.phoneOtpState!,
+        phoneController: phoneController,
+        otpController: otpController,
+        onPhoneChanged: onPhoneChanged,
+        onPhoneEditingComplete: onPhoneEditingComplete,
+        onOtpChanged: onOtpChanged,
+        onResend: onResendOtp,
+        onChangePhone: onChangePhone,
+      );
+    }
+    return const _ResolvingPanel();
+  }
+
   double? _heightForPresentation(LoginEntryPresentation presentation) {
     if (presentation.kind == LoginEntryKind.phoneOtp) {
       return null;
     }
     return AppSpacing.loginAccountAreaHeight;
+  }
+}
+
+class AccountBlockedPanel extends StatelessWidget {
+  const AccountBlockedPanel({super.key, required this.state});
+
+  final LoginPhoneOtpState state;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      liveRegion: true,
+      child: Column(
+        key: const ValueKey<String>('loginAccountBlocked'),
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: <Widget>[
+          Icon(
+            CupertinoIcons.lock_shield,
+            size: AppSpacing.forty,
+            color: loginMessageToneColor(context, LoginMessageTone.blocking),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            state.message,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: AppTypography.iosCallout,
+              height: AppSpacing.textLineHeightBody,
+              color: loginMessageToneColor(context, LoginMessageTone.blocking),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -369,7 +463,8 @@ class ReturningAccountPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final displayName = hint?.displayName.isNotEmpty == true
+    final displayName =
+        hint?.nicknameCustomized == true && hint?.displayName.isNotEmpty == true
         ? hint!.displayName
         : UITextConstants.loginReturningDefaultName;
     final maskedPhone = hint?.maskedPhone ?? '';
@@ -377,8 +472,7 @@ class ReturningAccountPanel extends StatelessWidget {
       key: const ValueKey<String>('returningAccount'),
       mainAxisAlignment: MainAxisAlignment.center,
       children: <Widget>[
-        _Avatar(avatarUrl: hint?.avatarUrl ?? '', displayName: displayName),
-        const SizedBox(height: AppSpacing.sm),
+        _Avatar(avatarUrl: hint?.avatarUrl ?? ''),
         Text(
           displayName,
           maxLines: 1,
@@ -389,16 +483,16 @@ class ReturningAccountPanel extends StatelessWidget {
             color: AppColors.iosLabel(context),
           ),
         ),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          maskedPhone.isEmpty
-              ? UITextConstants.loginReturningDefaultAccount
-              : maskedPhone,
-          style: TextStyle(
-            fontSize: AppTypography.iosBody,
-            color: AppColors.iosSecondaryLabel(context),
+        if (maskedPhone.isNotEmpty) ...<Widget>[
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            maskedPhone,
+            style: TextStyle(
+              fontSize: AppTypography.iosBody,
+              color: AppColors.iosSecondaryLabel(context),
+            ),
           ),
-        ),
+        ],
       ],
     );
   }
@@ -448,6 +542,8 @@ class PhoneOtpPanel extends StatelessWidget {
     required this.onPhoneChanged,
     required this.onOtpChanged,
     required this.onResend,
+    required this.onChangePhone,
+    this.onPhoneEditingComplete,
   });
 
   final LoginPhoneOtpState state;
@@ -456,31 +552,44 @@ class PhoneOtpPanel extends StatelessWidget {
   final ValueChanged<String> onPhoneChanged;
   final ValueChanged<String> onOtpChanged;
   final VoidCallback onResend;
+  final VoidCallback onChangePhone;
+  final VoidCallback? onPhoneEditingComplete;
 
   @override
   Widget build(BuildContext context) {
+    final showsDestination = state.otpWasDelivered;
     final showsCode = state._showsCode || state.code.isNotEmpty;
-    final message = _messageForState();
+    final fieldError = _fieldErrorForState();
+    final statusMessage = _statusMessageForState();
+    final formError = _formErrorForState();
     return AutofillGroup(
       child: Column(
         key: const ValueKey<String>('phoneOtp-panel'),
         mainAxisAlignment: MainAxisAlignment.center,
         children: <Widget>[
-          PhoneNumberField(
-            controller: phoneController,
-            enabled: state.isPhoneEditable,
-            hasError: state.phase == LoginPhoneOtpPhase.invalid,
-            onChanged: onPhoneChanged,
-          ),
-          if (showsCode) ...<Widget>[
-            const SizedBox(height: AppSpacing.ten),
-            Text(
-              _otpSentLine(),
-              style: TextStyle(
-                fontSize: AppTypography.iosCaption1,
-                color: AppColors.iosSecondaryLabel(context),
-              ),
+          if (!showsDestination)
+            PhoneNumberField(
+              controller: phoneController,
+              enabled: state.isPhoneEditable,
+              hasError: state.phase == LoginPhoneOtpPhase.invalid,
+              onChanged: onPhoneChanged,
+              onEditingComplete: onPhoneEditingComplete,
+            )
+          else
+            _OtpDestinationSummary(
+              message: _otpSentLine(),
+              onChangePhone: onChangePhone,
             ),
+          if (!showsDestination &&
+              state.phase == LoginPhoneOtpPhase.invalid &&
+              fieldError.isNotEmpty) ...<Widget>[
+            const SizedBox(height: AppSpacing.xs),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: AppInlineFieldError(message: fieldError),
+            ),
+          ],
+          if (showsCode) ...<Widget>[
             const SizedBox(height: AppSpacing.ten),
             OtpCodeBoxes(
               controller: otpController,
@@ -488,6 +597,14 @@ class PhoneOtpPanel extends StatelessWidget {
               hasError: state.phase == LoginPhoneOtpPhase.codeError,
               onChanged: onOtpChanged,
             ),
+            if (state.phase == LoginPhoneOtpPhase.codeError &&
+                fieldError.isNotEmpty) ...<Widget>[
+              const SizedBox(height: AppSpacing.xs),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: AppInlineFieldError(message: fieldError),
+              ),
+            ],
             const SizedBox(height: AppSpacing.sm),
             _OtpResendAction(
               resendSeconds: state.resendSeconds,
@@ -495,17 +612,21 @@ class PhoneOtpPanel extends StatelessWidget {
               onResend: onResend,
             ),
           ],
-          if (message.isNotEmpty) ...<Widget>[
+          if (formError != null) ...<Widget>[
+            const SizedBox(height: AppSpacing.sm),
+            AppFormErrorCard(
+              key: const ValueKey<String>('login-phone-form-error'),
+              semantic: formError,
+              density: AppFormErrorCardDensity.compact,
+            ),
+          ] else if (statusMessage.isNotEmpty) ...<Widget>[
             const SizedBox(height: AppSpacing.xs),
             Text(
-              message,
+              statusMessage,
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: AppTypography.iosCaption1,
-                color: loginMessageToneColor(
-                  context,
-                  loginMessageToneForPhase(state.phase),
-                ),
+                color: AppColors.iosSecondaryLabel(context),
               ),
             ),
           ],
@@ -514,33 +635,60 @@ class PhoneOtpPanel extends StatelessWidget {
     );
   }
 
-  String _messageForState() {
+  String _fieldErrorForState() {
+    if (state.phase != LoginPhoneOtpPhase.invalid &&
+        state.phase != LoginPhoneOtpPhase.codeError) {
+      return '';
+    }
+    if (state.message.isNotEmpty) return state.message;
+    return state.phase == LoginPhoneOtpPhase.invalid
+        ? UITextConstants.loginPhoneInvalid
+        : UITextConstants.loginOtpMismatch;
+  }
+
+  String _statusMessageForState() {
     if (state.phase == LoginPhoneOtpPhase.success) {
       return UITextConstants.loginRedirecting;
     }
-    if (state.message.isNotEmpty) {
-      return state.message;
-    }
-    // 兜底文案：异常/过渡态在 state.message 缺失时（例如纯构造或离线）仍给出
-    // 明确、可指引下一步的提示，杜绝空白提示导致用户不知所措。
-    return switch (state.phase) {
-      LoginPhoneOtpPhase.editing => UITextConstants.loginPhoneRequired,
-      LoginPhoneOtpPhase.invalid => UITextConstants.loginPhoneInvalid,
-      LoginPhoneOtpPhase.sendingCode => UITextConstants.loginSendOtpSubmitting,
-      LoginPhoneOtpPhase.codeError => UITextConstants.loginOtpMismatch,
-      LoginPhoneOtpPhase.codeExpired => UITextConstants.loginOtpExpired,
+    return state.phase == LoginPhoneOtpPhase.sendingCode
+        ? UITextConstants.loginSendOtpSubmitting
+        : '';
+  }
+
+  UiErrorSemantic? _formErrorForState() {
+    final isFormError = switch (state.phase) {
+      LoginPhoneOtpPhase.sendFailed ||
+      LoginPhoneOtpPhase.rateLimited ||
+      LoginPhoneOtpPhase.codeExpired ||
+      LoginPhoneOtpPhase.loginLocked ||
+      LoginPhoneOtpPhase.accountSuspended ||
+      LoginPhoneOtpPhase.accountDeleted => true,
+      _ => false,
+    };
+    if (!isFormError) return null;
+    final fallback = switch (state.phase) {
       LoginPhoneOtpPhase.rateLimited =>
         UITextConstants.loginOtpRateLimited.replaceFirst(
           '%d',
           '${state.resendSeconds > 0 ? state.resendSeconds : 60}',
         ),
-      LoginPhoneOtpPhase.sendFailed => UITextConstants.loginOtpSendFailed,
+      LoginPhoneOtpPhase.codeExpired => UITextConstants.loginOtpExpired,
       LoginPhoneOtpPhase.loginLocked => UITextConstants.loginPhoneLoginLocked,
       LoginPhoneOtpPhase.accountSuspended =>
         UITextConstants.loginAccountSuspended,
       LoginPhoneOtpPhase.accountDeleted => UITextConstants.loginAccountDeleted,
-      _ => '',
+      _ => UITextConstants.loginOtpSendFailed,
     };
+    return UiErrorSemantic(
+      category: state.phase == LoginPhoneOtpPhase.rateLimited
+          ? UiErrorCategory.rateLimited
+          : UiErrorCategory.submit,
+      scope: UiErrorScope.form,
+      title: UITextConstants.loginOtpErrorTitle,
+      message: state.message.isEmpty ? fallback : state.message,
+      presentation: UiErrorPresentation.formInlineCard,
+      tone: UiErrorTone.caution,
+    );
   }
 
   String _otpSentLine() {
@@ -548,9 +696,46 @@ class PhoneOtpPanel extends StatelessWidget {
         ? _maskPhone(state.phone)
         : state.maskedPhone;
     final base = UITextConstants.loginOtpSentTo.replaceFirst('%s', maskedPhone);
-    if (state.debugCode.isEmpty) {
-      return base;
-    }
-    return '$base  ${UITextConstants.loginOtpDebugCodePrefix}${state.debugCode}';
+    return base;
+  }
+}
+
+class _OtpDestinationSummary extends StatelessWidget {
+  const _OtpDestinationSummary({
+    required this.message,
+    required this.onChangePhone,
+  });
+
+  final String message;
+  final VoidCallback onChangePhone;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: <Widget>[
+        Flexible(
+          child: Text(
+            message,
+            key: const ValueKey<String>('loginOtpDestinationSummary'),
+            style: TextStyle(
+              fontSize: AppTypography.iosCaption1,
+              color: AppColors.iosSecondaryLabel(context),
+            ),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.xs),
+        CupertinoButton(
+          key: const ValueKey<String>('loginChangePhoneAction'),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+          minimumSize: const Size(
+            AppSpacing.minInteractiveSize,
+            AppSpacing.minInteractiveSize,
+          ),
+          onPressed: onChangePhone,
+          child: const Text(UITextConstants.loginPhoneChange),
+        ),
+      ],
+    );
   }
 }

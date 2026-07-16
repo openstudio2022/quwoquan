@@ -306,16 +306,23 @@ class _WorksArticlePageChevron extends StatelessWidget {
 class _WorksIntersectionDetailSheet extends StatelessWidget {
   const _WorksIntersectionDetailSheet({
     required this.reasons,
+    required this.contextObjectTarget,
     this.onAskAssistant,
   });
 
   final List<IntersectionReason> reasons;
+  final IntersectionTarget contextObjectTarget;
   final VoidCallback? onAskAssistant;
 
   @override
   Widget build(BuildContext context) {
     final displayReasons = reasons
-        .map(displayReadyIntersectionReason)
+        .map(
+          (reason) => displayReadyIntersectionReason(
+            reason,
+            contextObjectTarget: contextObjectTarget,
+          ),
+        )
         .whereType<IntersectionReason>()
         .toList(growable: false);
     return AppBottomModalSurface(

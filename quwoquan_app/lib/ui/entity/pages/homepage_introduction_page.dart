@@ -9,12 +9,14 @@ import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_introductio
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_introduction_section.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_introduction_timeline_item.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_related_group_summary.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_source.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/journey_event_tracker.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/components/media/app_media_image.dart';
 import 'package:quwoquan_app/ui/entity/providers/homepage_introduction_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 const double _introHeroHeight = AppSpacing.twoHundredTwenty;
 const double _introTimelineDateWidth = 86.0;
@@ -193,9 +195,9 @@ class _HomepageIntroductionPageState
             context.go(AppRoutePaths.homepageDetail(id: widget.homepageId));
           },
         ),
-        if (introduction.sourceRefs.isNotEmpty) ...<Widget>[
+        if (introduction.primarySource != null) ...<Widget>[
           SizedBox(height: AppSpacing.containerSm),
-          _SourceRefsCard(sourceRefs: introduction.sourceRefs),
+          _HomepageSourceCard(source: introduction.primarySource!),
         ],
       ],
     );
@@ -764,40 +766,117 @@ class _ReturnChip extends StatelessWidget {
   }
 }
 
-class _SourceRefsCard extends StatelessWidget {
-  const _SourceRefsCard({required this.sourceRefs});
+class _HomepageSourceCard extends StatelessWidget {
+  const _HomepageSourceCard({required this.source});
 
-  final List<String> sourceRefs;
+  final HomepageSource source;
+
+  Uri? get _safeUri {
+    final uri = Uri.tryParse(source.sourceUrl.trim());
+    if (uri == null ||
+        uri.scheme != 'https' ||
+        uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty ||
+        !_isPublicSourceHost(uri.host) ||
+        uri.queryParameters.keys.any(_isSensitiveSourceQueryKey)) {
+      return null;
+    }
+    return uri;
+  }
 
   @override
   Widget build(BuildContext context) {
+    final uri = _safeUri;
+    final host = uri?.host ?? '';
     return _IntroductionCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            '来源',
-            style: TextStyle(
-              fontSize: AppTypography.iosFootnote,
-              fontWeight: AppTypography.semiBold,
-              color: AppColors.iosSecondaryLabel(context),
-            ),
-          ),
-          SizedBox(height: AppSpacing.intraGroupXs),
-          for (final ref in sourceRefs.take(3))
-            Text(
-              ref,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: AppTypography.iosCaption1,
-                color: AppColors.iosTertiaryLabel(context),
+      child: CupertinoButton(
+        padding: EdgeInsets.zero,
+        onPressed: uri == null
+            ? null
+            : () {
+                unawaited(launchUrl(uri, mode: LaunchMode.externalApplication));
+              },
+        child: Row(
+          children: <Widget>[
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    UITextConstants.objectIntroSourceTitle,
+                    style: TextStyle(
+                      fontSize: AppTypography.iosFootnote,
+                      fontWeight: AppTypography.semiBold,
+                      color: AppColors.iosSecondaryLabel(context),
+                    ),
+                  ),
+                  SizedBox(height: AppSpacing.intraGroupXs),
+                  Text(
+                    source.title.trim().isEmpty
+                        ? UITextConstants.objectIntroSourcePlatform(
+                            source.sourceKind,
+                          )
+                        : source.title.trim(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: AppTypography.iosBody,
+                      color: AppColors.iosLabel(context),
+                    ),
+                  ),
+                  if (host.isNotEmpty)
+                    Text(
+                      '${UITextConstants.objectIntroSourcePlatform(source.sourceKind)} · $host',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: AppTypography.iosCaption1,
+                        color: AppColors.iosTertiaryLabel(context),
+                      ),
+                    ),
+                ],
               ),
             ),
-        ],
+            SizedBox(width: AppSpacing.intraGroupSm),
+            Icon(
+              CupertinoIcons.arrow_up_right_square,
+              size: AppSpacing.iconMedium,
+              color: AppColors.iosSecondaryLabel(context),
+              semanticLabel: UITextConstants.objectIntroSourceOpen,
+            ),
+          ],
+        ),
       ),
     );
   }
+}
+
+bool _isPublicSourceHost(String rawHost) {
+  final host = rawHost.toLowerCase();
+  if (host == 'localhost' ||
+      host == '::1' ||
+      host.endsWith('.local') ||
+      host.startsWith('127.') ||
+      host.startsWith('10.') ||
+      host.startsWith('192.168.')) {
+    return false;
+  }
+  final parts = host.split('.');
+  if (parts.length == 4 && parts.first == '172') {
+    final second = int.tryParse(parts[1]);
+    if (second != null && second >= 16 && second <= 31) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool _isSensitiveSourceQueryKey(String rawKey) {
+  final key = rawKey.toLowerCase();
+  return key.contains('token') ||
+      key.contains('signature') ||
+      key.contains('credential') ||
+      key.contains('auth');
 }
 
 class _IntroductionEmptyState extends StatelessWidget {

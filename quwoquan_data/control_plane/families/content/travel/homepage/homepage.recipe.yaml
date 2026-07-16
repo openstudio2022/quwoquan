@@ -1,0 +1,36 @@
+# 旅行地点主页通用 recipe，仅由 task geo-homepages 内部消费。
+# 省、市、区县与目标数只作为运行参数进入 execution manifest，不得复制 recipe。
+# 里程碑顺序与规模只读取双省 rollout contract；前序 closure 未绿不得启动后序。
+# 分支治理：不绑定 Git 分支；契约门按 quwoquan_ops/policies/branch_policy.yaml 校验。
+# 断点续跑：同 --execution-id 只允许 resume；新尝试递增 sequence 并声明 retryOf。
+schemaVersion: quwoquan.content.recipe
+recipeId: content/travel/homepage/homepage
+title: 旅行地点主页执行（通用模板）
+presetRef: content/travel/homepage/base
+runtimeProfile: cursor_local_calibrated
+instanceParams:
+  required: [region, discovery, name, limit]
+selection:
+  # region/discovery/name/title/intentLabel 由 CLI 实例参数注入（instanceParams）。
+  intentLabel: 省级主页放量
+  # 目标集在 execution 初始化时冻结；任何对象失败均阻断该档，不使用 reserve/replacement。
+  entityHomepagesPerTarget: 1
+  entityArticlesPerTarget: 0
+  imageWorksPerTarget: 0
+  mandatory: ""
+contract:
+  requireActiveStatus: true
+execution:
+  runtime: local
+  model: composer
+  modelFamily: composer
+  reviewModel: gpt-5.5
+  reviewModelFamily: gpt
+readiness:
+  # 商用准入（P5）：failOnNoGo=true + 真实 TokenLedger + 首过率门在 commercial 档执行；
+  # 本模板默认 calibration 档，升 commercial 档时由运行参数/准入配置切换。
+  minPassRate: 1.0
+  mode: commercial
+  failOnNoGo: true
+  acceptEstimatedTokenLedger: false
+  requireReviewed: true

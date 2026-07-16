@@ -35,7 +35,7 @@ entries:
           - A3
           - A4
           - A5
-      - path: specs/feature-tree/discovery-content/content-type-framework/unified-presentation-model/plan.yaml
+      - path: specs/feature-tree/discovery-content/content-type-framework/unified-presentation-model/content.execution.planning.yaml
         sections:
           - slices
       - path: specs/feature-tree/discovery-content/content-type-framework/content-unification-admission-gate-checklist.md

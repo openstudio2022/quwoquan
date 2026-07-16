@@ -135,7 +135,7 @@
         "mediaAvatar": "https://gamma-avatar.quwoquan-env.test:19100",
         "mediaImage": "https://gamma-image.quwoquan-env.test:19100",
         "mediaVideo": "https://gamma-video.quwoquan-env.test:19100",
-        "mediaUpload": "https://gamma-upload.quwoquan-env.test:19100"
+        "mediaUpload": "https://gamma-upload.quwoquan-env.test:19130"
       },
       "subnets": {
         "edge": "172.40.10.0/24",
@@ -297,10 +297,7 @@
         "mediaAvatar": "https://gamma-avatar.quwoquan-env.test:19100",
         "mediaImage": "https://gamma-image.quwoquan-env.test:19100",
         "mediaVideo": "https://gamma-video.quwoquan-env.test:19100",
-        "mediaUpload": "https://gamma-upload.quwoquan-env.test:19100"
-      },
-      "origins": {
-        "mediaOrigin": "http://127.0.0.1:19110"
+        "mediaUpload": "https://gamma-upload.quwoquan-env.test:19130"
       }
     },
     "prod-sim": {

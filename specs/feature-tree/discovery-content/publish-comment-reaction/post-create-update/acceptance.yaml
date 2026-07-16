@@ -423,16 +423,16 @@ gwt_acceptance:
     - manifest 缺少视频资产或封面资源时 publish gate 失败。
     - importer 重跑时保持幂等，不产生封面字段漂移。
     contract_refs:
-    - quwoquan_data/schema/produce/post_manifest.schema.json
-    - quwoquan_data/scripts/publish/gate.py
+    - quwoquan_data/schema/content/post_manifest.schema.json
+    - quwoquan_data/scripts/content/release/canonical/gate.py
     - quwoquan_service/services/content-service/cmd/import/main.go
     tests:
       planned:
-      - file: quwoquan_data/tests/local_contract/test_video_manifest_cover_contract__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/post/test_video_manifest_cover_contract__behavior__functional__local_contract_test.py
       - file: quwoquan_service/services/content-service/tests/local_contract/cmd/import/video_import_cover_projection__local_contract_test.go
       - file: quwoquan_app/test/api_integration/gamma/video_import_feed_cover_roundtrip__api_integration_test.dart
       recorded:
-      - file: quwoquan_data/tests/local_contract/test_video_manifest_cover_contract__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/post/test_video_manifest_cover_contract__behavior__functional__local_contract_test.py
       - file: quwoquan_service/services/content-service/tests/local_contract/cmd/import/video_import_cover_projection__local_contract_test.go
     status: pending
     test_evidence:

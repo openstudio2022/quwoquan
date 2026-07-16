@@ -133,7 +133,7 @@ Widget _buildShellRouter({required bool authenticated}) {
                 redirect: state.uri.queryParameters['redirect'],
                 dismissFallback:
                     state.uri.queryParameters[loginDismissFallbackQueryParam],
-                allowGuestDismissPop: loginGuestDismissCanPopFromQuery(
+                dismissPolicy: loginDismissPolicyFromQuery(
                   state.uri.queryParameters[loginGuestDismissPopQueryParam],
                 ),
               ),
@@ -146,7 +146,7 @@ Widget _buildShellRouter({required bool authenticated}) {
                     reason: AuthGateReason.createPost.name,
                     redirect: state.uri.toString(),
                     dismissFallback: AppRoutePaths.home,
-                    allowGuestDismissPop: false,
+                    dismissPolicy: LoginDismissPolicy.safeFallback,
                   );
                 }
                 return const Scaffold(body: Center(child: Text('CREATE_PAGE')));
@@ -196,7 +196,7 @@ Widget _buildShellRouterWithStore(AuthSessionStore store) {
                 redirect: state.uri.queryParameters['redirect'],
                 dismissFallback:
                     state.uri.queryParameters[loginDismissFallbackQueryParam],
-                allowGuestDismissPop: loginGuestDismissCanPopFromQuery(
+                dismissPolicy: loginDismissPolicyFromQuery(
                   state.uri.queryParameters[loginGuestDismissPopQueryParam],
                 ),
               ),
@@ -209,7 +209,7 @@ Widget _buildShellRouterWithStore(AuthSessionStore store) {
 }
 
 /// 复刻生产路由守卫的「受限直达路由 → 登录」逻辑，用于回归「深链进入受限路由
-/// 后关闭登录页又被守卫立刻弹出」的死循环。守卫触发的登录必须 allowGuestDismissPop=false。
+/// 后关闭登录页又被守卫立刻弹出」的死循环。守卫触发的登录必须使用 safeFallback。
 Widget _buildGuardedRouter({
   required bool authenticated,
   required String initialLocation,
@@ -261,7 +261,7 @@ class _GuardedRouterHostState extends ConsumerState<_GuardedRouterHost> {
               reasonName: gate.name,
               redirect: state.uri.toString(),
               dismissFallback: AppRoutePaths.home,
-              allowGuestDismissPop: false,
+              dismissPolicy: LoginDismissPolicy.safeFallback,
             );
           }
         }
@@ -297,7 +297,7 @@ class _GuardedRouterHostState extends ConsumerState<_GuardedRouterHost> {
             redirect: state.uri.queryParameters['redirect'],
             dismissFallback:
                 state.uri.queryParameters[loginDismissFallbackQueryParam],
-            allowGuestDismissPop: loginGuestDismissCanPopFromQuery(
+            dismissPolicy: loginDismissPolicyFromQuery(
               state.uri.queryParameters[loginGuestDismissPopQueryParam],
             ),
           ),
@@ -369,6 +369,11 @@ class _TestAuthSessionStore implements AuthSessionStore {
   }) async {}
 
   @override
+  Future<void> saveRefreshedAccountHint(
+    Map<String, dynamic>? accountHint,
+  ) async {}
+
+  @override
   Future<void> updateActiveSubAccount(String subAccountId) async {}
 
   @override
@@ -422,6 +427,11 @@ class _MutableAuthSessionStore implements AuthSessionStore {
   }) async {
     authenticated = true;
   }
+
+  @override
+  Future<void> saveRefreshedAccountHint(
+    Map<String, dynamic>? accountHint,
+  ) async {}
 
   @override
   Future<void> updateActiveSubAccount(String subAccountId) async {}

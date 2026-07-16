@@ -7,56 +7,55 @@ node:
   parent_domain_service: discovery-content
   parent_business_capability: object-homepage-coverage-scaling
 scope:
-  summary: 实体主页省级覆盖放量产线（主清单扩容、前置源核验、两段流水线、省级 recipe、批次执行导入、App 消费 UAT）验收范围。
+  summary: 实体主页覆盖从静态主清单、execution 内来源资格核验、单 execution 生产到环境发布与 App 消费的验收范围。
   in_scope:
-  - 主清单扩容管线（发现/去重/打标/写回）与 coverage-master-list 门禁。
-  - 前置 sourceScreen 批量核验与 sourceReadiness 三态回写。
-  - download/author 两段流水线与 bridge 池化并发改造。
-  - 省级参数化 recipe（100/500/all-ready 三档）与断点续跑。
-  - 批次执行、ship/import、coverage 账本回写证据链。
+  - 区县、实体类型与来源 coverage cell 及 checkpoint。
+  - execution-owned encyclopedia-primary-v2 来源资格核验与逐图权利闭包。
+  - 单 execution 工作包的五阶段生产、review 与 release 引用。
+  - immutable release、Gamma 导入、API 与 App UAT 证据。
   out_of_scope:
-  - 对象页消费体验升级（object-homepage-network）。
-  - 主页认领维护下线治理（shared-homepage-network）。
-  - 云端弹性 worker 池专项。
+  - 两省以外的本轮实跑。
 sit_acceptance:
   SIT1:
-    title: 省级批次产线端到端 SIT（扩容→核验→两段流水线→ship→coverage）
+    title: 省级实体主页端到端 SIT
     story_refs:
     - zhejiang-sichuan-province-coverage
     done_when:
-    - 主清单扩容批写回后 coverage-master-list 门禁绿，master-list-stats 出数。
-    - source-screen 批量核验回写三态与时间戳，产出 ready 折扣率报告。
-    - download stage 与 author stage 独立编排可断点续跑，author 只消费就绪对象。
-    - 批次 ship 后 coverage 账本 hasHomepage 与 envImports 与 publish 主线一致。
-    - gamma 导入后 introduction API 抽查 200。
+    - coverage cell 的终态、失败与截断可审计，资源上限不冒充饱和。
+    - 静态主清单只保存稳定身份与分类，不保存来源 URL、来源资格或运行期证据。
+    - 每个 execution 包含 plan、sources、五阶段对象树、evidence 与 publish_ref。
+    - approved 对象进入 canonical publish，release 环境中立且 create-once。
+    - Gamma 导入、API 与 App UAT 证据写入对应 env run。
     performance_points:
-    - M1 改造后单机吞吐 ≥4-6 主页/h（分段出数佐证）。
+    - M1 记录每小时 approved homepage 数量及 P95 单对象耗时。
     tests:
-      planned: []
-      recorded: []
+      planned:
+      - file: quwoquan_data/tests/local_contract/governance/test_coverage_matrix__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/governance/test_coverage_merge__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/execution/test_execution_source_qualification__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/execution/test_execution_input_ownership__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/user_acceptance/journeys/content_execution/test_execution_work_package_operator_journey__behavior__functional__user_acceptance_test.py
+      recorded:
+      - file: quwoquan_data/tests/local_contract/governance/test_coverage_matrix__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/governance/test_coverage_merge__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/execution/test_execution_source_qualification__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/execution/test_execution_input_ownership__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/user_acceptance/journeys/content_execution/test_execution_work_package_operator_journey__behavior__functional__user_acceptance_test.py
     status: pending
     test_evidence:
       primary:
       - layer: local_contract
-        suite: sit1_local_contract
+        suite: object_homepage_coverage_contract
         cases:
-        - local_contract.discovery_content.object_homepage_coverage_scaling.sit1.sit1_local_contract
-        envs: &id001
-        - local
+        - local_contract.discovery_content.object_homepage_coverage_scaling.sit1.contract
+        envs: [local]
       - layer: api_integration
-        suite: sit1_api_integration
+        suite: object_homepage_coverage_gamma
         cases:
-        - api_integration.discovery_content.object_homepage_coverage_scaling.sit1.sit1_api_integration
-        envs:
-        - gamma
-      supporting:
-      - layer: local_contract
-        suite: sit1_local_contract
-        cases:
-        - local_contract.discovery_content.object_homepage_coverage_scaling.sit1.sit1_local_contract
-        envs: *id001
-    notes:
-    - 批次证据归 QWQ_OUTPUT_ROOT/data/local/runtime/**，发布审计归 quwoquan_data/publish/env_releases/**。
+        - api_integration.discovery_content.object_homepage_coverage_scaling.sit1.gamma
+        envs: [gamma]
+      supporting: []
+    notes: []
 execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh

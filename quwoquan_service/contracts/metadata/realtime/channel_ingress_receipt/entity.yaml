@@ -1,0 +1,19 @@
+version: 1
+domain: realtime
+entity: ChannelIngressReceipt
+object_kind: append_only_fact
+
+description: |
+  外部渠道 Webhook 经验签和去重后形成的不可变接收事实。实时投递只消费该事实，
+  不把外部 ingress 冒充为 Connection 生命周期命令。
+
+storage_backend: postgresql
+
+capabilities:
+  - auditable
+
+ddd_layer_mapping:
+  domain_model: internal/domain/channel_ingress_receipt/model
+  repository: internal/domain/channel_ingress_receipt/ports
+  repository_implementation: internal/infrastructure/persistence
+  application: internal/application/channel_ingress_receipt

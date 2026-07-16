@@ -1,0 +1,104 @@
+version: 1
+entity: PostModerationCase
+
+fields:
+  - name: id
+    type: string
+    constraints: [PK]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: version
+    type: int
+    constraints: [NOT_NULL, DEFAULT_1]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: postId
+    type: string
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: postVersion
+    type: int
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: contentDigest
+    type: string
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: drop
+    ops_exposure: read
+
+  - name: status
+    type: enum
+    enum_ref: PostModerationCaseStatus
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read_write
+
+  - name: reviewerId
+    type: string
+    constraints: [NULLABLE]
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: drop
+    ops_exposure: read
+
+  - name: decisionReason
+    type: string
+    constraints: [NULLABLE]
+    classification: INTERNAL
+    log_policy: redact
+    api_exposure: drop
+    ops_exposure: read_write
+
+  - name: createdAt
+    type: timestamp
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: updatedAt
+    type: timestamp
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: decidedAt
+    type: timestamp
+    constraints: [NULLABLE]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+state_machine:
+  field: status
+  transitions:
+    - from: pending
+      to: [reviewed, superseded]
+    - from: reviewed
+      to: [approved, rejected, superseded]
+    - from: approved
+      to: [superseded]
+    - from: rejected
+      to: [superseded]

@@ -1,0 +1,407 @@
+part of "auth_session.dart";
+
+class AuthSessionController extends Notifier<AuthSessionState> {
+  static const Duration _staleRestoreRefreshThreshold = Duration(hours: 12);
+  static const Duration _foregroundAuthCheckThreshold = Duration(hours: 24);
+
+  bool _restoreStarted = false;
+  Future<bool>? _refreshInFlight;
+
+  AuthSessionStore get _store => ref.read(authSessionStoreProvider);
+
+  @override
+  AuthSessionState build() {
+    final restoreGateOpen = ref.watch(startupAuthRestoreGateProvider);
+    if (restoreGateOpen && !_restoreStarted) {
+      _restoreStarted = true;
+      unawaited(restore());
+    }
+    return const AuthSessionState.restoring();
+  }
+
+  Future<void> restore() async {
+    try {
+      final stored = await _store.read();
+      _syncDeviceActorId(stored.installId);
+      if (!ref.mounted) {
+        return;
+      }
+      if (stored.accessToken.isNotEmpty &&
+          stored.refreshToken.isNotEmpty &&
+          stored.ownerId.isNotEmpty) {
+        final authenticatedState = AuthSessionState(
+          status: AuthSessionStatus.authenticated,
+          accessToken: stored.accessToken,
+          refreshToken: stored.refreshToken,
+          ownerId: stored.ownerId,
+          activeSubAccountId: stored.activeSubAccountId,
+          accountState: stored.accountState,
+          identityOrigin: stored.identityOrigin,
+          installId: stored.installId,
+          rememberedLoginMethod: stored.rememberedLoginMethod,
+          rememberedLoginMaskedIdentifier:
+              stored.rememberedLoginMaskedIdentifier,
+          rememberedDisplayName: stored.rememberedDisplayName,
+          rememberedAvatarUrl: stored.rememberedAvatarUrl,
+          rememberedNicknameCustomized: stored.rememberedNicknameCustomized,
+        );
+        state = authenticatedState;
+        if (_shouldRefreshDuringRestore(stored)) {
+          await refreshSessionIfNeeded(force: true);
+        }
+        return;
+      }
+      state = AuthSessionState(
+        status: AuthSessionStatus.guest,
+        promptReason: stored.launchPromptDismissed
+            ? null
+            : stored.manualLoggedOut
+            ? AuthPromptReason.manualLoggedOut
+            : AuthPromptReason.firstRun,
+        installId: stored.installId,
+        rememberedLoginMethod: stored.rememberedLoginMethod,
+        rememberedLoginMaskedIdentifier: stored.rememberedLoginMaskedIdentifier,
+        rememberedDisplayName: stored.rememberedDisplayName,
+        rememberedAvatarUrl: stored.rememberedAvatarUrl,
+        rememberedNicknameCustomized: stored.rememberedNicknameCustomized,
+      );
+    } catch (e) {
+      if (!ref.mounted) {
+        return;
+      }
+      state = AuthSessionState(
+        status: AuthSessionStatus.guest,
+        promptReason: AuthPromptReason.sessionExpired,
+        rememberedLoginMethod: state.rememberedLoginMethod,
+        rememberedLoginMaskedIdentifier: state.rememberedLoginMaskedIdentifier,
+        rememberedDisplayName: state.rememberedDisplayName,
+        rememberedAvatarUrl: state.rememberedAvatarUrl,
+        rememberedNicknameCustomized: state.rememberedNicknameCustomized,
+        errorMessage: runtimeErrorDisplayMessage(e),
+      );
+    }
+  }
+
+  Future<void> applyLoginResult(AuthLoginResultDto result) async {
+    await _store.saveLoginResult(result);
+    final stored = await _store.read();
+    _syncDeviceActorId(stored.installId);
+    if (!ref.mounted) {
+      return;
+    }
+    state = AuthSessionState(
+      status: AuthSessionStatus.authenticated,
+      accessToken: stored.accessToken,
+      refreshToken: stored.refreshToken,
+      ownerId: stored.ownerId,
+      activeSubAccountId: stored.activeSubAccountId,
+      accountState: stored.accountState,
+      identityOrigin: stored.identityOrigin,
+      installId: stored.installId,
+      rememberedLoginMethod: stored.rememberedLoginMethod,
+      rememberedLoginMaskedIdentifier: stored.rememberedLoginMaskedIdentifier,
+      rememberedDisplayName: stored.rememberedDisplayName,
+      rememberedAvatarUrl: stored.rememberedAvatarUrl,
+      rememberedNicknameCustomized: stored.rememberedNicknameCustomized,
+    );
+  }
+
+  Future<void> applyRememberedLoginResult(
+    AuthLoginResultDto result, {
+    required AuthRememberedLoginMethod rememberedLoginMethod,
+    String? rememberedLoginMaskedIdentifier,
+    String? rememberedLoginIdentifier,
+  }) async {
+    await _store.saveLoginResult(
+      result,
+      rememberedLoginMethod: rememberedLoginMethod,
+      rememberedLoginMaskedIdentifier: rememberedLoginMaskedIdentifier,
+      rememberedLoginIdentifier: rememberedLoginIdentifier,
+    );
+    final stored = await _store.read();
+    _syncDeviceActorId(stored.installId);
+    if (!ref.mounted) {
+      return;
+    }
+    state = AuthSessionState(
+      status: AuthSessionStatus.authenticated,
+      accessToken: stored.accessToken,
+      refreshToken: stored.refreshToken,
+      ownerId: stored.ownerId,
+      activeSubAccountId: stored.activeSubAccountId,
+      accountState: stored.accountState,
+      identityOrigin: stored.identityOrigin,
+      installId: stored.installId,
+      rememberedLoginMethod: stored.rememberedLoginMethod,
+      rememberedLoginMaskedIdentifier: stored.rememberedLoginMaskedIdentifier,
+      rememberedDisplayName: stored.rememberedDisplayName,
+      rememberedAvatarUrl: stored.rememberedAvatarUrl,
+      rememberedNicknameCustomized: stored.rememberedNicknameCustomized,
+    );
+  }
+
+  Future<void> applyRefreshResult(AuthLoginResultDto result) async {
+    final current = state;
+    final accessToken = result.accessToken.trim();
+    final refreshToken = result.refreshToken.trim();
+    if (accessToken.isEmpty || refreshToken.isEmpty) {
+      throw StateError('refresh result missing tokens');
+    }
+    await _store.saveRefreshedTokens(
+      accessToken: accessToken,
+      refreshToken: refreshToken,
+    );
+    await _store.saveRefreshedAccountHint(result.accountHint);
+    final stored = await _store.read();
+    _syncDeviceActorId(stored.installId);
+    if (!ref.mounted) {
+      return;
+    }
+    state = AuthSessionState(
+      status: AuthSessionStatus.authenticated,
+      accessToken: accessToken,
+      refreshToken: refreshToken,
+      ownerId: current.ownerId.isNotEmpty ? current.ownerId : stored.ownerId,
+      activeSubAccountId: current.activeSubAccountId.isNotEmpty
+          ? current.activeSubAccountId
+          : stored.activeSubAccountId,
+      accountState: current.accountState.isNotEmpty
+          ? current.accountState
+          : stored.accountState,
+      identityOrigin: current.identityOrigin.isNotEmpty
+          ? current.identityOrigin
+          : stored.identityOrigin,
+      installId: stored.installId,
+      rememberedLoginMethod: stored.rememberedLoginMethod,
+      rememberedLoginMaskedIdentifier: stored.rememberedLoginMaskedIdentifier,
+      rememberedDisplayName: stored.rememberedDisplayName,
+      rememberedAvatarUrl: stored.rememberedAvatarUrl,
+      rememberedNicknameCustomized: stored.rememberedNicknameCustomized,
+    );
+  }
+
+  Future<bool> refreshSessionIfNeeded({
+    bool force = false,
+    Future<void>? abortTrigger,
+  }) async {
+    final current = state;
+    if (!current.isAuthenticated || current.refreshToken.trim().isEmpty) {
+      return false;
+    }
+    if (!force && _refreshInFlight != null) {
+      return _awaitRefresh(_refreshInFlight!, abortTrigger: abortTrigger);
+    }
+    final future = _performRefresh(abortTrigger: abortTrigger);
+    _refreshInFlight = future;
+    try {
+      return await _awaitRefresh(future, abortTrigger: abortTrigger);
+    } finally {
+      if (identical(_refreshInFlight, future)) {
+        _refreshInFlight = null;
+      }
+    }
+  }
+
+  Future<bool> refreshIfSessionLooksStale() async {
+    final stored = await _store.read();
+    if (!_shouldRefreshForForegroundCheck(stored)) {
+      return false;
+    }
+    return refreshSessionIfNeeded(force: true);
+  }
+
+  Future<void> markForegroundAuthCheck() async {
+    await _store.markForegroundAuthCheckNow();
+  }
+
+  Future<void> continueAsGuest({AuthPromptReason? reason}) async {
+    await _store.markLaunchPromptDismissed();
+    final stored = await _store.read();
+    _syncDeviceActorId(stored.installId);
+    if (!ref.mounted) {
+      return;
+    }
+    state = AuthSessionState(
+      status: AuthSessionStatus.guest,
+      promptReason: reason,
+      installId: stored.installId,
+      rememberedLoginMethod: stored.rememberedLoginMethod,
+      rememberedLoginMaskedIdentifier: stored.rememberedLoginMaskedIdentifier,
+      rememberedDisplayName: stored.rememberedDisplayName,
+      rememberedAvatarUrl: stored.rememberedAvatarUrl,
+      rememberedNicknameCustomized: stored.rememberedNicknameCustomized,
+    );
+  }
+
+  /// 软退出（默认）：仅失效当前活跃会话，保留快速登录凭证与账号摘要。
+  ///
+  /// 有效期内（云端下发，默认 30 天）再次打开登录页可一键免验证码快速登录。
+  /// 调用方（settings）须保证不向远端吊销 refresh token。
+  Future<void> softLogout() async {
+    await _store.softLogout();
+    final stored = await _store.read();
+    if (!ref.mounted) {
+      return;
+    }
+    state = AuthSessionState(
+      status: AuthSessionStatus.guest,
+      promptReason: AuthPromptReason.manualLoggedOut,
+      installId: stored.installId,
+      rememberedLoginMethod: stored.rememberedLoginMethod,
+      rememberedLoginMaskedIdentifier: stored.rememberedLoginMaskedIdentifier,
+      rememberedDisplayName: stored.rememberedDisplayName,
+      rememberedAvatarUrl: stored.rememberedAvatarUrl,
+      rememberedNicknameCustomized: stored.rememberedNicknameCustomized,
+    );
+  }
+
+  /// 彻底退出：清除本机全部登录凭证。调用方负责向远端吊销 refresh token。
+  /// 下次登录必须重新验证（无可用快速登录凭证）。
+  Future<void> hardLogout() async {
+    await _store.clearSession(manualLogout: true);
+    final stored = await _store.read();
+    if (!ref.mounted) {
+      return;
+    }
+    state = AuthSessionState(
+      status: AuthSessionStatus.guest,
+      promptReason: AuthPromptReason.manualLoggedOut,
+      installId: stored.installId,
+      rememberedLoginMethod: stored.rememberedLoginMethod,
+      rememberedLoginMaskedIdentifier: stored.rememberedLoginMaskedIdentifier,
+    );
+  }
+
+  /// 兼容旧调用：等价于彻底退出。新代码应显式使用 softLogout / hardLogout。
+  Future<void> clearForLogout() => hardLogout();
+
+  Future<void> clearForExpiredSession() async {
+    await _store.clearSession(manualLogout: false);
+    final stored = await _store.read();
+    if (!ref.mounted) {
+      return;
+    }
+    state = AuthSessionState(
+      status: AuthSessionStatus.guest,
+      promptReason: AuthPromptReason.sessionExpired,
+      installId: stored.installId,
+      rememberedLoginMethod: stored.rememberedLoginMethod,
+      rememberedLoginMaskedIdentifier: stored.rememberedLoginMaskedIdentifier,
+      rememberedDisplayName: stored.rememberedDisplayName,
+      rememberedAvatarUrl: stored.rememberedAvatarUrl,
+      rememberedNicknameCustomized: stored.rememberedNicknameCustomized,
+    );
+  }
+
+  Future<void> updateActiveSubAccount(String subAccountId) async {
+    await _store.updateActiveSubAccount(subAccountId);
+    state = state.copyWith(activeSubAccountId: subAccountId.trim());
+  }
+
+  Future<bool> _performRefresh({Future<void>? abortTrigger}) async {
+    final current = state;
+    final refreshToken = current.refreshToken.trim();
+    if (!current.isAuthenticated || refreshToken.isEmpty) {
+      return false;
+    }
+    try {
+      final result = await _awaitRefreshResult(
+        ref.read(authSessionRefreshExecutorProvider)(
+          refreshToken,
+          abortTrigger: abortTrigger,
+        ),
+        abortTrigger: abortTrigger,
+      );
+      await applyRefreshResult(result);
+      return true;
+    } catch (e) {
+      if (e is http.RequestAbortedException ||
+          e is CloudOperationCancelledException) {
+        return false;
+      }
+      if (_shouldClearSessionForRefreshFailure(e)) {
+        await clearForExpiredSession();
+        if (!ref.mounted) {
+          return false;
+        }
+        state = state.copyWith(
+          errorMessage: () => runtimeErrorDisplayMessage(e),
+        );
+        return false;
+      }
+      await _store.markForegroundAuthCheckNow();
+      if (!ref.mounted) {
+        return false;
+      }
+      state = state.copyWith(errorMessage: () => runtimeErrorDisplayMessage(e));
+      return false;
+    }
+  }
+
+  Future<AuthLoginResultDto> _awaitRefreshResult(
+    Future<AuthLoginResultDto> refresh, {
+    Future<void>? abortTrigger,
+  }) {
+    if (abortTrigger == null) {
+      return refresh;
+    }
+    return Future.any<AuthLoginResultDto>(<Future<AuthLoginResultDto>>[
+      refresh,
+      abortTrigger.then<AuthLoginResultDto>(
+        (_) => throw const CloudOperationCancelledException(),
+      ),
+    ]);
+  }
+
+  Future<bool> _awaitRefresh(
+    Future<bool> refresh, {
+    Future<void>? abortTrigger,
+  }) {
+    if (abortTrigger == null) {
+      return refresh;
+    }
+    return Future.any<bool>(<Future<bool>>[
+      refresh,
+      abortTrigger.then((_) => false),
+    ]);
+  }
+
+  bool _shouldClearSessionForRefreshFailure(Object error) {
+    if (error is CloudException) {
+      return error.type == CloudErrorType.unauthorized ||
+          error.type == CloudErrorType.forbidden;
+    }
+    if (error is StateError) {
+      return true;
+    }
+    return false;
+  }
+
+  bool _shouldRefreshDuringRestore(StoredAuthSession stored) {
+    return _isOlderThan(
+      stored.lastRefreshAtEpochMs,
+      _staleRestoreRefreshThreshold,
+    );
+  }
+
+  bool _shouldRefreshForForegroundCheck(StoredAuthSession stored) {
+    if (stored.accessToken.isEmpty ||
+        stored.refreshToken.isEmpty ||
+        stored.ownerId.isEmpty) {
+      return false;
+    }
+    return _isOlderThan(
+      stored.lastForegroundAuthCheckAtEpochMs,
+      _foregroundAuthCheckThreshold,
+    );
+  }
+
+  bool _isOlderThan(int epochMs, Duration threshold) {
+    if (epochMs <= 0) {
+      return true;
+    }
+    final now = DateTime.now().millisecondsSinceEpoch;
+    return now - epochMs >= threshold.inMilliseconds;
+  }
+}
+

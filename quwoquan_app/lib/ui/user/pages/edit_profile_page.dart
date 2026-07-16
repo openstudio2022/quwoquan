@@ -20,6 +20,8 @@ import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
 import 'package:quwoquan_app/ui/user/widgets/my_qr_card.dart';
+import 'package:quwoquan_app/ui/user/widgets/profile_update_proposal_review_sheet.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 part 'edit_profile_page_sections.dart';
 part 'edit_profile_page_phone_qr.dart';
 

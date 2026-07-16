@@ -5,11 +5,13 @@ import 'dart:developer' as developer;
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:crypto/crypto.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:quwoquan_app/assistant/observability/logging/app_log_redactor.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_trace_context_store.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
+import 'package:quwoquan_app/cloud/runtime/context/actor_queue_partition.dart';
+import 'package:quwoquan_app/infrastructure/local/actor_queue/actor_queue_storage.dart';
 import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
-import 'package:quwoquan_app/core/services/hive_runtime.dart';
 
 const String kAppExceptionQueueBoxName = 'app_exception_queue';
 
@@ -29,20 +31,42 @@ class AppExceptionTelemetryFailureState {
 
 class AppExceptionTelemetryService {
   AppExceptionTelemetryService({
-    OpsEventRepository? eventRepository,
+    this._eventRepository,
+    this._queuePartition,
     this._queueBoxName = kAppExceptionQueueBoxName,
-  }) : _eventRepository = eventRepository ?? RemoteOpsEventRepository();
+    ActorQueueStorage? queueStorage,
+  }) : _queueStorage = queueStorage ?? ActorQueueStorage();
 
   static final AppExceptionTelemetryService instance =
       AppExceptionTelemetryService();
 
-  final OpsEventRepository _eventRepository;
+  OpsEventRepository? _eventRepository;
+  ActorQueuePartition? _queuePartition;
   final String _queueBoxName;
+  ActorQueueStorage _queueStorage;
 
   final Set<String> _recentFingerprints = <String>{};
+  static const AppLogRedactor _redactor = AppLogRedactor();
   AppExceptionTelemetryFailureState? _lastFlushFailure;
 
   AppExceptionTelemetryFailureState? get lastFlushFailure => _lastFlushFailure;
+
+  void bind({
+    required OpsEventRepository eventRepository,
+    required ActorQueuePartition queuePartition,
+    ActorQueueStorage? queueStorage,
+  }) {
+    _eventRepository = eventRepository;
+    _queuePartition = queuePartition;
+    if (queueStorage != null) {
+      _queueStorage = queueStorage;
+    }
+  }
+
+  void unbind() {
+    _eventRepository = null;
+    _queuePartition = null;
+  }
 
   Future<void> recordGlobalException({
     required String source,
@@ -97,8 +121,8 @@ class AppExceptionTelemetryService {
       platform: CloudRequestHeaders.platform(),
       networkClass: await _networkClass(),
       payload: {
-        'exception': _truncate(exceptionText, 2048),
-        'stack': _truncate(stackText, 8192),
+        'exception': _truncate(_redactor.redactText(exceptionText), 2048),
+        'stack': _truncate(_redactor.redactText(stackText), 8192),
       },
     );
     await _enqueue(event);
@@ -110,11 +134,16 @@ class AppExceptionTelemetryService {
   }
 
   Future<void> flushPending() async {
+    final eventRepository = _eventRepository;
+    if (eventRepository == null) {
+      return;
+    }
     final box = await _ensureBox();
     if (box == null) {
       return;
     }
     final events = <OpsEventRecordInput>[];
+    final processedKeys = <String>[];
     final keys = box.keys.map((key) => key.toString()).toList(growable: false)
       ..sort();
     for (final key in keys) {
@@ -124,23 +153,48 @@ class AppExceptionTelemetryService {
         continue;
       }
       try {
-        final decoded = (jsonDecode(raw) as Map).cast<String, Object?>();
-        events.add(OpsEventRecordInput.fromJsonObject(decoded));
+        final envelope = (jsonDecode(raw) as Map).cast<String, Object?>();
+        final partition = _queuePartition;
+        if (partition == null ||
+            !partition.acceptsEnvelope(envelope['actorPartitionKey'])) {
+          if (partition != null) {
+            await _queueStorage.moveToDlq(
+              partition: partition,
+              queueName: _queueBoxName,
+              sourceKey: key,
+              rawEnvelope: raw,
+              reason: 'actor_partition_mismatch',
+            );
+          }
+          continue;
+        }
+        final event = (envelope['event'] as Map).cast<String, Object?>();
+        events.add(OpsEventRecordInput.fromJsonObject(event));
+        processedKeys.add(key);
       } catch (error) {
         developer.log(
           'app exception telemetry drops corrupt queue item: $error',
           name: 'AppExceptionTelemetryService',
         );
-        await box.delete(key);
+        final partition = _queuePartition;
+        if (partition != null) {
+          await _queueStorage.moveToDlq(
+            partition: partition,
+            queueName: _queueBoxName,
+            sourceKey: key,
+            rawEnvelope: raw,
+            reason: 'poison_${error.runtimeType}',
+          );
+        }
       }
     }
     if (events.isEmpty) {
       return;
     }
     try {
-      final ack = await _eventRepository.reportEventBatch(events: events);
+      final ack = await eventRepository.reportEventBatch(events: events);
       if (ack.acceptedCount + ack.duplicateCount >= events.length) {
-        await box.clear();
+        await box.deleteAll(processedKeys);
       }
     } catch (error, stackTrace) {
       await _recordFlushFailure(error, stackTrace, phase: 'report_batch');
@@ -148,7 +202,11 @@ class AppExceptionTelemetryService {
   }
 
   Future<Box<String>?> _ensureBox() async {
-    return HiveRuntime.openStringBoxOrNull(_queueBoxName);
+    final partition = _queuePartition;
+    if (partition == null || !partition.canPersist) {
+      return null;
+    }
+    return _queueStorage.open(partition, _queueBoxName);
   }
 
   Future<void> _enqueue(OpsEventRecordInput event) async {
@@ -156,15 +214,42 @@ class AppExceptionTelemetryService {
     if (box == null) {
       return;
     }
-    await box.put(event.eventId, jsonEncode(event.toJson()));
+    final partition = _queuePartition;
+    if (partition == null) return;
+    await box.put(
+      event.eventId,
+      jsonEncode(<String, Object?>{
+        'actorPartitionKey': partition.key,
+        'event': event.toJson(),
+      }),
+    );
     if (box.length > 100) {
       final keys = box.keys.map((key) => key.toString()).toList(growable: false)
         ..sort();
       final overflow = box.length - 100;
       for (var i = 0; i < overflow; i++) {
-        await box.delete(keys[i]);
+        final overflowKey = keys[i];
+        final raw = box.get(overflowKey);
+        if (raw == null) {
+          await box.delete(overflowKey);
+          continue;
+        }
+        await _queueStorage.moveToDlq(
+          partition: partition,
+          queueName: _queueBoxName,
+          sourceKey: overflowKey,
+          rawEnvelope: raw,
+          reason: 'queue_capacity_exceeded',
+          kind: ActorQueueSignalKind.overflowMoved,
+        );
       }
     }
+  }
+
+  Future<void> clearPendingForLogout() async {
+    final partition = _queuePartition;
+    if (partition == null) return;
+    await _queueStorage.purge(partition, _queueBoxName);
   }
 
   Future<void> _recordFlushFailure(

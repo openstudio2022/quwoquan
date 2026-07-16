@@ -77,6 +77,11 @@ func cloneHomepage(in *Homepage) Homepage {
 	out.RelationEdges = cloneObjectSlice(in.RelationEdges)
 	out.AssistantContext = cloneMap(in.AssistantContext)
 	out.IntroductionAssets = cloneIntroductionAssets(in.IntroductionAssets)
+	out.SourceURLs = cloneStrings(in.SourceURLs)
+	if in.PrimarySource != nil {
+		source := *in.PrimarySource
+		out.PrimarySource = &source
+	}
 	return out
 }
 

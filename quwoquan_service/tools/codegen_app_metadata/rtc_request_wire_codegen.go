@@ -2,11 +2,8 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
-
-	"gopkg.in/yaml.v3"
 )
 
 type rtcClientRequestWireFile struct {
@@ -16,12 +13,8 @@ type rtcClientRequestWireFile struct {
 }
 
 func readRtcClientRequestWire(path string) (*rtcClientRequestWireFile, error) {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
 	var out rtcClientRequestWireFile
-	if err := yaml.Unmarshal(raw, &out); err != nil {
+	if err := decodeMetadataDocument(path, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

@@ -1,129 +1,376 @@
 version: 1
-entity: Notification
+
+response_list_key: items
 
 service:
   name: notification-service
   domain: notification
+  owner: backend-team
+  commercial_defaults:
+    status: blocked
+    block_reason: canonical operation awaits object-centered commercial migration
+    gap_id: NOTIFICATION_NOTIFICATION_COMMERCIAL_EVIDENCE
+    target_story: app-cloud-business-object-commercial-closure
 
 api_routes:
   - method: POST
-    path: /v1/app-messages
+    path: /internal/v1/app-messages
     operation: CreateAppMessage
-    description: 创建统一应用消息。M3 仅开放服务端/内部调用，业务真相源仍落 notification 域。
-    request_fields: [userId, messageType, source, sourceId, destination, title, summary, target]
+    actor: none
+    application:
+      kind: command
+      facet: AppMessageCommandFacade
+      method: create
+      aggregate_owner: Notification
+      mutation_target: Notification
+      invariant_target: Notification
+    authorization:
+      principal: service
+      scopes: [notification.app_message.create]
+      ownership_policy: destination_owner_must_match_command
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - NOTIFICATION.USER.unauthorized
+      - NOTIFICATION.USER.invalid_argument
+      - NOTIFICATION.USER.idempotency_conflict
+      - NOTIFICATION.SYSTEM.storage_write_failed
+    privacy:
+      request_classification: PII
+      response_classification: PII
+      log_policy: metadata_only
+    telemetry:
+      metric: notification_app_message_create
+      trace: true
+      attributes: [outcome, message_type, caller_service]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    description: 由受信服务创建统一应用消息；Notification 是唯一真相源。
+    request_fields: [userId, messageType, source, sourceId, destination, title, summary, target, provenance]
+    security:
+      auth_mode: required
+      principal: service
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: internal
 
   - method: GET
     path: /v1/app-messages
     operation: ListAppMessages
-    description: 统一应用消息列表，兼容现有通知 inbox。
+    actor: account
+    application:
+      kind: query
+      facet: AppMessageQueryFacade
+      method: listInbox
+      reader: AppMessageInboxReader
+      slice: AppMessageInboxSlice
+    authorization:
+      principal: account
+      ownership_policy: authenticated_account_inbox_only
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - NOTIFICATION.USER.unauthorized
+      - NOTIFICATION.USER.invalid_argument
+      - NOTIFICATION.SYSTEM.storage_read_failed
+    privacy:
+      request_classification: PII
+      response_classification: PII
+      log_policy: metadata_only
+    telemetry:
+      metric: notification_app_message_inbox_list
+      trace: true
+      attributes: [outcome, message_type, result_count]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    client_contract:
+      dart_import: ../notification/app_message_contracts.dart
+      request_type: ListAppMessagesQuery
+      response_type: AppMessageInboxSlice
+      request_encoder: encodeListAppMessagesQuery
+      response_decoder: decodeAppMessageInboxSlice
+    description: 读取当前账户的统一应用消息列表。
     query_params: [type, read, cursor, limit]
+    response_body: AppMessageInboxSlice
+    response_body_kind: page
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: GET
     path: /v1/app-messages/{messageId}
     operation: GetAppMessage
-    description: 统一应用消息详情。
+    actor: account
+    application:
+      kind: query
+      facet: AppMessageQueryFacade
+      method: getDetail
+      reader: AppMessageDetailReader
+      slice: AppMessageDetailSlice
+    authorization:
+      principal: account
+      ownership_policy: authenticated_account_message_only
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - NOTIFICATION.USER.unauthorized
+      - NOTIFICATION.USER.invalid_argument
+      - NOTIFICATION.USER.app_message_not_found
+      - NOTIFICATION.SYSTEM.storage_read_failed
+    privacy:
+      request_classification: PII
+      response_classification: PII
+      log_policy: metadata_only
+    telemetry:
+      metric: notification_app_message_get
+      trace: true
+      attributes: [outcome, message_type]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    client_contract:
+      dart_import: ../notification/app_message_contracts.dart
+      request_type: GetAppMessageQuery
+      response_type: AppMessage
+      request_encoder: encodeGetAppMessageQuery
+      response_decoder: decodeAppMessage
+    description: 读取当前账户拥有的单条统一应用消息。
+    response_body: AppMessageDetailSlice
+    response_body_kind: object
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: POST
     path: /v1/app-messages/{messageId}/ack
     operation: AckAppMessage
-    description: 标记端侧已收到消息，不等价于已读。
+    actor: account
+    application:
+      kind: command
+      facet: AppMessageCommandFacade
+      method: acknowledge
+      aggregate_owner: Notification
+      mutation_target: Notification
+      invariant_target: Notification
+    authorization:
+      principal: account
+      ownership_policy: authenticated_account_message_only
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - NOTIFICATION.USER.unauthorized
+      - NOTIFICATION.USER.invalid_argument
+      - NOTIFICATION.USER.app_message_not_found
+      - NOTIFICATION.SYSTEM.storage_write_failed
+    privacy:
+      request_classification: PII
+      response_classification: PII
+      log_policy: metadata_only
+    telemetry:
+      metric: notification_app_message_ack
+      trace: true
+      attributes: [outcome, message_type]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    client_contract:
+      dart_import: ../notification/app_message_contracts.dart
+      request_type: AckAppMessageCommand
+      response_type: AppMessage
+      request_encoder: encodeAckAppMessageCommand
+      response_decoder: decodeAppMessage
+    description: 幂等记录端侧已收到消息，不等价于已读。
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: POST
     path: /v1/app-messages/{messageId}/read
     operation: ReadAppMessage
-    description: 标记单条统一应用消息已读。
+    actor: account
+    application:
+      kind: command
+      facet: AppMessageCommandFacade
+      method: markRead
+      aggregate_owner: Notification
+      mutation_target: Notification
+      invariant_target: Notification
+    authorization:
+      principal: account
+      ownership_policy: authenticated_account_message_only
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - NOTIFICATION.USER.unauthorized
+      - NOTIFICATION.USER.invalid_argument
+      - NOTIFICATION.USER.app_message_not_found
+      - NOTIFICATION.SYSTEM.storage_write_failed
+    privacy:
+      request_classification: PII
+      response_classification: PII
+      log_policy: metadata_only
+    telemetry:
+      metric: notification_app_message_read
+      trace: true
+      attributes: [outcome, message_type]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    client_contract:
+      dart_import: ../notification/app_message_contracts.dart
+      request_type: ReadAppMessageCommand
+      response_type: AppMessage
+      request_encoder: encodeReadAppMessageCommand
+      response_decoder: decodeAppMessage
+    description: 幂等标记当前账户拥有的单条消息已读。
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: GET
     path: /v1/app-messages/unread-count
     operation: GetAppMessageUnreadCount
-    description: 统一应用消息未读计数。
-
-  - method: GET
-    path: /v1/app-messages/stream
-    operation: StreamAppMessages
-    description: M3 typed stream 入口，可由 realtime gateway 或 fake transport 承接。
-    query_params: [lastSeq]
-
-  - method: GET
-    path: /v1/notifications
-    operation: ListNotifications
-    description: 通知列表
-    query_params: [type, read, cursor, limit]
-
-  - method: POST
-    path: /v1/notifications/read
-    operation: MarkAsRead
-    description: 批量标记已读
-    request_fields: [notificationIds]
-
-  - method: POST
-    path: /v1/notifications/read-all
-    operation: MarkAllAsRead
-    description: 全部标记已读
-
-  - method: GET
-    path: /v1/notifications/unread-count
-    operation: GetUnreadCount
-    description: 未读计数
+    actor: account
+    application:
+      kind: query
+      facet: AppMessageQueryFacade
+      method: getUnreadCount
+      reader: AppMessageUnreadCountReader
+      slice: AppMessageUnreadCountSlice
+    authorization:
+      principal: account
+      ownership_policy: authenticated_account_inbox_only
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 1000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - NOTIFICATION.USER.unauthorized
+      - NOTIFICATION.SYSTEM.storage_read_failed
+    privacy:
+      request_classification: PII
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: notification_app_message_unread_count
+      trace: true
+      attributes: [outcome, unread_bucket]
+    slo:
+      latency_p95_ms: 300
+      availability_percent: 99.9
+    client_contract:
+      dart_import: ../notification/app_message_contracts.dart
+      request_type: GetAppMessageUnreadCountQuery
+      response_type: AppMessageUnreadCountSlice
+      request_encoder: encodeGetAppMessageUnreadCountQuery
+      response_decoder: decodeAppMessageUnreadCountSlice
+    description: 读取当前账户统一应用消息未读计数。
+    response_body: AppMessageUnreadCountSlice
+    response_body_kind: object
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
 consumers:
   - name: app
-    capabilities: [list, mark_read, mark_all_read, unread_count, app_message_list, app_message_ack, app_message_stream]
-  - name: platform-ops
-    capabilities: [send_system_notification]
+    capabilities: [app_message_list, app_message_get, app_message_ack, app_message_read, app_message_unread_count]
   - name: assistant-service
     capabilities: [create_app_message]
-    description: 只通过 AppMessage adapter 写入 assistant 类型消息，不拥有消息真相源。
+    description: 仅通过 Notification command client 创建 assistant 类型消息，不拥有消息真相源。
 
 contract_test:
   mock_strategy:
     app_side:
-      mock_target: notification-service API
+      mock_target: notification-service generated operation contract
       scenarios:
-        - name: notification_list_tabs
-          route: GET /v1/notifications
-          variants: [all, social, content, circle, system]
-          assertions: [status_200, items_match_schema, sorted_by_created_at_desc]
-
-        - name: mark_read
-          route: POST /v1/notifications/read
-          assertions: [status_200, read_status_updated]
-
-        - name: unread_count
-          route: GET /v1/notifications/unread-count
-          assertions: [status_200, count_matches]
-
+        - name: app_message_inbox_lifecycle
+          routes:
+            - GET /v1/app-messages
+            - GET /v1/app-messages/{messageId}
+            - POST /v1/app-messages/{messageId}/ack
+            - POST /v1/app-messages/{messageId}/read
+            - GET /v1/app-messages/unread-count
+          assertions: [strict_typed_decode, account_isolation, ack_is_not_read, unread_count_converges]
     service_side:
-      description: 使用真实测试数据库，不 mock 存储层
+      description: 使用真实 MongoDB，aggregate 与 delivery outbox 在同一事务中提交。
       real_engines:
         mongodb: testcontainers (mongo:7)
-      spy_targets: [event_publisher]
-      mock_targets: [push_service_client]
+      spy_targets: []
+      mock_targets: [integration-delivery-provider]
       data_management:
-        seed: fixture 工厂预制到真实 MongoDB
-        cleanup: "db.notifications.DeleteMany(ctx, bson.D{})"
+        seed: fixture 工厂预制 app_messages
+        cleanup: "db.app_messages.DeleteMany(ctx, bson.D{})"
       scenarios:
-        - name: create_notification_from_event
-          trigger: inject UserFollowed event
-          seed: []
+        - name: create_app_message_transactional_outbox
+          command: CreateAppMessage
           assertions:
-            - "db.notifications.FindOne({userId, type: 'social'}) → document exists"
-            - "push mock called if user settings enablePush=true"
-
-        - name: batch_mark_read
-          command: MarkAsRead([id1, id2, id3])
-          seed: [fixture.NewNotification() x3]
+            - app_messages contains exactly one aggregate for idempotency key
+            - notification_delivery_jobs contains exactly one pending delivery job
+            - notification_delivery_jobs_outbox contains exactly one created event
+            - repeated identical command returns the original messageId
+        - name: app_message_owner_isolation
+          command: GetAppMessage
           assertions:
-            - "db.notifications.Find({_id: {$in: [id1,id2,id3]}}).read → all true"
-            - "db.notifications.Find({...}).readAt → all NOT NULL"
-
-        - name: ttl_expiry
-          description: 验证 90 天 TTL 索引
-          seed: [fixture.NewNotification(createdAt=91_days_ago)]
+            - owner receives the message
+            - another account receives NOTIFICATION.USER.app_message_not_found
+        - name: app_message_state_convergence
+          commands: [AckAppMessage, ReadAppMessage]
           assertions:
-            - "after MongoDB TTL monitor runs → document auto-deleted"
-
+            - ackedAt is stable across retries
+            - readAt is stable across retries
+            - unread count converges to zero
   coverage_requirements:
-    - all notification types tested
-    - TTL cleanup verified
-    - push integration tested
+    - all commercial-ready app message operations use generated typed clients
+    - owner isolation has a stable RuntimeFailure
+    - aggregate and outbox transaction is verified against real MongoDB

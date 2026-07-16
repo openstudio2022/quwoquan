@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -11,19 +13,33 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	generatedcontrolplane "quwoquan_service/generated/control_plane"
+	operationsecurity "quwoquan_service/generated/operationsecurity"
+	controlplanepersistence "quwoquan_service/internal/platform/controlplane/persistence"
+	rtauth "quwoquan_service/runtime/auth"
+	runtimeconfig "quwoquan_service/runtime/config"
 	"quwoquan_service/runtime/controlplane"
 	rterr "quwoquan_service/runtime/errors"
 	rtgov "quwoquan_service/runtime/governance"
 	rthttp "quwoquan_service/runtime/http"
 	robs "quwoquan_service/runtime/observability"
 	rtotel "quwoquan_service/runtime/otel"
+	confighttp "quwoquan_service/services/platform-ops-service/internal/adapters/http/config_layer"
+	configapp "quwoquan_service/services/platform-ops-service/internal/application/platform_ops/config_layer"
+	configmodel "quwoquan_service/services/platform-ops-service/internal/domain/platform_ops/config_layer/model"
+	configpersistence "quwoquan_service/services/platform-ops-service/internal/infrastructure/platform_ops/config_layer/persistence"
 
 	"gopkg.in/yaml.v3"
 )
 
 type platformService struct {
-	repoRoot string
-	store    *controlplane.FileStore
+	repoRoot     string
+	store        controlplane.StateStore
+	configLayer  *configapp.Facade
+	configLayers http.Handler
+	health       func(context.Context) error
 }
 
 func main() {
@@ -35,6 +51,18 @@ func main() {
 	if err != nil {
 		log.Fatalf("platform-ops-service config load failed: %v", err)
 	}
+	applyPlatformEnvOverrides(&cfg)
+	if err := validatePlatformRuntimeConfig(cfg); err != nil {
+		log.Fatalf("platform-ops-service required runtime config invalid: %v", err)
+	}
+	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(runtimeconfig.EnvRuntimeConfigProvider{})
+	if err != nil {
+		log.Fatalf("platform-ops-service access token config invalid: %v", err)
+	}
+	accessVerifier, err := rtauth.NewHS256Verifier(accessTokenConfig)
+	if err != nil {
+		log.Fatalf("platform-ops-service access token verifier invalid: %v", err)
+	}
 	addr := strings.TrimSpace(os.Getenv("PLATFORM_OPS_SERVICE_ADDR"))
 	if addr == "" {
 		addr = strings.TrimSpace(cfg.Service.HTTP.Addr)
@@ -43,14 +71,64 @@ func main() {
 		addr = ":18087"
 	}
 	repoRoot := resolveRepoRoot()
-	service := &platformService{
-		repoRoot: repoRoot,
-		store:    controlplane.NewFileStore(localControlPlaneStorePath(repoRoot, "platform-ops-service")),
+	ctx := context.Background()
+	postgresConfig, err := pgxpool.ParseConfig(cfg.Postgres.DSN)
+	if err != nil {
+		log.Fatalf("platform-ops-service postgres config invalid: %v", err)
 	}
-	if err := service.seed(); err != nil {
-		log.Fatalf("seed platform ops service: %v", err)
+	postgresConfig.MaxConns = 20
+	postgresConfig.MinConns = 2
+	postgresConfig.HealthCheckPeriod = 30 * time.Second
+	postgresPool, err := pgxpool.NewWithConfig(ctx, postgresConfig)
+	if err != nil {
+		log.Fatalf("platform-ops-service postgres connect failed: %v", err)
+	}
+	defer postgresPool.Close()
+	if err := postgresPool.Ping(ctx); err != nil {
+		log.Fatalf("platform-ops-service postgres unavailable: %v", err)
+	}
+	store, err := controlplanepersistence.NewPostgresStore(postgresPool, "platform-ops")
+	if err != nil {
+		log.Fatalf("platform-ops-service control plane store invalid: %v", err)
+	}
+	if err := store.EnsureSchema(ctx); err != nil {
+		log.Fatalf("platform-ops-service control plane schema initialization failed: %v", err)
+	}
+	configLayerStore, err := configpersistence.NewPostgresStore(postgresPool)
+	if err != nil {
+		log.Fatalf("platform-ops-service config layer store invalid: %v", err)
+	}
+	if err := configLayerStore.EnsureSchema(ctx); err != nil {
+		log.Fatalf("platform-ops-service config layer schema initialization failed: %v", err)
+	}
+	configKeyCatalog, err := configpersistence.NewGeneratedConfigKeyCatalog(
+		generatedcontrolplane.MustLoadPlatformConfigSchema(),
+	)
+	if err != nil {
+		log.Fatalf("platform-ops-service generated config key catalog invalid: %v", err)
+	}
+	configLayerFacade, err := configapp.NewFacade(configLayerStore, configLayerStore, configKeyCatalog)
+	if err != nil {
+		log.Fatalf("platform-ops-service config layer facade invalid: %v", err)
+	}
+	configLayerHandler, err := confighttp.NewHandler(configLayerFacade)
+	if err != nil {
+		log.Fatalf("platform-ops-service config layer HTTP adapter invalid: %v", err)
+	}
+	service := &platformService{
+		repoRoot: repoRoot, store: store, configLayer: configLayerFacade, configLayers: configLayerHandler,
+		health: postgresPool.Ping,
 	}
 	mux := newServerMux(service)
+	outerMux := http.NewServeMux()
+	outerMux.Handle("/healthz", mux)
+	outerMux.Handle("/metrics", mux)
+	outerMux.Handle(
+		"/",
+		rtauth.RequireGeneratedOperationAuthorization(
+			operationsecurity.ForDomain("ops"),
+		)(mux),
+	)
 
 	instanceID, _ := os.Hostname()
 	ioLogger := robs.NewIOAccessLogger(os.Stdout)
@@ -62,7 +140,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("platform-ops-service exception logger init failed: %v", err)
 	}
-	observedHandler := rthttp.NewHTTPServerMiddleware(mux, rthttp.HTTPServerMiddlewareConfig{
+	observedHandler := rthttp.NewHTTPServerMiddleware(outerMux, rthttp.HTTPServerMiddlewareConfig{
 		Service:           "platform-ops-service",
 		ServiceName:       "platform-ops-service",
 		ServiceInstanceID: instanceID,
@@ -79,8 +157,10 @@ func main() {
 	rateLimiter := rtgov.NewRateLimiter(1000)
 	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(corsHandler)
 	server := &http.Server{
-		Addr:              addr,
-		Handler:           rateLimited,
+		Addr: addr,
+		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
+			AccessTokenVerifier: accessVerifier,
+		})(rateLimited),
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
@@ -89,217 +169,6 @@ func main() {
 	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {
 		log.Fatalf("platform-ops-service: %v", err)
 	}
-}
-
-func (s *platformService) seed() error {
-	schemaPath := resolveConfigSchemaPath(s.repoRoot)
-	schemaKeys, schemaErr := controlplane.LoadConfigKeysFromSchema(schemaPath)
-	if schemaErr != nil {
-		log.Printf("WARN: platform-ops-service: load config_schema.yaml failed, using empty keys: %v", schemaErr)
-		schemaKeys = nil
-	}
-
-	defaultDocs := map[string][]controlplane.Document{
-		"config_keys": schemaKeys,
-		"config_layers": {
-			{
-				"id":          "global:all",
-				"title":       "系统级默认",
-				"scopeLevel":  "global",
-				"scopeID":     "all",
-				"environment": "all",
-				"values": map[string]any{
-					"sys.gateway.rate_limit.per_user_rps":    30,
-					"sys.orchestrator.downstream.timeout_ms": 900,
-					"sys.client_state_sync.flush_delay_sec":  12,
-					"sys.assistant.otel.trace_sample_ratio":  0.15,
-					"sys.content.mongo.max_pool_size":        100,
-				},
-			},
-			{
-				"id":          "environment:beta",
-				"title":       "beta 环境默认",
-				"scopeLevel":  "environment",
-				"scopeID":     "beta",
-				"environment": "beta",
-				"values": map[string]any{
-					"sys.orchestrator.downstream.timeout_ms": 850,
-				},
-			},
-			{
-				"id":          "cluster:beta-control-a",
-				"title":       "beta 控制面集群 A",
-				"scopeLevel":  "cluster",
-				"scopeID":     "beta-control-a",
-				"environment": "beta",
-				"cluster":     "beta-control-a",
-				"values": map[string]any{
-					"sys.gateway.rate_limit.per_user_rps": 45,
-				},
-			},
-			{
-				"id":          "service:product-ops-service",
-				"title":       "product-ops-service 服务层",
-				"scopeLevel":  "service",
-				"scopeID":     "product-ops-service",
-				"environment": "beta",
-				"cluster":     "beta-control-a",
-				"service":     "product-ops-service",
-				"values": map[string]any{
-					"sys.gateway.rate_limit.per_user_rps":    50,
-					"sys.client_state_sync.flush_delay_sec":  9,
-					"sys.orchestrator.downstream.timeout_ms": 720,
-				},
-			},
-		},
-		"config_packages": {
-			{
-				"id":            "beta-control-a-product-ops-service-v2026.03.08.0",
-				"packageId":     "beta-control-a-product-ops-service-v2026.03.08.0",
-				"environment":   "beta",
-				"cluster":       "beta-control-a",
-				"service":       "product-ops-service",
-				"configVersion": "v2026.03.08.0",
-				"imageVersion":  "0.0.1",
-				"releaseState":  "ready",
-				"distribution":  "config-center+disk",
-			},
-			{
-				"id":            "beta-control-a-platform-ops-service-v2026.03.08.0",
-				"packageId":     "beta-control-a-platform-ops-service-v2026.03.08.0",
-				"environment":   "beta",
-				"cluster":       "beta-control-a",
-				"service":       "platform-ops-service",
-				"configVersion": "v2026.03.08.0",
-				"imageVersion":  "0.0.1",
-				"releaseState":  "ready",
-				"distribution":  "config-center+disk",
-			},
-		},
-		"config_instance_reports": {
-			{
-				"id":            "product-ops-service-beta-control-a-0",
-				"environment":   "beta",
-				"cluster":       "beta-control-a",
-				"service":       "product-ops-service",
-				"instanceId":    "product-ops-service-beta-control-a-0",
-				"configVersion": "v2026.03.08.0",
-				"imageVersion":  "0.0.1",
-				"desiredHash":   "bootstrap-product-hash",
-				"effectiveHash": "bootstrap-product-hash",
-				"inSync":        true,
-				"source":        "config-center",
-			},
-			{
-				"id":            "platform-ops-service-beta-control-a-0",
-				"environment":   "beta",
-				"cluster":       "beta-control-a",
-				"service":       "platform-ops-service",
-				"instanceId":    "platform-ops-service-beta-control-a-0",
-				"configVersion": "v2026.03.08.0",
-				"imageVersion":  "0.0.1",
-				"desiredHash":   "bootstrap-platform-hash",
-				"effectiveHash": "stale-bootstrap-platform-hash",
-				"inSync":        false,
-				"source":        "disk-fallback",
-				"lastError":     "config center timeout",
-			},
-		},
-		"runtime_clusters": {
-			{"id": "beta-control-a", "environment": "beta", "cluster": "beta-control-a", "plane": "control-plane", "services": []string{"platform-ops-service", "product-ops-service", "seed-box"}, "status": "success"},
-			{"id": "beta-user-a", "environment": "beta", "cluster": "beta-user-a", "plane": "user-plane", "services": []string{"realtime-gateway", "recommendation-service"}, "status": "warning"},
-		},
-		"runtime_services": {
-			{"id": "platform-ops-service", "environment": "beta", "cluster": "beta-control-a", "service": "platform-ops-service", "plane": "platform-control-plane", "instances": 1, "status": "warning"},
-			{"id": "product-ops-service", "environment": "beta", "cluster": "beta-control-a", "service": "product-ops-service", "plane": "product-control-plane", "instances": 1, "status": "success"},
-			{"id": "realtime-gateway", "environment": "beta", "cluster": "beta-user-a", "service": "realtime-gateway", "plane": "user-plane", "instances": 2, "status": "success"},
-		},
-		"runtime_instances": {
-			{"id": "platform-ops-service-beta-control-a-0", "environment": "beta", "cluster": "beta-control-a", "service": "platform-ops-service", "plane": "platform-control-plane", "status": "warning"},
-			{"id": "product-ops-service-beta-control-a-0", "environment": "beta", "cluster": "beta-control-a", "service": "product-ops-service", "plane": "product-control-plane", "status": "success"},
-			{"id": "realtime-gateway-beta-user-a-0", "environment": "beta", "cluster": "beta-user-a", "service": "realtime-gateway", "plane": "user-plane", "status": "success"},
-		},
-		"governance_bindings": {
-			{"id": "gateway.timeout.default", "title": "gateway.timeout.default", "subtitle": "默认超时 800ms · 作用于 orchestrator / gateway。", "status": "warning"},
-			{"id": "content.mongo.pool", "title": "content.mongo.pool", "subtitle": "Mongo 连接池上限 120 · 需要 restart 生效。", "status": "neutral"},
-			{"id": "assistant.trace.sampling", "title": "assistant.trace.sampling", "subtitle": "OTel 采样率 0.2 · 支持热更新。", "status": "success"},
-		},
-		"governance_templates": {
-			{"id": "timeout-template", "title": "默认超时模板", "summary": "用于 gateway / orchestrator / integration 服务", "status": "success"},
-			{"id": "rate-limit-template", "title": "限流模板", "summary": "覆盖 user-plane 入口与控制面后台任务", "status": "warning"},
-		},
-		"dependency_profiles": {
-			{"id": "mongo-content", "dependency": "MongoDB / content-primary", "profile": "primary-write", "latency": "12ms", "status": "success"},
-			{"id": "redis-cluster-a", "dependency": "Redis / cache-cluster-a", "profile": "rate-limit + cache", "latency": "4ms", "status": "success"},
-			{"id": "llm-gateway", "dependency": "LLM Gateway / assistant-upstream", "profile": "external-api", "latency": "480ms", "status": "warning"},
-		},
-		"capacity_profiles": {
-			{"id": "user-plane", "plane": "user-plane", "resourceClass": "4c8g", "scaling": "HPA CPU / QPS", "splitTrigger": "user traffic spike"},
-			{"id": "platform-control-plane", "plane": "platform-control-plane", "resourceClass": "2c4g", "scaling": "manual + batch window", "splitTrigger": "config release / audit backlog"},
-			{"id": "product-control-plane", "plane": "product-control-plane", "resourceClass": "2c4g", "scaling": "case backlog / operator concurrency", "splitTrigger": "SLA backlog growth"},
-		},
-		"slo_policies": {
-			{"id": "release-success-rate", "service": "platform-control-plane", "objective": "99.2%", "window": "30m", "status": "warning"},
-			{"id": "config-latency-p95", "service": "gateway-orchestrator", "objective": "p95<900ms", "window": "15m", "status": "success"},
-		},
-		"alert_templates": {
-			{"id": "HighP95Latency", "title": "服务 P95 延迟过高", "severity": "warning", "status": "warning", "owner": "platform-ops", "runbookId": "cfg-rollback-drill", "runbookRoute": "/platform/runbook", "repairEntry": "/platform/rollout", "alertId": "HighP95Latency", "auditRoute": "/audit"},
-			{"id": "config_release_error_rate", "title": "配置发布错误率门禁", "severity": "critical", "status": "warning", "owner": "platform-ops", "runbookId": "cfg-rollback-drill", "runbookRoute": "/platform/runbook", "repairEntry": "/platform/rollout", "alertId": "config_release_error_rate", "auditRoute": "/audit"},
-			{"id": "rollback_readiness", "title": "回滚准备度检查", "severity": "warning", "status": "neutral", "owner": "platform-ops", "runbookId": "cfg-rollback-drill", "runbookRoute": "/platform/runbook", "repairEntry": "/platform/rollout", "alertId": "rollback_readiness", "auditRoute": "/audit"},
-		},
-		"dashboard_cards": {
-			{"id": "release_health", "title": "配置灰度健康", "summary": "success_rate / latency / rollback readiness"},
-			{"id": "sla_watch", "title": "SLA 风险队列", "summary": "集中观察接近阈值的链路"},
-		},
-		"runbooks": {
-			{"id": "cfg-rollback-drill", "title": "配置发布回滚演练", "subtitle": "每周一次，验证 rollback token、SLO gate 与恢复路径。", "status": "success"},
-			{"id": "mongo-failover-drill", "title": "Mongo 主从切换演练", "subtitle": "覆盖 content / user 关键写路径。", "status": "warning"},
-			{"id": "control-plane-split-drill", "title": "控制面独立扩容演练", "subtitle": "验证 seed-box 到独立 Pod 的切换准备度。", "status": "neutral"},
-		},
-		"gate_rules": {
-			{"id": "config_release_error_rate", "rule": "config_release_error_rate", "stage": "25%", "status": "success", "summary": "error_rate < 0.5% 且 p95 < 900ms"},
-			{"id": "dependency_health_mongo", "rule": "dependency_health_mongo", "stage": "50%", "status": "warning", "summary": "副本延迟接近阈值，需人工复核"},
-			{"id": "rollback_readiness", "rule": "rollback_readiness", "stage": "100%", "status": "neutral", "summary": "回滚包与上一个稳定版本均已就绪"},
-		},
-	}
-	for namespace, items := range defaultDocs {
-		for _, item := range items {
-			id := item["id"].(string)
-			switch namespace {
-			case "config_keys", "config_layers":
-				if err := s.store.PutDocument(namespace, id, item); err != nil {
-					return err
-				}
-			default:
-				_, ok, err := s.store.GetDocument(namespace, id)
-				if err != nil {
-					return err
-				}
-				if ok {
-					continue
-				}
-				if err := s.store.PutDocument(namespace, id, item); err != nil {
-					return err
-				}
-			}
-		}
-	}
-	configLayers, err := s.store.ListDocuments("config_layers")
-	if err != nil {
-		return err
-	}
-	for _, layer := range configLayers {
-		if stringifyDocumentValue(layer["scopeLevel"]) != "instance" {
-			continue
-		}
-		if err := s.store.DeleteDocument("config_layers", stringifyDocumentValue(layer["id"])); err != nil {
-			return err
-		}
-	}
-	if err := s.syncConfigPackageDesiredHashes(); err != nil {
-		return err
-	}
-	return nil
 }
 
 func (s *platformService) handleListServiceCatalog(w http.ResponseWriter, r *http.Request) {
@@ -430,29 +299,6 @@ func (s *platformService) handleListEnvironmentTopologies(w http.ResponseWriter,
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
-func (s *platformService) handleListConfigKeys(w http.ResponseWriter, r *http.Request) {
-	items, err := s.store.ListDocuments("config_keys")
-	if err != nil {
-		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": items})
-}
-
-func (s *platformService) handleGetEffectiveConfig(w http.ResponseWriter, r *http.Request) {
-	layerID := segmentBetween(r.URL.Path, "/v1/control-plane/platform/configs/", ":effective")
-	layer, ok, err := s.store.GetDocument("config_layers", layerID)
-	if err != nil {
-		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
-		return
-	}
-	if !ok {
-		writeRuntimeError(w, r, http.StatusNotFound, "请求处理失败", "config layer not found")
-		return
-	}
-	writeJSON(w, http.StatusOK, layer)
-}
-
 func (s *platformService) handleListNamespace(w http.ResponseWriter, r *http.Request, namespace string) {
 	items, err := s.store.ListDocuments(namespace)
 	if err != nil {
@@ -499,14 +345,9 @@ func (s *platformService) handleUpdateNamespaceDocument(w http.ResponseWriter, r
 	writeJSON(w, http.StatusOK, body)
 }
 
-func (s *platformService) syncConfigPackageDesiredHashes() error {
-	configLayers, err := s.store.ListDocuments("config_layers")
-	if err != nil {
-		return err
-	}
-	configKeys, err := s.store.ListDocuments("config_keys")
-	if err != nil {
-		return err
+func (s *platformService) syncConfigPackageDesiredHashes(ctx context.Context) error {
+	if s.configLayer == nil {
+		return fmt.Errorf("config layer facade is required")
 	}
 	configPackages, err := s.store.ListDocuments("config_packages")
 	if err != nil {
@@ -523,8 +364,15 @@ func (s *platformService) syncConfigPackageDesiredHashes() error {
 			Cluster:     stringifyDocumentValue(pkg["cluster"]),
 			Service:     stringifyDocumentValue(pkg["service"]),
 		}
-		values := controlplane.ResolveEffectiveConfig(configLayers, configKeys, scope)
-		desiredHash := controlplane.EffectiveConfigHash(values)
+		resolved, err := s.configLayer.Resolve(ctx, configmodel.Scope{
+			Environment: scope.Environment,
+			Cluster:     scope.Cluster,
+			Service:     scope.Service,
+		})
+		if err != nil {
+			return err
+		}
+		desiredHash := resolved.EffectiveHash
 		pkg["desiredHash"] = desiredHash
 		if err := s.store.PutDocument("config_packages", pkgID, pkg); err != nil {
 			return err
@@ -711,23 +559,6 @@ func resolveRepoRoot() string {
 		}
 		current = parent
 	}
-}
-
-func localControlPlaneStorePath(repoRoot, serviceName string) string {
-	return filepath.Join(repoRoot, ".qwq_output", "env", "repo", "local", "control-plane", serviceName, serviceName+".json")
-}
-
-func resolveConfigSchemaPath(repoRoot string) string {
-	candidates := []string{
-		filepath.Join(repoRoot, "quwoquan_service", "contracts", "metadata", "_control_plane", "platform", "config_schema.yaml"),
-		filepath.Join(repoRoot, "contracts", "metadata", "_control_plane", "platform", "config_schema.yaml"),
-	}
-	for _, candidate := range candidates {
-		if _, err := os.Stat(candidate); err == nil {
-			return candidate
-		}
-	}
-	return candidates[0]
 }
 
 func healthFromBlockers(blockers []string) string {

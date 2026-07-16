@@ -1,8 +1,7 @@
 // Package main: publish→运行库 importer 的纯加载层（无 mongo 依赖，可单测）。
 //
-// 唯一内容真相源是 quwoquan_data/publish 主线（单一发布主线，无版本目录）。
-// 本加载层只读消费 publish/posts 与 publish/entities 目录树，按可选 sample bundle
-// 过滤出某环境应灌入的 postRef / entityRef 子集，构建可幂等 upsert 的文档。
+// 唯一内容真相源是自治 canonical object package；选择集只来自 immutable release
+// payload/desired_state.json。禁止 sample bundle fallback 或无 release 的全树导入。
 package main
 
 import (
@@ -11,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -117,23 +117,42 @@ type EntityDoc struct {
 	SourceTaskId     string         `json:"sourceTaskId" bson:"sourceTaskId"`
 }
 
-// SampleBundle 是端云桥契约：某环境应灌入的 ref 子集。
-type SampleBundle struct {
-	Environment string   `json:"environment"`
-	Posts       []string `json:"posts"`
-	Entities    []string `json:"entities"`
+type ReleaseDesiredState struct {
+	SchemaVersion string `json:"schemaVersion"`
+	ReleaseID     string `json:"releaseId"`
+	DesiredRefs   struct {
+		Posts    []string `json:"posts"`
+		Entities []string `json:"entities"`
+	} `json:"desiredRefs"`
 }
 
-func loadSampleBundle(path string) (*SampleBundle, error) {
+func LoadReleaseDesiredState(releaseRoot string) (*ReleaseDesiredState, error) {
+	path := filepath.Join(releaseRoot, "payload", "desired_state.json")
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	var b SampleBundle
-	if err := json.Unmarshal(raw, &b); err != nil {
+	var desired ReleaseDesiredState
+	if err := json.Unmarshal(raw, &desired); err != nil {
 		return nil, err
 	}
-	return &b, nil
+	if desired.SchemaVersion != "quwoquan_data.release_desired_state/1" {
+		return nil, fmt.Errorf(
+			"%s: unsupported release schema %q; retired dual-read is forbidden",
+			path,
+			desired.SchemaVersion,
+		)
+	}
+	if strings.TrimSpace(desired.ReleaseID) == "" {
+		return nil, fmt.Errorf("%s: releaseId is required", path)
+	}
+	for _, ref := range append(append([]string(nil), desired.DesiredRefs.Posts...), desired.DesiredRefs.Entities...) {
+		clean := filepath.Clean(filepath.FromSlash(ref))
+		if ref == "" || filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+			return nil, fmt.Errorf("%s: unsafe desired ref %q", path, ref)
+		}
+	}
+	return &desired, nil
 }
 
 func toSet(items []string) map[string]bool {
@@ -142,6 +161,24 @@ func toSet(items []string) map[string]bool {
 		s[it] = true
 	}
 	return s
+}
+
+func missingDesiredRefs(filter map[string]bool, loadedRefs []string) []string {
+	if filter == nil || len(filter) == 0 {
+		return nil
+	}
+	loaded := make(map[string]bool, len(loadedRefs))
+	for _, ref := range loadedRefs {
+		loaded[ref] = true
+	}
+	missing := make([]string, 0)
+	for ref := range filter {
+		if !loaded[ref] {
+			missing = append(missing, ref)
+		}
+	}
+	sort.Strings(missing)
+	return missing
 }
 
 type postManifest struct {
@@ -251,7 +288,7 @@ func validateIntersectionHints(hints []IntersectionHintDoc, entityRefs []string,
 		"identity": true, "location": true, "content": true, "interest": true, "relationship": true,
 	}
 	allowedSources := map[string]bool{
-		"tagRef": true, "geoTagRef": true, "entityRef": true, "followEdge": true, "contact": true,
+		"tagRef": true, "geoTagRef": true, "entityRef": true, "relationship": true, "contact": true,
 	}
 	allowedActions := map[string]bool{
 		"follow": true, "join": true, "add_contact": true, "view_object": true,
@@ -487,6 +524,10 @@ func LoadPosts(publishRoot string, filter map[string]bool) ([]PostDoc, error) {
 				body = m.Body
 			}
 		}
+		assets := m.Assets
+		if len(assets) == 0 && m.ArticleAssetManifest != nil {
+			assets = m.ArticleAssetManifest.Assets
+		}
 		docs = append(docs, PostDoc{
 			PostRef:               postRef,
 			ContentType:           m.ContentType,
@@ -506,7 +547,7 @@ func LoadPosts(publishRoot string, filter map[string]bool) ([]PostDoc, error) {
 			CreatorDisclosure:     m.CreatorDisclosure,
 			ExperienceClaimMode:   m.ExperienceClaimMode,
 			AuthorQualitySignals:  m.AuthorQualitySignals,
-			Assets:                m.Assets,
+			Assets:                assets,
 			SourceCollectionID:    m.SourceCollectionID,
 			SourcePlatform:        m.SourcePlatform,
 			Creator:               firstSourceFact(m.Creator, m.SourceCreator),
@@ -526,6 +567,16 @@ func LoadPosts(publishRoot string, filter map[string]bool) ([]PostDoc, error) {
 	})
 	if err != nil && !os.IsNotExist(err) {
 		return docs, err
+	}
+	loadedRefs := make([]string, 0, len(docs))
+	for _, doc := range docs {
+		loadedRefs = append(loadedRefs, doc.PostRef)
+	}
+	if missing := missingDesiredRefs(filter, loadedRefs); len(missing) > 0 {
+		return nil, fmt.Errorf(
+			"desired posts missing from canonical publish: %s",
+			strings.Join(missing, ", "),
+		)
 	}
 	return docs, nil
 }
@@ -613,7 +664,8 @@ func LoadEntities(publishRoot string, filter map[string]bool) ([]EntityDoc, erro
 			hasPage = true
 		}
 		assetManifest := (*EntityAssetManifestDoc)(nil)
-		if rawManifest, merr := os.ReadFile(filepath.Join(filepath.Dir(path), "manifest.json")); merr == nil {
+		assetRefsPath := filepath.Join(filepath.Dir(path), "asset.refs.json")
+		if rawManifest, merr := os.ReadFile(assetRefsPath); merr == nil {
 			var parsed EntityAssetManifestDoc
 			if jerr := json.Unmarshal(rawManifest, &parsed); jerr != nil {
 				return jerr
@@ -622,6 +674,8 @@ func LoadEntities(publishRoot string, filter map[string]bool) ([]EntityDoc, erro
 				return err
 			}
 			assetManifest = &parsed
+		} else if !os.IsNotExist(merr) {
+			return merr
 		}
 		label := ef.Label
 		if label == "" {
@@ -644,6 +698,16 @@ func LoadEntities(publishRoot string, filter map[string]bool) ([]EntityDoc, erro
 	})
 	if err != nil && !os.IsNotExist(err) {
 		return docs, err
+	}
+	loadedRefs := make([]string, 0, len(docs))
+	for _, doc := range docs {
+		loadedRefs = append(loadedRefs, doc.EntityRef)
+	}
+	if missing := missingDesiredRefs(filter, loadedRefs); len(missing) > 0 {
+		return nil, fmt.Errorf(
+			"desired entities missing from canonical publish: %s",
+			strings.Join(missing, ", "),
+		)
 	}
 	return docs, nil
 }

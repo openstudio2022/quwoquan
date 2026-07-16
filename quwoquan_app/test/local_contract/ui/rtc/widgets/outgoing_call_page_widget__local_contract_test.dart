@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/rtc/livekit_room_service.dart';
 import 'package:quwoquan_app/cloud/services/rtc/rtc_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/core/services/app_content_repository.dart';
+import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import 'package:quwoquan_app/ui/rtc/pages/outgoing_call_page.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_timer_provider.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';

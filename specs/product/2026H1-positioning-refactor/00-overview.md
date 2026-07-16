@@ -34,7 +34,7 @@ WP0（本文档所在基线，已完成）
   ├─→ WP3 三对象主页结构统一与影响模块（端云）      wp-03-object-homepage-unification.md
   ├─→ WP4 实体完整介绍页（端云）                    wp-04-entity-introduction-page.md
   ├─→ WP5 「讨论」命名统一与消息页 IA（端云）       wp-05-discussion-naming-and-message-ia.md
-  ├─→ WP6 长文编辑与发布增强（端侧为主）            wp-06-article-editor-and-publish.md
+  ├─→ WP6 长文编辑与发布增强（端侧为主）            wp-06-article-editor-and-content.release.canonical.md
   ├─→ WP7 精品页统一（端侧，小包）                  wp-07-featured-page-unification.md
   └─→ WP8 小趣贯穿强化（assistant 端云）            wp-08-assistant-throughline.md
 
@@ -60,7 +60,7 @@ WP1 内部子序列（详见 wp-01 §2.5，可并行）：
 2. **文件独占权**（防并行冲突，越权改动=集成验收 BLOCK）：
    - `quwoquan_app/lib/components/object_page/**` → 仅 WP3 可改。
    - `lib/core/constants/ui_text_constants.dart` / `app_concept_constants.dart` 的**批量改名** → 仅 WP5；其他包只允许**追加**新 key（不改既有 key 值），并在本包简报「新增文案 key」清单登记。
-   - `contracts/metadata/recommendation/rec_model/projections/intersection_reason.yaml` → 交集统一规格收口（2026-06）允许字段形状一次性收敛（删除 displayText/label/sharedCount）；词表与 G2 以概念文档 §18 为准。
+   - `contracts/metadata/recommendation/model_release/projections/intersection_reason.yaml` → 交集统一规格收口（2026-06）允许字段形状一次性收敛（删除 displayText/label/sharedCount）；词表与 G2 以概念文档 §18 为准。
    - `lib/ui/chat/**` 与 `messages/conversation` metadata → 仅 WP5。
    - `lib/ui/discovery/**` → 仅 WP2（WP7 例外：`works_immersive_viewer.dart` 归 WP7）。
    - `lib/ui/content/entry/**` 与 `markdown/**` → 仅 WP6。

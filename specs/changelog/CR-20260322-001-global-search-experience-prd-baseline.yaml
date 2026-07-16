@@ -133,13 +133,13 @@ entries:
       rollout_impact: medium
       breaking_contract: false
     notes:
-      - 本次为 `/prd` 基线冻结，不进入 `design.md / plan.yaml`。
+      - 本次为 `/prd` 基线冻结，不进入 `design.md / content.execution.planning.yaml`。
       - 记录节点 `contact-search-index` 与 `contact-search-index--search-query-contract` 已从特性树治理中移除，不再保留。
       - L1 owner 正式冻结为 `global-search-experience`，不再挂在 `discovery-content`。
   - timestamp: "2026-03-22T12:45:00+08:00"
     summary: >
       为 `global-search-experience`、`cross-domain-search-journey` 及 6 个 L3 Scenario
-      补齐正式 `design.md + plan.yaml`，并执行一次真实 G1 metadata/codegen 校验。
+      补齐正式 `design.md + content.execution.planning.yaml`，并执行一次真实 G1 metadata/codegen 校验。
     reason: >
       `/prd` 已冻结能力边界、对象语义、生命周期与 NFR，但仍缺少可进入 `/dev` 的方案主轴、
       metadata/codegen 变更路径、切片顺序、助手 handoff 符合性说明与 `T1~T4` 证据矩阵。
@@ -155,7 +155,7 @@ entries:
           - 选型决策
           - 架构总览
           - metadata / codegen 方案
-      - path: specs/feature-tree/global-search-experience/plan.yaml
+      - path: specs/feature-tree/global-search-experience/content.execution.planning.yaml
         sections:
           - P1
           - P2
@@ -166,7 +166,7 @@ entries:
           - 关键设计决策
           - metadata / codegen 方案
           - plan slice 与 T1~T4 证据矩阵映射
-      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/plan.yaml
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/content.execution.planning.yaml
         sections:
           - P1
           - P2
@@ -179,7 +179,7 @@ entries:
           - 方案对比
           - 关键设计决策
           - metadata / codegen 方案
-      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/full-screen-search-shell-and-entry/plan.yaml
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/full-screen-search-shell-and-entry/content.execution.planning.yaml
         sections:
           - P1
           - P2
@@ -189,7 +189,7 @@ entries:
           - 方案对比
           - 关键设计决策
           - metadata / codegen 方案
-      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/multi-domain-result-composition/plan.yaml
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/multi-domain-result-composition/content.execution.planning.yaml
         sections:
           - P1
           - P2
@@ -199,7 +199,7 @@ entries:
           - 方案对比
           - 关键设计决策
           - metadata / codegen 方案
-      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/social-relationship-search-contract/plan.yaml
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/social-relationship-search-contract/content.execution.planning.yaml
         sections:
           - P1
           - P2
@@ -209,7 +209,7 @@ entries:
           - 方案对比
           - 关键设计决策
           - metadata / codegen 方案
-      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/circle-facet-search-and-filter/plan.yaml
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/circle-facet-search-and-filter/content.execution.planning.yaml
         sections:
           - P1
           - P2
@@ -219,7 +219,7 @@ entries:
           - 方案对比
           - 关键设计决策
           - metadata / codegen 方案
-      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/recent-search-sync-and-voice-asr/plan.yaml
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/recent-search-sync-and-voice-asr/content.execution.planning.yaml
         sections:
           - P1
           - P2
@@ -229,7 +229,7 @@ entries:
           - 方案对比
           - 关键设计决策
           - 符合性说明
-      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/xiaoqu-entry-handoff/plan.yaml
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/xiaoqu-entry-handoff/content.execution.planning.yaml
         sections:
           - P1
           - P2
@@ -254,7 +254,7 @@ entries:
       四域 fan-out 结果编排、recent search local+cloud sync、语音 ASR 转词、问小趣 typed handoff，
       并补齐 feature-tree 任务/验收证据，最终整仓 `make gate` 通过。
     reason: >
-      `/design` 与 `plan.yaml` 已冻结，但进入入库前仍需把 metadata/codegen、App 交互壳层、
+      `/design` 与 `content.execution.planning.yaml` 已冻结，但进入入库前仍需把 metadata/codegen、App 交互壳层、
       Repository typed search、assistant handoff、最近搜索生命周期、T1~T4 证据与整仓门禁一起收口。
       在最终验证阶段还暴露出增量语义门禁与旧测试断言失配，必须一并修复后才能标记为 deliver 完成。
     change_type:

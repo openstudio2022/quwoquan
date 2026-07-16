@@ -10,7 +10,7 @@ affected_nodes:
 entries:
   - timestamp: "2026-03-31T12:00:00+08:00"
     summary: >
-      冻结 article-editor-refactor 的 design.md、plan.yaml、acceptance.yaml；
+      冻结 article-editor-refactor 的 design.md、content.execution.planning.yaml、acceptance.yaml；
       明确 CreateEditorStateV2 更名为 CreateEditorState、移除 create_editor_v2 特性键，
       全库迁移至无版本后缀命名。
     reason: /design 交付与重构前命名债务清理
@@ -20,7 +20,7 @@ entries:
       - path: specs/feature-tree/runtime/runtime-client-foundation/article-editor-refactor/design.md
         sections:
           - 全文
-      - path: specs/feature-tree/runtime/runtime-client-foundation/article-editor-refactor/plan.yaml
+      - path: specs/feature-tree/runtime/runtime-client-foundation/article-editor-refactor/content.execution.planning.yaml
         sections:
           - slices
       - path: specs/feature-tree/runtime/runtime-client-foundation/article-editor-refactor/acceptance.yaml
@@ -38,7 +38,7 @@ entries:
       rollout_impact: low
       breaking_contract: false
     notes:
-      - 实现阶段按 plan.yaml 切片执行；metadata 扩展以 slice-metadata-article-editor-contract 为准
+      - 实现阶段按 content.execution.planning.yaml 切片执行；metadata 扩展以 slice-metadata-article-editor-contract 为准
   - timestamp: "2026-04-02T12:00:00+08:00"
     summary: >
       以 /baseline 方式补齐 article-editor-refactor 的终态规格：冻结编辑/预览共用 page slice、
@@ -65,7 +65,7 @@ entries:
       - path: specs/feature-tree/runtime/runtime-client-foundation/article-editor-refactor/acceptance.yaml
         sections:
           - acceptance
-      - path: specs/feature-tree/runtime/runtime-client-foundation/article-editor-refactor/plan.yaml
+      - path: specs/feature-tree/runtime/runtime-client-foundation/article-editor-refactor/content.execution.planning.yaml
         sections:
           - slices
     impact:

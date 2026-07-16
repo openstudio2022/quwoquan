@@ -425,14 +425,11 @@ class ImmersiveEngagementBar extends StatelessWidget {
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   // Track 宽度 = rail。作者左锚 rail 左缘、动作右锚 rail 右缘。
+                  // 与 caption / 交集 / 文章正文共用 bottomChromeHorizontalPadding。
                   final horizontalInset =
-                      ImmersiveViewerLayout.horizontalPadding(
+                      ImmersiveViewerLayout.bottomChromeHorizontalPadding(
                         context,
                         layoutSpec: layoutSpec,
-                      ) +
-                      AppSpacing.appChromeBottomSafeSideInset(
-                        context,
-                        bottomInset,
                       );
                   final availableRailWidth = math.max(
                     0.0,

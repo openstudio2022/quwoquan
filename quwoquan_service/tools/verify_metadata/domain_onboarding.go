@@ -1,7 +1,6 @@
 package main
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -10,7 +9,7 @@ import (
 
 func (v *validator) validateDomainOnboardingMetadata() {
 	schemaPath := filepath.Join(v.metadataDir, "_control_plane", "domain_onboarding_schema.yaml")
-	if !fileExists(schemaPath) {
+	if !v.hasMetadataFile(schemaPath) {
 		v.warnf("_control_plane/domain_onboarding_schema.yaml: not found, skip domain onboarding validation")
 		return
 	}
@@ -68,12 +67,7 @@ func (v *validator) validateDomainOnboardingMetadata() {
 		v.errorf("_control_plane/domain_onboarding_schema.yaml: minimum_package.required_deploy_sources.{current,plane_aware} are required")
 	}
 
-	domainsDir := filepath.Join(v.metadataDir, "_control_plane", "domains")
-	entries, err := os.ReadDir(domainsDir)
-	if err != nil {
-		v.errorf("_control_plane/domains: %v", err)
-		return
-	}
+	const domainsPrefix = "_control_plane/domains/"
 
 	allowedStatuses := sliceToSet(schema.Schema.AcceptanceStatuses)
 	allowedTemplateRoles := sliceToSet(schema.Schema.TemplateRoles)
@@ -88,11 +82,8 @@ func (v *validator) validateDomainOnboardingMetadata() {
 	}
 
 	seenDomains := map[string]bool{}
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".yaml") {
-			continue
-		}
-		path := filepath.Join(domainsDir, entry.Name())
+	for _, relativePath := range v.source.Paths(domainsPrefix, ".yaml") {
+		path := filepath.Join(v.metadataDir, filepath.FromSlash(relativePath))
 		raw, ok := v.readYAMLFile(path)
 		if !ok {
 			continue
@@ -140,7 +131,7 @@ func (v *validator) validateDomainOnboardingMetadata() {
 			v.errorf("%s: metadata_paths cannot be empty", pathRelative(v.metadataDir, path))
 		}
 		for _, metadataPath := range parsed.MetadataPaths {
-			if !fileExists(filepath.Join(v.metadataDir, metadataPath)) {
+			if !v.hasMetadataPath(filepath.Join(v.metadataDir, metadataPath)) {
 				v.errorf("%s: metadata_paths entry %q does not exist", pathRelative(v.metadataDir, path), metadataPath)
 			}
 		}

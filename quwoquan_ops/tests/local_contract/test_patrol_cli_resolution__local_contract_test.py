@@ -69,20 +69,37 @@ class PatrolCliResolutionTest(unittest.TestCase):
         args = SimpleNamespace(
             runtime_env="prod",
             api_contract_env="prod",
-            data_source="mock",
+            data_source="remote",
             gateway_base_url="https://api.example.test",
             product_ops_base_url="https://ops.example.test",
             media_base_url="https://media.example.test",
-            test_auth_token="token",
+            test_auth_token="access-token",
+            test_refresh_token="refresh-token",
+            current_owner_id="owner-1",
+            current_sub_account_id="persona-1",
             target="test/user_acceptance/patrol/environment/basic_viability__user_acceptance_test.dart",
             env_name="prod-sim",
         )
 
-        command = env_patrol.patrol_command({"id": "device-1"}, args, "/tmp/patrol")
+        command = env_patrol.patrol_command(
+            {"id": "device-1"},
+            args,
+            "/tmp/patrol",
+            dart_define_file=Path("/tmp/patrol-secrets.json"),
+        )
 
         self.assertEqual(command[0], "/tmp/patrol")
         self.assertIn("--dart-define=APP_RUNTIME_ENV=prod", command)
-        self.assertIn("--dart-define=APP_DATA_SOURCE=mock", command)
+        self.assertIn("--dart-define=APP_DATA_SOURCE=remote", command)
+        self.assertIn(
+            "--dart-define-from-file=/tmp/patrol-secrets.json",
+            command,
+        )
+        self.assertNotIn("access-token", "\n".join(command))
+        self.assertNotIn("refresh-token", "\n".join(command))
+        self.assertIn("--dart-define=APP_CURRENT_OWNER_ID=owner-1", command)
+        self.assertIn("--dart-define=APP_CURRENT_SUB_ACCOUNT_ID=persona-1", command)
+        self.assertIn("--dart-define=APP_CURRENT_USER_ID=persona-1", command)
 
     def test_gamma_matrix_command_uses_resolved_executable(self) -> None:
         args = SimpleNamespace(

@@ -252,7 +252,12 @@ class _ChatPageState extends ConsumerState<ChatPage>
     Map<int, bool>? dotBadges;
 
     if (_mainTabIndex == 0) {
-      final unreadCount = ref.watch(messageHomeUnreadBadgeCountProvider);
+      final unreadCount = ref
+          .watch(messageHomeRowsStateProvider('unread'))
+          .maybeWhen(
+            data: (state) => totalUnreadMessages(state.items),
+            orElse: () => null,
+          );
 
       numberBadges = {};
       dotBadges = {};
@@ -331,7 +336,6 @@ class _ChatPageState extends ConsumerState<ChatPage>
           if (action.type == UiErrorActionType.retry ||
               action.type == UiErrorActionType.resubmit) {
             ref.invalidate(messageHomeRowsStateProvider(messageFilter));
-            ref.invalidate(messageHomeRowsProvider(messageFilter));
           }
         },
       );

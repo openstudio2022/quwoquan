@@ -13,23 +13,20 @@ except ImportError:
 
 
 ROOT = Path(__file__).resolve().parents[3]
-SERVICE_PATH = (
+SERVICE_DIR = (
     ROOT
     / "quwoquan_service"
     / "contracts"
     / "metadata"
     / "assistant"
-    / "assistant_run"
-    / "service.yaml"
 )
 
 REQUIRED_AUTH_OPERATIONS = {
     "SearchXiaoquResults",
     "CreateAssistantConversation",
     "GetAssistantConversation",
-    "CreateAssistantTurn",
-    "GetAssistantTurn",
-    "StreamAssistantTurn",
+    "StartAssistantRun",
+    "GetAssistantRun",
     "ReportPageContext",
     "GetEntryPersonalization",
     "GetSuggestedActions",
@@ -45,6 +42,7 @@ REQUIRED_AUTH_OPERATIONS = {
     "GetLearningOpsSummary",
     "GrantSkillConsent",
     "RevokeSkillConsent",
+    "ListConsents",
 }
 
 
@@ -60,18 +58,26 @@ def route_auth_mode(route: dict) -> str:
 
 
 def main() -> int:
-    data = yaml.safe_load(SERVICE_PATH.read_text(encoding="utf-8"))
-    routes = data.get("api_routes") if isinstance(data, dict) else None
-    if not isinstance(routes, list):
-        print(f"FAIL: {SERVICE_PATH} missing api_routes", file=sys.stderr)
-        return 1
-
-    by_operation = {
-        str(route.get("operation")): route
-        for route in routes
-        if isinstance(route, dict) and route.get("operation")
-    }
+    by_operation: dict[str, dict] = {}
     failures: list[str] = []
+    service_paths = sorted(SERVICE_DIR.glob("*/service.yaml"))
+    if not service_paths:
+        print(f"FAIL: {SERVICE_DIR} has no service metadata", file=sys.stderr)
+        return 1
+    for service_path in service_paths:
+        data = yaml.safe_load(service_path.read_text(encoding="utf-8"))
+        routes = data.get("api_routes") if isinstance(data, dict) else None
+        if not isinstance(routes, list):
+            failures.append(f"{service_path}: missing api_routes")
+            continue
+        for route in routes:
+            if not isinstance(route, dict) or not route.get("operation"):
+                continue
+            operation = str(route["operation"])
+            if operation in by_operation:
+                failures.append(f"{operation}: duplicate metadata route")
+                continue
+            by_operation[operation] = route
     for operation in sorted(REQUIRED_AUTH_OPERATIONS):
         route = by_operation.get(operation)
         if route is None:

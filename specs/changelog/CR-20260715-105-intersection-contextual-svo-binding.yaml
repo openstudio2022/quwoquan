@@ -1,0 +1,72 @@
+id: CR-20260715-105-intersection-contextual-svo-binding
+title: 交集 3.0 上下文 SVO 与业务对象绑定
+slug: intersection-contextual-svo-binding
+revision: 1
+status: planned
+
+affected_nodes:
+  - specs/feature-tree/object-homepage-network/intersection-unified-experience
+  - specs/feature-tree/object-homepage-network/intersection-unified-experience/object-homepage-gamma-real-data-closure
+  - specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure
+  - quwoquan_service/contracts/metadata/recommendation/model_release/projections/intersection_reason.yaml
+  - quwoquan_service/contracts/metadata/recommendation/model_release/projections/intersection_text_span.yaml
+  - quwoquan_service/contracts/metadata/content/post/service.yaml
+
+entries:
+  - timestamp: "2026-07-15T00:00:00+08:00"
+    summary: |
+      将交集句从“所有 surface 都显式可点击宾语”修正为上下文 SVO：
+      当前内容卡、视频书、内容详情和当前主页作为宿主对象时，宾语由 Query Slice
+      承载，不再渲染可点击 self-target；独立列表和跨对象证据仍必须显式 typed object。
+    reason: |
+      `联系人林清越等3人赞过和评论过《这条记录》` 在内容卡形成 self-loop；
+      feed 旧实现还可能从 viewer 交集理由池按 70/20/10 随机附着到 post，
+      不能证明 reason 属于当前业务对象，违反业务对象中心的 Reader/Slice 设计。
+    change_type:
+      - metadata
+      - service
+      - app
+      - data
+      - ops
+      - local_contract
+      - api_integration
+      - user_acceptance
+    changed_documents:
+      - path: specs/product/intersection-definition-and-application.md
+        sections:
+          - 18.1.1 上下文 SVO 与 self-target 红线
+      - path: specs/feature-tree/object-homepage-network/intersection-unified-experience/acceptance.yaml
+        sections:
+          - SIT5
+      - path: specs/feature-tree/object-homepage-network/intersection-unified-experience/object-homepage-gamma-real-data-closure/acceptance.yaml
+        sections:
+          - GWT4_object_intersection_reason_contract
+      - path: quwoquan_service/contracts/metadata/recommendation/model_release/projections/intersection_reason.yaml
+        sections:
+          - displayBinding
+    impact:
+      replan_required: false
+      redesign_required: true
+      retest_layers:
+        - local_contract
+        - api_integration
+        - user_acceptance
+      rollout_impact: high
+      breaking_contract: true
+    test_evidence:
+      planned:
+        - make verify-metadata
+        - make codegen-app
+        - go test ./services/content-service/internal/application/intersection ./services/content-service/internal/application/feed -run 'Test.*Intersection.*' -count=1
+        - flutter test --no-pub test/local_contract/cloud/content/intersection_statement_synthesizer__local_contract_test.dart
+        - flutter test --no-pub test/components/content/intersection_reason_chip_test.dart
+        - python3 quwoquan_app/scripts/gamma/run_local_gamma_t3.py --strict-all --verification-scope object-homepage-gamma-real-data-closure
+      recorded: []
+      pending:
+        - beta/gamma remote smoke 逐条校验 displayBinding 与 typed target
+        - prod rollout stage 真实 smoke
+        - 七触点 user_acceptance
+    notes:
+      - displayBinding 默认 explicit_link；只有 Service 在 Reader/Slice 输出口证明宿主对象一致时，才能下发 host_implicit 或 host_plain。
+      - 70/20/10 是有效候选曝光节奏，不是跨对象附着理由的授权。
+      - App 不得从 span.target 缺失回退到 actionTargetId 或整行点击。

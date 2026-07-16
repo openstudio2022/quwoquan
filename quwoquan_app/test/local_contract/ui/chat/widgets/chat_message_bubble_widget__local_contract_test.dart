@@ -49,7 +49,9 @@ void main() {
       await tester.pumpWidget(_wrapBubble(message: message, isRight: true));
       await tester.pump();
 
-      final text = tester.widget<SelectableText>(find.byType(SelectableText).first);
+      final text = tester.widget<SelectableText>(
+        find.byType(SelectableText).first,
+      );
       expect(
         text.style?.fontFamilyFallback,
         contains(BundledFontFamilies.notoColorEmoji),
@@ -106,7 +108,10 @@ void main() {
       await tester.pump();
 
       expect(find.text('会议纪要.pdf'), findsAtLeastNWidgets(1));
-      expect(find.text(UITextConstants.chatPreviewFile), findsAtLeastNWidgets(1));
+      expect(
+        find.text(UITextConstants.chatPreviewFile),
+        findsAtLeastNWidgets(1),
+      );
     });
 
     testWidgets('视频消息展示视频卡片', (tester) async {
@@ -115,7 +120,9 @@ void main() {
         content: '旅行回顾.mp4',
         thumbnailUrl: 'https://cdn.example.com/video-thumb.jpg',
       );
-      await tester.pumpWidget(_wrapBubble(message: videoMessage, isRight: true));
+      await tester.pumpWidget(
+        _wrapBubble(message: videoMessage, isRight: true),
+      );
       await tester.pump();
 
       expect(find.text('旅行回顾.mp4'), findsAtLeastNWidgets(1));
@@ -124,7 +131,32 @@ void main() {
         find.byIcon(Icons.play_circle_fill_rounded),
         findsAtLeastNWidgets(1),
       );
-      expect(find.text(UITextConstants.chatPreviewVideo), findsAtLeastNWidgets(1));
+      expect(
+        find.text(UITextConstants.chatPreviewVideo),
+        findsAtLeastNWidgets(1),
+      );
+    });
+
+    testWidgets('强类型分享卡片展示标题、摘要和缩略图', (tester) async {
+      final cardMessage = _message(
+        type: 'card',
+        card: ChatMessageCardDto.fromMap(<String, dynamic>{
+          'kind': 'content_post',
+          'title': '城市漫步',
+          'subtitle': '周末路线',
+          'thumbnailUrl': 'https://cdn.example.com/card.jpg',
+          'attributes': <Map<String, String>>[
+            <String, String>{'name': 'postId', 'value': 'post_001'},
+          ],
+        }),
+      );
+      await tester.pumpWidget(_wrapBubble(message: cardMessage));
+      await tester.pump();
+
+      expect(find.text('城市漫步'), findsAtLeastNWidgets(1));
+      expect(find.text('周末路线'), findsAtLeastNWidgets(1));
+      expect(find.byType(AppCachedNetworkImage), findsAtLeastNWidgets(1));
+      expect(find.byIcon(Icons.chevron_right_rounded), findsAtLeastNWidgets(1));
     });
 
     testWidgets('图片消息展示图片预览', (tester) async {
@@ -133,7 +165,9 @@ void main() {
         imageUrl: 'https://cdn.example.com/photo.jpg',
         thumbnailUrl: 'https://cdn.example.com/thumb.jpg',
       );
-      await tester.pumpWidget(_wrapBubble(message: imageMessage, isRight: true));
+      await tester.pumpWidget(
+        _wrapBubble(message: imageMessage, isRight: true),
+      );
       await tester.pump();
 
       expect(find.byType(AppCachedNetworkImage), findsOneWidget);
@@ -147,7 +181,9 @@ void main() {
         imageUrl: '',
         thumbnailUrl: 'https://cdn.example.com/thumb-only.jpg',
       );
-      await tester.pumpWidget(_wrapBubble(message: imageMessage, isRight: true));
+      await tester.pumpWidget(
+        _wrapBubble(message: imageMessage, isRight: true),
+      );
       await tester.pump();
 
       expect(find.byType(AppCachedNetworkImage), findsOneWidget);
@@ -268,6 +304,7 @@ ChatMessageDisplayItem _message({
   String imageUrl = '',
   String thumbnailUrl = '',
   int audioDurationMs = 0,
+  ChatMessageCardDto? card,
 }) {
   return ChatMessageDisplayItem(
     id: id,
@@ -290,6 +327,6 @@ ChatMessageDisplayItem _message({
     thumbnailUrl: thumbnailUrl,
     audioDurationMs: audioDurationMs,
     audioWaveform: const <double>[0.1, 0.4, 0.2, 0.8],
-    tasks: const <ChatTaskCardEntry>[],
+    card: card,
   );
 }

@@ -6,51 +6,67 @@ import (
 	"strings"
 	"testing"
 
-	"quwoquan_service/runtime/codegen"
-	"quwoquan_service/runtime/registry"
+	contractcodegen "quwoquan_service/internal/metadata/codegen"
+	"quwoquan_service/internal/metadata/validate"
 )
 
-func TestCircleModelCodegen_IncludesCoreFields(t *testing.T) {
+func TestCircleModelCodegen_PreservesObjectBoundaries(t *testing.T) {
 	metadataDir := filepath.Join("..", "..", "contracts", "metadata")
 	if _, err := os.Stat(metadataDir); err != nil {
-		t.Skipf("metadata dir not found: %v", err)
+		t.Fatalf("metadata dir is required: %v", err)
 	}
-	reg, err := registry.LoadFromDirectory(metadataDir)
+	source, err := contractcodegen.NewSource(metadataDir, validate.ProfileBaseline)
 	if err != nil {
-		t.Fatalf("load registry: %v", err)
+		t.Fatalf("compile ContractGraph: %v", err)
 	}
 	out := t.TempDir()
-	g := codegen.NewGenerator(
-		reg,
+	generator := contractcodegen.NewDomainGenerator(
+		source,
 		out,
-		codegen.WithTypedEnums(),
-		codegen.WithSliceEntityRefs(),
-		codegen.WithSkipViewEntities(),
-		codegen.WithGoFieldIDSuffix(),
+		contractcodegen.WithTypedEnums(),
+		contractcodegen.WithSliceEntityRefs(),
+		contractcodegen.WithSkipViewEntities(),
+		contractcodegen.WithGoFieldIDSuffix(),
+		contractcodegen.WithBusinessObjectEntitiesOnly(),
 	)
-	if err := g.GenerateDomainModelOnly("Circle"); err != nil {
-		t.Fatalf("GenerateDomainModelOnly: %v", err)
+	objects := map[string][]string{
+		"Circle":              {"type Circle struct", "SubCategory", "Kind", "DisplaySubjectType", "FollowEnabled", "DefaultPublicGroupID", "LinkedHomepageID", "type CircleJoinPolicy", "CircleJoinPolicyInviteOnly", "[]CircleSectionConfig"},
+		"CircleFile":          {"type CircleFile struct", "type CircleFileStatus", "type CircleFileType"},
+		"CircleGroup":         {"type CircleGroup struct", "type CircleGroupStatus", "type OrganizationNodeType"},
+		"CircleMembership":    {"type CircleMembership struct", "type CircleMemberRole", "type CircleMembershipState"},
+		"CirclePostPlacement": {"type CirclePostPlacement struct", "OwnerPersonaID", "PinnedAt"},
 	}
-	b, err := os.ReadFile(filepath.Join(out, "domain", "circle", "model", "circle.go"))
-	if err != nil {
-		t.Fatalf("read model: %v", err)
+	paths := map[string]string{
+		"Circle":              filepath.Join("domain", "circle", "model", "circle.go"),
+		"CircleFile":          filepath.Join("domain", "circle", "circle_file", "model", "circle_file.go"),
+		"CircleGroup":         filepath.Join("domain", "circle", "circle_group", "model", "circle_group.go"),
+		"CircleMembership":    filepath.Join("domain", "circle", "circle_membership", "model", "circle_membership.go"),
+		"CirclePostPlacement": filepath.Join("domain", "circle", "circle_post_placement", "model", "circle_post_placement.go"),
 	}
-	s := string(b)
-	for _, needle := range []string{
-		"type Circle struct",
-		"SubCategory",
-		"Kind",
-		"DisplaySubjectType",
-		"FollowEnabled",
-		"DefaultPublicGroupID",
-		"LinkedHomepageID",
-		"type CircleGroup struct",
-		"type CircleJoinPolicy",
-		"CircleJoinPolicyInviteOnly",
-		"[]CircleSectionConfig",
-	} {
-		if !strings.Contains(s, needle) {
-			t.Errorf("generated model missing %q", needle)
+	for object, needles := range objects {
+		if err := generator.GenerateDomainModel(object); err != nil {
+			t.Fatalf("GenerateDomainModel(%s): %v", object, err)
+		}
+		b, err := os.ReadFile(filepath.Join(out, paths[object]))
+		if err != nil {
+			t.Fatalf("read %s model: %v", object, err)
+		}
+		s := string(b)
+		for _, needle := range needles {
+			if !strings.Contains(s, needle) {
+				t.Errorf("generated %s model missing %q", object, needle)
+			}
+		}
+		if object == "Circle" && strings.Contains(s, "type CircleGroup struct") {
+			t.Fatal("Circle aggregate must not absorb CircleGroup")
+		}
+		if object == "CircleMembership" && strings.Contains(s, "type CircleMember struct") {
+			t.Fatal("CircleMembership aggregate must not restore retired CircleMember type")
+		}
+		if strings.Contains(s, "CommandReceipt struct") || strings.Contains(s, "Request struct") ||
+			strings.Contains(s, "Outbox struct") || strings.Contains(s, "ProjectionCheckpoint struct") ||
+			strings.Contains(s, "Inbox struct") {
+			t.Fatalf("generated %s domain model contains infrastructure or transport entity", object)
 		}
 	}
 }

@@ -38,3 +38,7 @@ content_search:
 user_profile:
   base_url: "http://127.0.0.1:18081"
   timeout_ms: 5000
+
+notification_service:
+  base_url: "http://127.0.0.1:18088"
+  timeout_ms: 5000

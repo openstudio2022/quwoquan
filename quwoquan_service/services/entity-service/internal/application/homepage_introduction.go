@@ -20,18 +20,16 @@ const (
 )
 
 type HomepageIntroductionAsset struct {
-	AssetID   string `json:"assetId"`
-	URL       string `json:"url"`
-	Caption   string `json:"caption,omitempty"`
-	Role      string `json:"role,omitempty"`
-	SourceRef string `json:"sourceRef,omitempty"`
+	AssetID string `json:"assetId"`
+	URL     string `json:"url"`
+	Caption string `json:"caption,omitempty"`
+	Role    string `json:"role,omitempty"`
 }
 
 type HomepageIntroductionTimelineItem struct {
 	DateLabel string `json:"dateLabel"`
 	Text      string `json:"text"`
 	AssetURL  string `json:"assetUrl,omitempty"`
-	SourceRef string `json:"sourceRef,omitempty"`
 }
 
 type HomepageIntroductionSection struct {
@@ -50,7 +48,8 @@ type HomepageIntroduction struct {
 	Summary        string                        `json:"summary"`
 	Sections       []HomepageIntroductionSection `json:"sections"`
 	RelatedObjects []map[string]any              `json:"relatedObjects"`
-	SourceRefs     []string                      `json:"sourceRefs"`
+	PrimarySource  *HomepageSource               `json:"primarySource,omitempty"`
+	SourceURLs     []string                      `json:"sourceUrls"`
 	UpdatedAt      string                        `json:"updatedAt"`
 }
 
@@ -76,7 +75,6 @@ func buildHomepageIntroduction(homepage *Homepage) HomepageIntroduction {
 	if strings.TrimSpace(homepage.IntroductionMarkdown) != "" {
 		return buildIntroductionFromPageMarkdown(homepage)
 	}
-	sourceRefs := homepageSourceRefs(homepage)
 	summary := introductionSummary(homepage)
 	keywords := strings.Join(homepage.CategoryTags, "、")
 	if keywords == "" {
@@ -99,25 +97,23 @@ func buildHomepageIntroduction(homepage *Homepage) HomepageIntroduction {
 				"\n- 最近更新时间：" + homepage.UpdatedAt.UTC().Format("2006-01-02 15:04 UTC"),
 		},
 		{
-			Kind:  "timeline",
-			Title: "时间线",
+			Kind:         "timeline",
+			Title:        "时间线",
 			BodyMarkdown: homepage.Title + " 的内容沉淀采用“来源进入 -> 内容补齐 -> 讨论聚合”的节奏推进。当前主页会把已发布内容、问答与关联对象都收敛在同一条对象语境中，方便后续的交集、相关推荐和主页治理继续沿着同一锚点扩展，而不是再分散到多个临时视图中。",
 			TimelineItems: []HomepageIntroductionTimelineItem{
 				{
 					DateLabel: homepage.CreatedAt.UTC().Format("2006-01-02"),
 					Text:      "主页创建，进入对象网络等待补齐基础信息与可信来源。",
-					SourceRef: firstSourceRef(sourceRefs),
 				},
 				{
 					DateLabel: publishedDateLabel(homepage),
 					Text:      "主页发布后进入稳定对象承接链，允许内容、交集和对象页围绕统一 canonical 键继续沉淀。",
-					SourceRef: firstEntitySourceRef(sourceRefs),
 				},
 			},
 		},
 		{
-			Kind:  "history",
-			Title: "整理与演进",
+			Kind:         "history",
+			Title:        "整理与演进",
 			BodyMarkdown: homepage.Title + " 的介绍页并不是一次性生成的静态说明，而是会随着主页状态、内容预览、问答预览和相关群组的补齐逐步演进。当前版本优先保证对象锚点、交集证据和可读摘要在同一真相源下闭环：对象页展示只读后端 bundle，交集证据只来自结构化 points，相关对象和内容预览也都通过主页自身的数据沉淀来扩展。这保证了后续无论是继续补内容、补时间线、还是补对象关系，都不需要重新引入本地 fallback 或多格式对象键。\n\n换句话说，这个介绍页承担的是“把对象长期整理清楚”的角色，而不是把临时结果堆成营销文案。只要一个主页后续又补入了新的作品、问答、群组或治理记录，这些增量都应该继续沿着同一条对象主线更新，而不是再派生出第二份对象定义。这样做的价值在于：对象页、交集卡、搜索命中、行为上报和助手上下文都能复用同一个 canonical 身份，后续增加任何内容维度时，也不会再被旧格式 entityRefs、空洞 summary fallback 或本地拼装的说明文本拖回多真相源状态。",
 		},
 	}
@@ -129,7 +125,8 @@ func buildHomepageIntroduction(homepage *Homepage) HomepageIntroduction {
 		Summary:        summary,
 		Sections:       sections,
 		RelatedObjects: cloneObjectSlice(homepage.RelatedGroups),
-		SourceRefs:     sourceRefs,
+		PrimarySource:  homepage.PrimarySource,
+		SourceURLs:     cloneStrings(homepage.SourceURLs),
 		UpdatedAt:      homepage.UpdatedAt.UTC().Format(time.RFC3339),
 	}
 }
@@ -203,7 +200,8 @@ func buildIntroductionFromPageMarkdown(homepage *Homepage) HomepageIntroduction 
 		Summary:        summary,
 		Sections:       sections,
 		RelatedObjects: cloneObjectSlice(homepage.RelatedGroups),
-		SourceRefs:     homepageSourceRefs(homepage),
+		PrimarySource:  homepage.PrimarySource,
+		SourceURLs:     cloneStrings(homepage.SourceURLs),
 		UpdatedAt:      homepage.UpdatedAt.UTC().Format(time.RFC3339),
 	}
 }
@@ -368,11 +366,10 @@ func introductionAssets(homepage *Homepage) []HomepageIntroductionAsset {
 	}
 	return []HomepageIntroductionAsset{
 		{
-			AssetID:   homepage.ID + "_cover",
-			URL:       homepage.CoverURL,
-			Caption:   homepage.Title + " 封面图",
-			Role:      introductionAssetRoleCover,
-			SourceRef: homepageSourceRefs(homepage)[0],
+			AssetID: homepage.ID + "_cover",
+			URL:     homepage.CoverURL,
+			Caption: homepage.Title + " 封面图",
+			Role:    introductionAssetRoleCover,
 		},
 	}
 }

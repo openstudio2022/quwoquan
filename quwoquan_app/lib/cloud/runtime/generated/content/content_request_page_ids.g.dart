@@ -6,27 +6,34 @@ class ContentRequestPageIds {
 
   static const Map<String, String> operationToPageId = <String, String>{
     'AbortMediaUpload': 'content.media.abort',
+    'BeginReportReview': 'content.begin.report.review',
     'BindMediaAssetsToComment': 'content.bind.media.assets.to.comment',
     'BindMediaAssetsToPost': 'content.bind.media.assets.to.post',
     'CompleteMediaUpload': 'content.media.complete',
     'CreateComment': 'content.comment.create',
+    'CreateOutboundShare': 'content.outbound_share.create',
     'CreatePost': 'content.post.create',
     'CreateReport': 'content.report.create',
+    'DecidePostModeration': 'content.decide.post.moderation',
     'DeleteComment': 'content.comment.delete',
     'DeletePost': 'content.post.delete',
     'GenerateArticleSummary': 'content.article.summary',
     'GetAppConfig': 'content.get.app.config',
     'GetAuthorImpact': 'content.get.author.impact',
-    'GetCommentCountsDelta': 'content.get.comment.counts.delta',
+    'GetContentReactionState': 'content.post.reactions',
     'GetCounters': 'content.post.counters',
     'GetFeed': 'content.feed.list',
     'GetHelperRead': 'content.get.helper.read',
     'GetMediaAsset': 'content.media.get',
+    'GetMediaAssetDeliveryReference': 'content.get.media.asset.delivery.reference',
+    'GetMediaAssetReference': 'content.media.reference',
+    'GetMediaUploadSession': 'content.get.media.upload.session',
     'GetMyFootprint': 'content.footprint.list',
     'GetMyIntersectionSummary': 'content.get.my.intersection.summary',
     'GetObjectIntersections': 'content.get.object.intersections',
+    'GetOwnedMediaAsset': 'content.get.owned.media.asset',
     'GetPost': 'content.post.get',
-    'GetReactionState': 'content.post.reactions',
+    'GetPostPublicationEligibility': 'content.get.post.publication.eligibility',
     'GetReport': 'content.get.report',
     'InitMediaUpload': 'content.media.init',
     'LikePost': 'content.post.like',
@@ -38,51 +45,59 @@ class ContentRequestPageIds {
     'ListMyIntersections': 'content.list.my.intersections',
     'ListProfileInteractionActivitiesReceived': 'content.profile.interactions.received',
     'ListProfileInteractionActivitiesSent': 'content.profile.interactions.sent',
+    'ListReports': 'content.list.reports',
     'ListUserPosts': 'content.user.posts',
-    'MarkIntersectionsVisited': 'content.mark.intersections.visited',
+    'OpenPostModerationCase': 'content.open.post.moderation.case',
     'PinComment': 'content.pin.comment',
     'PromotePostToWork': 'content.post.promote',
     'PublishPost': 'content.post.publish',
-    'QuoteToCircle': 'content.post.quote',
     'ReactToComment': 'content.react.to.comment',
+    'RecordMediaProcessingResult': 'content.record.media.processing.result',
     'ReportBehaviors': 'content.behaviors.report',
-    'RepostToCircle': 'content.post.repost',
     'RequestOriginalImageAccess': 'content.request.original.image.access',
     'ResolveReport': 'content.resolve.report',
+    'ReviewPostModerationCase': 'content.review.post.moderation.case',
     'SearchPosts': 'content.search',
     'SelectAutoVideoCover': 'content.media.cover.auto',
     'SelectManualVideoCover': 'content.media.cover.manual',
-    'SharePost': 'content.share.post',
+    'SupersedePostModerationCase': 'content.supersede.post.moderation.case',
     'UnlikePost': 'content.post.unlike',
     'UnpinComment': 'content.unpin.comment',
-    'UnsharePost': 'content.unshare.post',
+    'UpdateMediaAssetAccessPolicy': 'content.update.media.asset.access.policy',
     'UpdatePost': 'content.post.update',
-    'UpdatePostCircles': 'content.post.circles',
     'UpdatePostSettings': 'content.post.settings',
+    'UpdateProfileInteractionState': 'content.update.profile.interaction.state',
   };
 
   static const String abortMediaUpload = 'content.media.abort';
+  static const String beginReportReview = 'content.begin.report.review';
   static const String bindMediaAssetsToComment = 'content.bind.media.assets.to.comment';
   static const String bindMediaAssetsToPost = 'content.bind.media.assets.to.post';
   static const String completeMediaUpload = 'content.media.complete';
   static const String createComment = 'content.comment.create';
+  static const String createOutboundShare = 'content.outbound_share.create';
   static const String createPost = 'content.post.create';
   static const String createReport = 'content.report.create';
+  static const String decidePostModeration = 'content.decide.post.moderation';
   static const String deleteComment = 'content.comment.delete';
   static const String deletePost = 'content.post.delete';
   static const String generateArticleSummary = 'content.article.summary';
   static const String getAppConfig = 'content.get.app.config';
   static const String getAuthorImpact = 'content.get.author.impact';
-  static const String getCommentCountsDelta = 'content.get.comment.counts.delta';
+  static const String getContentReactionState = 'content.post.reactions';
   static const String getCounters = 'content.post.counters';
   static const String getFeed = 'content.feed.list';
   static const String getHelperRead = 'content.get.helper.read';
   static const String getMediaAsset = 'content.media.get';
+  static const String getMediaAssetDeliveryReference = 'content.get.media.asset.delivery.reference';
+  static const String getMediaAssetReference = 'content.media.reference';
+  static const String getMediaUploadSession = 'content.get.media.upload.session';
   static const String getMyFootprint = 'content.footprint.list';
   static const String getMyIntersectionSummary = 'content.get.my.intersection.summary';
   static const String getObjectIntersections = 'content.get.object.intersections';
+  static const String getOwnedMediaAsset = 'content.get.owned.media.asset';
   static const String getPost = 'content.post.get';
-  static const String getReactionState = 'content.post.reactions';
+  static const String getPostPublicationEligibility = 'content.get.post.publication.eligibility';
   static const String getReport = 'content.get.report';
   static const String initMediaUpload = 'content.media.init';
   static const String likePost = 'content.post.like';
@@ -94,25 +109,26 @@ class ContentRequestPageIds {
   static const String listMyIntersections = 'content.list.my.intersections';
   static const String listProfileInteractionActivitiesReceived = 'content.profile.interactions.received';
   static const String listProfileInteractionActivitiesSent = 'content.profile.interactions.sent';
+  static const String listReports = 'content.list.reports';
   static const String listUserPosts = 'content.user.posts';
-  static const String markIntersectionsVisited = 'content.mark.intersections.visited';
+  static const String openPostModerationCase = 'content.open.post.moderation.case';
   static const String pinComment = 'content.pin.comment';
   static const String promotePostToWork = 'content.post.promote';
   static const String publishPost = 'content.post.publish';
-  static const String quoteToCircle = 'content.post.quote';
   static const String reactToComment = 'content.react.to.comment';
+  static const String recordMediaProcessingResult = 'content.record.media.processing.result';
   static const String reportBehaviors = 'content.behaviors.report';
-  static const String repostToCircle = 'content.post.repost';
   static const String requestOriginalImageAccess = 'content.request.original.image.access';
   static const String resolveReport = 'content.resolve.report';
+  static const String reviewPostModerationCase = 'content.review.post.moderation.case';
   static const String searchPosts = 'content.search';
   static const String selectAutoVideoCover = 'content.media.cover.auto';
   static const String selectManualVideoCover = 'content.media.cover.manual';
-  static const String sharePost = 'content.share.post';
+  static const String supersedePostModerationCase = 'content.supersede.post.moderation.case';
   static const String unlikePost = 'content.post.unlike';
   static const String unpinComment = 'content.unpin.comment';
-  static const String unsharePost = 'content.unshare.post';
+  static const String updateMediaAssetAccessPolicy = 'content.update.media.asset.access.policy';
   static const String updatePost = 'content.post.update';
-  static const String updatePostCircles = 'content.post.circles';
   static const String updatePostSettings = 'content.post.settings';
+  static const String updateProfileInteractionState = 'content.update.profile.interaction.state';
 }

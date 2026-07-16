@@ -21,6 +21,9 @@ from typing import Any
 
 
 ROOT = _find_repo_root()
+sys.path.insert(0, str(ROOT))
+
+from quwoquan_ops.cli.lib.output_paths import env_run_dir  # noqa: E402
 
 
 def utc_now() -> str:
@@ -43,12 +46,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--report",
         default=str(
-            Path(os.environ.get("QWQ_OUTPUT_ROOT", ".qwq_output"))
-            / "env"
-            / "gamma"
-            / "local"
-            / "gamma-local"
-            / "app-artifacts"
+            Path(os.environ.get("QWQ_RUN_ROOT") or env_run_dir(
+                "gamma", "chat-avatar-e2e", target="gamma-local"
+            ))
             / "avatar_e2e_report.json"
         ),
     )

@@ -3,43 +3,7 @@ package ports
 import (
 	"context"
 	"time"
-
-	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
-	reportmodel "quwoquan_service/services/content-service/internal/domain/report/model"
 )
-
-// PostRepository defines the post storage operations consumed by application use cases.
-type PostRepository interface {
-	Create(ctx context.Context, post *postmodel.Post) error
-	Update(ctx context.Context, id string, post *postmodel.Post) bool
-	FindByID(ctx context.Context, id string) (*postmodel.Post, bool)
-	ListAll(ctx context.Context) []postmodel.Post
-	ListPublished(ctx context.Context, limit int, cursor string) []postmodel.Post
-	ListByAuthor(ctx context.Context, authorID string, limit int, cursor string) []postmodel.Post
-	AdjustCommentCount(ctx context.Context, postID string, delta int64) (int64, bool, error)
-	SetCommentCount(ctx context.Context, postID string, count int64) (bool, error)
-}
-
-// ReportRepository defines the report persistence port consumed by report use cases.
-type ReportRepository interface {
-	Create(ctx context.Context, report *reportmodel.Report) error
-	FindByID(ctx context.Context, id string) (*reportmodel.Report, bool, error)
-	Update(ctx context.Context, report *reportmodel.Report) error
-	List(ctx context.Context, limit int) ([]*reportmodel.Report, error)
-}
-
-// Projector receives domain events for in-process read-model projection.
-type Projector interface {
-	Project(ctx context.Context, event ProjectorEvent) error
-}
-
-type ProjectorEvent struct {
-	Type          string         `json:"type"`
-	AggregateType string         `json:"aggregateType"`
-	AggregateID   string         `json:"aggregateId"`
-	Payload       map[string]any `json:"payload"`
-	OccurredAt    time.Time      `json:"occurredAt"`
-}
 
 // BehaviorEventStore persists raw behavior events for offline analytics.
 type BehaviorEventStore interface {
@@ -240,4 +204,19 @@ type AuthorImpactEvidenceStore interface {
 type WatermarkStore interface {
 	LoadWatermarks(ctx context.Context, userID string) (map[string]int64, error)
 	SaveWatermarks(ctx context.Context, userID string, dims map[string]int64) error
+}
+
+// ProjectorEvent 是读模型投影器消费的规范化生命周期事件。
+type ProjectorEvent struct {
+	ID            string
+	Type          string
+	AggregateType string
+	AggregateID   string
+	Payload       map[string]any
+	OccurredAt    time.Time
+}
+
+// Projector 将聚合生命周期事件应用到派生读模型。
+type Projector interface {
+	Project(ctx context.Context, event ProjectorEvent) error
 }

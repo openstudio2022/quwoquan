@@ -1,13 +1,14 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
-import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/platform/file_storage_gateway.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/services/create_page_remote_helpers.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
+import '../../../../support/recording_content_media_facet.dart';
 
 void main() {
   test('图片创作发布旅程保持选图顺序、远端引用、首图封面与 bind 顺序', () async {
-    final repository = _JourneyContentRepository();
+    final media = RecordingContentMediaFacet();
     final fileStorage = _JourneyFileStorageGateway(<String, List<int>>{
       '/tmp/first.jpg': <int>[1],
       '/tmp/second.jpg': <int>[2],
@@ -25,77 +26,40 @@ void main() {
         );
 
     final prepared = await buildCreatePostPayloadWithRemoteImageMedia(
-      repository: repository,
+      media: media,
       fileStorageGateway: fileStorage,
       state: state,
-      uploadObject: (uri, bytes, {required contentType}) async {},
+      uploadObject:
+          (
+            uri,
+            bytes, {
+            required contentType,
+            required expectedSha256,
+          }) async {},
     );
-    await repository.bindMediaAssetsToPost(
-      postId: 'post_photo_roundtrip',
-      assetIds: prepared.mediaAssetIds,
+    await media.bindPostMediaAssets(
+      BindContentPostMediaAssetsCommand(
+        postId: 'post_photo_roundtrip',
+        assetIds: prepared.mediaAssetIds,
+      ),
     );
 
     expect(prepared.payload['contentType'], 'image');
     expect(prepared.payload['mediaUrls'], <String>[
-      'https://cdn.quwoquan.test/second.jpg',
-      'https://cdn.quwoquan.test/first.jpg',
-      'https://cdn.quwoquan.test/third.jpg',
+      'https://cdn.quwoquan.test/image_asset_1.jpg',
+      'https://cdn.quwoquan.test/image_asset_2.jpg',
+      'https://cdn.quwoquan.test/image_asset_3.jpg',
     ]);
     expect(
       prepared.payload['coverUrl'],
-      'https://cdn.quwoquan.test/second.jpg',
+      'https://cdn.quwoquan.test/image_asset_1.jpg',
     );
-    expect(repository.boundAssetIds, <String>[
-      'asset_second',
-      'asset_first',
-      'asset_third',
+    expect(media.boundAssetIds, <String>[
+      'image_asset_1',
+      'image_asset_2',
+      'image_asset_3',
     ]);
   });
-}
-
-class _JourneyContentRepository extends MockContentRepository {
-  final List<String> boundAssetIds = <String>[];
-  final Map<String, String> _assetBySession = <String, String>{};
-
-  @override
-  Future<ContentMediaInitUploadResponseDto> initMediaUpload({
-    String mediaType = 'image',
-    String assetScope = 'draft',
-  }) async {
-    final index = _assetBySession.length;
-    final assetName = <String>['second', 'first', 'third'][index];
-    final sessionId = 'session_$assetName';
-    _assetBySession[sessionId] = assetName;
-    return ContentMediaInitUploadResponseDto(
-      sessionId: sessionId,
-      mediaId: 'asset_$assetName',
-      uploadUrl: 'https://upload.quwoquan.test/$assetName',
-      presignUrl: 'https://upload.quwoquan.test/$assetName',
-    );
-  }
-
-  @override
-  Future<ContentMediaCompleteUploadResponseDto> completeMediaUpload({
-    required String sessionId,
-  }) async {
-    final assetName = _assetBySession[sessionId]!;
-    return ContentMediaCompleteUploadResponseDto(
-      sessionId: sessionId,
-      status: 'ready',
-      cdnUrl: 'https://cdn.quwoquan.test/$assetName.jpg',
-      assetId: 'asset_$assetName',
-    );
-  }
-
-  @override
-  Future<void> bindMediaAssetsToPost({
-    required String postId,
-    required List<String> assetIds,
-  }) async {
-    boundAssetIds
-      ..clear()
-      ..addAll(assetIds);
-  }
 }
 
 class _JourneyFileStorageGateway implements FileStorageGateway {

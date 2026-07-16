@@ -80,8 +80,9 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 // fakeReader is an in-memory PostReader for projector tests.
 type fakeReader struct {
-	byID map[string]postmodel.Post
-	all  []postmodel.Post
+	byID    map[string]postmodel.Post
+	all     []postmodel.Post
+	listErr error
 }
 
 func (r fakeReader) FindByID(_ context.Context, id string) (*postmodel.Post, bool) {
@@ -93,7 +94,7 @@ func (r fakeReader) FindByID(_ context.Context, id string) (*postmodel.Post, boo
 	return &cp, true
 }
 
-func (r fakeReader) ListAll(_ context.Context) []postmodel.Post { return r.all }
+func (r fakeReader) ListAll(_ context.Context) ([]postmodel.Post, error) { return r.all, r.listErr }
 
 func placePost(id, name string) postmodel.Post {
 	return postmodel.Post{
@@ -183,7 +184,7 @@ func TestPlaceProjectorSingleSourceOnEntityBinding(t *testing.T) {
 	// The place is promoted to a canonical entity: it must drop from location.place
 	// (entity.homepage carries it now) — single source of truth.
 	bound := post
-	bound.CanonicalEntityId = "entity_777"
+	bound.PrimaryHomepageId = "homepage_777"
 	reader.byID[post.ID] = bound
 	if err := proj.Project(context.Background(), ports.ProjectorEvent{Type: "PostUpdated", AggregateID: post.ID}); err != nil {
 		t.Fatalf("Project(update) err=%v", err)

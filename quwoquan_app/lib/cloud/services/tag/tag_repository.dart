@@ -66,8 +66,6 @@ abstract class TagRepository {
     String? objectType,
     int limit = TagApiDefaults.searchLimit,
   });
-  Future<bool> feedback(String tagRef, String action, {String? context});
-
   // ── 场景4: 关系图谱 ──────────────────────────────────────────
   Future<List<TagCooccurrence>> cooccurrence({
     String? tagRef,

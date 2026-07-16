@@ -3,9 +3,9 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
+import 'package:quwoquan_app/cloud/runtime/auth/realtime_connection_credential.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
-import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/app_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/realtime/realtime_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/rtc/rtc_signal_payloads.g.dart';
 import 'package:quwoquan_app/cloud/rtc/rtc_signaling_wire.dart';
@@ -15,6 +15,7 @@ class RtcSignalEvent {
   final String type;
   final String callId;
   final String? actorId;
+
   /// 已按 `events.yaml` / [parseRtcWsPayload] 解析；未知 `type` 为 [RtcWsUnknownPayload]。
   final RtcWsPayload payload;
 
@@ -43,15 +44,20 @@ class RtcSignalEvent {
 }
 
 class RtcSignalingClient {
+  RtcSignalingClient({required this.authTokenProvider});
+
+  final CloudAuthTokenProvider authTokenProvider;
   WebSocketChannel? _channel;
   Timer? _heartbeatTimer;
   Timer? _reconnectTimer;
+  Completer<void>? _authAck;
   int _reconnectAttempt = 0;
   static const _maxReconnectAttempt = 10;
   static const _heartbeatInterval = Duration(seconds: 15);
+  static const _authAckTimeout = Duration(seconds: 5);
 
   bool _disposed = false;
-  String? _userId;
+  bool _authenticated = false;
 
   final _events = StreamController<RtcSignalEvent>.broadcast();
   Stream<RtcSignalEvent> get events => _events.stream;
@@ -68,8 +74,7 @@ class RtcSignalingClient {
   Stream<RtcSignalEvent> get callAnswered =>
       events.where((e) => e.payload is RtcCallAnsweredWsPayload);
 
-  Future<void> connect(String userId) async {
-    _userId = userId;
+  Future<void> connect() async {
     _disposed = false;
     await _doConnect();
   }
@@ -79,13 +84,18 @@ class RtcSignalingClient {
     WebSocketChannel? pendingChannel;
 
     try {
+      final credential = await RealtimeConnectionCredential.resolveWebSocket(
+        authTokenProvider,
+      );
+      if (credential == null) {
+        _connectionState.value = false;
+        return;
+      }
       final wsUrl = CloudRuntimeConfig.gatewayBaseUrl
           .replaceFirst('https://', 'wss://')
           .replaceFirst('http://', 'ws://');
-      final headers = CloudRequestHeaders.forPage(AppRequestPageIds.rtcSignal);
-
-      final uri = Uri.parse(
-        '$wsUrl${RealtimeApiMetadata.webSocketUpgradePath}?userId=$_userId',
+      final uri = credential.authorizeWebSocket(
+        Uri.parse('$wsUrl${RealtimeApiMetadata.webSocketUpgradePath}'),
       );
       pendingChannel = WebSocketChannel.connect(uri, protocols: null);
       await pendingChannel.ready;
@@ -94,31 +104,39 @@ class RtcSignalingClient {
         return;
       }
       _channel = pendingChannel;
+      _authAck = Completer<void>();
 
       _channel!.stream.listen(
-        (data) => _handleInboundFrame(
-          RtcSignalingWireFrame.fromChannelData(data),
-        ),
+        (data) =>
+            _handleInboundFrame(RtcSignalingWireFrame.fromChannelData(data)),
         onError: (Object error) {
-          debugPrint('RtcSignaling: connection error: $error');
+          _completeAuthFailure();
+          if (kDebugMode) {
+            debugPrint('RtcSignaling: connection error');
+          }
           _connectionState.value = false;
           _scheduleReconnect();
         },
         onDone: _onDone,
       );
 
+      await _authAck!.future.timeout(_authAckTimeout);
+      if (_disposed || !_authenticated) {
+        await pendingChannel.sink.close();
+        return;
+      }
       _connectionState.value = true;
       _reconnectAttempt = 0;
       _startHeartbeat();
-
-      _sendOutbound(_outboundAuthBody(_userId, headers));
-    } catch (e) {
+    } catch (_) {
       try {
         await pendingChannel?.sink.close();
       } catch (_) {
         /* best-effort: 连接失败后清理半开的 channel，close 二次报错无副作用可忽略 */
       }
-      debugPrint('RtcSignaling: connect failed: $e');
+      if (kDebugMode) {
+        debugPrint('RtcSignaling: connect failed');
+      }
       _connectionState.value = false;
       _scheduleReconnect();
     }
@@ -131,18 +149,42 @@ class RtcSignalingClient {
 
       final type = json['type'] as String? ?? '';
 
+      if (type == 'auth_ack') {
+        if (json['authenticated'] == true) {
+          _authenticated = true;
+          if (!(_authAck?.isCompleted ?? true)) {
+            _authAck!.complete();
+          }
+        } else {
+          _completeAuthFailure();
+          _onDone();
+        }
+        return;
+      }
+      if (!_authenticated) return;
       if (type == 'pong') return;
 
       _events.add(RtcSignalEvent.fromJson(json));
-    } catch (e) {
-      debugPrint('RtcSignaling: failed to parse message: $e');
+    } catch (_) {
+      if (kDebugMode) {
+        debugPrint('RtcSignaling: dropped malformed frame');
+      }
     }
   }
 
   void _onDone() {
+    _completeAuthFailure();
+    _authenticated = false;
     _connectionState.value = false;
     _stopHeartbeat();
     if (!_disposed) _scheduleReconnect();
+  }
+
+  void _completeAuthFailure() {
+    final authAck = _authAck;
+    if (authAck != null && !authAck.isCompleted) {
+      authAck.complete();
+    }
   }
 
   void _startHeartbeat() {
@@ -179,17 +221,6 @@ class RtcSignalingClient {
     }
   }
 
-  static Map<String, dynamic> _outboundAuthBody(
-    String? userId,
-    Map<String, String> headers,
-  ) {
-    return <String, dynamic>{
-      'type': 'auth',
-      if (userId != null && userId.isNotEmpty) 'userId': userId,
-      ...headers,
-    };
-  }
-
   Future<void> disconnect() async {
     _disposed = true;
     _stopHeartbeat();
@@ -197,6 +228,8 @@ class RtcSignalingClient {
     _reconnectTimer = null;
     await _channel?.sink.close();
     _channel = null;
+    _authAck = null;
+    _authenticated = false;
     _connectionState.value = false;
   }
 

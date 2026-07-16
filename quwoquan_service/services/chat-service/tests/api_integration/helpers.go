@@ -12,8 +12,23 @@ import (
 	"time"
 
 	rterr "quwoquan_service/runtime/errors"
+	"quwoquan_service/runtime/operation"
+	"quwoquan_service/services/chat-service/internal/application"
 	model "quwoquan_service/services/chat-service/internal/domain/conversation/model"
+	"quwoquan_service/services/chat-service/internal/infrastructure/persistence"
 )
+
+func chatStoragePorts(store *persistence.MongoChatStore) application.ChatStoragePorts {
+	return application.ChatStoragePorts{
+		Transactions:      store,
+		Conversations:     store,
+		Messages:          store,
+		MessageProjection: store,
+		Members:           store,
+		UserStates:        store,
+		Receipts:          store,
+	}
+}
 
 func testDerivedMediaFileServer(localRoot string) http.Handler {
 	root := filepath.Clean(strings.TrimSpace(localRoot))
@@ -86,8 +101,25 @@ func doPost(t *testing.T, path, payload, userId string, expectedStatus int) map[
 	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Client-User-Id", userId)
+	req.Header.Set("X-Client-Account-Id", userId)
+	req.Header.Set("X-Client-Sub-Account-Id", userId)
+	req.Header.Set("X-Client-Persona-Id", userId)
+	req = req.WithContext(operation.WithContext(req.Context(), operation.Context{
+		OperationID: "api_integration." + strings.Trim(path, "/"),
+		RequestID:   "api_integration.request",
+		TraceID:     "api_integration.trace",
+		Actor: operation.ActorContext{
+			AccountID: userId,
+			PersonaID: userId,
+		},
+	}))
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
+	if testMessageOutboxRelay != nil {
+		if _, err := testMessageOutboxRelay.Drain(context.Background(), 100); err != nil {
+			t.Fatalf("doPost %s: drain message outbox: %v", path, err)
+		}
+	}
 	if rec.Code != expectedStatus {
 		t.Fatalf("doPost %s: expected %d, got %d: %s", path, expectedStatus, rec.Code, rec.Body.String())
 	}
@@ -102,6 +134,7 @@ func doGet(t *testing.T, path, userId string) (int, map[string]any) {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodGet, path, nil)
 	req.Header.Set("X-Client-User-Id", userId)
+	req.Header.Set("X-Client-Sub-Account-Id", userId)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	var result map[string]any
@@ -114,6 +147,7 @@ func doPatch(t *testing.T, path, payload, userId string) (int, map[string]any) {
 	req := httptest.NewRequest(http.MethodPatch, path, strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Client-User-Id", userId)
+	req.Header.Set("X-Client-Sub-Account-Id", userId)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	var result map[string]any
@@ -126,6 +160,7 @@ func doPut(t *testing.T, path, payload, userId string) (int, map[string]any) {
 	req := httptest.NewRequest(http.MethodPut, path, strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Client-User-Id", userId)
+	req.Header.Set("X-Client-Sub-Account-Id", userId)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	var result map[string]any
@@ -137,6 +172,7 @@ func doDelete(t *testing.T, path, userId string) (int, map[string]any) {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodDelete, path, nil)
 	req.Header.Set("X-Client-User-Id", userId)
+	req.Header.Set("X-Client-Sub-Account-Id", userId)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	var result map[string]any
@@ -182,7 +218,7 @@ func seedConversationWithAssistantMember(
 		Role:           "owner",
 		JoinedAt:       now,
 	}
-	if _, err := db.Collection("conversation_members").InsertOne(context.Background(), ownerMember); err != nil {
+	if _, err := db.Collection("conversation_memberships").InsertOne(context.Background(), ownerMember); err != nil {
 		t.Fatalf("seed owner member %s: %v", conversationID, err)
 	}
 	assistantMember := &model.ConversationMember{
@@ -199,7 +235,7 @@ func seedConversationWithAssistantMember(
 		InvitedBy:        ownerUserID,
 		JoinedAt:         now.Add(time.Second),
 	}
-	if _, err := db.Collection("conversation_members").InsertOne(context.Background(), assistantMember); err != nil {
+	if _, err := db.Collection("conversation_memberships").InsertOne(context.Background(), assistantMember); err != nil {
 		t.Fatalf("seed assistant member %s: %v", conversationID, err)
 	}
 }

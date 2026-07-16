@@ -7,15 +7,17 @@ import (
 	"time"
 
 	rterr "quwoquan_service/runtime/errors"
-	event "quwoquan_service/services/chat-service/internal/domain/conversation/event"
+	userstateevent "quwoquan_service/services/chat-service/internal/domain/chat/conversation_user_state/event"
+	conversationevent "quwoquan_service/services/chat-service/internal/domain/chat/event"
 	model "quwoquan_service/services/chat-service/internal/domain/conversation/model"
-	"quwoquan_service/services/chat-service/internal/infrastructure/cache"
-	"quwoquan_service/services/chat-service/internal/infrastructure/persistence"
 )
 
 type ConversationService struct {
-	repo          persistence.ChatRepository
-	cache         *cache.ConversationCache
+	transactions  TransactionRunner
+	conversations ConversationStore
+	members       MemberStore
+	userStates    UserStateStore
+	cache         ConversationCache
 	publisher     EventPublisher
 	profiles      ProfileSnapshotResolver
 	relationships RelationshipGate
@@ -25,8 +27,8 @@ type ConversationService struct {
 }
 
 func NewConversationService(
-	repo persistence.ChatRepository,
-	cache *cache.ConversationCache,
+	storage ChatStoragePorts,
+	cache ConversationCache,
 	publisher EventPublisher,
 	profiles ProfileSnapshotResolver,
 	relationships RelationshipGate,
@@ -34,20 +36,19 @@ func NewConversationService(
 	sync UserSyncPublisher,
 	scheduler GroupAvatarTaskScheduler,
 ) *ConversationService {
-	if publisher == nil {
-		publisher = NoopEventPublisher()
-	}
+	publisher = requireEventPublisher(publisher)
 	if profiles == nil {
 		profiles = noopProfileResolver{}
 	}
 	if relationships == nil {
 		relationships = DenyRelationshipGate()
 	}
-	if scheduler == nil {
-		scheduler = NoopGroupAvatarTaskScheduler()
-	}
+	scheduler = requireGroupAvatarTaskScheduler(scheduler)
 	return &ConversationService{
-		repo:          repo,
+		transactions:  storage.Transactions,
+		conversations: storage.Conversations,
+		members:       storage.Members,
+		userStates:    storage.UserStates,
 		cache:         cache,
 		publisher:     publisher,
 		profiles:      profiles,
@@ -82,7 +83,7 @@ func (s *ConversationService) createDirectConversation(
 	bypassRelationshipGate bool,
 ) (*model.Conversation, error) {
 	now := time.Now()
-	req.Type = NormalizeConversationType(req.Type, req.CircleId)
+	req.Type = strings.TrimSpace(req.Type)
 	if req.Type != conversationTypeDirect && req.Type != conversationTypeGroup && req.Type != conversationTypeEncrypted {
 		return nil, rterr.NewInvalidArgument(
 			rterr.ModuleChat,
@@ -115,7 +116,7 @@ func (s *ConversationService) createDirectConversation(
 			)
 		}
 		peerID := initialMemberIds[0]
-		if existing, findErr := s.repo.FindDirectConversationBetween(ctx, req.CreatorId, peerID); findErr == nil && existing != nil {
+		if existing, findErr := s.conversations.FindDirectConversationBetween(ctx, req.CreatorId, peerID); findErr == nil && existing != nil {
 			return existing, nil
 		}
 		if !bypassRelationshipGate {
@@ -226,26 +227,26 @@ func (s *ConversationService) createDirectConversation(
 	conv.MemberCount = len(initialMemberIds) + 1
 	conv.MembersRosterRevision = 1
 	conv.UpdatedAt = time.Now()
-	if err := s.repo.RunInTransaction(ctx, func(txCtx context.Context) error {
-		if err := s.repo.CreateConversation(txCtx, conv); err != nil {
+	if err := s.transactions.RunInTransaction(ctx, func(txCtx context.Context) error {
+		if err := s.conversations.CreateConversation(txCtx, conv); err != nil {
 			return err
 		}
-		if err := s.repo.CreateMember(txCtx, creator); err != nil {
+		if err := s.members.CreateMember(txCtx, creator); err != nil {
 			return err
 		}
 		for _, member := range initialMembers {
-			if err := s.repo.CreateMember(txCtx, member); err != nil {
+			if err := s.members.CreateMember(txCtx, member); err != nil {
 				return err
 			}
 		}
-		if err := s.repo.UpdateConversation(txCtx, conv.ID, conv); err != nil {
+		if err := s.conversations.UpdateConversation(txCtx, conv.ID, conv); err != nil {
 			return err
 		}
-		if err := s.repo.UpsertUserState(txCtx, creatorState); err != nil {
+		if err := s.userStates.UpsertUserState(txCtx, creatorState); err != nil {
 			return err
 		}
 		for _, state := range initialStates {
-			if err := s.repo.UpsertUserState(txCtx, state); err != nil {
+			if err := s.userStates.UpsertUserState(txCtx, state); err != nil {
 				return err
 			}
 		}
@@ -261,12 +262,8 @@ func (s *ConversationService) createDirectConversation(
 		return nil, err
 	}
 
-	if err := s.cache.InitSeq(ctx, conv.ID, 0); err != nil {
-		return nil, err
-	}
-
 	go func() {
-		if err := s.publisher.PublishDomainEvent(context.Background(), event.ConversationCreated, conv.ID, req.CreatorId, map[string]any{
+		if err := s.publisher.PublishDomainEvent(context.Background(), conversationevent.ConversationCreated, conv.ID, req.CreatorId, map[string]any{
 			"type":            conv.Type,
 			"creatorId":       req.CreatorId,
 			"circleId":        conv.CircleId,
@@ -284,12 +281,12 @@ func (s *ConversationService) createDirectConversation(
 	}()
 
 	go func() {
-		convFresh, err := s.repo.FindConversationByID(context.Background(), conv.ID)
+		convFresh, err := s.conversations.FindConversationByID(context.Background(), conv.ID)
 		if err != nil {
 			slog.Error("publish ConversationRosterUpdated after create", "err", err, "conversationId", conv.ID)
 			return
 		}
-		if err := s.publisher.PublishDomainEvent(context.Background(), event.ConversationRosterUpdated, conv.ID, req.CreatorId, map[string]any{
+		if err := s.publisher.PublishDomainEvent(context.Background(), conversationevent.ConversationRosterUpdated, conv.ID, req.CreatorId, map[string]any{
 			"membersRosterRevision": convFresh.MembersRosterRevision,
 			"updatedAt":             convFresh.UpdatedAt,
 			"aspects":               []string{"members", "created"},
@@ -307,7 +304,7 @@ type DissolveConversationRequest struct {
 }
 
 func (s *ConversationService) DissolveConversation(ctx context.Context, req DissolveConversationRequest) error {
-	conv, err := s.repo.FindConversationByID(ctx, req.ConversationId)
+	conv, err := s.conversations.FindConversationByID(ctx, req.ConversationId)
 	if err != nil {
 		return err
 	}
@@ -318,7 +315,7 @@ func (s *ConversationService) DissolveConversation(ctx context.Context, req Diss
 			"circle conversation cannot be dissolved",
 		)
 	}
-	owner, err := s.repo.FindMember(ctx, req.ConversationId, req.OperatorId)
+	owner, err := s.members.FindMember(ctx, req.ConversationId, req.OperatorId)
 	if err != nil || owner.Role != "owner" {
 		return rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleChat, rterr.KindUser, "forbidden"),
@@ -327,7 +324,7 @@ func (s *ConversationService) DissolveConversation(ctx context.Context, req Diss
 		)
 	}
 	conv.Status = "deleted"
-	if err := s.repo.UpdateConversation(ctx, conv.ID, conv); err != nil {
+	if err := s.conversations.UpdateConversation(ctx, conv.ID, conv); err != nil {
 		return err
 	}
 	_ = s.cache.InvalidateConversation(ctx, req.ConversationId)
@@ -437,7 +434,7 @@ func inferGroupConversationSemantics(
 }
 
 func (s *ConversationService) GetConversation(ctx context.Context, conversationId string) (*model.Conversation, error) {
-	return s.repo.FindConversationByID(ctx, conversationId)
+	return s.conversations.FindConversationByID(ctx, conversationId)
 }
 
 type UpdateConversationTitleRequest struct {
@@ -447,7 +444,7 @@ type UpdateConversationTitleRequest struct {
 }
 
 func (s *ConversationService) UpdateConversationTitle(ctx context.Context, req UpdateConversationTitleRequest) (*model.Conversation, error) {
-	conv, err := s.repo.FindConversationByID(ctx, req.ConversationId)
+	conv, err := s.conversations.FindConversationByID(ctx, req.ConversationId)
 	if err != nil {
 		return nil, err
 	}
@@ -458,12 +455,12 @@ func (s *ConversationService) UpdateConversationTitle(ctx context.Context, req U
 	conv.Title = title
 	conv.MembersRosterRevision++
 	conv.UpdatedAt = time.Now()
-	if err := s.repo.UpdateConversation(ctx, conv.ID, conv); err != nil {
+	if err := s.conversations.UpdateConversation(ctx, conv.ID, conv); err != nil {
 		return nil, err
 	}
 	_ = s.cache.InvalidateConversation(ctx, conv.ID)
 	go func() {
-		if err := s.publisher.PublishDomainEvent(context.Background(), event.ConversationRosterUpdated, conv.ID, req.OperatorId, map[string]any{
+		if err := s.publisher.PublishDomainEvent(context.Background(), conversationevent.ConversationRosterUpdated, conv.ID, req.OperatorId, map[string]any{
 			"membersRosterRevision": conv.MembersRosterRevision,
 			"updatedAt":             conv.UpdatedAt,
 			"aspects":               []string{"title"},
@@ -482,7 +479,7 @@ func (s *ConversationService) CreateOrReuseDirect(ctx context.Context, creatorID
 			"creatorId and peerId required",
 		)
 	}
-	if existing, err := s.repo.FindDirectConversationBetween(ctx, creatorID, peerID); err != nil {
+	if existing, err := s.conversations.FindDirectConversationBetween(ctx, creatorID, peerID); err != nil {
 		return nil, err
 	} else if existing != nil {
 		return existing, nil
@@ -495,7 +492,7 @@ func (s *ConversationService) CreateOrReuseDirect(ctx context.Context, creatorID
 }
 
 func (s *ConversationService) HasDirectBetween(ctx context.Context, memberA, memberB string) (bool, error) {
-	conv, err := s.repo.FindDirectConversationBetween(ctx, memberA, memberB)
+	conv, err := s.conversations.FindDirectConversationBetween(ctx, memberA, memberB)
 	if err != nil {
 		return false, err
 	}
@@ -509,7 +506,7 @@ type ListConversationsRequest struct {
 }
 
 func (s *ConversationService) ListConversations(ctx context.Context, req ListConversationsRequest) ([]model.Conversation, error) {
-	return s.repo.ListConversationsByUser(ctx, req.UserId, req.Limit, req.Cursor)
+	return s.conversations.ListConversationsByUser(ctx, req.UserId, req.Limit, req.Cursor)
 }
 
 type SearchConversationsRequest struct {
@@ -528,7 +525,7 @@ func (s *ConversationService) SearchConversations(
 		return []model.Conversation{}, nil
 	}
 	limit := clampSearchLimit(req.Limit, 20)
-	conversations, err := listUserConversations(ctx, s.repo, req.UserId)
+	conversations, err := listUserConversations(ctx, s.conversations, s.userStates, req.UserId)
 	if err != nil {
 		return nil, err
 	}
@@ -564,7 +561,7 @@ type UpdateSettingsRequest struct {
 }
 
 func (s *ConversationService) UpdateSettings(ctx context.Context, req UpdateSettingsRequest) error {
-	state, err := s.repo.FindUserState(ctx, req.UserId, req.ConversationId)
+	state, err := s.userStates.FindUserState(ctx, req.UserId, req.ConversationId)
 	if err != nil {
 		now := time.Now()
 		state = &model.ConversationUserState{
@@ -583,18 +580,19 @@ func (s *ConversationService) UpdateSettings(ctx context.Context, req UpdateSett
 	}
 	state.UpdatedAt = time.Now()
 
-	if err := s.repo.UpsertUserState(ctx, state); err != nil {
+	if err := s.userStates.UpsertUserState(ctx, state); err != nil {
 		return err
 	}
 
 	_ = s.cache.InvalidateConversation(ctx, req.ConversationId)
 
 	go func() {
-		if err := s.publisher.PublishDomainEvent(context.Background(), event.ConversationSettingsUpdated, req.ConversationId, req.UserId, map[string]any{
-			"muted":  req.Muted,
-			"pinned": req.Pinned,
+		if err := s.publisher.PublishDomainEvent(context.Background(), userstateevent.ConversationUserSettingsChanged, req.ConversationId, req.UserId, map[string]any{
+			"muted":     req.Muted,
+			"pinned":    req.Pinned,
+			"updatedAt": state.UpdatedAt,
 		}); err != nil {
-			slog.Error("publish ConversationSettingsUpdated failed", "err", err, "conversationId", req.ConversationId)
+			slog.Error("publish ConversationUserSettingsChanged failed", "err", err, "conversationId", req.ConversationId)
 		}
 	}()
 

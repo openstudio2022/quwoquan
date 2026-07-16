@@ -32,7 +32,7 @@ artifacts:
   - specs/product/2026H1-positioning-refactor/wp-03-object-homepage-unification.md
   - specs/product/2026H1-positioning-refactor/wp-04-entity-introduction-page.md
   - specs/product/2026H1-positioning-refactor/wp-05-discussion-naming-and-message-ia.md
-  - specs/product/2026H1-positioning-refactor/wp-06-article-editor-and-publish.md
+  - specs/product/2026H1-positioning-refactor/wp-06-article-editor-and-content.release.canonical.md
   - specs/product/2026H1-positioning-refactor/wp-07-featured-page-unification.md
   - specs/product/2026H1-positioning-refactor/wp-08-assistant-throughline.md
   - specs/product/2026H1-positioning-refactor/90-integration-acceptance.md
@@ -123,7 +123,7 @@ dev_log:
       - make -C quwoquan_service verify-metadata
       - make -C quwoquan_service codegen-app
       - cd quwoquan_service/services/entity-service && go test ./...
-      - python3 -m py_compile quwoquan_data/scripts/build/homepage.py quwoquan_data/tests/local_contract/produce/test_homepage_introduction_seed__local_contract_test.py
+      - python3 -m py_compile quwoquan_data/scripts/content/homepage/homepage.py quwoquan_data/tests/local_contract/produce/test_homepage_introduction_seed__local_contract_test.py
       - make verify-app-seed-manifest
       - dart format quwoquan_app/lib/cloud/services/entity/entity_repository.dart quwoquan_app/lib/core/providers/app_providers.dart quwoquan_app/lib/ui/entity/pages/homepage_introduction_page.dart quwoquan_app/lib/ui/entity/pages/homepage_detail_page.dart quwoquan_app/lib/ui/entity/widgets/homepage_detail_shell.dart quwoquan_app/lib/ui/entity/widgets/homepage_detail_shell_builders.dart quwoquan_app/lib/app/navigation/app_router.dart
       - cd quwoquan_app && flutter analyze lib/cloud/services/entity/entity_repository.dart lib/core/providers/app_providers.dart lib/ui/entity/pages/homepage_introduction_page.dart lib/ui/entity/pages/homepage_detail_page.dart lib/ui/entity/providers/homepage_introduction_provider.dart lib/ui/entity/widgets/homepage_detail_shell.dart lib/ui/entity/widgets/homepage_detail_shell_builders.dart lib/app/navigation/app_router.dart test/ui/entity/pages/homepage_detail_page_widget_test.dart

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_action_hint.g.dart';
@@ -13,6 +14,7 @@ import 'package:quwoquan_app/components/object_page/object_intersection_card.dar
 import 'package:quwoquan_app/components/object_page/object_intersection_card_skeleton.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_provider.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_section.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
 
 /// T2：对象页交集 section 统一 async 三态 + 旅程一次性消费（V4 · 商用完整态）。
 IntersectionReason _reason({
@@ -23,9 +25,10 @@ IntersectionReason _reason({
   String objectKind = 'person',
   String source = 'sharedFollowees',
   List<IntersectionActionHint> actionHints = const <IntersectionActionHint>[],
+  String displayBinding = 'explicit_link',
 }) {
   final targetId = actionTargetId.trim().isEmpty
-      ? 'u_lin'
+      ? 'u_zhou'
       : actionTargetId.trim();
   final kind = objectKind.trim().isEmpty ? 'person' : objectKind.trim();
   final primary = '$label $count';
@@ -35,6 +38,7 @@ IntersectionReason _reason({
     dimension: dimension,
     actionTargetId: targetId,
     objectKind: kind,
+    displayBinding: displayBinding,
     primaryText: primary,
     primarySpans: <IntersectionTextSpan>[
       IntersectionTextSpan(text: primary, role: 'object', target: objectTarget),
@@ -49,6 +53,33 @@ IntersectionReason _reason({
       target: _targetFor('person', 'u_lin'),
     ),
     actionHints: actionHints,
+  );
+}
+
+IntersectionReason _hostPlainSelfReason() {
+  final actorTarget = _targetFor('person', 'u_zhou');
+  return IntersectionReason(
+    source: 'sharedFollowees',
+    dimension: 'relationship',
+    actionTargetId: 'u_lin',
+    objectKind: 'person',
+    displayBinding: 'host_plain',
+    primaryText: '联系人周屿也关注了林清越',
+    primarySpans: <IntersectionTextSpan>[
+      IntersectionTextSpan(text: '联系人', role: 'plain'),
+      IntersectionTextSpan(text: '周屿', role: 'object', target: actorTarget),
+      IntersectionTextSpan(text: '也关注了林清越', role: 'plain'),
+    ],
+    actorEvidenceTotalCount: 1,
+    actorEvidenceCompleteness: 'complete',
+    representativeActor: IntersectionRepresentativeActor(
+      actorId: 'u_zhou',
+      displayName: '周屿',
+      relationLabel: '联系人',
+      privacyState: 'visible',
+      target: actorTarget,
+    ),
+    sampleVisuals: const [],
   );
 }
 
@@ -99,9 +130,13 @@ const _query = ObjectIntersectionQuery(
   objectBType: 'user',
 );
 
-Widget _host({required Future<List<IntersectionReason>> Function() reasons}) {
+Widget _host({
+  required Future<List<IntersectionReason>> Function() reasons,
+  List<Override> overrides = const <Override>[],
+}) {
   return ProviderScope(
     overrides: [
+      ...overrides,
       objectSharedReasonsProvider(_query).overrideWith((_) => reasons()),
     ],
     child: const CupertinoApp(
@@ -192,7 +227,10 @@ Future<void> _tapIntersectionRowContaining(
   final rowButton = find
       .ancestor(
         of: find.textContaining(text),
-        matching: find.byType(CupertinoButton),
+        matching: find.byWidgetPredicate(
+          (widget) => widget is GestureDetector && widget.onTap != null,
+          description: 'tappable intersection statement row',
+        ),
       )
       .first;
   final rect = tester.getRect(rowButton);
@@ -202,9 +240,25 @@ Future<void> _tapIntersectionRowContaining(
 void main() {
   testWidgets('loading → 展示骨架占位（不留白/不闪布局）', (tester) async {
     final completer = Completer<List<IntersectionReason>>();
-    await tester.pumpWidget(_host(reasons: () => completer.future));
+    var displayConfigReads = 0;
+    await tester.pumpWidget(
+      _host(
+        reasons: () => completer.future,
+        overrides: <Override>[
+          intersectionDisplayConfigProvider.overrideWith((ref) {
+            displayConfigReads += 1;
+            return ref.watch(contentRuntimeConfigProvider).intersectionDisplay;
+          }),
+        ],
+      ),
+    );
     await tester.pump();
 
+    expect(
+      displayConfigReads,
+      1,
+      reason: 'loading 首帧必须建立稳定配置依赖，禁止在 data 回包帧首次订阅',
+    );
     expect(find.byType(ObjectIntersectionCardSkeleton), findsOneWidget);
     expect(find.byType(ObjectIntersectionCard), findsNothing);
 
@@ -302,7 +356,7 @@ void main() {
             dimension: 'relationship',
             label: '共同关注',
             count: 4,
-            actionTargetId: 'u_lin',
+            actionTargetId: 'u_zhou',
             objectKind: 'person',
           ),
         ],
@@ -315,7 +369,22 @@ void main() {
     await _tapIntersectionRowContaining(tester, '共同关注');
     await tester.pumpAndSettle();
 
-    expect(find.text('USER:u_lin'), findsOneWidget);
+    expect(find.text('USER:u_zhou'), findsOneWidget);
+  });
+
+  testWidgets('host_plain 当前主页作为宾语时展示但不点击 self-target', (tester) async {
+    await tester.pumpWidget(
+      _routerHost(reasons: <IntersectionReason>[_hostPlainSelfReason()]),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ObjectIntersectionCard), findsOneWidget);
+    expect(find.textContaining('林清越'), findsOneWidget);
+
+    await _tapIntersectionRowContaining(tester, '林清越');
+    await tester.pumpAndSettle();
+
+    expect(find.text('USER:u_lin'), findsNothing);
   });
 
   testWidgets('N4 传入 onReasonTap（实体页自定义）→ 调用方优先，不叠加默认下钻（不双跳）', (tester) async {
@@ -327,7 +396,7 @@ void main() {
             dimension: 'relationship',
             label: '共同关注',
             count: 4,
-            actionTargetId: 'u_lin',
+            actionTargetId: 'u_zhou',
             objectKind: 'person',
           ),
         ],
@@ -396,7 +465,7 @@ void main() {
             dimension: 'relationship',
             label: '你们的共同联系人',
             count: 1,
-            actionTargetId: 'u_lin',
+            actionTargetId: 'u_zhou',
             objectKind: 'person',
             source: 'commonContact',
             actionHints: <IntersectionActionHint>[
@@ -407,7 +476,7 @@ void main() {
                 targetAvailability: 'available',
                 isPrimary: true,
                 target: IntersectionTarget(
-                  objectId: 'u_lin',
+                  objectId: 'u_zhou',
                   objectKind: 'person',
                 ),
               ),
@@ -424,6 +493,6 @@ void main() {
     // 但整行仍对象级可达：点击主句走统一下钻到 person 承接页（不制造死行）。
     await _tapIntersectionRowContaining(tester, '共同联系人');
     await tester.pumpAndSettle();
-    expect(find.text('USER:u_lin'), findsOneWidget);
+    expect(find.text('USER:u_zhou'), findsOneWidget);
   });
 }

@@ -66,14 +66,14 @@ errors:
       zh: "短信回执签名校验失败"
       en: "SMS callback signature is invalid"
 
-  - code: INTEGRATION.SYSTEM.sms_pass_through_debt_expired
+  - code: INTEGRATION.SYSTEM.sms_otp_code_ref_invalid
     kind: SYSTEM
-    reason: pass_through_debt_expired
+    reason: secret_invalid
     http_status: 500
-    recovery_action: escalate
-    dart_const: smsPassThroughDebtExpired
-    l10n_key: smsPassThroughDebtExpired
-    go_const: ErrSmsPassThroughDebtExpired
+    recovery_action: surface
+    dart_const: smsOtpCodeRefInvalid
+    l10n_key: smsOtpCodeRefInvalid
+    go_const: ErrSmsOtpCodeRefInvalid
     user_message:
-      zh: "验证码跳过正确性校验债务已过期"
-      en: "SMS pass-through debt has expired"
+      zh: "验证码投递凭据无效，请重新获取验证码"
+      en: "Verification delivery credential is invalid; request a new code"

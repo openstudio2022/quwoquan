@@ -23,7 +23,7 @@ policy:
   - 视频只保留 trial lane 能力，不计入千级正式发布 KPI，直到视频研究/producer/权利安全门关闭。
 evidence:
   local_contract:
-    - quwoquan_data/.venv/bin/python -m py_compile quwoquan_data/scripts/vertical/source_registry.py quwoquan_data/scripts/site_supply/core.py quwoquan_data/scripts/task/target_selection.py quwoquan_data/scripts/vertical/license.py
+    - quwoquan_data/.venv/bin/python -m py_compile quwoquan_data/scripts/governance/coverage/source_registry.py quwoquan_data/scripts/site_supply/core.py quwoquan_data/scripts/task/target_selection.py quwoquan_data/scripts/governance/coverage/license.py
     - quwoquan_data/.venv/bin/python -m pytest quwoquan_data/tests/local_contract/template/test_source_catalog__local_contract_test.py quwoquan_data/tests/local_contract/vertical/test_travel_source_registry__local_contract_test.py quwoquan_data/tests/local_contract/vertical/test_image_rights_asset_level__local_contract_test.py -q
     - quwoquan_data/.venv/bin/python -m pytest quwoquan_data/tests/local_contract/site_supply/test_frontier_rollup__local_contract_test.py quwoquan_data/tests/local_contract/task/test_target_selection__local_contract_test.py -q
     - quwoquan_data/.venv/bin/python -m pytest quwoquan_data/tests/local_contract/download/test_source_quality_gate__local_contract_test.py quwoquan_data/tests/local_contract/download/test_auto_research_article_homepage__local_contract_test.py quwoquan_data/tests/local_contract/download/test_auto_research_image_lane__local_contract_test.py -q

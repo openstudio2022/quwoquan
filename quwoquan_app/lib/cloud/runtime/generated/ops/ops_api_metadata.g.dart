@@ -8,44 +8,63 @@ class OpsApiMetadata {
 
   static const String domain = 'ops';
   static const List<String> apiPrefixes = <String>[
+    '/v1/control-plane',
     '/v1/ops',
   ];
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
-    'AssignBucket': '/v1/ops/experiments/{experimentId}/assign',
-    'GetBucket': '/v1/ops/experiments/{experimentId}/bucket',
+    'AssignExperimentVariant': '/v1/ops/experiments/{experimentId}/assignment',
     'GetEventDrilldown': '/v1/ops/events/drilldown',
     'GetEventSummary': '/v1/ops/events/summary',
+    'GetExperimentAssignment': '/v1/ops/experiments/{experimentId}/assignment',
     'GetExperimentStats': '/v1/ops/experiments/{experimentId}/stats',
     'GetVisitStats': '/v1/ops/visits/stats',
+    'ListConfigLayers': '/v1/control-plane/platform/configs/layers',
+    'ListExperiments': '/v1/control-plane/product/experiments',
+    'ListServiceConfigs': '/v1/control-plane/platform/configs',
     'RecordVisit': '/v1/ops/visits',
     'ReportEventBatch': '/v1/ops/events',
+    'ResolveEffectiveConfig': '/v1/control-plane/platform/configs/resolve',
+    'UpdateExperimentRollout': '/v1/control-plane/product/experiments/{experimentId}:rollout',
+    'UpdateServiceConfig': '/v1/control-plane/platform/configs/{configKey}:update',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
-    'AssignBucket': 'POST',
-    'GetBucket': 'GET',
+    'AssignExperimentVariant': 'POST',
     'GetEventDrilldown': 'GET',
     'GetEventSummary': 'GET',
+    'GetExperimentAssignment': 'GET',
     'GetExperimentStats': 'GET',
     'GetVisitStats': 'GET',
+    'ListConfigLayers': 'GET',
+    'ListExperiments': 'GET',
+    'ListServiceConfigs': 'GET',
     'RecordVisit': 'POST',
     'ReportEventBatch': 'POST',
+    'ResolveEffectiveConfig': 'GET',
+    'UpdateExperimentRollout': 'POST',
+    'UpdateServiceConfig': 'POST',
   };
 
   /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
   static const Map<String, String> operationToAuthMode = <String, String>{
-    'AssignBucket': 'public',
-    'GetBucket': 'public',
-    'GetEventDrilldown': 'public',
-    'GetEventSummary': 'public',
-    'GetExperimentStats': 'public',
-    'GetVisitStats': 'public',
-    'RecordVisit': 'public',
-    'ReportEventBatch': 'public',
+    'AssignExperimentVariant': 'required',
+    'GetEventDrilldown': 'required',
+    'GetEventSummary': 'required',
+    'GetExperimentAssignment': 'required',
+    'GetExperimentStats': 'required',
+    'GetVisitStats': 'required',
+    'ListConfigLayers': 'required',
+    'ListExperiments': 'required',
+    'ListServiceConfigs': 'required',
+    'RecordVisit': 'required',
+    'ReportEventBatch': 'required',
+    'ResolveEffectiveConfig': 'required',
+    'UpdateExperimentRollout': 'required',
+    'UpdateServiceConfig': 'required',
   };
 
-  /// 响应读模型：operation -> 端侧 DTO 类名（service.yaml response_body 真相源，仅 object/page 形态）。
+  /// 已绑定端侧强类型的响应读模型：operation -> Dart 契约类名。
   static const Map<String, String> operationToResponseModel = <String, String>{
   };
 
@@ -53,29 +72,35 @@ class OpsApiMetadata {
   static const Map<String, String> operationToResponseKind = <String, String>{
   };
 
-  static const String assignBucketOperation = 'AssignBucket';
-  static const String getBucketOperation = 'GetBucket';
+  static const String assignExperimentVariantOperation = 'AssignExperimentVariant';
   static const String getEventDrilldownOperation = 'GetEventDrilldown';
   static const String getEventSummaryOperation = 'GetEventSummary';
+  static const String getExperimentAssignmentOperation = 'GetExperimentAssignment';
   static const String getExperimentStatsOperation = 'GetExperimentStats';
   static const String getVisitStatsOperation = 'GetVisitStats';
+  static const String listConfigLayersOperation = 'ListConfigLayers';
+  static const String listExperimentsOperation = 'ListExperiments';
+  static const String listServiceConfigsOperation = 'ListServiceConfigs';
   static const String recordVisitOperation = 'RecordVisit';
   static const String reportEventBatchOperation = 'ReportEventBatch';
+  static const String resolveEffectiveConfigOperation = 'ResolveEffectiveConfig';
+  static const String updateExperimentRolloutOperation = 'UpdateExperimentRollout';
+  static const String updateServiceConfigOperation = 'UpdateServiceConfig';
 
-  static const String assignBucketPathTemplate = '/v1/ops/experiments/{experimentId}/assign';
-  static String assignBucketPath({required String experimentId}) {
-    return _fillPath(assignBucketPathTemplate, <String, String>{
-      'experimentId': experimentId,
-    });
-  }
-  static const String getBucketPathTemplate = '/v1/ops/experiments/{experimentId}/bucket';
-  static String getBucketPath({required String experimentId}) {
-    return _fillPath(getBucketPathTemplate, <String, String>{
+  static const String assignExperimentVariantPathTemplate = '/v1/ops/experiments/{experimentId}/assignment';
+  static String assignExperimentVariantPath({required String experimentId}) {
+    return _fillPath(assignExperimentVariantPathTemplate, <String, String>{
       'experimentId': experimentId,
     });
   }
   static const String getEventDrilldownPath = '/v1/ops/events/drilldown';
   static const String getEventSummaryPath = '/v1/ops/events/summary';
+  static const String getExperimentAssignmentPathTemplate = '/v1/ops/experiments/{experimentId}/assignment';
+  static String getExperimentAssignmentPath({required String experimentId}) {
+    return _fillPath(getExperimentAssignmentPathTemplate, <String, String>{
+      'experimentId': experimentId,
+    });
+  }
   static const String getExperimentStatsPathTemplate = '/v1/ops/experiments/{experimentId}/stats';
   static String getExperimentStatsPath({required String experimentId}) {
     return _fillPath(getExperimentStatsPathTemplate, <String, String>{
@@ -83,8 +108,24 @@ class OpsApiMetadata {
     });
   }
   static const String getVisitStatsPath = '/v1/ops/visits/stats';
+  static const String listConfigLayersPath = '/v1/control-plane/platform/configs/layers';
+  static const String listExperimentsPath = '/v1/control-plane/product/experiments';
+  static const String listServiceConfigsPath = '/v1/control-plane/platform/configs';
   static const String recordVisitPath = '/v1/ops/visits';
   static const String reportEventBatchPath = '/v1/ops/events';
+  static const String resolveEffectiveConfigPath = '/v1/control-plane/platform/configs/resolve';
+  static const String updateExperimentRolloutPathTemplate = '/v1/control-plane/product/experiments/{experimentId}:rollout';
+  static String updateExperimentRolloutPath({required String experimentId}) {
+    return _fillPath(updateExperimentRolloutPathTemplate, <String, String>{
+      'experimentId': experimentId,
+    });
+  }
+  static const String updateServiceConfigPathTemplate = '/v1/control-plane/platform/configs/{configKey}:update';
+  static String updateServiceConfigPath({required String configKey}) {
+    return _fillPath(updateServiceConfigPathTemplate, <String, String>{
+      'configKey': configKey,
+    });
+  }
 
   static String _fillPath(String template, Map<String, String> params) {
     var path = template;

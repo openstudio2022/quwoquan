@@ -22,9 +22,9 @@
 - `quwoquan_app/lib/cloud/services/chat/chat_repository_api.dart`、`remote/chat_repository_remote.dart`、`mock/chat_repository_mock.dart`
 - `quwoquan_app/test/support/**`、`quwoquan_app/lib/core/data_source/README.md`
 - `quwoquan_app/test/local_contract/app/smoke/app_bootstrap_smoke__local_contract_test.dart`
-- `specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/nine-session-rollout-plan.md`
+- `specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/nine-session-rollout-content.execution.planning.md`
 - `specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/tasks.md`（**M8**）
-- `specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/plan.yaml`（**slice-6** 已合入 — §5.1 规格/流程基线）
+- `specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/content.execution.planning.yaml`（**slice-6** 已合入 — §5.1 规格/流程基线）
 
 ## 与 CR-20260330-011 的分工
 

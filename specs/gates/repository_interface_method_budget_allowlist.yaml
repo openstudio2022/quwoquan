@@ -1,10 +1,6 @@
 _comment: R02 Repository 接口方法数预算（ratchet 只降不升）。由 verify_repository_interface_method_budget.py --write-baseline 生成。ContentRepository 已拆 6 个 ≤10 子接口为达标模板；超标接口登记后只能降。
 method_threshold: 10
 allow:
-- interface: AppContentRepository
-  path: quwoquan_app/lib/core/services/app_content_repository.dart
-  max_methods: 22
-  reason: oversized-interface-budget (按 ContentRepository 模板拆窄接口，后续逐步降)
 - interface: AuthRepository
   path: quwoquan_app/lib/cloud/services/user/auth_repository.dart
   max_methods: 21

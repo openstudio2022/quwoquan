@@ -123,7 +123,6 @@ HomepageIntroduction _fallbackIntroductionFromHomepage(
       ),
     ],
     relatedObjects: homepage.relatedGroups,
-    sourceRefs: <String>['contract_fixture:entity.homepage.${homepage.id}'],
     updatedAt: homepage.updatedAt?.toUtc().toIso8601String() ?? '',
   );
 }

@@ -10,13 +10,32 @@ import (
 	"strings"
 	"time"
 
+	rtauth "quwoquan_service/runtime/auth"
 	rterr "quwoquan_service/runtime/errors"
 	"quwoquan_service/services/chat-service/internal/application"
 	model "quwoquan_service/services/chat-service/internal/domain/conversation/model"
 )
 
 func resolveUserID(r *http.Request) string {
-	return r.Header.Get("X-Client-User-Id")
+	if r != nil {
+		if principal, ok := rtauth.PrincipalFromContext(r.Context()); ok {
+			return strings.TrimSpace(principal.Actor.AccountID)
+		}
+	}
+	return strings.TrimSpace(r.Header.Get("X-Client-User-Id"))
+}
+
+// resolvePersonaID returns the verified business actor injected by the shared
+// bearer middleware. Message ownership is persona-scoped: using the owner ID
+// here makes a message writable by a different identity than the one recorded
+// by SendMessage.
+func resolvePersonaID(r *http.Request) string {
+	if r != nil {
+		if principal, ok := rtauth.PrincipalFromContext(r.Context()); ok {
+			return strings.TrimSpace(principal.Actor.PersonaID)
+		}
+	}
+	return strings.TrimSpace(r.Header.Get("X-Client-Sub-Account-Id"))
 }
 
 func writeJSON(w http.ResponseWriter, status int, data any) {
@@ -312,39 +331,33 @@ func (h *ChatHandler) resolveConversationAvatarURL(ctx context.Context, conv mod
 	return application.ResolveConversationAvatarURLWithMembers(conv, members)
 }
 
-func messageToWire(msg model.Message) map[string]any {
+func messageToWire(slice application.MessageSlice) map[string]any {
+	msg := slice.Message
 	wire := map[string]any{
-		"id":                 msg.ID,
-		"_id":                msg.ID,
-		"conversationId":     msg.ConversationId,
-		"seq":                msg.Seq,
-		"clientMsgId":        msg.ClientMsgId,
-		"senderId":           msg.SenderId,
-		"senderSubAccountId": msg.SenderId,
-		"type":               msg.Type,
-		"content":            msg.Content,
-		"mediaUrl":           msg.MediaUrl,
-		"media":              msg.Media,
-		"cardPayload":        msg.CardPayload,
-		"replyToMessageId":   msg.ReplyToMessageId,
-		"mentions":           msg.Mentions,
-		"status":             msg.Status,
-		"metadata":           msg.Metadata,
-		"timestamp":          msg.Timestamp,
+		"id":                        msg.ID,
+		"conversationId":            msg.ConversationID,
+		"seq":                       msg.Seq,
+		"clientMsgId":               msg.ClientMessageID,
+		"senderId":                  msg.SenderID,
+		"senderDisplayNameSnapshot": msg.SenderDisplayNameSnapshot,
+		"senderAvatarUrlSnapshot":   msg.SenderAvatarURLSnapshot,
+		"type":                      msg.Type,
+		"content":                   msg.Content,
+		"mediaAssetId":              msg.MediaAssetID,
+		"card":                      msg.Card,
+		"replyToMessageId":          msg.ReplyToMessageID,
+		"mentions":                  msg.Mentions,
+		"status":                    msg.Status,
+		"timestamp":                 msg.Timestamp,
+	}
+	if slice.Media != nil {
+		wire["mediaDeliveryUrl"] = slice.Media.DeliveryURL
+		wire["mediaType"] = slice.Media.MediaType
+		wire["mediaContentType"] = slice.Media.ContentType
+		wire["mediaFileSizeBytes"] = slice.Media.FileSize
 	}
 	if msg.RecalledAt != nil {
 		wire["recalledAt"] = msg.RecalledAt
-	}
-	if msg.Metadata != nil {
-		if displayName, ok := msg.Metadata["senderDisplayNameSnapshot"]; ok {
-			wire["senderDisplayNameSnapshot"] = displayName
-		}
-		if avatarUrl, ok := msg.Metadata["senderAvatarUrlSnapshot"]; ok {
-			wire["senderAvatarUrlSnapshot"] = avatarUrl
-		}
-		if contextVersion, ok := msg.Metadata["personaContextVersion"]; ok {
-			wire["personaContextVersion"] = contextVersion
-		}
 	}
 	return wire
 }
@@ -371,6 +384,22 @@ func readJSON(r *http.Request, v any) error {
 		return err
 	}
 	return json.Unmarshal(body, v)
+}
+
+func readStrictJSON(r *http.Request, v any) error {
+	decoder := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(v); err != nil {
+		return err
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		if err == nil {
+			return fmt.Errorf("request body must contain exactly one JSON value")
+		}
+		return err
+	}
+	return nil
 }
 
 func queryInt(r *http.Request, key string, defaultVal int) int {

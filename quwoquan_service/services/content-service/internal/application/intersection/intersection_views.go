@@ -12,10 +12,11 @@ type IntersectionReasonView struct {
 	Dimension                 string                               `json:"dimension"`
 	DisplayName               string                               `json:"displayName"`
 	AvatarURL                 string                               `json:"avatarUrl"`
-	PrimaryText               string                               `json:"primaryText"`   // 主交集结论句（蓝色，云侧产出，端只读直出）
-	SecondaryText             string                               `json:"secondaryText"` // 副交集辅助说明（灰色；缺省端不展示）
-	WeightTier                string                               `json:"weightTier"`    // light | heavy（内容卡交集轻重等级，云侧离散产出）
-	ObjectKind                string                               `json:"objectKind"`    // person | circle | school | place | enterprise
+	PrimaryText               string                               `json:"primaryText"`    // 主交集结论句（蓝色，云侧产出，端只读直出）
+	DisplayBinding            string                               `json:"displayBinding"` // explicit_link | host_implicit | host_plain | hidden
+	SecondaryText             string                               `json:"secondaryText"`  // 副交集辅助说明（灰色；缺省端不展示）
+	WeightTier                string                               `json:"weightTier"`     // light | heavy（内容卡交集轻重等级，云侧离散产出）
+	ObjectKind                string                               `json:"objectKind"`     // person | circle | school | place | enterprise
 	Strength                  float64                              `json:"strength"`
 	ConfidenceLabel           string                               `json:"confidenceLabel"`
 	ModelReasonBucket         string                               `json:"modelReasonBucket"`
@@ -49,7 +50,7 @@ type IntersectionReasonView struct {
 	DedupeKey                 string                               `json:"dedupeKey"`
 	AnchorUserWeight          float64                              `json:"anchorUserWeight"`
 	MutualCount               int                                  `json:"mutualCount"`
-	// 架构基线 v2（§21，对齐 recommendation/rec_model/projections/intersection_reason.yaml）：
+	// 架构基线 v2（§21，对齐 recommendation/model_release/projections/intersection_reason.yaml）：
 	// 边生命周期 / Graph 边权 / 类型图标 / 尾部对象视觉。
 	// lifecycleState/edgeWeight/previousStrength/strengthDelta 由异步投影真算填充（读路径零计算消费）；
 	// iconKey/objectVisual 由 Explain 管线确定性产出（缺省端有回退）。

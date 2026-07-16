@@ -11,6 +11,7 @@ import 'package:quwoquan_app/app/navigation/main_tab_registry.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/shell/main_app_shell.dart';
 import 'package:quwoquan_app/ui/user/pages/other_profile_page.dart';
+import 'package:quwoquan_app/ui/welcome/welcome_motion_timeline.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/models/start_group_chat_route_extra.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
@@ -23,6 +24,7 @@ import 'package:quwoquan_app/ui/discovery/pages/unified_media_viewer_page.dart';
 import 'package:quwoquan_app/ui/discovery/pages/work_browser_entry_page.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_detail_page.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_stats_page.dart';
+import 'package:quwoquan_app/ui/circle/pages/circles_page.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_draft_picker_flow.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_entry_sheet.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
@@ -35,7 +37,7 @@ import 'package:quwoquan_app/ui/settings/pages/settings_dark_mode_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_permissions_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_conversation_page.dart';
-import 'package:quwoquan_app/ui/chat/pages/chat_detail_page.dart';
+import 'package:quwoquan_app/ui/chat/pages/chat_conversation_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_settings_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/group_manage_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/transfer_ownership_page.dart';
@@ -128,11 +130,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       if (done && loc == AppRoutePaths.welcome) {
         return AppRoutePaths.home;
       }
-      if (done &&
-          auth.isAuthenticated &&
-          loc == AppRoutePaths.loginPathTemplate) {
-        return AppRoutePaths.home;
-      }
+      // 登录成功目标只由 LoginFrameHost._completeLogin 提交一次；路由守卫不得
+      // 同时把 /login 写回首页，否则会与 redirect/continuation 竞争。
       // 防自重定向：登录页本身永不再被路由守卫拦截，否则 login→login 死循环。
       if (done && loc == AppRoutePaths.loginPathTemplate) {
         return null;
@@ -148,7 +147,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             reasonName: gate.name,
             redirect: state.uri.toString(),
             dismissFallback: AppRoutePaths.home,
-            allowGuestDismissPop: false,
+            dismissPolicy: LoginDismissPolicy.safeFallback,
           );
         }
       }
@@ -161,6 +160,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           key: state.pageKey,
           child: Consumer(
             builder: (context, ref, _) => WelcomeScreen(
+              flowMode: WelcomeFlowMode.entry,
               onFinish: () {
                 _completeWelcome(ref);
               },
@@ -178,7 +178,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             redirect: state.uri.queryParameters['redirect'],
             dismissFallback:
                 state.uri.queryParameters[loginDismissFallbackQueryParam],
-            allowGuestDismissPop: loginGuestDismissCanPopFromQuery(
+            dismissPolicy: loginDismissPolicyFromQuery(
               state.uri.queryParameters[loginGuestDismissPopQueryParam],
             ),
           ),
@@ -241,13 +241,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             ),
           ),
           GoRoute(
-            path: AppRoutePaths.circles,
-            pageBuilder: (context, state) => NoTransitionPage(
-              key: state.pageKey,
-              child: const SizedBox.shrink(), // 圈子独立列表页在 MainAppShell 中渲染
-            ),
-          ),
-          GoRoute(
             path: AppRoutePaths.chat,
             pageBuilder: (context, state) => NoTransitionPage(
               key: state.pageKey,
@@ -274,6 +267,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             redirect: (context, state) => AppRoutePaths.assistantPersonal,
           ),
         ],
+      ),
+      GoRoute(
+        path: AppRoutePaths.circles,
+        pageBuilder: (context, state) =>
+            appRoutePage<void>(state: state, child: const CirclesPage()),
       ),
       GoRoute(
         path: AppRoutePaths.startGroupChat,
@@ -862,10 +860,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           }
           return appRoutePage<void>(
             state: state,
-            child: ChatDetailPage(
+            child: ChatConversationPage(
               conversationId: id,
               onBack: handleBack,
-              assistantOpenContext: assistantOpenContext,
               searchAnchorContext: searchAnchorContext,
             ),
           );

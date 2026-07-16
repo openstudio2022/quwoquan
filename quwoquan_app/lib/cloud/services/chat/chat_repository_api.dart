@@ -2,7 +2,6 @@ import 'package:quwoquan_app/cloud/chat/models/chat_contact_tab_row_dtos.dart';
 import 'package:quwoquan_app/cloud/chat/models/chat_conversation_timestamp_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/chat_message_receipt_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
-import 'package:quwoquan_app/cloud/chat/models/send_message_response.dart';
 import 'package:quwoquan_app/cloud/chat/models/sync_response.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_search_item_dto.g.dart';
@@ -15,7 +14,6 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/contact_home_row_dto.g
 import 'package:quwoquan_app/cloud/runtime/generated/chat/group_home_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/message_home_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/selectable_group_conversation_row_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
 
@@ -120,22 +118,6 @@ abstract class ChatMessageRepository {
   Future<List<MessageSearchItemView>> searchMessages({
     required String query,
     int limit = CloudApiDefaults.pageLimit,
-  });
-
-  Future<SendMessageResponse> sendMessage({
-    required String conversationId,
-    required String type,
-    required String content,
-    String? mediaUrl,
-    CloudJsonMap? media,
-    CloudJsonMap? cardPayload,
-    String? replyToMessageId,
-    List<String>? mentions,
-    String? senderSubAccountId,
-    String? personaContextVersion,
-    String? senderDisplayNameSnapshot,
-    String? senderAvatarUrlSnapshot,
-    required String clientMsgId,
   });
 
   Future<void> recallMessage({

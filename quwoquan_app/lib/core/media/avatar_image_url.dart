@@ -184,12 +184,44 @@ List<String> _mediaUrlCandidates(
 }) {
   final cdn = _normalizeBase(avatarCdnBaseUrl);
   final gateway = _normalizeBase(gatewayBaseUrl);
-  return _uniqueNonEmpty(<String>[
-    for (final base in _localEnvHostBaseCandidates(cdn))
-      _joinBaseAndPath(base, path),
-    for (final base in _localEnvHostBaseCandidates(gateway))
-      _joinBaseAndPath(base, path),
-  ]);
+  return _alignAvatarCandidatesToConfiguredTransport(
+    _uniqueNonEmpty(<String>[
+      for (final base in _localEnvHostBaseCandidates(cdn))
+        _joinBaseAndPath(base, path),
+      for (final base in _localEnvHostBaseCandidates(gateway))
+        _joinBaseAndPath(base, path),
+    ]),
+    gatewayBaseUrl: gatewayBaseUrl,
+    avatarCdnBaseUrl: avatarCdnBaseUrl,
+  );
+}
+
+List<String> _alignAvatarCandidatesToConfiguredTransport(
+  List<String> candidates, {
+  required String gatewayBaseUrl,
+  required String avatarCdnBaseUrl,
+}) {
+  final hosts = <String>{
+    Uri.tryParse(_normalizeBase(gatewayBaseUrl))?.host.toLowerCase() ?? '',
+    Uri.tryParse(_normalizeBase(avatarCdnBaseUrl))?.host.toLowerCase() ?? '',
+  }..remove('');
+  if (hosts.isEmpty ||
+      !hosts.every(
+        (host) =>
+            host == 'localhost' ||
+            host == '127.0.0.1' ||
+            host == '::1' ||
+            host == '10.0.2.2' ||
+            host.endsWith('.localhost'),
+      )) {
+    return candidates;
+  }
+  return _uniqueNonEmpty(
+    candidates.where((candidate) {
+      final host = Uri.tryParse(candidate)?.host.toLowerCase() ?? '';
+      return host.isEmpty || !_isLocalEnvTestHost(host);
+    }),
+  );
 }
 
 List<String> _localEnvHostBaseCandidates(String base) {
@@ -198,37 +230,43 @@ List<String> _localEnvHostBaseCandidates(String base) {
     return const <String>[];
   }
   final uri = Uri.tryParse(normalized);
-  if (uri == null) {
+  if (uri == null || uri.host.isEmpty) {
     return <String>[normalized];
   }
   final host = uri.host.toLowerCase();
   if (_isLocalEnvTestHost(host)) {
     return _uniqueNonEmpty(<String>[
-      uri
-          .replace(host: 'localhost')
-          .toString()
-          .replaceFirst(RegExp(r'/+$'), ''),
-      uri
-          .replace(host: '127.0.0.1')
-          .toString()
-          .replaceFirst(RegExp(r'/+$'), ''),
+      _rewriteAvatarHost(uri, '127.0.0.1'),
+      _rewriteAvatarHost(uri, 'localhost'),
       normalized,
     ]);
   }
-  if (host == '10.0.2.2' && uri.scheme.toLowerCase() == 'https') {
-    // 10.0.2.2 是 Android emulator 寻址别名；本地 HTTPS 媒体走 adb-reversed loopback。
+  if (host.endsWith('.localhost')) {
+    return <String>[normalized];
+  }
+  if (host == 'localhost' || host == '::1') {
     return _uniqueNonEmpty(<String>[
-      uri
-          .replace(host: 'localhost')
-          .toString()
-          .replaceFirst(RegExp(r'/+$'), ''),
-      uri
-          .replace(host: '127.0.0.1')
-          .toString()
-          .replaceFirst(RegExp(r'/+$'), ''),
+      _rewriteAvatarHost(uri, '127.0.0.1'),
+      _rewriteAvatarHost(uri, 'localhost'),
+    ]);
+  }
+  if (host == '127.0.0.1') {
+    return _uniqueNonEmpty(<String>[
+      normalized,
+      _rewriteAvatarHost(uri, 'localhost'),
+    ]);
+  }
+  if (host == '10.0.2.2' && uri.scheme.toLowerCase() == 'https') {
+    return _uniqueNonEmpty(<String>[
+      _rewriteAvatarHost(uri, '127.0.0.1'),
+      _rewriteAvatarHost(uri, 'localhost'),
     ]);
   }
   return <String>[normalized];
+}
+
+String _rewriteAvatarHost(Uri uri, String host) {
+  return uri.replace(host: host).toString().replaceFirst(RegExp(r'/+$'), '');
 }
 
 List<String> _uniqueNonEmpty(Iterable<String> values) {

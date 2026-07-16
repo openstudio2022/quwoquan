@@ -1,0 +1,2 @@
+ALTER TABLE otp_challenges
+  ADD COLUMN IF NOT EXISTS failed_attempts INTEGER NOT NULL DEFAULT 0;

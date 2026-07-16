@@ -28,6 +28,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
     return widget.initialAction == EditorStartAction.write &&
         state.editorKind == CreateEditorKind.text;
   }
+
   void _setMountedState(VoidCallback update) {
     if (!mounted) {
       return;
@@ -742,7 +743,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
         fullscreenDialog: true,
         builder: (_) => CreatePublishConfirmSheet(
           initialSettings: state.settings,
-          locationService: ref.read(createLocationServiceProvider),
+          locationCoordinator: ref.read(createLocationCoordinatorProvider),
           joinedCircles: joinedCircles,
           recommendedCircles: publishFlowRecommendedCircleOptions(
             ref.read(circleRepositoryProvider),

@@ -1,11 +1,14 @@
 version: 1
 domain: content
 aggregate_root: Post
+object_kind: aggregate_root
 
 description: |
   内容聚合。图片/视频/微趣/文章四种内容类型统一建模（contentType 判别，通用框架 + 按类型扩展）。
   设计详见 specs/feature-tree/discovery-content/content-type-framework/。
-  全部实体 MongoDB 存储，支撑高并发读写和水平扩展。
+  Comment、ContentReaction、MediaUploadSession、MediaAsset 与 CirclePostPlacement
+  按独立生命周期治理，不作为 Post 的无界聚合成员；站外分享只追加 OutboundShareFact。
+  MongoDB 存储支撑高并发读写和水平扩展。
   热数据 + 互动状态走 Redis 缓存，热点计数 Redis 原子递增后异步回写。
 
 storage_backend: mongodb
@@ -21,41 +24,27 @@ capabilities:
 taggable: true
 vector_enabled: true
 
-members:
-  - entity: Comment
-    relation: 1:N
-    cascade_delete: true
-    description: 评论与回复（楼中楼）
-
-  - entity: MediaAsset
-    relation: 1:N
-    cascade_delete: true
-    description: 媒体资源（异步处理管线）
-
-  - entity: ContentReaction
-    relation: 1:N
-    cascade_delete: true
-    description: 用户互动状态（点赞/转发/举报）
-
-  - entity: PostCircleDistribution
-    relation: 1:N
-    cascade_delete: true
-    description: 作者主动分发到圈子的关系（发布后可增删）
-
-  - entity: PostCircleReshare
-    relation: 1:N
-    cascade_delete: true
-    description: 用户转发到圈子的关系（与作者主动分发分离）
-
-  - entity: DeletedPostTombstone
-    relation: 1:1
-    cascade_delete: false
-    description: 已删除内容墓碑，用于 URL 访问返回“已删除”
+business_rules:
+  - draft 仅能由 author persona 修改、发布或删除
+  - PublishPost 必须绑定当前 postVersion + contentDigest 的 approved moderation case
+  - mediaAssetIds 必须全部 ready 且调用者拥有访问权限
+  - sourcePostId 仅表达引用发布，不复制或修改源 Post
+  - Post 不保存互动计数、Circle placement、审核状态、搜索向量或 URL 投影真相
+  - 所有命令使用 expectedVersion 与 idempotency receipt，并与 outbox 原子提交
+lifecycle:
+  states: [draft, published, deleted]
+  transitions:
+    - { from: none, command: CreatePost, to: draft }
+    - { from: draft, command: PublishPost, to: published }
+    - { from: draft, command: DeletePost, to: deleted }
+    - { from: published, command: DeletePost, to: deleted }
+  optimistic_concurrency: version
+  idempotency: command_receipt
 
 ddd_layer_mapping:
   domain_model: internal/domain/post/model
-  repository: internal/application/ports
-  repository_implementation: internal/infrastructure/persistence
+  ports: internal/domain/content/post/ports
+  persistence: internal/infrastructure/content/post/persistence
   application: internal/application/post
   search_projection: internal/application/searchprojection
   adapter_rest: internal/adapters/http

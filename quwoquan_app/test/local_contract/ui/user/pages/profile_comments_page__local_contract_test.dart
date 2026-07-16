@@ -6,10 +6,11 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
 import 'package:quwoquan_app/ui/user/pages/profile_comments_page.dart';
+import '../../../../support/cloud_services/content_facet_overrides.dart';
+import '../../../../support/cloud_services/test_content_comment_facet.dart';
 
 void main() {
   testWidgets('「查看原评论」深链使用统一方言并携带 profile-comments 入口来源', (tester) async {
@@ -44,8 +45,20 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          contentRepositoryProvider.overrideWithValue(
-            _SeededAuthoredCommentRepository(),
+          ...mockContentFacetOverrides(
+            MockContentRepository(),
+            commentFacet: TestContentCommentFacet(
+              actorId: 'me',
+              items: <ContentCommentListItem>[
+                testCommentItem(
+                  id: 'my_top_comment_1',
+                  postId: 'post_pc_1',
+                  authorId: 'me',
+                  authorDisplayNameSnapshot: '我',
+                  content: '我发出的一级评论',
+                ),
+              ],
+            ),
           ),
         ],
         child: MaterialApp.router(
@@ -73,11 +86,14 @@ void main() {
   });
 
   testWidgets('评论页加载失败时展示统一页态', (tester) async {
+    final comments = TestContentCommentFacet()
+      ..failure = StateError('comments unavailable');
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          contentRepositoryProvider.overrideWithValue(
-            _FailingCommentsRepository(),
+          ...mockContentFacetOverrides(
+            MockContentRepository(),
+            commentFacet: comments,
           ),
         ],
         child: const MaterialApp(home: ProfileCommentsPage()),
@@ -90,53 +106,4 @@ void main() {
     expect(find.text(UITextConstants.contentNotLoadedYet), findsOneWidget);
     expect(find.text(UITextConstants.tryAgain), findsOneWidget);
   });
-}
-
-class _SeededAuthoredCommentRepository extends MockContentRepository {
-  @override
-  Future<CommentPage> listCommentsByAuthor({
-    String? cursor,
-    int limit = 20,
-  }) async {
-    return CommentPage(
-      items: <CommentDto>[
-        CommentDto(
-          id: 'my_top_comment_1',
-          postId: 'post_pc_1',
-          authorId: 'me',
-          displayName: '我',
-          content: '我发出的一级评论',
-          createdAt: DateTime.utc(2026, 1, 1),
-        ),
-      ],
-      nextCursor: null,
-      totalCount: 1,
-    );
-  }
-
-  @override
-  Future<CommentPage> listCommentsForPostAuthor({
-    String? cursor,
-    int limit = 20,
-  }) async {
-    return CommentPage(items: const <CommentDto>[], nextCursor: null);
-  }
-}
-
-class _FailingCommentsRepository extends MockContentRepository {
-  @override
-  Future<CommentPage> listCommentsByAuthor({
-    String? cursor,
-    int limit = 20,
-  }) async {
-    throw StateError('comments unavailable');
-  }
-
-  @override
-  Future<CommentPage> listCommentsForPostAuthor({
-    String? cursor,
-    int limit = 20,
-  }) async {
-    throw StateError('comments unavailable');
-  }
 }

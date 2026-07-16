@@ -154,7 +154,7 @@ class _HomePageState extends ConsumerState<HomePage>
           AuthGateReason.followingFeed,
           redirect: AppRoutePaths.home,
           dismissFallback: AppRoutePaths.home,
-          allowGuestDismissPop: false,
+          dismissPolicy: LoginDismissPolicy.safeFallback,
         ),
       );
       return;

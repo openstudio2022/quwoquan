@@ -97,6 +97,10 @@ services:
       - PYTHONUNBUFFERED=1
       - MONGODB_URI=mongodb://mongodb:27017/?directConnection=true
       - APP_ENV=alpha
+      - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}
+      - AUTH_JWT_ISSUER=${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}
+      - AUTH_JWT_AUDIENCE=${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}
+      - AUTH_JWT_TOKEN_VERSION=${AUTH_JWT_TOKEN_VERSION:?AUTH_JWT_TOKEN_VERSION is required}
     volumes:
       - ./.local_models:/app/cache
     depends_on:

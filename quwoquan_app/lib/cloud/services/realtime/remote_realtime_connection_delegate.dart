@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:riverpod/misc.dart' show ProviderListenable;
+import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/feed_realtime_patch.g.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_config.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_delegate.dart';
@@ -12,14 +13,14 @@ import 'package:quwoquan_app/cloud/services/realtime/transport/websocket_transpo
 typedef RemoteRealtimeLongPollFactory =
     LongPollTransport Function({
       required RealtimeConfig config,
-      required String userId,
+      required CloudAuthTokenProvider authTokenProvider,
       required LongPollEventCallback onEvents,
     });
 
 typedef RemoteRealtimeWebSocketFactory =
     WebSocketTransport Function({
       required RealtimeConfig config,
-      required String userId,
+      required CloudAuthTokenProvider authTokenProvider,
       required RealtimeEventCallback onEvent,
       required VoidCallback onDisconnect,
     });
@@ -30,6 +31,7 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
     required this.read,
     ChatProviderInvalidate? invalidate,
     required this.currentUserIdResolver,
+    required this.authTokenProvider,
     this.onStateChanged,
     RealtimeConfig? config,
     RemoteRealtimeLongPollFactory? longPollFactory,
@@ -42,25 +44,25 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
 
   static LongPollTransport _defaultLongPollFactory({
     required RealtimeConfig config,
-    required String userId,
+    required CloudAuthTokenProvider authTokenProvider,
     required LongPollEventCallback onEvents,
   }) {
     return LongPollTransport(
       config: config,
-      userId: userId,
+      authTokenProvider: authTokenProvider,
       onEvents: onEvents,
     );
   }
 
   static WebSocketTransport _defaultWebSocketFactory({
     required RealtimeConfig config,
-    required String userId,
+    required CloudAuthTokenProvider authTokenProvider,
     required RealtimeEventCallback onEvent,
     required VoidCallback onDisconnect,
   }) {
     return WebSocketTransport(
       config: config,
-      userId: userId,
+      authTokenProvider: authTokenProvider,
       onEvent: onEvent,
       onDisconnect: onDisconnect,
     );
@@ -68,6 +70,7 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
 
   final T Function<T>(ProviderListenable<T> provider) read;
   final String Function() currentUserIdResolver;
+  final CloudAuthTokenProvider authTokenProvider;
   final RealtimeConnectionStateListener? onStateChanged;
   final RealtimeConfig _config;
   final RemoteRealtimeLongPollFactory _longPollFactory;
@@ -100,14 +103,14 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
   }
 
   @override
-  void onEnterChatDetail(String conversationId) {
+  void onEnterConversation(String conversationId) {
     _activeConversationId = conversationId;
     _cancelIdleTimer();
     _transitionTo(TransportState.active);
   }
 
   @override
-  void onLeaveChatDetail() {
+  void onLeaveConversation() {
     _activeConversationId = null;
     if (_state != TransportState.active) {
       _cancelIdleTimer();
@@ -164,7 +167,7 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
 
     _ws = _webSocketFactory(
       config: _config,
-      userId: _resolvedUserId,
+      authTokenProvider: authTokenProvider,
       onEvent: _onRealtimeEvent,
       onDisconnect: _onWebSocketDisconnect,
     );
@@ -210,7 +213,7 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
     _teardownLongPoll();
     _longPoll = _longPollFactory(
       config: _config,
-      userId: _resolvedUserId,
+      authTokenProvider: authTokenProvider,
       onEvents: _onLongPollEvents,
     );
     _longPoll!.start();
@@ -249,10 +252,5 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
     _cancelIdleTimer();
     _teardownWebSocket();
     _teardownLongPoll();
-  }
-
-  String get _resolvedUserId {
-    final userId = currentUserIdResolver().trim();
-    return userId.isNotEmpty ? userId : 'current_user';
   }
 }

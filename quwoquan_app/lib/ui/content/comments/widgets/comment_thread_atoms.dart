@@ -151,7 +151,7 @@ class _CommentAttachments extends StatelessWidget {
     this.compact = false,
   });
 
-  final List<CommentAttachmentDto> attachments;
+  final List<ContentCommentAttachment> attachments;
   final bool isDark;
   final bool compact;
 
@@ -210,14 +210,13 @@ class _ReplyPreviewItem extends ConsumerWidget {
   });
 
   final String postId;
-  final CommentDto reply;
+  final ContentCommentListItem reply;
   final bool isDark;
   final bool highlighted;
-  final ValueChanged<CommentDto>? onReplySelected;
+  final ValueChanged<ContentCommentListItem>? onReplySelected;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final ip = (reply.ipLocation ?? '').trim();
     final canReplyToReply = reply.canReply && !reply.canDelete;
     final body = Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -227,8 +226,8 @@ class _ReplyPreviewItem extends ConsumerWidget {
           onTap: canReplyToReply ? () => onReplySelected?.call(reply) : null,
           child: RoundedSquareAvatar(
             size: AppSpacing.commentReplyAvatarSize,
-            imageUrl: reply.avatarUrl,
-            name: reply.displayName,
+            imageUrl: reply.authorAvatarUrlSnapshot,
+            name: reply.authorDisplayNameSnapshot,
             borderRadius: AppSpacing.commentReplyAvatarSize / 2,
             backgroundColor: AppColorsFunctional.getColor(
               isDark,
@@ -252,7 +251,7 @@ class _ReplyPreviewItem extends ConsumerWidget {
                   TextSpan(
                     children: [
                       TextSpan(
-                        text: reply.displayName ?? reply.authorId,
+                        text: reply.authorDisplayNameSnapshot ?? reply.authorId,
                         style: TextStyle(
                           fontSize: AppTypography.sm,
                           color: AppColorsFunctional.getColor(
@@ -271,7 +270,6 @@ class _ReplyPreviewItem extends ConsumerWidget {
                           ),
                         ),
                       ),
-                      ..._replyTargetSpans(isDark, reply),
                       TextSpan(
                         text: reply.content,
                         style: TextStyle(
@@ -308,19 +306,6 @@ class _ReplyPreviewItem extends ConsumerWidget {
                       ),
                     ),
                   ),
-                  if (ip.isNotEmpty) ...[
-                    SizedBox(width: AppSpacing.sm),
-                    Text(
-                      ip,
-                      style: TextStyle(
-                        fontSize: AppTypography.xs,
-                        color: AppColorsFunctional.getColor(
-                          isDark,
-                          ColorType.foregroundTertiary,
-                        ),
-                      ),
-                    ),
-                  ],
                   if (reply.canReply) ...[
                     SizedBox(width: AppSpacing.md),
                     GestureDetector(
@@ -346,8 +331,10 @@ class _ReplyPreviewItem extends ConsumerWidget {
         ),
         SizedBox(width: AppSpacing.xs),
         _CommentReactionGroup(
-          likeSelected: reply.viewerReaction == 'like',
-          dislikeSelected: reply.viewerReaction == 'dislike',
+          likeSelected:
+              reply.viewerReaction == ContentCommentReactionValue.like,
+          dislikeSelected:
+              reply.viewerReaction == ContentCommentReactionValue.dislike,
           showDeleteAction: reply.canDelete,
           likeCount: reply.likeCount,
           dislikeCount: reply.dislikeCount,
@@ -384,28 +371,6 @@ class _ReplyPreviewItem extends ConsumerWidget {
       child: body,
     );
   }
-
-  List<InlineSpan> _replyTargetSpans(bool isDark, CommentDto reply) {
-    final targetName = reply.replyToDisplayName?.trim();
-    final isReplyingToNested =
-        (reply.replyToCommentId?.trim().isNotEmpty ?? false) &&
-        reply.replyToCommentId != reply.parentCommentId;
-    if (!isReplyingToNested || targetName == null || targetName.isEmpty) {
-      return const <InlineSpan>[];
-    }
-    return <InlineSpan>[
-      TextSpan(
-        text: '${UITextConstants.replyAction} @$targetName ',
-        style: TextStyle(
-          fontSize: AppTypography.sm,
-          color: AppColorsFunctional.getColor(
-            isDark,
-            ColorType.foregroundTertiary,
-          ),
-        ),
-      ),
-    ];
-  }
 }
 
 class _CommentActions extends StatelessWidget {
@@ -416,7 +381,7 @@ class _CommentActions extends StatelessWidget {
     this.onPin,
   });
 
-  final CommentDto comment;
+  final ContentCommentListItem comment;
   final bool isDark;
   final VoidCallback? onReply;
   final VoidCallback? onPin;
@@ -435,19 +400,6 @@ class _CommentActions extends StatelessWidget {
             ),
           ),
         ),
-        if ((comment.ipLocation ?? '').trim().isNotEmpty) ...[
-          SizedBox(width: AppSpacing.sm),
-          Text(
-            comment.ipLocation!.trim(),
-            style: TextStyle(
-              fontSize: AppTypography.xs,
-              color: AppColorsFunctional.getColor(
-                isDark,
-                ColorType.foregroundTertiary,
-              ),
-            ),
-          ),
-        ],
         if (onReply != null) ...[
           SizedBox(width: AppSpacing.md),
           GestureDetector(

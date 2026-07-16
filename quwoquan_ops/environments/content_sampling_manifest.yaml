@@ -1,6 +1,7 @@
 # 按环境内容采样真相源（唯一）。
 # publish/ 是单一发布主线（prod 全量）；其余环境按 sampleRatio + caps 确定性采样。
-# 采样产物 = publish/sample_bundles/{env}.json（桥契约），由服务侧 importer 消费灌入运行库。
+# 采样产物只进入 create-once `.qwq_output/data/releases/{releaseId}/sample_bundle.json`；
+# importer 只读同 release 的 environment-neutral desired_state，不读已退休 publish 路径。
 #
 # 采样确定性：seedHash(salt + ref) 映射到 [0,1)，< sampleRatio 入选；再按 bucket cap 截断。
 # 同一 ref 在同一 env/salt 下结果稳定，可重跑、可审计。

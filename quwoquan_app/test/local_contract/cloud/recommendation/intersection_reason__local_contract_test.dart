@@ -12,9 +12,22 @@ void main() {
         'displayName': '北京大学',
         'totalPointCount': 3,
         'strength': 0.9,
-        'primaryText': '你们都是北大的',
-        'actionType': 'follow',
-        'actionTargetId': 'user_x',
+        'primaryText': '推荐你了解北京大学',
+        'primarySpans': <Map<String, dynamic>>[
+          <String, dynamic>{'text': '推荐你了解', 'role': 'plain'},
+          <String, dynamic>{
+            'text': '北京大学',
+            'role': 'object',
+            'target': <String, dynamic>{
+              'objectType': 'homepage',
+              'objectId': 'homepage_pku',
+              'objectKind': 'school',
+              'routeId': 'homepageDetail',
+            },
+          },
+        ],
+        'actionType': 'view_object',
+        'actionTargetId': 'homepage_pku',
         'source': 'entityRef',
       });
       expect(r.dimension, 'identity');
@@ -22,8 +35,10 @@ void main() {
       expect(r.displayName, '北京大学');
       expect(r.totalPointCount, 3);
       expect(r.strength, 0.9);
-      expect(r.primaryText, '你们都是北大的');
-      expect(r.actionType, 'follow');
+      expect(r.primaryText, '推荐你了解北京大学');
+      expect(r.primarySpans, hasLength(2));
+      expect(r.primarySpans.last.target?.objectType, 'homepage');
+      expect(r.actionType, 'view_object');
       expect(r.source, 'entityRef');
     });
 
@@ -63,7 +78,42 @@ void main() {
 
     test('解析人数句逐人证据 actorEvidence', () {
       final r = IntersectionReason.fromMap(<String, dynamic>{
-        'primaryText': '联系人林清越等 2 人：1赞 1评',
+        'primaryText': '林清越等2位联系人关注了这篇内容',
+        'actionTargetId': 'post_1',
+        'representativeActor': <String, dynamic>{
+          'actorId': 'u_lin',
+          'displayName': '林清越',
+          'relationLabel': '联系人',
+          'target': <String, dynamic>{
+            'objectType': 'user',
+            'objectId': 'u_lin',
+            'objectKind': 'person',
+            'routeId': 'userProfile',
+          },
+        },
+        'primarySpans': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'text': '林清越',
+            'role': 'object',
+            'target': <String, dynamic>{
+              'objectType': 'user',
+              'objectId': 'u_lin',
+              'objectKind': 'person',
+              'routeId': 'userProfile',
+            },
+          },
+          <String, dynamic>{'text': '等2位联系人关注了', 'role': 'plain'},
+          <String, dynamic>{
+            'text': '这篇内容',
+            'role': 'object',
+            'target': <String, dynamic>{
+              'objectType': 'post',
+              'objectId': 'post_1',
+              'objectKind': 'post',
+              'routeId': 'postDetail',
+            },
+          },
+        ],
         'actorEvidenceTotalCount': 2,
         'actorEvidenceCompleteness': 'complete',
         'actorEvidence': <Map<String, dynamic>>[
@@ -77,6 +127,7 @@ void main() {
             'actionSummaryText': '点赞了这条记录',
             'likeCount': 1,
             'target': <String, dynamic>{
+              'objectType': 'user',
               'objectId': 'u_lin',
               'objectKind': 'person',
               'routeId': 'userProfile',
@@ -110,6 +161,9 @@ void main() {
       expect(r.actorEvidence.first.target?.routeId, 'userProfile');
       expect(r.actorEvidence.last.relationLabel, '你关注的人');
       expect(r.actorEvidence.last.commentCount, 1);
+      expect(r.representativeActor?.displayName, '林清越');
+      expect(r.representativeActor?.target?.objectType, 'user');
+      expect(r.primarySpans.map((span) => span.text).join(), r.primaryText);
     });
 
     test('toMap round-trip 保持字段', () {

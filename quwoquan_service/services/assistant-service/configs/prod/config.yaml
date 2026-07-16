@@ -30,3 +30,7 @@ model_provider:
 search_provider:
   provider: duckduckgo_html
   timeout_ms: 30000
+
+notification_service:
+  base_url: "http://notification-service:18087"
+  timeout_ms: 5000

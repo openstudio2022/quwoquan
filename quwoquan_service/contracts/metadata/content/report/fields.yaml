@@ -10,6 +10,15 @@ fields:
     api_exposure: read
     ops_exposure: read
 
+  - name: version
+    type: int
+    constraints: [NOT_NULL, DEFAULT_1]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: Report 乐观并发版本；每次状态迁移原子递增
+
   - name: reporterId
     type: string
     constraints: [NOT_NULL]
@@ -79,6 +88,14 @@ fields:
     ops_exposure: read_write
 
   - name: createdAt
+    type: timestamp
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: updatedAt
     type: timestamp
     constraints: [NOT_NULL]
     classification: PUBLIC

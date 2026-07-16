@@ -1,19 +1,71 @@
 version: 1
-entity: VisitRecord
 
 service:
   name: product-ops
   domain: ops
+  owner: platform-ops-team
+  commercial_defaults:
+    status: blocked
+    block_reason: canonical operation awaits object-centered commercial migration
+    gap_id: OPS_VISIT_RECORD_COMMERCIAL_EVIDENCE
+    target_story: app-cloud-business-object-commercial-closure
 
 api_routes:
   - method: POST
     path: /v1/ops/visits
     operation: RecordVisit
-    description: 记录访问
+    actor: persona_or_device
+    application:
+      kind: command
+      facet: VisitRecordCommandFacade
+      method: append
+      append_sink: VisitRecord
+      mutation_target: VisitRecord
+      invariant_target: VisitRecord
+    authorization:
+      principal: public
+      ownership_policy: authenticated_persona_or_derived_device_actor
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - OPS.USER.unauthorized
+      - OPS.USER.invalid_argument
+      - OPS.SYSTEM.storage_write_failed
+    privacy:
+      request_classification: SENSITIVE
+      response_classification: PUBLIC
+      log_policy: redacted
+    telemetry:
+      metric: ops_visit_record
+      trace: true
+      attributes: [actor_dimension, target_type, outcome]
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    description: 记录访问；服务端从已验证主体派生访问 actor，拒绝客户端指定 userId。
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: GET
     path: /v1/ops/visits/stats
     operation: GetVisitStats
+    actor: account
+    application:
+      kind: query
+      facet: VisitAnalyticsQueryFacade
+      method: getStats
+      reader: VisitStatsReader
+      slice: VisitStatsSlice
     description: 访问统计（运营）
 
 consumers:

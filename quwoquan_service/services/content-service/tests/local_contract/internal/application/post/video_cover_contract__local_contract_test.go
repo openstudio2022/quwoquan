@@ -2,6 +2,7 @@ package local_contract
 
 import (
 	"context"
+	"quwoquan_service/services/content-service/internal/application/commandmeta"
 	feedapp "quwoquan_service/services/content-service/internal/application/feed"
 	postapp "quwoquan_service/services/content-service/internal/application/post"
 	"strings"
@@ -10,33 +11,23 @@ import (
 
 	rtrec "quwoquan_service/runtime/recommendation"
 	rtredis "quwoquan_service/runtime/redis"
-	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
-	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
+	"quwoquan_service/services/content-service/internal/testsupport"
 )
-
-type videoCoverFeedReader struct {
-	store *persistence.PostStore
-}
-
-func (r videoCoverFeedReader) GetByID(ctx context.Context, id string) (*postmodel.Post, bool) {
-	return r.store.FindByID(ctx, id)
-}
-
-func (r videoCoverFeedReader) ListPublished(ctx context.Context, limit int, cursor string) []postmodel.Post {
-	return r.store.ListPublished(ctx, limit, cursor)
-}
 
 func TestVideoCoverContractLocalContract(t *testing.T) {
 	ctx := context.Background()
-	store := persistence.NewPostStore(nil)
-	postService := postapp.NewPostService(store)
+	store := testsupport.NewPostStore(nil)
+	postService := postapp.NewPostService(postapp.BindDataPorts(store))
 
-	post, err := postService.CreatePost(ctx, map[string]any{
-		"contentType": "video",
-		"authorId":    "author_video_cover",
-		"videoUrl":    "https://media.fixture.test/videos/trip.mp4",
-		"visibility":  "public",
-	})
+	post, err := postService.CreatePost(
+		commandmeta.WithIdempotencyKey(ctx, "video-cover-create"),
+		map[string]any{
+			"contentType": "video",
+			"authorId":    "author_video_cover",
+			"videoUrl":    "https://media.fixture.test/videos/trip.mp4",
+			"visibility":  "public",
+		},
+	)
 	if err != nil {
 		t.Fatalf("CreatePost(video): %v", err)
 	}
@@ -53,7 +44,12 @@ func TestVideoCoverContractLocalContract(t *testing.T) {
 		t.Fatalf("derived thumbnailUrl must be a stable thumb variant, got %q", post.ThumbnailUrl)
 	}
 
-	if _, err := postService.PublishPost(ctx, post.ID, map[string]any{"visibility": "public"}); err != nil {
+	if _, err := postService.PublishPost(
+		commandmeta.WithIdempotencyKey(ctx, "video-cover-publish"),
+		post.ID,
+		"author_video_cover",
+		map[string]any{"visibility": "public"},
+	); err != nil {
 		t.Fatalf("PublishPost(video): %v", err)
 	}
 
@@ -63,10 +59,11 @@ func TestVideoCoverContractLocalContract(t *testing.T) {
 	}()
 	hotPath := rtrec.NewHotPath(rtredis.NewRecAdapter(router.Scene("rec")))
 	engine := rtrec.NewEngine(rtrec.NewSessionCache(hotPath, 2*time.Second, 1000), nil)
-	feedService := feedapp.NewFeedService(engine, videoCoverFeedReader{store: store})
+	feedService := feedapp.NewFeedService(engine, testsupport.NewPostFeedReader(store))
 
 	resp, err := feedService.ListFeed(ctx, feedapp.ListFeedRequest{
 		UserID: "viewer_video_cover",
+		Type:   "video",
 		Limit:  10,
 	})
 	if err != nil {

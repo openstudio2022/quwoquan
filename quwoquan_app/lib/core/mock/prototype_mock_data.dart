@@ -9,7 +9,7 @@ import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 /// **弱类型策略**：记录 TSX 1:1 切片仍为 `Map<String, dynamic>`；**新增** mock 行在有 codegen DTO 时应优先 `Map<String, Object?>.from(dto.toMap())`（session_c §6）。
 ///
 /// **与内容域 canonical 数据**：发现区 Feed wire 已以 [ContentMockData]（`discovery_*`）为单一真相；
-/// [MockAppContentRepository.articleById] 已委托 [ContentMockData.articleWireByPostId]；本类仍保留 TSX 1:1
+/// 尚未完成对象化的 alpha fixture 原始输入；不得由 production composition 读取。
 /// `discovery*` 切片供非内容域原型使用。
 class PrototypeMockData {
   PrototypeMockData._();

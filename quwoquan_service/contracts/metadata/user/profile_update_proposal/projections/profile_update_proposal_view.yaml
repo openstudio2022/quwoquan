@@ -1,0 +1,27 @@
+version: 1
+read_model: ProfileUpdateProposalView
+
+description: >
+  owner-only proposal Reader 输出。ProfileChangeSet 在 wire 上展开为闭集字段，
+  禁止 Map<String,dynamic> 进入 public contract。
+source_entities: [ProfileUpdateProposal]
+consumers: [app]
+
+fields:
+  - { name: id, type: string }
+  - { name: personaId, type: string }
+  - { name: source, type: string }
+  - { name: status, type: string }
+  - { name: displayName, type: string, nullable: true }
+  - { name: bio, type: string, nullable: true }
+  - { name: avatarMediaAssetId, type: string, nullable: true }
+  - { name: backgroundMediaAssetId, type: string, nullable: true }
+  - { name: isPrivate, type: bool, nullable: true }
+  - { name: isolationLevel, type: string, nullable: true }
+  - { name: purposeHint, type: string, nullable: true }
+  - { name: reviewedBy, type: string, nullable: true }
+  - { name: targetPersonaExpectedVersion, type: int, nullable: true }
+  - { name: version, type: int }
+  - { name: createdAt, type: timestamp }
+  - { name: updatedAt, type: timestamp }
+  - { name: resolvedAt, type: timestamp, nullable: true }

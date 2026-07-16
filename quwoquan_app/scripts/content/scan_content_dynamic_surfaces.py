@@ -27,7 +27,6 @@ ROOTS = [
     APP / "ui" / "circle" / "widgets" / "section_creations.dart",
     APP / "cloud" / "runtime" / "models" / "content_post_detail_payload.dart",
     APP / "core" / "models" / "media_viewer_extra.dart",
-    APP / "core" / "services" / "app_content_repository.dart",
 ]
 
 

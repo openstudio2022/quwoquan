@@ -20,8 +20,11 @@ import 'package:quwoquan_app/core/design_system/spacing/discovery_feed_spacing.d
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
+import 'package:quwoquan_app/ui/user/models/share_interaction_models.dart';
+import 'package:quwoquan_app/ui/user/widgets/share_interaction/share_interaction_list.dart';
 import 'package:quwoquan_app/ui/user/utils/profile_comment_detail_route.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_secondary_tab_bar.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 part 'profile_interaction_tab_widgets.dart';
 part 'profile_interaction_tab_inline_actions.dart';
@@ -35,6 +38,7 @@ class ProfileInteractionTab extends ConsumerStatefulWidget {
     this.inlineScroll = false,
     this.secondaryTabBarKey,
     this.onSecondaryHorizontalDragEnd,
+    this.onDirectionSelected,
   });
 
   final ProfileMode mode;
@@ -43,6 +47,7 @@ class ProfileInteractionTab extends ConsumerStatefulWidget {
   final bool inlineScroll;
   final GlobalKey? secondaryTabBarKey;
   final GestureDragEndCallback? onSecondaryHorizontalDragEnd;
+  final ValueChanged<InteractionDirection>? onDirectionSelected;
 
   @override
   ConsumerState<ProfileInteractionTab> createState() =>
@@ -55,8 +60,10 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab>
       DiscoveryFeedSpacing.homeFeedArticleSideThumbAspectRatio;
   static const double _visitorFollowButtonWidth = 72.0;
 
-  List<UserProfileSubTabConfig> get _interactionFilters =>
-      UserProfileUIConfig.interactionSubTabs;
+  List<UserProfileSubTabConfig> get _interactionFilters => UserProfileUIConfig
+      .interactionSubTabs
+      .where((filter) => filter.visibleInMode(widget.mode.name))
+      .toList(growable: false);
 
   List<ProfileInteractionActivityViewData>? _items;
   final Map<String, bool> _visitorFollowingByUserId = <String, bool>{};
@@ -80,6 +87,15 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab>
     final subTab = profileState.interactionSubTab;
     _loadedDirection = direction;
     _loadedSubTab = subTab;
+    if (subTab == InteractionSubTab.shares) {
+      if (mounted) {
+        setState(() {
+          _items = null;
+          _loading = false;
+        });
+      }
+      return;
+    }
     final repo = ref.read(userProfileRepositoryProvider);
     setState(() {
       _loading = true;
@@ -154,10 +170,37 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab>
         isDark: widget.isDark,
         scrollKey: widget.secondaryTabBarKey,
         onHorizontalDragEnd: widget.onSecondaryHorizontalDragEnd,
+        trailing:
+            widget.mode == ProfileMode.mine &&
+                state.interactionSubTab == InteractionSubTab.shares
+            ? ProfileInteractionDirectionSwitch(
+                isDark: widget.isDark,
+                current: state.interactionDirection,
+                onSelected: (direction) {
+                  final callback = widget.onDirectionSelected;
+                  if (callback != null) {
+                    callback(direction);
+                  } else {
+                    notifier.setInteractionDirection(direction);
+                  }
+                },
+              )
+            : null,
       ),
     );
 
-    final body = _loading
+    final body =
+        state.interactionSubTab == InteractionSubTab.shares &&
+            widget.mode == ProfileMode.mine
+        ? ShareInteractionList(
+            direction:
+                state.interactionDirection == InteractionDirection.received
+                ? ShareInteractionDirection.received
+                : ShareInteractionDirection.initiated,
+            subAccountId: widget.userId,
+            inlineScroll: widget.inlineScroll,
+          )
+        : _loading
         ? Center(child: CupertinoActivityIndicator())
         : _items == null || _items!.isEmpty
         ? Center(
@@ -615,8 +658,6 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab>
 
   IconData _emptyStateIcon(InteractionSubTab subTab) {
     switch (subTab) {
-      case InteractionSubTab.all:
-        return CupertinoIcons.bell;
       case InteractionSubTab.likes:
         return CupertinoIcons.heart;
       case InteractionSubTab.comments:
@@ -633,8 +674,6 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab>
         .read(profileNotifierProvider(widget.userId))
         .interactionDirection;
     switch (subTab) {
-      case InteractionSubTab.all:
-        return UITextConstants.profileInteractionEmptyGuidance;
       case InteractionSubTab.likes:
         return UITextConstants.profileInteractionEmptyLikes;
       case InteractionSubTab.comments:

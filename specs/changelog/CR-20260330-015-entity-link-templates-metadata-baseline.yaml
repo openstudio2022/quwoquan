@@ -6,12 +6,12 @@ summary: |
   冻结 L3：以 contracts/metadata/_shared/link_templates.yaml 为链接结构唯一真相源；
   覆盖 post、circle、user、chat、entity_homepage；HTTPS origin 仅 Remote Config / dart-define，
   与 path_template 组合；navigation.route_id 对齐 app_routes.yaml。
-  baseline 交付文档与元数据文件；codegen 与调用点替换按 entity-link-templates-metadata/plan.yaml 在 /dev 执行。
+  baseline 交付文档与元数据文件；codegen 与调用点替换按 entity-link-templates-metadata/content.execution.planning.yaml 在 /dev 执行。
 artifacts:
   - specs/feature-tree/runtime/runtime-client-foundation/entity-link-templates-metadata/spec.md
   - specs/feature-tree/runtime/runtime-client-foundation/entity-link-templates-metadata/design.md
   - specs/feature-tree/runtime/runtime-client-foundation/entity-link-templates-metadata/acceptance.yaml
-  - specs/feature-tree/runtime/runtime-client-foundation/entity-link-templates-metadata/plan.yaml
+  - specs/feature-tree/runtime/runtime-client-foundation/entity-link-templates-metadata/content.execution.planning.yaml
   - specs/feature-tree/runtime/runtime-client-foundation/entity-link-templates-metadata/tasks.md
   - quwoquan_service/contracts/metadata/_shared/link_templates.yaml
   - quwoquan_service/tools/codegen_app_metadata/link_templates_codegen.go

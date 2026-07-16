@@ -30,8 +30,8 @@ scenarios:
   - name: follow_unfollow_idempotent
     command: FollowUser x2
     assertions:
-      - follow_edge_count_exactly_1
-      - event_UserFollowed_published_once
+      - persona_relationship_direction_count_exactly_1
+      - event_PersonaFollowStateChanged_published_once
 
   - name: get_appearance_settings
     command: GetAppearanceSettings

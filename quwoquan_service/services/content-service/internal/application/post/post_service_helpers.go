@@ -4,7 +4,6 @@ import (
 	"net/url"
 	rterr "quwoquan_service/runtime/errors"
 	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -62,36 +61,6 @@ func asStringSlice(v any) []string {
 	}
 }
 
-func diffCircleIDs(before []string, after []string) ([]string, []string) {
-	beforeSet := normalizedStringSet(before)
-	afterSet := normalizedStringSet(after)
-	added := make([]string, 0)
-	removed := make([]string, 0)
-	for id := range afterSet {
-		if !beforeSet[id] {
-			added = append(added, id)
-		}
-	}
-	for id := range beforeSet {
-		if !afterSet[id] {
-			removed = append(removed, id)
-		}
-	}
-	sort.Strings(added)
-	sort.Strings(removed)
-	return added, removed
-}
-
-func normalizedStringSet(values []string) map[string]bool {
-	out := make(map[string]bool, len(values))
-	for _, value := range values {
-		if id := strings.TrimSpace(value); id != "" {
-			out[id] = true
-		}
-	}
-	return out
-}
-
 func asMap(v any) map[string]any {
 	if m, ok := v.(map[string]any); ok {
 		return m
@@ -138,7 +107,6 @@ func projectionPayloadForPost(post *postmodel.Post) map[string]any {
 		"contentIdentity":    post.ContentIdentity,
 		"status":             post.Status,
 		"visibility":         normalizeVisibility(post.Visibility),
-		"circleIds":          asStringSlice(post.CircleIds),
 		"assistantUsePolicy": post.AssistantUsePolicy,
 		"publishedAt":        formatTimePtr(post.PublishedAt),
 		"createdAt":          formatTimePtr(post.CreatedAt),
@@ -158,7 +126,6 @@ func projectionPayloadForPost(post *postmodel.Post) map[string]any {
 		"tagRefs":            asStringSlice(post.TagRefs),
 		"entityRefs":         asStringSlice(post.EntityRefs),
 		"primaryHomepageId":  strings.TrimSpace(post.PrimaryHomepageId),
-		"canonicalEntityId":  strings.TrimSpace(post.CanonicalEntityId),
 	}
 }
 
@@ -250,71 +217,6 @@ func normalizePostObjectAnchors(post *postmodel.Post, payload map[string]any) {
 	} else {
 		post.EntityRefs = normalizeRuntimeEntityRefs(post.EntityRefs)
 	}
-	if canonicalEntityID := strings.TrimSpace(canonicalEntityIDFromPayload(payload)); canonicalEntityID != "" {
-		post.CanonicalEntityId = canonicalEntityID
-	} else if canonicalEntityID := strings.TrimSpace(canonicalEntityIDFromHomepage(post.PrimaryHomepageId, post.PrimaryHomepageType)); canonicalEntityID != "" {
-		post.CanonicalEntityId = canonicalEntityID
-	} else {
-		post.CanonicalEntityId = strings.TrimSpace(post.CanonicalEntityId)
-	}
-	if post.CanonicalEntityId != "" && !containsString(post.EntityRefs, post.CanonicalEntityId) {
-		post.EntityRefs = append([]string{post.CanonicalEntityId}, post.EntityRefs...)
-	}
-}
-
-func canonicalEntityIDFromPayload(payload map[string]any) string {
-	if payload == nil {
-		return ""
-	}
-	if explicit := strings.TrimSpace(asString(payload["canonicalEntityId"])); explicit != "" {
-		return explicit
-	}
-	snapshot := asMap(payload["primaryHomepageSnapshot"])
-	return strings.TrimSpace(asString(snapshot["canonicalEntityId"]))
-}
-
-func canonicalEntityIDFromHomepage(homepageID, homepageType string) string {
-	id := strings.TrimSpace(homepageID)
-	if id == "" {
-		return ""
-	}
-	normalizedType := strings.TrimSpace(homepageType)
-	if normalizedType == "" {
-		normalizedType = inferHomepageTypeFromID(id)
-	}
-	if normalizedType == "" {
-		return ""
-	}
-	trimmedID := strings.TrimSpace(strings.TrimPrefix(id, "homepage_"))
-	prefix := normalizedType + "_"
-	if strings.HasPrefix(trimmedID, prefix) {
-		trimmedID = strings.TrimPrefix(trimmedID, prefix)
-	}
-	trimmedID = strings.Trim(trimmedID, "_")
-	if trimmedID == "" {
-		return ""
-	}
-	return "entity:" + normalizedType + ":" + trimmedID
-}
-
-func inferHomepageTypeFromID(homepageID string) string {
-	id := strings.TrimSpace(homepageID)
-	switch {
-	case strings.HasPrefix(id, "homepage_sight_"):
-		return "sight"
-	case strings.HasPrefix(id, "homepage_restaurant_"):
-		return "restaurant"
-	case strings.HasPrefix(id, "homepage_hotel_"):
-		return "hotel"
-	case strings.HasPrefix(id, "homepage_vehicle_"):
-		return "vehicle"
-	case strings.HasPrefix(id, "fixture_homepage_travel_photo_"):
-		return "travel_photo"
-	case strings.HasPrefix(id, "fixture_homepage_university_"):
-		return "university"
-	default:
-		return ""
-	}
 }
 
 func normalizeRuntimeEntityRefs(refs []string) []string {
@@ -335,15 +237,6 @@ func normalizeRuntimeEntityRefs(refs []string) []string {
 		out = append(out, normalized)
 	}
 	return out
-}
-
-func containsString(items []string, want string) bool {
-	for _, item := range items {
-		if strings.TrimSpace(item) == want {
-			return true
-		}
-	}
-	return false
 }
 
 func sameStringSet(left, right []string) bool {
@@ -389,49 +282,28 @@ func normalizeAssistantUsePolicy(value string) string {
 }
 
 func normalizeVisibility(value string) string {
-	switch strings.TrimSpace(strings.ToLower(value)) {
+	normalized := strings.TrimSpace(strings.ToLower(value))
+	switch normalized {
 	case "", "public":
 		return "public"
 	case "private":
 		return "private"
-	case "circle_visible", "circle-visible", "circle":
-		return "circle_visible"
 	default:
-		return "public"
+		return normalized
 	}
 }
 
-func supportsCircleDistribution(visibility string) bool {
-	switch normalizeVisibility(visibility) {
-	case "public", "circle_visible":
-		return true
+func validateVisibility(value string) error {
+	switch normalizeVisibility(value) {
+	case "public", "private":
+		return nil
 	default:
-		return false
+		return rterr.NewInvalidArgument(
+			rterr.ModuleContent,
+			"内容可见性不合法",
+			"visibility must be public or private",
+		)
 	}
-}
-
-func sharesCircle(postCircleIDs, viewerCircleIDs []string) bool {
-	if len(postCircleIDs) == 0 || len(viewerCircleIDs) == 0 {
-		return false
-	}
-	allowed := make(map[string]struct{}, len(postCircleIDs))
-	for _, circleID := range postCircleIDs {
-		circleID = strings.TrimSpace(circleID)
-		if circleID == "" {
-			continue
-		}
-		allowed[circleID] = struct{}{}
-	}
-	for _, circleID := range viewerCircleIDs {
-		circleID = strings.TrimSpace(circleID)
-		if circleID == "" {
-			continue
-		}
-		if _, ok := allowed[circleID]; ok {
-			return true
-		}
-	}
-	return false
 }
 
 func validateContentIdentity(contentType, identity string) error {
@@ -491,9 +363,6 @@ func applyPostSettingsPayload(post *postmodel.Post, payload map[string]any) erro
 	if visibility, exists := payload["visibility"]; exists {
 		post.Visibility = normalizeVisibility(asString(visibility))
 	}
-	if circles, exists := payload["circleIds"]; exists {
-		post.CircleIds = asStringSlice(circles)
-	}
 	if assistantUsePolicy, exists := payload["assistantUsePolicy"]; exists {
 		post.AssistantUsePolicy = normalizeAssistantUsePolicy(
 			strings.TrimSpace(asString(assistantUsePolicy)),
@@ -509,14 +378,10 @@ func applyPostSettingsPayload(post *postmodel.Post, payload map[string]any) erro
 	if err := validateContentIdentity(post.ContentType, post.ContentIdentity); err != nil {
 		return err
 	}
-	post.Visibility = normalizeVisibility(post.Visibility)
-	if circles := asStringSlice(post.CircleIds); len(circles) > 0 && !supportsCircleDistribution(post.Visibility) {
-		return rterr.NewInvalidArgument(
-			rterr.ModuleContent,
-			"发布到圈子前需设置为公开或圈内可见",
-			"visibility must be public or circle_visible",
-		)
+	if err := validateVisibility(post.Visibility); err != nil {
+		return err
 	}
+	post.Visibility = normalizeVisibility(post.Visibility)
 	return nil
 }
 
@@ -597,6 +462,9 @@ func validateCreatePostPayload(post *postmodel.Post) error {
 	if err := validateContentIdentity(post.ContentType, post.ContentIdentity); err != nil {
 		return err
 	}
+	if err := validateVisibility(post.Visibility); err != nil {
+		return err
+	}
 	post.Visibility = normalizeVisibility(post.Visibility)
 	switch strings.TrimSpace(post.ContentType) {
 	case "micro":
@@ -631,13 +499,6 @@ func validateCreatePostPayload(post *postmodel.Post) error {
 		if !hasBody && !hasImages && !hasTitle {
 			return rterr.NewInvalidArgument(rterr.ModuleContent, "文章内容不能为空", "article requires title, body or image")
 		}
-	}
-	if circles := asStringSlice(post.CircleIds); len(circles) > 0 && !supportsCircleDistribution(post.Visibility) {
-		return rterr.NewInvalidArgument(
-			rterr.ModuleContent,
-			"发布到圈子前需设置为公开或圈内可见",
-			"visibility must be public or circle_visible",
-		)
 	}
 	return nil
 }

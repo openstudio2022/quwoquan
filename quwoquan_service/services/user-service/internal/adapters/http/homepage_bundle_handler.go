@@ -68,17 +68,17 @@ func (h *UserHandler) handleGetUserHomepageBundle(w http.ResponseWriter, r *http
 		relationToTarget = "self"
 	}
 	if !isGuest {
-		rel, relErr := h.follow.GetRelationship(r.Context(), viewerID, targetSubAccountID)
+		rel, relErr := h.relationship.GetRelationship(r.Context(), viewerID, targetSubAccountID)
 		if relErr != nil {
 			writeHTTPError(w, r, relErr)
 			return
 		}
-		isBlocked, blockErr := h.block.CheckBlocked(r.Context(), viewerID, targetSubAccountID)
+		isBlocked, blockErr := h.relationship.CheckBlocked(r.Context(), viewerID, targetSubAccountID)
 		if blockErr != nil {
 			writeHTTPError(w, r, blockErr)
 			return
 		}
-		isBlockedBy, blockedByErr := h.block.CheckBlocked(r.Context(), targetSubAccountID, viewerID)
+		isBlockedBy, blockedByErr := h.relationship.CheckBlocked(r.Context(), targetSubAccountID, viewerID)
 		if blockedByErr != nil {
 			writeHTTPError(w, r, blockedByErr)
 			return

@@ -1,10 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:uuid/uuid.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/app/navigation/main_tab_registry.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/home_channels_remote_override.dart';
@@ -17,8 +18,12 @@ import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart'
     show AppLogService, AppLogType, AppLogLevel, AppLogContext;
 import 'package:quwoquan_app/assistant/observability/logging/app_log_uploader.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
-import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
+import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
+import 'package:quwoquan_app/cloud/runtime/config/cloud_runtime_environment.dart';
+import 'package:quwoquan_app/cloud/runtime/context/actor_queue_partition.dart';
+import 'package:quwoquan_app/cloud/runtime/context/cloud_client_context.dart';
+import 'package:quwoquan_app/cloud/runtime/executor/cloud_operation_client_factory.dart';
+import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/cloud/runtime/models/app_remote_config_snapshot.dart';
 import 'package:quwoquan_app/cloud/runtime/models/comment_remote_config.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
@@ -26,31 +31,43 @@ import 'package:quwoquan_app/cloud/services/tag/tag_repository.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import 'package:quwoquan_app/cloud/remote/chat/message/message_remote.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_delegate.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_notifier.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
-import 'package:quwoquan_app/cloud/services/integration/integration_repository.dart';
-// 发布选点服务（content/entry）。注：实现暂位于 lib/ui/.../services，理想位置应为
-// lib/cloud/services/integration（属既有分层债，待用户确认后登记 backlog 再收敛）；
-// mode-switch provider 须集中在 core 以满足 verify_ui_app_data_source_mode_ratchet
-// （禁止 lib/ui 引用 appDataSourceModeProvider）。
-import 'package:quwoquan_app/ui/content/entry/services/publish_settings_services.dart';
-import 'package:quwoquan_app/cloud/services/notification/app_message_repository.dart';
-import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
+import 'package:quwoquan_app/core/application/content/create_location_coordinator.dart';
+import 'package:quwoquan_app/cloud/services/integration/remote/location_query_remote.dart';
+import 'package:quwoquan_app/cloud/services/notification/remote/app_message_facets_remote.dart';
 import 'package:quwoquan_app/cloud/services/ops/ops_visit_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/footprint_repository.dart';
+import 'package:quwoquan_app/cloud/services/content/remote/footprint_query_remote.dart';
+import 'package:quwoquan_app/cloud/services/content/remote/post_query_remote.dart';
+import 'package:quwoquan_app/cloud/services/content/remote/post_reader_remote.dart';
+import 'package:quwoquan_app/cloud/services/content/remote/comment_facets_remote.dart';
+import 'package:quwoquan_app/cloud/services/content/remote/post_reaction_facets_remote.dart';
+import 'package:quwoquan_app/cloud/remote/content/media/content_media_remote.dart';
+import 'package:quwoquan_app/cloud/remote/content/media/content_media_object_uploader.dart';
+import 'package:quwoquan_app/cloud/remote/content/media/local_media_upload_source.dart';
+import 'package:quwoquan_app/cloud/remote/content/outbound_share/outbound_share_remote.dart';
+import 'package:quwoquan_app/cloud/remote/content/post/post_lifecycle_remote.dart';
+import 'package:quwoquan_app/cloud/remote/circle/post_placement/post_placement_remote.dart';
+import 'package:quwoquan_app/cloud/remote/circle/membership/membership_remote.dart';
+import 'package:quwoquan_app/cloud/remote/circle/group/group_remote.dart';
+import 'package:quwoquan_app/cloud/remote/circle/group_membership/group_membership_remote.dart';
+import 'package:quwoquan_app/cloud/remote/circle/file/file_remote.dart';
+import 'package:quwoquan_app/cloud/remote/circle/behavior_fact/behavior_fact_remote.dart';
+import 'package:quwoquan_app/cloud/remote/user/profile_update_proposal/profile_update_proposal_remote.dart';
+import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';
-import 'package:quwoquan_app/cloud/services/content/report_repository.dart';
-import 'package:quwoquan_app/cloud/services/user/auth_repository.dart';
+import 'package:quwoquan_app/cloud/services/content/remote/report_command_remote.dart';
 import 'package:quwoquan_app/cloud/services/user/appearance_settings_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/block_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/call_settings_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/contact_discovery_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/greeting_repository.dart';
-import 'package:quwoquan_app/cloud/services/user/invite_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/keyword_block_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/following_subject_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
@@ -61,15 +78,17 @@ import 'package:quwoquan_app/cloud/services/user/user_sync_repository.dart';
 import 'package:quwoquan_app/cloud/services/rtc/rtc_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
-import 'package:quwoquan_app/core/auth/one_tap_login_channel.dart';
 import 'package:quwoquan_app/core/design_system/providers/theme_provider.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/models/client_state_sync.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/media/content_media_url.dart';
+import 'package:quwoquan_app/core/platform/location/geolocator_location_gateway.dart';
+import 'package:quwoquan_app/core/platform/location/location_gateway.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_service.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_sync_service.dart';
 import 'package:quwoquan_app/core/services/cache/cached_content_repository.dart';
+import 'package:quwoquan_app/core/services/cache/cached_content_post_reader.dart';
 import 'package:quwoquan_app/core/services/cache/cache_management_service.dart';
 import 'package:quwoquan_app/core/services/cache/cache_telemetry_sink.dart';
 import 'package:quwoquan_app/core/services/cache/content_cache_services.dart';
@@ -78,9 +97,13 @@ import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_sync_service.dart';
 import 'package:quwoquan_app/core/services/cache/local_circle_group_snapshot_store.dart';
 import 'package:quwoquan_app/core/services/cache/user_profile_cache_service.dart';
+import 'package:quwoquan_app/core/di/app_cloud_client_context_provider.dart';
+import 'package:quwoquan_app/core/di/app_cloud_operation_telemetry_sink.dart';
+import 'package:quwoquan_app/core/di/cloud_http_client_provider.dart';
+import 'package:quwoquan_app/core/di/ops_event_dependencies.dart';
 import 'package:quwoquan_app/core/di/cloud_repository_binding.dart';
 import 'package:quwoquan_app/core/services/app_remote_config_store.dart';
-import 'package:quwoquan_app/core/services/app_content_repository.dart';
+import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import 'package:quwoquan_app/core/services/remote_search_repository.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
 import 'package:quwoquan_app/core/services/visit_recorder_service.dart';
@@ -89,6 +112,7 @@ import 'package:quwoquan_app/core/trackers/journey_event_tracker.dart';
 import 'package:quwoquan_app/core/platform/platform_providers.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/core/models/user_models.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 // 跨平台防腐层 Provider（平台目标、能力契约、文件存储网关、原生桥）统一从
 // app_providers 再导出，业务层经同一入口消费能力位，禁止直接判断平台。
 export 'package:quwoquan_app/core/platform/platform_providers.dart'
@@ -99,10 +123,19 @@ export 'package:quwoquan_app/core/platform/platform_providers.dart'
         assistantLocalContextBridgeProvider,
         nativeAuthBridgeProvider,
         nativeShareBridgeProvider;
-
+export 'package:quwoquan_app/core/di/login_dependencies.dart'
+    show
+        authRepositoryProvider,
+        oneTapLoginClientProvider,
+        socialAuthorizationRepositoryProvider;
+export 'package:quwoquan_app/core/di/ops_event_dependencies.dart'
+    show opsEventRepositoryProvider;
 part 'app_providers_content_extras.dart';
+part 'app_providers_content_facets.dart';
+part 'app_providers_operations.dart';
 part 'app_providers_entity_extras.dart';
 part 'app_providers_client_sync.dart';
+part 'app_providers_circle_facets.dart';
 
 /// 主题相关的便捷Provider
 final isDarkProvider = Provider<bool>((ref) {
@@ -345,79 +378,6 @@ final appearanceSnapshotProvider = Provider<AppearanceSnapshot>((ref) {
   );
 });
 
-/// Shared CloudHttpClient with API latency instrumentation.
-///
-/// All remote repositories should prefer this over constructing their own
-/// CloudHttpClient, ensuring every HTTP call is metered for L1 monitoring.
-final cloudHttpClientProvider = Provider<CloudHttpClient>((ref) {
-  return CloudHttpClient(
-    authTokenProvider: ProviderBackedCloudAuthTokenProvider(
-      () => ref.read(authSessionControllerProvider).accessToken,
-    ),
-    onUnauthorizedRefresh: () => ref
-        .read(authSessionControllerProvider.notifier)
-        .refreshSessionIfNeeded(),
-    latencyObserver: (method, path, elapsedMs, statusCode) {
-      AppLogService.instance.writeEvent(
-        logType: AppLogType.perf,
-        level: statusCode >= 0 && statusCode < 400
-            ? AppLogLevel.info
-            : AppLogLevel.warn,
-        context: AppLogContext(
-          sessionId: AppTraceContextStore.instance.sessionId,
-          requestId: AppTraceContextStore.instance.newRequestId(),
-          target: 'cloud_api',
-          action: '$method $path',
-        ),
-        payload: <String, dynamic>{
-          'kind': 'api_latency',
-          'method': method,
-          'path': path,
-          'elapsedMs': elapsedMs,
-          'statusCode': statusCode,
-        },
-      );
-    },
-  );
-});
-
-final opsVisitRepositoryProvider = Provider<OpsVisitRepository>((ref) {
-  final mode = ref.watch(appDataSourceModeProvider);
-  if (mode == AppDataSourceMode.remote) {
-    return RemoteOpsVisitRepository(
-      httpClient: ref.watch(cloudHttpClientProvider),
-    );
-  }
-  return MockOpsVisitRepository();
-});
-
-final opsEventRepositoryProvider = Provider<OpsEventRepository>((ref) {
-  final mode = ref.watch(appDataSourceModeProvider);
-  if (mode == AppDataSourceMode.remote) {
-    final repo = RemoteOpsEventRepository(
-      httpClient: ref.watch(cloudHttpClientProvider),
-    );
-    ref.onDispose(repo.dispose);
-    return repo;
-  }
-  return MockOpsEventRepository();
-});
-
-/// 发布选点服务：按数据源模式在 Mock/Remote 间切换。
-///
-/// - mock（alpha/开发）→ [MockCreateLocationService]：本地 canonical POI，不发 HTTP、
-///   不依赖系统定位，杜绝「附近地点访问失败」整页断点。
-/// - remote（beta/gamma/prod）→ [RemoteCreateLocationService]：经 gateway/API + 系统定位。
-final createLocationServiceProvider = Provider<CreateLocationService>((ref) {
-  final mode = ref.watch(appDataSourceModeProvider);
-  if (mode == AppDataSourceMode.remote) {
-    return RemoteCreateLocationService(
-      httpClient: ref.watch(cloudHttpClientProvider),
-    );
-  }
-  return MockCreateLocationService();
-});
-
 /// AppLog 上传服务 — 定期将本地 ndjson 日志批量上传到 OpsEvent 后端。
 final appLogUploaderProvider = Provider<AppLogUploader>((ref) {
   final uploader = AppLogUploader(
@@ -546,7 +506,9 @@ class PersonalContentAccessNotifier
       );
     } catch (error) {
       state = state.copyWith(
+        granted: false,
         isHydrating: false,
+        source: 'remote_unavailable',
         errorMessage: runtimeErrorDisplayMessage(error),
       );
     }
@@ -814,7 +776,7 @@ class AppRemoteConfigNotifier extends Notifier<AppRemoteConfigState> {
     state = state.copyWith(isRefreshing: true, errorMessage: () => null);
     try {
       final remoteConfig = await ref
-          .read(contentRepositoryProvider)
+          .read(contentConfigRepositoryProvider)
           .getAppConfig();
       if (!ref.mounted) return;
       final snapshot = AppRemoteConfigSnapshot.fromWire(remoteConfig);
@@ -1107,25 +1069,19 @@ class UserRelationshipStateNotifier extends Notifier<UserRelationshipState> {
 class PostInteractionState {
   const PostInteractionState({
     this.likedPostIds = const <String>{},
-    this.sharedPostIds = const <String>{},
     this.likeCounts = const <String, int>{},
     this.confirmedShareCounts = const <String, int>{},
-    this.pendingShareDeltas = const <String, int>{},
     this.confirmedCommentCounts = const <String, int>{},
     this.pendingCommentDeltas = const <String, int>{},
   });
 
   final Set<String> likedPostIds;
-  final Set<String> sharedPostIds;
   final Map<String, int> likeCounts;
   final Map<String, int> confirmedShareCounts;
-  final Map<String, int> pendingShareDeltas;
   final Map<String, int> confirmedCommentCounts;
   final Map<String, int> pendingCommentDeltas;
 
   bool isLiked(String postId) => likedPostIds.contains(postId);
-  bool isShared(String postId) => sharedPostIds.contains(postId);
-
   bool hasLikeStateFor(String postId) {
     return likedPostIds.contains(postId) || likeCounts.containsKey(postId);
   }
@@ -1135,9 +1091,7 @@ class PostInteractionState {
   }
 
   int shareCountFor(String postId, {int fallback = 0}) {
-    final confirmed = confirmedShareCounts[postId] ?? fallback;
-    final pending = pendingShareDeltas[postId] ?? 0;
-    return math.max(0, confirmed + pending);
+    return confirmedShareCounts[postId] ?? fallback;
   }
 
   int commentCountFor(String postId, {int fallback = 0}) {
@@ -1148,19 +1102,15 @@ class PostInteractionState {
 
   PostInteractionState copyWith({
     Set<String>? likedPostIds,
-    Set<String>? sharedPostIds,
     Map<String, int>? likeCounts,
     Map<String, int>? confirmedShareCounts,
-    Map<String, int>? pendingShareDeltas,
     Map<String, int>? confirmedCommentCounts,
     Map<String, int>? pendingCommentDeltas,
   }) {
     return PostInteractionState(
       likedPostIds: likedPostIds ?? this.likedPostIds,
-      sharedPostIds: sharedPostIds ?? this.sharedPostIds,
       likeCounts: likeCounts ?? this.likeCounts,
       confirmedShareCounts: confirmedShareCounts ?? this.confirmedShareCounts,
-      pendingShareDeltas: pendingShareDeltas ?? this.pendingShareDeltas,
       confirmedCommentCounts:
           confirmedCommentCounts ?? this.confirmedCommentCounts,
       pendingCommentDeltas: pendingCommentDeltas ?? this.pendingCommentDeltas,
@@ -1191,12 +1141,8 @@ class PostInteractionState {
 
     return PostInteractionState(
       likedPostIds: readSet('likedPostIds'),
-      sharedPostIds: readSet('sharedPostIds'),
       likeCounts: readIntMap('likeCounts'),
-      confirmedShareCounts: readIntMap('confirmedShareCounts').isNotEmpty
-          ? readIntMap('confirmedShareCounts')
-          : readIntMap('shareCounts'),
-      pendingShareDeltas: readIntMap('pendingShareDeltas'),
+      confirmedShareCounts: readIntMap('confirmedShareCounts'),
       confirmedCommentCounts: readIntMap('confirmedCommentCounts').isNotEmpty
           ? readIntMap('confirmedCommentCounts')
           : readIntMap('commentCounts'),
@@ -1207,10 +1153,8 @@ class PostInteractionState {
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
       'likedPostIds': likedPostIds.toList(growable: false),
-      'sharedPostIds': sharedPostIds.toList(growable: false),
       'likeCounts': likeCounts,
       'confirmedShareCounts': confirmedShareCounts,
-      'pendingShareDeltas': pendingShareDeltas,
       'confirmedCommentCounts': confirmedCommentCounts,
       'pendingCommentDeltas': pendingCommentDeltas,
     };
@@ -1252,17 +1196,6 @@ class PostInteractionStateNotifier extends Notifier<PostInteractionState> {
     unawaited(_persistState());
   }
 
-  void setShared(String postId, bool isShared) {
-    final nextShared = Set<String>.from(state.sharedPostIds);
-    if (isShared) {
-      nextShared.add(postId);
-    } else {
-      nextShared.remove(postId);
-    }
-    state = state.copyWith(sharedPostIds: nextShared);
-    unawaited(_persistState());
-  }
-
   void applyConfirmedCounters(
     String postId, {
     int? shareCount,
@@ -1270,9 +1203,6 @@ class PostInteractionStateNotifier extends Notifier<PostInteractionState> {
   }) {
     final nextConfirmedShareCounts = Map<String, int>.from(
       state.confirmedShareCounts,
-    );
-    final nextPendingShareDeltas = Map<String, int>.from(
-      state.pendingShareDeltas,
     );
     final nextConfirmedCommentCounts = Map<String, int>.from(
       state.confirmedCommentCounts,
@@ -1282,7 +1212,6 @@ class PostInteractionStateNotifier extends Notifier<PostInteractionState> {
     );
     if (shareCount != null) {
       nextConfirmedShareCounts[postId] = shareCount;
-      nextPendingShareDeltas.remove(postId);
     }
     if (commentCount != null) {
       nextConfirmedCommentCounts[postId] = commentCount;
@@ -1290,7 +1219,6 @@ class PostInteractionStateNotifier extends Notifier<PostInteractionState> {
     }
     state = state.copyWith(
       confirmedShareCounts: nextConfirmedShareCounts,
-      pendingShareDeltas: nextPendingShareDeltas,
       confirmedCommentCounts: nextConfirmedCommentCounts,
       pendingCommentDeltas: nextPendingCommentDeltas,
     );
@@ -1309,9 +1237,6 @@ class PostInteractionStateNotifier extends Notifier<PostInteractionState> {
     final nextConfirmedShareCounts = Map<String, int>.from(
       state.confirmedShareCounts,
     );
-    final nextPendingShareDeltas = Map<String, int>.from(
-      state.pendingShareDeltas,
-    );
     final nextConfirmedCommentCounts = Map<String, int>.from(
       state.confirmedCommentCounts,
     );
@@ -1323,63 +1248,13 @@ class PostInteractionStateNotifier extends Notifier<PostInteractionState> {
         continue;
       }
       nextConfirmedShareCounts[post.id] = post.shareCount;
-      nextPendingShareDeltas.remove(post.id);
       nextConfirmedCommentCounts[post.id] = post.commentCount;
       nextPendingCommentDeltas.remove(post.id);
     }
     state = state.copyWith(
       confirmedShareCounts: nextConfirmedShareCounts,
-      pendingShareDeltas: nextPendingShareDeltas,
       confirmedCommentCounts: nextConfirmedCommentCounts,
       pendingCommentDeltas: nextPendingCommentDeltas,
-    );
-    unawaited(_persistState());
-  }
-
-  void stageOptimisticShare(
-    String postId, {
-    required int baseShareCount,
-    int delta = 1,
-  }) {
-    final nextConfirmed = Map<String, int>.from(state.confirmedShareCounts);
-    final nextPending = Map<String, int>.from(state.pendingShareDeltas);
-    final nextShared = Set<String>.from(state.sharedPostIds);
-    nextConfirmed.putIfAbsent(postId, () => baseShareCount);
-    nextPending[postId] = (nextPending[postId] ?? 0) + delta;
-    nextShared.add(postId);
-    state = state.copyWith(
-      sharedPostIds: nextShared,
-      confirmedShareCounts: nextConfirmed,
-      pendingShareDeltas: nextPending,
-    );
-    unawaited(_persistState());
-  }
-
-  void rollbackOptimisticShare(
-    String postId, {
-    required int baseShareCount,
-    int delta = 1,
-    bool isShared = false,
-  }) {
-    final nextConfirmed = Map<String, int>.from(state.confirmedShareCounts);
-    final nextPending = Map<String, int>.from(state.pendingShareDeltas);
-    final nextShared = Set<String>.from(state.sharedPostIds);
-    nextConfirmed.putIfAbsent(postId, () => baseShareCount);
-    final reverted = (nextPending[postId] ?? 0) - delta;
-    if (reverted == 0) {
-      nextPending.remove(postId);
-    } else {
-      nextPending[postId] = reverted;
-    }
-    if (isShared) {
-      nextShared.add(postId);
-    } else {
-      nextShared.remove(postId);
-    }
-    state = state.copyWith(
-      sharedPostIds: nextShared,
-      confirmedShareCounts: nextConfirmed,
-      pendingShareDeltas: nextPending,
     );
     unawaited(_persistState());
   }
@@ -1431,9 +1306,6 @@ class PostInteractionStateNotifier extends Notifier<PostInteractionState> {
     final nextConfirmedShareCounts = Map<String, int>.from(
       state.confirmedShareCounts,
     );
-    final nextPendingShareDeltas = Map<String, int>.from(
-      state.pendingShareDeltas,
-    );
     final nextConfirmedCommentCounts = Map<String, int>.from(
       state.confirmedCommentCounts,
     );
@@ -1453,7 +1325,6 @@ class PostInteractionStateNotifier extends Notifier<PostInteractionState> {
       final shareCount = snapshot.postSharesCount[postId];
       if (shareCount != null) {
         nextConfirmedShareCounts[postId] = shareCount;
-        nextPendingShareDeltas.remove(postId);
       }
       final commentCount = snapshot.postCommentCount[postId];
       if (commentCount != null) {
@@ -1465,7 +1336,6 @@ class PostInteractionStateNotifier extends Notifier<PostInteractionState> {
       likedPostIds: nextLiked,
       likeCounts: nextLikeCounts,
       confirmedShareCounts: nextConfirmedShareCounts,
-      pendingShareDeltas: nextPendingShareDeltas,
       confirmedCommentCounts: nextConfirmedCommentCounts,
       pendingCommentDeltas: nextPendingCommentDeltas,
     );

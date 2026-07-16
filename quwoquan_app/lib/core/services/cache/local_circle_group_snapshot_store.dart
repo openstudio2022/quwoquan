@@ -1,10 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_group_wire_normalize.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/core/services/cache/local_circle_group_snapshot_record.dart';
 import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:sqflite/sqflite.dart';
 
 class LocalCircleGroupSnapshotStore {
@@ -35,6 +35,7 @@ class LocalCircleGroupSnapshotStore {
   Future<bool> ensureSeeded({
     required LocalSearchNamespace namespace,
     required CircleRepository circleRepository,
+    required CircleGroupQueryReader circleGroupQuery,
     int circleLimit = 12,
     int groupsPerCircle = 20,
   }) async {
@@ -53,6 +54,7 @@ class LocalCircleGroupSnapshotStore {
     final future = _seedFromRemote(
       namespace: namespace,
       circleRepository: circleRepository,
+      circleGroupQuery: circleGroupQuery,
       circleLimit: circleLimit,
       groupsPerCircle: groupsPerCircle,
     );
@@ -69,45 +71,40 @@ class LocalCircleGroupSnapshotStore {
 
   Future<void> upsertGroups({
     required LocalSearchNamespace namespace,
-    required Iterable<Map<String, dynamic>> groups,
+    required Iterable<LocalCircleGroupSnapshotRecord> groups,
   }) async {
     final database = await _database;
     final batch = database.batch();
     final now = DateTime.now().toIso8601String();
     for (final group in groups) {
-      final normalized = normalizeCircleGroupWireMap(
-        Map<String, dynamic>.from(group),
-        shape: CircleGroupWireShape.localSnapshotPersist,
-        fallbackUpdatedAt: now,
-      );
-      final groupId = _string(normalized['groupId']);
-      final circleId = _string(normalized['circleId']);
-      if (groupId.isEmpty || circleId.isEmpty) {
-        continue;
+      if (group.groupId.trim().isEmpty ||
+          group.circleId.trim().isEmpty ||
+          group.name.trim().isEmpty ||
+          group.groupType.trim().isEmpty ||
+          group.visibility.trim().isEmpty) {
+        throw const FormatException('CircleGroup snapshot identity is invalid');
       }
       final searchableText = _searchableText(<Object?>[
-        normalized['name'],
-        normalized['description'],
-        normalized['circleName'],
-        normalized['groupType'],
-        normalized['visibility'],
+        group.name,
+        group.description,
+        group.circleName,
+        group.groupType,
+        group.visibility,
       ]);
       batch.insert('circle_group_snapshots', <String, Object?>{
         'namespace_key': namespace.key,
-        'circle_id': circleId,
-        'group_id': groupId,
-        'name': _string(normalized['name']),
-        'description': _string(normalized['description']),
-        'circle_name': _string(normalized['circleName']),
-        'group_type': _string(normalized['groupType']),
-        'visibility': _string(normalized['visibility']),
-        'conversation_id': _string(normalized['conversationId']),
-        'member_count': (normalized['memberCount'] as num?)?.toInt() ?? 0,
+        'circle_id': group.circleId,
+        'group_id': group.groupId,
+        'name': group.name,
+        'description': group.description,
+        'circle_name': group.circleName,
+        'group_type': group.groupType,
+        'visibility': group.visibility,
+        'conversation_id': group.conversationId,
+        'member_count': group.memberCount,
         'searchable_text': searchableText,
-        'payload_json': jsonEncode(normalized),
-        'updated_at': _string(normalized['updatedAt']).isNotEmpty
-            ? _string(normalized['updatedAt'])
-            : now,
+        'payload_json': jsonEncode(group.toStorageMap()),
+        'updated_at': group.updatedAt.isNotEmpty ? group.updatedAt : now,
       }, conflictAlgorithm: ConflictAlgorithm.replace);
     }
     await batch.commit(noResult: true);
@@ -136,7 +133,7 @@ class LocalCircleGroupSnapshotStore {
     );
     return rows
         .map(
-          (row) => LocalCircleGroupSnapshotRecord.fromWireMap(
+          (row) => LocalCircleGroupSnapshotRecord.fromStorageMap(
             _decodePayload(row['payload_json']),
           ),
         )
@@ -163,11 +160,12 @@ class LocalCircleGroupSnapshotStore {
   Future<void> _seedFromRemote({
     required LocalSearchNamespace namespace,
     required CircleRepository circleRepository,
+    required CircleGroupQueryReader circleGroupQuery,
     required int circleLimit,
     required int groupsPerCircle,
   }) async {
     final circles = await circleRepository.listCircles(limit: circleLimit);
-    final snapshots = <Map<String, dynamic>>[];
+    final snapshots = <LocalCircleGroupSnapshotRecord>[];
     for (final circle in circles) {
       final circleId = _string(circle.id);
       if (circleId.isEmpty) {
@@ -175,16 +173,16 @@ class LocalCircleGroupSnapshotStore {
       }
       final circleName = _string(circle.name);
       try {
-        final groups = await circleRepository.listCircleGroups(
-          circleId,
-          limit: groupsPerCircle,
+        final groups = await circleGroupQuery.list(
+          CircleGroupListQuery(circleId: circleId, limit: groupsPerCircle),
         );
-        for (final group in groups) {
-          snapshots.add(<String, dynamic>{
-            ...group.toMap(),
-            'circleId': circleId,
-            if (circleName.isNotEmpty) 'circleName': circleName,
-          });
+        for (final group in groups.items) {
+          snapshots.add(
+            LocalCircleGroupSnapshotRecord.fromGroupSlice(
+              group,
+              circleName: circleName,
+            ),
+          );
         }
       } catch (_) {
         /* best-effort: 单个圈子的分组拉取失败时跳过该圈，其余圈子的快照照常落库 */
@@ -193,7 +191,7 @@ class LocalCircleGroupSnapshotStore {
     await upsertGroups(namespace: namespace, groups: snapshots);
   }
 
-  Map<String, dynamic> _decodePayload(Object? rawJson) {
+  Map<String, Object?> _decodePayload(Object? rawJson) {
     final text = _string(rawJson);
     if (text.isEmpty) {
       return const <String, dynamic>{};
@@ -201,12 +199,12 @@ class LocalCircleGroupSnapshotStore {
     try {
       final decoded = jsonDecode(text);
       if (decoded is Map) {
-        return decoded.cast<String, dynamic>();
+        return decoded.cast<String, Object?>();
       }
     } catch (_) {
       /* best-effort: 持久化 payload 损坏时回退到空 Map，由上层用默认记录兜底 */
     }
-    return const <String, dynamic>{};
+    return const <String, Object?>{};
   }
 
   Future<Database> get _database async {

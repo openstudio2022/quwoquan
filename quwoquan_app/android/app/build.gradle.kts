@@ -1,5 +1,6 @@
 import com.flutter.gradle.tasks.FlutterTask
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.nio.charset.StandardCharsets
 import java.util.Base64
 
@@ -18,10 +19,15 @@ val androidLocalAutoPrepareEnvVar = "QWQ_ANDROID_LOCAL_AUTO_PREPARE"
 val androidLocalAutoReverseEnvVar = "QWQ_ANDROID_LOCAL_AUTO_REVERSE"
 val androidAbiSplitsEnvVar = "QWQ_ANDROID_ABI_SPLITS"
 val androidAbiSplitsEnabled = envFlagEnabled(androidAbiSplitsEnvVar, false)
+fun escapedBuildConfigString(name: String): String {
+    val value = System.getenv(name)?.trim().orEmpty()
+    return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+}
+val deploymentWorkRoot =
+    System.getenv("QWQ_DEPLOY_WORK_ROOT")?.takeIf { it.isNotBlank() }
+        ?: System.getProperty("user.home") + "/.cache/quwoquan/deploy"
 val alphaLocalCaCert =
-    repoRootDir.resolve(
-        ".qwq_output/env/alpha/local/alpha-local/tls/ca/root.crt",
-    )
+    File(deploymentWorkRoot, "alpha-local/certificates/tls/ca/root.crt")
 val alphaLocalStackScript =
     repoRootDir.resolve("quwoquan_ops/cli/alpha/start_alpha_mock_stack.sh")
 val alphaLocalAdbReversePorts = listOf("17000", "17010", "17100")
@@ -44,6 +50,9 @@ android {
     namespace = "com.quwoquan.quwoquan_app"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
+    buildFeatures {
+        buildConfig = true
+    }
 
     sourceSets {
         getByName("debug").res.srcDir(generatedLocalEnvDebugResDir)
@@ -63,6 +72,23 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        buildConfigField("String", "QWQ_WECHAT_APP_ID", escapedBuildConfigString("QWQ_WECHAT_APP_ID"))
+        buildConfigField(
+            "String",
+            "QWQ_WECHAT_ANDROID_SIGNATURE",
+            escapedBuildConfigString("QWQ_WECHAT_ANDROID_SIGNATURE"),
+        )
+        buildConfigField("String", "QWQ_QQ_APP_ID", escapedBuildConfigString("QWQ_QQ_APP_ID"))
+        buildConfigField(
+            "String",
+            "QWQ_ALIPAY_CALLBACK_SCHEME",
+            escapedBuildConfigString("QWQ_ALIPAY_CALLBACK_SCHEME"),
+        )
+        buildConfigField(
+            "String",
+            "QWQ_ALIYUN_PNVS_SECRET_INFO",
+            escapedBuildConfigString("QWQ_ALIYUN_PNVS_SECRET_INFO"),
+        )
         // Patrol native 接线：让 Android Test Orchestrator 能发现并执行 Dart 测试。
         testInstrumentationRunner = "pl.leancode.patrol.PatrolJUnitRunner"
         testInstrumentationRunnerArguments["clearPackageData"] = "true"
@@ -127,25 +153,44 @@ fun encodeDartDefines(defines: List<String>): String {
     }
 }
 
+// Plain `flutter run` alpha debug/profile only. Transport URL keys are force-
+// overwritten to localhost so stale `*.quwoquan-env.test` dart-defines cannot
+// reach the APK. beta/gamma/prod packages skip this entire merge.
+val alphaLocalTransportDartDefineKeys =
+    setOf(
+        "CLOUD_GATEWAY_BASE_URL",
+        "APP_LEGAL_BASE_URL",
+        "MEDIA_AVATAR_CDN_BASE_URL",
+        "MEDIA_IMAGE_CDN_BASE_URL",
+        "MEDIA_VIDEO_CDN_BASE_URL",
+        "MEDIA_UPLOAD_BASE_URL",
+    )
+
 fun mergeAlphaLocalDartDefines(encoded: String?): String {
     val defines = decodeDartDefines(encoded)
-    val valuesByKey = defines
-        .mapNotNull { define ->
-            val separator = define.indexOf("=")
-            if (separator <= 0) null else define.substring(0, separator) to define.substring(separator + 1)
-        }
-        .toMap()
+    val valuesByKey =
+        defines
+            .mapNotNull { define ->
+                val separator = define.indexOf("=")
+                if (separator <= 0) {
+                    null
+                } else {
+                    define.substring(0, separator) to define.substring(separator + 1)
+                }
+            }.toMap()
+            .toMutableMap()
     val runtimeEnv = valuesByKey["APP_RUNTIME_ENV"]?.trim()
     if (!runtimeEnv.isNullOrEmpty() && runtimeEnv != "alpha") {
         return encoded ?: ""
     }
-    val existingKeys = valuesByKey.keys.toMutableSet()
     for ((key, value) in alphaLocalDefaultDartDefines) {
-        if (existingKeys.add(key)) {
-            defines.add("$key=$value")
+        val shouldForceTransport = key in alphaLocalTransportDartDefineKeys
+        if (shouldForceTransport || !valuesByKey.containsKey(key)) {
+            valuesByKey[key] = value
         }
     }
-    return encodeDartDefines(defines)
+    val mergedDefines = valuesByKey.map { (key, value) -> "$key=$value" }
+    return encodeDartDefines(mergedDefines)
 }
 
 tasks.withType<FlutterTask>().configureEach {
@@ -302,6 +347,23 @@ val vendoredAndroidArtifactsDir =
 
 dependencies {
     implementation("androidx.core:core-splashscreen:1.0.1")
+    implementation("com.tencent.mm.opensdk:wechat-sdk-android:6.8.34")
+    implementation("com.alipay.sdk:alipaysdk-android:15.8.42")
+    implementation(
+        files(
+            rootProject.file(
+                "../vendor/commercial_auth/qq/android/open_sdk_3.5.19_r9483ffc7_lite.jar",
+            ),
+        ),
+    )
+    implementation(
+        fileTree(
+            mapOf(
+                "dir" to rootProject.file("../vendor/commercial_auth/aliyun/android"),
+                "include" to listOf("*.aar", "*.jar"),
+            ),
+        ),
+    )
     // flutter_webrtc + livekit_client use compileOnly for vendored AARs (AGP 8+).
     implementation(
         files(

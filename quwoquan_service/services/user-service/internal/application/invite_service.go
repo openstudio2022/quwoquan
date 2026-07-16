@@ -9,30 +9,30 @@ import (
 	"github.com/google/uuid"
 
 	"quwoquan_service/services/user-service/internal/domain/user/model"
-	userrepo "quwoquan_service/services/user-service/internal/domain/user/repository"
+	userrepo "quwoquan_service/services/user-service/internal/domain/user/ports"
 	"quwoquan_service/services/user-service/internal/generated"
 )
 
 const (
-	inviteDailyLimit  = 1000
-	inviteTTLDays     = 7
+	inviteDailyLimit = 1000
+	inviteTTLDays    = 7
 )
 
 // InviteService manages invite lifecycle and attribution.
 type InviteService struct {
-	invites  userrepo.InviteRepository
-	personas userrepo.PersonaRepository
+	reader userrepo.InviteReader
+	writer userrepo.InviteWriter
 }
 
-func NewInviteService(invites userrepo.InviteRepository, personas userrepo.PersonaRepository) *InviteService {
-	return &InviteService{invites: invites, personas: personas}
+func NewInviteService(reader userrepo.InviteReader, writer userrepo.InviteWriter) *InviteService {
+	return &InviteService{reader: reader, writer: writer}
 }
 
 // Generate creates an invite record idempotently.
 // inviterOwnerAccountID is stored for audit; never returned via API.
 func (s *InviteService) Generate(ctx context.Context, inviterSubAccountID, inviterOwnerAccountID, channel, inviteePhone string) (*model.InviteRecord, error) {
 	// Rate limit
-	count, err := s.invites.CountTodayByInviter(ctx, inviterSubAccountID)
+	count, err := s.reader.CountTodayByInviter(ctx, inviterSubAccountID)
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +42,7 @@ func (s *InviteService) Generate(ctx context.Context, inviterSubAccountID, invit
 
 	// Idempotency: if same (sub, channel, phone) in generated state, return existing
 	if inviteePhone != "" {
-		existing, err := s.invites.FindIdempotent(ctx, inviterSubAccountID, channel, inviteePhone)
+		existing, err := s.reader.FindIdempotent(ctx, inviterSubAccountID, channel, inviteePhone)
 		if err != nil {
 			return nil, err
 		}
@@ -66,7 +66,7 @@ func (s *InviteService) Generate(ctx context.Context, inviterSubAccountID, invit
 		Status:                "generated",
 		ExpireAt:              time.Now().UTC().Add(inviteTTLDays * 24 * time.Hour),
 	}
-	if err := s.invites.Create(ctx, record); err != nil {
+	if err := s.writer.Create(ctx, record); err != nil {
 		return nil, err
 	}
 	return record, nil
@@ -75,7 +75,7 @@ func (s *InviteService) Generate(ctx context.Context, inviterSubAccountID, invit
 // GetByCode returns public-facing invite info.
 // Privacy: does NOT include inviterOwnerAccountID or inviteePhoneHash.
 func (s *InviteService) GetByCode(ctx context.Context, linkCode string) (*model.InviteRecord, error) {
-	r, err := s.invites.FindByLinkCode(ctx, linkCode)
+	r, err := s.reader.FindByLinkCode(ctx, linkCode)
 	if err != nil {
 		return nil, err
 	}
@@ -86,14 +86,14 @@ func (s *InviteService) GetByCode(ctx context.Context, linkCode string) (*model.
 		return nil, generated.AppErrorFromInviteExpired("invitation has expired")
 	}
 	// Mark delivered (first view)
-	_ = s.invites.MarkDelivered(ctx, r.ID)
+	_ = s.writer.MarkDelivered(ctx, r.ID)
 	r.Status = "delivered"
 	return r, nil
 }
 
 // Accept records that the invitee accepted the invite (idempotent).
 func (s *InviteService) Accept(ctx context.Context, linkCode string) (*model.InviteRecord, error) {
-	r, err := s.invites.FindByLinkCode(ctx, linkCode)
+	r, err := s.reader.FindByLinkCode(ctx, linkCode)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +106,7 @@ func (s *InviteService) Accept(ctx context.Context, linkCode string) (*model.Inv
 	if r.Status == "accepted" || r.Status == "activated" {
 		return r, nil // idempotent
 	}
-	if err := s.invites.Accept(ctx, r.ID); err != nil {
+	if err := s.writer.Accept(ctx, r.ID); err != nil {
 		return nil, err
 	}
 	r.Status = "accepted"
@@ -120,7 +120,7 @@ func (s *InviteService) ListByInviter(ctx context.Context, inviterSubAccountID, 
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
-	return s.invites.ListByInviter(ctx, inviterSubAccountID, statusFilter, limit, offset)
+	return s.reader.ListByInviter(ctx, inviterSubAccountID, statusFilter, limit, offset)
 }
 
 func generateLinkCode() (string, error) {

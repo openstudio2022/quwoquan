@@ -1,17 +1,38 @@
 #!/usr/bin/env python3
+"""Validate the single, environment-orthogonal `.qwq_output` layout."""
 from __future__ import annotations
 
+import json
+import os
+import sys
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-OUTPUT_ROOT = ROOT / ".qwq_output"
-ALLOWED_TOP_LEVEL = frozenset({"env", "data"})
-ALLOWED_ENVS = frozenset({"alpha", "beta", "gamma", "prod", "repo"})
-ALLOWED_ENV_CHILDREN = frozenset({"runs", "observability", "release", "local"})
-ALLOWED_DATA_CHILDREN = frozenset({"runs", "observability", "release", "local"})
-ALLOWED_RELEASE_CHILDREN = frozenset({"app", "service", "legal-static"})
-FORBIDDEN_OLD_TOP_LEVEL = frozenset({"local", "runs", "release", "observability"})
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from quwoquan_ops.cli.lib.output_paths import output_root  # noqa: E402
+
+
+MANIFEST_PATH = ROOT / "quwoquan_ops" / "environments" / "output_layout_manifest.yaml"
+FORBIDDEN_SOURCE_TRUTH_DIRS = frozenset(
+    {
+        "control_plane",
+        "prompts",
+        "templates",
+        "schema",
+        "specs",
+        "policies",
+        "reference",
+    }
+)
+OPAQUE_DISPOSABLE_CACHE_DIRS = frozenset({"cache", "node_modules", "site-packages"})
+EXPECTED_OUTPUT_CONSUMPTION = {
+    "same_execution_stage",
+    "derived_release_deployment",
+    "verification_evidence",
+}
 
 
 def _rel(path: Path) -> str:
@@ -21,65 +42,115 @@ def _rel(path: Path) -> str:
         return path.as_posix()
 
 
-def output_layout_issues(root: Path = OUTPUT_ROOT) -> list[str]:
-    issues: list[str] = []
-    if not root.exists():
+def _manifest() -> dict:
+    return json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+
+
+def layout_manifest_issues() -> list[str]:
+    try:
+        manifest = _manifest()
+    except (OSError, json.JSONDecodeError) as exc:
+        return [f"output layout manifest unreadable: {exc}"]
+    if set(manifest) != {"root", "contract", "topLevel"}:
+        return ["output layout manifest must contain only root, contract and topLevel"]
+    if manifest.get("root") != ".qwq_output":
+        return ["output layout manifest root must be .qwq_output"]
+    contract = manifest.get("contract")
+    if not isinstance(contract, dict):
+        return ["output layout manifest contract must be an object"]
+    if contract.get("disposable") is not True or contract.get("sourceTruthAllowed") is not False:
+        return ["output layout manifest must declare disposable output and forbid source truth"]
+    if contract.get("deletionInvariant") != "repository_remains_buildable":
+        return ["output layout manifest must require repository rebuildability after output deletion"]
+    if contract.get("cachePersistenceRequired") is not False:
+        return ["output layout manifest must declare that cache persistence is never required"]
+    consumption = contract.get("allowedOutputConsumption")
+    if not isinstance(consumption, list) or set(consumption) != EXPECTED_OUTPUT_CONSUMPTION:
+        return ["output layout manifest has invalid allowed output consumption boundaries"]
+    rebuild_sources = contract.get("rebuildSources")
+    if not isinstance(rebuild_sources, list) or not rebuild_sources:
+        return ["output layout manifest must declare repository rebuild sources"]
+    for relative in rebuild_sources:
+        if not isinstance(relative, str) or not relative or Path(relative).is_absolute():
+            return ["output layout rebuild sources must be non-empty repository-relative paths"]
+        source = (ROOT / relative).resolve()
+        try:
+            source.relative_to(ROOT.resolve())
+        except ValueError:
+            return [f"output layout rebuild source escapes repository: {relative}"]
+        if ".qwq_output" in source.parts:
+            return [f"output layout rebuild source cannot point into output: {relative}"]
+        if not source.exists():
+            return [f"output layout rebuild source does not exist: {relative}"]
+    top = manifest.get("topLevel")
+    if not isinstance(top, dict) or set(top) != {"env", "data"}:
+        return ["output layout manifest topLevel must contain exactly env and data"]
+    return []
+
+
+def output_layout_issues(root: Path | None = None) -> list[str]:
+    path = Path(root) if root is not None else output_root()
+    issues = layout_manifest_issues()
+    if not path.exists():
         return issues
+    if not path.is_dir():
+        return [*issues, f"{_rel(path)}: output root must be a directory"]
+    allowed_top = {"env", "data"}
+    for entry in sorted(path.iterdir()):
+        if entry.name not in allowed_top or not entry.is_dir():
+            issues.append(f"{_rel(entry)}: output root only permits env/ and data/")
+    env = path / "env"
+    if env.is_dir():
+        for entry in sorted(env.iterdir()):
+            if not entry.is_dir() or entry.name not in {"alpha", "beta", "gamma", "prod", "repo"}:
+                issues.append(f"{_rel(entry)}: env only permits alpha/beta/gamma/prod/repo")
+                continue
+            allowed = {"runs", "observability", "local"}
+            if entry.name != "repo":
+                allowed.add("release")
+            for child in sorted(entry.iterdir()):
+                if not child.is_dir() or child.name not in allowed:
+                    issues.append(f"{_rel(child)}: invalid {entry.name} output category")
+            local = entry / "local"
+            if local.is_dir():
+                for target in sorted(local.iterdir()):
+                    if not target.is_dir():
+                        issues.append(f"{_rel(target)}: local target must be a directory")
+                        continue
+                    for child in sorted(target.iterdir()):
+                        if not child.is_dir() or child.name not in {"process", "cache"}:
+                            issues.append(
+                                f"{_rel(child)}: output local state only permits process/ and cache/; "
+                                "configuration, TLS and volumes belong to deployment infrastructure"
+                            )
+    data = path / "data"
+    if data.is_dir():
+        for entry in sorted(data.iterdir()):
+            if not entry.is_dir() or entry.name not in {"tasks", "releases", "local"}:
+                issues.append(f"{_rel(entry)}: data only permits tasks/releases/local")
+    issues.extend(output_source_truth_issues(path))
+    return issues
+
+
+def output_source_truth_issues(root: Path) -> list[str]:
+    """Reject reusable configuration roots hidden under a valid output shape."""
+    issues: list[str] = []
     if not root.is_dir():
-        return [f"{_rel(root)}: output root must be a directory"]
-
-    for entry in sorted(root.iterdir()):
-        if entry.name in FORBIDDEN_OLD_TOP_LEVEL:
-            issues.append(f"{_rel(entry)}: retired output top-level; use .qwq_output/env/** or .qwq_output/data/**")
-            continue
-        if entry.name not in ALLOWED_TOP_LEVEL:
-            issues.append(f"{_rel(entry)}: unknown .qwq_output top-level; only env/ and data/ are allowed")
-
-    env_root = root / "env"
-    if env_root.exists():
-        if not env_root.is_dir():
-            issues.append(f"{_rel(env_root)}: env must be a directory")
-        else:
-            issues.extend(_env_issues(env_root))
-
-    data_root = root / "data"
-    if data_root.exists():
-        if not data_root.is_dir():
-            issues.append(f"{_rel(data_root)}: data must be a directory")
-        else:
-            issues.extend(_data_issues(data_root))
-    return issues
-
-
-def _env_issues(env_root: Path) -> list[str]:
-    issues: list[str] = []
-    for env_dir in sorted(env_root.iterdir()):
-        if not env_dir.is_dir():
-            issues.append(f"{_rel(env_dir)}: env/ only allows environment directories")
-            continue
-        if env_dir.name not in ALLOWED_ENVS:
-            issues.append(f"{_rel(env_dir)}: unknown environment segment")
-        for child in sorted(env_dir.iterdir()):
-            if child.name not in ALLOWED_ENV_CHILDREN:
-                issues.append(f"{_rel(child)}: environment output only allows local/, runs/, release/ and observability/")
-        release_root = env_dir / "release"
-        if release_root.is_dir():
-            for child in sorted(release_root.iterdir()):
-                if child.name not in ALLOWED_RELEASE_CHILDREN:
-                    issues.append(f"{_rel(child)}: env release only allows app/, service/ and legal-static/")
-    return issues
-
-
-def _data_issues(data_root: Path) -> list[str]:
-    issues: list[str] = []
-    for child in sorted(data_root.iterdir()):
-        if child.name not in ALLOWED_DATA_CHILDREN:
-            issues.append(f"{_rel(child)}: data output only allows local/, runs/, release/ and observability/")
-    local_root = data_root / "local"
-    if local_root.exists():
-        for child in sorted(local_root.iterdir()):
-            if child.name != "runtime":
-                issues.append(f"{_rel(child)}: data local output only allows runtime/")
+        return issues
+    for current, dirnames, _filenames in os.walk(root):
+        current_path = Path(current)
+        retained: list[str] = []
+        for name in dirnames:
+            child = current_path / name
+            if name in FORBIDDEN_SOURCE_TRUTH_DIRS:
+                issues.append(
+                    f"{_rel(child)}: reusable source truth is forbidden under disposable output"
+                )
+                continue
+            if name in OPAQUE_DISPOSABLE_CACHE_DIRS:
+                continue
+            retained.append(name)
+        dirnames[:] = retained
     return issues
 
 

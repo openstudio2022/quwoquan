@@ -79,6 +79,10 @@ contracts/metadata/
 │
 ├── recommendation/                # 域：推荐 → rec-model-service
 │   ├── openapi.yaml
+│   ├── model_release/
+│   │   └── aggregate.yaml  fields.yaml  storage.yaml  events.yaml  service.yaml
+│   ├── intersection_visit_state/
+│   │   └── entity.yaml  fields.yaml  storage.yaml  events.yaml  service.yaml
 │   └── rec_model/
 │       ├── entity.yaml  fields.yaml  storage.yaml  events.yaml  service.yaml
 │       └── projections/{recommend_feature,training_samples,learning_events,model_registry}.yaml
@@ -90,7 +94,9 @@ contracts/metadata/
 │
 └── ops/                           # 域：运营/平台 → ops-service
     ├── openapi.yaml
-    ├── experiment_bucket/
+    ├── experiment/
+    │   └── aggregate.yaml  fields.yaml  storage.yaml  events.yaml  service.yaml
+    ├── experiment_assignment_fact/
     │   └── entity.yaml  fields.yaml  storage.yaml  events.yaml  service.yaml
     └── visit_record/
         └── entity.yaml  fields.yaml  storage.yaml  events.yaml  service.yaml
@@ -121,8 +127,11 @@ contracts/metadata/
 ## codegen 流水线（全量）
 
 ```
+make codegen-openapi          # ContractGraph -> 各域 OpenAPI 生成快照（原子替换）
+make codegen-contract-graph   # 先生成 OpenAPI，再固化 generated/contract_graph.json
+make verify-openapi           # 直接比较磁盘快照与 ContractGraph 期望
 make verify-metadata          # YAML 内部一致性（枚举引用/字段类型/路径绑定）
-make codegen                  # Go: struct + routes + errors + migration + fixture
+make codegen                  # OpenAPI + Go struct/routes/errors/migration/fixture
 make codegen-app              # Dart: DTO + metadata + errors + behaviors + privacy + ui_config
 make codegen-rec-model-python # Python: features + training_samples（Pydantic）
 ```
@@ -153,3 +162,156 @@ make codegen-rec-model-python # Python: features + training_samples（Pydantic�
 3. **无兼容路径**：0→1 构建，codegen 工具只识别规范路径，不存在 fallback
 4. **声明即契约**：tests/*.yaml 是测试意图的声明；`make gate` 验证测试代码实现了全部声明场景
 5. **端云对称**：一个域目录 = 一个领域服务 = app cloud/{domain}/ 目录
+
+## D0 对象模型冻结
+
+### Actor
+
+- `UserAccount` 是账号/认证/安全聚合；`Persona` 是公开业务主体。
+- `CredentialBinding` 因 provider subject 唯一、callback 并发和独立撤销而成为独立聚合。
+- `ActorContext` 只允许 `accountId`、`personaId`、`deviceActorId`；operation 必须声明所需 actor。
+- 公开作者、关系、互动、创作归 `personaId`；认证、凭证和安全归 `accountId`；游客事实归 `deviceActorId`。
+
+### 当前 aggregate.yaml 处置
+
+- `Post`：保留生命周期根；Comment、ContentReaction、MediaUploadSession、MediaAsset、PostModerationCase、Report 拆为独立聚合；站外分享归 `OutboundShareFact`，圈内分发归 Circle 的 `CirclePostPlacement`。
+- `CallSession`：保留；`CallParticipant` 最多 32 个，可作为有界成员。
+- `Connection`：改为 `runtime_session`；Presence 是 projection，不计业务聚合。
+- `ExternalInteraction`：保留可靠外部交互工作流；Sms/Push 是类型化 interaction，不另占 ledger。
+- `UserAccount`：只拥有账号状态；Persona、AuthenticationChallenge、CredentialBinding、AccountSession、DeviceRegistration、UserSettings、ProfileUpdateProposal 均是独立生命周期根。
+- `Conversation`：只拥有会话身份、策略和 bounded metadata；Message、Membership、UserState、Receipt 按独立写模型治理。
+- `Circle`：只拥有社区主档和治理策略；CircleGroup、Membership、Activity、File/Placement 独立。
+- `Homepage`：保留主档和 published/offline；Claim、StatusReport、Review 独立，Shell/Summary/RelatedGroups 是 Slice。
+- `AssistantRun`：AssistantConversation、AssistantRun、SkillSubscription、SkillConsent 为独立根；AssistantTurn 是投影，ProfileUpdateProposal 归 User，InteractionEvent/Scorecard 为追加事实。
+- `SearchQuery`：改为 request/append-only query fact；执行由 SearchFacade + named Reader 完成。
+- `Location`：改为 external query capability，LocationPoi 为 value/read model。
+- `SmsOtp`：OTP challenge 归 User/Auth；integration 只拥有 ExternalInteraction。
+- `PushDelivery`：是 Notification 意图对应的 ExternalInteraction，不拥有业务生命周期。
+
+### 当前 entity.yaml 处置
+
+- `CreatorRuntimeProfile`、`UserLifeItem`、`UserWork`：imported/materialized projection。
+- `ModelScoreRequest`：仅是 `RecommendationModelRelease` scoring Reader 的 inference wire DTO，不登记为业务对象、聚合或生命周期 owner。
+- `Report`：governance aggregate。
+- `DeletedPostTombstone`：内容删除后的 retention/audit 事实，由 Post 删除事件创建；
+  不恢复 Post 生命周期，不作为可编辑业务聚合。
+- `TagNodeView`：由版本化 `TagTaxonomyRelease` 激活事件构建的只读投影；节点集合不进入聚合一致性边界。
+- `PersonaRelationship`：以规范化 persona pair 为 ID 的关系聚合，最多拥有两个 `RelationshipDirection` 子对象；follow/block 在 PostgreSQL 同一事务内迁移，block 原子清除双方 follow，unblock 不恢复。删除独立 `FollowEdge`、`BlockEdge` 生命周期。
+- `SubjectFollow`：Persona 对 Homepage/Place 等非 Persona 公开主体的关系聚合；删除 `HomepageFollow` 重复生命周期，Homepage 只消费计数与 viewer Slice。
+- `HomepageClaimRequest`、`HomepageStatusReport`、`HomepageReview`：各自拥有申请、审核或评价生命周期的独立聚合，通过 homepageId 引用 Homepage。
+- `FollowingSubject`：关系组合 projection；私有 visit watermark 由独立聚合 `FollowedSubjectVisitState` 承载，与 Recommendation 的 `RecommendationIntersectionVisitState` 区分。
+- `InviteRecord`、`GreetingRequest`、`ContactDiscoveryRecord`：独立 workflow aggregate。
+- `VisitRecord`、`EventRecord`、`ChannelIngressReceipt`：append-only fact；其中 `ChannelIngressReceipt` 只负责外部渠道验签去重后的不可变接收事实。
+- `TagFeedback`：只追加反馈事实，不修改 TagTaxonomyRelease 或 TagNode。
+- `Experiment`：实验定义与发布生命周期根；`ExperimentAssignmentFact` 是确定性、幂等、不可修改的分配事实。
+- `Notification/AppMessage`：拥有 create/deliver/ack/read/dismiss 的 aggregate。
+- `SkillConsent`：拥有 grant/revoke/version/audit 的 aggregate。
+- `_control_plane/domains/entity.yaml` 是控制面部署目录，不参与业务对象数量。
+
+### Post 样板关键裁决
+
+- Moderation decision 绑定 `postId + postVersion + contentDigest`；编辑立即使旧 approval 失效。
+- 每条 Comment 是独立聚合，首发 thread 深度上限 2；Post 只保存可选 `pinnedCommentId`。
+- Reaction 以 `target + actor + reactionType` 唯一；站外分享追加 OutboundShareFact，引用发布创建 Post，圈内转发创建 CirclePostPlacement；Report 是治理 Case。
+- MediaUploadSession 有 TTL，完成后产生 MediaAsset；Post 只保存有序 mediaAssetId。
+- 已知删除在 retention 内 410，隐私删除先脱敏，硬清除后 404；投影由删除事件收敛。
+- Post Query 只拥有 detail/card/presentation/author-page；Feed/Search/Intersection/Impact/Footprint 各归其 query owner。
+- UGC 与 Data/PGC 只通过 `BulkImportFacade` 汇入同一 command/event pipeline，禁止直写业务表或 projection。
+
+## ContractGraph 两层接口
+
+每个 public/internal operation 必须编译成唯一 `OperationDescriptor`：
+
+```yaml
+operation_id: content.post.PublishPost
+transport:
+  method: POST
+  path_template: /v1/content/posts/{postId}:publish
+application:
+  facet: PostCommandFacade
+  method: publish
+  kind: command
+  aggregate_owner: Post
+actor:
+  requires: persona
+storage:
+  authoritative_port: PostStore
+errors:
+  catalog: content/post/errors.yaml
+```
+
+Query operation 将 `kind` 设为 `query`，并声明 `reader` 与 `slice`；禁止仅用 URL、DTO 名或 Handler 名推断。
+Append-only fact 的 POST command 必须声明 `append_sink`，且不得伪装成
+`aggregate_owner`；编译器强制两者互斥，并验证目标分别为 `append_only_fact` 与
+`aggregate_root`。
+
+### Object Application Facade
+
+- Command facet：authz、幂等、load aggregate、领域行为、commit + outbox。
+- Query facet：调用 named Reader 返回 typed Slice，不加载聚合。
+- 一个 facet 不超过 10 个方法；超过即按子域/场景拆分。
+- transport adapter 不依赖 infrastructure；跨域只经 ExternalDomainPort、事件或本地 projection。
+
+### Object Data Ports
+
+- `AggregateStore` 是对象专属具名接口，至少表达 Load、Commit、expectedVersion、IdempotencyKey 和 outbox。
+- Reader 以业务目的命名，例如 `PostDetailReader`、`AuthorPostReader`，不暴露 GenericSliceReader。
+- adapter 必须声明 `authoritative`、`projection`、`cache`、`external` 或 `memory`；只有 authoritative store 接受 command commit。
+- 跨上下文写入只经目标 Command Facade，读取只经 named Reader/Slice，异步协作只经公开事件与 outbox/inbox；只有已证明补偿语义的具体流程使用专用 process manager，不存在通用 Saga 或分布式 UnitOfWork。
+- aggregate members 只允许 owned entity/value object；子对象只能经聚合根访问。需要独立命令、版本、并发或生命周期即为 aggregate root，不得为方便直连子对象 Store/Repository。
+- Mongo/PG 中 aggregate change 与同库 outbox 单事务；消费者以 inbox/checkpoint 保证幂等和 replay。
+
+## OpenAPI 派生快照
+
+`service.yaml api_routes` 编译出的 `ContractGraph.Operations` 是 HTTP transport
+唯一真相源。`contracts/metadata/{domain}/openapi.yaml` 只是确定性生成快照，
+禁止手写、合并旧内容或保留未知路径。生成器覆盖 `/v1/`、`/internal/v1/` 与
+`/callbacks/v1/` 下的全部 operation，并固定输出：
+
+- `operationId` 使用域内稳定 `LocalID`，同时写入 canonical
+  `x-contract-operation-id`。
+- `x-object-id`、`x-actor`、`x-application` 直接来自同一个
+  `OperationDescriptor`，command 输出 aggregate owner，query 输出 reader/slice。
+- URL 模板中的每个 `{parameter}` 都生成 required path parameter。
+- `RequestEntity`、`ResponseEntity`、`ResponseBody` 与 `ResponseBodyKind`
+  决定 request/response；`page` 生成类型化 items + cursor 结构，`ack` 生成
+  `204`，其他实体通过命名 component 引用。
+- `_shared/openapi_common.yaml` 继续提供 `ErrorResponse` 与 bearer security
+  component，域快照仅通过 `$ref` 复用。
+
+当前 ContractGraph 尚未携带 fields/projection 的完整字段 AST 时，生成器必须
+输出带 `x-contract-entity` 与 `x-contract-placeholder` 的命名 component。
+禁止用 `additionalProperties: true` 或匿名 Map 伪造业务 schema。具体字段仍以
+`fields.yaml` / projection codegen 为真相，后续只能扩展 compiler AST 后再增强
+OpenAPI schema，不能另写第二套 parser 或让 transport operation 缺席。
+
+`generate-openapi` 会先生成全部内容，在各目标目录写入临时文件并逐文件原子
+rename，随后删除 ContractGraph 已不存在的孤儿域快照；不存在 merge/preserve
+模式。`check-openapi` 必须直接读取磁盘 artifact，与期望字节全等比较，missing、
+stale、orphan 任一情况均失败。标准顺序是：
+
+```text
+qwq-contract generate-openapi
+  -> qwq-contract generate
+  -> qwq-contract check-openapi
+  -> qwq-contract validate --profile commercial
+```
+
+## 严格 compiler 与统计
+
+唯一流水线为：
+
+```text
+_schemas
+  -> internal/metadata/ast
+  -> internal/metadata/load
+  -> internal/metadata/validate
+  -> internal/metadata/graph
+  -> internal/metadata/codegen
+  -> tools/qwq_contract
+```
+
+`qwq-contract validate/generate/check/generate-openapi/check-openapi/coverage`
+驱动所有语言产物。未知字段、旧字段、重复 ID、缺
+owner/Slice/store/error/actor/test contract 直接失败。对象、operation、事件和
+覆盖数量只能由 ContractGraph 生成，文档不得手工维护。

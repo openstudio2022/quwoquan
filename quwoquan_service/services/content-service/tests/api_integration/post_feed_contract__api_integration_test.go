@@ -4,6 +4,7 @@
 package api_integration
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -11,7 +12,45 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	postports "quwoquan_service/services/content-service/internal/domain/post/ports"
+	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
 )
+
+// TestMongoPostFeedReaderDecodesCanonicalProjection 直接验证生产 Feed Reader
+// 可以把 canonical Post 文档解码为 typed Slice。HTTP 层会把持久化错误收敛为
+// 稳定的 RuntimeFailure，因此 BSON/投影漂移必须在此契约边界完整暴露。
+func TestMongoPostFeedReaderDecodesCanonicalProjection(t *testing.T) {
+	t.Cleanup(func() { cleanPosts(t) })
+
+	created := createPost(t, `{"contentType":"image","contentIdentity":"work","title":"Typed feed projection","mediaUrls":["https://example.com/typed.jpg"],"deviceInfo":{"width":1280,"height":720}}`)
+	createdID, _ := created["_id"].(string)
+	if createdID == "" {
+		createdID, _ = created["id"].(string)
+	}
+	if createdID == "" {
+		t.Fatalf("created post is missing id: %+v", created)
+	}
+
+	reader := persistence.NewMongoPostQueryReader(mongoDB.Collection("posts"))
+	page, err := reader.ListPublishedFeedPosts(
+		context.Background(),
+		postports.NewPostFeedReadRequest("work", "image", "", 10),
+	)
+	if err != nil {
+		t.Fatalf("list typed feed projection: %v", err)
+	}
+	if len(page.Items) != 1 {
+		t.Fatalf("expected one typed feed item, got %d: %+v", len(page.Items), page.Items)
+	}
+	item := page.Items[0]
+	if string(item.PostID) != createdID {
+		t.Fatalf("expected post %q, got %q", createdID, item.PostID)
+	}
+	if item.Width != 1280 || item.Height != 720 {
+		t.Fatalf("expected normalized 1280x720 dimensions, got %dx%d", item.Width, item.Height)
+	}
+}
 
 // TestGetFeedByType creates image and video posts, then requests feed with
 // type=image and verifies only image-type items are returned.
@@ -107,6 +146,50 @@ func TestGetFeedByIdentity(t *testing.T) {
 		if item["type"] != "moment" && item["contentType"] != "micro" {
 			t.Fatalf("expected only moment items, got %v", item)
 		}
+	}
+}
+
+// TestGetFeedIdentityFilterCannotBeStarvedByNewerWorks 守护存储侧 identity
+// 过滤。旧实现先读取固定窗口的最新 Post，再在 application 内过滤；当较新的
+// work 占满窗口时，合法 moment 会被错误隐藏。limit=1 时旧四轮窗口最多扫描
+// 八条记录，因此九条较新 work 足以稳定复现该架构缺陷。
+func TestGetFeedIdentityFilterCannotBeStarvedByNewerWorks(t *testing.T) {
+	t.Cleanup(func() { cleanPosts(t) })
+
+	moment := createPost(t, `{"contentType":"micro","contentIdentity":"moment","body":"不能被较新作品饿死的点滴"}`)
+	momentID, _ := moment["_id"].(string)
+	if momentID == "" {
+		momentID, _ = moment["id"].(string)
+	}
+	for i := range 9 {
+		createPost(t, fmt.Sprintf(
+			`{"contentType":"image","contentIdentity":"work","title":"newer work %d","mediaUrls":["https://example.com/work-%d.jpg"]}`,
+			i,
+			i,
+		))
+	}
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/v1/content/feed?identity=moment&type=image&limit=1",
+		nil,
+	)
+	rec := httptest.NewRecorder()
+	testHandler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var page struct {
+		Items []map[string]any `json:"items"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &page); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(page.Items) != 1 {
+		t.Fatalf("expected the older moment after storage-side identity filtering, got %+v", page.Items)
+	}
+	if page.Items[0]["id"] != momentID {
+		t.Fatalf("expected moment %q, got %+v", momentID, page.Items[0])
 	}
 }
 

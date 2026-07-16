@@ -20,17 +20,7 @@ func NewTagHandler(svc *application.TagService) *TagHandler {
 	return &TagHandler{svc: svc}
 }
 
-// reservedRoutes 是 service.yaml 保留契约、仍未实现的端点；显式 501，不留静默 404。
-//
-// feedback 是写操作（用户对推荐的点击/忽略/修正），与 tag-service「只读消费导入产物」的
-// 领域定位冲突——落地需新增写存储或路由到 behavior/recommendation 域，待架构评审，故保留 501。
-// 其余 search / related / search-by-tags / cooccurrence / related-objects 已基于现有
-// TagNode / ObjectTagIndex 只读数据实现。
-var reservedRoutes = []string{
-	"POST /v1/tag/feedback",
-}
-
-// Routes 注册交集核心、创作打标查询、推荐搜索与共现图谱路由 + 保留契约的 501 占位。
+// Routes 注册已实现的交集核心、创作打标查询、推荐搜索与共现图谱路由。
 func (h *TagHandler) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/tag/resolve", h.resolve)
@@ -45,9 +35,6 @@ func (h *TagHandler) Routes() http.Handler {
 	mux.HandleFunc("POST /v1/tag/search-by-tags", h.searchByTags)
 	mux.HandleFunc("GET /v1/tag/graph/cooccurrence", h.cooccurrence)
 	mux.HandleFunc("GET /v1/tag/related-objects", h.relatedObjects)
-	for _, p := range reservedRoutes {
-		mux.HandleFunc(p, h.notImplemented)
-	}
 	return mux
 }
 
@@ -252,10 +239,6 @@ func (h *TagHandler) relatedObjects(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, views)
-}
-
-func (h *TagHandler) notImplemented(w http.ResponseWriter, _ *http.Request) {
-	writeError(w, http.StatusNotImplemented, "endpoint reserved; not implemented (feedback awaiting domain decision)")
 }
 
 func parseLimit(s string) int {

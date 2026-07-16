@@ -36,7 +36,7 @@ type redisKeyspaceMeta struct {
 
 func loadStorageMeta(t *testing.T) storageMeta {
 	t.Helper()
-	path := filepath.Join("..", "..", "..", "contracts", "metadata", "search", "query", "storage.yaml")
+	path := filepath.Join("..", "..", "..", "..", "contracts", "metadata", "search", "query", "storage.yaml")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read storage.yaml: %v", err)
@@ -50,7 +50,7 @@ func loadStorageMeta(t *testing.T) storageMeta {
 
 func loadRedisKeyspaceMeta(t *testing.T) redisKeyspaceMeta {
 	t.Helper()
-	path := filepath.Join("..", "..", "..", "contracts", "metadata", "_shared", "redis_keyspace.yaml")
+	path := filepath.Join("..", "..", "..", "..", "contracts", "metadata", "_shared", "redis_keyspace.yaml")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read redis_keyspace.yaml: %v", err)

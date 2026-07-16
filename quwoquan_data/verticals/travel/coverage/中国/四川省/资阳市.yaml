@@ -1,11 +1,10 @@
 # 全国地点主清单 · 四川省资阳市（discovery_seed/2，WP2 区县级全量枚举）
-# schema: quwoquan_data/schema/coverage/master_list.schema.json
-# 门禁: qwq-data verify coverage-master-list
+# schema: quwoquan_data/schema/governance/master_list.schema.json
+# 门禁: qwq-data verify coverage-static-identity
 schemaVersion: quwoquan_data.discovery_seed/2
 country: 中国
 province: 四川省
 city: 资阳市
-generatedBy: wp2_enumeration_20260708
 districts:
 - district: 乐至县
   leaves:
@@ -20,7 +19,6 @@ districts:
     - 陈毅故居
     - 陈毅纪念馆
     selectionPriority: 1
-    sourceReadiness: ready
   - name: 报国寺
     canonicalName: 乐至报国寺
     entityType: 地点/宗教场所
@@ -28,7 +26,6 @@ districts:
     - Entity/地点/宗教场所
     geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/乐至县
     selectionPriority: 2
-    sourceReadiness: ready
   - name: 蟠龙湖
     canonicalName: 乐至蟠龙湖
     entityType: 地点/自然景观
@@ -36,14 +33,12 @@ districts:
     - Entity/地点/自然景观/水体
     geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/乐至县
     selectionPriority: 3
-    sourceReadiness: ready
   - name: 天池淩雲塔
     canonicalName: 天池淩雲塔
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/乐至县
-    sourceReadiness: pending
     selectionPriority: 4
   - name: 寶林白塔
     canonicalName: 寶林白塔
@@ -51,7 +46,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/乐至县
-    sourceReadiness: pending
     selectionPriority: 5
   - name: 樂至三聖宮
     canonicalName: 樂至三聖宮
@@ -59,7 +53,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/乐至县
-    sourceReadiness: pending
     selectionPriority: 6
   - name: 樂至千佛岩摩岩造像
     canonicalName: 樂至千佛岩摩岩造像
@@ -67,7 +60,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/乐至县
-    sourceReadiness: pending
     selectionPriority: 7
   - name: 睏佛寺摩崖造像
     canonicalName: 睏佛寺摩崖造像
@@ -75,7 +67,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/乐至县
-    sourceReadiness: pending
     selectionPriority: 8
 - district: 安岳县
   leaves:
@@ -88,7 +79,6 @@ districts:
     aliases:
     - 圆觉洞石刻
     selectionPriority: 1
-    sourceReadiness: pending
   - name: 毗卢洞
     canonicalName: 安岳毗卢洞
     entityType: 地点/遗址
@@ -98,7 +88,6 @@ districts:
     aliases:
     - 紫竹观音
     selectionPriority: 2
-    sourceReadiness: ready
   - name: 卧佛院
     canonicalName: 安岳卧佛院
     entityType: 地点/遗址
@@ -106,7 +95,6 @@ districts:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/安岳县
     selectionPriority: 3
-    sourceReadiness: pending
   - name: 千佛寨
     canonicalName: 安岳千佛寨
     entityType: 地点/遗址
@@ -114,7 +102,6 @@ districts:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/安岳县
     selectionPriority: 4
-    sourceReadiness: pending
   - name: 华严洞
     canonicalName: 安岳华严洞
     entityType: 地点/遗址
@@ -122,7 +109,6 @@ districts:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/安岳县
     selectionPriority: 5
-    sourceReadiness: pending
   - name: 茗山寺
     canonicalName: 安岳茗山寺
     entityType: 地点/遗址
@@ -131,7 +117,6 @@ districts:
     - Entity/地点/宗教场所
     geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/安岳县
     selectionPriority: 6
-    sourceReadiness: pending
   - name: 玄妙观
     canonicalName: 安岳玄妙观
     entityType: 地点/遗址
@@ -139,7 +124,6 @@ districts:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/安岳县
     selectionPriority: 7
-    sourceReadiness: ready
   - name: 孔雀洞
     canonicalName: 安岳孔雀洞
     entityType: 地点/遗址
@@ -147,7 +131,6 @@ districts:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/安岳县
     selectionPriority: 8
-    sourceReadiness: ready
   - name: 木门寺
     canonicalName: 安岳木门寺
     entityType: 地点/遗址
@@ -157,14 +140,12 @@ districts:
     aliases:
     - 无际禅师塔亭
     selectionPriority: 9
-    sourceReadiness: pending
   - name: 中共遂安中心縣委舊址
     canonicalName: 中共遂安中心縣委舊址
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/安岳县
-    sourceReadiness: pending
     selectionPriority: 10
   - name: 中共遂安潼三縣黨員代表大會遺址
     canonicalName: 中共遂安潼三縣黨員代表大會遺址
@@ -172,7 +153,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/安岳县
-    sourceReadiness: pending
     selectionPriority: 11
   - name: 協和廊橋
     canonicalName: 協和廊橋
@@ -180,7 +160,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/安岳县
-    sourceReadiness: pending
     selectionPriority: 12
   - name: 安岳奎閣
     canonicalName: 安岳奎閣
@@ -188,7 +167,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/安岳县
-    sourceReadiness: pending
     selectionPriority: 13
   - name: 安岳文廟
     canonicalName: 安岳文廟
@@ -196,7 +174,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/安岳县
-    sourceReadiness: pending
     selectionPriority: 14
   - name: 安岳木門寺
     canonicalName: 安岳木門寺
@@ -204,7 +181,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/安岳县
-    sourceReadiness: pending
     selectionPriority: 15
   - name: 安岳王劉氏節孝坊
     canonicalName: 安岳王劉氏節孝坊
@@ -212,7 +188,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/安岳县
-    sourceReadiness: pending
     selectionPriority: 16
   - name: 安岳石刻
     canonicalName: 安岳石刻
@@ -220,7 +195,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/安岳县
-    sourceReadiness: pending
     selectionPriority: 17
   - name: 川陝蘇維埃政府遂安中心組織總部兼龍台區委舊址
     canonicalName: 川陝蘇維埃政府遂安中心組織總部兼龍台區委舊址
@@ -228,7 +202,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/安岳县
-    sourceReadiness: pending
     selectionPriority: 18
   - name: 毗卢洞石刻造像
     canonicalName: 毗卢洞石刻造像
@@ -236,7 +209,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/安岳县
-    sourceReadiness: pending
     selectionPriority: 19
   - name: 石羊奎閣
     canonicalName: 石羊奎閣
@@ -244,7 +216,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/安岳县
-    sourceReadiness: pending
     selectionPriority: 20
   - name: 賈島墓
     canonicalName: 賈島墓
@@ -252,7 +223,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/安岳县
-    sourceReadiness: pending
     selectionPriority: 21
   - name: 道林寺
     canonicalName: 道林寺
@@ -260,7 +230,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/安岳县
-    sourceReadiness: pending
     selectionPriority: 22
   - name: 鐵佛寺崖墓群
     canonicalName: 鐵佛寺崖墓群
@@ -268,7 +237,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/安岳县
-    sourceReadiness: pending
     selectionPriority: 23
   - name: 鴛鴦村崖墓群
     canonicalName: 鴛鴦村崖墓群
@@ -276,7 +244,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/安岳县
-    sourceReadiness: pending
     selectionPriority: 24
 - district: 雁江区
   leaves:
@@ -287,9 +254,6 @@ districts:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/雁江区
     selectionPriority: 1
-    sourceReadiness: ready
-    sourceScreenedAt: '2026-07-09T11:54:47Z'
-    sourceScreenEvidence: zh.wikipedia.org:半月山大佛 extract=271ch
   - name: 三贤文化公园
     canonicalName: 资阳三贤文化公园
     entityType: 地点/公园
@@ -297,7 +261,6 @@ districts:
     - Entity/地点/公园
     geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/雁江区
     selectionPriority: 2
-    sourceReadiness: ready
   - name: 花溪谷
     canonicalName: 资阳花溪谷
     entityType: 地点/自然景观
@@ -305,14 +268,12 @@ districts:
     - Entity/地点/自然景观/水体
     geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/雁江区
     selectionPriority: 3
-    sourceReadiness: pending
   - name: 丹山塔
     canonicalName: 丹山塔
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/雁江区
-    sourceReadiness: pending
     selectionPriority: 4
   - name: 丹山黃氏宗祠
     canonicalName: 丹山黃氏宗祠
@@ -320,7 +281,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/雁江区
-    sourceReadiness: pending
     selectionPriority: 5
   - name: 半月山摩崖造像
     canonicalName: 半月山摩崖造像
@@ -328,7 +288,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/雁江区
-    sourceReadiness: pending
     selectionPriority: 6
   - name: 菩薩岩摩崖造像
     canonicalName: 菩薩岩摩崖造像
@@ -336,7 +295,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/雁江区
-    sourceReadiness: pending
     selectionPriority: 7
   - name: 雁江白佛寺石刻
     canonicalName: 雁江白佛寺石刻
@@ -344,5 +302,4 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/雁江区
-    sourceReadiness: pending
     selectionPriority: 8

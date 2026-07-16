@@ -131,14 +131,18 @@ gwt_acceptance:
         cases:
         - api_integration.runtime.deliver_deploy_prod_pipeline.local_gamma_mirror.gwt2_api_integration
         envs:
-        - prod_gray_initial
+        - prod
+        rollout_stages:
+        - gray_initial
       supporting:
       - layer: user_acceptance
         suite: end_to_end_journey
         cases:
         - user_acceptance.runtime.deliver_deploy_prod_pipeline.local_gamma_mirror.end_to_end_journey
         envs:
-        - prod_gray_initial
+        - prod
+        rollout_stages:
+        - gray_initial
     notes:
     - '[migrated_from_planned] prod gray-initial rollout stage 承接真实远端集成与 curated 媒体路由复验链路。'
 execution:

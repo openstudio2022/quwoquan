@@ -2,12 +2,9 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 	"unicode"
-
-	"gopkg.in/yaml.v3"
 )
 
 // link_templates.yaml
@@ -53,12 +50,8 @@ type linkTemplatesFile struct {
 }
 
 func readLinkTemplates(path string) (*linkTemplatesFile, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
 	var parsed linkTemplatesFile
-	if err := yaml.Unmarshal(data, &parsed); err != nil {
+	if err := decodeMetadataDocument(path, &parsed); err != nil {
 		return nil, err
 	}
 	return &parsed, nil

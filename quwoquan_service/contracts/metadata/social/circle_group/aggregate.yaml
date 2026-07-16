@@ -1,0 +1,25 @@
+version: 1
+domain: circle
+aggregate_root: CircleGroup
+object_kind: aggregate_root
+description: Circle 内公共群、自建群或组织节点的主档与治理策略聚合。
+storage_backend: mongodb
+capabilities: [commandable, queryable, idempotent_commands]
+members: []
+business_rules:
+  - circleId 与 groupType 创建后不可变
+  - parentGroupId 必须属于同一 Circle 且层级关系无环
+  - default public group 在同一 Circle 内唯一
+  - conversationId 只能由 Chat Facade 成功事件绑定，不由 Circle 直接创建
+  - archived group 不接受新成员或文件
+  - owner/manager/member 角色只由 CircleGroupMembership 聚合维护
+  - memberCount 与活跃度只由 named Reader/投影派生，不写入权威聚合
+lifecycle:
+  states: [active, archived]
+  optimistic_concurrency: version
+  idempotency: command_receipt
+ddd_layer_mapping:
+  domain_model: internal/domain/circle/circle_group/model
+  ports: internal/domain/circle/circle_group/ports
+  application: internal/application/circle/circle_group
+  persistence: internal/infrastructure/circle/circle_group/persistence

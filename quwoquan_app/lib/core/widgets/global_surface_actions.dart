@@ -555,7 +555,7 @@ class GlobalQuickActionSheet {
         AuthGateReason.createPost,
         redirect: AppRoutePaths.localDrafts,
         dismissFallback: AppRoutePaths.home,
-        allowGuestDismissPop: false,
+        dismissPolicy: LoginDismissPolicy.safeFallback,
       );
       return;
     }
@@ -583,7 +583,7 @@ class GlobalQuickActionSheet {
       context,
       reason,
       dismissFallback: AppRoutePaths.home,
-      allowGuestDismissPop: false,
+      dismissPolicy: LoginDismissPolicy.safeFallback,
     );
   }
 }

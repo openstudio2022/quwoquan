@@ -11,9 +11,9 @@ void main() {
         equals('/v1/user/following-subjects'),
       );
       expect(
-        UserApiMetadata.operationToPathTemplate['MarkFollowingSubjectVisited'],
+        UserApiMetadata.operationToPathTemplate['MarkFollowedSubjectVisited'],
         equals(
-          '/v1/user/following-subjects/{subjectType}/{subjectId}:mark-visited',
+          '/v1/user/followed-subjects/{subjectType}/{subjectId}:mark-visited',
         ),
       );
       expect(
@@ -21,7 +21,7 @@ void main() {
         equals('required'),
       );
       expect(
-        UserApiMetadata.operationToAuthMode['MarkFollowingSubjectVisited'],
+        UserApiMetadata.operationToAuthMode['MarkFollowedSubjectVisited'],
         equals('required'),
       );
       expect(
@@ -29,8 +29,8 @@ void main() {
         equals('user.list.following.subjects'),
       );
       expect(
-        UserRequestPageIds.markFollowingSubjectVisited,
-        equals('user.mark.following.subject.visited'),
+        UserRequestPageIds.markFollowedSubjectVisited,
+        equals('user.mark.followed.subject.visited'),
       );
     });
 

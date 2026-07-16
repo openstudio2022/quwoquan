@@ -8,17 +8,23 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/runtime/models/comment_remote_config.dart';
 import 'package:quwoquan_app/ui/content/comments/widgets/comment_input_overlay.dart';
 import 'package:quwoquan_app/components/comment_system/comment_composer_models.dart';
 import 'package:quwoquan_app/components/comment_system/comment_models.dart';
 import 'package:quwoquan_app/components/input/unified_emoji_picker.dart';
+import 'package:quwoquan_app/components/media/picker/image_pick_gateway.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/platform/file_storage_gateway.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/content/comments/providers/comment_provider.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../../support/cloud_services/content_facet_overrides.dart';
+import '../../../../support/recording_content_media_facet.dart';
+import '../../../../support/cloud_services/test_content_comment_facet.dart';
 
 class _AuthenticatedSession extends AuthSessionController {
   @override
@@ -49,7 +55,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          contentRepositoryProvider.overrideWithValue(MockContentRepository()),
+          ...mockContentFacetOverrides(MockContentRepository()),
           analyticsProvider.overrideWithValue(AnalyticsService.forTesting()),
         ],
         child: CupertinoApp(
@@ -161,9 +167,19 @@ Widget _overlayHarness({
 }) {
   return ProviderScope(
     overrides: [
-      contentRepositoryProvider.overrideWithValue(MockContentRepository()),
+      ...mockContentFacetOverrides(MockContentRepository()),
       analyticsProvider.overrideWithValue(AnalyticsService.forTesting()),
       authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
+      activePersonaContextProvider.overrideWith(
+        (ref) async => const ActivePersonaContextViewData(
+          subAccountId: 'test-sub-account',
+          ownerUserId: 'test-user',
+          subjectType: 'subAccount',
+          displayName: '测试用户',
+          avatarUrl: '',
+          personaContextVersion: '1',
+        ),
+      ),
     ],
     child: CupertinoApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -187,17 +203,27 @@ Widget _overlayHarness({
 }
 
 /// 复现用户主路径：经 commentProvider.addComment（非自定义 onSubmit）提交评论。
-/// alpha mock 下 requiresResolvedPersonaForMutations=false，persona 回退也不应抛
-/// StateError；提交后 mock 记录一次 createComment、provider 状态乐观插入新评论。
+/// 提交必须经 typed command，然后从权威查询投影回读，不构造兼容 DTO。
 Future<void> testCommentSubmitThroughProvider() async {
   SharedPreferences.setMockInitialValues(const <String, Object>{});
   final repo = MockContentRepository();
+  final comments = TestContentCommentFacet();
   const postId = 'alpha_photo_landscape_single';
   final container = ProviderContainer(
     overrides: [
-      contentRepositoryProvider.overrideWithValue(repo),
+      ...mockContentFacetOverrides(repo, commentFacet: comments),
       analyticsProvider.overrideWithValue(AnalyticsService.forTesting()),
       authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
+      activePersonaContextProvider.overrideWith(
+        (ref) async => const ActivePersonaContextViewData(
+          subAccountId: 'test-sub-account',
+          ownerUserId: 'test-user',
+          subjectType: 'subAccount',
+          displayName: '测试用户',
+          avatarUrl: '',
+          personaContextVersion: '1',
+        ),
+      ),
     ],
   );
   addTearDown(container.dispose);
@@ -206,14 +232,14 @@ Future<void> testCommentSubmitThroughProvider() async {
   final result = await notifier.addComment('测试发评论是否可用');
 
   expect(result, isNotNull, reason: 'addComment 应返回云侧确认评论');
-  expect(repo.createCommentCallCount, 1, reason: '应真实调用一次 createComment');
-  expect(repo.lastCommentPostId, postId);
-  expect(repo.lastCommentText, '测试发评论是否可用');
+  expect(comments.createCalls, 1, reason: '应真实调用一次 typed createComment');
+  expect(comments.lastCreateCommand?.postId, postId);
+  expect(comments.lastCreateCommand?.content, '测试发评论是否可用');
   final state = container.read(commentProviderFamily(postId));
   expect(
     state.comments.any((c) => c.content == '测试发评论是否可用'),
     isTrue,
-    reason: '乐观插入后评论应出现在列表中',
+    reason: '权威投影回读后评论应出现在列表中',
   );
 }
 
@@ -222,12 +248,26 @@ Future<void> testCommentComposerMentionsAndAttachment(
 ) async {
   SharedPreferences.setMockInitialValues(const <String, Object>{});
   final submittedPayloads = <CommentComposerPayload>[];
+  final media = RecordingContentMediaFacet();
+  const selectedPath = '/tmp/comment-attachment.jpg';
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        contentRepositoryProvider.overrideWithValue(MockContentRepository()),
+        ...mockContentFacetOverrides(MockContentRepository()),
         analyticsProvider.overrideWithValue(AnalyticsService.forTesting()),
         authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
+        imagePickGatewayProvider.overrideWithValue(
+          const _SelectedImagePickGateway(selectedPath),
+        ),
+        fileStorageGatewayProvider.overrideWithValue(
+          const _MemoryFileStorageGateway(<String, List<int>>{
+            selectedPath: <int>[1, 2, 3, 4],
+          }),
+        ),
+        homeFeedContentMediaFacetProvider.overrideWithValue(media),
+        contentMediaObjectUploadProvider.overrideWithValue(
+          (_, _, {required contentType, required expectedSha256}) async {},
+        ),
         commentRemoteConfigProvider.overrideWithValue(
           const CommentRemoteConfig(maxImageAttachments: 1),
         ),
@@ -243,18 +283,18 @@ Future<void> testCommentComposerMentionsAndAttachment(
                   context,
                   postId: 'comment-compose-post',
                   config: const CommentConfig(maxImageAttachments: 1),
-                  mentionCandidates: const <CommentMentionCandidate>[
-                    CommentMentionCandidate(
+                  mentionCandidates: <ContentCommentMention>[
+                    ContentCommentMention(
                       subjectType: 'assistant',
                       subjectId: 'assistant_xiaoqu',
                       displayName: UITextConstants.assistantEntryXiaoqu,
                     ),
-                    CommentMentionCandidate(
+                    ContentCommentMention(
                       subjectType: 'user',
                       subjectId: 'mutual_user_1',
                       displayName: '互相关注小雨',
                     ),
-                    CommentMentionCandidate(
+                    ContentCommentMention(
                       subjectType: 'user',
                       subjectId: 'following_user_1',
                       displayName: '关注阿青',
@@ -309,9 +349,67 @@ Future<void> testCommentComposerMentionsAndAttachment(
   final payload = submittedPayloads.single;
   expect(payload.content, contains('@小趣'));
   expect(payload.attachmentMediaIds, hasLength(1));
+  expect(media.initCommands, hasLength(1));
+  expect(media.completedSessions, <String>['session_1']);
+  expect(media.abortedSessions, isEmpty);
+  expect(payload.attachmentMediaIds.single, 'image_asset_1');
   expect(payload.mentions, hasLength(1));
   expect(
     payload.mentions.single.displayName,
     equals(UITextConstants.assistantEntryXiaoqu),
   );
+}
+
+final class _SelectedImagePickGateway implements ImagePickGateway {
+  const _SelectedImagePickGateway(this.path);
+
+  final String path;
+
+  @override
+  Future<String?> pickImage(
+    BuildContext context, {
+    required ImagePickSource source,
+    required String cameraRouteName,
+    required String galleryRouteName,
+  }) async => path;
+}
+
+final class _MemoryFileStorageGateway implements FileStorageGateway {
+  const _MemoryFileStorageGateway(this.bytesByPath);
+
+  final Map<String, List<int>> bytesByPath;
+
+  @override
+  bool get isSupported => true;
+
+  @override
+  Future<String> applicationSupportPath() async => '/tmp/support';
+
+  @override
+  Future<String> temporaryPath() async => '/tmp';
+
+  @override
+  Future<bool> exists(String path) async => bytesByPath.containsKey(path);
+
+  @override
+  Future<String> readAsString(String path) async => '';
+
+  @override
+  Future<void> writeAsString(String path, String contents) async {}
+
+  @override
+  Future<List<int>> readAsBytes(String path) async => bytesByPath[path]!;
+
+  @override
+  Future<void> writeAsBytes(String path, List<int> bytes) async {}
+
+  @override
+  Future<void> delete(String path) async {}
+
+  @override
+  Future<void> ensureDirectory(String path) async {}
+
+  @override
+  Future<List<FileSystemEntry>> listDirectory(String path) async =>
+      const <FileSystemEntry>[];
 }

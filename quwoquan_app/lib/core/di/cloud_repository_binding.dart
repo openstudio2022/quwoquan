@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/core/services/app_content_repository.dart';
+import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 
 /// 组合根：按 [AppDataSourceMode] 在 Remote / Mock 实现间二选一（业务代码不分支）。
 ///

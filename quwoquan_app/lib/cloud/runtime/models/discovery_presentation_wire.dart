@@ -1,6 +1,6 @@
 /// 发现流展示 wire 的强类型封装。
 ///
-/// 替代 `ContentRepository.discoveryPresentationWireForPost` 既有的
+/// 替代 `ContentReadRepository.discoveryPresentationWireForPost` 既有的
 /// `Map<String, dynamic>?` 裸返回（R04）。对消费方暴露强类型 getter；
 /// [toWireMap] 把底层 canonical wire row 透传给统一映射器
 /// [ContentSurfaceViewMapper.fromDto]（其 `tagRefs` / read-presentation 取数仍以
@@ -29,9 +29,6 @@ class DiscoveryPresentationWire {
     }
     return const <String>[];
   }
-
-  /// 来源圈子名（无则空串）。
-  String get circleName => _fields['circleName']?.toString().trim() ?? '';
 
   /// 可见性（默认 public）。
   String get visibility => _fields['visibility']?.toString() ?? 'public';

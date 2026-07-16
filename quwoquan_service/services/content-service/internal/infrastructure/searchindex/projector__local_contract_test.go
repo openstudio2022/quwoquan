@@ -97,8 +97,9 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 // fakeReader is an in-memory PostReader for projector/backfill tests.
 type fakeReader struct {
-	byID map[string]postmodel.Post
-	all  []postmodel.Post
+	byID    map[string]postmodel.Post
+	all     []postmodel.Post
+	listErr error
 }
 
 func (r fakeReader) FindByID(_ context.Context, id string) (*postmodel.Post, bool) {
@@ -110,7 +111,7 @@ func (r fakeReader) FindByID(_ context.Context, id string) (*postmodel.Post, boo
 	return &cp, true
 }
 
-func (r fakeReader) ListAll(_ context.Context) []postmodel.Post { return r.all }
+func (r fakeReader) ListAll(_ context.Context) ([]postmodel.Post, error) { return r.all, r.listErr }
 
 func publishedPost() postmodel.Post {
 	return postmodel.Post{
@@ -236,7 +237,7 @@ func TestProjectorIgnoresCounterOnlyEvents(t *testing.T) {
 	f := newFakeES()
 	proj := newProjectorWithFakeES(t, f, fakeReader{byID: map[string]postmodel.Post{post.ID: post}})
 
-	for _, et := range []string{"ContentReacted", "BehaviorBatchReported", "SomethingElse"} {
+	for _, et := range []string{"ContentReactionActivated", "EventBatchReported", "SomethingElse"} {
 		if err := proj.Project(context.Background(), ports.ProjectorEvent{Type: et, AggregateID: post.ID}); err != nil {
 			t.Fatalf("Project(%s) err=%v", et, err)
 		}
@@ -246,9 +247,10 @@ func TestProjectorIgnoresCounterOnlyEvents(t *testing.T) {
 	}
 }
 
-// TestProjectorESOutageDoesNotBlock asserts an ES write failure is swallowed
-// (recorded, returns nil) so the primary post write path is never blocked.
-func TestProjectorESOutageDoesNotBlock(t *testing.T) {
+// TestProjectorESOutageKeepsOutboxConsumerReplayable asserts an ES failure is
+// returned to the dedicated relay. The primary write has already committed;
+// this error only prevents the search consumer checkpoint from advancing.
+func TestProjectorESOutageKeepsOutboxConsumerReplayable(t *testing.T) {
 	post := publishedPost()
 	f := newFakeES()
 	f.writeFailStatus = http.StatusServiceUnavailable
@@ -256,8 +258,8 @@ func TestProjectorESOutageDoesNotBlock(t *testing.T) {
 
 	if err := proj.Project(context.Background(), ports.ProjectorEvent{
 		Type: "PostPublished", AggregateID: post.ID,
-	}); err != nil {
-		t.Fatalf("ES outage must not propagate to the write path, got err=%v", err)
+	}); err == nil {
+		t.Fatal("ES outage must fail the search outbox consumer")
 	}
 }
 

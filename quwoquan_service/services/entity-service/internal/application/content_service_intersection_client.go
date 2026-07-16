@@ -81,5 +81,9 @@ func fetchContentServiceObjectIntersections(
 	if len(payload.Items) == 0 {
 		return nil, false
 	}
+	for i := range payload.Items {
+		delete(payload.Items[i], "sourceRefs")
+		delete(payload.Items[i], "primaryEvidenceRef")
+	}
 	return payload.Items, true
 }

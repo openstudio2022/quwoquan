@@ -2,35 +2,50 @@ package application
 
 import (
 	"context"
+	"fmt"
+	"reflect"
 	"time"
 
 	"quwoquan_service/runtime/reliabletask"
 )
 
+const NotificationPushRequestedEvent = "notification.push.requested"
+
 type DeliveryAdapter interface {
 	Deliver(ctx context.Context, notification reliabletask.NotificationOutboxRecord, recipientID string) (int64, error)
 }
 
+type NotificationDeliveryStore interface {
+	reliabletask.Store
+}
+
 type NotificationDeliveryService struct {
-	store   reliabletask.Store
 	worker  reliabletask.NotificationWorker
 	adapter DeliveryAdapter
 	limiter *reliabletask.RateLimiter
 	policy  reliabletask.RateLimitPolicy
 }
 
-func NewNotificationDeliveryService(store reliabletask.Store, adapter DeliveryAdapter, policy reliabletask.RateLimitPolicy) *NotificationDeliveryService {
-	if store == nil {
-		store = reliabletask.NewMemoryStore()
+func NewNotificationDeliveryService(
+	store NotificationDeliveryStore,
+	adapter DeliveryAdapter,
+	policy reliabletask.RateLimitPolicy,
+) (*NotificationDeliveryService, error) {
+	if isNilDependency(store) {
+		return nil, fmt.Errorf("notification delivery store is required")
 	}
-	if adapter == nil {
-		adapter = NoopDeliveryAdapter{}
+	if isNilDependency(adapter) {
+		return nil, fmt.Errorf("notification delivery adapter is required")
+	}
+	if policy.DispatchPerSecond <= 0 ||
+		policy.ClaimPerSecond <= 0 ||
+		policy.RetryPerSecond <= 0 {
+		return nil, fmt.Errorf("notification delivery rate limits must be positive")
 	}
 	return &NotificationDeliveryService{
-		store: store,
 		worker: reliabletask.NotificationWorker{
 			Store:      store,
-			EventTypes: []string{"notification.push.requested", "notification.in_app.requested"},
+			EventTypes: []string{NotificationPushRequestedEvent},
 			WorkerID:   "notification-delivery-worker",
 			LeaseTTL:   30 * time.Second,
 			Retry:      reliabletask.DefaultRetryPolicy(),
@@ -38,7 +53,7 @@ func NewNotificationDeliveryService(store reliabletask.Store, adapter DeliveryAd
 		adapter: adapter,
 		limiter: reliabletask.NewRateLimiter(),
 		policy:  policy,
-	}
+	}, nil
 }
 
 func (s *NotificationDeliveryService) ProcessOne(ctx context.Context) (bool, error) {
@@ -50,27 +65,20 @@ func (s *NotificationDeliveryService) ProcessOne(ctx context.Context) (bool, err
 	return worker.ProcessOne(ctx, s.adapter.Deliver)
 }
 
-func (s *NotificationDeliveryService) Metrics(ctx context.Context) (reliabletask.MetricsSnapshot, error) {
-	metrics, ok := s.store.(reliabletask.MetricsStore)
-	if !ok {
-		return reliabletask.MetricsSnapshot{}, nil
+func isNilDependency(value any) bool {
+	if value == nil {
+		return true
 	}
-	return metrics.ReliableTaskMetrics(ctx)
-}
-
-func (s *NotificationDeliveryService) RecoverNotification(ctx context.Context, notificationID string) error {
-	recovery, ok := s.store.(reliabletask.DLQRecoveryStore)
-	if !ok {
-		return nil
+	reflected := reflect.ValueOf(value)
+	switch reflected.Kind() {
+	case reflect.Chan,
+		reflect.Func,
+		reflect.Interface,
+		reflect.Map,
+		reflect.Pointer,
+		reflect.Slice:
+		return reflected.IsNil()
+	default:
+		return false
 	}
-	return recovery.RecoverDeadNotification(ctx, notificationID, time.Now().UTC())
-}
-
-type NoopDeliveryAdapter struct{}
-
-func (NoopDeliveryAdapter) Deliver(ctx context.Context, notification reliabletask.NotificationOutboxRecord, recipientID string) (int64, error) {
-	_ = ctx
-	_ = notification
-	_ = recipientID
-	return time.Now().UTC().UnixNano(), nil
 }

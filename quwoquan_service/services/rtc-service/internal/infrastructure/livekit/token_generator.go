@@ -8,17 +8,40 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"quwoquan_service/services/rtc-service/internal/application"
 )
+
+var _ application.CallTokenIssuer = (*ParticipantTokenIssuer)(nil)
+
+// ParticipantTokenIssuer 使用 LiveKit 凭证实现应用层令牌签发端口。
+type ParticipantTokenIssuer struct {
+	apiKey    string
+	apiSecret string
+	ttl       time.Duration
+}
+
+func NewParticipantTokenIssuer(apiKey, apiSecret string) *ParticipantTokenIssuer {
+	return &ParticipantTokenIssuer{
+		apiKey:    apiKey,
+		apiSecret: apiSecret,
+		ttl:       6 * time.Hour,
+	}
+}
+
+func (i *ParticipantTokenIssuer) GenerateParticipantToken(roomName, participantIdentity string) (string, error) {
+	return GenerateAccessToken(i.apiKey, i.apiSecret, roomName, participantIdentity, i.ttl)
+}
 
 // VideoGrant defines LiveKit room permissions embedded in the JWT.
 type VideoGrant struct {
-	Room             string `json:"room,omitempty"`
-	RoomJoin         bool   `json:"roomJoin,omitempty"`
-	RoomCreate       bool   `json:"roomCreate,omitempty"`
-	RoomAdmin        bool   `json:"roomAdmin,omitempty"`
-	CanPublish       bool   `json:"canPublish,omitempty"`
-	CanSubscribe     bool   `json:"canSubscribe,omitempty"`
-	CanPublishData   bool   `json:"canPublishData,omitempty"`
+	Room           string `json:"room,omitempty"`
+	RoomJoin       bool   `json:"roomJoin,omitempty"`
+	RoomCreate     bool   `json:"roomCreate,omitempty"`
+	RoomAdmin      bool   `json:"roomAdmin,omitempty"`
+	CanPublish     bool   `json:"canPublish,omitempty"`
+	CanSubscribe   bool   `json:"canSubscribe,omitempty"`
+	CanPublishData bool   `json:"canPublishData,omitempty"`
 }
 
 type jwtHeader struct {

@@ -14,18 +14,16 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
-	"github.com/jackc/pgx/v5/pgconn"
 	"go.opentelemetry.io/otel/attribute"
 
 	rtauth "quwoquan_service/runtime/auth"
-	runtimegovernance "quwoquan_service/runtime/governance"
 	rtobs "quwoquan_service/runtime/observability"
+	"quwoquan_service/runtime/otpseal"
 	"quwoquan_service/services/user-service/internal/domain/user/model"
-	userrepo "quwoquan_service/services/user-service/internal/domain/user/repository"
-	usertelemetry "quwoquan_service/services/user-service/internal/domain/user/telemetry"
+	userrepo "quwoquan_service/services/user-service/internal/domain/user/ports"
 	"quwoquan_service/services/user-service/internal/generated"
-	"quwoquan_service/services/user-service/internal/infrastructure/cache"
 )
 
 const (
@@ -41,8 +39,12 @@ const (
 	personaStatusActive   = "active"
 	personaStatusRetired  = "retired"
 	maxLoginFailCount     = 5
+	maxOTPFailCount       = 5
 	lockDurationMinutes   = 30
 	refreshTokenTTLHours  = 24 * 30
+
+	anonymousDevicePlatformMaxRunes   = 16
+	anonymousDeviceAppVersionMaxRunes = 32
 
 	// defaultNewUserNicknamePrefix 是首次创建用户的系统默认昵称前缀。
 	// 云侧可通过 WithDefaultNicknamePrefix 覆盖（USER_DEFAULT_NICKNAME_PREFIX）。
@@ -51,28 +53,30 @@ const (
 
 // AuthService handles OwnerAccount authentication and credential binding.
 type AuthService struct {
-	profiles         userrepo.ProfileRepository
-	personas         userrepo.PersonaRepository
-	credentials      userrepo.CredentialRepository
-	userAuth         userrepo.UserAuthRepository
-	userDevices      userrepo.UserDeviceRepository
-	consents         userrepo.ConsentRepository
-	anonymousDevices userrepo.AnonymousDeviceBindingRepository
-	pcache           *cache.ProfileCache
+	profiles         userrepo.UserProfileStore
+	personas         PersonaStore
+	credentials      userrepo.CredentialBindingStore
+	userAuth         userrepo.AccountSessionStore
+	userDevices      userrepo.DeviceRegistrationStore
+	consents         userrepo.ConsentRecordStore
+	anonymousDevices userrepo.AnonymousDeviceBindingStore
 	shardDirectory   *ShardDirectory
 	oneTapResolver   OneTapPhoneResolver
 	otp              OtpCodeStore
 	otpChallenges    OtpChallengeStore
+	otpCodeSealer    OTPCodeSealer
+	otpCodeGenerator func() (string, error)
 	externalClient   ExternalInteractionClient
-	otpDebugReveal   bool
-	otpPassThrough   SmsOtpPassThroughConfig
-	otpSandbox       SandboxAllowlist
 	socialProviders  ExternalAuthProviderClient
 	accessSigner     *rtauth.Signer
 	nicknamePrefix   string
 }
 
 type AuthServiceOption func(*AuthService)
+
+type OTPCodeSealer interface {
+	Seal(secret otpseal.Secret, binding otpseal.Binding) (string, error)
+}
 
 type OneTapPhoneResolver interface {
 	ResolvePhone(ctx context.Context, vendor, carrierToken string) (phone string, displayLabel string, err error)
@@ -88,11 +92,10 @@ type OtpCodeStore interface {
 }
 
 func NewAuthService(
-	profiles userrepo.ProfileRepository,
-	personas userrepo.PersonaRepository,
-	credentials userrepo.CredentialRepository,
-	anonymousDevices userrepo.AnonymousDeviceBindingRepository,
-	pcache *cache.ProfileCache,
+	profiles userrepo.UserProfileStore,
+	personas PersonaStore,
+	credentials userrepo.CredentialBindingStore,
+	anonymousDevices userrepo.AnonymousDeviceBindingStore,
 	shardDirectory *ShardDirectory,
 	opts ...AuthServiceOption,
 ) *AuthService {
@@ -101,12 +104,10 @@ func NewAuthService(
 		personas:         personas,
 		credentials:      credentials,
 		anonymousDevices: anonymousDevices,
-		pcache:           pcache,
 		shardDirectory:   shardDirectory,
 		oneTapResolver:   TokenEncodedOneTapPhoneResolver{},
-		otpChallenges:    NewMemoryOtpChallengeStore(),
-		otpPassThrough:   SmsOtpPassThroughConfig{Mode: SmsOtpPassThroughDisabled},
 		nicknamePrefix:   defaultNewUserNicknamePrefix,
+		otpCodeGenerator: generateOtpCode,
 	}
 	for _, opt := range opts {
 		if opt != nil {
@@ -114,6 +115,22 @@ func NewAuthService(
 		}
 	}
 	return svc
+}
+
+func WithOTPCodeSealer(sealer OTPCodeSealer) AuthServiceOption {
+	return func(s *AuthService) {
+		if sealer != nil {
+			s.otpCodeSealer = sealer
+		}
+	}
+}
+
+func WithOTPCodeGenerator(generator func() (string, error)) AuthServiceOption {
+	return func(s *AuthService) {
+		if generator != nil {
+			s.otpCodeGenerator = generator
+		}
+	}
 }
 
 // WithDefaultNicknamePrefix 注入系统默认昵称前缀（云侧可配置）。
@@ -126,19 +143,19 @@ func WithDefaultNicknamePrefix(prefix string) AuthServiceOption {
 	}
 }
 
-func WithUserAuthRepository(repo userrepo.UserAuthRepository) AuthServiceOption {
+func WithAccountSessionStore(repo userrepo.AccountSessionStore) AuthServiceOption {
 	return func(s *AuthService) {
 		s.userAuth = repo
 	}
 }
 
-func WithUserDeviceRepository(repo userrepo.UserDeviceRepository) AuthServiceOption {
+func WithDeviceRegistrationStore(repo userrepo.DeviceRegistrationStore) AuthServiceOption {
 	return func(s *AuthService) {
 		s.userDevices = repo
 	}
 }
 
-func WithConsentRepository(repo userrepo.ConsentRepository) AuthServiceOption {
+func WithConsentRecordStore(repo userrepo.ConsentRecordStore) AuthServiceOption {
 	return func(s *AuthService) {
 		s.consents = repo
 	}
@@ -173,33 +190,8 @@ func WithExternalInteractionClient(client ExternalInteractionClient) AuthService
 	}
 }
 
-// WithOtpDebugReveal 在非生产环境下让 SendOtp 返回明文验证码，便于本地/CI 联调。
-// 生产必须为 false。
-func WithOtpDebugReveal(reveal bool) AuthServiceOption {
-	return func(s *AuthService) {
-		s.otpDebugReveal = reveal
-	}
-}
-
-func WithSmsOtpPassThroughConfig(config SmsOtpPassThroughConfig) AuthServiceOption {
-	return func(s *AuthService) {
-		if strings.TrimSpace(config.Mode) == "" {
-			config.Mode = SmsOtpPassThroughDisabled
-		}
-		s.otpPassThrough = config
-	}
-}
-
-// WithSmsOtpSandboxAllowlist 注入 gamma 受控放通白名单：仅命中号码跳过真实下发并回填验证码，
-// 真实用户仍走严格校验。生产必须为空（由 SandboxAllowlist.Validate 在装配期强制）。
-func WithSmsOtpSandboxAllowlist(list SandboxAllowlist) AuthServiceOption {
-	return func(s *AuthService) {
-		s.otpSandbox = list
-	}
-}
-
 // WithExternalAuthProviderClient 注入社交登录（微信/支付宝/QQ）票据置换实现。
-// 按环境分别注入 mock（alpha/beta）、sandbox 包装（gamma）、真实 HTTP（prod）。
+// 所有 Remote 环境只注入真实 HTTP provider；alpha fixture 不进入服务进程。
 func WithExternalAuthProviderClient(client ExternalAuthProviderClient) AuthServiceOption {
 	return func(s *AuthService) {
 		if client != nil {
@@ -271,6 +263,29 @@ func (s *AuthService) LoginWithCredential(ctx context.Context, credType, credKey
 
 // LoginWithSocialProvider 用社交提供方（微信/支付宝/QQ）的短期授权码登录。
 // App 只上传 authCode，服务端置换稳定身份并在首次登录时同步昵称/头像。
+func (s *AuthService) CreateSocialAuthorizationRequest(
+	ctx context.Context,
+	provider string,
+) (string, time.Time, error) {
+	provider, supported := NormalizeSocialProvider(provider)
+	if !supported {
+		return "", time.Time{}, generated.AppErrorFromInvalidArgument("unsupported social provider")
+	}
+	issuer, ok := s.socialProviders.(ExternalAuthAuthorizationIssuer)
+	if !ok {
+		return "", time.Time{}, generated.AppErrorFromSocialProviderUnavailable(
+			provider + " authorization issuer unavailable",
+		)
+	}
+	payload, expiresAt, err := issuer.CreateAuthorizationRequest(ctx, provider)
+	if err != nil {
+		return "", time.Time{}, generated.AppErrorFromSocialProviderUnavailable(
+			provider + " authorization request unavailable",
+		)
+	}
+	return payload, expiresAt, nil
+}
+
 func (s *AuthService) LoginWithSocialProvider(
 	ctx context.Context,
 	provider, authCode, deviceID, platform, appVersion string,
@@ -690,6 +705,10 @@ func (s *AuthService) LoginAnonymously(
 	if deviceFingerprintHash == "" {
 		return nil, generated.AppErrorFromInvalidArgument("deviceFingerprintHash is required")
 	}
+	platform, appVersion, err = validateAnonymousDeviceMetadata(platform, appVersion)
+	if err != nil {
+		return nil, err
+	}
 
 	var ownerID string
 	if s.anonymousDevices != nil {
@@ -731,6 +750,22 @@ func (s *AuthService) LoginAnonymously(
 		return nil, generated.AppErrorFromInternalError(fmt.Sprintf("persist anonymous device binding: %v", err))
 	}
 	return s.issueLoginResult(ctx, ownerID, credentialAnonymousDevice, "")
+}
+
+func validateAnonymousDeviceMetadata(platform, appVersion string) (string, string, error) {
+	normalizedPlatform := strings.TrimSpace(platform)
+	if normalizedPlatform == "" {
+		normalizedPlatform = "unknown"
+	}
+	if utf8.RuneCountInString(normalizedPlatform) > anonymousDevicePlatformMaxRunes {
+		return "", "", generated.AppErrorFromInvalidArgument("platform exceeds 16 characters")
+	}
+
+	normalizedAppVersion := strings.TrimSpace(appVersion)
+	if utf8.RuneCountInString(normalizedAppVersion) > anonymousDeviceAppVersionMaxRunes {
+		return "", "", generated.AppErrorFromInvalidArgument("appVersion exceeds 32 characters")
+	}
+	return normalizedPlatform, normalizedAppVersion, nil
 }
 
 // BindCredential binds a new credential to an existing OwnerAccount.
@@ -956,11 +991,12 @@ func buildLoginAccountHint(profile *model.UserProfile, fallbackMaskedPhone strin
 		maskedPhone = maskPhoneForDisplay(profile.Phone)
 	}
 	return map[string]any{
-		"displayName":    displayName,
-		"avatarUrl":      avatarURLWithVersion(profile.AvatarURL, profile.AvatarVersion),
-		"avatarAssetId":  strings.TrimSpace(profile.AvatarAssetID),
-		"maskedPhone":    maskedPhone,
-		"identityOrigin": strings.TrimSpace(profile.IdentityOrigin),
+		"displayName":        displayName,
+		"nicknameCustomized": profile.NicknameCustomized,
+		"avatarUrl":          avatarURLWithVersion(profile.AvatarURL, profile.AvatarVersion),
+		"avatarAssetId":      strings.TrimSpace(profile.AvatarAssetID),
+		"maskedPhone":        maskedPhone,
+		"identityOrigin":     strings.TrimSpace(profile.IdentityOrigin),
 	}
 }
 
@@ -1188,20 +1224,22 @@ func generateToken() (string, error) {
 	return base64.URLEncoding.EncodeToString(b), nil
 }
 
-// issueAccessToken 在配置签发器时签发短期 JWT（principal=owner/persona），
-// 否则回退到不透明随机串。token_version 暂以 0 占位（吊销目前依赖 refresh 轮换）。
+// issueAccessToken 只签发经统一 trust root 配置的短期 JWT。
 func (s *AuthService) issueAccessToken(ownerID string, activeSub *model.Persona) (string, error) {
 	if s.accessSigner == nil {
-		return generateToken()
+		return "", generated.AppErrorFromInternalError("access token signer unavailable")
 	}
 	persona := ""
 	if activeSub != nil {
 		persona = activeSub.SubAccountID
 	}
-	return s.accessSigner.Sign(ownerID, persona, 0, "user")
+	return s.accessSigner.Sign(rtauth.TokenSubject{
+		AccountID: ownerID,
+		PersonaID: persona,
+	})
 }
 
-// OtpSendResult 描述一次发码结果；DebugCode 仅在非生产开启 reveal 时填充。
+// OtpSendResult 描述一次发码结果；验证码永不进入 API response。
 type OtpSendResult struct {
 	MaskedPhone       string `json:"maskedPhone"`
 	ExpiresInSeconds  int    `json:"expiresInSeconds"`
@@ -1209,7 +1247,6 @@ type OtpSendResult struct {
 	ChallengeID       string `json:"challengeId,omitempty"`
 	DeliveryStatus    string `json:"deliveryStatus"`
 	RetryAfterSeconds int    `json:"retryAfterSeconds,omitempty"`
-	DebugCode         string `json:"debugCode,omitempty"`
 }
 
 // verifyOtp 校验验证码：只信任持久化 challenge 状态、hash、过期与一次性消费标记。
@@ -1222,16 +1259,6 @@ func (s *AuthService) verifyOtp(ctx context.Context, phone, code string) error {
 		return generated.AppErrorFromInvalidArgument("otpCode required")
 	}
 	now := time.Now().UTC()
-	if s.otpPassThrough.Allows(now) {
-		challenge, err := s.otpChallenges.FindLatestChallenge(ctx, phone, now)
-		if err != nil {
-			return generated.AppErrorFromInternalError(fmt.Sprintf("otp challenge read: %v", err))
-		}
-		if challenge != nil {
-			_ = s.otpChallenges.ConsumeChallenge(ctx, challenge.ChallengeID, now)
-		}
-		return nil
-	}
 	challenge, err := s.otpChallenges.FindLatestChallenge(ctx, phone, now)
 	if err != nil {
 		return generated.AppErrorFromInternalError(fmt.Sprintf("otp challenge read: %v", err))
@@ -1243,6 +1270,13 @@ func (s *AuthService) verifyOtp(ctx context.Context, phone, code string) error {
 		return generated.AppErrorFromOtpExpired("otp not ready")
 	}
 	if challenge.CodeHash != hashOTPCode(challenge.ChallengeID, phone, code) {
+		_, exhausted, recordErr := s.otpChallenges.RecordFailedAttempt(ctx, challenge.ChallengeID, maxOTPFailCount, now)
+		if recordErr != nil {
+			return generated.AppErrorFromInternalError(fmt.Sprintf("otp failed attempt record: %v", recordErr))
+		}
+		if exhausted {
+			return generated.AppErrorFromOtpAttemptsExceeded("otp attempts exceeded")
+		}
 		return generated.AppErrorFromOtpMismatch("otp mismatch")
 	}
 	_ = s.otpChallenges.ConsumeChallenge(ctx, challenge.ChallengeID, now)
@@ -1313,970 +1347,12 @@ func generateOtpCode() (string, error) {
 	return fmt.Sprintf("%0*d", digits, n.Int64()), nil
 }
 
+// GenerateSecureOTPCode 暴露安全随机验证码生成器供运行时环境装配使用。
+func GenerateSecureOTPCode() (string, error) {
+	return generateOtpCode()
+}
+
 // SubAccountService handles SubAccount lifecycle within an OwnerAccount.
-type SubAccountService struct {
-	personas userrepo.PersonaRepository
-	profiles userrepo.ProfileRepository
-	pcache   *cache.ProfileCache
-}
-
-func NewSubAccountService(
-	personas userrepo.PersonaRepository,
-	profiles userrepo.ProfileRepository,
-	pcache *cache.ProfileCache,
-) *SubAccountService {
-	return &SubAccountService{personas: personas, profiles: profiles, pcache: pcache}
-}
-
-// ListSubAccounts returns all sub-accounts for an owner.
-func (s *SubAccountService) ListSubAccounts(ctx context.Context, ownerID string) ([]model.Persona, error) {
-	return s.personas.FindByUserID(ctx, ownerID)
-}
-
-// CreateSubAccount creates a new isolated sub-account for the owner.
-func (s *SubAccountService) CreateSubAccount(ctx context.Context, ownerID string, data map[string]any) (*model.Persona, error) {
-	if _, ok := data["userHandle"]; ok {
-		return nil, generated.AppErrorFromSubAccountHandleReadonly("userHandle is system assigned")
-	}
-	primary, _ := s.personas.FindActiveByUserID(ctx, ownerID)
-	if primary == nil {
-		personas, err := s.personas.FindByUserID(ctx, ownerID)
-		if err == nil {
-			primary = primaryPersona(personas)
-		}
-	}
-	owner, _ := s.profiles.FindByID(ctx, ownerID)
-	newSubAccountID, err := buildSubAccountIdentity(extractOwnerRootPrefix(ownerID))
-	if err != nil {
-		return nil, err
-	}
-	p := &model.Persona{
-		UserID:                   ownerID,
-		SubAccountID:             newSubAccountID,
-		UserHandle:               systemUserHandleForSubAccount(newSubAccountID),
-		IsolationLevel:           defaultIsolationLevel,
-		InheritsProfileFromOwner: true,
-		OverriddenProfileFields:  encodeProfileFieldList(nil),
-		LastProfileSyncSource:    "initial_inherit",
-	}
-	if v, ok := data["displayName"].(string); ok {
-		p.DisplayName = strings.TrimSpace(v)
-	}
-	if v, ok := data["avatarUrl"].(string); ok {
-		p.AvatarURL = strings.TrimSpace(v)
-	}
-	if v, ok := data["isolationLevel"].(string); ok {
-		p.IsolationLevel = v
-	}
-	if v, ok := data["purposeHint"].(string); ok {
-		p.PurposeHint = v
-	}
-	if primary != nil {
-		p.Phone = primary.Phone
-		p.Email = primary.Email
-	} else if owner != nil {
-		p.Phone = owner.Phone
-	}
-	now := time.Now().UTC()
-	p.LastProfileSyncAt = &now
-	normalizePersonaPersistence(p)
-	if err := s.personas.Create(ctx, p); err != nil {
-		if isPersonaHandleUniqueConstraint(err) {
-			return nil, ErrPersonaHandleTaken
-		}
-		return nil, err
-	}
-	// Bump sub_account_count
-	_ = s.pcache.Del(ctx, ownerID)
-	return p, nil
-}
-
-func (s *SubAccountService) UpdatePersona(ctx context.Context, ownerID, personaID string, data map[string]any) (*model.Persona, error) {
-	if profileMutationRequestsUserHandle(data) {
-		return nil, generated.AppErrorFromSubAccountHandleReadonly("userHandle is system assigned")
-	}
-	persona, err := s.personas.FindBySubAccountID(ctx, personaID)
-	if err != nil {
-		return nil, err
-	}
-	if persona == nil || persona.UserID != ownerID {
-		return nil, ErrSubAccountNotFound
-	}
-	if isRetiredPersona(persona) {
-		return nil, ErrRetiredPersonaAction
-	}
-	personas, err := s.personas.FindByUserID(ctx, ownerID)
-	if err != nil {
-		return nil, err
-	}
-	changedFields := make([]string, 0, 5)
-	if v, ok := data["displayName"].(string); ok {
-		persona.DisplayName = strings.TrimSpace(v)
-		changedFields = append(changedFields, "displayName")
-	}
-	if v, ok := data["phone"].(string); ok {
-		persona.Phone = strings.TrimSpace(v)
-		changedFields = append(changedFields, "phone")
-	}
-	if v, ok := data["email"].(string); ok {
-		persona.Email = strings.TrimSpace(v)
-		changedFields = append(changedFields, "email")
-	}
-	if v, ok := data["avatarUrl"].(string); ok {
-		nextAvatarURL := strings.TrimSpace(v)
-		if nextAvatarURL != strings.TrimSpace(persona.AvatarURL) {
-			persona.AvatarURL = nextAvatarURL
-			if nextAvatarURL == "" {
-				persona.AvatarVersion = 0
-			} else {
-				persona.AvatarVersion++
-				if persona.AvatarVersion <= 0 {
-					persona.AvatarVersion = 1
-				}
-			}
-		}
-		changedFields = append(changedFields, "avatarUrl")
-	}
-	if v, ok := data["backgroundUrl"].(string); ok {
-		persona.BackgroundURL = strings.TrimSpace(v)
-		changedFields = append(changedFields, "backgroundUrl")
-	}
-	if v, ok := data["isolationLevel"].(string); ok {
-		persona.IsolationLevel = v
-	}
-	if v, ok := data["purposeHint"].(string); ok {
-		persona.PurposeHint = v
-	}
-	if len(changedFields) > 0 {
-		persona.InheritsProfileFromOwner = false
-		persona.OverriddenProfileFields = encodeProfileFieldList(
-			mergeProfileFields(parseProfileFieldList(persona.OverriddenProfileFields), changedFields),
-		)
-		persona.LastProfileSyncSource = "sub_account_edit"
-	}
-	normalizePersonaPersistence(persona)
-	if err := s.personas.Update(ctx, persona); err != nil {
-		if isPersonaHandleUniqueConstraint(err) {
-			return nil, ErrPersonaHandleTaken
-		}
-		return nil, err
-	}
-	fieldsMask := parseRequestedFieldsMask(data, changedFields)
-	if shouldApplyPersonaSync(data) && len(fieldsMask) > 0 {
-		if _, err := s.applyPersonaProfileSync(ctx, ownerID, persona, personas, data, fieldsMask); err != nil {
-			return nil, err
-		}
-		usertelemetry.Collector().RecordSyncScopeSubmit()
-	}
-	_ = s.pcache.Del(ctx, ownerID)
-	return persona, nil
-}
-
-// ActivateSubAccount atomically switches the active sub-account.
-func (s *SubAccountService) ActivateSubAccount(ctx context.Context, ownerID, subAccountID string) error {
-	startedAt := time.Now()
-	defer func() {
-		usertelemetry.RolloutCollector().RecordSwitchLatency(time.Since(startedAt))
-	}()
-	// Find the persona by subAccountID
-	subs, err := s.personas.FindByUserID(ctx, ownerID)
-	if err != nil {
-		return err
-	}
-	var target *model.Persona
-	for i := range subs {
-		if subs[i].SubAccountID == subAccountID {
-			target = &subs[i]
-			break
-		}
-	}
-	if target == nil {
-		return ErrSubAccountNotFound
-	}
-	if isRetiredPersona(target) {
-		return ErrRetiredPersonaAction
-	}
-	if err := s.personas.DeactivateAll(ctx, ownerID); err != nil {
-		return err
-	}
-	if err := s.personas.ActivateOne(ctx, target.SubAccountID); err != nil {
-		return err
-	}
-	now := time.Now().UTC()
-	target.IsActive = true
-	target.LastActivatedAt = &now
-	normalizePersonaPersistence(target)
-	if err := s.personas.Update(ctx, target); err != nil {
-		return err
-	}
-	_ = s.pcache.Del(ctx, ownerID)
-	return nil
-}
-
-// DeleteSubAccount only deletes truly empty personas.
-func (s *SubAccountService) DeleteSubAccount(ctx context.Context, ownerID, subAccountID string) error {
-	subs, err := s.personas.FindByUserID(ctx, ownerID)
-	if err != nil {
-		return err
-	}
-	var target *model.Persona
-	for i := range subs {
-		if subs[i].SubAccountID == subAccountID {
-			target = &subs[i]
-			break
-		}
-	}
-	if target == nil {
-		return ErrSubAccountNotFound
-	}
-	if target.IsPrimary {
-		return ErrPrimarySubAccount
-	}
-	if isRetiredPersona(target) {
-		return ErrRetiredPersonaAction
-	}
-	if target.IsActive {
-		return ErrActiveSubAccountAction
-	}
-	if activePersonaCount(subs) <= 1 {
-		return ErrLastSubAccount
-	}
-	hasHistory, err := s.personas.HasAttributedHistory(ctx, target.SubAccountID)
-	if err != nil {
-		return err
-	}
-	if hasHistory {
-		return ErrSubAccountRetireRequired
-	}
-	if err := s.personas.Delete(ctx, target.SubAccountID); err != nil {
-		return err
-	}
-	_ = s.pcache.Del(ctx, ownerID)
-	return nil
-}
-
-func (s *SubAccountService) DeleteEmptyPersona(ctx context.Context, ownerID, personaID string) error {
-	return s.DeleteSubAccount(ctx, ownerID, personaID)
-}
-
-func (s *SubAccountService) ApplyPersonaProfileSync(ctx context.Context, ownerID, personaID string, data map[string]any) (map[string]any, error) {
-	personas, err := s.personas.FindByUserID(ctx, ownerID)
-	if err != nil {
-		return nil, err
-	}
-	source := findPersonaBySubAccount(personas, personaID)
-	if source == nil {
-		return nil, ErrSubAccountNotFound
-	}
-	fieldsMask := parseRequestedFieldsMask(data, nil)
-	applied, err := s.applyPersonaProfileSync(ctx, ownerID, source, personas, data, fieldsMask)
-	if err != nil {
-		return nil, err
-	}
-	if len(fieldsMask) > 0 {
-		usertelemetry.Collector().RecordSyncScopeSubmit()
-	}
-	return map[string]any{
-		"status":       "ok",
-		"appliedCount": applied,
-		"fieldsMask":   fieldsMask,
-	}, nil
-}
-
-func (s *SubAccountService) GetActivePersonaContextView(ctx context.Context, ownerID string) (map[string]any, error) {
-	owner, err := s.profiles.FindByID(ctx, ownerID)
-	if err != nil {
-		return nil, err
-	}
-	persona, err := s.personas.FindActiveByUserID(ctx, ownerID)
-	if err != nil {
-		return nil, err
-	}
-	if owner == nil {
-		return map[string]any{}, nil
-	}
-	view := buildSubAccountProfileView(owner, persona)
-	return map[string]any{
-		"ownerUserId":            ownerID,
-		"subAccountId":           view["subAccountId"],
-		"displayName":            view["displayName"],
-		"avatarUrl":              view["avatarUrl"],
-		"avatarVersion":          view["avatarVersion"],
-		"subjectType":            "persona",
-		"isPrimary":              persona != nil && persona.IsPrimary,
-		"personaContextVersion":  "1",
-		"personaSnapshotVersion": 1,
-		"sourceSurfaceId":        "",
-		"explicitOverride":       false,
-		"contextVersion":         1,
-		"isolationLevel":         defaultString(personaIsolationLevel(persona), defaultIsolationLevel),
-		"profileVisibility":      "public",
-		"switchedAt":             time.Now().UTC().Format(time.RFC3339),
-	}, nil
-}
-
-func (s *SubAccountService) GetPersonaManagementSummary(ctx context.Context, ownerID string) (map[string]any, error) {
-	personas, err := s.personas.FindByUserID(ctx, ownerID)
-	if err != nil {
-		return nil, err
-	}
-	items := make([]map[string]any, 0, len(personas))
-	activeID := ""
-	primaryID := ""
-	for i := range personas {
-		hasHistory, err := s.personas.HasAttributedHistory(ctx, personas[i].SubAccountID)
-		if err != nil {
-			return nil, err
-		}
-		item := BuildPersonaManagementItemWithHistory(personas[i], hasHistory)
-		items = append(items, item)
-		if personas[i].IsActive && !isRetiredPersona(&personas[i]) {
-			activeID = personas[i].SubAccountID
-		}
-		if personas[i].IsPrimary {
-			primaryID = personas[i].SubAccountID
-		}
-	}
-	activeContext, err := s.GetActivePersonaContextView(ctx, ownerID)
-	if err != nil {
-		return nil, err
-	}
-	return map[string]any{
-		"items": items,
-		"quota": map[string]any{
-			"ownerUserId":             ownerID,
-			"totalCount":              len(personas),
-			"quotaLimit":              5,
-			"remainingCount":          remainingPersonaSlots(len(personas), 5),
-			"activeProfileSubjectId":  activeID,
-			"primaryProfileSubjectId": primaryID,
-			"usedSubAccounts":         len(personas),
-			"maxSubAccounts":          5,
-		},
-		"activeContext": activeContext,
-	}, nil
-}
-
-func (s *SubAccountService) GetPersonaLifecycleGuard(ctx context.Context, ownerID, personaID string) (map[string]any, error) {
-	personas, err := s.personas.FindByUserID(ctx, ownerID)
-	if err != nil {
-		return nil, err
-	}
-	var target *model.Persona
-	for i := range personas {
-		if personas[i].SubAccountID == personaID {
-			target = &personas[i]
-			break
-		}
-	}
-	if target == nil {
-		return nil, ErrSubAccountNotFound
-	}
-	hasHistory, err := s.personas.HasAttributedHistory(ctx, target.SubAccountID)
-	if err != nil {
-		return nil, err
-	}
-	return buildPersonaLifecycleGuardView(target, activePersonaCount(personas), hasHistory), nil
-}
-
-func (s *SubAccountService) RetirePersona(ctx context.Context, ownerID, personaID string) (map[string]any, error) {
-	personas, err := s.personas.FindByUserID(ctx, ownerID)
-	if err != nil {
-		return nil, err
-	}
-	target := findPersonaBySubAccount(personas, personaID)
-	if target == nil {
-		return nil, ErrSubAccountNotFound
-	}
-	if target.IsPrimary {
-		return nil, ErrPrimarySubAccount
-	}
-	if isRetiredPersona(target) {
-		return nil, ErrRetiredPersonaAction
-	}
-	if target.IsActive {
-		return nil, ErrActiveSubAccountAction
-	}
-	if activePersonaCount(personas) <= 1 {
-		return nil, ErrLastSubAccount
-	}
-	hasHistory, err := s.personas.HasAttributedHistory(ctx, target.SubAccountID)
-	if err != nil {
-		return nil, err
-	}
-	if !hasHistory {
-		return nil, ErrDeleteEmptyPersonaOnly
-	}
-	now := time.Now().UTC()
-	target.Status = personaStatusRetired
-	target.IsActive = false
-	target.RetiredAt = &now
-	normalizePersonaPersistence(target)
-	if err := s.personas.Update(ctx, target); err != nil {
-		return nil, err
-	}
-	_ = s.pcache.Del(ctx, ownerID)
-	return map[string]any{
-		"requestedAction":      "retire",
-		"allowed":              true,
-		"reason":               "allowed",
-		"hasAttributedHistory": true,
-		"requiresSuccessor":    false,
-		"subAccountId":         target.SubAccountID,
-		"canDelete":            false,
-		"canRetire":            false,
-		"requiredAction":       "",
-		"reasonCode":           "allowed",
-		"message":              "分身已退役，记录归因已保留",
-	}, nil
-}
-
-// GetSubAccountProfile returns the raw persona entity for compatibility callers.
-func (s *SubAccountService) GetSubAccountProfile(ctx context.Context, subAccountID string) (*model.Persona, error) {
-	return s.personas.FindBySubAccountID(ctx, subAccountID)
-}
-
-// GetSubAccountProfileView projects a sub-account to the public profile view shape.
-func (s *SubAccountService) GetSubAccountProfileView(ctx context.Context, handleOrPersonaID string) (map[string]any, error) {
-	startedAt := time.Now()
-	defer func() {
-		usertelemetry.Collector().RecordPublicRead(time.Since(startedAt))
-	}()
-
-	var (
-		persona *model.Persona
-		err     error
-	)
-	if runtimegovernance.PersonaPublicProfileEnabled() {
-		persona, err = s.resolvePublicPersona(ctx, handleOrPersonaID)
-	} else {
-		persona, err = s.personas.FindBySubAccountID(ctx, strings.TrimSpace(handleOrPersonaID))
-	}
-	if err != nil {
-		return nil, err
-	}
-	if persona == nil {
-		usertelemetry.Collector().RecordVisibilityNotFound()
-		return nil, nil
-	}
-	if !canExposePublicPersona(persona) {
-		usertelemetry.Collector().RecordVisibilityNotFound()
-		return nil, nil
-	}
-	owner, err := s.profiles.FindByID(ctx, persona.UserID)
-	if err != nil {
-		return nil, err
-	}
-	view := buildPublicSubAccountProfileView(owner, persona)
-	if hasPublicLeakage(view) {
-		usertelemetry.RolloutCollector().RecordPublicLeakage()
-		delete(view, "ownerUserId")
-		delete(view, "ownerAccountId")
-		delete(view, "ownerId")
-	}
-	return view, nil
-}
-
-// GetMeProfileView projects the viewer's active owner/sub-account identity.
-func (s *SubAccountService) GetMeProfileView(ctx context.Context, userID string) (map[string]any, error) {
-	owner, err := s.profiles.FindByID(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	if owner == nil {
-		return nil, nil
-	}
-	persona, err := s.personas.FindActiveByUserID(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	return buildSubAccountProfileView(owner, persona), nil
-}
-
-func (s *SubAccountService) resolvePublicPersona(ctx context.Context, handleOrPersonaID string) (*model.Persona, error) {
-	handleOrPersonaID = strings.TrimSpace(handleOrPersonaID)
-	if handleOrPersonaID == "" {
-		return nil, nil
-	}
-	persona, err := s.personas.FindByUserHandle(ctx, handleOrPersonaID)
-	if err != nil {
-		return nil, err
-	}
-	if persona != nil {
-		return persona, nil
-	}
-	return s.personas.FindBySubAccountID(ctx, handleOrPersonaID)
-}
-
-func BuildPersonaManagementItem(persona model.Persona) map[string]any {
-	return BuildPersonaManagementItemWithHistory(persona, false)
-}
-
-func BuildPersonaManagementItemWithHistory(persona model.Persona, hasAttributedHistory bool) map[string]any {
-	avatarVersion := resolvedPersonaAvatarVersion(&persona)
-	var lastProfileSyncAt any
-	if persona.LastProfileSyncAt != nil {
-		lastProfileSyncAt = persona.LastProfileSyncAt.Format(time.RFC3339)
-	}
-	var lastActivatedAt any
-	if persona.LastActivatedAt != nil {
-		lastActivatedAt = persona.LastActivatedAt.Format(time.RFC3339)
-	}
-	var retiredAt any
-	if persona.RetiredAt != nil {
-		retiredAt = persona.RetiredAt.Format(time.RFC3339)
-	}
-	return map[string]any{
-		"subAccountId":             persona.SubAccountID,
-		"displayName":              persona.DisplayName,
-		"userHandle":               resolvedPersonaUserHandle(&persona),
-		"phone":                    persona.Phone,
-		"email":                    persona.Email,
-		"avatarUrl":                avatarURLWithVersion(persona.AvatarURL, avatarVersion),
-		"avatarVersion":            avatarVersion,
-		"backgroundUrl":            persona.BackgroundURL,
-		"bio":                      "",
-		"isolationLevel":           defaultString(persona.IsolationLevel, defaultIsolationLevel),
-		"profileVisibility":        profileVisibilityFromIsolation(defaultString(persona.IsolationLevel, defaultIsolationLevel)),
-		"isPrimary":                persona.IsPrimary,
-		"isActive":                 persona.IsActive && !isRetiredPersona(&persona),
-		"status":                   personaStatus(persona),
-		"retiredAt":                retiredAt,
-		"inheritsProfileFromOwner": persona.InheritsProfileFromOwner,
-		"inheritsFromOwner":        persona.InheritsProfileFromOwner,
-		"overriddenProfileFields":  parseProfileFieldList(persona.OverriddenProfileFields),
-		"lastProfileSyncAt":        lastProfileSyncAt,
-		"lastProfileSyncSource":    persona.LastProfileSyncSource,
-		"lastActivatedAt":          lastActivatedAt,
-		"hasAttributedHistory":     hasAttributedHistory,
-		"hasPublishedContent":      false,
-		"subjectType":              "persona",
-		"updatedAt":                persona.UpdatedAt.Format(time.RFC3339),
-	}
-}
-
-func remainingPersonaSlots(used, limit int) int {
-	remaining := limit - used
-	if remaining < 0 {
-		return 0
-	}
-	return remaining
-}
-
-func personaIsolationLevel(persona *model.Persona) string {
-	if persona == nil {
-		return defaultIsolationLevel
-	}
-	return defaultString(persona.IsolationLevel, defaultIsolationLevel)
-}
-
-func resolvedPersonaUserHandle(persona *model.Persona) string {
-	if persona == nil {
-		return ""
-	}
-	handle := strings.TrimSpace(persona.UserHandle)
-	if handle != "" {
-		return handle
-	}
-	return strings.TrimSpace(persona.SubAccountID)
-}
-
-func profileVisibilityFromIsolation(isolationLevel string) string {
-	switch strings.TrimSpace(isolationLevel) {
-	case "strict":
-		return "private"
-	case "semi":
-		return "friends"
-	default:
-		return "public"
-	}
-}
-
-func canExposePublicPersona(persona *model.Persona) bool {
-	if persona == nil {
-		return false
-	}
-	if isRetiredPersona(persona) {
-		return false
-	}
-	return personaIsolationLevel(persona) != "strict"
-}
-
-func lifecycleGuardMessage(reason string) string {
-	switch reason {
-	case "blocked_primary_persona":
-		return "主分身不可删除或退役"
-	case "blocked_last_persona":
-		return "至少需要保留一个分身"
-	case "blocked_active_persona":
-		return "请先切换到其他分身后再执行该操作"
-	case "blocked_retired_persona":
-		return "该分身已退役，记录归因已保留，不可删除或再次退役"
-	case "retire_instead_of_delete":
-		return "该分身已有记录归因，请使用退役而不是删除"
-	default:
-		return ""
-	}
-}
-
-func shouldApplyPersonaSync(data map[string]any) bool {
-	scope, _ := data["applyScope"].(string)
-	if scope == "" || scope == "current_subject_only" {
-		return false
-	}
-	return true
-}
-
-func parseRequestedFieldsMask(data map[string]any, fallback []string) []string {
-	raw, ok := data["fieldsMask"]
-	if !ok {
-		return normalizeProfileFields(fallback)
-	}
-	list, ok := raw.([]any)
-	if !ok {
-		return normalizeProfileFields(fallback)
-	}
-	fields := make([]string, 0, len(list))
-	for _, item := range list {
-		if text := strings.TrimSpace(fmt.Sprint(item)); text != "" {
-			fields = append(fields, text)
-		}
-	}
-	return normalizeProfileFields(fields)
-}
-
-func normalizeProfileFields(fields []string) []string {
-	seen := make(map[string]struct{})
-	result := make([]string, 0, len(fields))
-	for _, field := range fields {
-		switch strings.TrimSpace(field) {
-		case "displayName", "phone", "email", "avatarUrl":
-			if _, exists := seen[field]; exists {
-				continue
-			}
-			seen[field] = struct{}{}
-			result = append(result, field)
-		}
-	}
-	return result
-}
-
-func profileMutationRequestsUserHandle(data map[string]any) bool {
-	if _, ok := data["userHandle"]; ok {
-		return true
-	}
-	raw, ok := data["fieldsMask"]
-	if !ok {
-		return false
-	}
-	switch list := raw.(type) {
-	case []any:
-		for _, item := range list {
-			if strings.TrimSpace(fmt.Sprint(item)) == "userHandle" {
-				return true
-			}
-		}
-	case []string:
-		for _, item := range list {
-			if strings.TrimSpace(item) == "userHandle" {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func systemUserHandleForSubAccount(subAccountID string) string {
-	normalized := strings.ToLower(strings.TrimSpace(subAccountID))
-	var b strings.Builder
-	for _, r := range normalized {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
-			b.WriteRune(r)
-		}
-	}
-	value := b.String()
-	if value == "" {
-		return "qwuser"
-	}
-	if len(value) > 24 {
-		value = value[len(value)-24:]
-	}
-	return "qw" + value
-}
-
-func mergeProfileFields(existing, next []string) []string {
-	merged := append([]string{}, existing...)
-	merged = append(merged, next...)
-	return normalizeProfileFields(merged)
-}
-
-func removeProfileFields(existing, toRemove []string) []string {
-	removeSet := make(map[string]struct{}, len(toRemove))
-	for _, field := range toRemove {
-		removeSet[field] = struct{}{}
-	}
-	result := make([]string, 0, len(existing))
-	for _, field := range existing {
-		if _, shouldRemove := removeSet[field]; shouldRemove {
-			continue
-		}
-		result = append(result, field)
-	}
-	return normalizeProfileFields(result)
-}
-
-// parsePgTextArray 解析 Postgres TEXT[] 扫描出的 "{a,b}" 字面量为字符串切片（不做字段白名单归一）。
-func parsePgTextArray(raw string) []string {
-	text := strings.TrimSpace(raw)
-	text = strings.TrimPrefix(text, "{")
-	text = strings.TrimSuffix(text, "}")
-	if text == "" {
-		return []string{}
-	}
-	parts := strings.Split(text, ",")
-	result := make([]string, 0, len(parts))
-	for _, part := range parts {
-		part = strings.Trim(strings.TrimSpace(part), `"`)
-		if part != "" {
-			result = append(result, part)
-		}
-	}
-	return result
-}
-
-func parseProfileFieldList(raw string) []string {
-	text := strings.TrimSpace(raw)
-	text = strings.TrimPrefix(text, "{")
-	text = strings.TrimSuffix(text, "}")
-	if text == "" {
-		return nil
-	}
-	parts := strings.Split(text, ",")
-	result := make([]string, 0, len(parts))
-	for _, part := range parts {
-		part = strings.Trim(strings.TrimSpace(part), `"`)
-		if part != "" {
-			result = append(result, part)
-		}
-	}
-	return normalizeProfileFields(result)
-}
-
-func encodeProfileFieldList(fields []string) string {
-	normalized := normalizeProfileFields(fields)
-	if len(normalized) == 0 {
-		return "{}"
-	}
-	return "{" + strings.Join(normalized, ",") + "}"
-}
-
-func normalizePersonaPersistence(persona *model.Persona) {
-	if persona == nil {
-		return
-	}
-	persona.AvatarURL = strings.TrimSpace(persona.AvatarURL)
-	if strings.TrimSpace(persona.OverriddenProfileFields) == "" {
-		persona.OverriddenProfileFields = "{}"
-	}
-	if strings.TrimSpace(persona.Status) == "" {
-		persona.Status = personaStatusActive
-	}
-	if persona.AvatarURL == "" {
-		persona.AvatarVersion = 0
-	} else if persona.AvatarVersion <= 0 {
-		persona.AvatarVersion = resolvedPersonaAvatarVersion(persona)
-		if persona.AvatarVersion <= 0 {
-			persona.AvatarVersion = 1
-		}
-	}
-	if persona.Status == personaStatusRetired {
-		persona.IsActive = false
-	}
-}
-
-func personaStatus(persona model.Persona) string {
-	if strings.TrimSpace(persona.Status) == "" {
-		return personaStatusActive
-	}
-	return strings.TrimSpace(persona.Status)
-}
-
-func isRetiredPersona(persona *model.Persona) bool {
-	if persona == nil {
-		return false
-	}
-	return personaStatus(*persona) == personaStatusRetired
-}
-
-func activePersonaCount(personas []model.Persona) int {
-	count := 0
-	for i := range personas {
-		if !isRetiredPersona(&personas[i]) {
-			count++
-		}
-	}
-	return count
-}
-
-func buildPersonaLifecycleGuardView(target *model.Persona, activeCount int, hasAttributedHistory bool) map[string]any {
-	reason := "allowed"
-	canDelete := true
-	canRetire := false
-	requiredAction := ""
-	requiresSuccessor := false
-	if target.IsPrimary {
-		reason = "blocked_primary_persona"
-		canDelete = false
-	} else if isRetiredPersona(target) {
-		reason = "blocked_retired_persona"
-		canDelete = false
-	} else if activeCount <= 1 {
-		reason = "blocked_last_persona"
-		canDelete = false
-	} else if target.IsActive {
-		reason = "blocked_active_persona"
-		canDelete = false
-		requiresSuccessor = true
-	} else if hasAttributedHistory {
-		reason = "retire_instead_of_delete"
-		canDelete = false
-		canRetire = true
-		requiredAction = "retire"
-	}
-	return map[string]any{
-		"requestedAction":      "delete",
-		"allowed":              canDelete,
-		"reason":               reason,
-		"hasAttributedHistory": hasAttributedHistory,
-		"requiresSuccessor":    requiresSuccessor,
-		"subAccountId":         target.SubAccountID,
-		"canDelete":            canDelete,
-		"canRetire":            canRetire,
-		"requiredAction":       requiredAction,
-		"reasonCode":           reason,
-		"message":              lifecycleGuardMessage(reason),
-	}
-}
-
-func primaryPersona(personas []model.Persona) *model.Persona {
-	for i := range personas {
-		if personas[i].IsPrimary {
-			return &personas[i]
-		}
-	}
-	return nil
-}
-
-func findPersonaBySubAccount(personas []model.Persona, personaID string) *model.Persona {
-	for i := range personas {
-		if personas[i].SubAccountID == personaID {
-			return &personas[i]
-		}
-	}
-	return nil
-}
-
-func resolveSyncTargetPersonas(personas []model.Persona, sourcePersonaID, applyScope string, explicitTargetIDs []string) []*model.Persona {
-	explicitSet := make(map[string]struct{}, len(explicitTargetIDs))
-	for _, id := range explicitTargetIDs {
-		id = strings.TrimSpace(id)
-		if id != "" {
-			explicitSet[id] = struct{}{}
-		}
-	}
-	targets := make([]*model.Persona, 0, len(personas))
-	for i := range personas {
-		persona := &personas[i]
-		if persona.SubAccountID == sourcePersonaID || isRetiredPersona(persona) {
-			continue
-		}
-		switch applyScope {
-		case "all_sub_accounts":
-			targets = append(targets, persona)
-		case "selected_subjects":
-			if _, ok := explicitSet[persona.SubAccountID]; ok {
-				targets = append(targets, persona)
-			}
-		}
-	}
-	return targets
-}
-
-func extractSyncTargetIDs(data map[string]any) []string {
-	raw, ok := data["syncTargetIds"]
-	if !ok {
-		return nil
-	}
-	list, ok := raw.([]any)
-	if !ok {
-		return nil
-	}
-	result := make([]string, 0, len(list))
-	for _, item := range list {
-		text := strings.TrimSpace(fmt.Sprint(item))
-		if text != "" {
-			result = append(result, text)
-		}
-	}
-	return result
-}
-
-func applyFieldsFromSource(target *model.Persona, source *model.Persona, fields []string) {
-	for _, field := range fields {
-		switch field {
-		case "displayName":
-			target.DisplayName = source.DisplayName
-		case "phone":
-			target.Phone = source.Phone
-		case "email":
-			target.Email = source.Email
-		case "avatarUrl":
-			target.AvatarURL = source.AvatarURL
-			target.AvatarVersion = source.AvatarVersion
-		}
-	}
-}
-
-func (s *SubAccountService) applyPersonaProfileSync(ctx context.Context, ownerID string, source *model.Persona, personas []model.Persona, data map[string]any, fieldsMask []string) (int, error) {
-	if source == nil {
-		return 0, ErrSubAccountNotFound
-	}
-	if isRetiredPersona(source) {
-		return 0, ErrRetiredPersonaAction
-	}
-	if len(fieldsMask) == 0 {
-		return 0, nil
-	}
-	applyScope, _ := data["applyScope"].(string)
-	targets := resolveSyncTargetPersonas(
-		personas,
-		source.SubAccountID,
-		applyScope,
-		extractSyncTargetIDs(data),
-	)
-	now := time.Now().UTC()
-	applied := 0
-	for _, target := range targets {
-		applyFieldsFromSource(target, source, fieldsMask)
-		target.OverriddenProfileFields = encodeProfileFieldList(
-			removeProfileFields(parseProfileFieldList(target.OverriddenProfileFields), fieldsMask),
-		)
-		target.InheritsProfileFromOwner = source.IsPrimary && len(parseProfileFieldList(target.OverriddenProfileFields)) == 0
-		target.LastProfileSyncAt = &now
-		target.LastProfileSyncSource = "manual_sync"
-		normalizePersonaPersistence(target)
-		if err := s.personas.Update(ctx, target); err != nil {
-			if isPersonaHandleUniqueConstraint(err) {
-				return applied, ErrPersonaHandleTaken
-			}
-			return applied, err
-		}
-		applied++
-	}
-	_ = s.pcache.Del(ctx, ownerID)
-	return applied, nil
-}
-
 func defaultString(value, fallback string) string {
 	if value != "" {
 		return value
@@ -2284,15 +1360,8 @@ func defaultString(value, fallback string) string {
 	return fallback
 }
 
-func isPersonaHandleUniqueConstraint(err error) bool {
-	if err == nil {
-		return false
-	}
-	var pgErr *pgconn.PgError
-	if !errors.As(err, &pgErr) {
-		return false
-	}
-	return pgErr.ConstraintName == "uq_personas_user_handle"
+func isPersonaHandleConflict(err error) bool {
+	return errors.Is(err, userrepo.ErrPersonaHandleConflict)
 }
 
 func hashInstallID(installID string) string {
@@ -2361,17 +1430,13 @@ func (s *AuthService) ensureAnonymousDeviceBinding(
 	if err != nil {
 		return err
 	}
-	normalizedPlatform := strings.TrimSpace(platform)
-	if normalizedPlatform == "" {
-		normalizedPlatform = "unknown"
-	}
 	return s.anonymousDevices.Create(ctx, &model.AnonymousDeviceBinding{
 		ID:                    bindingID,
 		OwnerID:               strings.TrimSpace(ownerID),
 		InstallIDHash:         strings.TrimSpace(installIDHash),
 		DeviceFingerprintHash: strings.TrimSpace(deviceFingerprintHash),
-		Platform:              normalizedPlatform,
-		AppVersion:            strings.TrimSpace(appVersion),
+		Platform:              platform,
+		AppVersion:            appVersion,
 		LastSeenAt:            time.Now().UTC(),
 	})
 }
@@ -2388,7 +1453,6 @@ var (
 	ErrPersonaHandleTaken       = generated.AppErrorFromSubAccountHandleTaken("persona_handle_taken")
 )
 
-// PersonaRepository needs FindBySubAccountID – add it to the interface extension.
-func findPersonaBySubAccountID(ctx context.Context, personas userrepo.PersonaRepository, subAccountID string) (*model.Persona, error) {
+func findPersonaBySubAccountID(ctx context.Context, personas userrepo.PersonaReader, subAccountID string) (*model.Persona, error) {
 	return personas.FindBySubAccountID(ctx, subAccountID)
 }

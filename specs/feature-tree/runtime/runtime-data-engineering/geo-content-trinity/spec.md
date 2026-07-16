@@ -114,10 +114,11 @@
 - 图片作品必须坚持 `one-source-one-work`：一条 pin/source unit 只生成一份图片作品，不得跨 pin、跨作者、跨 sourceCollection 拼接。
 - `local runtime` 是主执行平面，`cloud runtime` 只作诊断/兜底；任何 H100/H1000 证据必须在单一执行分支、单一任务级隔离根下获得，禁止全局 `pkill`、grep `WORKFLOW COMPLETE` 冒充完成、跨任务清理并行批次。
 - 在拿到真实 `download / author / release / TokenLedger / firstPassRate / objectsPerHour / downstream visibility` 之前，只允许评估 `10k/日` 与 `100k/日`，不允许提前承诺可达。
-- 输出目录口径（数据输出规范）：image lane 批次落仓外
-  `QWQ_OUTPUT_ROOT/runtime/{e2e|operations}/image/{supplyMode}/…`（`contentType=image` 独立批次，禁止与
-  homepage/article 混批）；证据只认 `batch/_shared` 权威条目，摘要落 `artifacts/content_runs/**` index-first 回指
-  （真相源 `quwoquan_data/docs/pipeline_directory_layout_spec.md` §0.5）。
+- 输出目录口径（数据输出规范）：每次 image lane 使用唯一
+  `.qwq_output/data/tasks/<executionId>/` 工作包，规划、来源、五阶段和证据均在同一 execution
+  内聚；最终 approved 对象才写入 `quwoquan_data/publish/**`，immutable release 只写入
+  `.qwq_output/data/releases/<releaseId>/`。homepage/article/image/video 不共享运行身份，
+  也不建立摘要镜像或第二状态源。
 
 ### R6-H：四川酒店住宿专题作为旅行/出差扩展样例
 

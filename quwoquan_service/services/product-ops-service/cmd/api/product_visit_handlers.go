@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 
@@ -12,20 +13,31 @@ func (s *productService) handleRecordVisit(w http.ResponseWriter, r *http.Reques
 	var body struct {
 		TargetType string `json:"targetType"`
 		TargetKey  string `json:"targetKey"`
-		UserID     string `json:"userId"`
 		SessionID  string `json:"sessionId"`
 		Source     string `json:"source"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil {
 		writeRuntimeError(w, r, http.StatusBadRequest, "请求处理失败", "invalid json body")
+		return
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		writeRuntimeError(w, r, http.StatusBadRequest, "请求处理失败", "request body must contain exactly one JSON object")
 		return
 	}
 	if strings.TrimSpace(body.TargetType) == "" || strings.TrimSpace(body.TargetKey) == "" {
 		writeRuntimeError(w, r, http.StatusBadRequest, "请求处理失败", "targetType and targetKey are required")
 		return
 	}
+	actorHash, ok := verifiedTelemetryActorHash(r)
+	if !ok {
+		writeRuntimeError(w, r, http.StatusUnauthorized, "请先登录", "verified telemetry actor is required")
+		return
+	}
 	record, err := s.telemetry.RecordVisit(r.Context(), application.VisitInput{
-		UserID:     body.UserID,
+		UserID:     actorHash,
 		TargetType: body.TargetType,
 		TargetKey:  body.TargetKey,
 		SessionID:  body.SessionID,
@@ -35,7 +47,12 @@ func (s *productService) handleRecordVisit(w http.ResponseWriter, r *http.Reques
 		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, record)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"targetType": record.TargetType,
+		"targetKey":  record.TargetKey,
+		"visitCount": record.VisitCount,
+		"lastSeenAt": record.LastSeenAt,
+	})
 }
 
 func (s *productService) handleGetVisitStats(w http.ResponseWriter, r *http.Request) {

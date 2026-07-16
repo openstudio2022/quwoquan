@@ -1,0 +1,23 @@
+version: 1
+entity: MediaOriginalAccessFact
+backend: mongodb
+
+collections:
+  media_original_access_facts:
+    entity: MediaOriginalAccessFact
+    role: append_only
+    indexes:
+      - { name: idx_media_original_access_audit, keys: { auditId: 1 }, unique: true }
+      - { name: idx_media_original_access_asset_time, keys: { assetId: 1, grantedAt: -1 } }
+      - { name: idx_media_original_access_dedupe, keys: { viewerId: 1, idempotencyKey: 1 }, unique: true }
+  media_original_access_receipts:
+    entity: MediaOriginalAccessFact
+    role: idempotency_receipt
+    indexes:
+      - { name: idx_media_original_access_receipt_key, keys: { idempotencyKey: 1 }, unique: true }
+  media_original_access_outbox:
+    entity: MediaOriginalAccessFact
+    role: append_only
+    indexes:
+      - { name: idx_media_original_access_outbox_event, keys: { eventId: 1 }, unique: true }
+      - { name: idx_media_original_access_outbox_replay, keys: { occurredAt: 1, eventId: 1 } }

@@ -88,7 +88,7 @@ docker compose -f quwoquan_ops/environments/compose/docker-compose.yaml up -d mo
 
 # 2. 灌库（复用 Phase 2 已验证的 Path A importer 与 P1 真实 publish）
 go run ./services/content-service/cmd/import \
-  --publish-root <P1 publish 根> --sample-bundle alpha.json
+  --publish-root <canonical publish 根> --release-root <immutable release 根>
 
 # 3. 起 content-service（连本地 Mongo），监听 18080
 go run ./services/content-service/cmd/api

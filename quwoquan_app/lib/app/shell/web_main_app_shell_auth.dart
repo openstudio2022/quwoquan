@@ -15,7 +15,7 @@ bool _ensureWebShellLoggedInFor(
     reasonName: reason.name,
     redirect: redirect,
     dismissFallback: AppRoutePaths.home,
-    allowGuestDismissPop: false,
+    dismissPolicy: LoginDismissPolicy.safeFallback,
   );
   return false;
 }

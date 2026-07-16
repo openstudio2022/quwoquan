@@ -13,7 +13,7 @@
 - 统一分享面板与渠道编排（微信朋友圈/微信好友/系统分享/复制链接/复制口令/保存海报/二维码）。
 - 5 类对象 × 各渠道的**分享卡视觉与文案设计**（设计师口径：信息层级、配色、缩略图比例、CTA、吸引点击策略）。
 - 分享归因（`share_id`/UTM/口令）、口令生成与识别契约、海报渲染规格。
-- 登录门策略（复用 `AuthGateReason.shareRecord`）与可见性分级（public/circle_visible/private）。
+- 登录门策略（复用 `AuthGateReason.shareRecord`）与可见性分级（public/private，未知值 default-deny）。
 
 不拥有（does not own）：
 
@@ -42,7 +42,7 @@
 
 - A1：5 类对象都能从统一面板分享到微信会话/朋友圈/海报/系统分享/复制，渠道与对象组合无盲区。
 - A2：每个渠道生成的卡片/海报/口令携带正确归因，站外点击可回流到对应对象（与 inbound 节点联调）。
-- A3：可见性分级正确（private 阻断、circle_visible 受控、public 完整），登录门关闭后不死循环（对齐 rule 15）。
+- A3：可见性分级正确（private 阻断、public 完整、未知值拒绝），登录门关闭后不死循环（对齐 rule 15）。
 - A4：分享归因可在指标大盘按渠道与对象类型统计转化（对接 `analytics-metric-dictionary`）。
 
 详见同目录 `acceptance.yaml` 与 `design.md`。

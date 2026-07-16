@@ -34,6 +34,7 @@ CURATED_REFS: dict[str, list[str]] = {
         "content_discovery_core",
         "intersection_core",
         "home_showcase_core",
+        "profile_share_interaction_core",
     ],
     USER_SCENARIO: [
         "user_profile_core",
@@ -69,6 +70,7 @@ CURATED_CONTENT_COMMENT_IDS = {"fixture_comment_photo_001"}
 # alpha-dev-lite 专用对象交集夹具 id（intersection_object_evidence 契约测试），不进 gamma。
 CURATED_OBJECT_INTERSECTION_DROP_IDS = {"u_lin", "c_photo", "e_pku"}
 CURATED_MAX_IMAGES_PER_POST = 4
+CURATED_MAX_CIRCLE_MEMBERS = 5
 CURATED_USER_IDS = {
     "fixture_user_current",
     "fixture_user_photo",
@@ -226,7 +228,7 @@ def prune_seed_payload(relative_path: str, payload: dict[str, Any]) -> dict[str,
             if key in CURATED_CIRCLE_IDS
         }
         seed["members"] = {
-            key: value
+            key: value[:CURATED_MAX_CIRCLE_MEMBERS]
             for key, value in (seed.get("members") or {}).items()
             if key in CURATED_CIRCLE_IDS
         }

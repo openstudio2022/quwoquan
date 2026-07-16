@@ -1,9 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/cloud/circle/generated/circle_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_stats_view_data.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_tab.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// 圈子内用户角色
 enum CircleRole { owner, admin, member, visitor }
@@ -24,7 +27,7 @@ class CircleState {
     this.defaultPublicGroup,
     this.role = CircleRole.visitor,
     this.joinStatus = 'none',
-    this.isFollowed = false,
+    this.membershipVersion,
     this.activeTabType = 'works',
     this.activeSubTab = CreationSubTab.all,
     this.activeWorkFormat = CreationWorkFormat.all,
@@ -37,10 +40,10 @@ class CircleState {
 
   final String circleId;
   final CircleDto? circleData;
-  final CircleGroupDto? defaultPublicGroup;
+  final CircleGroupSlice? defaultPublicGroup;
   final CircleRole role;
   final String joinStatus;
-  final bool isFollowed;
+  final int? membershipVersion;
   final String activeTabType;
   final CreationSubTab activeSubTab;
   final CreationWorkFormat activeWorkFormat;
@@ -52,10 +55,11 @@ class CircleState {
 
   CircleState copyWith({
     CircleDto? circleData,
-    CircleGroupDto? defaultPublicGroup,
+    CircleGroupSlice? defaultPublicGroup,
     CircleRole? role,
     String? joinStatus,
-    bool? isFollowed,
+    int? membershipVersion,
+    bool clearMembershipVersion = false,
     String? activeTabType,
     CreationSubTab? activeSubTab,
     CreationWorkFormat? activeWorkFormat,
@@ -72,7 +76,9 @@ class CircleState {
       defaultPublicGroup: defaultPublicGroup ?? this.defaultPublicGroup,
       role: role ?? this.role,
       joinStatus: joinStatus ?? this.joinStatus,
-      isFollowed: isFollowed ?? this.isFollowed,
+      membershipVersion: clearMembershipVersion
+          ? null
+          : (membershipVersion ?? this.membershipVersion),
       activeTabType: activeTabType ?? this.activeTabType,
       activeSubTab: activeSubTab ?? this.activeSubTab,
       activeWorkFormat: activeWorkFormat ?? this.activeWorkFormat,
@@ -103,21 +109,37 @@ class CircleStateNotifier extends Notifier<CircleState> {
       final detail = await repo.getCircle(_circleId);
       final statsWire = await repo.getCircleStats(_circleId);
       final dto = detail.circle;
-      CircleGroupDto? defaultGroup;
-      final defaultGroupId = dto.defaultPublicGroupId?.trim() ?? '';
-      if (defaultGroupId.isNotEmpty) {
+      CircleMembershipSlice? membership;
+      if (ref.read(resolvedOwnerUserIdProvider).trim().isNotEmpty) {
+        await ref.read(activePersonaContextProvider.future);
         try {
-          defaultGroup = await repo.getCircleGroup(_circleId, defaultGroupId);
-        } catch (_) {
-          defaultGroup = null;
+          membership = await ref
+              .read(circleDetailMembershipQueryProvider)
+              .getMyMembership(MyCircleMembershipQuery(circleId: _circleId));
+        } on CloudException catch (error) {
+          if (error.code != CircleErrorCode.membershipNotFound.code) rethrow;
         }
+      }
+      CircleGroupSlice? defaultGroup;
+      final defaultGroupId = dto.defaultPublicGroupId?.trim() ?? '';
+      if (defaultGroupId.isNotEmpty && membership != null) {
+        defaultGroup = await ref
+            .read(circleDetailGroupQueryProvider)
+            .get(
+              CircleGroupQuery(circleId: _circleId, groupId: defaultGroupId),
+            );
       }
       state = state.copyWith(
         circleData: dto,
         defaultPublicGroup: defaultGroup,
-        role: _circleRoleFromRaw(detail.viewerRole),
-        joinStatus: detail.joinStatusIfPresent ?? state.joinStatus,
-        isFollowed: detail.isFollowedIfPresent ?? state.isFollowed,
+        role: _circleRoleFromRaw(membership?.role.name),
+        joinStatus: membership == null
+            ? 'none'
+            : membership.state == CircleMembershipState.active
+            ? 'joined'
+            : membership.state.name,
+        membershipVersion: membership?.version,
+        clearMembershipVersion: membership == null,
         circleStats: CircleStatsViewData.fromStatsWire(
           statsWire,
           circleFallback: dto,
@@ -155,72 +177,74 @@ class CircleStateNotifier extends Notifier<CircleState> {
 
   Future<void> joinCircle() async {
     final previousStatus = state.joinStatus;
-    final previousFollowed = state.isFollowed;
+    final previousVersion = state.membershipVersion;
     final nextJoinStatus = state.circleData?.joinPolicy == 'approval'
         ? 'pending'
         : 'joined';
-    state = state.copyWith(joinStatus: nextJoinStatus, isFollowed: true);
+    state = state.copyWith(joinStatus: nextJoinStatus, clearLoadError: true);
     try {
-      final activeContext = await ref.read(activePersonaContextProvider.future);
-      final repo = ref.read(circleRepositoryProvider);
-      await repo.joinCircle(
-        _circleId,
-        ownerUserId: activeContext.ownerUserId,
-        subAccountId: activeContext.subAccountId,
-        subAccountContextVersion: activeContext.contextVersion,
+      await ref.read(activePersonaContextProvider.future);
+      final result = await ref
+          .read(circleDetailMembershipCommandWriterProvider)
+          .join(JoinCircleMembershipCommand(circleId: _circleId));
+      state = state.copyWith(
+        role: _circleRoleFromRaw(result.role.name),
+        joinStatus: result.state == CircleMembershipState.active
+            ? 'joined'
+            : result.state.name,
+        membershipVersion: result.version,
+        clearLoadError: true,
       );
-    } catch (_) {
+    } catch (error) {
       state = state.copyWith(
         joinStatus: previousStatus,
-        isFollowed: previousFollowed,
+        membershipVersion: previousVersion,
+        clearMembershipVersion: previousVersion == null,
+        loadError: error,
       );
     }
   }
 
   Future<void> leaveCircle() async {
     final previousStatus = state.joinStatus;
-    final previousFollowed = state.isFollowed;
-    state = state.copyWith(joinStatus: 'none', isFollowed: false);
+    final previousRole = state.role;
+    var expectedVersion = state.membershipVersion;
     try {
-      final activeContext = await ref.read(activePersonaContextProvider.future);
-      final repo = ref.read(circleRepositoryProvider);
-      await repo.leaveCircle(
-        _circleId,
-        ownerUserId: activeContext.ownerUserId,
-        subAccountId: activeContext.subAccountId,
-        subAccountContextVersion: activeContext.contextVersion,
+      expectedVersion ??=
+          (await ref
+                  .read(circleDetailMembershipQueryProvider)
+                  .getMyMembership(
+                    MyCircleMembershipQuery(circleId: _circleId),
+                  ))
+              .version;
+      state = state.copyWith(
+        joinStatus: 'none',
+        role: CircleRole.visitor,
+        clearMembershipVersion: true,
+        clearLoadError: true,
       );
-    } catch (_) {
+      final result = await ref
+          .read(circleDetailMembershipCommandWriterProvider)
+          .leave(
+            LeaveCircleMembershipCommand(
+              circleId: _circleId,
+              expectedVersion: expectedVersion,
+            ),
+          );
+      state = state.copyWith(
+        joinStatus: result.state.name,
+        role: CircleRole.visitor,
+        membershipVersion: result.version,
+        clearLoadError: true,
+      );
+    } catch (error) {
       state = state.copyWith(
         joinStatus: previousStatus,
-        isFollowed: previousFollowed,
+        role: previousRole,
+        membershipVersion: expectedVersion,
+        clearMembershipVersion: expectedVersion == null,
+        loadError: error,
       );
-    }
-  }
-
-  Future<void> toggleFollow() async {
-    final wasFollowed = state.isFollowed;
-    state = state.copyWith(isFollowed: !wasFollowed);
-    try {
-      final activeContext = await ref.read(activePersonaContextProvider.future);
-      final repo = ref.read(circleRepositoryProvider);
-      if (wasFollowed) {
-        await repo.leaveCircle(
-          _circleId,
-          ownerUserId: activeContext.ownerUserId,
-          subAccountId: activeContext.subAccountId,
-          subAccountContextVersion: activeContext.contextVersion,
-        );
-      } else {
-        await repo.joinCircle(
-          _circleId,
-          ownerUserId: activeContext.ownerUserId,
-          subAccountId: activeContext.subAccountId,
-          subAccountContextVersion: activeContext.contextVersion,
-        );
-      }
-    } catch (_) {
-      state = state.copyWith(isFollowed: wasFollowed);
     }
   }
 
@@ -238,7 +262,6 @@ class CircleStateNotifier extends Notifier<CircleState> {
         circleData: CircleDto.fromMap(merged),
         role: _circleRoleFromRaw(merged['role']),
         joinStatus: (merged['joinStatus'] ?? state.joinStatus).toString(),
-        isFollowed: merged['isFollowed'] as bool? ?? state.isFollowed,
         clearLoadError: true,
       );
       return true;

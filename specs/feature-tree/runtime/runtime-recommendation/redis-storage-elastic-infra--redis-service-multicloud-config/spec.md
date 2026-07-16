@@ -15,9 +15,9 @@
 |---|---|---|
 | 多场景 config schema | `content-service/configs/config.yaml` | `redis.rec` + `redis.general` |
 | config struct | `cmd/api/main.go: redisSceneCfg` | Go struct 对应 YAML 字段 |
-| env 覆盖逻辑 | `cmd/api/main.go: applyEnvOverrides` | CONTENT_REDIS_REC_* 覆盖 |
-| buildRecRedisClient | `cmd/api/main.go` | standalone/cluster 分支 + fallback |
-| resolvePoolConfig | `cmd/api/main.go` | Pool 零值自动填充 CPU 基准 |
+| env 覆盖逻辑 | `cmd/api/runtime_config_and_projection.go: applyEnvOverrides` | 仅接受具名 scene 的 `CONTENT_REDIS_REC_* / GENERAL_* / REALTIME_*` |
+| Redis router | `cmd/api/main.go` | production composition 显式装配 standalone/cluster adapter；缺 scene 配置时启动失败 |
+| 运行时预检 | `cmd/api/runtime_config_and_projection.go: preflightConfig` | 禁止 memory mode、空地址与旧单 scene env 回退 |
 | 键空间文档 | `contracts/metadata/_shared/redis_keyspace.yaml` | hash tag + redis_scene 字段 |
 
 ## 适用范围与约束
@@ -27,16 +27,17 @@
 - 未来所有使用 Redis 的服务（参照 `redisSceneCfg` struct 复制或抽取到 runtime/config）
 
 **不适用**：
-- 本地开发（`addr` 留空 → in-memory fallback，无需任何 Redis 配置）
+- 纯函数单元测试；真实服务进程在 alpha/beta/gamma/prod 均须由环境清单提供 Redis，禁止进程内 fallback
 
 **约束**：
 - `redis.rec.db` 字段在 `mode: cluster` 时被忽略（Redis Cluster 不支持 SELECT）
-- `redis.general` 在 content-service 中当前未连接任何逻辑（预留）；其他服务使用时需在自身 main.go 中调用 `buildGeneralRedisClient`
+- `redis.rec/general/realtime` 均为显式 scene；任何 scene 依赖缺失均由启动预检阻断
+- 旧 `CONTENT_REDIS_ADDR / CONTENT_REDIS_PASSWORD / CONTENT_REDIS_DB` 已退役且不会被读取
 
 ## 验收标准
 
 - A1：content-service 读取 `redis.rec.mode=cluster` + `addrs=[...]` 时创建 `RedisClusterAdapter`
 - A2：`CONTENT_REDIS_REC_MODE=cluster` 环境变量覆盖 yaml 中 `mode: standalone`
-- A3：旧 `CONTENT_REDIS_ADDR` 向后兼容，正确映射到 `redis.rec.addr`
+- A3：旧单 scene Redis 环境变量不产生任何配置效果；仅具名 scene 变量可覆盖 YAML
 - A4：`pool.size=0` 时自动使用 `DefaultClusterPoolConfig()` 或 `DefaultRedisPoolConfig()`
 - A8：config 解析和 env 覆盖逻辑有单元测试

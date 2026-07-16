@@ -1,11 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/chat/models/send_message_response.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/ui/chat/models/chat_message_media_view_data.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import '../../../../support/cloud_services/content_facet_overrides.dart';
 
 final RegExp _defaultNicknamePattern = RegExp(r'^新同学_\d{6}_\d{7}$');
 
@@ -49,11 +51,12 @@ void main() {
     });
 
     test('sendMessage forwards rich media payloads', () async {
-      final repo = _TrackingSendChatRepository();
+      final writer = _TrackingMessageWriter();
       final container = ProviderContainer(
         overrides: [
-          chatRepositoryProvider.overrideWithValue(repo),
-          contentRepositoryProvider.overrideWithValue(MockContentRepository()),
+          chatRepositoryProvider.overrideWithValue(MockChatRepository()),
+          chatMessageCommandWriterProvider.overrideWithValue(writer),
+          ...mockContentFacetOverrides(MockContentRepository()),
           activePersonaContextProvider.overrideWith(
             (ref) async => ActivePersonaContextViewData.fallback(
               subAccountId: 'persona_media_test',
@@ -72,43 +75,41 @@ void main() {
       final sent = await notifier.sendMessage(
         'image',
         '',
-        mediaUrl: 'https://cdn.example.com/photo.jpg',
-        media: <String, dynamic>{
-          'url': 'https://cdn.example.com/photo.jpg',
-          'thumbnailUrl': 'https://cdn.example.com/thumb.jpg',
-          'mimeType': 'image/jpeg',
-          'fileSizeBytes': 1024,
-        },
+        media: ChatMessageMediaViewData(
+          assetId: 'asset_photo_001',
+          deliveryUrl: 'https://cdn.example.com/photo.jpg',
+          mediaType: 'image',
+          contentType: 'image/jpeg',
+          thumbnailUrl: 'https://cdn.example.com/thumb.jpg',
+          fileSizeBytes: 1024,
+        ),
       );
 
       expect(sent, isTrue);
-      expect(repo.lastType, 'image');
-      expect(repo.lastContent, '');
-      expect(repo.lastMediaUrl, 'https://cdn.example.com/photo.jpg');
-      expect(
-        repo.lastMedia?['thumbnailUrl'],
-        'https://cdn.example.com/thumb.jpg',
-      );
+      expect(writer.lastCommand?.type, 'image');
+      expect(writer.lastCommand?.content, '');
+      expect(writer.lastCommand?.mediaAssetId, 'asset_photo_001');
 
       final state = container.read(chatMessageProvider('fixture_conv_media'));
       expect(state.messages, hasLength(1));
       final message = state.messages.single;
       expect(message.type, 'image');
       expect(message.content, '');
-      expect(message.mediaUrl, 'https://cdn.example.com/photo.jpg');
-      expect(
-        message.media?['thumbnailUrl'],
-        'https://cdn.example.com/thumb.jpg',
-      );
+      expect(message.mediaDeliveryUrl, 'https://cdn.example.com/photo.jpg');
+      expect(message.mediaAssetId, 'asset_photo_001');
+      expect(message.mediaType, 'image');
+      expect(message.mediaContentType, 'image/jpeg');
+      expect(message.mediaFileSizeBytes, 1024);
       expect(message.status, 'sent');
     });
 
     test('sendMessage forwards assistant mentions', () async {
-      final repo = _TrackingSendChatRepository();
+      final writer = _TrackingMessageWriter();
       final container = ProviderContainer(
         overrides: [
-          chatRepositoryProvider.overrideWithValue(repo),
-          contentRepositoryProvider.overrideWithValue(MockContentRepository()),
+          chatRepositoryProvider.overrideWithValue(MockChatRepository()),
+          chatMessageCommandWriterProvider.overrideWithValue(writer),
+          ...mockContentFacetOverrides(MockContentRepository()),
           activePersonaContextProvider.overrideWith(
             (ref) async => ActivePersonaContextViewData.fallback(
               subAccountId: 'persona_mention_test',
@@ -131,53 +132,23 @@ void main() {
       );
 
       expect(sent, isTrue);
-      expect(repo.lastMentions, contains('assistant'));
+      expect(writer.lastCommand?.mentions, contains('assistant'));
     });
   });
 }
 
-class _TrackingSendChatRepository extends MockChatRepository {
-  String? lastType;
-  String? lastContent;
-  String? lastMediaUrl;
-  Map<String, dynamic>? lastMedia;
-  List<String>? lastMentions;
+class _TrackingMessageWriter implements ChatMessageCommandWriter {
+  ChatSendMessageCommand? lastCommand;
 
   @override
-  Future<SendMessageResponse> sendMessage({
-    required String conversationId,
-    required String type,
-    required String content,
-    String? mediaUrl,
-    Map<String, dynamic>? media,
-    Map<String, dynamic>? cardPayload,
-    String? replyToMessageId,
-    List<String>? mentions,
-    String? senderSubAccountId,
-    String? personaContextVersion,
-    String? senderDisplayNameSnapshot,
-    String? senderAvatarUrlSnapshot,
-    required String clientMsgId,
-  }) async {
-    lastType = type;
-    lastContent = content;
-    lastMediaUrl = mediaUrl;
-    lastMedia = media;
-    lastMentions = mentions;
-    return super.sendMessage(
-      conversationId: conversationId,
-      type: type,
-      content: content,
-      mediaUrl: mediaUrl,
-      media: media,
-      cardPayload: cardPayload,
-      replyToMessageId: replyToMessageId,
-      mentions: mentions,
-      senderSubAccountId: senderSubAccountId,
-      personaContextVersion: personaContextVersion,
-      senderDisplayNameSnapshot: senderDisplayNameSnapshot,
-      senderAvatarUrlSnapshot: senderAvatarUrlSnapshot,
-      clientMsgId: clientMsgId,
+  Future<ChatSendMessageResult> sendMessage(
+    ChatSendMessageCommand command,
+  ) async {
+    lastCommand = command;
+    return ChatSendMessageResult(
+      messageId: 'message_${command.clientMsgId}',
+      seq: 1,
+      timestamp: DateTime.utc(2026, 6, 6),
     );
   }
 }

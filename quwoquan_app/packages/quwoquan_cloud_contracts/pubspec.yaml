@@ -1,5 +1,5 @@
 name: quwoquan_cloud_contracts
-description: Repository abstract contracts for quwoquan_app (decouples API from Mock/Remote).
+description: Pure Dart ABI contracts generated from the accepted ContractGraph.
 publish_to: 'none'
 version: 0.1.0
 
@@ -8,5 +8,3 @@ environment:
 
 dependencies:
   meta: ^1.15.0
-  quwoquan_app:
-    path: ../../quwoquan_app

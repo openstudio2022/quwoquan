@@ -1,5 +1,5 @@
-// Codegen for rec-model-service Python: reads service metadata + service projections
-// and generates Pydantic models + FastAPI route skeleton. Single source of truth with Go/App.
+// Codegen for rec-model-service Python: reads ModelRelease metadata and projections,
+// then generates pure operation descriptors and Pydantic contracts.
 package main
 
 import (
@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
-	"gopkg.in/yaml.v3"
+	contractcodegen "quwoquan_service/internal/metadata/codegen"
+	"quwoquan_service/internal/metadata/validate"
 )
 
 const (
@@ -20,7 +20,7 @@ const (
 func main() {
 	metadataDir := flag.String("metadata-dir", "contracts/metadata", "metadata root directory")
 	outputDir := flag.String("output-dir", "services/rec-model-service/generated", "Python generated output directory")
-	serviceDir := flag.String("service-dir", "rec_model_service", "service metadata directory name")
+	serviceDir := flag.String("service-dir", "recommendation/model_release", "service metadata directory")
 	flag.Parse()
 
 	if err := run(*metadataDir, *outputDir, *serviceDir); err != nil {
@@ -31,19 +31,23 @@ func main() {
 }
 
 func run(metadataDir, outputDir, serviceDir string) error {
-	servicePath := filepath.Join(metadataDir, serviceDir)
+	source, err := contractcodegen.NewSource(metadataDir, validate.ProfileBaseline)
+	if err != nil {
+		return fmt.Errorf("compile ContractGraph: %w", err)
+	}
+	servicePath := serviceDir
 	projectionsPath := filepath.Join(servicePath, "projections")
 
-	fields, err := loadFields(filepath.Join(servicePath, "fields.yaml"))
+	fields, err := loadFields(source, filepath.Join(servicePath, "fields.yaml"))
 	if err != nil {
 		return fmt.Errorf("load fields: %w", err)
 	}
-	service, err := loadService(filepath.Join(servicePath, "service.yaml"))
+	service, err := loadService(source, filepath.Join(servicePath, "service.yaml"))
 	if err != nil {
 		return fmt.Errorf("load service: %w", err)
 	}
 
-	projections, err := loadProjections(projectionsPath)
+	projections, err := loadProjections(source, projectionsPath)
 	if err != nil {
 		return fmt.Errorf("load projections: %w", err)
 	}
@@ -52,6 +56,10 @@ func run(metadataDir, outputDir, serviceDir string) error {
 		return err
 	}
 	if err := os.MkdirAll(filepath.Join(outputDir, "api"), 0755); err != nil {
+		return err
+	}
+	operationsPy := generateOperationsPy(service)
+	if err := os.WriteFile(filepath.Join(outputDir, "api", "operations.py"), []byte(operationsPy), 0644); err != nil {
 		return err
 	}
 
@@ -65,13 +73,12 @@ func run(metadataDir, outputDir, serviceDir string) error {
 		return err
 	}
 
-	modelsInit := generateModelsInit()
+	modelsInit := generateModelsInit(projections)
 	if err := os.WriteFile(filepath.Join(outputDir, "models", "__init__.py"), []byte(modelsInit), 0644); err != nil {
 		return err
 	}
 
-	routesPy := generateRoutesPy(service)
-	if err := os.WriteFile(filepath.Join(outputDir, "api", "routes.py"), []byte(routesPy), 0644); err != nil {
+	if err := os.Remove(filepath.Join(outputDir, "api", "routes.py")); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 
@@ -91,9 +98,9 @@ func run(metadataDir, outputDir, serviceDir string) error {
 	}
 
 	// Generate content features + training sample from content/post/behaviors.yaml
-	behaviorsPath := resolveContentBehaviors(metadataDir)
+	behaviorsPath := resolveContentBehaviors(source)
 	if behaviorsPath != "" {
-		beh, err := loadBehaviors(behaviorsPath)
+		beh, err := loadBehaviors(source, behaviorsPath)
 		if err == nil && beh != nil {
 			if beh.RecommendFeatures.PythonClass != "" {
 				featuresPy := generateContentFeaturesPy(beh)
@@ -117,14 +124,13 @@ func run(metadataDir, outputDir, serviceDir string) error {
 	return nil
 }
 
-func resolveContentBehaviors(metadataDir string) string {
-	// Domain-centric path first
-	p := filepath.Join(metadataDir, "content", "post", "behaviors.yaml")
-	if _, err := os.Stat(p); err == nil {
+func resolveContentBehaviors(source *contractcodegen.Source) string {
+	p := filepath.Join("content", "post", "behaviors.yaml")
+	if source.Has(p) {
 		return p
 	}
-	p = filepath.Join(metadataDir, "post", "behaviors.yaml")
-	if _, err := os.Stat(p); err == nil {
+	p = filepath.Join("post", "behaviors.yaml")
+	if source.Has(p) {
 		return p
 	}
 	return ""
@@ -153,18 +159,18 @@ type serviceFile struct {
 }
 
 type routeDef struct {
-	Method          string `yaml:"method"`
-	Path            string `yaml:"path"`
-	Operation       string `yaml:"operation"`
-	RequestEntity   string `yaml:"request_entity"`
-	ResponseEntity  string `yaml:"response_entity"`
-	Description     string `yaml:"description"`
+	Method         string `yaml:"method"`
+	Path           string `yaml:"path"`
+	Operation      string `yaml:"operation"`
+	RequestEntity  string `yaml:"request_entity"`
+	ResponseEntity string `yaml:"response_entity"`
+	Description    string `yaml:"description"`
 }
 
 type projectionFile struct {
-	ReadModel string     `yaml:"read_model"`
-	Collection string   `yaml:"collection"`
-	Fields   []projField `yaml:"fields"`
+	ReadModel  string      `yaml:"read_model"`
+	Collection string      `yaml:"collection"`
+	Fields     []projField `yaml:"fields"`
 }
 
 type projField struct {
@@ -176,47 +182,38 @@ type projField struct {
 type projectionSpec struct {
 	ReadModel  string
 	Collection string
-	Fields    []projField
+	Fields     []projField
 }
 
-func loadFields(path string) (*fieldsFile, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
+func loadFields(source *contractcodegen.Source, path string) (*fieldsFile, error) {
 	var f fieldsFile
-	if err := yaml.Unmarshal(data, &f); err != nil {
+	if err := source.Decode(path, &f); err != nil {
 		return nil, err
 	}
 	return &f, nil
 }
 
-func loadService(path string) (*serviceFile, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
+func loadService(source *contractcodegen.Source, path string) (*serviceFile, error) {
 	var s serviceFile
-	if err := yaml.Unmarshal(data, &s); err != nil {
+	if err := source.Decode(path, &s); err != nil {
 		return nil, err
 	}
 	return &s, nil
 }
 
-func loadProjections(projectionsPath string) ([]projectionSpec, error) {
+func loadProjections(
+	source *contractcodegen.Source,
+	projectionsPath string,
+) ([]projectionSpec, error) {
 	names := []string{"learning_events.yaml", "training_samples.yaml", "model_registry.yaml"}
 	var out []projectionSpec
 	for _, n := range names {
 		path := filepath.Join(projectionsPath, n)
-		data, err := os.ReadFile(path)
-		if err != nil {
-			if os.IsNotExist(err) {
-				continue
-			}
-			return nil, err
+		if !source.Has(path) {
+			continue
 		}
 		var p projectionFile
-		if err := yaml.Unmarshal(data, &p); err != nil {
+		if err := source.Decode(path, &p); err != nil {
 			return nil, fmt.Errorf("%s: %w", n, err)
 		}
 		out = append(out, projectionSpec{
@@ -278,7 +275,14 @@ func isRequired(constraints []string) bool {
 
 // --- Request/Response generation (entity order: dependencies first) ---
 
-var requestResponseOrder = []string{"CandidateInput", "CandidateScore", "ModelScoreRequest", "ModelScoreResponse"}
+var requestResponseOrder = []string{
+	"CandidateInput",
+	"CandidateScore",
+	"ModelScoreRequest",
+	"ModelScoreResponse",
+	"BatchModelScoreRequest",
+	"BatchModelScoreResponse",
+}
 
 func generateRequestResponsePy(f *fieldsFile) string {
 	var b strings.Builder
@@ -322,19 +326,7 @@ func generateProjectionsPy(projections []projectionSpec) string {
 	b.WriteString("from pydantic import BaseModel, ConfigDict\n\n")
 
 	for _, p := range projections {
-		className := p.ReadModel
-		if strings.HasSuffix(className, "s") && len(className) > 1 {
-			className = className[:len(className)-1]
-		}
-		if className == "LearningEvents" {
-			className = "LearningEvent"
-		}
-		if className == "TrainingSamples" {
-			className = "TrainingSample"
-		}
-		if className == "ModelRegistry" {
-			className = "ModelRegistryEntry"
-		}
+		className := projectionClassName(p.ReadModel)
 		b.WriteString(fmt.Sprintf("\n\nclass %s(BaseModel):\n", className))
 		b.WriteString(fmt.Sprintf("    \"\"\"Read model: %s, collection: %s\"\"\"\n", p.ReadModel, p.Collection))
 		for _, fd := range p.Fields {
@@ -346,41 +338,62 @@ func generateProjectionsPy(projections []projectionSpec) string {
 	return b.String()
 }
 
-func generateModelsInit() string {
+func projectionClassName(readModel string) string {
+	className := readModel
+	if strings.HasSuffix(className, "s") && len(className) > 1 {
+		className = className[:len(className)-1]
+	}
+	if className == "LearningEvents" {
+		return "LearningEvent"
+	}
+	if className == "TrainingSamples" {
+		return "TrainingSample"
+	}
+	if className == "ModelRegistry" {
+		return "ModelRegistryEntry"
+	}
+	return className
+}
+
+func generateModelsInit(projections []projectionSpec) string {
 	var b strings.Builder
 	b.WriteString(genHeader)
 	b.WriteString("\nfrom .request_response import (\n")
-	b.WriteString("    CandidateInput,\n    CandidateScore,\n    ModelScoreRequest,\n    ModelScoreResponse,\n)\n")
-	b.WriteString("from .projections import LearningEvent, ModelRegistryEntry, TrainingSample\n")
+	b.WriteString("    CandidateInput,\n    CandidateScore,\n    ModelScoreRequest,\n    ModelScoreResponse,\n    BatchModelScoreRequest,\n    BatchModelScoreResponse,\n)\n")
+	if len(projections) == 0 {
+		return b.String()
+	}
+	b.WriteString("from .projections import (\n")
+	for _, projection := range projections {
+		b.WriteString(fmt.Sprintf("    %s,\n", projectionClassName(projection.ReadModel)))
+	}
+	b.WriteString(")\n")
 	return b.String()
 }
 
-func generateRoutesPy(s *serviceFile) string {
+func pythonOperationConstant(operation string) string {
+	var b strings.Builder
+	for i, r := range operation {
+		if i > 0 && r >= 'A' && r <= 'Z' {
+			b.WriteByte('_')
+		}
+		if r >= 'a' && r <= 'z' {
+			b.WriteRune(r - ('a' - 'A'))
+		} else {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+func generateOperationsPy(s *serviceFile) string {
 	var b strings.Builder
 	b.WriteString(genHeader)
-	b.WriteString("\nfrom fastapi import APIRouter\n\n")
-	b.WriteString("from .schemas import ModelScoreRequest, ModelScoreResponse\n\n")
-	b.WriteString("router = APIRouter()\n\n")
-
+	b.WriteString("\n\"\"\"Operation descriptors generated from ContractGraph metadata.\"\"\"\n\n")
 	for _, r := range s.APIRoutes {
-		method := strings.ToLower(r.Method)
-		path := r.Path
-		op := r.Operation
-		switch {
-		case method == "post" && path == "/v1/score":
-			b.WriteString("@router.post(\"/v1/score\", response_model=ModelScoreResponse)\n")
-			b.WriteString("def score(body: ModelScoreRequest):\n")
-			b.WriteString("    \"\"\"Multi-scenario recommendation scoring. Implement by injecting a scorer.\"\"\"\n")
-			b.WriteString("    # TODO: delegate to scorer.score(body) and return ModelScoreResponse(scores=...)\n")
-			b.WriteString("    return ModelScoreResponse(scores=[])\n\n\n")
-		case method == "get" && path == "/health":
-			b.WriteString("@router.get(\"/health\")\n")
-			b.WriteString("def health():\n")
-			b.WriteString("    \"\"\"Health check.\"\"\"\n")
-			b.WriteString("    return {\"status\": \"ok\"}\n\n\n")
-		default:
-			b.WriteString(fmt.Sprintf("# %s %s (%s)\n", r.Method, path, op))
-		}
+		name := pythonOperationConstant(r.Operation)
+		b.WriteString(fmt.Sprintf("%s_PATH = %q\n", name, r.Path))
+		b.WriteString(fmt.Sprintf("%s_METHOD = %q\n", name, strings.ToUpper(r.Method)))
 	}
 	return b.String()
 }
@@ -390,11 +403,12 @@ func generateSchemasPy(f *fieldsFile) string {
 	b.WriteString(genHeader)
 	b.WriteString("\n\"\"\"Re-export request/response models for API use.\"\"\"\n\n")
 	b.WriteString("from ..models.request_response import (\n")
-	names := make([]string, 0, len(f.Entities))
-	for n := range f.Entities {
-		names = append(names, n)
+	names := make([]string, 0, len(requestResponseOrder))
+	for _, name := range requestResponseOrder {
+		if _, ok := f.Entities[name]; ok {
+			names = append(names, name)
+		}
 	}
-	sort.Strings(names)
 	for _, n := range names {
 		b.WriteString(fmt.Sprintf("    %s,\n", n))
 	}
@@ -410,7 +424,8 @@ func generateSchemasPy(f *fieldsFile) string {
 func generateAPIInit() string {
 	var b strings.Builder
 	b.WriteString(genHeader)
-	b.WriteString("\nfrom .routes import router\n\n__all__ = [\"router\"]\n")
+	b.WriteString("\n\"\"\"Generated operation descriptors and transport schemas.\"\"\"\n")
+	b.WriteString("\n__all__ = [\"operations\", \"schemas\"]\n")
 	return b.String()
 }
 
@@ -465,13 +480,12 @@ type behaviorsYAML struct {
 	TrainingSample    trainingSampleDef `yaml:"training_sample"`
 }
 
-func loadBehaviors(path string) (*behaviorsYAML, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
+func loadBehaviors(
+	source *contractcodegen.Source,
+	path string,
+) (*behaviorsYAML, error) {
 	var b behaviorsYAML
-	return &b, yaml.Unmarshal(data, &b)
+	return &b, source.Decode(path, &b)
 }
 
 func generateContentFeaturesPy(beh *behaviorsYAML) string {

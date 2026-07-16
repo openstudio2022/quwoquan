@@ -186,6 +186,5 @@ ChatMessageDisplayItem _message({
     thumbnailUrl: imageUrl,
     audioDurationMs: 0,
     audioWaveform: const <double>[],
-    tasks: const <ChatTaskCardEntry>[],
   );
 }

@@ -49,27 +49,27 @@ TextSpan _spanByText(RichText richText, String text) {
 int _fontWeightValue(TextSpan span) =>
     span.style?.fontWeight?.value ?? FontWeight.normal.value;
 
-IntersectionReason _reason({String intersectionClass = 'fact'}) {
+IntersectionReason _reason({
+  String intersectionClass = 'fact',
+  String? postId,
+}) {
+  final resolvedPostId =
+      postId ?? 'post_intersection_demo_${intersectionClass}_1';
   final target = IntersectionTarget(
     objectType: 'user',
     objectId: 'fixture_user_lin',
     objectKind: 'person',
     routeId: 'userProfile',
   );
-  final objectTarget = IntersectionTarget(
-    objectType: 'post',
-    objectId: 'post_intersection_demo',
-    objectKind: 'content',
-    routeId: 'workBrowser',
-  );
   return IntersectionReason(
     dimension: 'content',
     intersectionId: 'ix_post_lin',
     intersectionClass: intersectionClass,
-    objectKind: 'person',
+    objectKind: 'content',
     source: 'coCommented',
-    actionTargetId: 'post_intersection_demo',
+    actionTargetId: resolvedPostId,
     pointSummarySnapshotId: 'snap_lin',
+    displayBinding: 'host_implicit',
     actorEvidenceTotalCount: 3,
     actorEvidenceCompleteness: 'complete',
     representativeActor: IntersectionRepresentativeActor(
@@ -89,7 +89,7 @@ IntersectionReason _reason({String intersectionClass = 'fact'}) {
         relationSourceRef: 'contact',
         sourcePointId: 'ix_post_lin_actor_1',
         sourceRef: 'commonContact',
-        actionSummaryText: '点赞了这条记录',
+        actionSummaryText: '赞过川西雪山和校园摄影路线',
         likeCount: 1,
         target: target,
         evidenceRank: 5,
@@ -103,7 +103,7 @@ IntersectionReason _reason({String intersectionClass = 'fact'}) {
         relationSourceRef: 'followee',
         sourcePointId: 'ix_post_lin_actor_2',
         sourceRef: 'sharedFollowees',
-        actionSummaryText: '点赞了这条记录',
+        actionSummaryText: '赞过川西雪山和校园摄影路线',
         likeCount: 1,
         evidenceRank: 10,
         snapshotVersion: 'snap_lin',
@@ -118,14 +118,14 @@ IntersectionReason _reason({String intersectionClass = 'fact'}) {
         relationObjectName: '城市漫游圈',
         sourcePointId: 'ix_post_lin_actor_3',
         sourceRef: 'sharedCircle',
-        actionSummaryText: '评论了这条记录',
+        actionSummaryText: '评论过川西雪山和校园摄影路线',
         commentCount: 1,
         evidenceRank: 20,
         snapshotVersion: 'snap_lin',
         sortKey: 3,
       ),
     ],
-    primaryText: '联系人林清越等3人赞过和评论过《川西雪山和校园摄影路线》',
+    primaryText: '联系人林清越等3人赞过和评论过',
     primarySpans: <IntersectionTextSpan>[
       IntersectionTextSpan(text: '联系人', role: 'plain'),
       IntersectionTextSpan(text: '林清越', role: 'object', target: target),
@@ -141,11 +141,6 @@ IntersectionReason _reason({String intersectionClass = 'fact'}) {
         ),
       ),
       IntersectionTextSpan(text: '人赞过和评论过', role: 'plain'),
-      IntersectionTextSpan(
-        text: '《川西雪山和校园摄影路线》',
-        role: 'object',
-        target: objectTarget,
-      ),
     ],
     sampleVisuals: <IntersectionVisual>[
       IntersectionVisual(
@@ -224,9 +219,12 @@ MicroPostDto _microPost({
   IntersectionReason? reason,
   String avatarUrl = '',
 }) {
-  final effectiveReason = reason ?? _reason();
+  final reasonClass = reason?.intersectionClass ?? 'fact';
+  final postId = 'post_intersection_demo_${reasonClass}_${imageUrls.length}';
+  final effectiveReason =
+      reason ?? _reason(intersectionClass: reasonClass, postId: postId);
   return MicroPostDto(
-    id: 'post_intersection_demo_${effectiveReason.intersectionClass}_${imageUrls.length}',
+    id: postId,
     type: 'moment',
     identity: 'moment',
     authorId: 'user_demo',
@@ -259,9 +257,10 @@ PhotoPostDto _photoPost({
   ],
   IntersectionReason? reason,
 }) {
-  final effectiveReason = reason ?? _reason();
+  final postId = 'photo_${width}_${height}_${imageUrls.length}';
+  final effectiveReason = reason ?? _reason(postId: postId);
   return PhotoPostDto(
-    id: 'photo_${width}_${height}_${imageUrls.length}',
+    id: postId,
     type: 'photo',
     identity: 'work',
     assistantUsePolicy: 'allow',
@@ -288,8 +287,9 @@ PhotoPostDto _photoPost({
 }
 
 VideoPostDto _videoPost({required int width, required int height}) {
+  final postId = 'video_${width}_$height';
   return VideoPostDto(
-    id: 'video_${width}_$height',
+    id: postId,
     type: 'video',
     identity: 'work',
     assistantUsePolicy: 'allow',
@@ -315,7 +315,7 @@ VideoPostDto _videoPost({required int width, required int height}) {
     createdAt: DateTime(2026),
     updatedAt: null,
     publishedAt: null,
-    intersectionReasons: <IntersectionReason>[_reason()],
+    intersectionReasons: <IntersectionReason>[_reason(postId: postId)],
   );
 }
 
@@ -373,7 +373,7 @@ class _ArticleLayoutPost extends PostBaseDto {
   DateTime get createdAt => DateTime(2026);
   @override
   List<IntersectionReason>? get intersectionReasons => <IntersectionReason>[
-    _reason(),
+    _reason(postId: id),
   ];
   @override
   Map<String, dynamic> toMap() => <String, dynamic>{'id': id};
@@ -492,7 +492,7 @@ void main() {
         matching: find.byType(RichText),
       ),
     );
-    expect(richText.text.toPlainText(), '联系人林清越等3人赞过和评论过《川西雪山和校园摄影路线》');
+    expect(richText.text.toPlainText(), '联系人林清越等3人赞过和评论过');
     final textContext = tester.element(
       find.byType(InteractiveIntersectionText),
     );
@@ -507,7 +507,6 @@ void main() {
     expect(plainColor, isNot(AppColors.iosSecondaryLabel(textContext)));
     expect(_spanByText(richText, '林清越').style?.color, accentColor);
     expect(_spanByText(richText, '3').style?.color, accentColor);
-    expect(_spanByText(richText, '《川西雪山和校园摄影路线》').style?.color, accentColor);
     expect(
       _fontWeightValue(_spanByText(richText, '林清越')),
       greaterThan(_fontWeightValue(_spanByText(richText, '联系人'))),
@@ -787,7 +786,7 @@ void main() {
     expect(reason.actorEvidenceCompleteness, 'complete');
     expect(reason.actorEvidence, hasLength(3));
     expect(reason.actorEvidence.first.relationLabel, '联系人');
-    expect(reason.actorEvidence.first.actionSummaryText, '点赞了这条记录');
+    expect(reason.actorEvidence.first.actionSummaryText, '赞过川西雪山和校园摄影路线');
 
     await tester.pumpWidget(_buildFeed(showcasePost));
     await tester.pump();
@@ -1346,12 +1345,15 @@ void main() {
     final intersectionRect = tester.getRect(
       find.byKey(const ValueKey('home-article-inline-intersection')),
     );
+    final cardRect = tester.getRect(
+      find.byKey(const ValueKey('home-feed-card-0')),
+    );
     expect(thumbRect.top, greaterThan(titleRect.bottom - 1));
     expect((bodyRect.top - thumbRect.top).abs(), lessThan(2));
     expect(bodyRect.right, lessThan(thumbRect.left + 1));
     expect(intersectionRect.top, greaterThan(thumbRect.bottom - 1));
     expect(intersectionRect.right, greaterThanOrEqualTo(bodyRect.right - 1));
-    expect(intersectionRect.right, greaterThanOrEqualTo(thumbRect.right - 1));
+    expect(intersectionRect.right, lessThanOrEqualTo(cardRect.right));
 
     await tester.pumpWidget(
       _buildFeed(

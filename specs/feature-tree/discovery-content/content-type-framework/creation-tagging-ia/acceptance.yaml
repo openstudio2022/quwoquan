@@ -7,17 +7,16 @@ node:
   parent_domain_service: discovery-content
   parent_business_capability: content-type-framework
 scope:
-  summary: 冻结创作侧打标 IA：各类型编辑页内联打标区，打标全类型可选、不强制，由自动打标（转发识别+内容识别）辅助， 手动 UI 作确认/修正层。首发芯片集来自
-    tag_ref_migration launch 子集，搜索补充在 C2 后 flag 灰度。 tagRefs 经 CreatePost 注入，使「打标→content.tagRefs→交集归因」可还原。
+  summary: 冻结创作侧打标 IA：各类型编辑页内联打标区，打标全类型可选、不强制，由自动打标（转发识别+内容识别）辅助，手动 UI 作确认/修正层。常用标签和搜索结果来自 tag-service serving projection，tagRefs 经 CreatePost 注入，使「打标→content.tagRefs→交集归因」可还原。
   in_scope:
   - 各类型编辑页内联打标区（图文/视频），打标可选不拦截发布
   - 自动打标建议 suggestedTagRefs 消费 + 可编辑/可删除芯片（确认/修正层）
-  - 交互形态：launch 子集芯片 + 自动建议多选 ≤5；C2 后 flag 灰度搜索补充
-  - 首发标签子集引用 tag_ref_migration launch 项（不另建第二套）
+  - 交互形态：tag-service 常用标签 + 自动建议多选 ≤5；搜索入口由 flag 控制
+  - 端侧不维护标签 catalog 或首发子集
   - tagRefs 经 CreatePost/UpdatePost writable_fields 注入（已通）
   out_of_scope:
   - 自动打标模型/管线（转发识别、内容识别）实现（属 ML/数据工程）
-  - publish/tags 真相源发布（属 C2）
+  - taxonomy 治理与发布导入（属数据工程与 tag-service）
   - 标签运营后台/治理
   - pageflip 受控文件
 gwt_acceptance:
@@ -175,13 +174,13 @@ gwt_acceptance:
     notes:
     - '[migrated_from_planned] quwoquan_app/test/ui/content/entry/creation_tagging_widget_test.dart'
   GWT6:
-    title: 搜索补充由 flag 灰度（C2 后），检索源唯一 publish/tags
+    title: 搜索补充由 flag 控制，查询源唯一为 tag-service serving projection
     given:
-    - 搜索补充 feature flag 关闭（C2 未发布）。
+    - 搜索补充 feature flag 关闭。
     when:
     - 渲染打标区。
     then:
-    - 不渲染搜索入口；仅首发子集 + 自动建议芯片。flag 开启后检索源唯一 publish/tags。
+    - 不渲染搜索入口；保留自动建议和已选标签。flag 开启后查询源唯一为 tag-service serving projection。
     done_when:
     - flag 开关两态 widget 测试通过。
     edge_cases: []

@@ -1,68 +1,72 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:http/http.dart' as http;
+import 'package:quwoquan_app/cloud/runtime/transport/cloud_retry_policy.dart';
 
 /// HTTP client wrapper with exponential backoff retry for transient failures.
 ///
-/// Retries only on:
-/// - Network errors (SocketException, TimeoutException)
-/// - Server errors (5xx)
-///
-/// Idempotent methods (GET, HEAD, DELETE, PUT) are always retried.
-/// POST/PATCH are only retried if [retryNonIdempotent] is true.
+/// 只自动重试可重放的 GET / HEAD。Command 的幂等重放由 generated operation
+/// descriptor 与 executor 独立控制，禁止在 transport 全局开启。
 class RetryHttpClient extends http.BaseClient {
   RetryHttpClient({
     http.Client? inner,
-    this.maxRetries = 2,
-    this.initialBackoffMs = 500,
-    this.maxBackoffMs = 8000,
-    this.retryNonIdempotent = false,
-  }) : _inner = inner ?? http.Client();
+    this.policy = const CloudRetryPolicy(),
+    math.Random? random,
+    Future<void> Function(Duration delay)? sleeper,
+  }) : _inner = inner ?? http.Client(),
+       _random = random ?? math.Random(),
+       _sleeper = sleeper ?? Future<void>.delayed;
 
   final http.Client _inner;
-  final int maxRetries;
-  final int initialBackoffMs;
-  final int maxBackoffMs;
-  final bool retryNonIdempotent;
+  final CloudRetryPolicy policy;
+  final math.Random _random;
+  final Future<void> Function(Duration delay) _sleeper;
 
-  static const _idempotentMethods = {'GET', 'HEAD', 'DELETE', 'PUT', 'OPTIONS'};
+  /// Generated operation executor owns retry accounting and calls this path
+  /// so one transport invocation always equals one network attempt.
+  Future<http.StreamedResponse> sendSingleAttempt(http.BaseRequest request) {
+    return _inner.send(request);
+  }
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
-    final isIdempotent = _idempotentMethods.contains(request.method.toUpperCase());
-    final shouldRetry = isIdempotent || retryNonIdempotent;
+    final shouldRetry =
+        policy.canRetryMethod(request.method) && request is http.Request;
 
-    for (var attempt = 0; attempt <= maxRetries; attempt++) {
+    for (var attempt = 0; attempt <= policy.maxRetries; attempt++) {
       try {
         final response = await _inner.send(_copyRequest(request));
-
-        if (response.statusCode >= 500 && shouldRetry && attempt < maxRetries) {
-          await _backoff(attempt);
+        if (shouldRetry &&
+            attempt < policy.maxRetries &&
+            policy.canRetryStatus(response.statusCode)) {
+          await response.stream.drain<void>();
+          await _waitBeforeRetry(
+            attempt,
+            retryAfter: response.headers['retry-after'],
+          );
           continue;
         }
-
         return response;
-      } on SocketException {
-        if (!shouldRetry || attempt == maxRetries) rethrow;
-        await _backoff(attempt);
+      } on http.ClientException {
+        if (!shouldRetry || attempt == policy.maxRetries) rethrow;
+        await _waitBeforeRetry(attempt);
       } on TimeoutException {
-        if (!shouldRetry || attempt == maxRetries) rethrow;
-        await _backoff(attempt);
+        if (!shouldRetry || attempt == policy.maxRetries) rethrow;
+        await _waitBeforeRetry(attempt);
       }
     }
-
-    return _inner.send(_copyRequest(request));
+    throw StateError('RetryHttpClient exhausted without response');
   }
 
-  Future<void> _backoff(int attempt) async {
-    final delayMs = math.min(
-      initialBackoffMs * math.pow(2, attempt).toInt(),
-      maxBackoffMs,
+  Future<void> _waitBeforeRetry(int attempt, {String? retryAfter}) {
+    return _sleeper(
+      policy.delayFor(
+        attempt: attempt,
+        retryAfter: retryAfter,
+        jitterUnit: _random.nextDouble(),
+      ),
     );
-    final jitter = (delayMs * 0.2 * (math.Random().nextDouble() - 0.5)).toInt();
-    await Future<void>.delayed(Duration(milliseconds: delayMs + jitter));
   }
 
   http.BaseRequest _copyRequest(http.BaseRequest original) {

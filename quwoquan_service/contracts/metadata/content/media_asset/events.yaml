@@ -1,0 +1,24 @@
+version: 1
+entity: MediaAsset
+
+events:
+  - name: MediaAssetCreated
+    description: 已验证的上传会话物化为独立 MediaAsset，初始处理状态为 processing。
+    producer: content-service
+    consumers: [media-processing]
+    channel: transactional_outbox
+    payload_fields: [id, version, ownerId, sourceSessionId, objectKey, sha256, processingStatus]
+
+  - name: MediaAssetProcessingUpdated
+    description: 转码、扫描或缩略图处理更新资产处理状态。
+    producer: content-service
+    consumers: [content-service, search-service]
+    channel: transactional_outbox
+    payload_fields: [id, version, processingStatus, processedAt]
+
+  - name: MediaAssetAccessPolicyUpdated
+    description: owner 修改资产访问策略。
+    producer: content-service
+    consumers: [content-service]
+    channel: transactional_outbox
+    payload_fields: [id, version, ownerId, accessPolicy]

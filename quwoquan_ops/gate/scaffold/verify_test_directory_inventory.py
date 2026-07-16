@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -13,6 +14,7 @@ from test_directory_inventory_lib import (
     OPS_ACCEPTANCE_ROOT,
     OPS_TEST_ROOT,
     ROOT,
+    SERVICE_DOMAIN_ROOT,
     SERVICE_ROOT,
     contains_generated_bridge_marker,
     iter_canonical_files,
@@ -27,9 +29,15 @@ APP_LAYER_DIRS = {
 }
 APP_TEST_ROOT_DIRS = {*LAYERS, "support"}
 DATA_TEST_ROOT_DIRS = {*LAYERS, "support"}
+DATA_LAYER_DIRS = {
+    "local_contract": {"core", "execution", "source", "homepage", "post", "governance", "release"},
+    "api_integration": {"execution", "release"},
+    "user_acceptance": {"journeys", "quality"},
+}
 OPS_TEST_ROOT_DIRS = {"local_contract", "acceptance", "support"}
 OPS_ACCEPTANCE_DIRS = {"api_integration", "user_acceptance"}
 SERVICE_TEST_DIRS = {"local_contract", "api_integration", "support"}
+IGNORED_TEST_CACHE_DIRS = {"__pycache__", ".pytest_cache"}
 
 TEST_SUFFIX_BY_LAYER = {
     ".dart": {
@@ -47,6 +55,11 @@ TEST_SUFFIX_BY_LAYER = {
         "user_acceptance": "__user_acceptance_test.py",
     },
 }
+DATA_TEST_NAME_RE = re.compile(
+    r"^test_[a-z0-9]+(?:_[a-z0-9]+)*__[a-z0-9]+(?:_[a-z0-9]+)*__"
+    r"(functional|contract|reliability|availability|observability|experience|security|performance|data_consistency)"
+    r"__(local_contract|api_integration|user_acceptance)_test\.py$"
+)
 
 
 class Failures:
@@ -100,6 +113,8 @@ def ensure_allowed_children(root: Path, allowed: set[str], failures: Failures, *
         failures.add(f"missing test root: {rel(root)}")
         return
     for child in sorted(root.iterdir()):
+        if child.is_dir() and child.name in IGNORED_TEST_CACHE_DIRS:
+            continue
         if child.is_dir() and child.name not in allowed:
             failures.add(f"{rel(child)} is not an allowed test directory")
         if child.is_file() and child.name not in allow_files:
@@ -142,8 +157,13 @@ def verify_data(failures: Failures) -> None:
         if not layer_root.exists():
             failures.add(f"missing data test layer: {rel(layer_root)}")
             continue
+        ensure_allowed_children(layer_root, DATA_LAYER_DIRS[layer], failures)
         for path in sorted(layer_root.rglob("test_*.py")):
             require_layer_suffix(path, layer, failures)
+            if not DATA_TEST_NAME_RE.fullmatch(path.name):
+                failures.add(
+                    f"{rel(path)} must use test_<subject>__<case>__<facet>__{layer}_test.py"
+                )
 
 
 def verify_ops(failures: Failures) -> None:
@@ -189,7 +209,10 @@ def verify_service(failures: Failures) -> None:
             rel_text = rel(path)
             if "/tests/local_contract/" in rel_text or "/tests/api_integration/" in rel_text:
                 continue
-            require_layer_suffix(path, "local_contract", failures)
+            if path.name.endswith("__api_integration_test.go"):
+                require_layer_suffix(path, "api_integration", failures)
+            else:
+                require_layer_suffix(path, "local_contract", failures)
         for path in sorted(service_dir.rglob("test_*.py")):
             rel_text = rel(path)
             if "/tests/local_contract/" in rel_text or "/tests/api_integration/" in rel_text:
@@ -198,8 +221,6 @@ def verify_service(failures: Failures) -> None:
                 failures.add(f"{rel_text} is under support/; support may contain fixtures or harness only")
             elif "/tests/" in rel_text:
                 failures.add(f"{rel_text} must live under tests/local_contract or tests/api_integration")
-
-
 def verify_all_canonical_files_registered(failures: Failures) -> None:
     for _, path, layer in iter_canonical_files():
         if not recorded_file_is_canonical(rel(path)):
@@ -216,6 +237,9 @@ def main() -> int:
     verify_no_generated_bridges(DATA_ROOT, failures)
     verify_no_generated_bridges(OPS_TEST_ROOT, failures)
     verify_no_generated_bridges(SERVICE_ROOT, failures)
+    verify_no_generated_bridges(SERVICE_DOMAIN_ROOT / "internal", failures)
+    verify_no_generated_bridges(SERVICE_DOMAIN_ROOT / "runtime", failures)
+    verify_no_generated_bridges(SERVICE_DOMAIN_ROOT / "tools", failures)
     verify_all_canonical_files_registered(failures)
     return failures.exit_code()
 

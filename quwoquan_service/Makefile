@@ -1,4 +1,4 @@
-.PHONY: gate build test test-unit test-contract test-contract-local test-integration test-chat-ready-index-alpha-beta lint verify-metadata verify-content-architecture codegen codegen-app codegen-ops-portal codegen-control-plane-runtime codegen-content-service codegen-circle-service codegen-chat-service codegen-chat-domain-events codegen-rec-model-python codegen-rec-policy codegen-storage dev dev-down dev-redis dev-redis-down dev-reliable-task-local dev-reliable-task-local-down clean verify-ml-features verify-ml-model-quality verify-ml-e2e verify-ml-e2e-live verify-ml-guardrail verify-ml-drift verify-ml-tests verify-rec-policy-advisor verify-content-flywheel-tests verify-content-flywheel-loop
+.PHONY: gate build test test-unit test-contract test-contract-local test-integration test-chat-ready-index-alpha-beta lint verify-metadata verify-openapi verify-contract-graph verify-contract-graph-commercial verify-registry-contract-graph-single-track verify-ddd-cqrs-baseline verify-codegen-contract-graph-source verify-go-single-module verify-service-layering verify-production-wiring-purity verify-content-architecture codegen codegen-openapi codegen-contract-graph codegen-app codegen-ops-portal codegen-control-plane-runtime codegen-content-service codegen-circle-service codegen-entity-service codegen-notification-service codegen-product-ops-service codegen-platform-ops-service codegen-user-service codegen-chat-service codegen-chat-domain-events codegen-rec-model-python codegen-rec-policy codegen-storage dev dev-down dev-redis dev-redis-down dev-reliable-task-local dev-reliable-task-local-down clean verify-ml-features verify-ml-model-quality verify-ml-e2e verify-ml-e2e-live verify-ml-guardrail verify-ml-drift verify-ml-tests verify-rec-policy-advisor verify-content-flywheel-tests verify-content-flywheel-loop
 
 SCENARIO ?= content_feed
 DB ?= quwoquan_content
@@ -13,9 +13,12 @@ ML_DRIFT_OUT ?=
 FLYWHEEL_REQUIRE_CLOSED ?= false
 FLYWHEEL_OUT ?=
 REPO_ROOT ?= $(abspath ..)
-ML_PYTHON ?= $(if $(wildcard $(REPO_ROOT)/.qwq_output/env/repo/local/python-envs/rec-model/bin/python),$(REPO_ROOT)/.qwq_output/env/repo/local/python-envs/rec-model/bin/python,python3)
+QWQ_OUTPUT_ROOT ?= $(REPO_ROOT)/.qwq_output
+ML_REPORT_ROOT ?= $(QWQ_OUTPUT_ROOT)/env/repo/runs/ml
+ML_PYTHON ?= $(if $(wildcard $(QWQ_OUTPUT_ROOT)/env/repo/local/python-envs/cache/rec-model/bin/python),$(QWQ_OUTPUT_ROOT)/env/repo/local/python-envs/cache/rec-model/bin/python,python3)
 ML_SCRIPTS := services/rec-model-service/scripts
 PYTEST_NO_CACHE := -p no:cacheprovider
+export QWQ_OUTPUT_ROOT
 export PYTHONDONTWRITEBYTECODE ?= 1
 
 # ─── Quality Gate ────────────────────────────────────────────────────
@@ -24,12 +27,7 @@ gate:
 
 # ─── Build ───────────────────────────────────────────────────────────
 build:
-	go build ./runtime/...
-	go build ./tools/...
-	go build ./services/user-service/...
-	go build ./services/rtc-service/...
-	go build ./services/tag-service/...
-	$(MAKE) -C services/assistant-service build
+	go list ./... | awk '$$0 !~ /\/tests(\/|$$)/' | xargs go build
 
 # ─── Test ────────────────────────────────────────────────────────────
 test: test-unit
@@ -69,13 +67,52 @@ lint:
 	go vet ./tools/...
 
 # ─── Metadata ────────────────────────────────────────────────────────
-verify-metadata:
+verify-ddd-cqrs-baseline:
+	go test ./internal/metadata/load ./internal/metadata/graph ./internal/metadata/validate
+	go test ./services/content-service/internal/domain/report/... ./services/content-service/internal/application/report
+
+verify-metadata: verify-codegen-contract-graph-source verify-registry-contract-graph-single-track
+	@$(MAKE) verify-contract-graph-commercial
 	go run ./tools/verify_metadata/ contracts/metadata
+
+verify-openapi:
+	go run ./tools/qwq_contract check-openapi --metadata-dir contracts/metadata
+
+verify-contract-graph: verify-openapi
+	go run ./tools/qwq_contract validate --metadata-dir contracts/metadata --profile baseline
+	go run ./tools/qwq_contract check --metadata-dir contracts/metadata --profile baseline --input generated/contract_graph.json
+	go run ./tools/qwq_contract coverage --metadata-dir contracts/metadata
+
+verify-contract-graph-commercial: verify-openapi
+	go run ./tools/qwq_contract validate --metadata-dir contracts/metadata --profile commercial
+	go run ./tools/qwq_contract check --metadata-dir contracts/metadata --profile commercial --input generated/contract_graph.json
+	go run ./tools/qwq_contract coverage --metadata-dir contracts/metadata
+
+verify-registry-contract-graph-single-track:
+	python3 scripts/verify/verify_registry_contract_graph_single_track.py
+
+verify-codegen-contract-graph-source:
+	python3 scripts/verify/verify_codegen_contract_graph_source.py
+
+verify-go-single-module:
+	python3 scripts/verify/verify_go_single_module.py
+
+verify-service-layering:
+	python3 scripts/verify/verify_service_layering.py
+
+verify-production-wiring-purity:
+	python3 scripts/verify/verify_production_wiring_purity.py
 
 verify-content-architecture:
 	python3 scripts/verify/verify_content_application_boundaries.py
 
-codegen: codegen-content-service codegen-circle-service codegen-chat-service codegen-chat-domain-events codegen-storage codegen-rec-model-python codegen-rec-policy codegen-rec-intersection codegen-impact codegen-control-plane-runtime codegen-ops-portal
+codegen: codegen-contract-graph codegen-content-service codegen-circle-service codegen-entity-service codegen-notification-service codegen-product-ops-service codegen-platform-ops-service codegen-user-service codegen-chat-service codegen-chat-domain-events codegen-storage codegen-rec-model-python codegen-rec-policy codegen-rec-intersection codegen-impact codegen-control-plane-runtime codegen-ops-portal
+
+codegen-openapi:
+	go run ./tools/qwq_contract generate-openapi --metadata-dir contracts/metadata
+
+codegen-contract-graph: codegen-openapi
+	go run ./tools/qwq_contract generate --metadata-dir contracts/metadata --profile commercial --output generated/contract_graph.json --go-security-output generated/operationsecurity/descriptors.g.go
 
 codegen-rec-intersection:
 	go run ./tools/codegen_rec_intersection --metadata-dir contracts/metadata --output-dir services/content-service/internal/generated
@@ -84,7 +121,7 @@ codegen-impact:
 	go run ./tools/codegen_impact --metadata-dir contracts/metadata --output-dir runtime/impact
 
 codegen-app:
-	go run ./tools/codegen_app_metadata --metadata-dir contracts/metadata --app-dir ../quwoquan_app --integration-service-dir ./services/integration-service --rtc-service-dir ./services/rtc-service --chat-service-dir ./services/chat-service --user-service-dir ./services/user-service
+	go run ./tools/codegen_app_metadata --metadata-dir contracts/metadata --contract-graph generated/contract_graph.json --contract-graph-lock ../quwoquan_app/tool/cloud_codegen/contract_graph.lock.json --app-dir ../quwoquan_app --generated-manifest ../quwoquan_app/tool/cloud_codegen/generated_manifest.json
 
 codegen-ops-portal:
 	go run ./tools/codegen_ops_portal_metadata --metadata-dir contracts/metadata --portal-dir ../quwoquan_ops/portal
@@ -93,10 +130,25 @@ codegen-control-plane-runtime:
 	go run ./tools/codegen_control_plane_runtime --metadata-dir contracts/metadata --go-out-dir ./generated/control_plane --python-out-dir ./services/rec-model-service/generated/control_plane
 
 codegen-content-service:
-	go run ./tools/codegen_content_service --metadata-dir contracts/metadata --output-dir services/content-service/internal --aggregate Post
+	go run ./tools/codegen_content_service --metadata-dir contracts/metadata --output-dir services/content-service/internal --aggregate Post --route-service content-service
 
 codegen-circle-service:
 	go run ./tools/codegen_circle_domain --metadata-dir contracts/metadata --output-dir services/circle-service/internal
+
+codegen-entity-service:
+	go run ./tools/codegen_entity_service --metadata-dir contracts/metadata --output-dir services/entity-service/internal
+
+codegen-notification-service:
+	go run ./tools/codegen_notification_service --metadata-dir contracts/metadata --output-dir services/notification-service/internal
+
+codegen-product-ops-service:
+	go run ./tools/codegen_product_ops_service --metadata-dir contracts/metadata --output-dir services/product-ops-service/internal
+
+codegen-platform-ops-service:
+	go run ./tools/codegen_platform_ops_service --metadata-dir contracts/metadata --output-dir services/platform-ops-service/internal
+
+codegen-user-service:
+	go run ./tools/codegen_user_service --metadata-dir contracts/metadata --output-dir services/user-service/internal
 
 codegen-chat-service:
 	go run ./tools/codegen_chat_service --metadata-dir contracts/metadata --output-dir services/chat-service/internal --manifest services/chat-service/codegen_chat_service_manifest.yaml
@@ -105,7 +157,7 @@ codegen-chat-domain-events:
 	go run ./tools/codegen_chat_domain_events --metadata-dir contracts/metadata --output-dir services/chat-service/internal
 
 codegen-rec-model-python:
-	go run ./tools/codegen_rec_model_python --metadata-dir contracts/metadata --service-dir recommendation/rec_model --output-dir services/rec-model-service/generated
+	go run ./tools/codegen_rec_model_python --metadata-dir contracts/metadata --service-dir recommendation/model_release --output-dir services/rec-model-service/generated
 
 codegen-rec-policy:
 	go run ./tools/codegen_rec_policy --metadata-dir contracts/metadata --out-dir runtime/recpolicy
@@ -157,8 +209,9 @@ verify-content-flywheel-loop:
 	$(ML_PYTHON) scripts/recommendation/eval_content_flywheel_loop.py --mongodb-uri "$(MONGODB_URI)" $(if $(filter 1 true yes,$(FLYWHEEL_REQUIRE_CLOSED)),--require-closed-loop,) $(if $(strip $(FLYWHEEL_OUT)),--output "$(FLYWHEEL_OUT)",)
 
 verify-ml-model-quality:
-	$(ML_PYTHON) $(ML_SCRIPTS)/evaluate_gate.py --scenario "$(SCENARIO)" $(if $(filter 1 true yes,$(ML_DRY_RUN)),--dry-run,) --out "eval_report_$(SCENARIO).json"
-	$(ML_PYTHON) $(ML_SCRIPTS)/evaluate_gate.py --scenario "$(SCENARIO)_multiobjective" $(if $(filter 1 true yes,$(ML_DRY_RUN)),--dry-run,) --out "eval_report_$(SCENARIO)_multiobjective.json"
+	@mkdir -p "$(ML_REPORT_ROOT)"
+	$(ML_PYTHON) $(ML_SCRIPTS)/evaluate_gate.py --scenario "$(SCENARIO)" $(if $(filter 1 true yes,$(ML_DRY_RUN)),--dry-run,) --out "$(ML_REPORT_ROOT)/eval_report_$(SCENARIO).json"
+	$(ML_PYTHON) $(ML_SCRIPTS)/evaluate_gate.py --scenario "$(SCENARIO)_multiobjective" $(if $(filter 1 true yes,$(ML_DRY_RUN)),--dry-run,) --out "$(ML_REPORT_ROOT)/eval_report_$(SCENARIO)_multiobjective.json"
 
 verify-ml-e2e:
 	$(ML_PYTHON) $(ML_SCRIPTS)/e2e_learning_loop_verify.py --scenario "$(SCENARIO)" --full-pipeline $(if $(strip $(REC_MODEL_URL)),--rec-model $(REC_MODEL_URL),--skip-service)

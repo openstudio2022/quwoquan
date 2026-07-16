@@ -7,7 +7,8 @@ import (
 )
 
 func TestChatErrorGeneration_matchesFormalDirectMessagingContract(t *testing.T) {
-	errorsPath := filepath.Join("..", "..", "contracts", "metadata", "messages", "conversation", "errors.yaml")
+	metadataDir := initializeTestContractGraph(t)
+	errorsPath := filepath.Join(metadataDir, "messages", "conversation", "errors.yaml")
 	ef, err := readErrors(errorsPath)
 	if err != nil {
 		t.Fatalf("read errors: %v", err)
@@ -34,6 +35,7 @@ func TestChatErrorGeneration_matchesFormalDirectMessagingContract(t *testing.T) 
 		"ErrGreetingRequired = errors.New(\"CHAT.USER.greeting_required\")",
 		"ErrBlocked = errors.New(\"CHAT.USER.blocked\")",
 		"return rerrors.NewAppError(code, \"互相关注后可进入正式私信\", debugMessage)",
+		"WithMetadata(\"forbidden\", 403)",
 		"return rerrors.NewAppError(code, \"请先打招呼，等对方回复后再进入正式私信\", debugMessage)",
 		"code, _ := rerrors.ParseCode(string(ErrNotMutual.Error()))",
 	} {

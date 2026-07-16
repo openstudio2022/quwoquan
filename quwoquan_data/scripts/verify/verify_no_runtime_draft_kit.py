@@ -12,7 +12,7 @@
   - import agent_draft_kit（测试专用 fixture builder）；
   - 调用 route_article/entity_article/gallery_article 这类 kit 骨架函数；
   - 复刻 kit 的固定段落骨架指纹句；
-  - 调用 `write_agent_draft()`（除 `_common/draft_io.py` 自身定义外）；正文写回只能由创作 agent/外部 runner 执行，
+  - 调用 `write_agent_draft()`（除 `core/draft_io.py` 自身定义外）；正文写回只能由创作 agent/外部 runner 执行，
     编排/verify/普通 CLI 脚本不得伪造 generator=agent；
   - 定义「脚本拼实体主页正文」的机械骨架函数（如 `_compose_*page* / _render_*page_body /
     _build_*page_body / _pad_*page* / _homepage_body* / _homepage_paragraph* / _synthesize_*page* /
@@ -99,7 +99,7 @@ def scan(root: Path | None = None) -> list[str]:
                 offenders.append(f"{rel}: calls draft-kit skeleton function (script-spliced body is forbidden)")
             elif (
                 _WRITE_AGENT_DRAFT_RE.search(text)
-                and rel.as_posix() != "quwoquan_data/scripts/_common/draft_io.py"
+                and rel.as_posix() != "quwoquan_data/scripts/core/draft_io.py"
                 and "def write_agent_draft" not in text
             ):
                 offenders.append(
@@ -125,7 +125,7 @@ def main() -> int:
         for row in offenders:
             print(f"  - {row}", file=sys.stderr)
         print(
-            "\nFix: delete the runtime batch script and let the session model author each draft "
+            "\nFix: delete the runtime execution script and let the session model author each draft "
             "(produce --stage compose-brief → agent writes 4.draft/draft.article.md).",
             file=sys.stderr,
         )

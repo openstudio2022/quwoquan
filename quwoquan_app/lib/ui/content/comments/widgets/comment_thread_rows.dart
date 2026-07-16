@@ -19,7 +19,7 @@ class _CommentThreadItem extends ConsumerWidget {
   });
 
   final String postId;
-  final CommentDto comment;
+  final ContentCommentListItem comment;
   final bool isDark;
   final bool loadingReplies;
   final bool repliesExpanded;
@@ -28,7 +28,7 @@ class _CommentThreadItem extends ConsumerWidget {
   final bool highlighted;
   final String? highlightedReplyId;
   final GlobalKey Function(String replyId)? replyItemKeyFor;
-  final ValueChanged<CommentDto>? onReplySelected;
+  final ValueChanged<ContentCommentListItem>? onReplySelected;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -40,8 +40,8 @@ class _CommentThreadItem extends ConsumerWidget {
           children: [
             RoundedSquareAvatar(
               size: AppSpacing.commentAvatarSize,
-              imageUrl: comment.avatarUrl,
-              name: comment.displayName,
+              imageUrl: comment.authorAvatarUrlSnapshot,
+              name: comment.authorDisplayNameSnapshot,
               borderRadius: AppSpacing.commentAvatarSize / 2,
               backgroundColor: AppColorsFunctional.getColor(
                 isDark,
@@ -53,8 +53,10 @@ class _CommentThreadItem extends ConsumerWidget {
             Expanded(child: _buildContent(context, ref)),
             SizedBox(width: AppSpacing.xs),
             _CommentReactionGroup(
-              likeSelected: comment.viewerReaction == 'like',
-              dislikeSelected: comment.viewerReaction == 'dislike',
+              likeSelected:
+                  comment.viewerReaction == ContentCommentReactionValue.like,
+              dislikeSelected:
+                  comment.viewerReaction == ContentCommentReactionValue.dislike,
               showDeleteAction: comment.canDelete,
               likeCount: comment.likeCount,
               dislikeCount: comment.dislikeCount,
@@ -130,7 +132,7 @@ class _CommentThreadItem extends ConsumerWidget {
                     ? () => onReplySelected?.call(comment)
                     : null,
                 child: Text(
-                  comment.displayName ?? comment.authorId,
+                  comment.authorDisplayNameSnapshot ?? comment.authorId,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -144,13 +146,6 @@ class _CommentThreadItem extends ConsumerWidget {
                 ),
               ),
             ),
-            if (comment.authorLiked) ...[
-              _Badge(
-                label: UITextConstants.commentAuthorLikedBadge,
-                isDark: isDark,
-              ),
-              SizedBox(width: AppSpacing.xs),
-            ],
             if (comment.isAuthor)
               _Badge(label: UITextConstants.commentAuthorBadge, isDark: isDark),
           ],
@@ -188,7 +183,7 @@ class _CommentThreadItem extends ConsumerWidget {
   Future<void> _togglePin(
     BuildContext context,
     WidgetRef ref,
-    CommentDto comment,
+    ContentCommentListItem comment,
   ) async {
     final willPin = !comment.isPinned;
     try {

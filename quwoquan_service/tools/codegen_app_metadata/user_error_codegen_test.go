@@ -1,13 +1,12 @@
 package main
 
 import (
-	"path/filepath"
 	"strings"
 	"testing"
 )
 
 func TestUserErrorGeneration_aggregatesAllUserErrorMetadata(t *testing.T) {
-	metadataDir := filepath.Join("..", "..", "contracts", "metadata")
+	metadataDir := initializeTestContractGraph(t)
 	ef, err := readUserDomainErrors(metadataDir)
 	if err != nil {
 		t.Fatalf("read user errors: %v", err)

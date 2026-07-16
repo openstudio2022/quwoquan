@@ -24,35 +24,58 @@ void main() {
 
   group('AppPermissionCoordinator.phase / isGranted', () {
     test('granted 短路', () async {
-      coordinator.phaseReaders[AppPermissionKind.microphone] =
-          () async => AppPermissionPhase.granted;
+      coordinator.phaseReaders[AppPermissionKind.microphone] = () async =>
+          AppPermissionPhase.granted;
 
-      expect(await coordinator.phase(AppPermissionKind.microphone),
-          AppPermissionPhase.granted);
+      expect(
+        await coordinator.phase(AppPermissionKind.microphone),
+        AppPermissionPhase.granted,
+      );
       expect(await coordinator.isGranted(AppPermissionKind.microphone), isTrue);
     });
 
     test('settingsRequired 映射正确', () async {
-      coordinator.phaseReaders[AppPermissionKind.camera] =
-          () async => AppPermissionPhase.settingsRequired;
+      coordinator.phaseReaders[AppPermissionKind.camera] = () async =>
+          AppPermissionPhase.settingsRequired;
       coordinator.grantCheckers[AppPermissionKind.camera] = () async => false;
 
-      expect(await coordinator.phase(AppPermissionKind.camera),
-          AppPermissionPhase.settingsRequired);
+      expect(
+        await coordinator.phase(AppPermissionKind.camera),
+        AppPermissionPhase.settingsRequired,
+      );
       expect(await coordinator.isGranted(AppPermissionKind.camera), isFalse);
     });
   });
 
   group('AppPermissionCoordinator session suppress', () {
+    test('设置页未打开时清除待返回状态与 callback', () async {
+      coordinator.settingsOpener = () async => false;
+      var callbackInvoked = false;
+
+      final opened = await coordinator.openSettings(
+        AppPermissionKind.contacts,
+        onReturn: (_) => callbackInvoked = true,
+      );
+
+      final session = coordinator.testSession(AppPermissionKind.contacts);
+      expect(opened, isFalse);
+      expect(session.settingsVisitPending, isFalse);
+      await coordinator.handleSettingsReturnForTest();
+      expect(callbackInvoked, isFalse);
+    });
+
     test('settingsRequired + suppress 后 isGranted 仍为 false', () async {
-      coordinator.phaseReaders[AppPermissionKind.microphone] =
-          () async => AppPermissionPhase.settingsRequired;
-      coordinator.grantCheckers[AppPermissionKind.microphone] =
-          () async => false;
+      coordinator.phaseReaders[AppPermissionKind.microphone] = () async =>
+          AppPermissionPhase.settingsRequired;
+      coordinator.grantCheckers[AppPermissionKind.microphone] = () async =>
+          false;
       final session = coordinator.testSession(AppPermissionKind.microphone);
       session.suppressSettingsPrompt = true;
 
-      expect(await coordinator.isGranted(AppPermissionKind.microphone), isFalse);
+      expect(
+        await coordinator.isGranted(AppPermissionKind.microphone),
+        isFalse,
+      );
       expect(session.suppressSettingsPrompt, isTrue);
     });
 

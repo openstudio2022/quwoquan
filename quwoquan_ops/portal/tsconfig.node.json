@@ -2,7 +2,7 @@
   "compilerOptions": {
     "composite": true,
     "noEmit": true,
-    "tsBuildInfoFile": "../../.qwq_output/env/repo/local/ops-portal/tsconfig.node.tsbuildinfo",
+    "tsBuildInfoFile": "../../.qwq_output/env/repo/local/ops-portal/cache/tsconfig.node.tsbuildinfo",
     "skipLibCheck": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",

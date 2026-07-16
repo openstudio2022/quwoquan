@@ -184,7 +184,7 @@ func (w ExternalInteractionWorker) handleTask(ctx context.Context, task Reliable
 			result.OccurredAt = w.now()
 		}
 		record := ProviderAttemptRecord{
-			AttemptID:         newID("attempt"),
+			AttemptID:         NewRecordID("attempt"),
 			RequestID:         req.RequestID,
 			TaskID:            task.TaskID,
 			Operation:         req.Operation,
@@ -269,7 +269,7 @@ func (r ExternalInteractionRequest) Validate() error {
 }
 
 func (r ExternalInteractionRequest) TaskPayload() map[string]string {
-	payload := clonePayload(r.Payload)
+	payload := CloneStringMap(r.Payload)
 	payload["requestId"] = r.RequestID
 	payload["operation"] = r.Operation
 	payload["tenant"] = r.Tenant
@@ -286,7 +286,7 @@ func (r ExternalInteractionRequest) TaskPayload() map[string]string {
 
 func ExternalInteractionRequestFromTask(task ReliableAsyncTask) ExternalInteractionRequest {
 	expiresAt, _ := time.Parse(time.RFC3339, task.Payload["expiresAt"])
-	payload := clonePayload(task.Payload)
+	payload := CloneStringMap(task.Payload)
 	return ExternalInteractionRequest{
 		RequestID:      task.Payload["requestId"],
 		Operation:      task.Payload["operation"],

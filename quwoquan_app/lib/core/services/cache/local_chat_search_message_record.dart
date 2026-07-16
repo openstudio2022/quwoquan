@@ -3,13 +3,15 @@ import 'package:quwoquan_app/core/models/search_models.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
 
 class LocalChatSearchMessageRecord {
+  static const int schemaVersion = 1;
+
   const LocalChatSearchMessageRecord({
     required this.messageId,
     required this.conversationId,
     this.conversationType = '',
     this.conversationTitle = '',
     this.conversationAvatarUrl = '',
-    this.senderSubAccountId = '',
+    this.senderPersonaId = '',
     this.senderDisplayName = '',
     this.senderAvatarUrl = '',
     this.messageType = 'text',
@@ -28,7 +30,7 @@ class LocalChatSearchMessageRecord {
   final String conversationType;
   final String conversationTitle;
   final String conversationAvatarUrl;
-  final String senderSubAccountId;
+  final String senderPersonaId;
   final String senderDisplayName;
   final String senderAvatarUrl;
   final String messageType;
@@ -52,9 +54,7 @@ class LocalChatSearchMessageRecord {
       conversationType: conversation?.type ?? '',
       conversationTitle: conversation?.title ?? '',
       conversationAvatarUrl: conversation?.avatarUrl ?? '',
-      senderSubAccountId: (dto.senderSubAccountId?.trim().isNotEmpty ?? false)
-          ? dto.senderSubAccountId!.trim()
-          : dto.senderId.trim(),
+      senderPersonaId: dto.senderId.trim(),
       senderDisplayName: dto.senderName?.trim() ?? '',
       senderAvatarUrl: dto.senderAvatar?.trim() ?? '',
       messageType: dto.type.trim().isEmpty ? 'text' : dto.type.trim(),
@@ -70,47 +70,67 @@ class LocalChatSearchMessageRecord {
     );
   }
 
-  factory LocalChatSearchMessageRecord.fromWireMap(
+  factory LocalChatSearchMessageRecord.fromProjectionMap(
     Map<String, dynamic> map, {
     ConversationCacheRecord? conversation,
   }) {
-    final dto = MessageDto.fromMap(map);
-    final base = LocalChatSearchMessageRecord.fromMessageDto(
-      dto,
-      conversation: conversation,
-    );
-    return base.copyWith(
-      conversationType: _firstNonEmpty(<Object?>[
-        map['conversationType'],
-        base.conversationType,
-      ]),
+    const allowedKeys = <String>{
+      'schemaVersion',
+      'messageId',
+      'conversationId',
+      'conversationType',
+      'conversationTitle',
+      'conversationAvatarUrl',
+      'senderPersonaId',
+      'senderDisplayName',
+      'senderAvatarUrl',
+      'messageType',
+      'contentPreview',
+      'seq',
+      'timestamp',
+      'status',
+      'recalledAt',
+      'deleted',
+      'highlightText',
+      'matchedField',
+    };
+    final unknownKeys = map.keys.toSet().difference(allowedKeys);
+    if (unknownKeys.isNotEmpty) {
+      throw FormatException(
+        'LocalChatSearchMessageRecord contains unknown fields: '
+        '${unknownKeys.toList()..sort()}',
+      );
+    }
+    final version = map['schemaVersion'];
+    if (version != schemaVersion) {
+      throw FormatException(
+        'Unsupported LocalChatSearchMessageRecord schemaVersion: $version',
+      );
+    }
+    return LocalChatSearchMessageRecord(
+      messageId: _requiredProjectionString(map, 'messageId'),
+      conversationId: _requiredProjectionString(map, 'conversationId'),
+      conversationType: _projectionString(map, 'conversationType'),
       conversationTitle: _firstNonEmpty(<Object?>[
         map['conversationTitle'],
-        base.conversationTitle,
+        conversation?.title,
       ]),
       conversationAvatarUrl: _firstNonEmpty(<Object?>[
         map['conversationAvatarUrl'],
-        base.conversationAvatarUrl,
+        conversation?.avatarUrl,
       ]),
-      senderDisplayName: _firstNonEmpty(<Object?>[
-        map['senderDisplayName'],
-        map['senderDisplayNameSnapshot'],
-        base.senderDisplayName,
-      ]),
-      senderAvatarUrl: _firstNonEmpty(<Object?>[
-        map['senderAvatarUrl'],
-        map['senderAvatarUrlSnapshot'],
-        base.senderAvatarUrl,
-      ]),
-      contentPreview: _firstNonEmpty(<Object?>[
-        map['contentPreview'],
-        map['content'],
-        base.contentPreview,
-      ]),
-      deleted:
-          map['deleted'] == true || map['isDeleted'] == true || base.deleted,
-      matchedField: map['matchedField']?.toString(),
-      highlightText: map['highlightText']?.toString(),
+      senderPersonaId: _projectionString(map, 'senderPersonaId'),
+      senderDisplayName: _projectionString(map, 'senderDisplayName'),
+      senderAvatarUrl: _projectionString(map, 'senderAvatarUrl'),
+      messageType: _requiredProjectionString(map, 'messageType'),
+      contentPreview: _projectionString(map, 'contentPreview'),
+      seq: _requiredProjectionInt(map, 'seq'),
+      timestamp: _requiredProjectionString(map, 'timestamp'),
+      status: _requiredProjectionString(map, 'status'),
+      recalledAt: _projectionString(map, 'recalledAt'),
+      deleted: _requiredProjectionBool(map, 'deleted'),
+      matchedField: _nullableProjectionString(map, 'matchedField'),
+      highlightText: _nullableProjectionString(map, 'highlightText'),
     );
   }
 
@@ -122,7 +142,7 @@ class LocalChatSearchMessageRecord {
       conversationAvatarUrl: conversationAvatarUrl.isEmpty
           ? null
           : conversationAvatarUrl,
-      senderSubAccountId: senderSubAccountId.isEmpty ? null : senderSubAccountId,
+      senderPersonaId: senderPersonaId.isEmpty ? null : senderPersonaId,
       senderDisplayName: senderDisplayName.isEmpty ? null : senderDisplayName,
       senderAvatarUrl: senderAvatarUrl.isEmpty ? null : senderAvatarUrl,
       messageType: messageType,
@@ -140,7 +160,7 @@ class LocalChatSearchMessageRecord {
     String? conversationType,
     String? conversationTitle,
     String? conversationAvatarUrl,
-    String? senderSubAccountId,
+    String? senderPersonaId,
     String? senderDisplayName,
     String? senderAvatarUrl,
     String? messageType,
@@ -160,7 +180,7 @@ class LocalChatSearchMessageRecord {
       conversationTitle: conversationTitle ?? this.conversationTitle,
       conversationAvatarUrl:
           conversationAvatarUrl ?? this.conversationAvatarUrl,
-      senderSubAccountId: senderSubAccountId ?? this.senderSubAccountId,
+      senderPersonaId: senderPersonaId ?? this.senderPersonaId,
       senderDisplayName: senderDisplayName ?? this.senderDisplayName,
       senderAvatarUrl: senderAvatarUrl ?? this.senderAvatarUrl,
       messageType: messageType ?? this.messageType,
@@ -175,44 +195,71 @@ class LocalChatSearchMessageRecord {
     );
   }
 
-  Map<String, dynamic> toWireMap() {
+  Map<String, dynamic> toProjectionMap() {
     return <String, dynamic>{
+      'schemaVersion': schemaVersion,
       'messageId': messageId,
-      'id': messageId,
-      '_id': messageId,
       'conversationId': conversationId,
-      if (conversationType.isNotEmpty) 'conversationType': conversationType,
-      if (conversationTitle.isNotEmpty) 'conversationTitle': conversationTitle,
-      if (conversationAvatarUrl.isNotEmpty)
-        'conversationAvatarUrl': conversationAvatarUrl,
-      if (senderSubAccountId.isNotEmpty)
-        'senderSubAccountId': senderSubAccountId,
-      if (senderDisplayName.isNotEmpty) ...<String, dynamic>{
-        'senderDisplayName': senderDisplayName,
-        'senderDisplayNameSnapshot': senderDisplayName,
-        'senderName': senderDisplayName,
-      },
-      if (senderAvatarUrl.isNotEmpty) ...<String, dynamic>{
-        'senderAvatarUrl': senderAvatarUrl,
-        'senderAvatarUrlSnapshot': senderAvatarUrl,
-      },
+      'conversationType': conversationType,
+      'conversationTitle': conversationTitle,
+      'conversationAvatarUrl': conversationAvatarUrl,
+      'senderPersonaId': senderPersonaId,
+      'senderDisplayName': senderDisplayName,
+      'senderAvatarUrl': senderAvatarUrl,
       'messageType': messageType,
-      'type': messageType,
-      if (contentPreview.isNotEmpty) ...<String, dynamic>{
-        'contentPreview': contentPreview,
-        'content': contentPreview,
-      },
+      'contentPreview': contentPreview,
       'seq': seq,
-      if (timestamp.isNotEmpty) ...<String, dynamic>{
-        'timestamp': timestamp,
-        'createdAt': timestamp,
-      },
+      'timestamp': timestamp,
       'status': status,
-      'messageStatus': status,
-      if (recalledAt.isNotEmpty) 'recalledAt': recalledAt,
-      if (deleted) ...<String, dynamic>{'deleted': true, 'isDeleted': true},
+      'recalledAt': recalledAt,
+      'deleted': deleted,
+      if (highlightText != null) 'highlightText': highlightText,
+      if (matchedField != null) 'matchedField': matchedField,
     };
   }
+}
+
+String _requiredProjectionString(Map<String, dynamic> map, String key) {
+  final value = map[key];
+  if (value is! String || value.trim().isEmpty) {
+    throw FormatException('$key must be a non-empty String');
+  }
+  return value.trim();
+}
+
+String _projectionString(Map<String, dynamic> map, String key) {
+  final value = map[key];
+  if (value == null) return '';
+  if (value is! String) {
+    throw FormatException('$key must be a String');
+  }
+  return value.trim();
+}
+
+String? _nullableProjectionString(Map<String, dynamic> map, String key) {
+  final value = map[key];
+  if (value == null) return null;
+  if (value is! String) {
+    throw FormatException('$key must be a String');
+  }
+  final normalized = value.trim();
+  return normalized.isEmpty ? null : normalized;
+}
+
+int _requiredProjectionInt(Map<String, dynamic> map, String key) {
+  final value = map[key];
+  if (value is! int) {
+    throw FormatException('$key must be an int');
+  }
+  return value;
+}
+
+bool _requiredProjectionBool(Map<String, dynamic> map, String key) {
+  final value = map[key];
+  if (value is! bool) {
+    throw FormatException('$key must be a bool');
+  }
+  return value;
 }
 
 String _firstNonEmpty(List<Object?> values) {

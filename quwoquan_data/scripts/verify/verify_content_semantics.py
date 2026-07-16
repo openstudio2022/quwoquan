@@ -20,8 +20,8 @@ from pathlib import Path
 SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
-from _common.io import read_json  # noqa: E402
-from _common.fact_coverage import fact_covered  # noqa: E402
+from core.io import read_json  # noqa: E402
+from core.fact_coverage import fact_covered  # noqa: E402
 
 
 STUB_URL_MARKERS = ("cold-start.local", "cold_start.local")
@@ -51,10 +51,10 @@ def _jaccard(a: str, b: str) -> float:
     return len(sa & sb) / len(sa | sb)
 
 
-def _load_brief_facts(task: str, batch: str, ref: str) -> list[str]:
-    from _common.content_object import read_brief_object
+def _load_brief_facts(execution_id: str, ref: str) -> list[str]:
+    from content.post.object_index import read_brief_object
 
-    brief = read_brief_object(task, batch, ref)
+    brief = read_brief_object(execution_id, ref)
     return [str(f) for f in (brief or {}).get("mustIncludeFacts", []) if f]
 
 
@@ -73,8 +73,7 @@ def _post_allowed(posts_root: Path, post_dir: Path, post_rels: set[str] | None) 
 
 def verify_semantics(
     posts_root: Path,
-    task: str | None = None,
-    batch: str | None = None,
+    execution_id: str | None = None,
     *,
     post_rels: set[str] | None = None,
 ) -> list[str]:
@@ -110,8 +109,8 @@ def verify_semantics(
         elif any(any(m in str(u) for m in STUB_URL_MARKERS) for u in source_urls):
             issues.append(f"{ref}: sourceUrls still use cold-start stub")
 
-        if task and batch:
-            facts = _load_brief_facts(task, batch, ref)
+        if execution_id:
+            facts = _load_brief_facts(execution_id, ref)
             for fact in facts:
                 if re.search(rf"请把[^。\n]*{re.escape(fact)}", article):
                     issues.append(f"{ref}: mustIncludeFact '{fact}' appears as schema label only")
@@ -133,9 +132,9 @@ def verify_semantics(
                             issues.append(f"{ref}: narrativeContinuity lacks progression transitions")
                     headings = re.findall(r"(?m)^##\s+(.+)$", article)
                     if headings:
-                        from _common.content_object import read_brief_object
+                        from content.post.object_index import read_brief_object
 
-                        brief = read_brief_object(task, batch, ref)
+                        brief = read_brief_object(execution_id, ref)
                         if brief:
                             required = [str(x) for x in (brief.get("structure") or {}).get("required") or []]
                             mirrored = sum(1 for heading in headings if heading in required)
@@ -172,23 +171,22 @@ def verify_semantics(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Verify content semantics")
-    parser.add_argument("--task")
-    parser.add_argument("--batch")
+    parser.add_argument("--execution-id")
     parser.add_argument("--posts-root")
     args = parser.parse_args()
 
     if args.posts_root:
         root = Path(args.posts_root)
-        task, batch = None, None
-    elif args.batch:
-        from _common.paths import batch_posts_root
-        root = batch_posts_root(args.task, args.batch)
-        task, batch = args.task, args.batch
+        execution_id = None
+    elif args.execution_id:
+        from core.paths import execution_posts_root
+        root = execution_posts_root(args.execution_id)
+        execution_id = args.execution_id
     else:
-        print("[semantics] specify --batch or --posts-root", file=sys.stderr)
+        print("[semantics] specify --execution-id or --posts-root", file=sys.stderr)
         sys.exit(1)
 
-    issues = verify_semantics(root, task, batch)
+    issues = verify_semantics(root, execution_id)
     if issues:
         print(f"[semantics] FAILED ({len(issues)} issue(s))", file=sys.stderr)
         for issue in issues:

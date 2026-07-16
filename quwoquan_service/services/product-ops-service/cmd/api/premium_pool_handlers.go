@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"quwoquan_service/runtime/controlplane"
-	"quwoquan_service/runtime/repository"
+	messaging "quwoquan_service/runtime/messaging"
 )
 
 const premiumPoolNamespace = "premium_pool_entries"
@@ -197,7 +197,7 @@ func (s *productService) publishPremiumPoolEvent(r *http.Request, eventType stri
 	if occurredAt == "" {
 		occurredAt = nowRFC3339()
 	}
-	return s.publisher.Publish(r.Context(), repository.DomainEvent{
+	return s.publisher.Publish(r.Context(), messaging.DomainEvent{
 		Type:          eventType,
 		AggregateType: "PremiumPoolEntry",
 		AggregateID:   entry.ID,

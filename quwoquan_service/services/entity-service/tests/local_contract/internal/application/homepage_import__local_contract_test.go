@@ -2,6 +2,7 @@ package local_contract
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -24,13 +25,36 @@ func importedSightInput(title string) application.ImportedHomepageInput {
 			"Entity/地点/景区/5A景区",
 			"Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/九寨沟县",
 		},
+		PrimarySource: &application.HomepageSource{
+			SourceKind: "wikipedia", SourceURL: "https://zh.wikipedia.org/wiki/" + title,
+			Title: title, FetchedAt: "2026-07-11T00:00:00Z",
+			SnapshotHash:   "sha256:" + strings.Repeat("a", 64),
+			PolicyRevision: "encyclopedia-primary-v2", SourceUseMode: "licensed_adaptation",
+		},
+		SourceURLs:   []string{"https://zh.wikipedia.org/wiki/" + title},
 		SourceTaskID: "旅行/地域/中国/景区/全国景区主页试点0706a",
 	}
 }
 
-func TestUpsertImportedHomepagesCreatesPublishedHomepage(t *testing.T) {
+func reconcileImportedHomepages(
+	t *testing.T,
+	svc *application.HomepageService,
+	inputs []application.ImportedHomepageInput,
+	mode application.HomepageImportMode,
+	releaseID string,
+) (application.HomepageImportReport, error) {
+	t.Helper()
+	return svc.ReconcileImportedHomepages(context.Background(), application.HomepageImportRequest{
+		Mode:            mode,
+		SourceOwner:     "qwq_data",
+		SourceReleaseID: releaseID,
+		Inputs:          inputs,
+	})
+}
+
+func TestReconcileImportedHomepagesCreatesPublishedHomepage(t *testing.T) {
 	svc := application.NewHomepageService()
-	report, err := svc.UpsertImportedHomepages(context.Background(), []application.ImportedHomepageInput{importedSightInput("九寨沟")})
+	report, err := reconcileImportedHomepages(t, svc, []application.ImportedHomepageInput{importedSightInput("九寨沟")}, application.HomepageImportModeUpsert, "release-001")
 	if err != nil {
 		t.Fatalf("upsert failed: %v", err)
 	}
@@ -47,6 +71,9 @@ func TestUpsertImportedHomepagesCreatesPublishedHomepage(t *testing.T) {
 	}
 	if homepage.Status != "published" || homepage.SourceType != "official_seed" {
 		t.Fatalf("imported homepage must be published official_seed, got %s/%s", homepage.Status, homepage.SourceType)
+	}
+	if homepage.SourceOwner != "qwq_data" || homepage.SourceEntityRef != "地点/景区/九寨沟" || homepage.SourceReleaseID != "release-001" {
+		t.Fatalf("import provenance must be release-bound, got %+v", homepage)
 	}
 	if !strings.Contains(homepage.IntroductionMarkdown, "## 概况") {
 		t.Fatalf("introductionMarkdown missing body: %q", homepage.IntroductionMarkdown)
@@ -81,16 +108,26 @@ func TestUpsertImportedHomepagesCreatesPublishedHomepage(t *testing.T) {
 	if !foundOverview || !foundRelated {
 		t.Fatalf("introduction must project page.md body + related images, got %+v", intro.Sections)
 	}
+	if intro.PrimarySource == nil || intro.PrimarySource.SourceKind != "wikipedia" ||
+		len(intro.SourceURLs) != 1 {
+		t.Fatalf("introduction must expose public source without internal refs: %+v", intro)
+	}
+	wire, err := json.Marshal(intro)
+	if err != nil {
+		t.Fatalf("marshal introduction: %v", err)
+	}
+	if strings.Contains(string(wire), "sourceRefs") || strings.Contains(string(wire), "primaryEvidenceRef") {
+		t.Fatalf("introduction wire must not expose internal refs: %s", wire)
+	}
 }
 
-func TestUpsertImportedHomepagesIsIdempotentByEntityRef(t *testing.T) {
+func TestReconcileImportedHomepagesIsIdempotentBySourceEntityRef(t *testing.T) {
 	svc := application.NewHomepageService()
-	ctx := context.Background()
-	first, err := svc.UpsertImportedHomepages(ctx, []application.ImportedHomepageInput{importedSightInput("黄龙")})
+	first, err := reconcileImportedHomepages(t, svc, []application.ImportedHomepageInput{importedSightInput("黄龙")}, application.HomepageImportModeUpsert, "release-001")
 	if err != nil {
 		t.Fatalf("first upsert: %v", err)
 	}
-	second, err := svc.UpsertImportedHomepages(ctx, []application.ImportedHomepageInput{importedSightInput("黄龙")})
+	second, err := reconcileImportedHomepages(t, svc, []application.ImportedHomepageInput{importedSightInput("黄龙")}, application.HomepageImportModeUpsert, "release-002")
 	if err != nil {
 		t.Fatalf("second upsert: %v", err)
 	}
@@ -106,10 +143,10 @@ func TestUpsertImportedHomepagesIsIdempotentByEntityRef(t *testing.T) {
 	}
 }
 
-func TestUpsertImportedHomepagesPreservesClaimedEdits(t *testing.T) {
+func TestReconcileImportedHomepagesPreservesClaimedEdits(t *testing.T) {
 	svc := application.NewHomepageService()
 	ctx := context.Background()
-	report, err := svc.UpsertImportedHomepages(ctx, []application.ImportedHomepageInput{importedSightInput("武侯祠")})
+	report, err := reconcileImportedHomepages(t, svc, []application.ImportedHomepageInput{importedSightInput("武侯祠")}, application.HomepageImportModeUpsert, "release-001")
 	if err != nil {
 		t.Fatalf("seed upsert: %v", err)
 	}
@@ -134,7 +171,7 @@ func TestUpsertImportedHomepagesPreservesClaimedEdits(t *testing.T) {
 
 	updated := importedSightInput("武侯祠")
 	updated.IntroductionMarkdown = "# 武侯祠\n\n## 概况\n\n新一批更优底稿。\n"
-	if _, err := svc.UpsertImportedHomepages(ctx, []application.ImportedHomepageInput{updated}); err != nil {
+	if _, err := reconcileImportedHomepages(t, svc, []application.ImportedHomepageInput{updated}, application.HomepageImportModeUpsert, "release-002"); err != nil {
 		t.Fatalf("re-import: %v", err)
 	}
 	homepage, err := svc.GetHomepage(ctx, id)
@@ -149,20 +186,20 @@ func TestUpsertImportedHomepagesPreservesClaimedEdits(t *testing.T) {
 	}
 }
 
-func TestUpsertImportedHomepagesSkipsInvalidType(t *testing.T) {
+func TestReconcileImportedHomepagesRejectsInvalidType(t *testing.T) {
 	svc := application.NewHomepageService()
 	bad := importedSightInput("九寨沟")
 	bad.HomepageType = "galaxy"
-	report, err := svc.UpsertImportedHomepages(context.Background(), []application.ImportedHomepageInput{bad})
-	if err != nil {
-		t.Fatalf("upsert: %v", err)
+	report, err := reconcileImportedHomepages(t, svc, []application.ImportedHomepageInput{bad}, application.HomepageImportModeUpsert, "release-001")
+	if err == nil {
+		t.Fatalf("invalid homepageType must fail closed, got %+v", report)
 	}
-	if len(report.Skipped) != 1 || len(report.Created) != 0 {
-		t.Fatalf("invalid homepageType must be skipped, got %+v", report)
+	if len(report.Created) != 0 || len(report.Skipped) != 0 {
+		t.Fatalf("invalid import must not mutate or silently skip, got %+v", report)
 	}
 }
 
-func TestUpsertImportedHomepagesAcceptsPilotScopePlaceTypes(t *testing.T) {
+func TestReconcileImportedHomepagesAcceptsPilotScopePlaceTypes(t *testing.T) {
 	// 地点类主页类型闭集与 metadata HomepageType 枚举 / 数据工程试点 scope 对齐（WP3-4）。
 	svc := application.NewHomepageService()
 	pilotTypes := []string{
@@ -175,7 +212,7 @@ func TestUpsertImportedHomepagesAcceptsPilotScopePlaceTypes(t *testing.T) {
 		input.HomepageType = homepageType
 		inputs = append(inputs, input)
 	}
-	report, err := svc.UpsertImportedHomepages(context.Background(), inputs)
+	report, err := reconcileImportedHomepages(t, svc, inputs, application.HomepageImportModeUpsert, "release-001")
 	if err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
@@ -184,18 +221,18 @@ func TestUpsertImportedHomepagesAcceptsPilotScopePlaceTypes(t *testing.T) {
 	}
 }
 
-func TestUpsertImportedHomepagesKeepsExistingTagsWhenImportHasNone(t *testing.T) {
+func TestReconcileImportedHomepagesKeepsExistingTagsWhenImportHasNone(t *testing.T) {
 	// 数据工程无打标时不清空既有 categoryTags（保护存量/运营侧标签）。
 	svc := application.NewHomepageService()
 	ctx := context.Background()
-	report, err := svc.UpsertImportedHomepages(ctx, []application.ImportedHomepageInput{importedSightInput("青城山")})
+	report, err := reconcileImportedHomepages(t, svc, []application.ImportedHomepageInput{importedSightInput("青城山")}, application.HomepageImportModeUpsert, "release-001")
 	if err != nil {
 		t.Fatalf("seed upsert: %v", err)
 	}
 	id := report.Created[0]
 	bare := importedSightInput("青城山")
 	bare.CategoryTags = nil
-	if _, err := svc.UpsertImportedHomepages(ctx, []application.ImportedHomepageInput{bare}); err != nil {
+	if _, err := reconcileImportedHomepages(t, svc, []application.ImportedHomepageInput{bare}, application.HomepageImportModeUpsert, "release-002"); err != nil {
 		t.Fatalf("re-import: %v", err)
 	}
 	homepage, err := svc.GetHomepage(ctx, id)
@@ -204,5 +241,68 @@ func TestUpsertImportedHomepagesKeepsExistingTagsWhenImportHasNone(t *testing.T)
 	}
 	if len(homepage.CategoryTags) != 2 {
 		t.Fatalf("re-import without tags must keep existing categoryTags, got %+v", homepage.CategoryTags)
+	}
+}
+
+func TestSyncImportedHomepagesOfflinesOnlyStaleDataOwnedHomepages(t *testing.T) {
+	svc := application.NewHomepageService()
+	first, err := reconcileImportedHomepages(
+		t,
+		svc,
+		[]application.ImportedHomepageInput{importedSightInput("普陀山"), importedSightInput("东钱湖")},
+		application.HomepageImportModeUpsert,
+		"release-canary-001",
+	)
+	if err != nil {
+		t.Fatalf("initial import: %v", err)
+	}
+	manual, err := svc.IntakeHomepageCandidate(context.Background(), application.HomepageInput{
+		Title:        "人工主页",
+		HomepageType: "sight",
+	}, "official_seed")
+	if err != nil {
+		t.Fatalf("create manual homepage: %v", err)
+	}
+	if _, err := svc.PublishHomepageCandidate(context.Background(), manual.ID); err != nil {
+		t.Fatalf("publish manual homepage: %v", err)
+	}
+
+	report, err := reconcileImportedHomepages(
+		t,
+		svc,
+		[]application.ImportedHomepageInput{importedSightInput("普陀山")},
+		application.HomepageImportModeSync,
+		"release-baseline-001",
+	)
+	if err != nil {
+		t.Fatalf("sync import: %v", err)
+	}
+	if len(report.Offlined) != 1 || report.Offlined[0] != first.EntityRefToHomepageID["地点/景区/东钱湖"] {
+		t.Fatalf("sync must offline only stale data-owned homepage, got %+v", report)
+	}
+	offlined, err := svc.GetHomepage(context.Background(), first.EntityRefToHomepageID["地点/景区/东钱湖"])
+	if err == nil || offlined != nil {
+		t.Fatalf("offlined homepage must be unavailable, got homepage=%+v err=%v", offlined, err)
+	}
+	stillPublished, err := svc.GetHomepage(context.Background(), manual.ID)
+	if err != nil || stillPublished.Status != "published" {
+		t.Fatalf("sync must not alter independent homepage, got %+v err=%v", stillPublished, err)
+	}
+}
+
+func TestSyncImportedHomepagesRejectsInvalidInputBeforeMutation(t *testing.T) {
+	svc := application.NewHomepageService()
+	valid := importedSightInput("海螺沟")
+	if _, err := reconcileImportedHomepages(t, svc, []application.ImportedHomepageInput{valid}, application.HomepageImportModeUpsert, "release-001"); err != nil {
+		t.Fatalf("initial import: %v", err)
+	}
+	invalid := importedSightInput("坏数据")
+	invalid.HomepageType = "unsupported"
+	if _, err := reconcileImportedHomepages(t, svc, []application.ImportedHomepageInput{invalid}, application.HomepageImportModeSync, "release-002"); err == nil {
+		t.Fatal("sync must reject invalid desired state before mutation")
+	}
+	homepage, err := svc.GetHomepage(context.Background(), "海螺沟")
+	if err != nil || homepage.Status != "published" {
+		t.Fatalf("failed sync must not offline existing data homepage, got %+v err=%v", homepage, err)
 	}
 }

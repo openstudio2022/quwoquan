@@ -1,0 +1,20 @@
+name: quwoquan_app_alpha_runner
+description: Independent alpha/test composition for quwoquan_app.
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: '>=3.12.2 <4.0.0'
+
+dependencies:
+  crypto: ^3.0.7
+  flutter:
+    sdk: flutter
+  flutter_riverpod: ^3.2.1
+  quwoquan_app:
+    path: ../..
+  quwoquan_cloud_mock:
+    path: ../../packages/quwoquan_cloud_mock
+
+flutter:
+  uses-material-design: true

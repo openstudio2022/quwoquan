@@ -5,6 +5,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_introductio
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_introduction_asset.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_introduction_section.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_introduction_timeline_item.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_source.g.dart';
 import 'package:quwoquan_app/components/media/app_media_image.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
@@ -66,7 +67,13 @@ void main() {
               ],
             ),
           ],
-          sourceRefs: const <String>['fixture:west_lake'],
+          primarySource: HomepageSource(
+            sourceKind: 'wikipedia',
+            sourceUrl: 'https://zh.wikipedia.org/wiki/西湖',
+            title: '西湖',
+            policyRevision: 'encyclopedia-primary-v2',
+          ),
+          sourceUrls: const <String>['https://zh.wikipedia.org/wiki/西湖'],
         ),
       ),
     );
@@ -80,11 +87,21 @@ void main() {
     expect(find.text('今天'), findsOneWidget);
     expect(find.textContaining('持续沉淀'), findsOneWidget);
     await tester.scrollUntilVisible(
-      find.textContaining('fixture:west_lake'),
+      find.text('西湖'),
       AppSpacing.twoHundredTwenty,
       scrollable: find.byType(Scrollable).first,
     );
-    expect(find.textContaining('fixture:west_lake'), findsOneWidget);
+    expect(find.textContaining('Wikipedia · zh.wikipedia.org'), findsOneWidget);
+    expect(find.textContaining('fixture:'), findsNothing);
+    expect(find.textContaining('sourceRefs'), findsNothing);
+    expect(find.textContaining('/Users/'), findsNothing);
+    final sourceButton = tester.widget<CupertinoButton>(
+      find.ancestor(
+        of: find.text('西湖'),
+        matching: find.byType(CupertinoButton),
+      ),
+    );
+    expect(sourceButton.onPressed, isNotNull);
   });
 
   testWidgets('三段结构：正文块级内嵌图与页尾相关图片按 role 渲染', (tester) async {
@@ -132,7 +149,6 @@ void main() {
               ],
             ),
           ],
-          sourceRefs: const <String>['fixture:dujiangyan'],
         ),
       ),
     );

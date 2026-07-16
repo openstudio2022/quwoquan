@@ -1,0 +1,11 @@
+version: 1
+aggregate: TagTaxonomyRelease
+backend: mongodb
+
+collections:
+  tag_taxonomy_releases:
+    entity: TagTaxonomyRelease
+    role: authoritative
+    indexes:
+      - { name: idx_tag_taxonomy_release_status_activated, keys: { status: 1, activatedAt: -1 } }
+      - { name: idx_tag_taxonomy_release_digest, keys: { canonicalDigest: 1 }, unique: true }

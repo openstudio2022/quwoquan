@@ -57,13 +57,63 @@ func TestSkillSubscriptionLifecycle(t *testing.T) {
 	}
 }
 
+func TestUpsertSkillSubscriptionIsIdempotent(t *testing.T) {
+	store := persistence.NewMemorySkillSubscriptionStore()
+	service := NewAssistantService(
+		persistence.NewMemoryEventStore(),
+		persistence.NewMemoryConsentStore(),
+		rtredis.NewMemoryClient(),
+		WithSkillSubscriptionStore(store),
+	)
+	now := time.Date(2026, 7, 13, 0, 0, 0, 0, time.UTC)
+	service.now = func() time.Time { return now }
+	input := assistant.UpsertSkillSubscriptionInput{
+		SubscriptionID: "sub_environment_seed",
+		SkillID:        "stock_sentinel",
+		DomainID:       "finance",
+		Status:         assistant.SkillSubscriptionStatusActive,
+		SearchQueryPlan: assistant.SkillSubscriptionSearchQueryPlan{
+			RawText: "environment seed: stock_sentinel",
+			Queries: []string{"stock_sentinel"},
+		},
+		Trigger: assistant.SkillSubscriptionTrigger{Type: "cron", Cron: "0 8 * * *"},
+	}
+	first, err := service.UpsertSkillSubscription(context.Background(), "user_seed", input)
+	if err != nil {
+		t.Fatalf("first UpsertSkillSubscription error: %v", err)
+	}
+	now = now.Add(time.Hour)
+	input.Status = assistant.SkillSubscriptionStatusPaused
+	second, err := service.UpsertSkillSubscription(context.Background(), "user_seed", input)
+	if err != nil {
+		t.Fatalf("second UpsertSkillSubscription error: %v", err)
+	}
+	if second.SubscriptionID != first.SubscriptionID {
+		t.Fatalf("subscription id changed: first=%q second=%q", first.SubscriptionID, second.SubscriptionID)
+	}
+	if !second.CreatedAt.Equal(first.CreatedAt) {
+		t.Fatalf("createdAt changed: first=%s second=%s", first.CreatedAt, second.CreatedAt)
+	}
+	if second.Status != assistant.SkillSubscriptionStatusPaused {
+		t.Fatalf("status=%q, want paused", second.Status)
+	}
+	list, err := service.ListSkillSubscriptions(context.Background(), "user_seed", "", 20)
+	if err != nil {
+		t.Fatalf("ListSkillSubscriptions error: %v", err)
+	}
+	if len(list.Items) != 1 {
+		t.Fatalf("items=%d, want one idempotently upserted subscription", len(list.Items))
+	}
+}
+
 func TestTickSkillSubscriptionCronCreatesProactiveTurnAndAppMessage(t *testing.T) {
+	notifications := newRecordingNotificationCommandWriter()
 	service := NewAssistantService(
 		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
 		WithSkillSubscriptionStore(persistence.NewMemorySkillSubscriptionStore()),
-		WithAppMessageStore(persistence.NewMemoryAppMessageStore()),
+		WithNotificationAppMessageCommandWriter(notifications),
 	)
 	service.now = func() time.Time { return time.Date(2026, 4, 29, 8, 0, 0, 0, time.UTC) }
 
@@ -100,26 +150,24 @@ func TestTickSkillSubscriptionCronCreatesProactiveTurnAndAppMessage(t *testing.T
 		t.Fatalf("second tick processed=%d, want 0", again.ProcessedCount)
 	}
 
-	messages, err := service.ListAppMessages(context.Background(), "user_1", 20, "")
-	if err != nil {
-		t.Fatalf("ListAppMessages error: %v", err)
+	messages := notifications.CommandsForUser("user_1")
+	if len(messages) != 1 {
+		t.Fatalf("notification commands=%d, want 1", len(messages))
 	}
-	if len(messages.Items) != 1 {
-		t.Fatalf("messages=%d, want 1", len(messages.Items))
-	}
-	if messages.Items[0].Target.TargetType != "assistant_turn" {
-		t.Fatalf("target=%+v", messages.Items[0].Target)
+	if messages[0].Target.TargetType != "assistant_turn" {
+		t.Fatalf("target=%+v", messages[0].Target)
 	}
 }
 
 func TestTickSkillSubscriptionCronDeliversToConversationDestination(t *testing.T) {
 	chat := &fakeChatGroundingClient{}
+	notifications := newRecordingNotificationCommandWriter()
 	service := NewAssistantService(
 		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
 		WithSkillSubscriptionStore(persistence.NewMemorySkillSubscriptionStore()),
-		WithAppMessageStore(persistence.NewMemoryAppMessageStore()),
+		WithNotificationAppMessageCommandWriter(notifications),
 		WithChatGroundingClient(chat),
 	)
 	service.now = func() time.Time { return time.Date(2026, 4, 29, 8, 0, 0, 0, time.UTC) }
@@ -159,22 +207,20 @@ func TestTickSkillSubscriptionCronDeliversToConversationDestination(t *testing.T
 	if chat.sent[0].ConversationID != "conv_group_1" || !strings.HasPrefix(chat.sent[0].ClientMsgID, "assistant-proactive-") {
 		t.Fatalf("chat message=%+v", chat.sent[0])
 	}
-	messages, err := service.ListAppMessages(context.Background(), "user_1", 20, "")
-	if err != nil {
-		t.Fatalf("ListAppMessages error: %v", err)
-	}
-	if len(messages.Items) != 0 {
-		t.Fatalf("user app messages=%d, want 0 for conversation destination", len(messages.Items))
+	messages := notifications.CommandsForUser("user_1")
+	if len(messages) != 0 {
+		t.Fatalf("notification commands=%d, want 0 for conversation destination", len(messages))
 	}
 }
 
 func TestTickSkillSubscriptionCronCreatesM9P0SkillMessages(t *testing.T) {
+	notifications := newRecordingNotificationCommandWriter()
 	service := NewAssistantService(
 		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
 		WithSkillSubscriptionStore(persistence.NewMemorySkillSubscriptionStore()),
-		WithAppMessageStore(persistence.NewMemoryAppMessageStore()),
+		WithNotificationAppMessageCommandWriter(notifications),
 	)
 	service.now = func() time.Time { return time.Date(2026, 4, 29, 8, 0, 0, 0, time.UTC) }
 
@@ -252,14 +298,11 @@ func TestTickSkillSubscriptionCronCreatesM9P0SkillMessages(t *testing.T) {
 			if result.ProcessedCount != 1 || len(result.CreatedTurnIDs) != 1 || len(result.CreatedMessageIDs) != 1 {
 				t.Fatalf("tick result=%+v", result)
 			}
-			messages, err := service.ListAppMessages(context.Background(), userID, 20, "")
-			if err != nil {
-				t.Fatalf("ListAppMessages error: %v", err)
+			messages := notifications.CommandsForUser(userID)
+			if len(messages) != 1 {
+				t.Fatalf("notification commands=%d, want 1", len(messages))
 			}
-			if len(messages.Items) != 1 {
-				t.Fatalf("messages=%d, want 1", len(messages.Items))
-			}
-			message := messages.Items[0]
+			message := messages[0]
 			if message.Title != tc.wantTitle {
 				t.Fatalf("title=%q, want %q", message.Title, tc.wantTitle)
 			}

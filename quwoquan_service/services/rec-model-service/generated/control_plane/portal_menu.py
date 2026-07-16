@@ -243,6 +243,7 @@ _PORTAL_MENU_JSON = r'''{
       "menu_id": "governance",
       "object_types": [
         "moderation_case",
+        "report_queue",
         "appeal_case",
         "recovery_case"
       ],
@@ -378,20 +379,6 @@ _PORTAL_MENU_JSON = r'''{
       "parent_menu_id": "product-ops",
       "permission_scope": "ops.product.xiaoqu.read",
       "route_path": "/product/xiaoqu-comments"
-    },
-    {
-      "domain": "product-ops",
-      "icon": "school",
-      "label": "校园冷启动",
-      "menu_id": "campus-bootstrap",
-      "object_types": [
-        "campus_homepage",
-        "bootstrap_seed"
-      ],
-      "order": 38,
-      "parent_menu_id": "product-ops",
-      "permission_scope": "ops.product.bootstrap.read",
-      "route_path": "/product/campus-bootstrap"
     },
     {
       "domain": "product-ops",

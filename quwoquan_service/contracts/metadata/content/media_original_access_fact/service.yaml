@@ -1,0 +1,72 @@
+version: 1
+
+service:
+  name: content-service
+  domain: content
+  owner: backend-team
+  commercial_defaults:
+    status: blocked
+    block_reason: App typed Media Facet、真实 S3-compatible 集成与 Gamma 页面验收尚未完成
+    gap_id: CONTENT_MEDIA_OBJECT_MIGRATION_PENDING
+    target_story: app-cloud-business-object-commercial-closure
+  description: MediaOriginalAccessFact 的对象中心不可变授权事实追加入口。
+
+api_routes:
+  - method: POST
+    path: /v1/content/media/{mediaId}/original:access
+    operation: RequestOriginalImageAccess
+    actor: persona
+    application:
+      kind: command
+      facet: MediaOriginalAccessAppendFacet
+      method: requestOriginalImageAccess
+      append_sink: MediaOriginalAccessFact
+      mutation_target: MediaOriginalAccessFact
+      invariant_target: MediaOriginalAccessFact
+    authorization:
+      principal: persona
+      ownership_policy: post_visibility_and_media_policy
+    commercial:
+      status: blocked
+      block_reason: typed Media Facet, Mongo append/outbox and real S3-compatible integration are complete; Gamma original-access page evidence remains required
+      gap_id: CONTENT_MEDIA_GAMMA_UAT
+      target_story: app-cloud-business-object-commercial-closure
+    reliability:
+      timeout_ms: 5000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - CONTENT.USER.unauthorized
+      - CONTENT.USER.media_not_found
+      - CONTENT.USER.original_access_denied
+      - CONTENT.USER.original_access_rate_limited
+      - CONTENT.USER.idempotency_conflict
+      - CONTENT.SYSTEM.storage_read_failed
+    privacy:
+      request_classification: PII
+      response_classification: SENSITIVE
+      log_policy: redacted
+    telemetry:
+      metric: content_media_original_access_request
+      trace: true
+      attributes: [purpose, outcome]
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    request_fields: [purpose]
+    response_fields: [mediaId, status, originalUrl, format, sizeBytes, expiresAt, ttlSeconds, auditId]
+    client_contract:
+      dart_import: ../content/media_contracts.dart
+      request_type: RequestContentMediaOriginalAccessCommand
+      response_type: ContentMediaOriginalAccessGrant
+      request_encoder: encodeRequestContentMediaOriginalAccessCommand
+      response_decoder: decodeContentMediaOriginalAccessGrant
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    description: 按 MediaAsset named Reader 的 owner、状态与访问策略校验签发短时原始媒体访问授权。

@@ -5,6 +5,8 @@ extension ContentErrorCodeExt on ContentErrorCode {
     switch (this) {
       case ContentErrorCode.postNotFound:
         return 'CONTENT.USER.post_not_found';
+      case ContentErrorCode.reportNotFound:
+        return 'CONTENT.USER.report_not_found';
       case ContentErrorCode.commentNotFound:
         return 'CONTENT.USER.comment_not_found';
       case ContentErrorCode.forbiddenEdit:
@@ -15,6 +17,14 @@ extension ContentErrorCodeExt on ContentErrorCode {
         return 'CONTENT.USER.unauthorized';
       case ContentErrorCode.invalidArgument:
         return 'CONTENT.USER.invalid_argument';
+      case ContentErrorCode.interactionTypeInvalid:
+        return 'CONTENT.USER.interaction_type_invalid';
+      case ContentErrorCode.interactionCursorInvalid:
+        return 'CONTENT.USER.interaction_cursor_invalid';
+      case ContentErrorCode.interactionOwnerForbidden:
+        return 'CONTENT.USER.interaction_owner_forbidden';
+      case ContentErrorCode.interactionReadModelUnavailable:
+        return 'CONTENT.SYSTEM.interaction_read_model_unavailable';
       case ContentErrorCode.assistantMentionContextMissing:
         return 'CONTENT.USER.assistant_mention_context_missing';
       case ContentErrorCode.invalidContentType:
@@ -57,10 +67,22 @@ extension ContentErrorCodeExt on ContentErrorCode {
         return 'CONTENT.USER.invalid_moment_payload';
       case ContentErrorCode.contentDeleted:
         return 'CONTENT.USER.content_deleted';
+      case ContentErrorCode.versionConflict:
+        return 'CONTENT.USER.version_conflict';
+      case ContentErrorCode.idempotencyConflict:
+        return 'CONTENT.USER.idempotency_conflict';
+      case ContentErrorCode.moderationApprovalRequired:
+        return 'CONTENT.USER.moderation_approval_required';
+      case ContentErrorCode.moderationDecisionStale:
+        return 'CONTENT.USER.moderation_decision_stale';
       case ContentErrorCode.circleDistributionForbidden:
         return 'CONTENT.USER.circle_distribution_forbidden';
       case ContentErrorCode.storageWriteFailed:
         return 'CONTENT.SYSTEM.storage_write_failed';
+      case ContentErrorCode.storageReadFailed:
+        return 'CONTENT.SYSTEM.storage_read_failed';
+      case ContentErrorCode.requiredDependencyUnavailable:
+        return 'CONTENT.SYSTEM.required_dependency_unavailable';
       case ContentErrorCode.internalError:
         return 'CONTENT.SYSTEM.internal_error';
       case ContentErrorCode.upstreamTimeout:

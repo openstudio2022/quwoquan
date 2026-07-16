@@ -4,9 +4,9 @@
 校验单一真相源闭环：
 - works_classification.yaml：schemaVersion/version/必需键 + 权重覆盖全部 tier/affinity + video 后置。
 - content_source_registry.yaml：sourceTierSignals 完整（复用 verify_content_source_registry）。
-- 判定 smoke：代表样本 decision 正确，且裁决符合 schema/produce/works_classification.schema.json。
+- 判定 smoke：代表样本 decision 正确，且裁决符合 schema/content/works_classification.schema.json。
 
-接入 verify_quwoquan_data.sh；改判定行为先改 yaml + version，再过本门。
+接入 `qwq-data verify all`；改判定行为先改 yaml + version，再过本门。
 """
 from __future__ import annotations
 
@@ -17,13 +17,13 @@ SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
 if str(SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_ROOT))
 
-from _common.content_source_registry import (  # noqa: E402
+from core.content_source_registry import (  # noqa: E402
     VALID_SOURCE_TIERS,
     VALID_WORKS_AFFINITIES,
     verify_content_source_registry,
 )
-from _common.schema import validate_result  # noqa: E402
-from _common.works_classifier import classify_works, load_works_classification_config  # noqa: E402
+from core.schema import validate_result  # noqa: E402
+from content.post.works_classifier import classify_works, load_works_classification_config  # noqa: E402
 
 _LONG = """# 九寨沟旅游全攻略
 
@@ -81,7 +81,7 @@ def check() -> list[str]:
 
     for ref, kwargs, expect in _SAMPLES:
         verdict = classify_works(ref, **kwargs)
-        schema_errs = validate_result(verdict, "produce", "works_classification")
+        schema_errs = validate_result(verdict, "content", "works_classification")
         if schema_errs:
             issues.append(f"verdict[{ref}] schema violations: {schema_errs}")
         if str(verdict.get("decision")) != expect:

@@ -8,22 +8,20 @@ class NotificationApiMetadata {
 
   static const String domain = 'notification';
   static const List<String> apiPrefixes = <String>[
+    '/internal/v1',
     '/v1/app-messages',
-    '/v1/notifications',
   ];
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
     'AckAppMessage': '/v1/app-messages/{messageId}/ack',
-    'CreateAppMessage': '/v1/app-messages',
+    'CreateAppMessage': '/internal/v1/app-messages',
     'GetAppMessage': '/v1/app-messages/{messageId}',
     'GetAppMessageUnreadCount': '/v1/app-messages/unread-count',
-    'GetUnreadCount': '/v1/notifications/unread-count',
+    'GetNotificationDeliveryJobMetrics': '/internal/v1/notifications/delivery-jobs/metrics',
     'ListAppMessages': '/v1/app-messages',
-    'ListNotifications': '/v1/notifications',
-    'MarkAllAsRead': '/v1/notifications/read-all',
-    'MarkAsRead': '/v1/notifications/read',
+    'ListNotificationDeliveryJobDeadLetters': '/internal/v1/notifications/delivery-jobs/dead-letters',
     'ReadAppMessage': '/v1/app-messages/{messageId}/read',
-    'StreamAppMessages': '/v1/app-messages/stream',
+    'RecoverNotificationDeliveryJob': '/internal/v1/notifications/delivery-jobs/{jobId}:recover',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
@@ -31,49 +29,52 @@ class NotificationApiMetadata {
     'CreateAppMessage': 'POST',
     'GetAppMessage': 'GET',
     'GetAppMessageUnreadCount': 'GET',
-    'GetUnreadCount': 'GET',
+    'GetNotificationDeliveryJobMetrics': 'GET',
     'ListAppMessages': 'GET',
-    'ListNotifications': 'GET',
-    'MarkAllAsRead': 'POST',
-    'MarkAsRead': 'POST',
+    'ListNotificationDeliveryJobDeadLetters': 'GET',
     'ReadAppMessage': 'POST',
-    'StreamAppMessages': 'GET',
+    'RecoverNotificationDeliveryJob': 'POST',
   };
 
   /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
   static const Map<String, String> operationToAuthMode = <String, String>{
-    'AckAppMessage': 'public',
-    'CreateAppMessage': 'public',
-    'GetAppMessage': 'public',
-    'GetAppMessageUnreadCount': 'public',
-    'GetUnreadCount': 'public',
-    'ListAppMessages': 'public',
-    'ListNotifications': 'public',
-    'MarkAllAsRead': 'public',
-    'MarkAsRead': 'public',
-    'ReadAppMessage': 'public',
-    'StreamAppMessages': 'public',
+    'AckAppMessage': 'required',
+    'CreateAppMessage': 'required',
+    'GetAppMessage': 'required',
+    'GetAppMessageUnreadCount': 'required',
+    'GetNotificationDeliveryJobMetrics': 'required',
+    'ListAppMessages': 'required',
+    'ListNotificationDeliveryJobDeadLetters': 'required',
+    'ReadAppMessage': 'required',
+    'RecoverNotificationDeliveryJob': 'required',
   };
 
-  /// 响应读模型：operation -> 端侧 DTO 类名（service.yaml response_body 真相源，仅 object/page 形态）。
+  /// 已绑定端侧强类型的响应读模型：operation -> Dart 契约类名。
   static const Map<String, String> operationToResponseModel = <String, String>{
+    'GetAppMessage': 'AppMessage',
+    'GetAppMessageUnreadCount': 'AppMessageUnreadCountSlice',
+    'ListAppMessages': 'AppMessageInboxSlice',
   };
 
   /// 响应体形态：object 单对象 | page 分页列表（items） | ack 仅状态确认（无读模型）。
   static const Map<String, String> operationToResponseKind = <String, String>{
+    'GetAppMessage': 'object',
+    'GetAppMessageUnreadCount': 'object',
+    'GetNotificationDeliveryJobMetrics': 'object',
+    'ListAppMessages': 'page',
+    'ListNotificationDeliveryJobDeadLetters': 'page',
+    'RecoverNotificationDeliveryJob': 'object',
   };
 
   static const String ackAppMessageOperation = 'AckAppMessage';
   static const String createAppMessageOperation = 'CreateAppMessage';
   static const String getAppMessageOperation = 'GetAppMessage';
   static const String getAppMessageUnreadCountOperation = 'GetAppMessageUnreadCount';
-  static const String getUnreadCountOperation = 'GetUnreadCount';
+  static const String getNotificationDeliveryJobMetricsOperation = 'GetNotificationDeliveryJobMetrics';
   static const String listAppMessagesOperation = 'ListAppMessages';
-  static const String listNotificationsOperation = 'ListNotifications';
-  static const String markAllAsReadOperation = 'MarkAllAsRead';
-  static const String markAsReadOperation = 'MarkAsRead';
+  static const String listNotificationDeliveryJobDeadLettersOperation = 'ListNotificationDeliveryJobDeadLetters';
   static const String readAppMessageOperation = 'ReadAppMessage';
-  static const String streamAppMessagesOperation = 'StreamAppMessages';
+  static const String recoverNotificationDeliveryJobOperation = 'RecoverNotificationDeliveryJob';
 
   static const String ackAppMessagePathTemplate = '/v1/app-messages/{messageId}/ack';
   static String ackAppMessagePath({required String messageId}) {
@@ -81,7 +82,7 @@ class NotificationApiMetadata {
       'messageId': messageId,
     });
   }
-  static const String createAppMessagePath = '/v1/app-messages';
+  static const String createAppMessagePath = '/internal/v1/app-messages';
   static const String getAppMessagePathTemplate = '/v1/app-messages/{messageId}';
   static String getAppMessagePath({required String messageId}) {
     return _fillPath(getAppMessagePathTemplate, <String, String>{
@@ -89,18 +90,21 @@ class NotificationApiMetadata {
     });
   }
   static const String getAppMessageUnreadCountPath = '/v1/app-messages/unread-count';
-  static const String getUnreadCountPath = '/v1/notifications/unread-count';
+  static const String getNotificationDeliveryJobMetricsPath = '/internal/v1/notifications/delivery-jobs/metrics';
   static const String listAppMessagesPath = '/v1/app-messages';
-  static const String listNotificationsPath = '/v1/notifications';
-  static const String markAllAsReadPath = '/v1/notifications/read-all';
-  static const String markAsReadPath = '/v1/notifications/read';
+  static const String listNotificationDeliveryJobDeadLettersPath = '/internal/v1/notifications/delivery-jobs/dead-letters';
   static const String readAppMessagePathTemplate = '/v1/app-messages/{messageId}/read';
   static String readAppMessagePath({required String messageId}) {
     return _fillPath(readAppMessagePathTemplate, <String, String>{
       'messageId': messageId,
     });
   }
-  static const String streamAppMessagesPath = '/v1/app-messages/stream';
+  static const String recoverNotificationDeliveryJobPathTemplate = '/internal/v1/notifications/delivery-jobs/{jobId}:recover';
+  static String recoverNotificationDeliveryJobPath({required String jobId}) {
+    return _fillPath(recoverNotificationDeliveryJobPathTemplate, <String, String>{
+      'jobId': jobId,
+    });
+  }
 
   static String _fillPath(String template, Map<String, String> params) {
     var path = template;

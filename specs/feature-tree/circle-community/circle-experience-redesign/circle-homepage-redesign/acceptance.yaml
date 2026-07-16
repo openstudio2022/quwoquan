@@ -41,7 +41,7 @@ gwt_acceptance:
       - file: quwoquan_app/test/user_acceptance/pages/circle/circle_detail/circle_detail_page__user_acceptance_test.dart
       - file: quwoquan_service/services/circle-service/tests/api_integration/circle_section_contract__api_integration_test.go
       - file: quwoquan_service/services/circle-service/tests/api_integration/circle_feed_contract__api_integration_test.go
-      - file: quwoquan_service/services/circle-service/tests/api_integration/circle_member_contract__api_integration_test.go
+      - file: quwoquan_service/services/circle-service/tests/api_integration/circle_membership__api_integration_test.go
     status: completed
     test_evidence:
       primary:

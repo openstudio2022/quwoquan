@@ -1,11 +1,10 @@
 # 全国地点主清单 · 四川省攀枝花市（discovery_seed/2，WP2 区县级全量枚举）
-# schema: quwoquan_data/schema/coverage/master_list.schema.json
-# 门禁: qwq-data verify coverage-master-list
+# schema: quwoquan_data/schema/governance/master_list.schema.json
+# 门禁: qwq-data verify coverage-static-identity
 schemaVersion: quwoquan_data.discovery_seed/2
 country: 中国
 province: 四川省
 city: 攀枝花市
-generatedBy: wp2_enumeration_20260708
 districts:
 - district: 东区
   leaves:
@@ -17,7 +16,6 @@ districts:
     - Entity/地点/公园
     geoTagRef: Topic/地理/行政区/中国/四川省/攀枝花市/东区
     selectionPriority: 1
-    sourceReadiness: pending
   - name: 阿署达村
     canonicalName: 攀枝花阿署达村
     entityType: 地点/古镇
@@ -29,7 +27,6 @@ districts:
     - 阿署达花舞人间景区
     - 阿署达四季花海
     selectionPriority: 2
-    sourceReadiness: pending
   - name: 竹湖园
     canonicalName: 攀枝花竹湖园
     entityType: 地点/公园
@@ -39,14 +36,12 @@ districts:
     aliases:
     - 竹湖园公园
     selectionPriority: 3
-    sourceReadiness: pending
   - name: 渡口建設指揮部招待所
     canonicalName: 渡口建設指揮部招待所
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/攀枝花市/东区
-    sourceReadiness: pending
     selectionPriority: 4
   - name: 雅江桥
     canonicalName: 雅江桥
@@ -54,7 +49,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/攀枝花市/东区
-    sourceReadiness: pending
     selectionPriority: 5
 - district: 仁和区
   leaves:
@@ -67,7 +61,6 @@ districts:
     aliases:
     - 三线建设博物馆
     selectionPriority: 1
-    sourceReadiness: ready
   - name: 迤沙拉村
     canonicalName: 迤沙拉村
     entityType: 地点/古镇
@@ -77,7 +70,6 @@ districts:
     aliases:
     - 迤沙拉历史文化名村
     selectionPriority: 2
-    sourceReadiness: pending
   - name: 大黑山森林公园
     canonicalName: 攀枝花大黑山森林公园
     entityType: 地点/自然景观
@@ -86,7 +78,6 @@ districts:
     - Entity/地点/自然景观/山岳
     geoTagRef: Topic/地理/行政区/中国/四川省/攀枝花市/仁和区
     selectionPriority: 3
-    sourceReadiness: pending
   - name: 攀枝花中国苴却砚博物馆
     canonicalName: 攀枝花中国苴却砚博物馆
     entityType: 地点/博物馆
@@ -96,7 +87,6 @@ districts:
     aliases:
     - 苴却砚博物馆
     selectionPriority: 4
-    sourceReadiness: pending
   - name: 拉鲊古渡
     canonicalName: 拉鲊古渡
     entityType: 地点/遗址
@@ -104,14 +94,12 @@ districts:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/攀枝花市/仁和区
     selectionPriority: 5
-    sourceReadiness: pending
   - name: 下灣遺址
     canonicalName: 下灣遺址
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/攀枝花市/仁和区
-    sourceReadiness: pending
     selectionPriority: 6
   - name: 回龍灣洞穴遺址
     canonicalName: 回龍灣洞穴遺址
@@ -119,7 +107,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/攀枝花市/仁和区
-    sourceReadiness: pending
     selectionPriority: 7
   - name: 大田會議會址
     canonicalName: 大田會議會址
@@ -127,7 +114,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/攀枝花市/仁和区
-    sourceReadiness: pending
     selectionPriority: 8
   - name: 西祝寺
     canonicalName: 西祝寺
@@ -135,7 +121,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/攀枝花市/仁和区
-    sourceReadiness: pending
     selectionPriority: 9
 - district: 盐边县
   leaves:
@@ -148,7 +133,6 @@ districts:
     aliases:
     - 格萨拉
     selectionPriority: 1
-    sourceReadiness: ready
   - name: 二滩国家森林公园
     canonicalName: 二滩国家森林公园
     entityType: 地点/自然景观
@@ -157,7 +141,6 @@ districts:
     - Entity/地点/自然景观/森林草原
     geoTagRef: Topic/地理/行政区/中国/四川省/攀枝花市/盐边县
     selectionPriority: 2
-    sourceReadiness: pending
   - name: 二滩水电站
     canonicalName: 二滩水电站
     entityType: 地点/打卡地
@@ -165,9 +148,6 @@ districts:
     - Entity/地点/打卡地
     geoTagRef: Topic/地理/行政区/中国/四川省/攀枝花市/盐边县
     selectionPriority: 3
-    sourceReadiness: ready
-    sourceScreenedAt: '2026-07-09T11:47:58Z'
-    sourceScreenEvidence: zh.wikipedia.org:二滩水电站 extract=266ch
   - name: 红格温泉
     canonicalName: 红格温泉
     entityType: 地点/温泉
@@ -175,14 +155,12 @@ districts:
     - Entity/地点/温泉
     geoTagRef: Topic/地理/行政区/中国/四川省/攀枝花市/盐边县
     selectionPriority: 4
-    sourceReadiness: pending
   - name: 程家墓群
     canonicalName: 程家墓群
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/攀枝花市/盐边县
-    sourceReadiness: pending
     selectionPriority: 5
   - name: 马喇长官司衙门遗址
     canonicalName: 马喇长官司衙门遗址
@@ -190,7 +168,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/攀枝花市/盐边县
-    sourceReadiness: pending
     selectionPriority: 6
 - district: 米易县
   leaves:
@@ -203,7 +180,6 @@ districts:
     aliases:
     - 新山梯田
     selectionPriority: 1
-    sourceReadiness: pending
   - name: 颛顼龙洞
     canonicalName: 米易颛顼龙洞
     entityType: 地点/自然景观
@@ -213,7 +189,6 @@ districts:
     aliases:
     - 龙潭溶洞
     selectionPriority: 2
-    sourceReadiness: pending
   - name: 海塔世外桃源
     canonicalName: 米易海塔世外桃源
     entityType: 地点/打卡地
@@ -223,14 +198,12 @@ districts:
     aliases:
     - 海塔村
     selectionPriority: 3
-    sourceReadiness: pending
   - name: 何家壩遺址
     canonicalName: 何家壩遺址
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/攀枝花市/米易县
-    sourceReadiness: pending
     selectionPriority: 4
   - name: 得石攔木壩
     canonicalName: 得石攔木壩
@@ -238,7 +211,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/攀枝花市/米易县
-    sourceReadiness: pending
     selectionPriority: 5
   - name: 掛榜清真寺
     canonicalName: 掛榜清真寺
@@ -246,7 +218,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/攀枝花市/米易县
-    sourceReadiness: pending
     selectionPriority: 6
   - name: 灣丘五七幹校舊址
     canonicalName: 灣丘五七幹校舊址
@@ -254,7 +225,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/攀枝花市/米易县
-    sourceReadiness: pending
     selectionPriority: 7
 - district: 西区
   leaves:
@@ -266,7 +236,6 @@ districts:
     - Entity/地点/自然景观/森林草原
     geoTagRef: Topic/地理/行政区/中国/四川省/攀枝花市/西区
     selectionPriority: 1
-    sourceReadiness: pending
   - name: 西佛山
     canonicalName: 攀枝花西佛山
     entityType: 地点/自然景观
@@ -276,7 +245,6 @@ districts:
     aliases:
     - 西佛山景区
     selectionPriority: 2
-    sourceReadiness: pending
   - name: 河门口公园
     canonicalName: 河门口公园
     entityType: 地点/公园
@@ -284,7 +252,6 @@ districts:
     - Entity/地点/公园
     geoTagRef: Topic/地理/行政区/中国/四川省/攀枝花市/西区
     selectionPriority: 3
-    sourceReadiness: pending
   - name: 庄上旅游新村
     canonicalName: 庄上旅游新村
     entityType: 地点/古镇
@@ -294,12 +261,10 @@ districts:
     aliases:
     - 庄上村
     selectionPriority: 4
-    sourceReadiness: pending
   - name: 503电厂
     canonicalName: 503电厂
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/攀枝花市/西区
-    sourceReadiness: pending
     selectionPriority: 5

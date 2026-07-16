@@ -9,7 +9,7 @@ affected_nodes:
   - specs/feature-tree/recommendation-platform/evaluation-and-flywheel
   - specs/feature-tree/recommendation-platform/evaluation-and-flywheel/offline-replay-evaluation
   - specs/feature-tree/recommendation-platform/evaluation-and-flywheel/online-ab-significance
-  - docs/recommendation-commercial-maturity-plan.md
+  - docs/recommendation-commercial-maturity-content.execution.planning.md
   - docs/outstanding_risks_backlog.md
 
 entries:
@@ -28,7 +28,7 @@ entries:
       - acceptance
       - observability
     changed_documents:
-      - path: docs/recommendation-commercial-maturity-plan.md
+      - path: docs/recommendation-commercial-maturity-content.execution.planning.md
         sections:
           - continue-dev 下一轮目标规划
       - path: docs/outstanding_risks_backlog.md

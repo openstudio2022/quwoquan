@@ -8,6 +8,7 @@
 
 **扫描基线**：`quwoquan_app/lib/ui/**/pages/*_page.dart`、`lib/components/**/*_page.dart`、`lib/ui/welcome/pages/welcome_screen.dart`（无 `_page` 后缀的入口屏）、**`lib/app/shell/*.dart`**（主壳 / 底栏，P1+P6 强相关）。
 **门禁**：`quwoquan_app/scripts/runtime/verify_page_matrix_scan_complete.py` — 磁盘扫描集 **=** 矩阵路径集，且矩阵路径 **⊆** `metadata_driven_ui_gap_inventory.yaml` 的 `ui_pages`（防漏页、漏清单）。
+**职责边界**：本表只承载页面类型与 P1–P8 横向质量结论；页面到业务对象、路由、Surface、Query Slice、鉴权、能力位和 telemetry 的唯一契约是 `quwoquan_service/contracts/metadata/_shared/page_object_contract.yaml`，禁止在本表复制对象绑定。
 **帖子全链路 P2**：`post-projection-pipeline-inventory.md`；2026-04-11 已收口为清单 `compliant` + 矩阵 **P2=✓**（`unified_media_viewer` 的 P6 仍 exempt）。
 **排除**：`lib/ui/chat/pages/chat_display_fallbacks.dart` 仅为 `export`，不占行（见 `dual-theme-page-coverage/page-dual-theme-matrix.md`）。
 **P6 口径**：与 `page-dual-theme-matrix.md` 一致 — `✓`=full，`○`=partial（待按 S6 收敛），`—`=exempt。
@@ -36,7 +37,7 @@
 
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
-| `lib/ui/welcome/pages/welcome_screen.dart` | local_contract | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | **P1**：启动 fast path 先以 `MaterialApp.home` 直出 `AppScaffold` 欢迎页，首帧已有品牌花瓣与文案；`DefaultTextStyle.merge` 收口调试黄下划线。P6 与双色矩阵 `welcome_screen` full 对齐；2026-06 Web intro overlay 改用 `deferSequenceStart`，让动效在内容页首帧后再启动；启动登录 prompt 不再进入 Web 主流程；2026-06-26 纠偏为诚实启动边界：原生层只允许无内容中性过渡背景，Android 禁止 `StartupActivity`/`NativeWelcomeView`/overlay/handoff，iOS 使用 `LaunchTransitionScreen` 无内容中性背景；Flutter `WelcomeScreen` 是唯一欢迎页。启动初始化首帧后 best-effort 并行，本地 HTTPS CA 等 prerequisite 在 `runApp` 前启动但不阻塞首帧，启动壳在欢迎页期间等待 2.5 秒预算；花瓣动效等 Flutter 首帧 rasterized 后再开始，避免在 LaunchScreen 背后跑完；Shell ready 且动效完成即进入，未就绪最多重放两次并只显示一行 `启动中，马上进入`，超过上限进入降级 Shell；设备探针默认启动 `MainActivity`，监控 `nativeWelcomeDetected=false`、旧亮蓝失败、3 秒内 Flutter 欢迎页/主壳可见，并允许进入 Shell 后的页面骨架生命周期；2026-05-19 登记为品牌屏 chrome 豁免，无传统 toolbar |
+| `lib/ui/welcome/pages/welcome_screen.dart` | local_contract | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | **P1**：启动 fast path 直出 `AppScaffold` + `WelcomeBrandCluster`；原生使用自适应渐变背景与同源透明品牌簇，Flutter 首帧 `openAmount=1` identity 接管。首帧稳定 90ms 后立即播放约 1040ms 的「全开→合拢→再开放」，单控制器按对称组错峰；正常一轮 ready 即进入，3s 为 Shell 首帧目标，6s 仅为进程启动起算的硬退出门。未 ready 才显示 24px 单行 `启动中，马上进入`，最多重放两次；超预算进入安全 Shell，禁止回到欢迎页。Shell 首帧后 120ms 内移除欢迎层并记录 `overlayRemovedMs`，探针不再把“Shell 已画但仍被欢迎遮住”判为成功。`disableAnimations`、后台恢复、压缩周期与 terminal latch 均有 local_contract。品牌屏 chrome 豁免，无传统 toolbar |
 
 ---
 
@@ -45,7 +46,6 @@
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
 | `lib/ui/discovery/pages/home_page.dart` | local_contract | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：Feed/沉浸 `PostReadSurfaceId.immersive` + wire；`MediaPostCard`/`PostSummaryView.readPresentation`；见 `post-projection-pipeline-inventory.md`；Tab 根为关注/推荐 + 校园/旅行/摄影/科技/车之家，默认推荐；P4 MainAppShell；2026-05-21 旅行/摄影图片使用页内轮播并禁用图片沉浸跳转，P7/P8 分列保持 ✓ |
-| `lib/ui/discovery/pages/discovery_page.dart` | T7 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：同 home（微趣/沉浸）；P6 与双色矩阵 `discovery_page` full 对齐；2026-05-19 顶部主导航接入 `appChromeTopSafeInset`/`appChromeTopBarHeight` |
 
 ---
 
@@ -56,7 +56,6 @@
 | `lib/ui/assistant/pages/assistant_management_page.dart` | local_contract | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `SettingsInsetFormPageScaffold`；P2 同左 |
 | `lib/ui/assistant/pages/assistant_reference_webview_page.dart` | local_contract | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | WebView 内容域 P2/P3 —；P6 壳层与双色矩阵 `assistant_reference_webview` full 对齐 |
 | `lib/ui/assistant/pages/personal_assistant_conversation_page.dart` | local_contract | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | “找私助”唯一入口；P2 `AssistantConversationWire`/`AssistantTurnEnvelopeWire`/`AssistantStreamEventWire`/`SkillSubscriptionWire` + `AppMessageWire`；P3 经 `assistantRepositoryProvider`/`appMessageRepositoryProvider` Mock/Remote；用户 query 与主动 AppMessage 均投影到统一 transcript；2026-05-19 导航栏接入 `AppNavigationBar`，设置/返回和底部输入栏接入 appChrome/chatInput token，并补 runArtifacts 脏数据兼容 |
-| `lib/ui/assistant/pages/assistant_dev_replay_page.dart` | local_contract | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | 开发工具 |
 | `lib/ui/assistant/pages/assistant_skill_center_page.dart` | local_contract | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `AssistantSkillCatalogItemView`/`SkillSubscriptionWire` + `AssistantLocalSessionSummaryView`；P3 经 `assistantRepositoryProvider` Mock/Remote；含 AppLog 类埋点 |
 
 ---
@@ -66,7 +65,6 @@
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
 | `lib/ui/chat/pages/chat_page.dart` | local_contract | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 消息体系商用重构入口；消息/联系为消息模块内两个独立一级页面状态，均无内联搜索框并统一走顶部工具栏搜索入口；消息筛选收口为 `全部/未读/群聊/私聊/通知`，联系筛选收口为 `全部/互关/圈子/群聊`；P2 以 `MessageHomeRowDto`、`ContactHomeRowDto`、`AppMessage`/notification inbox 和交集摘要 read model 为真相源，App 不拼来源/交集/成员数；`未读` 胶囊数统一汇总 `ListMessageHome(unread)` 返回的 `unreadCount`，与列表未读行同源，单数字 badge 收口为圆形；打开会话后统一刷新全部消息筛选引用的已读状态；群头像只消费服务端预合成 `avatarUrl`，禁止端侧群成员九宫格 fallback；P3 生产 Remote-only，Mock 仅作 contract fixture |
-| `lib/ui/chat/pages/chat_detail_page.dart` | local_contract | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 委托 `ChatConversationPage`；P2 消息链 `ChatMessageDto` + Repository 强类型 |
 | `lib/ui/chat/pages/chat_conversation_page.dart` | T7 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `ConversationPageScaffold`；P2 消息列表 `ChatMessageDto` + `ChatMessageDisplayItem` 强类型展示链；2026-05-19 三点入口、选择态文字操作与默认单行输入栏统一到 appChrome/chatInput token；2026-05-30 语音消息接入 `VoiceRecorder`/`voiceSendProvider`，compact 输入栏收敛 `@小趣` 防挤压，语音发送沿 metadata `audio` 契约；2026-06-06 body 外包统一 `WebPageMaxWidthFrame`（宽屏内容区限宽居中、左右用 page background 区分阅读区，移动端透传），时间分隔按 `sentAtIso` 间隔（≥5min）降噪 |
 | `lib/ui/chat/pages/chat_settings_page.dart` | local_contract | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | P2 `GroupHomeDto` + `ChatGroupSettingsDto`；聊天信息/群主页入口消费 `GetGroupHome` 的来源、公告、成员数和能力；`AppScaffold`；P7 成员网格按头像与文字高度计算；2026-05-19 登记为三点入口链路设置 Inset chrome |
 | `lib/ui/chat/pages/start_group_chat_page.dart` | user_acceptance | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `ChatInboxDto`/`CircleDto`/`ChatConversationCreatedDto` + 向导 ViewModel；模态建群；选择群聊页与主列表共享会话头像 token / 占位视觉；**2026-06-25 P4 观测收口**：发起群聊/添加成员页接入 `PageLifecycleObservability`（enter/onlineLoading/onlineSuccess/emptyState/blockingFailure/submitSuccess/submitFailure/exit + itemCount/durationMs）与 `JourneyEventTracker`（`start_group_chat.create_success`/`create_failed`/`add_members_*` funnel，payload 带 memberCount/isCreateMode），失败事件携服务端 `sourceCode`（错误码到埋点同源），并经 `runtimeErrorDisplayMessage` 结构化透出；术语统一「群聊」、用户可见文案/魔数全走 `UITextConstants`；**2026-06-25 错误文案去私信语境**：建群关系门改用群专用错误码 `CHAT.USER.group_member_not_mutual`/`group_member_blocked`（metadata errors.yaml → Go+Dart codegen），不再复用私信态 `not_mutual`/`blocked`；**R03 拆分**：本页 1383 行经 `part` 拆为主文件 743 + `start_group_chat_page_widgets.dart`(302) + `start_group_chat_member_sheet.dart`(343)，均 <1000 |
@@ -106,7 +104,7 @@
 | `lib/ui/content/entry/pages/create_page.dart` | user_acceptance | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：`postReadPreviewBundleFromPublishConfirmSummary`（draftPreview）+ `CreatePostRequestWire` 写入 `summary/tagRefs/entityRefs/assistantUsePolicy`；P6 full。P7/P8：reader host 与发布 sheet token 口径不变；2026-06-23 商用化图片发布（P3）：本地图片先 `initMediaUpload`→上传→`completeMediaUpload`→`createPost`→`bindMediaAssetsToPost`（metadata codegen path/pageId）→`publish`，远端不提交本地路径，失败 `abort` 不产半成品；同日补重入旅程：图片选择器再次进入不预选旧图，但确认后新图会按剩余名额追加到现有图片末尾，不覆盖第一次选择；同日补 `/create?type=capture` 高保拍照：capture 初始 flow 固定图片，拍照→预览→图片编辑→创作页追加，`cameraPageBuilder` 仅作测试注入；2026-06-25 图片 flow 顶栏主标题统一为“图片创作”，首屏不再 34% 淡化；图片网格拖拽悬停时目标区间即时让位，保持与选择器/编辑器共用 `MediaReorderableView` |
 | `lib/ui/content/entry/pages/article_typography_page.dart` | T5 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：`postReadPreviewBundleFromCreateEditorState` 标题/投影；书页分页不变；2026-05-19 黑场顶栏 safeTop/按钮尺寸接入 appChrome |
 | `lib/ui/content/entry/pages/local_draft_page.dart` | user_acceptance | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：本地草稿页只消费 `CreateDraftStoreState` / `CreateDraft`，续草稿统一回到 create 链 `draftPreview`；P3 仅经 provider/store，不直连 mock 列表；P6 空态/缺图占位与删除确认已覆盖 |
-| `lib/ui/content/entry/pages/publish_location_selector_page.dart` | T5 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：帖子投影 N/A；`LocationPoiDto`+Settings；主预览在 create 链 |
+| `lib/ui/content/entry/pages/publish_location_selector_page.dart` | T5 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2/P3 ✓**：`LocationPoiDto` + ContractGraph generated operation client；production 仅 Remote，alpha 由独立 `quwoquan_cloud_mock` fixture bundle 覆盖；compact/light、regular/dark、expanded/light 共用同一 Slice；主预览在 create 链 |
 | `lib/ui/content/entry/pages/video_editor_page.dart` | T5 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：回写草稿；与 draftPreview 桥一致（类注释） |
 | `lib/ui/content/entry/pages/publish_circle_select_page.dart` | T5 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：帖子投影 N/A；`CircleDto`+Settings |
 
@@ -122,7 +120,7 @@
 | `lib/ui/entity/pages/homepage_maintenance_page.dart` | local_contract | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `HomepageBasicDraft` |
 | `lib/ui/entity/pages/homepage_status_report_page.dart` | local_contract | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `HomepageStatusReportDraft` |
 | `lib/ui/entity/pages/homepage_detail_page.dart` | local_contract | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `HomepageDetail`/`HomepageShellData`/`ObjectPageBundle`；2026-06-14 地点和事物主页 IA 收敛为身份区、关注/私信、与你的交集、认识对象、内容/讨论/兴趣圈；用户可见文案不用“实体”；认领/维护/状态上报进入更多菜单；主视觉使用品牌蓝 |
-| `lib/ui/entity/pages/homepage_introduction_page.dart` | local_contract | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `HomepageIntroduction`/`HomepageIntroductionSection`；完整介绍页，P5 非设置/半屏表单 |
+| `lib/ui/entity/pages/homepage_introduction_page.dart` | local_contract | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `HomepageIntroduction`/`HomepageSource` metadata codegen；公开 HTTPS 来源卡，不展示内部 sourceRefs；P5 非设置/半屏表单 |
 
 ---
 
@@ -179,8 +177,8 @@
 
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
-| `lib/ui/user/pages/my_profile_page.dart` | local_contract | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：2026-06-17 我的主页首屏固定为封面→身份(✎)→Slogan→单行统计→我的连接→我的影响力→记录/互动/足迹（V5：圈子降为统计数字，足迹=浏览历史 mine-only）；连接/影响力共用主谓宾交集卡，记录筛选为全部/图片/视频/长文；进入曝光 + dispose 停留（`contentBehaviorTracker`）；2026-06-18 首屏经 `getUserHomepageBundle` 一次聚合身份域真相（profile/stats/关系能力/viewerContext）+ 作品/帖子并发补充，聚合失败渲染结构化 `AppPageErrorState`+重试（不被乐观壳层静默吞掉，R17/R20） |
-| `lib/ui/user/pages/login_page.dart` | local_contract | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `AuthRepository.loginOneTap/loginWechat/loginApple/loginPasskey` + `AuthLoginResultDto`；P3 Mock/Remote 由 `authRepositoryProvider` 切换；微信 / Apple / Credential Manager / passkey 入口由 `PlatformCapabilities + NativeAuthBridge` 预留并降级，协议勾选前不调用原生登录 SDK |
+| `lib/ui/user/pages/my_profile_page.dart` | local_contract | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：2026-06-17 我的主页首屏固定为封面→身份(✎)→Slogan→单行统计→我的连接→我的影响力→记录/互动/足迹（V5：圈子降为统计数字，足迹=浏览历史 mine-only）；连接/影响力共用主谓宾交集卡，记录筛选为全部/图片/视频/长文；进入曝光 + dispose 停留（`contentBehaviorTracker`）；2026-06-18 首屏经 `getUserHomepageBundle` 一次聚合身份域真相（profile/stats/关系能力/viewerContext）+ 作品/帖子并发补充，聚合失败渲染结构化 `AppPageErrorState`+重试（不被乐观壳层静默吞掉，R17/R20）；2026-07-12 互动二级行收敛为点赞/评论/转发/浏览 + 收到的/我发起的，转发 mine-only，消费 metadata/codegen、Mock/Remote 双向分页、双桶缓存、seen/read 与 `ShareInteractionObservability`，P7 继续由共享滚动壳与可横滑二级控制行承担，P8 使用 profileShare 语义尺寸/色阶/token |
+| `lib/ui/user/pages/login_page.dart` | local_contract | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `AuthRepository.loginOneTap/loginWechat/loginAlipay/loginQq`、`SocialAuthorizationRepository` + `AuthLoginResultDto` 均消费 metadata/codegen；P3 Mock/Remote 由统一 Provider 切换；运营商、微信、支付宝、QQ 入口由强类型 capability 区分可用/未安装/未配置/超时/SDK/平台状态，支持平台临时不可用仍可发现；协议勾选前不调用原生 SDK；字段错误、表单卡、协议和社交反馈按操作锚点单通道呈现；`LoginDismissPolicy` 明确普通返回、受限安全关闭与宿主关闭，错误不持有导航；2026-07-14 品牌与返回态收口：头像仅在可信候选成功解码后显示，空值/加载中/失败零占位，昵称按 `nicknameCustomized` 展示，短名称/完整无障碍动作、短信验证码 CTA、共享两层花蕊 Painter 与 light/dark/narrow/wide 视觉基线；2026-07-16 返回会话与运营商一键动作分离，空摘要不建卡，显式一键失败紧凑降级，OTP 发送后折叠号码且保持单主动作 |
 | `lib/ui/user/pages/legal_document_page.dart` | local_contract | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | 远端 WebView 展示用户协议/隐私政策/权限说明/第三方 SDK 清单；P2/P3 —，内容来自配置 URL；禁用 JS，保留返回与失败重试 |
 | `lib/ui/user/pages/other_profile_page.dart` | local_contract | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：2026-06-14 用户主页首屏固定为身份区、关注/私信、你们的交集、TA的影响力、作品/圈子/互动、双列内容流；交集卡 `onReasonTap` → `BehaviorEvent.intersectionDimension/intersectionTagRefs` 归因；2026-06-18 首屏经 `getUserHomepageBundle` 一次聚合身份域真相 + 关系能力 seed（免首屏额外 `getCapability` 串行），聚合失败渲染结构化 `AppPageErrorState`+重试（R17/R20） |
 | `lib/ui/user/pages/my_intersection_inbox_page.dart` | local_contract | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：交集/影响力详情双一级 tab，与 `ProfileStatsPage` 共用 `AppSegmentedChoiceBar` tap-only 分段控；交集 tab 消费 `GET /v1/content/intersections`（list）+ `POST /v1/content/intersections/visit`（打开即推进已读水位清零），强类型 `IntersectionReason`，展示筛选与十年时间桶；影响力 tab 消费 `GET /v1/content/sub-accounts/{subAccountId}/author-impact`，强类型 `AuthorImpactSummary`；P3 Mock/Remote 经 `intersectionRepositoryProvider` / `authorImpactProvider` 切换；空/错误兜底；点条目带 `relationKind` 进对象页 |
@@ -192,7 +190,7 @@
 | `lib/ui/user/pages/contact_confirm_page.dart` | local_contract | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 扫码/搜索/手机号添加确认页；P2/P3 经 `UserProfileRepository.getSubAccountProfile`、`RelationshipCapabilityRepository.getCapability` 与 `followUser`，错误态使用 `AppPageErrorState` + runtime semantic |
 | `lib/ui/user/pages/my_qr_code_page.dart` | local_contract | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 独立我的二维码页；P2/P3 经 `UserProfileRepository.getProfileQrCard` 返回 `ProfileQrCardData`，复用 `MyQrCardView` 真实二维码渲染，扫一扫 CTA 进入扫码路由，错误态支持重试 |
 | `lib/ui/user/pages/scan_contact_qr_page.dart` | local_contract | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 扫一扫页；P2/P3 经 `QrPayloadParser` 解析 HTTPS payload 并调用 `UserProfileRepository.resolveProfileQrToken` 返回 `ProfileQrResolveWireDto`，摄像头能力位降级、图库识别和无效码 toast 齐备 |
-| `lib/ui/user/pages/phone_contacts_page.dart` | local_contract | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 手机联系人页；P2/P3 经 `ContactHashService` 本地规范化哈希、`ContactDiscoveryRepository.initiate` 返回 `ContactDiscoveryMatchWireDto`，手机号原文不上传，权限拒绝/不可用/空结果状态齐备 |
+| `lib/ui/user/pages/phone_contacts_page.dart` | local_contract | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 手机联系人页；P2/P3 经 `ContactHashService` 本地规范化哈希、`ContactDiscoveryRepository.initiate` 返回 `ContactDiscoveryMatchWireDto`，手机号原文不上传；权限请求、设置跳转与返回重检唯一经 `AppPermissionCoordinator`，拒绝/不可用/空结果状态齐备 |
 | `lib/ui/user/pages/persona_management_page.dart` | T7 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | UserRepository summary / PersonaDtoSurface |
 | `lib/ui/user/pages/profile_stats_page.dart` | local_contract | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | 2026-06-25 商用化重设计：顶部改为与设置/资料编辑同源的 inset chrome + `AppSegmentedChoiceBar` tap-only segmented selector `[粉丝|关注|圈子]`，搜索条下沉为列表首块；P2/P3 同源读模型为 `CircleDto` + `ProfileSocialRelationRowViewData(relationshipCapability/profileVisibility/relationState)`，followers/following/circles 全部走 `query+cursor+limit` 云侧分页过滤；private/blocked 权限卡、空态、分页、inline retry 与 action sheet 全链路齐备 |
 | `lib/ui/user/pages/profile_comments_page.dart` | local_contract | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | CommentDto |
@@ -260,6 +258,7 @@
 | 2026-04-11 | **帖子 ReadPresentation + Surface 全量收口**：`PostReadProjectionFacade`/`PostReadUiBundle`；发现/圈子/资料/详情/搜索/创作链/分享模板接表面枚举与 wire；清单 content/circle/user/search 帖子相关行 compliant；矩阵上述 17 行 P2 ✓；见 `post-projection-pipeline-inventory.md` §4 |
 | 2026-05-07 | **chat 强类型收口**：`LocalChatSearchStore` 联系人/会话快照改具名记录；`SearchHitPayloadChatContact` 收口 chat contact payload；`MockChatRepository` 内部缓存转 typed state；`chat_conversation_page` / `ChatMessageBubble` / `ConversationMessageActionMenuOverlay` 改消费 `ChatMessageDisplayItem` |
 | 2026-05-17 | **主壳安全区节奏收口**：`main_app_shell`/`bottom_navigation`/`home_page`/`chat_page` 调整顶部与底部安全区消费方式；底栏改为背景吃满底部安全区、内容上下对称收口；首页与消息页主顶栏 regular 档降到紧凑基线，并让关注/精品切换共用同一顶栏几何与 local_contract 位置稳定回归测试 |
+| 2026-07-15 | **启动欢迎 3/6 秒时限纠偏**：删除“2s 后才动、最早 6s 才能进”和 8-controller/8-loop 实现；首帧 90ms 后立即完整开合一轮，正常一轮即进，未 ready 最多重放两次，6s 只作硬退出门；原生改为自适应背景 + 同源透明品牌簇（CR-20260715-104） |
 | 2026-06-26 | **启动欢迎诚实边界纠偏**：删除 Android `StartupActivity` / `NativeWelcomeView` / 原生 overlay / `quwoquan/startup/native` handoff；原生层只显示无内容中性过渡背景，Flutter `WelcomeScreen` 成为唯一欢迎页。启动初始化改为 best-effort，不再阻断 Shell；欢迎页最多正常播放一次 + 两次重放，之后进入 Shell/降级 Shell |
 | 2026-06-26 | **启动首帧探针纠偏**：`verify_startup_first_frame.py` 默认启动 `MainActivity`，禁止 native welcome 日志/链路，Android 默认 3 秒内需出现 Flutter 欢迎页或主壳，避免用原生镜像绕过真实 Flutter 首帧 |
 | 2026-06-26 | **启动性能与 iOS 过渡收口**：本地 HTTPS CA 安装从 `runApp` 前阻塞改为 prerequisite 并行，`WelcomeScreen` 等首帧 rasterized 后启动花瓣动效；iOS 改用 `LaunchTransitionScreen` 无内容中性背景；probe 区分启动空背景与进入 Shell 后骨架屏，并把旧亮蓝快照作为失败信号 |

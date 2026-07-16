@@ -7,173 +7,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/media/cdn_image_url_builder.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
+import 'package:quwoquan_app/core/media/app_image_cache_controller.dart';
 import 'package:quwoquan_app/core/media/content_media_url.dart';
+import 'package:quwoquan_app/core/media/media_candidate_failure.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';
 
+export 'package:quwoquan_app/core/media/app_image_cache_controller.dart';
+
 const int appImageDecodeMaxPhysicalExtent = 2048;
-const double _compactFeedCacheExtentViewportMultiplier = 0.5;
-const double _comfortableFeedCacheExtentViewportMultiplier = 1.0;
-
-final _avatarImageCacheManager = _AppImageCacheManager(
-  Config(
-    'appImageAvatarCache',
-    maxNrOfCacheObjects: 800,
-    stalePeriod: const Duration(days: 30),
-  ),
-);
-
-final _previewImageCacheManager = _AppImageCacheManager(
-  Config(
-    'appImagePreviewCache',
-    maxNrOfCacheObjects: 1000,
-    stalePeriod: const Duration(days: 10),
-  ),
-);
-
-final _ephemeralImageCacheManager = _AppImageCacheManager(
-  Config(
-    'appImageEphemeralCache',
-    maxNrOfCacheObjects: 250,
-    stalePeriod: const Duration(days: 2),
-  ),
-);
-
-class _AppImageCacheManager extends CacheManager with ImageCacheManager {
-  _AppImageCacheManager(super.config);
-}
-
-class AppImageCacheController {
-  const AppImageCacheController._();
-
-  static Future<void> clearTemporaryImages() {
-    return _ephemeralImageCacheManager.emptyCache();
-  }
-
-  static Future<void> clearAllRebuildableImages() async {
-    await _ephemeralImageCacheManager.emptyCache();
-    await _previewImageCacheManager.emptyCache();
-    await _avatarImageCacheManager.emptyCache();
-  }
-
-  static void applyResourceProfile(AppResourceCacheProfile profile) {
-    final imageCache = PaintingBinding.instance.imageCache;
-    imageCache.maximumSize = profile.maxImageCacheObjects;
-    imageCache.maximumSizeBytes = profile.maxImageCacheBytes;
-  }
-
-  static void trimForMemoryPressure() {
-    applyResourceProfile(AppResourceCacheProfile.compact);
-    final imageCache = PaintingBinding.instance.imageCache;
-    imageCache.clear();
-    imageCache.clearLiveImages();
-  }
-
-  static Future<void> preloadAvatar(
-    String imageUrl, {
-    double size = 120,
-  }) async {
-    final candidates = resolveAvatarImageUrlCandidates(imageUrl);
-    if (candidates.isEmpty) {
-      return;
-    }
-    final processed = CdnImageUrlBuilder.avatar(
-      candidates.first,
-      size: size.toInt(),
-    );
-    await _avatarImageCacheManager.downloadFile(processed);
-  }
-
-  static AppImageCacheTier cacheTierForPreset(CdnImagePreset preset) {
-    switch (preset) {
-      case CdnImagePreset.avatar:
-        return AppImageCacheTier.avatar;
-      case CdnImagePreset.thumbnail:
-      case CdnImagePreset.cover:
-        return AppImageCacheTier.preview;
-      case CdnImagePreset.inline:
-      case CdnImagePreset.full:
-      case CdnImagePreset.none:
-        return AppImageCacheTier.ephemeral;
-    }
-  }
-
-  static BaseCacheManager cacheManagerForPreset(CdnImagePreset preset) {
-    switch (cacheTierForPreset(preset)) {
-      case AppImageCacheTier.avatar:
-        return _avatarImageCacheManager;
-      case AppImageCacheTier.preview:
-        return _previewImageCacheManager;
-      case AppImageCacheTier.ephemeral:
-        return _ephemeralImageCacheManager;
-    }
-  }
-}
-
-/// CDN-aware image processing preset.
-enum CdnImagePreset { avatar, thumbnail, cover, inline, full, none }
-
-enum AppImageCacheTier { avatar, preview, ephemeral }
-
-class AppResourceCacheProfile {
-  const AppResourceCacheProfile({
-    required this.name,
-    required this.maxImageCacheObjects,
-    required this.maxImageCacheBytes,
-    required this.maxMediaDownloadCacheSizeMb,
-    required this.maxConcurrentMediaDownloads,
-    required this.maxPostObjectCacheEntries,
-  });
-
-  final String name;
-  final int maxImageCacheObjects;
-  final int maxImageCacheBytes;
-  final int maxMediaDownloadCacheSizeMb;
-  final int maxConcurrentMediaDownloads;
-  final int maxPostObjectCacheEntries;
-
-  bool get usesCompactScrollMediaPolicy => name == compact.name;
-
-  double get feedCacheExtentViewportMultiplier => usesCompactScrollMediaPolicy
-      ? _compactFeedCacheExtentViewportMultiplier
-      : _comfortableFeedCacheExtentViewportMultiplier;
-
-  double feedCacheExtentForViewport(double viewportDimension) {
-    if (viewportDimension <= 0 || viewportDimension == double.infinity) {
-      return 0;
-    }
-    return viewportDimension * feedCacheExtentViewportMultiplier;
-  }
-
-  static const compact = AppResourceCacheProfile(
-    name: 'compact',
-    maxImageCacheObjects: 300,
-    maxImageCacheBytes: 64 * 1024 * 1024,
-    maxMediaDownloadCacheSizeMb: 96,
-    maxConcurrentMediaDownloads: 2,
-    maxPostObjectCacheEntries: 120,
-  );
-
-  static const regular = AppResourceCacheProfile(
-    name: 'regular',
-    maxImageCacheObjects: 500,
-    maxImageCacheBytes: 96 * 1024 * 1024,
-    maxMediaDownloadCacheSizeMb: 200,
-    maxConcurrentMediaDownloads: 3,
-    maxPostObjectCacheEntries: 200,
-  );
-
-  static const expanded = AppResourceCacheProfile(
-    name: 'expanded',
-    maxImageCacheObjects: 900,
-    maxImageCacheBytes: 192 * 1024 * 1024,
-    maxMediaDownloadCacheSizeMb: 384,
-    maxConcurrentMediaDownloads: 4,
-    maxPostObjectCacheEntries: 320,
-  );
-}
 
 class AppAvatarImage extends StatelessWidget {
   const AppAvatarImage({
@@ -183,6 +27,7 @@ class AppAvatarImage extends StatelessWidget {
     this.fit = BoxFit.cover,
     this.placeholder,
     this.errorWidget,
+    this.onLoadSucceeded,
     this.onLoadFailed,
   });
 
@@ -191,18 +36,21 @@ class AppAvatarImage extends StatelessWidget {
   final BoxFit fit;
   final Widget? placeholder;
   final Widget? errorWidget;
+  final VoidCallback? onLoadSucceeded;
   final void Function(Object error)? onLoadFailed;
 
   @override
   Widget build(BuildContext context) {
     return AppCachedNetworkImage(
       imageUrl: imageUrl,
+      imageUrlCandidates: resolveAvatarImageUrlCandidates(imageUrl),
       width: size,
       height: size,
       fit: fit,
       cdnPreset: CdnImagePreset.avatar,
       placeholder: placeholder,
       errorWidget: errorWidget,
+      onLoadSucceeded: onLoadSucceeded,
       onLoadFailed: onLoadFailed,
     );
   }
@@ -216,6 +64,7 @@ class AppCachedNetworkImage extends ConsumerWidget {
   final double? height;
   final Widget? placeholder;
   final Widget? errorWidget;
+  final VoidCallback? onLoadSucceeded;
   final void Function(Object error)? onLoadFailed;
   final CdnImagePreset cdnPreset;
   final Widget Function(BuildContext context, ImageProvider imageProvider)?
@@ -230,6 +79,7 @@ class AppCachedNetworkImage extends ConsumerWidget {
     this.height,
     this.placeholder,
     this.errorWidget,
+    this.onLoadSucceeded,
     this.onLoadFailed,
     this.cdnPreset = CdnImagePreset.none,
     this.imageBuilder,
@@ -298,7 +148,7 @@ class AppCachedNetworkImage extends ConsumerWidget {
       return _ImageLoadFailureReporter(
         onReport: () =>
             onLoadFailed?.call(StateError('image url candidates empty')),
-        child: _buildErrorWidget(context),
+        child: errorWidget ?? _buildErrorWidget(context),
       );
     }
     return _buildCandidateImage(context, ref, candidates, 0);
@@ -350,14 +200,22 @@ class AppCachedNetworkImage extends ConsumerWidget {
                   candidatesTried: index + 1,
                 );
             final builder = imageBuilder;
-            if (builder != null) {
-              return builder(context, imageProvider);
+            final child = builder != null
+                ? builder(context, imageProvider)
+                : Image(
+                    image: imageProvider,
+                    fit: fit,
+                    width: width,
+                    height: height,
+                  );
+            final onSucceeded = onLoadSucceeded;
+            if (onSucceeded == null) {
+              return child;
             }
-            return Image(
-              image: imageProvider,
-              fit: fit,
-              width: width,
-              height: height,
+            return _ImageLoadSuccessReporter(
+              reportKey: candidates[index],
+              onReport: onSucceeded,
+              child: child,
             );
           },
           placeholder: (context, url) =>
@@ -369,14 +227,17 @@ class AppCachedNetworkImage extends ConsumerWidget {
               return _buildCandidateImage(context, ref, candidates, nextIndex);
             }
             developer.log(
-              'image load failed after ${candidates.length} candidate(s): $url',
+              'image load failed after ${candidates.length} candidate(s); '
+              'last=${_summarizeImageUrl(url)}; '
+              '(kind=${classifyMediaCandidateLoadFailure(error, candidateUrl: url).name})',
               name: 'AppCachedNetworkImage',
-              error: error,
+              error: error.runtimeType,
             );
             debugPrint(
               '[AppCachedNetworkImage] image load failed after '
               '${candidates.length} candidate(s); '
               'last=${_summarizeImageUrl(url)}; '
+              'kind=${classifyMediaCandidateLoadFailure(error, candidateUrl: url).name}; '
               'errorType=${error.runtimeType}',
             );
             ref
@@ -443,7 +304,7 @@ class AppCachedNetworkImage extends ConsumerWidget {
     if (uri == null || uri.host.isEmpty) {
       return 'unparseable';
     }
-    return '${uri.host}${uri.path}';
+    return uri.host;
   }
 
   Widget _buildErrorWidget(BuildContext context) {
@@ -487,6 +348,62 @@ class AppCachedNetworkImage extends ConsumerWidget {
       },
     );
   }
+}
+
+class _ImageLoadSuccessReporter extends StatefulWidget {
+  const _ImageLoadSuccessReporter({
+    required this.reportKey,
+    required this.child,
+    required this.onReport,
+  });
+
+  final String reportKey;
+  final Widget child;
+  final VoidCallback onReport;
+
+  @override
+  State<_ImageLoadSuccessReporter> createState() =>
+      _ImageLoadSuccessReporterState();
+}
+
+class _ImageLoadSuccessReporterState extends State<_ImageLoadSuccessReporter> {
+  bool _reported = false;
+  int _reportGeneration = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleReport();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ImageLoadSuccessReporter oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.reportKey != widget.reportKey) {
+      _reported = false;
+      _scheduleReport();
+    }
+  }
+
+  void _scheduleReport() {
+    final generation = ++_reportGeneration;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || generation != _reportGeneration || _reported) {
+        return;
+      }
+      _reported = true;
+      widget.onReport();
+    });
+  }
+
+  @override
+  void dispose() {
+    _reportGeneration += 1;
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 class _ImageLoadFailureReporter extends ConsumerStatefulWidget {

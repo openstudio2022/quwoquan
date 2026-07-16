@@ -8,8 +8,8 @@ import (
 
 	rtredis "quwoquan_service/runtime/redis"
 
+	"quwoquan_service/services/circle-service/internal/application"
 	model "quwoquan_service/services/circle-service/internal/domain/circle/model"
-	"quwoquan_service/services/circle-service/internal/infrastructure/persistence"
 )
 
 const (
@@ -17,15 +17,33 @@ const (
 	circleCacheTTL       = 600 * time.Second
 )
 
-// CachedCircleStore wraps a CircleStore with a Redis caching layer.
+// CachedCircleStore wraps the circle storage ports with a Redis caching layer.
 // Cache is invalidated on write operations per storage.yaml invalidation rules.
 type CachedCircleStore struct {
-	inner persistence.CircleStore
-	rdb   rtredis.Client
+	records  application.CircleRecordStore
+	metrics  application.CircleMetricsStore
+	sections application.CircleSectionStore
+	rdb      rtredis.Client
 }
 
-func NewCachedCircleStore(inner persistence.CircleStore, rdb rtredis.Client) *CachedCircleStore {
-	return &CachedCircleStore{inner: inner, rdb: rdb}
+var (
+	_ application.CircleRecordStore  = (*CachedCircleStore)(nil)
+	_ application.CircleMetricsStore = (*CachedCircleStore)(nil)
+	_ application.CircleSectionStore = (*CachedCircleStore)(nil)
+)
+
+func NewCachedCircleStore(
+	records application.CircleRecordStore,
+	metrics application.CircleMetricsStore,
+	sections application.CircleSectionStore,
+	rdb rtredis.Client,
+) *CachedCircleStore {
+	return &CachedCircleStore{
+		records:  records,
+		metrics:  metrics,
+		sections: sections,
+		rdb:      rdb,
+	}
 }
 
 func (s *CachedCircleStore) cacheKey(id string) string {
@@ -46,7 +64,7 @@ func (s *CachedCircleStore) FindByID(ctx context.Context, id string) (*model.Cir
 		}
 	}
 
-	c, ok := s.inner.FindByID(ctx, id)
+	c, ok := s.records.FindByID(ctx, id)
 	if !ok {
 		return nil, false
 	}
@@ -58,55 +76,31 @@ func (s *CachedCircleStore) FindByID(ctx context.Context, id string) (*model.Cir
 }
 
 func (s *CachedCircleStore) Create(ctx context.Context, circle *model.Circle) error {
-	return s.inner.Create(ctx, circle)
+	return s.records.Create(ctx, circle)
 }
 
 func (s *CachedCircleStore) Update(ctx context.Context, id string, circle *model.Circle) bool {
-	ok := s.inner.Update(ctx, id, circle)
+	ok := s.records.Update(ctx, id, circle)
 	if ok {
 		s.invalidate(ctx, id)
 	}
 	return ok
 }
 
-func (s *CachedCircleStore) List(ctx context.Context, opts persistence.ListCirclesOpts) ([]model.Circle, string) {
-	return s.inner.List(ctx, opts)
+func (s *CachedCircleStore) List(ctx context.Context, query application.ListCirclesQuery) ([]model.Circle, string) {
+	return s.records.List(ctx, query)
 }
 
 func (s *CachedCircleStore) Archive(ctx context.Context, id string) bool {
-	ok := s.inner.Archive(ctx, id)
+	ok := s.records.Archive(ctx, id)
 	if ok {
 		s.invalidate(ctx, id)
 	}
 	return ok
 }
 
-func (s *CachedCircleStore) IncrementMemberCount(ctx context.Context, id string, delta int64) error {
-	err := s.inner.IncrementMemberCount(ctx, id, delta)
-	if err == nil {
-		s.invalidate(ctx, id)
-	}
-	return err
-}
-
-func (s *CachedCircleStore) IncrementPostCount(ctx context.Context, id string, delta int64) error {
-	err := s.inner.IncrementPostCount(ctx, id, delta)
-	if err == nil {
-		s.invalidate(ctx, id)
-	}
-	return err
-}
-
-func (s *CachedCircleStore) UpdateWeeklyActiveCount(ctx context.Context, id string, count int64) error {
-	err := s.inner.UpdateWeeklyActiveCount(ctx, id, count)
-	if err == nil {
-		s.invalidate(ctx, id)
-	}
-	return err
-}
-
 func (s *CachedCircleStore) UpdateStorageUsed(ctx context.Context, id string, deltaBytes int64) error {
-	err := s.inner.UpdateStorageUsed(ctx, id, deltaBytes)
+	err := s.metrics.UpdateStorageUsed(ctx, id, deltaBytes)
 	if err == nil {
 		s.invalidate(ctx, id)
 	}
@@ -114,7 +108,7 @@ func (s *CachedCircleStore) UpdateStorageUsed(ctx context.Context, id string, de
 }
 
 func (s *CachedCircleStore) UpdateSections(ctx context.Context, id string, sections []model.CircleSectionConfig) error {
-	err := s.inner.UpdateSections(ctx, id, sections)
+	err := s.sections.UpdateSections(ctx, id, sections)
 	if err == nil {
 		s.invalidate(ctx, id)
 	}

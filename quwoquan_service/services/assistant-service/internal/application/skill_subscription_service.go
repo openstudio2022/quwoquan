@@ -17,6 +17,7 @@ import (
 
 type SkillSubscriptionStore interface {
 	CreateSkillSubscription(ctx context.Context, subscription assistant.SkillSubscription) (assistant.SkillSubscription, error)
+	UpsertSkillSubscription(ctx context.Context, subscription assistant.SkillSubscription) (assistant.SkillSubscription, error)
 	GetSkillSubscription(ctx context.Context, userID, subscriptionID string) (assistant.SkillSubscription, error)
 	ListSkillSubscriptions(ctx context.Context, userID, status string, limit int) ([]assistant.SkillSubscription, error)
 	UpdateSkillSubscriptionStatus(ctx context.Context, userID, subscriptionID, status string, updatedAt time.Time) (assistant.SkillSubscription, error)
@@ -35,11 +36,48 @@ func (s *AssistantService) CreateSkillSubscription(ctx context.Context, userID s
 	if userID == "" {
 		return assistant.SkillSubscription{}, rterr.NewInvalidArgument(rterr.ModuleAssistant, "userId 不能为空", "missing userId")
 	}
-	normalized, err := s.normalizeSkillSubscriptionInput(userID, input)
+	normalized, err := s.normalizeSkillSubscriptionInput(userID, input, "")
 	if err != nil {
 		return assistant.SkillSubscription{}, err
 	}
 	return s.subscriptions.CreateSkillSubscription(ctx, normalized)
+}
+
+func (s *AssistantService) UpsertSkillSubscription(ctx context.Context, userID string, input assistant.UpsertSkillSubscriptionInput) (_ assistant.SkillSubscription, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.UpsertSkillSubscription",
+		attribute.String("user.id", userID),
+		attribute.String("subscription.id", input.SubscriptionID),
+		attribute.String("skill.id", input.SkillID))
+	defer func() { rtobs.EndSpan(span, err) }()
+
+	if s.subscriptions == nil {
+		return assistant.SkillSubscription{}, rterr.NewUnavailable(rterr.ModuleAssistant, "订阅存储不可用", "skill subscription store is not configured")
+	}
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return assistant.SkillSubscription{}, rterr.NewInvalidArgument(rterr.ModuleAssistant, "userId 不能为空", "missing userId")
+	}
+	subscriptionID := strings.TrimSpace(input.SubscriptionID)
+	if subscriptionID == "" {
+		return assistant.SkillSubscription{}, rterr.NewInvalidArgument(rterr.ModuleAssistant, "subscriptionId 不能为空", "missing subscriptionId")
+	}
+	status, err := normalizeSubscriptionStatus(input.Status)
+	if err != nil {
+		return assistant.SkillSubscription{}, err
+	}
+	normalized, err := s.normalizeSkillSubscriptionInput(userID, assistant.CreateSkillSubscriptionInput{
+		SkillID:         input.SkillID,
+		DomainID:        input.DomainID,
+		TagRefs:         input.TagRefs,
+		SearchQueryPlan: input.SearchQueryPlan,
+		Trigger:         input.Trigger,
+		Destination:     input.Destination,
+	}, subscriptionID)
+	if err != nil {
+		return assistant.SkillSubscription{}, err
+	}
+	normalized.Status = status
+	return s.subscriptions.UpsertSkillSubscription(ctx, normalized)
 }
 
 func (s *AssistantService) ListSkillSubscriptions(ctx context.Context, userID string, status string, limit int) (_ assistant.SkillSubscriptionListView, err error) {
@@ -99,8 +137,8 @@ func (s *AssistantService) TickSkillSubscriptionCron(ctx context.Context, input 
 	if s.subscriptions == nil {
 		return assistant.SkillSubscriptionCronTickResult{}, rterr.NewUnavailable(rterr.ModuleAssistant, "订阅存储不可用", "skill subscription store is not configured")
 	}
-	if s.appMessages == nil {
-		return assistant.SkillSubscriptionCronTickResult{}, rterr.NewUnavailable(rterr.ModuleAssistant, "应用消息通道不可用", "app message store is not configured")
+	if s.notificationMessages == nil {
+		return assistant.SkillSubscriptionCronTickResult{}, rterr.NewUnavailable(rterr.ModuleAssistant, "应用消息通道不可用", "notification app message command writer is not configured")
 	}
 	now := s.now()
 	if raw := strings.TrimSpace(input.Now); raw != "" {
@@ -136,7 +174,7 @@ func (s *AssistantService) TickSkillSubscriptionCron(ctx context.Context, input 
 	return result, nil
 }
 
-func (s *AssistantService) normalizeSkillSubscriptionInput(userID string, input assistant.CreateSkillSubscriptionInput) (assistant.SkillSubscription, error) {
+func (s *AssistantService) normalizeSkillSubscriptionInput(userID string, input assistant.CreateSkillSubscriptionInput, subscriptionID string) (assistant.SkillSubscription, error) {
 	skillID := strings.TrimSpace(input.SkillID)
 	if skillID == "" {
 		return assistant.SkillSubscription{}, rterr.NewInvalidArgument(rterr.ModuleAssistant, "skillId 不能为空", "missing skillId")
@@ -176,9 +214,13 @@ func (s *AssistantService) normalizeSkillSubscriptionInput(userID string, input 
 	if len(searchPlan.Queries) == 0 && searchPlan.RawText != "" {
 		searchPlan.Queries = []string{searchPlan.RawText}
 	}
-	subscriptionID, err := rtid.Generate(rtid.PrefixSkillSubscription)
-	if err != nil {
-		return assistant.SkillSubscription{}, rterr.NewUnavailable(rterr.ModuleAssistant, "生成订阅 ID 失败", err.Error())
+	subscriptionID = strings.TrimSpace(subscriptionID)
+	if subscriptionID == "" {
+		generatedID, err := rtid.Generate(rtid.PrefixSkillSubscription)
+		if err != nil {
+			return assistant.SkillSubscription{}, rterr.NewUnavailable(rterr.ModuleAssistant, "生成订阅 ID 失败", err.Error())
+		}
+		subscriptionID = generatedID
 	}
 	now := s.now()
 	return assistant.SkillSubscription{
@@ -197,7 +239,7 @@ func (s *AssistantService) normalizeSkillSubscriptionInput(userID string, input 
 	}, nil
 }
 
-func (s *AssistantService) createProactiveTurnMessage(ctx context.Context, subscription assistant.SkillSubscription, now time.Time) (assistant.AssistantTurn, assistant.AppMessage, error) {
+func (s *AssistantService) createProactiveTurnMessage(ctx context.Context, subscription assistant.SkillSubscription, now time.Time) (assistant.AssistantTurn, NotificationAppMessageReceipt, error) {
 	profile := s.loadProactiveInterestProfile(ctx, subscription.Owner.OwnerID)
 	proactive := BuildP0ProactiveSkillResult(subscription, profile, now)
 	recordProactivePersonalization(proactive)
@@ -205,7 +247,7 @@ func (s *AssistantService) createProactiveTurnMessage(ctx context.Context, subsc
 		Summary: "主动订阅：" + displaySkillName(subscription.SkillID),
 	})
 	if err != nil {
-		return assistant.AssistantTurn{}, assistant.AppMessage{}, err
+		return assistant.AssistantTurn{}, NotificationAppMessageReceipt{}, err
 	}
 	prompt := proactive.Prompt
 	turn, err := s.CreateTurn(ctx, subscription.Owner.OwnerID, conversation.ConversationID, assistant.CreateTurnInput{
@@ -218,15 +260,15 @@ func (s *AssistantService) createProactiveTurnMessage(ctx context.Context, subsc
 		},
 	})
 	if err != nil {
-		return assistant.AssistantTurn{}, assistant.AppMessage{}, err
+		return assistant.AssistantTurn{}, NotificationAppMessageReceipt{}, err
 	}
 	if _, err := s.BuildFakeTurnStream(ctx, subscription.Owner.OwnerID, turn.TurnID); err != nil {
-		return assistant.AssistantTurn{}, assistant.AppMessage{}, err
+		return assistant.AssistantTurn{}, NotificationAppMessageReceipt{}, err
 	}
 	switch subscription.Destination.DestinationType {
 	case "conversation", "group":
 		if s.chatGrounding == nil {
-			return assistant.AssistantTurn{}, assistant.AppMessage{}, rterr.NewUnavailable(rterr.ModuleAssistant, "会话投递通道不可用", "chat grounding client is not configured")
+			return assistant.AssistantTurn{}, NotificationAppMessageReceipt{}, rterr.NewUnavailable(rterr.ModuleAssistant, "会话投递通道不可用", "chat grounding client is not configured")
 		}
 		clientMsgID := "assistant-proactive-" + turn.TurnID
 		if err := s.chatGrounding.SendMessage(ctx, ChatGroundingSendMessageRequest{
@@ -236,26 +278,29 @@ func (s *AssistantService) createProactiveTurnMessage(ctx context.Context, subsc
 			Content:        proactive.Title + "\n" + proactive.Summary,
 			ClientMsgID:    clientMsgID,
 		}); err != nil {
-			return assistant.AssistantTurn{}, assistant.AppMessage{}, err
+			return assistant.AssistantTurn{}, NotificationAppMessageReceipt{}, err
 		}
-		return turn, assistant.AppMessage{MessageID: clientMsgID}, nil
+		return turn, NotificationAppMessageReceipt{MessageID: clientMsgID}, nil
 	default:
-		message, err := s.CreateAppMessage(ctx, assistant.CreateAppMessageInput{
-			UserID:          subscription.Owner.OwnerID,
-			MessageType:     "assistant",
-			Source:          "assistant_turn",
-			SourceID:        turn.TurnID,
-			Destination:     assistant.AppMessageDestination{Type: "user", ID: subscription.Owner.OwnerID},
-			Title:           proactive.Title,
-			Summary:         proactive.Summary,
-			Target:          assistant.AppMessageTarget{TargetType: "assistant_turn", TargetID: turn.TurnID},
-			Personalized:    proactive.Personalized,
-			InterestTags:    proactive.InterestTags,
-			MatchedSegments: proactive.MatchedSegments,
-			LifecycleStage:  proactive.LifecycleStage,
+		message, err := s.publishNotificationAppMessage(ctx, NotificationAppMessageCommand{
+			IdempotencyKey: "assistant:proactive-turn:" + turn.TurnID,
+			UserID:         subscription.Owner.OwnerID,
+			MessageType:    "assistant",
+			Source:         "assistant_turn",
+			SourceID:       turn.TurnID,
+			Destination:    NotificationAppMessageDestination{Type: "user", ID: subscription.Owner.OwnerID},
+			Title:          proactive.Title,
+			Summary:        proactive.Summary,
+			Target:         NotificationAppMessageTarget{TargetType: "assistant_turn", TargetID: turn.TurnID},
+			Provenance: NotificationAppMessageProvenance{
+				Personalized:    proactive.Personalized,
+				InterestTags:    proactive.InterestTags,
+				MatchedSegments: proactive.MatchedSegments,
+				LifecycleStage:  proactive.LifecycleStage,
+			},
 		})
 		if err != nil {
-			return assistant.AssistantTurn{}, assistant.AppMessage{}, err
+			return assistant.AssistantTurn{}, NotificationAppMessageReceipt{}, err
 		}
 		return turn, message, nil
 	}

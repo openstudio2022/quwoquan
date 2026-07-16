@@ -12,16 +12,13 @@ class ChatApiMetadata {
   ];
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
-    'AbortChatUpload': '/v1/chat/media/uploads:abort',
     'AddMembers': '/v1/chat/conversations/{conversationId}/members',
     'BatchGetConversations': '/v1/chat/conversations/batch',
-    'CompleteChatUpload': '/v1/chat/media/uploads:complete',
     'CreateConversation': '/v1/chat/conversations',
     'DissolveConversation': '/v1/chat/conversations/{conversationId}',
     'GetConversation': '/v1/chat/conversations/{conversationId}',
     'GetGroupHome': '/v1/chat/groups/{conversationId}/home',
     'GetReceipts': '/v1/chat/conversations/{conversationId}/messages/{messageId}/receipts',
-    'InitChatUpload': '/v1/chat/media/uploads:init',
     'InviteAssistant': '/v1/chat/conversations/{conversationId}/assistant',
     'ListContactHome': '/v1/chat/contact-home',
     'ListContacts': '/v1/chat/contacts',
@@ -50,16 +47,13 @@ class ChatApiMetadata {
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
-    'AbortChatUpload': 'POST',
     'AddMembers': 'POST',
     'BatchGetConversations': 'POST',
-    'CompleteChatUpload': 'POST',
     'CreateConversation': 'POST',
     'DissolveConversation': 'DELETE',
     'GetConversation': 'GET',
     'GetGroupHome': 'GET',
     'GetReceipts': 'GET',
-    'InitChatUpload': 'POST',
     'InviteAssistant': 'POST',
     'ListContactHome': 'GET',
     'ListContacts': 'GET',
@@ -89,30 +83,27 @@ class ChatApiMetadata {
 
   /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
   static const Map<String, String> operationToAuthMode = <String, String>{
-    'AbortChatUpload': 'required',
     'AddMembers': 'required',
-    'BatchGetConversations': 'public',
-    'CompleteChatUpload': 'required',
-    'CreateConversation': 'public',
+    'BatchGetConversations': 'required',
+    'CreateConversation': 'required',
     'DissolveConversation': 'required',
     'GetConversation': 'required',
     'GetGroupHome': 'required',
-    'GetReceipts': 'public',
-    'InitChatUpload': 'required',
+    'GetReceipts': 'required',
     'InviteAssistant': 'required',
     'ListContactHome': 'required',
-    'ListContacts': 'public',
-    'ListConversationTimestamps': 'public',
+    'ListContacts': 'required',
+    'ListConversationTimestamps': 'required',
     'ListConversations': 'required',
     'ListGroupCandidates': 'required',
     'ListInbox': 'required',
-    'ListMembers': 'public',
+    'ListMembers': 'required',
     'ListMessageHome': 'required',
-    'ListMessages': 'public',
+    'ListMessages': 'required',
     'ListSelectableGroupContactMembers': 'required',
     'ListSelectableGroupConversations': 'required',
     'MarkAsRead': 'required',
-    'RecallMessage': 'public',
+    'RecallMessage': 'required',
     'RemoveAssistant': 'required',
     'RemoveMember': 'required',
     'SearchContacts': 'required',
@@ -126,7 +117,7 @@ class ChatApiMetadata {
     'UpdateGroupAdmins': 'required',
   };
 
-  /// 响应读模型：operation -> 端侧 DTO 类名（service.yaml response_body 真相源，仅 object/page 形态）。
+  /// 已绑定端侧强类型的响应读模型：operation -> Dart 契约类名。
   static const Map<String, String> operationToResponseModel = <String, String>{
   };
 
@@ -134,16 +125,13 @@ class ChatApiMetadata {
   static const Map<String, String> operationToResponseKind = <String, String>{
   };
 
-  static const String abortChatUploadOperation = 'AbortChatUpload';
   static const String addMembersOperation = 'AddMembers';
   static const String batchGetConversationsOperation = 'BatchGetConversations';
-  static const String completeChatUploadOperation = 'CompleteChatUpload';
   static const String createConversationOperation = 'CreateConversation';
   static const String dissolveConversationOperation = 'DissolveConversation';
   static const String getConversationOperation = 'GetConversation';
   static const String getGroupHomeOperation = 'GetGroupHome';
   static const String getReceiptsOperation = 'GetReceipts';
-  static const String initChatUploadOperation = 'InitChatUpload';
   static const String inviteAssistantOperation = 'InviteAssistant';
   static const String listContactHomeOperation = 'ListContactHome';
   static const String listContactsOperation = 'ListContacts';
@@ -170,7 +158,6 @@ class ChatApiMetadata {
   static const String updateConversationTitleOperation = 'UpdateConversationTitle';
   static const String updateGroupAdminsOperation = 'UpdateGroupAdmins';
 
-  static const String abortChatUploadPath = '/v1/chat/media/uploads:abort';
   static const String addMembersPathTemplate = '/v1/chat/conversations/{conversationId}/members';
   static String addMembersPath({required String conversationId}) {
     return _fillPath(addMembersPathTemplate, <String, String>{
@@ -178,7 +165,6 @@ class ChatApiMetadata {
     });
   }
   static const String batchGetConversationsPath = '/v1/chat/conversations/batch';
-  static const String completeChatUploadPath = '/v1/chat/media/uploads:complete';
   static const String createConversationPath = '/v1/chat/conversations';
   static const String dissolveConversationPathTemplate = '/v1/chat/conversations/{conversationId}';
   static String dissolveConversationPath({required String conversationId}) {
@@ -205,7 +191,6 @@ class ChatApiMetadata {
       'messageId': messageId,
     });
   }
-  static const String initChatUploadPath = '/v1/chat/media/uploads:init';
   static const String inviteAssistantPathTemplate = '/v1/chat/conversations/{conversationId}/assistant';
   static String inviteAssistantPath({required String conversationId}) {
     return _fillPath(inviteAssistantPathTemplate, <String, String>{

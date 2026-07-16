@@ -22,6 +22,17 @@ errors:
       zh: "内容不存在或已删除"
       en: "Post not found or deleted"
 
+  - code: CONTENT.USER.report_not_found
+    kind: USER
+    reason: not_found
+    http_status: 404
+    recovery_action: surface
+    dart_const: reportNotFound
+    go_const: ErrReportNotFound
+    user_message:
+      zh: "举报不存在"
+      en: "Report not found"
+
   - code: CONTENT.USER.comment_not_found
     kind: USER
     reason: not_found
@@ -76,6 +87,51 @@ errors:
     user_message:
       zh: "请求参数有误，请检查后重试"
       en: "Invalid request, please check and retry"
+
+  - code: CONTENT.USER.interaction_type_invalid
+    kind: USER
+    reason: interaction_type_invalid
+    http_status: 400
+    recovery_action: surface
+    dart_const: interactionTypeInvalid
+    go_const: ErrInteractionTypeInvalid
+    user_message:
+      zh: "不支持的互动类型"
+      en: "Unsupported interaction type"
+
+  - code: CONTENT.USER.interaction_cursor_invalid
+    kind: USER
+    reason: interaction_cursor_invalid
+    http_status: 400
+    recovery_action: refresh
+    dart_const: interactionCursorInvalid
+    go_const: ErrInteractionCursorInvalid
+    user_message:
+      zh: "列表状态已更新，请刷新后重试"
+      en: "The list changed, refresh and retry"
+
+  - code: CONTENT.USER.interaction_owner_forbidden
+    kind: USER
+    reason: interaction_owner_forbidden
+    http_status: 403
+    recovery_action: surface
+    dart_const: interactionOwnerForbidden
+    go_const: ErrInteractionOwnerForbidden
+    user_message:
+      zh: "无权查看该互动记录"
+      en: "You cannot view this interaction history"
+
+  - code: CONTENT.SYSTEM.interaction_read_model_unavailable
+    kind: SYSTEM
+    reason: interaction_read_model_unavailable
+    http_status: 503
+    recovery_action: retry
+    recovery_after_seconds: 3
+    dart_const: interactionReadModelUnavailable
+    go_const: ErrInteractionReadModelUnavailable
+    user_message:
+      zh: "互动记录暂时不可用，请稍后重试"
+      en: "Interaction history is temporarily unavailable"
 
   - code: CONTENT.USER.assistant_mention_context_missing
     kind: USER
@@ -313,6 +369,51 @@ errors:
       zh: "内容已删除"
       en: "Content has been deleted"
 
+  - code: CONTENT.USER.version_conflict
+    kind: USER
+    reason: version_conflict
+    http_status: 409
+    recovery_action: refresh
+    dart_const: versionConflict
+    go_const: ErrVersionConflict
+    user_message:
+      zh: "内容已更新，请刷新后重试"
+      en: "Content changed, refresh and retry"
+
+  - code: CONTENT.USER.idempotency_conflict
+    kind: USER
+    reason: idempotency_conflict
+    http_status: 409
+    recovery_action: refresh
+    dart_const: idempotencyConflict
+    go_const: ErrIdempotencyConflict
+    user_message:
+      zh: "重复请求与原操作不一致，请刷新后重试"
+      en: "The repeated request differs from the original operation"
+
+  - code: CONTENT.USER.moderation_approval_required
+    kind: USER
+    reason: moderation_approval_required
+    http_status: 409
+    recovery_action: retry
+    recovery_after_seconds: 3
+    dart_const: moderationApprovalRequired
+    go_const: ErrModerationApprovalRequired
+    user_message:
+      zh: "内容尚未通过当前版本审核"
+      en: "The current content version is not approved"
+
+  - code: CONTENT.USER.moderation_decision_stale
+    kind: USER
+    reason: moderation_decision_stale
+    http_status: 409
+    recovery_action: refresh
+    dart_const: moderationDecisionStale
+    go_const: ErrModerationDecisionStale
+    user_message:
+      zh: "内容已编辑，请基于最新版本重新审核"
+      en: "Content changed; review the latest version"
+
   - code: CONTENT.USER.circle_distribution_forbidden
     kind: USER
     reason: forbidden
@@ -328,7 +429,7 @@ errors:
 
   - code: CONTENT.SYSTEM.storage_write_failed
     kind: SYSTEM
-    reason: internal_error
+    reason: storage_write_failed
     http_status: 500
     recovery_action: retry
     recovery_after_seconds: 5
@@ -337,6 +438,30 @@ errors:
     user_message:
       zh: "操作失败，请稍后重试"
       en: "Operation failed, please retry"
+
+  - code: CONTENT.SYSTEM.storage_read_failed
+    kind: SYSTEM
+    reason: storage_read_failed
+    http_status: 500
+    recovery_action: retry
+    recovery_after_seconds: 5
+    dart_const: storageReadFailed
+    go_const: ErrStorageReadFailed
+    user_message:
+      zh: "读取内容失败，请稍后重试"
+      en: "Unable to read content, please retry"
+
+  - code: CONTENT.SYSTEM.required_dependency_unavailable
+    kind: SYSTEM
+    reason: required_dependency_unavailable
+    http_status: 503
+    recovery_action: retry
+    recovery_after_seconds: 5
+    dart_const: requiredDependencyUnavailable
+    go_const: ErrRequiredDependencyUnavailable
+    user_message:
+      zh: "内容服务依赖暂时不可用，请稍后重试"
+      en: "A required content dependency is unavailable"
 
   - code: CONTENT.SYSTEM.internal_error
     kind: SYSTEM

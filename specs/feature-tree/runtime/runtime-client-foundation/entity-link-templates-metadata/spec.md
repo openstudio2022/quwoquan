@@ -46,7 +46,7 @@
 ## 数据生命周期 / 权限
 
 - 帖子 **private** 等可见性与 **是否允许复制 Web/深链** 仍由现有 **`ContentShareTemplateBuilder` / 分享策略** 等业务规则决定；本 metadata 只提供 **允许复制时的字符串形态**。  
-- `query_rules`（如 `scope=circle`）与 visibility 的对应关系在 design 与实现中与现有 `circle_visible` 语义对齐。
+- Post 链接不携带 scope 或圈子可见性参数；圈内放置由 CirclePostPlacement 的独立入口与权限合同处理。
 
 ## 迁移与回滚
 

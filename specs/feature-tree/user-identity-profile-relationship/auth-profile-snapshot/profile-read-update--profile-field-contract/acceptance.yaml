@@ -12,7 +12,7 @@ scope:
     - ProfileEditSnapshotWire.region + regionTagRef
     - PATCH /v1/user/profile regionTagRef
     - tag-service ListTagChildren 行政区 direct children
-    - Data publish/tags 行政区发布产物完整性
+    - Data control_plane/governance/taxonomy 行政区真相源完整性
   out_of_scope:
     - 普通省份第三层区县选择
     - 境外行政区完整填充
@@ -47,7 +47,7 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-        - file: quwoquan_data/tests/local_contract/publish/test_admin_region_tags__local_contract_test.py
+        - file: quwoquan_data/tests/local_contract/release/test_admin_region_tags__behavior__functional__local_contract_test.py
         - file: quwoquan_service/services/tag-service/internal/application/tag_service__local_contract_test.go
         - file: quwoquan_service/services/user-service/tests/api_integration/profile_crud_contract__api_integration_test.go
         - file: quwoquan_service/services/user-service/tests/local_contract/internal/infrastructure/integration/tag_service_region_resolver__local_contract_test.go
@@ -82,11 +82,11 @@ gwt_acceptance:
             - local_contract.user_identity_profile_relationship.auth_profile_snapshot.profile_read_update_profile_field_contract.admin_region_direct_children_publish_integrity
           envs: *local_envs
     notes:
-      - 线上读取源为 Mongo tag_nodes serving projection；publish/tags 是源头真相。
+      - 线上读取源为 Mongo tag_nodes serving projection；control_plane/governance/taxonomy 是源头真相。
       - App Mock 与 Remote 必须走同一 TagRepository.listChildren 接口。
 execution:
   local_gate:
-    - python3 quwoquan_data/tests/local_contract/publish/test_admin_region_tags__local_contract_test.py
+    - python3 quwoquan_data/tests/local_contract/release/test_admin_region_tags__behavior__functional__local_contract_test.py
     - make -C quwoquan_service verify-metadata
     - make -C quwoquan_service codegen-app
     - go test ./services/tag-service/tests ./services/user-service/tests

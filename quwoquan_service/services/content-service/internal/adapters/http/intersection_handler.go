@@ -17,12 +17,12 @@ func (h *ContentHandler) handleGetMyIntersectionSummary(w http.ResponseWriter, r
 		h.handleNotImplemented(w, r, "GetMyIntersectionSummary")
 		return
 	}
-	userID := resolveUserID(r)
-	if strings.TrimSpace(userID) == "" {
+	personaID := resolvePersonaID(r)
+	if strings.TrimSpace(personaID) == "" {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "需要登录", "missing user"))
 		return
 	}
-	summary, err := h.intersectionService.Summary(r.Context(), userID)
+	summary, err := h.intersectionService.Summary(r.Context(), personaID)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -36,8 +36,8 @@ func (h *ContentHandler) handleListMyIntersections(w http.ResponseWriter, r *htt
 		h.handleNotImplemented(w, r, "ListMyIntersections")
 		return
 	}
-	userID := resolveUserID(r)
-	if strings.TrimSpace(userID) == "" {
+	personaID := resolvePersonaID(r)
+	if strings.TrimSpace(personaID) == "" {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "需要登录", "missing user"))
 		return
 	}
@@ -49,7 +49,7 @@ func (h *ContentHandler) handleListMyIntersections(w http.ResponseWriter, r *htt
 			limit = parsed
 		}
 	}
-	items, nextCursor, hasMore, err := h.intersectionService.List(r.Context(), userID, intersectionapp.IntersectionListQuery{
+	items, nextCursor, hasMore, err := h.intersectionService.List(r.Context(), personaID, intersectionapp.IntersectionListQuery{
 		Dimension:  dimension,
 		Filter:     strings.TrimSpace(q.Get("filter")),
 		SourceRef:  strings.TrimSpace(q.Get("sourceRef")),
@@ -75,8 +75,8 @@ func (h *ContentHandler) handleMarkIntersectionsVisited(w http.ResponseWriter, r
 		h.handleNotImplemented(w, r, "MarkIntersectionsVisited")
 		return
 	}
-	userID := resolveUserID(r)
-	if strings.TrimSpace(userID) == "" {
+	personaID := resolvePersonaID(r)
+	if strings.TrimSpace(personaID) == "" {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "需要登录", "missing user"))
 		return
 	}
@@ -87,7 +87,7 @@ func (h *ContentHandler) handleMarkIntersectionsVisited(w http.ResponseWriter, r
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
 		return
 	}
-	if err := h.intersectionService.MarkVisited(r.Context(), userID, body.Dimension); err != nil {
+	if err := h.intersectionService.MarkVisited(r.Context(), personaID, body.Dimension); err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
@@ -103,8 +103,8 @@ func (h *ContentHandler) handleGetObjectIntersections(w http.ResponseWriter, r *
 		h.handleNotImplemented(w, r, "GetObjectIntersections")
 		return
 	}
-	userID := resolveUserID(r)
-	if strings.TrimSpace(userID) == "" {
+	personaID := resolvePersonaID(r)
+	if strings.TrimSpace(personaID) == "" {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "需要登录", "missing user"))
 		return
 	}
@@ -121,7 +121,7 @@ func (h *ContentHandler) handleGetObjectIntersections(w http.ResponseWriter, r *
 			limit = parsed
 		}
 	}
-	items, err := h.intersectionService.ObjectIntersections(r.Context(), userID, objectID, objectType, limit)
+	items, err := h.intersectionService.ObjectIntersections(r.Context(), personaID, objectID, objectType, limit)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return

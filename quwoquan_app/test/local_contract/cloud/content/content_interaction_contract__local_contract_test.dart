@@ -1,10 +1,11 @@
 /// L1a Contract Tests: 内容互动相关 Mock 契约（Block / Report）。
 ///
-/// 内容点赞窄接口已并入 [ContentReactionRepository]，其 like 行为
-/// 由 content_repository 契约测试与子接口契约测试覆盖。
+/// 内容点赞由 pure-contract [ContentPostReactionFacet] 承载；本文件只覆盖
+/// Block / Report，不维护聚合 Content Repository 的反应接口。
 library;
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
   group('MockBlockRepository', () {
@@ -22,33 +23,36 @@ void main() {
     });
   });
 
-  group('MockReportRepository', () {
+  group('ContentReportCommandWriter alpha 契约', () {
     test('createReport 记录到 submitted', () async {
       final repo = _reportRepo();
       await repo.createReport(
-        targetId: 'post_1',
-        targetType: 'post',
-        reason: 'spam',
-        note: '广告',
+        CreateContentReportCommand(
+          targetId: 'post_1',
+          targetType: ContentReportTargetType.post,
+          reason: ContentReportReason.spam,
+          description: '广告',
+        ),
       );
       expect(repo.submitted.length, equals(1));
-      expect(repo.submitted.first['reason'], equals('spam'));
-      expect(repo.submitted.first['note'], equals('广告'));
+      expect(repo.submitted.first.reason, ContentReportReason.spam);
+      expect(repo.submitted.first.description, equals('广告'));
     });
 
-    test('note 为 null 时不写入 submitted map', () async {
+    test('description 为 null 时不写入 submitted map', () async {
       final repo = _reportRepo();
       await repo.createReport(
-        targetId: 'post_2',
-        targetType: 'post',
-        reason: 'inappropriate',
+        CreateContentReportCommand(
+          targetId: 'post_2',
+          targetType: ContentReportTargetType.post,
+          reason: ContentReportReason.other,
+        ),
       );
-      expect(repo.submitted.first.containsKey('note'), isFalse);
+      expect(repo.submitted.first.description, isNull);
     });
   });
 }
 
-// 避免循环 import，直接 inline 最小 helper
 _MockBlock _blockRepo() => _MockBlock();
 _MockReport _reportRepo() => _MockReport();
 
@@ -60,22 +64,11 @@ class _MockBlock {
   bool isBlocked(String id) => _set.contains(id);
 }
 
-class _MockReport {
-  final List<Map<String, dynamic>> submitted = [];
-  Future<void> createReport({
-    required String targetId,
-    required String targetType,
-    required String reason,
-    String? note,
-  }) async {
-    final payload = <String, dynamic>{
-      'targetId': targetId,
-      'targetType': targetType,
-      'reason': reason,
-    };
-    if (note != null) {
-      payload['note'] = note;
-    }
-    submitted.add(payload);
+class _MockReport implements ContentReportCommandWriter {
+  final List<CreateContentReportCommand> submitted = [];
+
+  @override
+  Future<void> createReport(CreateContentReportCommand command) async {
+    submitted.add(command);
   }
 }

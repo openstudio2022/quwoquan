@@ -30,7 +30,7 @@ gwt_acceptance:
     - recommend_feature.yaml 含 socialFeatures.intersection 子对象字段。
     - feature_registry.yaml 含 ≥4 intersection 特征且 source 指向 rm_recommend_feature。
     contract_refs:
-    - recommendation/rec_model/projections/recommend_feature.yaml
+    - recommendation/model_release/projections/recommend_feature.yaml
     performance_points:
     - 交集特征在离线特征流水化，读路径零额外同步打分。
     tests:
@@ -63,7 +63,7 @@ gwt_acceptance:
     - ranking-signal-fusion spec 登记 intersection fact/affinity 权重入口。
     - 无独立 intersection-only ranker 文档或 service.yaml。
     contract_refs:
-    - recommendation/rec_model/projections/recommend_feature.yaml
+    - recommendation/model_release/projections/recommend_feature.yaml
     performance_points:
     - 交集信号经统一融合权重入口，无并行排序通道造成重复打分。
     tests:
@@ -95,7 +95,7 @@ gwt_acceptance:
     - primaryText 由 Explain 管线产出，禁止 displayText/label hydrate 回退。
     - contract 测试覆盖 ≥3 个 §5.4 标准 kind 的主谓宾句。
     contract_refs:
-    - recommendation/rec_model/projections/intersection_reason.yaml
+    - recommendation/model_release/projections/intersection_reason.yaml
     performance_points:
     - primaryText 在服务端 Explain 管线一次产出，端零句子拼装。
     tests:
@@ -147,7 +147,7 @@ gwt_acceptance:
     - 非旅行信号 hydration 不强标 travel_photography（缺省 general）；无生命周期信号不造假态。
     contract_refs:
     - recommendation/rec_model/intersection_kind_registry.yaml
-    - recommendation/rec_model/projections/intersection_reason.yaml
+    - recommendation/model_release/projections/intersection_reason.yaml
     - recommendation/rec_model/impact_help_type_registry.yaml
     performance_points:
     - hydration 在离线物化路径产出 vertical/lifecycle，读路径零额外同步打分（R-IX01 不变量保持）。
@@ -179,7 +179,7 @@ gwt_acceptance:
         envs:
         - gamma
     notes:
-    - '[migrated_from_recorded_artifact] .qwq_output/env/repo/runs/intersection-travel-debridge-t3/t3_gamma_recap_20260621.json'
+    - '[migrated_from_recorded_artifact] 已迁移 canonical run evidence（t3_gamma_recap_20260621.json）'
 execution:
   local_gate:
   - make verify-metadata

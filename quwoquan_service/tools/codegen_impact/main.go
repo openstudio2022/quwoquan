@@ -17,6 +17,8 @@ import (
 	"sort"
 	"strings"
 
+	contractcodegen "quwoquan_service/internal/metadata/codegen"
+	"quwoquan_service/internal/metadata/validate"
 	"quwoquan_service/tools/recimpactmeta"
 )
 
@@ -25,8 +27,16 @@ func main() {
 	outputDir := flag.String("output-dir", "runtime/impact", "生成 Go 表的输出目录 (package impact)")
 	flag.Parse()
 
-	contractPath := filepath.Join(*metadataDir, "recommendation", "rec_model", "impact_help_type_registry.yaml")
-	registry, err := recimpactmeta.Read(contractPath)
+	source, err := contractcodegen.NewSource(*metadataDir, validate.ProfileBaseline)
+	if err != nil {
+		fail(fmt.Errorf("compile ContractGraph: %w", err))
+	}
+	const contractPath = "recommendation/rec_model/impact_help_type_registry.yaml"
+	raw, err := source.Content(contractPath)
+	if err != nil {
+		fail(fmt.Errorf("read impact help type registry: %w", err))
+	}
+	registry, err := recimpactmeta.Parse(raw)
 	if err != nil {
 		fail(fmt.Errorf("read impact help type registry: %w", err))
 	}

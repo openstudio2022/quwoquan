@@ -9,7 +9,7 @@ import (
 	"strings"
 	"text/template"
 
-	"quwoquan_service/runtime/codegen"
+	"quwoquan_service/internal/metadata/codegen"
 )
 
 type modelData struct {
@@ -41,6 +41,9 @@ func generateModels(ctx *genContext) error {
 
 	if backend == "postgres" || len(ctx.storage.Tables) > 0 {
 		for _, table := range ctx.storage.Tables {
+			if table.InfrastructureOnly {
+				continue
+			}
 			if generated[table.Entity] {
 				continue
 			}
@@ -67,7 +70,7 @@ func generateModels(ctx *genContext) error {
 }
 
 func generatePGModel(ctx *genContext, entityName string, table TableDef) error {
-	dir := filepath.Join(ctx.outputDir(), "domain", ctx.domainPkg(), "model")
+	dir := filepath.Join(ctx.outputDir(), "domain", ctx.source.domainPath(), "model")
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
 	}
@@ -113,7 +116,7 @@ func generatePGModel(ctx *genContext, entityName string, table TableDef) error {
 }
 
 func generateMongoModel(ctx *genContext, entityName string) error {
-	dir := filepath.Join(ctx.outputDir(), "domain", ctx.domainPkg(), "model")
+	dir := filepath.Join(ctx.outputDir(), "domain", ctx.source.domainPath(), "model")
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
 	}
@@ -187,7 +190,7 @@ func writeModel(ctx *genContext, entityName, dir string, fields []modelFieldData
 
 	fileName := codegen.CamelToSnake(entityName) + ".g.go"
 	path := filepath.Join(dir, fileName)
-	fmt.Printf("  model: %s/%s\n", ctx.domainPkg(), fileName)
+	fmt.Printf("  model: %s/%s\n", filepath.ToSlash(ctx.source.domainPath()), fileName)
 	return os.WriteFile(path, formatted, 0644)
 }
 

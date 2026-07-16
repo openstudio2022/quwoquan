@@ -212,7 +212,7 @@ objectKinds:
     assetKind: coverImage
 
 computabilityLegend:
-  R1: 关系边集合直接求交（follow_edges / circle_members），最易、最可靠、可请求期算。
+  R1: 关系投影与成员集合直接求交（persona_follow_projection / circle_memberships），最易、最可靠、可请求期算。
   R2: 行为边集合求交（rm_behavior_events 行为边真相源），需扫描+求交，请求期或预投影。
   R3: 身份/通讯录/标签维度（需 profile / contact 映射 / 实体标签），成本与隐私约束更高。
   R4: 当前无稳定数据源或为概率推断（coCreatedContent / coWishlistedEntity / affinity），暂不产出 fact。

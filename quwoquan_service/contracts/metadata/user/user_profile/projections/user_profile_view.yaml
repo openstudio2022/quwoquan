@@ -10,16 +10,16 @@ collection: rm_user_profile_view
 
 source_entities:
   - UserProfile
-  - FollowEdge
+  - PersonaRelationship
   - ContentReaction
   - VisitRecord
 
 source_events:
   - UserProfileUpdated
-  - UserFollowed
-  - UserUnfollowed
-  - ContentReacted
-  - BehaviorBatchReported
+  - PersonaFollowStateChanged
+  - ContentReactionActivated
+  - ContentReactionRemoved
+  - EventBatchReported
 
 consumers:
   - recommendation-engine

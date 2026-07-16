@@ -14,6 +14,8 @@ PAGE_INVENTORY_PATH = ROOT / "specs" / "gates" / "user_acceptance_page_inventory
 
 LAYERS = {"local_contract", "api_integration", "user_acceptance"}
 APP_ROOT = ROOT / "quwoquan_app" / "test"
+APP_PACKAGES_ROOT = ROOT / "quwoquan_app" / "packages"
+SERVICE_DOMAIN_ROOT = ROOT / "quwoquan_service"
 SERVICE_ROOT = ROOT / "quwoquan_service" / "services"
 DATA_ROOT = ROOT / "quwoquan_data" / "tests"
 OPS_TEST_ROOT = ROOT / "quwoquan_ops" / "tests"
@@ -83,6 +85,9 @@ def iter_canonical_files() -> list[tuple[str, Path, str]]:
     for layer in LAYERS:
         for path in sorted((APP_ROOT / layer).rglob("*_test.dart")):
             files.append(("app", path, layer))
+        for package_root in sorted(APP_PACKAGES_ROOT.glob("*")):
+            for path in sorted((package_root / "test" / layer).rglob("*_test.dart")):
+                files.append(("app", path, layer))
         for path in sorted((DATA_ROOT / layer).rglob("test_*.py")):
             files.append(("data", path, layer))
     for path in sorted((OPS_TEST_ROOT / "local_contract").rglob("test_*.py")):
@@ -96,12 +101,14 @@ def iter_canonical_files() -> list[tuple[str, Path, str]]:
                 files.append(("service", path, layer))
             for path in sorted((service_tests_dir / layer).rglob("test_*.py")):
                 files.append(("service", path, layer))
-    for path in sorted(SERVICE_ROOT.glob("*/**/*_test.go")):
-        rel = path.relative_to(SERVICE_ROOT).as_posix()
+    for path in sorted(SERVICE_DOMAIN_ROOT.rglob("*_test.go")):
+        rel = path.relative_to(SERVICE_DOMAIN_ROOT).as_posix()
         if "/tests/local_contract/" in rel or "/tests/api_integration/" in rel:
             continue
         if path.name.endswith("__local_contract_test.go"):
             files.append(("service", path, "local_contract"))
+        elif path.name.endswith("__api_integration_test.go"):
+            files.append(("service", path, "api_integration"))
     return files
 
 
@@ -110,6 +117,9 @@ def recorded_file_is_canonical(path_text: str) -> bool:
         return True
     if path_text.startswith("quwoquan_app/test/"):
         return any(path_text.startswith(f"quwoquan_app/test/{layer}/") for layer in LAYERS)
+    if path_text.startswith("quwoquan_app/packages/"):
+        parts = Path(path_text).parts
+        return len(parts) >= 6 and parts[3] == "test" and parts[4] in LAYERS
     if path_text.startswith("quwoquan_data/tests/"):
         return any(path_text.startswith(f"quwoquan_data/tests/{layer}/") for layer in LAYERS)
     if path_text.startswith("quwoquan_ops/tests/local_contract/"):
@@ -121,10 +131,12 @@ def recorded_file_is_canonical(path_text: str) -> bool:
                 "quwoquan_ops/tests/acceptance/user_acceptance/",
             )
         )
-    if path_text.startswith("quwoquan_service/services/"):
+    if path_text.startswith("quwoquan_service/"):
+        if "/tests/support/" in path_text:
+            return False
         if "/tests/local_contract/" in path_text or "/tests/api_integration/" in path_text:
             return True
-        return path_text.endswith("__local_contract_test.go")
+        return path_text.endswith(("__local_contract_test.go", "__api_integration_test.go"))
     return False
 
 

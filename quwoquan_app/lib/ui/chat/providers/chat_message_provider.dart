@@ -5,7 +5,9 @@ import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
+import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
+import 'package:quwoquan_app/ui/chat/models/chat_message_media_view_data.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 const _uuid = Uuid();
 
@@ -41,9 +43,16 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
   final String conversationId;
 
   ChatRepository get _repo => ref.read(chatRepositoryProvider);
+  ChatMessageCommandWriter get _writer =>
+      ref.read(chatMessageCommandWriterProvider);
+  final Map<String, ChatSendMessageCommand> _pendingCommands =
+      <String, ChatSendMessageCommand>{};
 
   @override
-  ChatMessageState build() => const ChatMessageState();
+  ChatMessageState build() {
+    ref.onDispose(_pendingCommands.clear);
+    return const ChatMessageState();
+  }
 
   // seq=0 表示消息尚未被服务端确认（发送中/发送失败）
   static const int _unconfirmedSeq = 0;
@@ -51,7 +60,7 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
   Future<ActivePersonaContextViewData> _resolveActivePersonaContext() async {
     final activeContext = await ref.read(activePersonaContextProvider.future);
     if (ref
-            .read(contentRepositoryProvider)
+            .read(contentConfigRepositoryProvider)
             .requiresResolvedPersonaForMutations &&
         activeContext.isFallback) {
       throw StateError('active persona context unavailable');
@@ -113,8 +122,7 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
   Future<bool> sendMessage(
     String type,
     String content, {
-    String? mediaUrl,
-    Map<String, dynamic>? media,
+    ChatMessageMediaViewData? media,
     String? senderName,
     String? senderAvatar,
     List<String>? mentions,
@@ -134,34 +142,32 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
       senderAvatar: resolveAvatarImageUrl(
         senderAvatar ?? activeContext.avatarUrl,
       ),
-      senderSubAccountId: resolvedSenderSubAccountId.isEmpty
-          ? null
-          : resolvedSenderSubAccountId,
       type: type,
       content: content,
-      mediaUrl: mediaUrl,
-      media: media,
+      mediaAssetId: media?.assetId,
+      mediaDeliveryUrl: media?.deliveryUrl,
+      mediaType: media?.mediaType,
+      mediaContentType: media?.contentType,
+      mediaFileSizeBytes: media?.fileSizeBytes,
       status: 'sending',
     );
+    final command = ChatSendMessageCommand(
+      conversationId: conversationId,
+      type: type,
+      content: content,
+      clientMsgId: clientMsgId,
+      mediaAssetId: media?.assetId,
+      mentions: mentions ?? const <String>[],
+      senderDisplayNameSnapshot: senderName ?? activeContext.displayName,
+      senderAvatarUrlSnapshot: senderAvatar ?? activeContext.avatarUrl,
+      personaContextVersion: _positiveVersion(activeContext.contextVersion),
+    );
+    _pendingCommands[clientMsgId] = command;
     state = state.copyWith(messages: _sorted([...state.messages, optimistic]));
     try {
-      final resp = await _repo.sendMessage(
-        conversationId: conversationId,
-        type: type,
-        content: content,
-        mediaUrl: mediaUrl,
-        media: media,
-        mentions: mentions,
-        senderSubAccountId: resolvedSenderSubAccountId.isEmpty
-            ? null
-            : resolvedSenderSubAccountId,
-        personaContextVersion: activeContext.contextVersion,
-        senderDisplayNameSnapshot: senderName ?? activeContext.displayName,
-        senderAvatarUrlSnapshot: senderAvatar ?? activeContext.avatarUrl,
-        clientMsgId: clientMsgId,
-      );
+      final resp = await _writer.sendMessage(command);
       final confirmed = optimistic.copyWith(
-        id: resp.id,
+        id: resp.messageId,
         seq: resp.seq,
         status: 'sent',
         timestamp: resp.timestamp,
@@ -170,6 +176,7 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
         return m.clientMsgId == clientMsgId ? confirmed : m;
       }).toList();
       state = state.copyWith(messages: _sorted(updated));
+      _pendingCommands.remove(clientMsgId);
       return true;
     } catch (e) {
       final failed = state.messages.map((m) {
@@ -186,31 +193,19 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
       (m) => m.clientMsgId == clientMsgId && m.status == 'failed',
       orElse: () => throw StateError('Message not found or not failed'),
     );
-    final activeContext = await _resolveActivePersonaContext();
+    await _resolveActivePersonaContext();
+    final command = _pendingCommands[clientMsgId];
+    if (command == null) {
+      throw StateError('Pending Message command not found');
+    }
     final retrying = state.messages.map((m) {
       return m.clientMsgId == clientMsgId ? m.copyWith(status: 'sending') : m;
     }).toList();
     state = state.copyWith(messages: _sorted(retrying));
     try {
-      final retrySenderSubAccountId = msg.senderSubAccountId?.isNotEmpty == true
-          ? msg.senderSubAccountId
-          : (activeContext.subAccountId.isNotEmpty
-                ? activeContext.subAccountId
-                : activeContext.ownerUserId);
-      final resp = await _repo.sendMessage(
-        conversationId: conversationId,
-        type: msg.type,
-        content: msg.content ?? '',
-        mediaUrl: msg.mediaUrl,
-        media: msg.media,
-        senderSubAccountId: retrySenderSubAccountId,
-        personaContextVersion: activeContext.contextVersion,
-        senderDisplayNameSnapshot: msg.senderName ?? activeContext.displayName,
-        senderAvatarUrlSnapshot: msg.senderAvatar ?? activeContext.avatarUrl,
-        clientMsgId: clientMsgId,
-      );
+      final resp = await _writer.sendMessage(command);
       final confirmed = msg.copyWith(
-        id: resp.id,
+        id: resp.messageId,
         seq: resp.seq,
         status: 'sent',
         timestamp: resp.timestamp,
@@ -219,12 +214,18 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
         return m.clientMsgId == clientMsgId ? confirmed : m;
       }).toList();
       state = state.copyWith(messages: _sorted(updated));
+      _pendingCommands.remove(clientMsgId);
     } catch (_) {
       final failed = state.messages.map((m) {
         return m.clientMsgId == clientMsgId ? m.copyWith(status: 'failed') : m;
       }).toList();
       state = state.copyWith(messages: _sorted(failed));
     }
+  }
+
+  int? _positiveVersion(String raw) {
+    final parsed = int.tryParse(raw.trim());
+    return parsed != null && parsed > 0 ? parsed : null;
   }
 
   /// 撤回消息。

@@ -97,10 +97,10 @@ sit_acceptance:
         - TestListFollowing_QueryFiltersWithinSubject
         - TestListFollowers_QueryFiltersWithinSubject
         - TestListFollowRowsCarryViewerRelationshipCapability
-      - file: quwoquan_service/services/circle-service/tests/api_integration/circle_member_contract__api_integration_test.go
+      - file: quwoquan_service/services/circle-service/tests/api_integration/circle_membership__api_integration_test.go
         cases:
         - TestListUserCircles_QueryFiltersAndHidesPrivateForOtherViewer
-      - file: quwoquan_service/services/circle-service/tests/api_integration/circle_member_contract__api_integration_test.go
+      - file: quwoquan_service/services/circle-service/tests/api_integration/circle_membership__api_integration_test.go
         cases:
         - TestListUserCircles_QueryFiltersAndHidesPrivateForOtherViewer
       - file: quwoquan_app/test/local_contract/cloud/user/contract/user_profile_repository_contract__local_contract_test.dart
@@ -294,7 +294,7 @@ sit_acceptance:
     - "职业通过 Audience/用户/职业 查询并保存单个叶子 tagRef；兴趣通过 Audience/用户/兴趣偏好 查询并保存有序叶子 tagRefs，最多 30 个、允许清空。"
     - "端侧通过 ListTagChildren / ResolveTag / ValidateTagRefs 查询与校验；alpha mock 不再接受 Topic/兴趣/*。"
     - "user-service 拒绝非法根、分类父节点、职业多选与兴趣超限；保存成功后投影 object_tag_index 的 user 对象 tagRefs。"
-    - "alpha/beta/gamma/prod 均使用同一 publish/tags 标签树；beta/gamma/prod 通过 tag import 与 object index import/backfill 灌入。"
+    - "alpha/beta/gamma/prod 均由 control_plane/governance/taxonomy 生成同一标签发布包；beta/gamma/prod 通过 tag import 与 object index import/backfill 灌入。"
     performance_points:
     - 标签层级加载 P95 ≤ 500ms
     - 保存 P95 ≤ 800ms

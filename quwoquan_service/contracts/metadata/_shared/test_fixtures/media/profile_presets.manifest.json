@@ -1,0 +1,1010 @@
+{
+  "presetSetId": "profile_presets_travel_photo_v1",
+  "mediaPolicy": "system_profile_preset_id_only",
+  "brandPaletteSource": "quwoquan_app WelcomeAppearance.petalColors",
+  "avatars": [
+    {
+      "presetId": "avatar_travel_wayfinder",
+      "objectKey": "media/preset/avatar/avatar_travel_wayfinder.png",
+      "theme": "travel",
+      "style": "person_wayfinder",
+      "visualSubject": "person_wayfinder",
+      "assetKind": "illustrated_person_avatar",
+      "paletteToken": "welcomePetalOrange",
+      "palette": [
+        "#42322D",
+        "#FB923C",
+        "#F9D5B8",
+        "#6070BA",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "travel"
+      ],
+      "sourceHash": "sha256:3ec4782584f0f15b18353082ac24bc336d5f6f8b7c9a21a3390b997c5285d604"
+    },
+    {
+      "presetId": "avatar_travel_backpacker",
+      "objectKey": "media/preset/avatar/avatar_travel_backpacker.png",
+      "theme": "travel",
+      "style": "person_backpacker",
+      "visualSubject": "person_backpacker",
+      "assetKind": "illustrated_person_avatar",
+      "paletteToken": "welcomePetalLime",
+      "palette": [
+        "#2F442C",
+        "#A3E635",
+        "#DAF3B6",
+        "#4887B8",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "travel"
+      ],
+      "sourceHash": "sha256:e941639a2f48e9d55e8f4983fda8e2ed3d1ed7614e1dc54e9e18d8d80caa4311"
+    },
+    {
+      "presetId": "avatar_travel_map_reader",
+      "objectKey": "media/preset/avatar/avatar_travel_map_reader.png",
+      "theme": "travel",
+      "style": "person_map_reader",
+      "visualSubject": "person_map_reader",
+      "assetKind": "illustrated_person_avatar",
+      "paletteToken": "welcomePetalYellow",
+      "palette": [
+        "#434330",
+        "#FDE047",
+        "#F9F0BC",
+        "#6186BD",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "travel"
+      ],
+      "sourceHash": "sha256:464580511570fb639e5c5b72b84d42031894eedbf3c1c8a77dd81e0e31d4782a"
+    },
+    {
+      "presetId": "avatar_travel_lighthouse",
+      "objectKey": "media/preset/avatar/avatar_travel_lighthouse.png",
+      "theme": "travel",
+      "style": "coastal_lighthouse",
+      "visualSubject": "coastal_lighthouse",
+      "assetKind": "illustrated_landmark_avatar",
+      "paletteToken": "welcomePetalSky",
+      "palette": [
+        "#183B57",
+        "#38BDF8",
+        "#B4E4FA",
+        "#2A7CEE",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "travel"
+      ],
+      "sourceHash": "sha256:34b739f9351b75d317e0e2ffbaee53d3ba5048d978a440c4af10e6e539030824"
+    },
+    {
+      "presetId": "avatar_travel_train_window",
+      "objectKey": "media/preset/avatar/avatar_travel_train_window.png",
+      "theme": "travel",
+      "style": "train_window_view",
+      "visualSubject": "train_window_view",
+      "assetKind": "illustrated_landmark_avatar",
+      "paletteToken": "welcomePetalCyan",
+      "palette": [
+        "#134055",
+        "#22D3EE",
+        "#ADECF7",
+        "#2482EB",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "travel"
+      ],
+      "sourceHash": "sha256:3a23ad41b3cab12f4bc694d4d4c1c4f8dc0f0539c9a0008bb2099f731148f1ca"
+    },
+    {
+      "presetId": "avatar_travel_camp_sunset",
+      "objectKey": "media/preset/avatar/avatar_travel_camp_sunset.png",
+      "theme": "travel",
+      "style": "camp_sunset",
+      "visualSubject": "camp_sunset",
+      "assetKind": "illustrated_scenic_avatar",
+      "paletteToken": "welcomePetalRose",
+      "palette": [
+        "#422A3E",
+        "#FB7185",
+        "#F9CAD2",
+        "#6066CE",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "travel"
+      ],
+      "sourceHash": "sha256:f1449833c3946c33c4a4c0d1c12c674d00c72e83c2089f5a8be99cce40751c69"
+    },
+    {
+      "presetId": "avatar_travel_rooftop_viewer",
+      "objectKey": "media/preset/avatar/avatar_travel_rooftop_viewer.png",
+      "theme": "travel",
+      "style": "rooftop_viewer",
+      "visualSubject": "rooftop_viewer",
+      "assetKind": "illustrated_person_avatar",
+      "paletteToken": "welcomePetalPurple",
+      "palette": [
+        "#303057",
+        "#A78BFA",
+        "#DBD3FB",
+        "#496EEF",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "travel"
+      ],
+      "sourceHash": "sha256:a7a2c638bbbc1c4c84ff48d84b001430cd355e7d6b3b154e709c07e6d879a259"
+    },
+    {
+      "presetId": "avatar_travel_ferry_reader",
+      "objectKey": "media/preset/avatar/avatar_travel_ferry_reader.png",
+      "theme": "travel",
+      "style": "ferry_reader",
+      "visualSubject": "ferry_reader",
+      "assetKind": "illustrated_person_avatar",
+      "paletteToken": "welcomePetalEmerald",
+      "palette": [
+        "#174042",
+        "#34D399",
+        "#B3ECD9",
+        "#2982D4",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "travel"
+      ],
+      "sourceHash": "sha256:9e030b91638174f3541abd3aabfd1780c319fea0c48238cea8cf1c6dd62a46e2"
+    },
+    {
+      "presetId": "avatar_photo_lens_portrait",
+      "objectKey": "media/preset/avatar/avatar_photo_lens_portrait.png",
+      "theme": "photography",
+      "style": "lens_portrait",
+      "visualSubject": "lens_portrait",
+      "assetKind": "illustrated_camera_avatar",
+      "paletteToken": "welcomePetalPurple",
+      "palette": [
+        "#303057",
+        "#A78BFA",
+        "#DBD3FB",
+        "#496EEF",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "photography"
+      ],
+      "sourceHash": "sha256:86c5a7c9f746b673be5fdef7bbc2a9ad843de6adb45a2e8f0d66b77e94a711f1"
+    },
+    {
+      "presetId": "avatar_photo_film_grain",
+      "objectKey": "media/preset/avatar/avatar_photo_film_grain.png",
+      "theme": "photography",
+      "style": "film_grain",
+      "visualSubject": "film_grain",
+      "assetKind": "illustrated_camera_avatar",
+      "paletteToken": "welcomePetalOrange",
+      "palette": [
+        "#42322D",
+        "#FB923C",
+        "#F9D5B8",
+        "#6070BA",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "photography"
+      ],
+      "sourceHash": "sha256:934ae923a8fe6067d8fe45f19955629c08b668167f5ac744a6a15056f7264a59"
+    },
+    {
+      "presetId": "avatar_photo_viewfinder",
+      "objectKey": "media/preset/avatar/avatar_photo_viewfinder.png",
+      "theme": "photography",
+      "style": "viewfinder_frame",
+      "visualSubject": "viewfinder_frame",
+      "assetKind": "illustrated_camera_avatar",
+      "paletteToken": "welcomePetalSky",
+      "palette": [
+        "#183B57",
+        "#38BDF8",
+        "#B4E4FA",
+        "#2A7CEE",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "photography"
+      ],
+      "sourceHash": "sha256:12e0275434cc951cf0c1abc8a132d11eeaddf5610d99a45b6a92806445facc38"
+    },
+    {
+      "presetId": "avatar_photo_darkroom_profile",
+      "objectKey": "media/preset/avatar/avatar_photo_darkroom_profile.png",
+      "theme": "photography",
+      "style": "darkroom_profile",
+      "visualSubject": "darkroom_profile",
+      "assetKind": "illustrated_person_avatar",
+      "paletteToken": "welcomePetalRose",
+      "palette": [
+        "#422A3E",
+        "#FB7185",
+        "#F9CAD2",
+        "#6066CE",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "photography"
+      ],
+      "sourceHash": "sha256:95bbc7388f72b314705c2af9b081d227f193b72110c3bcf7e6cba7e9dbb826dc"
+    },
+    {
+      "presetId": "avatar_photo_street_frame",
+      "objectKey": "media/preset/avatar/avatar_photo_street_frame.png",
+      "theme": "photography",
+      "style": "street_frame",
+      "visualSubject": "street_frame",
+      "assetKind": "illustrated_camera_avatar",
+      "paletteToken": "welcomePetalYellow",
+      "palette": [
+        "#434330",
+        "#FDE047",
+        "#F9F0BC",
+        "#6186BD",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "photography"
+      ],
+      "sourceHash": "sha256:3b67f86bddd14fece04dfd44cde3a1bb6aeab2fc67db97e551dc2d57b88042d0"
+    },
+    {
+      "presetId": "avatar_photo_drone_mark",
+      "objectKey": "media/preset/avatar/avatar_photo_drone_mark.png",
+      "theme": "photography",
+      "style": "drone_mark",
+      "visualSubject": "drone_mark",
+      "assetKind": "illustrated_camera_avatar",
+      "paletteToken": "welcomePetalCyan",
+      "palette": [
+        "#134055",
+        "#22D3EE",
+        "#ADECF7",
+        "#2482EB",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "photography"
+      ],
+      "sourceHash": "sha256:3e3d20f2d6867a0b6946af69faaa1c5d13ea446159c7d27b93d891b9534409b8"
+    },
+    {
+      "presetId": "avatar_photo_gallery_curator",
+      "objectKey": "media/preset/avatar/avatar_photo_gallery_curator.png",
+      "theme": "photography",
+      "style": "gallery_curator",
+      "visualSubject": "gallery_curator",
+      "assetKind": "illustrated_person_avatar",
+      "paletteToken": "welcomePetalLime",
+      "palette": [
+        "#2F442C",
+        "#A3E635",
+        "#DAF3B6",
+        "#4887B8",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "photography"
+      ],
+      "sourceHash": "sha256:f96422ea952be0bcc837c87d588058b77b1d9113b901643fda1e2c0f21cd1c19"
+    },
+    {
+      "presetId": "avatar_photo_flash_meter",
+      "objectKey": "media/preset/avatar/avatar_photo_flash_meter.png",
+      "theme": "photography",
+      "style": "flash_meter",
+      "visualSubject": "flash_meter",
+      "assetKind": "illustrated_camera_avatar",
+      "paletteToken": "welcomePetalEmerald",
+      "palette": [
+        "#174042",
+        "#34D399",
+        "#B3ECD9",
+        "#2982D4",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "photography"
+      ],
+      "sourceHash": "sha256:f27e14a14d69c3ca46c8b42c9dccc4b2a5bc29558315bf0d6e9ab265427ef2ff"
+    },
+    {
+      "presetId": "avatar_travelphoto_mountain_guide",
+      "objectKey": "media/preset/avatar/avatar_travelphoto_mountain_guide.png",
+      "theme": "travel_photography",
+      "style": "mountain_guide",
+      "visualSubject": "mountain_guide",
+      "assetKind": "illustrated_person_avatar",
+      "paletteToken": "welcomePetalEmerald",
+      "palette": [
+        "#174042",
+        "#34D399",
+        "#B3ECD9",
+        "#2982D4",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "cross"
+      ],
+      "sourceHash": "sha256:6dc11c1c869d6c4754389849389ea42e4b37c8b06b79ce24db3c8c48a3451e10"
+    },
+    {
+      "presetId": "avatar_travelphoto_city_shooter",
+      "objectKey": "media/preset/avatar/avatar_travelphoto_city_shooter.png",
+      "theme": "travel_photography",
+      "style": "city_shooter",
+      "visualSubject": "city_shooter",
+      "assetKind": "illustrated_person_avatar",
+      "paletteToken": "welcomePetalSky",
+      "palette": [
+        "#183B57",
+        "#38BDF8",
+        "#B4E4FA",
+        "#2A7CEE",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "cross"
+      ],
+      "sourceHash": "sha256:a51d5505375f91efbd1183d0fe50d2c3d0cdf2628c8fa100ffd0517d77b2b42e"
+    },
+    {
+      "presetId": "avatar_travelphoto_coast_walker",
+      "objectKey": "media/preset/avatar/avatar_travelphoto_coast_walker.png",
+      "theme": "travel_photography",
+      "style": "coast_walker",
+      "visualSubject": "coast_walker",
+      "assetKind": "illustrated_person_avatar",
+      "paletteToken": "welcomePetalCyan",
+      "palette": [
+        "#134055",
+        "#22D3EE",
+        "#ADECF7",
+        "#2482EB",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "cross"
+      ],
+      "sourceHash": "sha256:eea4a1e7795dbde1c13193a79ae4eca9eb57b563a9b1a5c25db34fea67b5d98a"
+    },
+    {
+      "presetId": "avatar_travelphoto_heritage_observer",
+      "objectKey": "media/preset/avatar/avatar_travelphoto_heritage_observer.png",
+      "theme": "travel_photography",
+      "style": "heritage_observer",
+      "visualSubject": "heritage_observer",
+      "assetKind": "illustrated_landmark_avatar",
+      "paletteToken": "welcomePetalPurple",
+      "palette": [
+        "#303057",
+        "#A78BFA",
+        "#DBD3FB",
+        "#496EEF",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "cross"
+      ],
+      "sourceHash": "sha256:c6e82888b9de02722994a01a3a278daf1255eed5e7b29a7b518034af55095969"
+    },
+    {
+      "presetId": "avatar_travelphoto_food_visualist",
+      "objectKey": "media/preset/avatar/avatar_travelphoto_food_visualist.png",
+      "theme": "travel_photography",
+      "style": "food_visualist",
+      "visualSubject": "food_visualist",
+      "assetKind": "illustrated_person_avatar",
+      "paletteToken": "welcomePetalOrange",
+      "palette": [
+        "#42322D",
+        "#FB923C",
+        "#F9D5B8",
+        "#6070BA",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "cross"
+      ],
+      "sourceHash": "sha256:1165d2af57d523290b3b6b40bc4ddb7a3662c1682a47a496111e86c1c228a1ce"
+    },
+    {
+      "presetId": "avatar_travelphoto_mobile_creator",
+      "objectKey": "media/preset/avatar/avatar_travelphoto_mobile_creator.png",
+      "theme": "travel_photography",
+      "style": "mobile_creator",
+      "visualSubject": "mobile_creator",
+      "assetKind": "illustrated_person_avatar",
+      "paletteToken": "welcomePetalLime",
+      "palette": [
+        "#2F442C",
+        "#A3E635",
+        "#DAF3B6",
+        "#4887B8",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "cross"
+      ],
+      "sourceHash": "sha256:90d3c3c39126f3ef37387a448947493d6d19c53b4ca496dcb47a49378eb2a555"
+    },
+    {
+      "presetId": "avatar_travelphoto_desert_shooter",
+      "objectKey": "media/preset/avatar/avatar_travelphoto_desert_shooter.png",
+      "theme": "travel_photography",
+      "style": "desert_shooter",
+      "visualSubject": "desert_shooter",
+      "assetKind": "illustrated_person_avatar",
+      "paletteToken": "welcomePetalYellow",
+      "palette": [
+        "#434330",
+        "#FDE047",
+        "#F9F0BC",
+        "#6186BD",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "cross"
+      ],
+      "sourceHash": "sha256:8d225f677da1dc6b043b76d06b6392e7819c30afac5955b7aa35855544ad1ffd"
+    },
+    {
+      "presetId": "avatar_travelphoto_lake_tripod",
+      "objectKey": "media/preset/avatar/avatar_travelphoto_lake_tripod.png",
+      "theme": "travel_photography",
+      "style": "lake_tripod",
+      "visualSubject": "lake_tripod",
+      "assetKind": "illustrated_camera_avatar",
+      "paletteToken": "welcomePetalRose",
+      "palette": [
+        "#422A3E",
+        "#FB7185",
+        "#F9CAD2",
+        "#6066CE",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "cross"
+      ],
+      "sourceHash": "sha256:d5315f4be37576fde738a8830279031725fcaadd50a18a0be742124350e7de96"
+    }
+  ],
+  "covers": [
+    {
+      "presetId": "cover_travel_snowpeak_route",
+      "objectKey": "media/preset/cover/cover_travel_snowpeak_route.jpg",
+      "theme": "travel",
+      "style": "snowpeak_route",
+      "visualSubject": "snowpeak_route",
+      "assetKind": "illustrated_scenic_cover",
+      "paletteToken": "welcomePetalSky",
+      "palette": [
+        "#183B57",
+        "#38BDF8",
+        "#B4E4FA",
+        "#2A7CEE",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "travel"
+      ],
+      "sourceHash": "sha256:b82fa4a5020d06618e33ee128322adfbaa5f1bd4d1a690364293c7daa667e1ce"
+    },
+    {
+      "presetId": "cover_travel_desert_stars",
+      "objectKey": "media/preset/cover/cover_travel_desert_stars.jpg",
+      "theme": "travel",
+      "style": "desert_stars",
+      "visualSubject": "desert_stars",
+      "assetKind": "illustrated_scenic_cover",
+      "paletteToken": "welcomePetalYellow",
+      "palette": [
+        "#434330",
+        "#FDE047",
+        "#F9F0BC",
+        "#6186BD",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "travel"
+      ],
+      "sourceHash": "sha256:593f60b4aa4c454e66e7fd90eec59702cd00ddf0de34ced63747bf512334df71"
+    },
+    {
+      "presetId": "cover_travel_coastal_lighthouse",
+      "objectKey": "media/preset/cover/cover_travel_coastal_lighthouse.jpg",
+      "theme": "travel",
+      "style": "coastal_lighthouse",
+      "visualSubject": "coastal_lighthouse",
+      "assetKind": "illustrated_landmark_cover",
+      "paletteToken": "welcomePetalCyan",
+      "palette": [
+        "#134055",
+        "#22D3EE",
+        "#ADECF7",
+        "#2482EB",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "travel"
+      ],
+      "sourceHash": "sha256:d675b15cd98cfffd87e6bbb4052f5049539175ff2469fcd9732ffb3bd665f723"
+    },
+    {
+      "presetId": "cover_travel_forest_road",
+      "objectKey": "media/preset/cover/cover_travel_forest_road.jpg",
+      "theme": "travel",
+      "style": "forest_road",
+      "visualSubject": "forest_road",
+      "assetKind": "illustrated_scenic_cover",
+      "paletteToken": "welcomePetalEmerald",
+      "palette": [
+        "#174042",
+        "#34D399",
+        "#B3ECD9",
+        "#2982D4",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "travel"
+      ],
+      "sourceHash": "sha256:879ce3a444a747b7302104a39c741f2988c63f3dbd51a0715eba2c6b0dc51aa6"
+    },
+    {
+      "presetId": "cover_travel_canyon_bridge",
+      "objectKey": "media/preset/cover/cover_travel_canyon_bridge.jpg",
+      "theme": "travel",
+      "style": "canyon_bridge",
+      "visualSubject": "canyon_bridge",
+      "assetKind": "illustrated_landmark_cover",
+      "paletteToken": "welcomePetalOrange",
+      "palette": [
+        "#42322D",
+        "#FB923C",
+        "#F9D5B8",
+        "#6070BA",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "travel"
+      ],
+      "sourceHash": "sha256:fcc8c2f7f90606f627729c0ce1d4cbcb35742d613e7e2445fdc38fe0f9f98822"
+    },
+    {
+      "presetId": "cover_travel_lake_sunrise",
+      "objectKey": "media/preset/cover/cover_travel_lake_sunrise.jpg",
+      "theme": "travel",
+      "style": "lake_sunrise",
+      "visualSubject": "lake_sunrise",
+      "assetKind": "illustrated_scenic_cover",
+      "paletteToken": "welcomePetalRose",
+      "palette": [
+        "#422A3E",
+        "#FB7185",
+        "#F9CAD2",
+        "#6066CE",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "travel"
+      ],
+      "sourceHash": "sha256:a5799dd119a9c199a064a8bd077e44b5ef6186ab05a6abb54de24bc0599cc82f"
+    },
+    {
+      "presetId": "cover_travel_train_window",
+      "objectKey": "media/preset/cover/cover_travel_train_window.jpg",
+      "theme": "travel",
+      "style": "train_window",
+      "visualSubject": "train_window",
+      "assetKind": "illustrated_landmark_cover",
+      "paletteToken": "welcomePetalPurple",
+      "palette": [
+        "#303057",
+        "#A78BFA",
+        "#DBD3FB",
+        "#496EEF",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "travel"
+      ],
+      "sourceHash": "sha256:bb73a6f7d710d309f9c3f912f8fc9c8837266ff660264f04f805a83a9dcf1357"
+    },
+    {
+      "presetId": "cover_travel_oldtown_roofs",
+      "objectKey": "media/preset/cover/cover_travel_oldtown_roofs.jpg",
+      "theme": "travel",
+      "style": "oldtown_roofs",
+      "visualSubject": "oldtown_roofs",
+      "assetKind": "illustrated_landmark_cover",
+      "paletteToken": "welcomePetalLime",
+      "palette": [
+        "#2F442C",
+        "#A3E635",
+        "#DAF3B6",
+        "#4887B8",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "travel"
+      ],
+      "sourceHash": "sha256:abe5b86e3d6be787578d94e04021331740180bfed8efb19d3e42d4d483fb0d6b"
+    },
+    {
+      "presetId": "cover_photo_city_bluehour",
+      "objectKey": "media/preset/cover/cover_photo_city_bluehour.jpg",
+      "theme": "photography",
+      "style": "city_bluehour",
+      "visualSubject": "city_bluehour",
+      "assetKind": "illustrated_photo_cover",
+      "paletteToken": "welcomePetalSky",
+      "palette": [
+        "#183B57",
+        "#38BDF8",
+        "#B4E4FA",
+        "#2A7CEE",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "photography"
+      ],
+      "sourceHash": "sha256:db7c1cfc8f00ae7e7b775b1b10acaf1de6e1dbc4a40111fc0adb011ce24db12b"
+    },
+    {
+      "presetId": "cover_photo_darkroom_contactsheet",
+      "objectKey": "media/preset/cover/cover_photo_darkroom_contactsheet.jpg",
+      "theme": "photography",
+      "style": "darkroom_contactsheet",
+      "visualSubject": "darkroom_contactsheet",
+      "assetKind": "illustrated_photo_cover",
+      "paletteToken": "welcomePetalRose",
+      "palette": [
+        "#422A3E",
+        "#FB7185",
+        "#F9CAD2",
+        "#6066CE",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "photography"
+      ],
+      "sourceHash": "sha256:2fb0c647e96a20e43f923b627d136351974a1246148bc4e39c1e6417e4464bed"
+    },
+    {
+      "presetId": "cover_photo_gallery_wall",
+      "objectKey": "media/preset/cover/cover_photo_gallery_wall.jpg",
+      "theme": "photography",
+      "style": "gallery_wall",
+      "visualSubject": "gallery_wall",
+      "assetKind": "illustrated_photo_cover",
+      "paletteToken": "welcomePetalPurple",
+      "palette": [
+        "#303057",
+        "#A78BFA",
+        "#DBD3FB",
+        "#496EEF",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "photography"
+      ],
+      "sourceHash": "sha256:0b95252552d8d99705dfeac7cc87eb9c8581db066f899f2f3c220a67b697b08f"
+    },
+    {
+      "presetId": "cover_photo_studio_light",
+      "objectKey": "media/preset/cover/cover_photo_studio_light.jpg",
+      "theme": "photography",
+      "style": "studio_light",
+      "visualSubject": "studio_light",
+      "assetKind": "illustrated_photo_cover",
+      "paletteToken": "welcomePetalYellow",
+      "palette": [
+        "#434330",
+        "#FDE047",
+        "#F9F0BC",
+        "#6186BD",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "photography"
+      ],
+      "sourceHash": "sha256:7797d97183b913c486f4beec80b13b164c96784fcbe99296a651a04639bccee6"
+    },
+    {
+      "presetId": "cover_photo_street_shadow",
+      "objectKey": "media/preset/cover/cover_photo_street_shadow.jpg",
+      "theme": "photography",
+      "style": "street_shadow",
+      "visualSubject": "street_shadow",
+      "assetKind": "illustrated_photo_cover",
+      "paletteToken": "welcomePetalOrange",
+      "palette": [
+        "#42322D",
+        "#FB923C",
+        "#F9D5B8",
+        "#6070BA",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "photography"
+      ],
+      "sourceHash": "sha256:6f60e70ca19840a47a6c51f3ce3a33b5c6475a3ecc5b33417954060464abd1c9"
+    },
+    {
+      "presetId": "cover_photo_aerial_grid",
+      "objectKey": "media/preset/cover/cover_photo_aerial_grid.jpg",
+      "theme": "photography",
+      "style": "aerial_grid",
+      "visualSubject": "aerial_grid",
+      "assetKind": "illustrated_photo_cover",
+      "paletteToken": "welcomePetalCyan",
+      "palette": [
+        "#134055",
+        "#22D3EE",
+        "#ADECF7",
+        "#2482EB",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "photography"
+      ],
+      "sourceHash": "sha256:ed55d054d035bb0cfef0f328f19c1e24622ab91cca13043b9a5eb3461e3b4856"
+    },
+    {
+      "presetId": "cover_photo_film_table",
+      "objectKey": "media/preset/cover/cover_photo_film_table.jpg",
+      "theme": "photography",
+      "style": "film_table",
+      "visualSubject": "film_table",
+      "assetKind": "illustrated_photo_cover",
+      "paletteToken": "welcomePetalLime",
+      "palette": [
+        "#2F442C",
+        "#A3E635",
+        "#DAF3B6",
+        "#4887B8",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "photography"
+      ],
+      "sourceHash": "sha256:ff5d84f30767e74d8a6c896a1efafe63a109875ece6fe6699b6c72fcdc9fd314"
+    },
+    {
+      "presetId": "cover_photo_night_tripod",
+      "objectKey": "media/preset/cover/cover_photo_night_tripod.jpg",
+      "theme": "photography",
+      "style": "night_tripod",
+      "visualSubject": "night_tripod",
+      "assetKind": "illustrated_photo_cover",
+      "paletteToken": "welcomePetalEmerald",
+      "palette": [
+        "#174042",
+        "#34D399",
+        "#B3ECD9",
+        "#2982D4",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "photography"
+      ],
+      "sourceHash": "sha256:eb734fb7557740a2f9ff9043b18f1e981c94962ee7883896774b441bf2ae8b69"
+    },
+    {
+      "presetId": "cover_travelphoto_mountain_pass",
+      "objectKey": "media/preset/cover/cover_travelphoto_mountain_pass.jpg",
+      "theme": "travel_photography",
+      "style": "mountain_pass",
+      "visualSubject": "mountain_pass",
+      "assetKind": "illustrated_scenic_cover",
+      "paletteToken": "welcomePetalSky",
+      "palette": [
+        "#183B57",
+        "#38BDF8",
+        "#B4E4FA",
+        "#2A7CEE",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "cross"
+      ],
+      "sourceHash": "sha256:1b0ac551525fc4f426020e85a892f7de7e0fb231a1e5f2e482fe02b6dde2871d"
+    },
+    {
+      "presetId": "cover_travelphoto_landmark_silhouette",
+      "objectKey": "media/preset/cover/cover_travelphoto_landmark_silhouette.jpg",
+      "theme": "travel_photography",
+      "style": "landmark_silhouette",
+      "visualSubject": "landmark_silhouette",
+      "assetKind": "illustrated_landmark_cover",
+      "paletteToken": "welcomePetalPurple",
+      "palette": [
+        "#303057",
+        "#A78BFA",
+        "#DBD3FB",
+        "#496EEF",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "cross"
+      ],
+      "sourceHash": "sha256:a4a17e9f52e04ea7bba9125d53eac746336b49ee8850c4cb8143261f0392e903"
+    },
+    {
+      "presetId": "cover_travelphoto_harbor_sunset",
+      "objectKey": "media/preset/cover/cover_travelphoto_harbor_sunset.jpg",
+      "theme": "travel_photography",
+      "style": "harbor_sunset",
+      "visualSubject": "harbor_sunset",
+      "assetKind": "illustrated_scenic_cover",
+      "paletteToken": "welcomePetalOrange",
+      "palette": [
+        "#42322D",
+        "#FB923C",
+        "#F9D5B8",
+        "#6070BA",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "cross"
+      ],
+      "sourceHash": "sha256:bee7719d48adbc5903be353133e17b33ea5500abd7b3f6032ffe5f496ca532a1"
+    },
+    {
+      "presetId": "cover_travelphoto_rice_terrace",
+      "objectKey": "media/preset/cover/cover_travelphoto_rice_terrace.jpg",
+      "theme": "travel_photography",
+      "style": "rice_terrace",
+      "visualSubject": "rice_terrace",
+      "assetKind": "illustrated_scenic_cover",
+      "paletteToken": "welcomePetalLime",
+      "palette": [
+        "#2F442C",
+        "#A3E635",
+        "#DAF3B6",
+        "#4887B8",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "cross"
+      ],
+      "sourceHash": "sha256:e3bbf00624b9707be2de83d00eab2225a8913c98ea7ed3cc5bec147333eee4cb"
+    },
+    {
+      "presetId": "cover_travelphoto_temple_roof",
+      "objectKey": "media/preset/cover/cover_travelphoto_temple_roof.jpg",
+      "theme": "travel_photography",
+      "style": "temple_roof",
+      "visualSubject": "temple_roof",
+      "assetKind": "illustrated_landmark_cover",
+      "paletteToken": "welcomePetalRose",
+      "palette": [
+        "#422A3E",
+        "#FB7185",
+        "#F9CAD2",
+        "#6066CE",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "cross"
+      ],
+      "sourceHash": "sha256:2789c75309c803a8a8a0b8439339cc33cd08b38311d2bb3d0dfd67c63cd69894"
+    },
+    {
+      "presetId": "cover_travelphoto_waterfall_mist",
+      "objectKey": "media/preset/cover/cover_travelphoto_waterfall_mist.jpg",
+      "theme": "travel_photography",
+      "style": "waterfall_mist",
+      "visualSubject": "waterfall_mist",
+      "assetKind": "illustrated_scenic_cover",
+      "paletteToken": "welcomePetalCyan",
+      "palette": [
+        "#134055",
+        "#22D3EE",
+        "#ADECF7",
+        "#2482EB",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "cross"
+      ],
+      "sourceHash": "sha256:7d97fc64f37c6d6941260c946ab82724d5f4c7c25e43e388e066eec907900b77"
+    },
+    {
+      "presetId": "cover_travelphoto_citywalk_neon",
+      "objectKey": "media/preset/cover/cover_travelphoto_citywalk_neon.jpg",
+      "theme": "travel_photography",
+      "style": "citywalk_neon",
+      "visualSubject": "citywalk_neon",
+      "assetKind": "illustrated_landmark_cover",
+      "paletteToken": "welcomePetalSky",
+      "palette": [
+        "#183B57",
+        "#38BDF8",
+        "#B4E4FA",
+        "#2A7CEE",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "cross"
+      ],
+      "sourceHash": "sha256:a423af1a9937dfc2c4b114fa83ce4864ac15c82867e02c90ee52b2b881bf7c58"
+    },
+    {
+      "presetId": "cover_travelphoto_glacier_light",
+      "objectKey": "media/preset/cover/cover_travelphoto_glacier_light.jpg",
+      "theme": "travel_photography",
+      "style": "glacier_light",
+      "visualSubject": "glacier_light",
+      "assetKind": "illustrated_scenic_cover",
+      "paletteToken": "welcomePetalEmerald",
+      "palette": [
+        "#174042",
+        "#34D399",
+        "#B3ECD9",
+        "#2982D4",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "cross"
+      ],
+      "sourceHash": "sha256:fb3530bb56637549e89147c57962c5ec359f112393e61aabae7ed104f86f4eff"
+    },
+    {
+      "presetId": "cover_travelphoto_cafe_window",
+      "objectKey": "media/preset/cover/cover_travelphoto_cafe_window.jpg",
+      "theme": "travel_photography",
+      "style": "cafe_window",
+      "visualSubject": "cafe_window",
+      "assetKind": "illustrated_landmark_cover",
+      "paletteToken": "welcomePetalYellow",
+      "palette": [
+        "#434330",
+        "#FDE047",
+        "#F9F0BC",
+        "#6186BD",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "cross"
+      ],
+      "sourceHash": "sha256:bc546564e80d8bd4b0de5ca26bc177b42a4907cc2f6d170ad6a3e9a7b80bacd9"
+    },
+    {
+      "presetId": "cover_travelphoto_night_sky",
+      "objectKey": "media/preset/cover/cover_travelphoto_night_sky.jpg",
+      "theme": "travel_photography",
+      "style": "night_sky",
+      "visualSubject": "night_sky",
+      "assetKind": "illustrated_scenic_cover",
+      "paletteToken": "welcomePetalPurple",
+      "palette": [
+        "#303057",
+        "#A78BFA",
+        "#DBD3FB",
+        "#496EEF",
+        "#F8FAFC"
+      ],
+      "usage": [
+        "cross"
+      ],
+      "sourceHash": "sha256:04abca7d83b7ef9a07d82651e390b2e6ac7edd2aa81e0e024b5f66e261755f22"
+    }
+  ],
+  "generatedAt": "2026-07-14T01:10:12.987774+00:00"
+}

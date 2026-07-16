@@ -8,7 +8,7 @@ import 'package:quwoquan_app/core/auth/auth_continuation.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
-import 'package:quwoquan_app/core/widgets/app_toast.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 const String loginDismissFallbackQueryParam = 'dismiss_fallback';
 const String loginGuestDismissPopQueryParam = 'guest_dismiss_pop';
@@ -28,7 +28,7 @@ enum AuthGateReason {
   like,
   follow,
   followingFeed,
-  shareRecord,
+  share,
   personaManage,
   settingsAccount,
   mediaUpload,
@@ -77,167 +77,174 @@ class LoginReasonCopy {
 
 /// 受登录约束的 App 功能入口矩阵（覆盖主导航、内容互动、评论、创作、消息、
 /// 用户关系、设置、媒体上传、举报）。
-const Map<AuthGateReason, AuthGateEntry> authGateMatrix =
-    <AuthGateReason, AuthGateEntry>{
-      AuthGateReason.profileTab: AuthGateEntry(
-        reason: AuthGateReason.profileTab,
-        title: UITextConstants.authGateTitleProfile,
-        subtitle: UITextConstants.authGateSubtitleProfile,
-        prompt: UITextConstants.authGatePromptProfile,
-        requiredOperations: <String>['GetMeProfile'],
-      ),
-      AuthGateReason.createPost: AuthGateEntry(
-        reason: AuthGateReason.createPost,
-        title: UITextConstants.authGateTitleCreate,
-        subtitle: UITextConstants.authGateSubtitleCreate,
-        prompt: UITextConstants.authGatePromptCreate,
-        requiredOperations: <String>['CreatePost', 'UpdatePost'],
-      ),
-      AuthGateReason.openChat: AuthGateEntry(
-        reason: AuthGateReason.openChat,
-        title: UITextConstants.authGateTitleOpenChat,
-        subtitle: UITextConstants.authGateSubtitleOpenChat,
-        prompt: UITextConstants.authGatePromptOpenChat,
-        requiredOperations: <String>['ListConversations', 'GetConversation'],
-      ),
-      AuthGateReason.sendMessage: AuthGateEntry(
-        reason: AuthGateReason.sendMessage,
-        title: UITextConstants.authGateTitleSendMessage,
-        subtitle: UITextConstants.authGateSubtitleSendMessage,
-        prompt: UITextConstants.authGatePromptSendMessage,
-        requiredOperations: <String>['SendMessage'],
-      ),
-      AuthGateReason.comment: AuthGateEntry(
-        reason: AuthGateReason.comment,
-        title: UITextConstants.authGateTitleComment,
-        subtitle: UITextConstants.authGateSubtitleComment,
-        prompt: UITextConstants.authGatePromptComment,
-        requiredOperations: <String>['CreateComment'],
-      ),
-      // 点赞已下放为「游客设备态可写」：LikePost 鉴权为 optional + anonymous_policy=allow，
-      // 游客按 deviceActorId 维度真实写入、登录用户按账号维度写入，互不并账。
-      // 因此点赞不再触发登录门，requiredOperations 留空（保留 reason 以兼容既往调用）。
-      AuthGateReason.like: AuthGateEntry(
-        reason: AuthGateReason.like,
-        title: UITextConstants.authGateTitleLike,
-        subtitle: UITextConstants.authGateSubtitleLike,
-        prompt: UITextConstants.authGatePromptLike,
-        requiredOperations: <String>[],
-      ),
-      AuthGateReason.follow: AuthGateEntry(
-        reason: AuthGateReason.follow,
-        title: UITextConstants.authGateTitleFollow,
-        subtitle: UITextConstants.authGateSubtitleFollow,
-        prompt: UITextConstants.authGatePromptFollow,
-        requiredOperations: <String>['FollowUser'],
-      ),
-      AuthGateReason.greet: AuthGateEntry(
-        reason: AuthGateReason.greet,
-        title: UITextConstants.authGateTitleGreet,
-        subtitle: UITextConstants.authGateSubtitleGreet,
-        prompt: UITextConstants.authGatePromptGreet,
-        requiredOperations: <String>[
-          'SendGreetingRequest',
-          'ReplyGreetingRequest',
-          'IgnoreGreetingRequest',
-          'CancelGreetingRequest',
-          'ListGreetingInbox',
-          'ListGreetingOutbox',
-        ],
-      ),
-      // 关注频道展示「关注的人」的内容流，游客无关注关系，需登录后查看。
-      // 关注流走 GetFeed（鉴权快照为 optional），故此处不声明 requiredOperations，
-      // 登录约束是产品决策而非 API 强制。
-      AuthGateReason.followingFeed: AuthGateEntry(
-        reason: AuthGateReason.followingFeed,
-        title: UITextConstants.authGateTitleFollowingFeed,
-        subtitle: UITextConstants.authGateSubtitleFollowingFeed,
-        prompt: UITextConstants.authGatePromptFollowingFeed,
-        requiredOperations: <String>[],
-      ),
-      // 分享/复制链接已下放为「游客设备态可写」：SharePost 鉴权为 optional +
-      // anonymous_policy=allow，游客按 deviceActorId 维度真实累加、登录按账号维度累加，
-      // 互不并账。因此分享不再触发登录门，requiredOperations 留空。
-      AuthGateReason.shareRecord: AuthGateEntry(
-        reason: AuthGateReason.shareRecord,
-        title: UITextConstants.authGateTitleShare,
-        subtitle: UITextConstants.authGateSubtitleShare,
-        prompt: UITextConstants.authGatePromptShare,
-        requiredOperations: <String>[],
-      ),
-      AuthGateReason.personaManage: AuthGateEntry(
-        reason: AuthGateReason.personaManage,
-        title: UITextConstants.authGateTitlePersona,
-        subtitle: UITextConstants.authGateSubtitlePersona,
-        prompt: UITextConstants.authGatePromptPersona,
-        requiredOperations: <String>['ListPersonas', 'CreatePersona'],
-      ),
-      AuthGateReason.settingsAccount: AuthGateEntry(
-        reason: AuthGateReason.settingsAccount,
-        title: UITextConstants.authGateTitleSettingsAccount,
-        subtitle: UITextConstants.authGateSubtitleSettingsAccount,
-        prompt: UITextConstants.authGatePromptSettingsAccount,
-        requiredOperations: <String>['ListCredentials'],
-      ),
-      AuthGateReason.mediaUpload: AuthGateEntry(
-        reason: AuthGateReason.mediaUpload,
-        title: UITextConstants.authGateTitleMediaUpload,
-        subtitle: UITextConstants.authGateSubtitleMediaUpload,
-        prompt: UITextConstants.authGatePromptMediaUpload,
-        requiredOperations: <String>['CreatePost'],
-      ),
-      AuthGateReason.deletePost: AuthGateEntry(
-        reason: AuthGateReason.deletePost,
-        title: UITextConstants.authGateTitleDeletePost,
-        subtitle: UITextConstants.authGateSubtitleDeletePost,
-        prompt: UITextConstants.authGatePromptDeletePost,
-        requiredOperations: <String>['DeletePost'],
-      ),
-      AuthGateReason.report: AuthGateEntry(
-        reason: AuthGateReason.report,
-        title: UITextConstants.authGateTitleReport,
-        subtitle: UITextConstants.authGateSubtitleReport,
-        prompt: UITextConstants.authGatePromptReport,
-        requiredOperations: <String>['CreateReport'],
-      ),
-      AuthGateReason.joinCircle: AuthGateEntry(
-        reason: AuthGateReason.joinCircle,
-        title: UITextConstants.authGateTitleJoinCircle,
-        subtitle: UITextConstants.authGateSubtitleJoinCircle,
-        prompt: UITextConstants.authGatePromptJoinCircle,
-        requiredOperations: <String>['JoinCircle'],
-      ),
-      // 添加联系人 / 发起群聊 / 建圈子 属「先开面板、动作再登录」的产品级动作门，
-      // 登录约束是产品决策而非单一 required API，故 requiredOperations 留空。
-      AuthGateReason.addContact: AuthGateEntry(
-        reason: AuthGateReason.addContact,
-        title: UITextConstants.authGateTitleAddContact,
-        subtitle: UITextConstants.authGateSubtitleAddContact,
-        prompt: UITextConstants.authGatePromptAddContact,
-        requiredOperations: <String>[],
-      ),
-      AuthGateReason.startGroupChat: AuthGateEntry(
-        reason: AuthGateReason.startGroupChat,
-        title: UITextConstants.authGateTitleStartGroupChat,
-        subtitle: UITextConstants.authGateSubtitleStartGroupChat,
-        prompt: UITextConstants.authGatePromptStartGroupChat,
-        requiredOperations: <String>[],
-      ),
-      AuthGateReason.createCircle: AuthGateEntry(
-        reason: AuthGateReason.createCircle,
-        title: UITextConstants.authGateTitleCreateCircle,
-        subtitle: UITextConstants.authGateSubtitleCreateCircle,
-        prompt: UITextConstants.authGatePromptCreateCircle,
-        requiredOperations: <String>[],
-      ),
-      AuthGateReason.generic: AuthGateEntry(
-        reason: AuthGateReason.generic,
-        title: UITextConstants.authGateTitleGeneric,
-        subtitle: UITextConstants.authGateSubtitleGeneric,
-        prompt: UITextConstants.authGatePromptGeneric,
-        requiredOperations: <String>[],
-      ),
-    };
+const Map<AuthGateReason, AuthGateEntry>
+authGateMatrix = <AuthGateReason, AuthGateEntry>{
+  AuthGateReason.profileTab: AuthGateEntry(
+    reason: AuthGateReason.profileTab,
+    title: UITextConstants.authGateTitleProfile,
+    subtitle: UITextConstants.authGateSubtitleProfile,
+    prompt: UITextConstants.authGatePromptProfile,
+    requiredOperations: <String>[
+      AppCloudOperationIds.userUserProfileGetSubAccountProfile,
+    ],
+  ),
+  AuthGateReason.createPost: AuthGateEntry(
+    reason: AuthGateReason.createPost,
+    title: UITextConstants.authGateTitleCreate,
+    subtitle: UITextConstants.authGateSubtitleCreate,
+    prompt: UITextConstants.authGatePromptCreate,
+    requiredOperations: <String>[
+      AppCloudOperationIds.contentPostCreatePost,
+      AppCloudOperationIds.contentPostPublishPost,
+    ],
+  ),
+  AuthGateReason.openChat: AuthGateEntry(
+    reason: AuthGateReason.openChat,
+    title: UITextConstants.authGateTitleOpenChat,
+    subtitle: UITextConstants.authGateSubtitleOpenChat,
+    prompt: UITextConstants.authGatePromptOpenChat,
+    requiredOperations: <String>[
+      AppCloudOperationIds.chatConversationListConversations,
+      AppCloudOperationIds.chatConversationGetConversation,
+    ],
+  ),
+  AuthGateReason.sendMessage: AuthGateEntry(
+    reason: AuthGateReason.sendMessage,
+    title: UITextConstants.authGateTitleSendMessage,
+    subtitle: UITextConstants.authGateSubtitleSendMessage,
+    prompt: UITextConstants.authGatePromptSendMessage,
+    requiredOperations: <String>[AppCloudOperationIds.chatMessageSendMessage],
+  ),
+  AuthGateReason.comment: AuthGateEntry(
+    reason: AuthGateReason.comment,
+    title: UITextConstants.authGateTitleComment,
+    subtitle: UITextConstants.authGateSubtitleComment,
+    prompt: UITextConstants.authGatePromptComment,
+    requiredOperations: <String>[],
+  ),
+  // 点赞已下放为「游客设备态可写」：LikePost 鉴权为 optional + anonymous_policy=allow，
+  // 游客按 deviceActorId 维度真实写入、登录用户按账号维度写入，互不并账。
+  // 因此点赞不再触发登录门，requiredOperations 留空；reason 仅表达设备态动作的
+  // UX 分类，不映射到 required operation。
+  AuthGateReason.like: AuthGateEntry(
+    reason: AuthGateReason.like,
+    title: UITextConstants.authGateTitleLike,
+    subtitle: UITextConstants.authGateSubtitleLike,
+    prompt: UITextConstants.authGatePromptLike,
+    requiredOperations: <String>[],
+  ),
+  AuthGateReason.follow: AuthGateEntry(
+    reason: AuthGateReason.follow,
+    title: UITextConstants.authGateTitleFollow,
+    subtitle: UITextConstants.authGateSubtitleFollow,
+    prompt: UITextConstants.authGatePromptFollow,
+    requiredOperations: <String>[
+      AppCloudOperationIds.userPersonaRelationshipFollowUser,
+    ],
+  ),
+  AuthGateReason.greet: AuthGateEntry(
+    reason: AuthGateReason.greet,
+    title: UITextConstants.authGateTitleGreet,
+    subtitle: UITextConstants.authGateSubtitleGreet,
+    prompt: UITextConstants.authGatePromptGreet,
+    requiredOperations: <String>[],
+  ),
+  // 关注频道展示「关注的人」的内容流，游客无关注关系，需登录后查看。
+  // 关注流走 GetFeed（鉴权快照为 optional），故此处不声明 requiredOperations，
+  // 登录约束是产品决策而非 API 强制。
+  AuthGateReason.followingFeed: AuthGateEntry(
+    reason: AuthGateReason.followingFeed,
+    title: UITextConstants.authGateTitleFollowingFeed,
+    subtitle: UITextConstants.authGateSubtitleFollowingFeed,
+    prompt: UITextConstants.authGatePromptFollowingFeed,
+    requiredOperations: <String>[],
+  ),
+  // 系统分享、复制链接和转发本身不要求账号；只有圈内投放等实际业务写命令
+  // 在其独立入口通过对应 operation 的登录门处理。
+  AuthGateReason.share: AuthGateEntry(
+    reason: AuthGateReason.share,
+    title: UITextConstants.authGateTitleShare,
+    subtitle: UITextConstants.authGateSubtitleShare,
+    prompt: UITextConstants.authGatePromptShare,
+    requiredOperations: <String>[],
+  ),
+  AuthGateReason.personaManage: AuthGateEntry(
+    reason: AuthGateReason.personaManage,
+    title: UITextConstants.authGateTitlePersona,
+    subtitle: UITextConstants.authGateSubtitlePersona,
+    prompt: UITextConstants.authGatePromptPersona,
+    requiredOperations: <String>[],
+  ),
+  AuthGateReason.settingsAccount: AuthGateEntry(
+    reason: AuthGateReason.settingsAccount,
+    title: UITextConstants.authGateTitleSettingsAccount,
+    subtitle: UITextConstants.authGateSubtitleSettingsAccount,
+    prompt: UITextConstants.authGatePromptSettingsAccount,
+    requiredOperations: <String>[],
+  ),
+  AuthGateReason.mediaUpload: AuthGateEntry(
+    reason: AuthGateReason.mediaUpload,
+    title: UITextConstants.authGateTitleMediaUpload,
+    subtitle: UITextConstants.authGateSubtitleMediaUpload,
+    prompt: UITextConstants.authGatePromptMediaUpload,
+    requiredOperations: <String>[AppCloudOperationIds.contentPostCreatePost],
+  ),
+  AuthGateReason.deletePost: AuthGateEntry(
+    reason: AuthGateReason.deletePost,
+    title: UITextConstants.authGateTitleDeletePost,
+    subtitle: UITextConstants.authGateSubtitleDeletePost,
+    prompt: UITextConstants.authGatePromptDeletePost,
+    requiredOperations: <String>[],
+  ),
+  AuthGateReason.report: AuthGateEntry(
+    reason: AuthGateReason.report,
+    title: UITextConstants.authGateTitleReport,
+    subtitle: UITextConstants.authGateSubtitleReport,
+    prompt: UITextConstants.authGatePromptReport,
+    requiredOperations: <String>[
+      AppCloudOperationIds.contentReportCreateReport,
+    ],
+  ),
+  AuthGateReason.joinCircle: AuthGateEntry(
+    reason: AuthGateReason.joinCircle,
+    title: UITextConstants.authGateTitleJoinCircle,
+    subtitle: UITextConstants.authGateSubtitleJoinCircle,
+    prompt: UITextConstants.authGatePromptJoinCircle,
+    requiredOperations: <String>[
+      AppCloudOperationIds.circleCircleMembershipJoinCircle,
+    ],
+  ),
+  // 添加联系人 / 发起群聊 / 建圈子 属「先开面板、动作再登录」的产品级动作门，
+  // 登录约束是产品决策而非单一 required API，故 requiredOperations 留空。
+  AuthGateReason.addContact: AuthGateEntry(
+    reason: AuthGateReason.addContact,
+    title: UITextConstants.authGateTitleAddContact,
+    subtitle: UITextConstants.authGateSubtitleAddContact,
+    prompt: UITextConstants.authGatePromptAddContact,
+    requiredOperations: <String>[],
+  ),
+  AuthGateReason.startGroupChat: AuthGateEntry(
+    reason: AuthGateReason.startGroupChat,
+    title: UITextConstants.authGateTitleStartGroupChat,
+    subtitle: UITextConstants.authGateSubtitleStartGroupChat,
+    prompt: UITextConstants.authGatePromptStartGroupChat,
+    requiredOperations: <String>[],
+  ),
+  AuthGateReason.createCircle: AuthGateEntry(
+    reason: AuthGateReason.createCircle,
+    title: UITextConstants.authGateTitleCreateCircle,
+    subtitle: UITextConstants.authGateSubtitleCreateCircle,
+    prompt: UITextConstants.authGatePromptCreateCircle,
+    requiredOperations: <String>[],
+  ),
+  AuthGateReason.generic: AuthGateEntry(
+    reason: AuthGateReason.generic,
+    title: UITextConstants.authGateTitleGeneric,
+    subtitle: UITextConstants.authGateSubtitleGeneric,
+    prompt: UITextConstants.authGatePromptGeneric,
+    requiredOperations: <String>[],
+  ),
+};
 
 extension AuthGateReasonX on AuthGateReason {
   AuthGateEntry get entry =>
@@ -284,11 +291,13 @@ AuthGateReason? requiredRouteGateForLocation(String loc) {
   return null;
 }
 
+enum LoginDismissPolicy { popPrevious, safeFallback, hostControlledClose }
+
 String buildLoginRouteLocation({
   required String reasonName,
   String? redirect,
   String? dismissFallback,
-  bool allowGuestDismissPop = true,
+  LoginDismissPolicy dismissPolicy = LoginDismissPolicy.popPrevious,
 }) {
   final reason = _trimmedOrNull(reasonName);
   final redirectLocation = _trimmedOrNull(redirect);
@@ -297,7 +306,7 @@ String buildLoginRouteLocation({
     'reason': ?reason,
     'redirect': ?redirectLocation,
     loginDismissFallbackQueryParam: ?fallbackLocation,
-    loginGuestDismissPopQueryParam: allowGuestDismissPop ? '1' : '0',
+    loginGuestDismissPopQueryParam: dismissPolicy.name,
   };
   return Uri(
     path: AppRoutePaths.loginPathTemplate,
@@ -305,7 +314,12 @@ String buildLoginRouteLocation({
   ).toString();
 }
 
-bool loginGuestDismissCanPopFromQuery(String? raw) => raw != '0';
+LoginDismissPolicy loginDismissPolicyFromQuery(String? raw) {
+  return LoginDismissPolicy.values.firstWhere(
+    (value) => value.name == raw,
+    orElse: () => LoginDismissPolicy.popPrevious,
+  );
+}
 
 String currentLoginDismissFallback(BuildContext context) {
   try {
@@ -331,19 +345,28 @@ void openLoginPage(
   required String reasonName,
   String? redirect,
   String? dismissFallback,
-  bool allowGuestDismissPop = true,
+  LoginDismissPolicy dismissPolicy = LoginDismissPolicy.popPrevious,
   bool replace = false,
 }) {
   final location = buildLoginRouteLocation(
     reasonName: reasonName,
     redirect: redirect,
     dismissFallback: dismissFallback,
-    allowGuestDismissPop: allowGuestDismissPop,
+    dismissPolicy: dismissPolicy,
   );
   if (replace) {
     context.go(location);
   } else {
     context.push(location);
+  }
+}
+
+bool _isLoginSurfaceActive(BuildContext context) {
+  try {
+    return GoRouter.of(context).routerDelegate.currentConfiguration.uri.path ==
+        AppRoutePaths.loginPathTemplate;
+  } catch (_) {
+    return false;
   }
 }
 
@@ -455,19 +478,18 @@ class AuthGate {
   AuthGate._();
 
   static const Duration _debounceWindow = Duration(milliseconds: 800);
-  static final Map<AuthGateReason, DateTime> _lastTriggered =
-      <AuthGateReason, DateTime>{};
+  static DateTime? _lastTriggeredAt;
 
   @visibleForTesting
-  static void resetDebounce() => _lastTriggered.clear();
+  static void resetDebounce() => _lastTriggeredAt = null;
 
-  static bool _isDebounced(AuthGateReason reason) {
+  static bool _isDebounced(AuthGateReason _) {
     final now = DateTime.now();
-    final last = _lastTriggered[reason];
+    final last = _lastTriggeredAt;
     if (last != null && now.difference(last) < _debounceWindow) {
       return true;
     }
-    _lastTriggered[reason] = now;
+    _lastTriggeredAt = now;
     return false;
   }
 
@@ -475,15 +497,14 @@ class AuthGate {
       ref.read(authSessionControllerProvider).isAuthenticated;
 }
 
-/// 「游客设备态可写」动作：点赞 / 分享。这些动作不再触发登录门——游客以
-/// deviceActorId 设备维度真实写入、登录用户以账号维度写入，云侧独立计数不并账
-/// （详见 service.yaml LikePost/SharePost = optional + anonymous_policy:allow）。
+/// 无需账号的动作：点赞与系统分享。系统分享仅交给平台，不会伪造外部平台回执；
+/// 需要真实业务写入的圈内投放会在它自己的命令入口再次执行鉴权。
 ///
 /// 收口为单一真相源：所有 like/share 入口都通过 [requireLogin] / [runWhenLoggedIn]
 /// 统一放行，无需逐个改调用点，避免遗漏导致游客被错误拦截。
 const Set<AuthGateReason> guestWritableAuthGateReasons = <AuthGateReason>{
   AuthGateReason.like,
-  AuthGateReason.shareRecord,
+  AuthGateReason.share,
 };
 
 /// 拦截受限动作。返回 `true` 表示可继续（已登录或属游客设备态可写动作），
@@ -494,29 +515,21 @@ Future<bool> requireLogin(
   AuthGateReason reason, {
   String? redirect,
   String? dismissFallback,
-  bool allowGuestDismissPop = true,
+  LoginDismissPolicy dismissPolicy = LoginDismissPolicy.popPrevious,
 }) async {
-  // 游客设备态可写动作（点赞/分享）：游客与登录用户都直接放行，乐观态与 outbox
-  // 写入由调用方完成，设备维度计数由云侧依据 X-Client-Device-Actor-Id 实现。
+  // 无需账号的点赞/系统分享动作直接放行；它们不创建或伪造站外分享业务事实。
   if (guestWritableAuthGateReasons.contains(reason)) {
     return true;
   }
   if (AuthGate.isAuthenticated(ref)) {
     return true;
   }
+  if (_isLoginSurfaceActive(context)) {
+    return false;
+  }
   if (AuthGate._isDebounced(reason)) {
     return false;
   }
-  final pending = ref.read(authContinuationProvider);
-  final semantic = authGateSemantic(
-    context,
-    reason: reason,
-    continuation: pending,
-  );
-  final toastMessage = (semantic.secondaryMessage ?? '').trim().isNotEmpty
-      ? semantic.secondaryMessage!.trim()
-      : semantic.message;
-  AppToast.show(context, toastMessage);
   if (!context.mounted) {
     return false;
   }
@@ -525,7 +538,7 @@ Future<bool> requireLogin(
     reasonName: reason.name,
     redirect: redirect,
     dismissFallback: dismissFallback ?? currentLoginDismissFallback(context),
-    allowGuestDismissPop: allowGuestDismissPop,
+    dismissPolicy: dismissPolicy,
   );
   return false;
 }
@@ -541,7 +554,7 @@ void runWhenLoggedIn(
   FutureOr<void> Function() action, {
   String? redirect,
   String? dismissFallback,
-  bool allowGuestDismissPop = true,
+  LoginDismissPolicy dismissPolicy = LoginDismissPolicy.popPrevious,
 }) {
   unawaited(() async {
     final allowed = await requireLogin(
@@ -550,7 +563,7 @@ void runWhenLoggedIn(
       reason,
       redirect: redirect,
       dismissFallback: dismissFallback,
-      allowGuestDismissPop: allowGuestDismissPop,
+      dismissPolicy: dismissPolicy,
     );
     if (!allowed || !context.mounted) {
       return;

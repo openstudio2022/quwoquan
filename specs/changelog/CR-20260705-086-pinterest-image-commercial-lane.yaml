@@ -24,7 +24,7 @@ policy:
   - local runtime 的完成判定必须来自 workflow state / audit / downstream evidence，禁止 shell grep WORKFLOW COMPLETE 作为唯一完成信号。
 evidence:
   local_contract:
-    - quwoquan_data/.venv/bin/python -m py_compile quwoquan_data/scripts/_common/execution_branch.py quwoquan_data/scripts/site_supply/authorized_assets.py quwoquan_data/scripts/site_supply/core.py quwoquan_data/scripts/vertical/license.py
+    - quwoquan_data/.venv/bin/python -m py_compile quwoquan_data/scripts/core/execution_branch.py quwoquan_data/scripts/site_supply/authorized_assets.py quwoquan_data/scripts/site_supply/core.py quwoquan_data/scripts/governance/coverage/license.py
     - quwoquan_data/.venv/bin/python -m py_compile quwoquan_data/scripts/site_supply/pinterest_public_pin.py quwoquan_data/scripts/site_supply/cli_handlers.py
     - quwoquan_data/.venv/bin/python -m pytest quwoquan_data/tests/local_contract/common/test_image_provider_compliance__local_contract_test.py quwoquan_data/tests/local_contract/vertical/test_image_rights_asset_level__local_contract_test.py quwoquan_data/tests/local_contract/vertical/test_travel_source_registry__local_contract_test.py -q
     - quwoquan_data/.venv/bin/python -m pytest quwoquan_data/tests/local_contract/site_supply/test_tuchong_authorized_assets__local_contract_test.py -q
@@ -32,7 +32,7 @@ evidence:
   api_integration:
     - quwoquan_data/.venv/bin/python -m pytest quwoquan_data/tests/local_contract/verify/test_site_scale_readiness__local_contract_test.py -q
   runtime_e2e:
-    - 待本轮 H100/H1000 真跑后回填 task_workflow_state.json、trial_review.json、managed_batch_audit.json、site_rollup_report.json 与 downstream_e2e 报告。
+    - 待本轮 H100/H1000 真跑后回填 workflow_state.json、trial_review.json、managed_batch_audit.json、site_rollup_report.json 与 downstream_e2e 报告。
 rollout:
   h100:
     target: 100 Pinterest 单源图片作品

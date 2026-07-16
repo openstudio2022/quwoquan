@@ -6,8 +6,11 @@ import UIKit
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
+  private let processStartUptime = ProcessInfo.processInfo.systemUptime
   private let videoEditingPlugin = VideoEditingPlugin()
   private let personalAssistantNativeApiPlugin = PersonalAssistantNativeApiPlugin()
+  private let commercialAuthPlugin = CommercialAuthPlugin()
+  private let aliyunOneTapPlugin = AliyunOneTapPlugin()
 
   override func application(
     _ application: UIApplication,
@@ -25,11 +28,24 @@ import UIKit
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     NSLog("QWQStartup ios_implicit_flutter_engine_initialized")
+    registerStartupTimingsChannel(
+      binaryMessenger: engineBridge.applicationRegistrar.messenger()
+    )
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
-    registerMethodChannels(binaryMessenger: engineBridge.applicationRegistrar.messenger())
+    registerMethodChannels(
+      binaryMessenger: engineBridge.applicationRegistrar.messenger(),
+      includeStartupTimings: false
+    )
   }
 
-  private func registerMethodChannels(binaryMessenger: FlutterBinaryMessenger) {
+  private func registerMethodChannels(
+    binaryMessenger: FlutterBinaryMessenger,
+    includeStartupTimings: Bool = true
+  ) {
+    if includeStartupTimings {
+      registerStartupTimingsChannel(binaryMessenger: binaryMessenger)
+    }
+
     let videoEditingChannel = FlutterMethodChannel(
       name: "quwoquan/video_editing",
       binaryMessenger: binaryMessenger
@@ -46,24 +62,79 @@ import UIKit
       self?.personalAssistantNativeApiPlugin.handle(call: call, result: result)
     }
 
+    let nativeAuthChannel = FlutterMethodChannel(
+      name: "quwoquan/auth/native_bridge",
+      binaryMessenger: binaryMessenger
+    )
+    nativeAuthChannel.setMethodCallHandler { [weak self] call, result in
+      self?.commercialAuthPlugin.handle(call: call, result: result)
+    }
+
     let oneTapLoginChannel = FlutterMethodChannel(
       name: "quwoquan/auth/one_tap",
       binaryMessenger: binaryMessenger
     )
-    oneTapLoginChannel.setMethodCallHandler { call, result in
-      switch call.method {
-      case "isAvailable":
-        result(false)
-      case "requestLoginToken":
-        result(FlutterError(
-          code: "one_tap_sdk_not_configured",
-          message: "One-tap login SDK is not configured for this build.",
-          details: nil
-        ))
-      default:
-        result(FlutterMethodNotImplemented)
-      }
+    oneTapLoginChannel.setMethodCallHandler { [weak self] call, result in
+      self?.aliyunOneTapPlugin.handle(call: call, result: result)
     }
+  }
+
+  private func registerStartupTimingsChannel(
+    binaryMessenger: FlutterBinaryMessenger
+  ) {
+    let startupTimingsChannel = FlutterMethodChannel(
+      name: "quwoquan/startup/timings",
+      binaryMessenger: binaryMessenger
+    )
+    startupTimingsChannel.setMethodCallHandler { [weak self] call, result in
+      if call.method == "recordStartupEvent" {
+        let event = call.arguments as? String ?? "{}"
+        NSLog("QWQStartup startup_event %@", event)
+        result(nil)
+        return
+      }
+      guard call.method == "readProcessSegments" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      guard let self else {
+        result(nil)
+        return
+      }
+      let elapsedMs = Int(
+        (ProcessInfo.processInfo.systemUptime - self.processStartUptime) * 1000
+      )
+      result([
+        "elapsedSinceProcessStartMs": elapsedMs,
+        "deadlineOrigin": "ios_process",
+      ])
+    }
+  }
+
+  override func application(
+    _ app: UIApplication,
+    open url: URL,
+    options: [UIApplication.OpenURLOptionsKey: Any] = [:]
+  ) -> Bool {
+    if commercialAuthPlugin.handle(url: url) {
+      return true
+    }
+    return super.application(app, open: url, options: options)
+  }
+
+  override func application(
+    _ application: UIApplication,
+    continue userActivity: NSUserActivity,
+    restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void
+  ) -> Bool {
+    if commercialAuthPlugin.handle(userActivity: userActivity) {
+      return true
+    }
+    return super.application(
+      application,
+      continue: userActivity,
+      restorationHandler: restorationHandler
+    )
   }
 }
 

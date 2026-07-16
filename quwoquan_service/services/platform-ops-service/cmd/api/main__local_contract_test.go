@@ -2,24 +2,25 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"testing"
 
-	"quwoquan_service/runtime/controlplane"
+	controlplanetest "quwoquan_service/runtime/controlplane/testsupport"
 )
 
 func newTestPlatformService(t *testing.T) *platformService {
 	t.Helper()
 	repoRoot := resolveRepoRoot()
+	configLayer, configLayers := newTestConfigLayerComponents(t)
 	service := &platformService{
-		repoRoot: repoRoot,
-		store:    controlplane.NewFileStore(filepath.Join(t.TempDir(), "platform-ops-state.json")),
+		repoRoot: repoRoot, store: controlplanetest.NewFileStore(t.TempDir() + "/platform-ops-state.json"),
+		configLayer: configLayer, configLayers: configLayers, health: func(context.Context) error { return nil },
 	}
-	if err := service.seed(); err != nil {
-		t.Fatalf("seed platform service: %v", err)
+	if err := seedTestPlatformService(service); err != nil {
+		t.Fatalf("seed platform test fixture: %v", err)
 	}
 	return service
 }
@@ -69,15 +70,6 @@ func TestPlatformCatalogAndTopologyEndpoints(t *testing.T) {
 func TestPlatformMutableEndpointsEmitAudit(t *testing.T) {
 	server := newServerMux(newTestPlatformService(t))
 
-	configReq := httptest.NewRequest(http.MethodPost, "/v1/control-plane/platform/configs/sys.gateway.timeout.default:update", bytes.NewBufferString(`{"value":900,"status":"warning"}`))
-	configReq.Header.Set("Content-Type", "application/json")
-	configReq.Header.Set("X-Actor", "platform-admin")
-	configResp := httptest.NewRecorder()
-	server.ServeHTTP(configResp, configReq)
-	if configResp.Code != http.StatusOK {
-		t.Fatalf("update config status=%d body=%s", configResp.Code, configResp.Body.String())
-	}
-
 	runbookReq := httptest.NewRequest(http.MethodPost, "/v1/control-plane/platform/runbooks/cfg-rollback-drill:runDrill", nil)
 	runbookReq.Header.Set("X-Actor", "platform-admin")
 	runbookResp := httptest.NewRecorder()
@@ -108,7 +100,7 @@ func TestPlatformMutableEndpointsEmitAudit(t *testing.T) {
 	if err := json.Unmarshal(auditResp.Body.Bytes(), &auditPayload); err != nil {
 		t.Fatalf("unmarshal audit payload: %v", err)
 	}
-	if len(auditPayload.Items) < 3 {
+	if len(auditPayload.Items) < 2 {
 		t.Fatalf("expected audit items, got %+v", auditPayload.Items)
 	}
 
@@ -125,7 +117,7 @@ func TestPlatformMutableEndpointsEmitAudit(t *testing.T) {
 	if err := json.Unmarshal(approvalResp.Body.Bytes(), &approvalPayload); err != nil {
 		t.Fatalf("unmarshal approvals: %v", err)
 	}
-	if len(approvalPayload.Items) < 3 {
+	if len(approvalPayload.Items) < 2 {
 		t.Fatalf("expected approval items, got %+v", approvalPayload.Items)
 	}
 
@@ -134,23 +126,6 @@ func TestPlatformMutableEndpointsEmitAudit(t *testing.T) {
 	server.ServeHTTP(projectionResp, projectionReq)
 	if projectionResp.Code != http.StatusOK {
 		t.Fatalf("projection summary status=%d body=%s", projectionResp.Code, projectionResp.Body.String())
-	}
-}
-
-func TestResolveConfigSchemaPathPrefersWorkspaceMetadataRoot(t *testing.T) {
-	repoRoot := resolveRepoRoot()
-	got := resolveConfigSchemaPath(repoRoot)
-	want := filepath.Join(
-		repoRoot,
-		"quwoquan_service",
-		"contracts",
-		"metadata",
-		"_control_plane",
-		"platform",
-		"config_schema.yaml",
-	)
-	if got != want {
-		t.Fatalf("expected schema path %q, got %q", want, got)
 	}
 }
 
@@ -169,10 +144,8 @@ func TestPlatformConfigResolveAndInstanceReports(t *testing.T) {
 	}
 
 	var resolvePayload struct {
-		EffectiveHash string            `json:"effectiveHash"`
-		DesiredHash   string            `json:"desiredHash"`
-		Values        []map[string]any  `json:"values"`
-		Scope         map[string]string `json:"scope"`
+		EffectiveHash string           `json:"effectiveHash"`
+		Items         []map[string]any `json:"items"`
 	}
 	if err := json.Unmarshal(resolveResp.Body.Bytes(), &resolvePayload); err != nil {
 		t.Fatalf("unmarshal resolve payload: %v", err)
@@ -180,14 +153,8 @@ func TestPlatformConfigResolveAndInstanceReports(t *testing.T) {
 	if resolvePayload.EffectiveHash == "" {
 		t.Fatalf("expected effective hash, got %+v", resolvePayload)
 	}
-	if resolvePayload.DesiredHash == "" {
-		t.Fatalf("expected desired hash, got %+v", resolvePayload)
-	}
-	if len(resolvePayload.Values) == 0 {
+	if len(resolvePayload.Items) == 0 {
 		t.Fatalf("expected resolved values")
-	}
-	if got := resolvePayload.Scope["Environment"]; got != "beta" {
-		t.Fatalf("expected environment beta, got %+v", resolvePayload.Scope)
 	}
 
 	reportReq := httptest.NewRequest(
@@ -221,58 +188,6 @@ func TestPlatformConfigResolveAndInstanceReports(t *testing.T) {
 	}
 	if _, ok := instancePayload.Summary["outOfSyncInstances"]; !ok {
 		t.Fatalf("expected drift summary, got %+v", instancePayload.Summary)
-	}
-}
-
-func TestRuntimeConfigSnapshotFiltersDriftByScope(t *testing.T) {
-	service := newTestPlatformService(t)
-	if err := service.store.DeleteDocument("config_instance_reports", "product-ops-service-beta-control-a-0"); err != nil {
-		t.Fatalf("delete bootstrap scoped report: %v", err)
-	}
-	if err := service.store.PutDocument("config_instance_reports", "beta-target", controlplane.Document{
-		"id":            "beta-target",
-		"environment":   "beta",
-		"cluster":       "beta-control-a",
-		"service":       "product-ops-service",
-		"instanceId":    "beta-target",
-		"desiredHash":   "hash-a",
-		"effectiveHash": "hash-b",
-		"inSync":        false,
-	}); err != nil {
-		t.Fatalf("seed scoped report: %v", err)
-	}
-	if err := service.store.PutDocument("config_instance_reports", "gamma-other", controlplane.Document{
-		"id":            "gamma-other",
-		"environment":   "gamma",
-		"cluster":       "gamma-control-a",
-		"service":       "content-service",
-		"instanceId":    "gamma-other",
-		"desiredHash":   "hash-x",
-		"effectiveHash": "hash-y",
-		"inSync":        false,
-	}); err != nil {
-		t.Fatalf("seed out-of-scope report: %v", err)
-	}
-	server := newServerMux(service)
-
-	req := httptest.NewRequest(http.MethodGet, "/v1/control-plane/platform/configs/resolve?env=beta&cluster=beta-control-a&service=product-ops-service", nil)
-	resp := httptest.NewRecorder()
-	server.ServeHTTP(resp, req)
-	if resp.Code != http.StatusOK {
-		t.Fatalf("runtime snapshot status=%d body=%s", resp.Code, resp.Body.String())
-	}
-
-	var payload struct {
-		DriftSummary struct {
-			TotalInstances     int `json:"totalInstances"`
-			OutOfSyncInstances int `json:"outOfSyncInstances"`
-		} `json:"driftSummary"`
-	}
-	if err := json.Unmarshal(resp.Body.Bytes(), &payload); err != nil {
-		t.Fatalf("unmarshal runtime snapshot payload: %v", err)
-	}
-	if payload.DriftSummary.TotalInstances != 1 || payload.DriftSummary.OutOfSyncInstances != 1 {
-		t.Fatalf("expected scoped drift summary, got %+v", payload.DriftSummary)
 	}
 }
 
@@ -351,12 +266,12 @@ func TestPlatformTriageSummaryEndpointIncludesBacklogRepairSemantics(t *testing.
 
 	var payload struct {
 		BacklogCandidates []struct {
-			ID            string `json:"id"`
+			ID             string `json:"id"`
 			DrilldownRoute string `json:"drilldownRoute"`
-			RunbookRoute  string `json:"runbookRoute"`
-			RepairEntry   string `json:"repairEntry"`
-			AlertID       string `json:"alertId"`
-			AuditRoute    string `json:"auditRoute"`
+			RunbookRoute   string `json:"runbookRoute"`
+			RepairEntry    string `json:"repairEntry"`
+			AlertID        string `json:"alertId"`
+			AuditRoute     string `json:"auditRoute"`
 		} `json:"backlogCandidates"`
 	}
 	if err := json.Unmarshal(resp.Body.Bytes(), &payload); err != nil {

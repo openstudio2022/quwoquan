@@ -1,0 +1,54 @@
+version: 1
+service:
+  name: recommendation-service
+  domain: recommendation
+  owner: recommendation-team
+  description: 推荐交集访问状态仅由 Recommendation Facade 修改和查询，不向其他上下文暴露存储。
+  commercial_defaults:
+    status: blocked
+    block_reason: RecommendationIntersectionVisitState Store/outbox 与 transport 尚未完成生产装配
+    gap_id: RECOMMENDATION_INTERSECTION_VISIT_WIRING
+    target_story: app-cloud-business-object-commercial-closure
+api_routes:
+  - method: POST
+    path: /v1/recommendation/intersections/visit
+    operation: MarkRecommendationIntersectionsVisited
+    actor: persona
+    auth: required
+    application:
+      kind: command
+      facet: RecommendationIntersectionVisitCommandFacade
+      method: markVisited
+      aggregate_owner: RecommendationIntersectionVisitState
+      mutation_target: RecommendationIntersectionVisitState
+      invariant_target: RecommendationIntersectionVisitState
+    response_body_kind: ack
+    authorization:
+      principal: persona
+      ownership_policy: own_intersection_visit_state
+    commercial:
+      status: blocked
+      block_reason: 真实 Mongo Store/outbox 与 generated client 尚未完成
+      gap_id: RECOMMENDATION_INTERSECTION_VISIT_WIRING
+      target_story: app-cloud-business-object-commercial-closure
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes: [RECOMMENDATION.USER.invalid_argument, RECOMMENDATION.SYSTEM.internal_error]
+    privacy:
+      request_classification: PII
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: recommendation_intersection_visit
+      trace: true
+      attributes: [target_type, outcome]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+consumers:
+  - name: recommendation-engine
+    capabilities: [mark_recommendation_intersection_visited, read_recommendation_intersection_visit_state]

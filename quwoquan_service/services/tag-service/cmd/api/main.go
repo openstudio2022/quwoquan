@@ -12,11 +12,11 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	rtmongo "quwoquan_service/internal/platform/mongodb"
 	rtgov "quwoquan_service/runtime/governance"
 	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
 	rtmetrics "quwoquan_service/runtime/metrics"
-	rtmongo "quwoquan_service/runtime/mongodb"
 	robs "quwoquan_service/runtime/observability"
 	rtotel "quwoquan_service/runtime/otel"
 

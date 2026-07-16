@@ -1,0 +1,47 @@
+version: 1
+aggregate: RecommendationModelRelease
+backend: postgres
+
+tables:
+  recommendation_model_releases:
+    entity: RecommendationModelRelease
+    role: authoritative
+    pk: id
+    columns:
+      - { name: id, type: VARCHAR(64), constraints: [PK] }
+      - { name: scenario, type: VARCHAR(64), constraints: [NOT_NULL] }
+      - { name: model_digest, type: VARCHAR(128), constraints: [NOT_NULL] }
+      - { name: feature_contract_version, type: VARCHAR(64), constraints: [NOT_NULL] }
+      - { name: status, type: VARCHAR(32), constraints: [NOT_NULL] }
+      - { name: rollout_percent, type: INTEGER, constraints: [NOT_NULL] }
+      - { name: created_at, type: TIMESTAMPTZ, constraints: [NOT_NULL] }
+      - { name: activated_at, type: TIMESTAMPTZ, constraints: [NULLABLE] }
+    indexes:
+      - { name: idx_model_release_scenario_status, columns: [scenario, status, created_at] }
+
+  recommendation_model_release_command_receipts:
+    entity: RecommendationModelRelease
+    role: authoritative
+    pk: idempotency_key
+    description: 与发布状态和 outbox 在同一 PostgreSQL transaction 提交的幂等回执。
+    columns:
+      - { name: idempotency_key, type: VARCHAR(128), constraints: [PK, NOT_NULL] }
+      - { name: aggregate_id, type: VARCHAR(64), constraints: [NOT_NULL] }
+      - { name: aggregate_version, type: BIGINT, constraints: [NOT_NULL] }
+      - { name: command_digest, type: VARCHAR(64), constraints: [NOT_NULL] }
+      - { name: result_json, type: JSONB, constraints: [NOT_NULL] }
+      - { name: created_at, type: TIMESTAMPTZ, constraints: [NOT_NULL] }
+
+  recommendation_model_release_outbox:
+    entity: RecommendationModelRelease
+    role: append_only
+    pk: event_id
+    description: 与聚合变更同事务提交，供评分缓存和消费者按 aggregate_version 幂等收敛。
+    columns:
+      - { name: event_id, type: VARCHAR(64), constraints: [PK, NOT_NULL] }
+      - { name: aggregate_id, type: VARCHAR(64), constraints: [NOT_NULL] }
+      - { name: aggregate_version, type: BIGINT, constraints: [NOT_NULL] }
+      - { name: event_type, type: VARCHAR(96), constraints: [NOT_NULL] }
+      - { name: payload_json, type: JSONB, constraints: [NOT_NULL] }
+      - { name: occurred_at, type: TIMESTAMPTZ, constraints: [NOT_NULL] }
+      - { name: published_at, type: TIMESTAMPTZ, constraints: [NULLABLE] }

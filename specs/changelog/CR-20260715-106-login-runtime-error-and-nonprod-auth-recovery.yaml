@@ -1,0 +1,67 @@
+id: CR-20260715-106-login-runtime-error-and-nonprod-auth-recovery
+title: 登录导航、表单错误语义与非生产认证恢复
+slug: login-runtime-error-and-nonprod-auth-recovery
+revision: 1
+status: in_progress
+
+affected_nodes:
+  - specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/two-state-one-tap-login--commercial-login-entry
+  - specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity
+  - specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics
+
+entries:
+  - timestamp: "2026-07-15T15:30:00+08:00"
+    summary: |
+      登录退出从 allowGuestDismissPop 布尔值收敛为强类型宿主策略；第三方登录能力
+      区分配置、安装、SDK、超时和平台状态，不再把可恢复不可用静默过滤。统一错误
+      系统增加表单内联卡与字段错误载体，OTP/社交错误就近呈现。
+
+      alpha/beta/gamma 默认使用固定测试码 123456，但保留 challenge、过期、限流与
+      一次性消费；alpha public plane 补齐 Remote OTP 路由。prod 继续只允许真实 provider，
+      OTP 通过 metadata SECRET codeRef 密封传递且 fail-closed。
+    reason: |
+      裸 flutter run 的 alpha App 当前请求缺失的 mock public-plane auth route 并返回 404；
+      登录页同时存在第三方入口无解释消失和 inlineCard 错误被弱化为 caption 的契约漂移。
+    change_type: [ux, contract, security, reliability, testing]
+    changed_documents:
+      - path: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/two-state-one-tap-login--commercial-login-entry/spec.md
+        sections: [导航语义, 登录反馈, 四环境验证码策略]
+      - path: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md
+        sections: [表单错误载体]
+      - path: quwoquan_service/contracts/metadata/integration/sms_otp/fields.yaml
+        sections: [SmsOtpSendPayload.codeRef]
+      - path: quwoquan_service/contracts/metadata/user/user_profile/errors.yaml
+        sections: [USER.AUTH.otp_attempts_exceeded]
+    impact:
+      replan_required: false
+      redesign_required: true
+      retest_layers: [local_contract, api_integration, user_acceptance]
+      rollout_impact: high
+      breaking_contract: false
+    supersedes:
+      - cr: CR-20260715-103-login-bypass-purge
+        scope: 仅修订 alpha/beta/gamma 不允许确定性 OTP provider 的结论
+        preserved: [禁止 debugCode, 禁止任意验证码放通, prod 无 Mock, prod 缺配置 fail-closed]
+    verification:
+      planned:
+        - make verify-metadata
+        - cd quwoquan_service && make codegen codegen-app
+        - cd quwoquan_app && flutter test test/local_contract/ui/user/login_page_widget__local_contract_test.dart test/local_contract/core/widgets/error_states/app_error_states__local_contract_test.dart
+        - cd quwoquan_service && go test ./services/user-service/... ./services/integration-service/... -count=1
+        - python3 -m pytest quwoquan_ops/tests/local_contract/test_mock_public_plane_auth__local_contract_test.py
+        - make verify-app-login-entry-loop-contract verify-app-page-horizontal-quality verify-production-wiring-purity
+      recorded:
+        - make -C quwoquan_service verify-metadata && make codegen-app（通过）
+        - Flutter 登录、AuthGate、会话、错误映射与 commercial login recovery 定向测试 84/84（通过）
+        - 登录触达文件定向 dart analyze（0 issue；完整 flutter analyze 两次被系统以 -9 终止）
+        - user-service OTP/登录定向 API integration、integration-service 全包及 Mongo provider API integration（通过）
+        - user-service → integration-service HTTPS/mTLS client local contract（服务端 CA 校验、客户端证书出示、缺材料 fail-closed，通过）
+        - alpha public plane 运行态 HTTPS OTP send/login smoke（通过；响应不包含固定测试码）
+        - iOS simulator、Android APK、Web Debug 构建（通过；Web vendor 插件保留 Wasm dry-run warning）
+        - 四环境 runtime package/stackctl verify、环境隔离、prod package purity（通过）
+        - verify_login_dependency_config、production wiring purity、登录防循环、页面质量、Mock 隔离与非功能证据（通过）
+        - prod legal-static verify（按预期失败：运营主体、注册地址、客服电话、ICP备案号仍为占位值）
+        - make gate（失败于登录无关的 quwoquan_data/tests/local_contract/verify 非法目录；coverage map 单独复跑通过）
+        - user-service 全量 API integration（失败于登录无关的二维码错误 HTTP 期望 400/实际 metadata 404）
+    remaining_blockers:
+      - R-AUTH-001 保持开放，直至正式 provider 凭据、受控 SDK、真实 mTLS 证书注入、真实设备 UAT、SLO/告警和回滚证据齐全。

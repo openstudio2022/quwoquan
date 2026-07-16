@@ -1,6 +1,6 @@
 # S2：元数据驱动契约（P2）— 全页落实检查与基线锁定（2026-03-30）
 
-> **会话代号**：S2（见 [`nine-session-rollout-plan.md`](./nine-session-rollout-plan.md)）  
+> **会话代号**：S2（见 [`nine-session-rollout-content.execution.planning.md`](./nine-session-rollout-content.execution.planning.md)）  
 > **横向维度**：P2 — 定义见 [`page-horizontal-quality-spec.md`](../page-horizontal-quality-spec.md) §「P2」  
 > **L1 / L2 / L3（横向登记）**：`runtime` → `runtime-client-foundation` → `page-horizontal-quality`  
 > **L3（契约专题）**：同 L2 下 [`metadata-driven-client-data-contract`](../metadata-driven-client-data-contract/spec.md)（与 P2 同向）
@@ -95,7 +95,6 @@
 | 路径 | 类型 | 矩阵 P2 | 清单 status | 域 | target_dto | 备注（清单） |
 |------|------|---------|-------------|-----|------------|----------------|
 | `lib/ui/chat/pages/chat_page.dart` | local_contract | ○ | partial | chat | ChatInboxDto | 主列表 ChatInboxDto；密信/联系人 Tab 等仍有 Map 或旁路 |
-| `lib/ui/chat/pages/chat_detail_page.dart` | local_contract | ○ | partial | chat | TBD | 委托 ChatConversationPage；契约随子页 |
 | `lib/ui/chat/pages/chat_conversation_page.dart` | T7 | ○ | partial | chat | TBD | 消息气泡动态结构；长期与 conversation metadata 对齐 |
 | `lib/ui/chat/pages/chat_settings_page.dart` | local_contract | ○ | partial | chat | ChatConversationMemberDto | 成员列表 ChatConversationMemberDto；会话元数据等可继续收口 |
 | `lib/ui/chat/pages/start_group_chat_page.dart` | user_acceptance | ○ | partial | chat | ChatInboxDto | listInbox/Contacts/Members/Circle 已 DTO；消息等仍 Map |

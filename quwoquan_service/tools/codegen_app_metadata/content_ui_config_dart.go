@@ -96,7 +96,6 @@ func renderContentUIConfigDart(uc *uiConfigFile) string {
 	b.WriteString("  final String coverStrategy;\n")
 	b.WriteString("  final bool includeAuthor;\n")
 	b.WriteString("  final bool includeTimeContext;\n")
-	b.WriteString("  final bool includeCircleContext;\n")
 	b.WriteString("  final bool includeTags;\n\n")
 	b.WriteString("  const ShareTemplateProfileConfig({\n")
 	b.WriteString("    required this.id,\n")
@@ -106,7 +105,6 @@ func renderContentUIConfigDart(uc *uiConfigFile) string {
 	b.WriteString("    required this.coverStrategy,\n")
 	b.WriteString("    required this.includeAuthor,\n")
 	b.WriteString("    required this.includeTimeContext,\n")
-	b.WriteString("    required this.includeCircleContext,\n")
 	b.WriteString("    required this.includeTags,\n")
 	b.WriteString("  });\n")
 	b.WriteString("}\n\n")
@@ -275,7 +273,7 @@ func renderContentUIConfigDart(uc *uiConfigFile) string {
 
 	b.WriteString("  static const List<ShareTemplateProfileConfig> shareTemplateProfiles = <ShareTemplateProfileConfig>[\n")
 	for _, profile := range shareProfiles {
-		b.WriteString(fmt.Sprintf("    ShareTemplateProfileConfig(id: %s, titleKey: %s, subtitleKey: %s, layout: %s, coverStrategy: %s, includeAuthor: %v, includeTimeContext: %v, includeCircleContext: %v, includeTags: %v),\n",
+		b.WriteString(fmt.Sprintf("    ShareTemplateProfileConfig(id: %s, titleKey: %s, subtitleKey: %s, layout: %s, coverStrategy: %s, includeAuthor: %v, includeTimeContext: %v, includeTags: %v),\n",
 			dartStringLiteral(profile.ID),
 			dartStringLiteral(profile.TitleKey),
 			dartStringLiteral(profile.SubtitleKey),
@@ -283,7 +281,6 @@ func renderContentUIConfigDart(uc *uiConfigFile) string {
 			dartStringLiteral(profile.CoverStrategy),
 			profile.IncludeAuthor,
 			profile.IncludeTimeContext,
-			profile.IncludeCircleContext,
 			profile.IncludeTags))
 	}
 	b.WriteString("  ];\n\n")

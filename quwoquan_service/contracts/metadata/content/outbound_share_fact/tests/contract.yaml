@@ -1,0 +1,22 @@
+version: 1
+entity: OutboundShareFact
+
+scenarios:
+  - name: successful_outbound_share_append
+    operation: CreateOutboundShare
+    go_func: TestCreateOutboundSharePersistsFactReceiptAndOutbox
+    evidence: api_integration
+    assertions:
+      - 只有具有 providerReceiptId 的成功分享回执可追加事实
+      - outbound_share_facts、outbound_share_receipts 与 outbound_share_outbox 在同一 Mongo transaction 提交
+      - 目的地明文不进入 fact、outbox、receipt 或日志，只保存不可逆摘要
+      - 相同 trusted actor 与 Idempotency-Key 重放返回同一 eventId 且不重复追加
+
+  - name: outbound_share_security_negative
+    operation: CreateOutboundShare
+    go_func: TestAppendOutboundShareRejectsUnconfirmedOrMissingPost
+    evidence: local_contract
+    assertions:
+      - actor 只能来自 verified persona 或 device principal
+      - 不存在或已删除 Post 不得产生事实
+      - deliverySucceeded=false 或缺失 providerReceiptId 必须拒绝

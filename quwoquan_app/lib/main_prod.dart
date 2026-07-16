@@ -1,7 +1,7 @@
 // 生产/发布用入口：不经由 lib/main.dart，强制云侧数据源且忽略切到 Mock 的写入。
 // 推荐：flutter build ... -t lib/main_prod.dart --dart-define=APP_DATA_SOURCE=remote
 import 'package:quwoquan_app/app_bootstrap.dart';
-import 'package:quwoquan_app/core/services/app_content_repository.dart';
+import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 
 Future<void> main() async {
   await runQuwoquanApp(

@@ -6,13 +6,15 @@ import (
 	"fmt"
 	"hash/fnv"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
 
 const DefaultShardCount = 64
 
-func newID(prefix string) string {
+// NewRecordID 为可靠任务机制生成带前缀的记录标识。
+func NewRecordID(prefix string) string {
 	var b [12]byte
 	if _, err := rand.Read(b[:]); err != nil {
 		return fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano())
@@ -20,7 +22,8 @@ func newID(prefix string) string {
 	return prefix + "-" + hex.EncodeToString(b[:])
 }
 
-func clonePayload(payload map[string]string) map[string]string {
+// CloneStringMap 复制字符串映射，避免存储实现共享可变 payload。
+func CloneStringMap(payload map[string]string) map[string]string {
 	if len(payload) == 0 {
 		return map[string]string{}
 	}
@@ -31,15 +34,16 @@ func clonePayload(payload map[string]string) map[string]string {
 	return out
 }
 
-func mergePayload(existing, incoming map[string]string) map[string]string {
-	out := clonePayload(existing)
+// MergeTaskPayload 按可靠任务合并规则合并 payload。
+func MergeTaskPayload(existing, incoming map[string]string) map[string]string {
+	out := CloneStringMap(existing)
 	for key, value := range incoming {
 		if strings.TrimSpace(value) == "" {
 			continue
 		}
 		if prev := strings.TrimSpace(out[key]); prev != "" && prev != value {
 			if isCSVKey(key) {
-				out[key] = mergeCSV(prev, value)
+				out[key] = MergeCSVValues(prev, value)
 				continue
 			}
 		}
@@ -48,7 +52,8 @@ func mergePayload(existing, incoming map[string]string) map[string]string {
 	return out
 }
 
-func validatePayloadAllowlist(payload map[string]string, allow []string) error {
+// ValidatePayloadAllowlist 校验 payload 是否只包含任务目录允许的字段。
+func ValidatePayloadAllowlist(payload map[string]string, allow []string) error {
 	if len(allow) == 0 {
 		return nil
 	}
@@ -64,7 +69,8 @@ func validatePayloadAllowlist(payload map[string]string, allow []string) error {
 	return nil
 }
 
-func normalizeStartAt(req DeclareTaskRequest, now time.Time) (time.Time, time.Time) {
+// ResolveTaskSchedule 解析任务起始时间与最大延迟上限。
+func ResolveTaskSchedule(req DeclareTaskRequest, now time.Time) (time.Time, time.Time) {
 	startAt := req.StartAt
 	if startAt.IsZero() {
 		startAt = now
@@ -79,8 +85,9 @@ func normalizeStartAt(req DeclareTaskRequest, now time.Time) (time.Time, time.Ti
 	return startAt.UTC(), maxDelayUntil.UTC()
 }
 
-func extendStartAt(existing TaskOutboxRecord, req DeclareTaskRequest, now time.Time) time.Time {
-	next, maxDelayUntil := normalizeStartAt(req, now)
+// ExtendTaskStartAt 按 pending 合并规则顺延任务，但不越过最大延迟上限。
+func ExtendTaskStartAt(existing TaskOutboxRecord, req DeclareTaskRequest, now time.Time) time.Time {
+	next, maxDelayUntil := ResolveTaskSchedule(req, now)
 	if existing.MaxDelayUntil.IsZero() && !maxDelayUntil.IsZero() {
 		existing.MaxDelayUntil = maxDelayUntil
 	}
@@ -110,7 +117,8 @@ func isCSVKey(key string) bool {
 	return strings.HasSuffix(lower, "ids") || strings.HasSuffix(lower, "triggers")
 }
 
-func mergeCSV(a, b string) string {
+// MergeCSVValues 合并、去重并稳定排序逗号分隔值。
+func MergeCSVValues(a, b string) string {
 	seen := map[string]struct{}{}
 	values := make([]string, 0)
 	for _, raw := range strings.Split(a+","+b, ",") {
@@ -141,7 +149,8 @@ func shardIDForKey(key string, shardCount int) int {
 	return int(h.Sum32() % uint32(shardCount))
 }
 
-func shardIDForRequest(req DeclareTaskRequest) int {
+// ResolveTaskShardID 根据显式 shard、partition key 或 aggregate id 解析分片。
+func ResolveTaskShardID(req DeclareTaskRequest) int {
 	if req.ShardID > 0 {
 		return req.ShardID
 	}
@@ -152,4 +161,33 @@ func shardIDForRequest(req DeclareTaskRequest) int {
 		return shardIDForKey(req.AggregateID, DefaultShardCount)
 	}
 	return 0
+}
+
+// DedupeStrings 清理、去重并稳定排序字符串集合。
+func DedupeStrings(values []string) []string {
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(values))
+	for _, raw := range values {
+		value := strings.TrimSpace(raw)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// DeliveryLedgerID 返回通知与接收者组合的账本标识。
+func DeliveryLedgerID(notificationID string, recipientID string) string {
+	return strings.TrimSpace(notificationID) + ":" + strings.TrimSpace(recipientID)
+}
+
+// ShardLeaseID 返回环境、领域、模块和分片组合的租约标识。
+func ShardLeaseID(env string, domain string, module string, shardID int) string {
+	return strings.TrimSpace(env) + ":" + strings.TrimSpace(domain) + ":" + strings.TrimSpace(module) + ":" + strconv.Itoa(shardID)
 }

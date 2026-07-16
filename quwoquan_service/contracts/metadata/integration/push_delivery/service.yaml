@@ -1,31 +1,21 @@
 version: 1
-aggregate: PushDelivery
 
 service:
   name: integration-service
   domain: integration
   owner: backend-team
-  description: 外部手机推送 provider 适配契约，notification-service 保持内部通知语义中心。
+  commercial_defaults:
+    status: blocked
+    block_reason: canonical operation awaits object-centered commercial migration
+    gap_id: INTEGRATION_PUSH_DELIVERY_COMMERCIAL_EVIDENCE
+    target_story: app-cloud-business-object-commercial-closure
+  description: |
+    PushDelivery 是 ExternalInteraction 的类型化外部引用，不拥有 transport operation。
+    提交与回调统一由 integration/external_interaction/service.yaml 声明，禁止恢复
+    /v1/integrations/push-deliveries 兼容路由。
 
-api_routes:
-  - method: POST
-    path: /v1/integrations/push-deliveries
-    operation: SubmitPushDelivery
-    description: 内部接口，提交 APNs/FCM/厂商推送异步发送请求。
-    request_entity: PushDeliveryRequest
-    response_entity: PushDeliveryAccepted
-    success_status: 202
-
-  - method: POST
-    path: /v1/integrations/push-deliveries:callback
-    operation: PushDeliveryProviderCallback
-    description: 推送供应商回执回调。
-    request_entity: PushDeliveryCallback
-    response_entity: PushDeliveryCallbackAccepted
-    success_status: 202
+api_routes: []
 
 consumers:
-  - name: notification-service
-    capabilities: [push_delivery_send, push_delivery_callback]
-  - name: platform-ops
-    capabilities: [push_provider_policy, push_delivery_audit]
+  - name: external-interaction
+    capabilities: [push_delivery_payload, push_delivery_callback_payload]

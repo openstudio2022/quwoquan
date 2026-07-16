@@ -1,0 +1,7 @@
+# build_homepage checkpoint prompt 变量契约。
+system:
+  required: []
+  optional: []
+task:
+  required: [execution_id, entity_id, object_dir]
+  optional: [repair_block]

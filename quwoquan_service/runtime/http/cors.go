@@ -7,11 +7,11 @@ import (
 )
 
 type CORSOptions struct {
-	AllowedOrigins    []string
-	AllowedMethods    []string
-	AllowedHeaders    []string
-	AllowCredentials  bool
-	ExposeHeaders     []string
+	AllowedOrigins   []string
+	AllowedMethods   []string
+	AllowedHeaders   []string
+	AllowCredentials bool
+	ExposeHeaders    []string
 }
 
 func DefaultCORSOptions() CORSOptions {
@@ -36,11 +36,13 @@ func DefaultCORSOptions() CORSOptions {
 			"Authorization",
 			"Content-Type",
 			"Origin",
+			"X-Client-Account-Id",
 			"X-Client-App-Version",
 			"X-Client-Device-Actor-Id",
 			"X-Client-Device-Platform",
 			"X-Client-Operation-Id",
 			"X-Client-Page-Id",
+			"X-Client-Persona-Id",
 			"X-Client-Route-Id",
 			"X-Client-Sent-At",
 			"X-Client-Session-Id",
@@ -50,7 +52,12 @@ func DefaultCORSOptions() CORSOptions {
 			"X-Client-User-Id",
 			"X-Actor",
 			"X-Environment",
+			"X-Experiment-Bucket",
+			"X-Feed-Request-Id",
+			"X-Model-Id",
+			"X-Referral-Source",
 			"X-Request-Id",
+			"X-Share-Id",
 			"X-Trace-Id",
 		},
 		ExposeHeaders: []string{

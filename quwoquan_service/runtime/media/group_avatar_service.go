@@ -41,13 +41,34 @@ type GroupAvatarService struct {
 	httpClient     *http.Client
 }
 
-func NewGroupAvatarService(client rtredis.Client, cdnBaseURL, localMediaRoot string) *GroupAvatarService {
-	return &GroupAvatarService{
+type GroupAvatarServiceOption func(*GroupAvatarService)
+
+func WithGroupAvatarHTTPClient(client *http.Client) GroupAvatarServiceOption {
+	return func(service *GroupAvatarService) {
+		if client != nil {
+			service.httpClient = client
+		}
+	}
+}
+
+func NewGroupAvatarService(
+	client rtredis.Client,
+	cdnBaseURL string,
+	localMediaRoot string,
+	opts ...GroupAvatarServiceOption,
+) *GroupAvatarService {
+	service := &GroupAvatarService{
 		client:         client,
 		cdnBaseURL:     NormalizeMediaCDNBase(cdnBaseURL),
 		localMediaRoot: strings.TrimSpace(localMediaRoot),
 		httpClient:     DefaultGroupAvatarHTTPClient(),
 	}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(service)
+		}
+	}
+	return service
 }
 
 func (s *GroupAvatarService) Register(

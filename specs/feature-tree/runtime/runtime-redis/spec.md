@@ -1,275 +1,122 @@
-# L2 规格：runtime-redis — 统一 Redis 路由层
+# L2 规格：runtime-redis
 
-> 平台级 Redis 基础设施，所有服务通过统一接口 + scene 路由访问 Redis，上层无感弹性扩缩。
+## 1. 定位
 
-## 1. 背景
+`runtime-redis` 提供跨服务一致的 Redis client、scene 连接池、健康检查和可观测机制。
+它不是业务数据访问层，不解释业务对象，也不根据 metadata 创建 Store、Reader 或缓存。
 
-### 1.1 现状问题
+业务缓存属于对应服务的对象 Reader adapter：
 
-当前 Redis 使用存在三个核心缺陷：
-
-**接口碎片化** — 三套不兼容接口各自为政：
-
-| 接口 | 包 | 方法签名 | 使用者 |
-|---|---|---|---|
-| `CacheAdapter` | `runtime/repository` | Get/Set/Del ([]byte) | Repository 缓存装饰器（**无服务接入**） |
-| `RedisClient` (rec) | `runtime/recommendation` | Get/Set/Del/SAdd/HIncrByFloat/Pipeline (string) | HotPath（content-service） |
-| `RedisClient` (ctx) | `runtime/context` | Get/Set/Del (string, **参数类型不同**) | PageContext |
-
-**scene 路由只在文档不在代码** — `redis_keyspace.yaml` 声明了 rec/general 两个场景，但：
-- `redis.general` 在 config 中预留却从未创建客户端
-- `repository.Factory.WithCache()` 存在但无服务调用
-- metadata 声明的 `cache_layer: redis`（Post/Circle/Conversation/UserProfile 等 8 个实体）全部空转
-
-**新场景无处安放** — chat 重构需要的 seq INCR、clientMsgId 幂等 SET NX、在线状态 presence、Pub/Sub 跨节点 fanout 均需要独立 Redis scene，当前架构无法承载。
-
-### 1.2 业界对标
-
-| 平台 | Redis 架构 | 场景分离 |
-|---|---|---|
-| 飞书 | 统一 Redis SDK + 场景路由 | IM / 推送 / 缓存 / 计数 独立集群 |
-| 微信 | 分场景 Redis | 时间线热路径 vs 点赞计数 vs 缓存 独立扩容 |
-| Discord | Redis Cluster + 场景分离 | 消息路由 / 状态 / 缓存 独立集群 |
-| Slack | 统一 Redis 抽象层 | 不同 workspace 隔离到不同 cluster |
-
-### 1.3 从 runtime-recommendation 提升的理由
-
-当前 Redis 弹性基础设施挂在 `runtime-recommendation/redis-storage-elastic-infra` 下，但 Redis 是**平台级横切能力**，不从属于推荐：
-- chat-service 需要 realtime scene（seq/dedup/presence/Pub/Sub）
-- realtime-gateway 需要 realtime scene（跨节点 fanout）
-- user-service 需要 general scene（blocked_set/device_tokens/login_fail）
-- 所有服务需要 general scene（实体缓存）
-
-提升为 L2 `runtime-redis`，与 `runtime-repository`、`runtime-messaging`、`runtime-observability` 平级，符合 runtime 统一能力的定位。
-
-## 2. 核心设计
-
-### 2.1 架构总览
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│  上层消费者（不感知 Redis 拓扑和弹性）                         │
-│  Repository.Cache │ HotPath │ SeqGen │ Dedup │ Pub/Sub │ ... │
-└────────┬──────────┬─────────┬────────┬───────┬───────────────┘
-         │          │         │        │       │
-         ▼          ▼         ▼        ▼       ▼
-┌──────────────────────────────────────────────────────────────┐
-│  runtime/redis.Router                                        │
-│  ┌────────────────────────────────────────────────────────┐  │
-│  │  Scene 路由表（from config + redis_keyspace.yaml）      │  │
-│  │    "rec:*"       → rec ScenePool                       │  │
-│  │    "cache:*"     → general ScenePool                   │  │
-│  │    "page_ctx:*"  → general ScenePool                   │  │
-│  │    "rt:*"        → realtime ScenePool                  │  │
-│  │    "seq:*"       → realtime ScenePool                  │  │
-│  │    "presence:*"  → realtime ScenePool                  │  │
-│  │    "dedup:*"     → realtime ScenePool                  │  │
-│  │    fallback      → general ScenePool                   │  │
-│  └────────────────────────────────────────────────────────┘  │
-└──────────┬──────────────────┬──────────────────┬─────────────┘
-           ▼                  ▼                  ▼
-    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-    │  ScenePool   │    │  ScenePool   │    │  ScenePool   │
-    │  "rec"       │    │  "general"   │    │  "realtime"  │
-    │  cluster     │    │  standalone  │    │  cluster     │
-    │  独立扩容    │    │  独立扩容    │    │  独立扩容    │
-    └─────────────┘    └─────────────┘    └─────────────┘
+```text
+Object Query Facade
+  -> named Reader port
+  -> service internal/infrastructure/cache/<object>_reader
+  -> runtime Redis client scene
 ```
 
-### 2.2 统一接口 `redis.Client`
+具体 adapter 由服务 composition root 显式创建和注入。
 
-覆盖当前三套接口的超集 + chat/realtime 新需求：
+## 2. 能力范围
 
-| 操作类别 | 方法 | 覆盖来源 |
-|---|---|---|
-| String | Get / Set / SetNX / Del / Incr / Expire | CacheAdapter + rec.RedisClient + ctx.RedisClient |
-| Hash | HSet / HGet / HGetAll / HIncrByFloat | rec.RedisClient (HotPath) |
-| Set | SAdd / SMembers / SIsMember | rec.RedisClient (HotPath) |
-| Pub/Sub | Publish / Subscribe | 新增（realtime-gateway fanout） |
-| Pipeline | Pipeline() → batch exec | rec.RedisPipeliner |
-| Bytes | GetBytes / SetBytes | CacheAdapter (Repository cache) |
+### 2.1 Client
 
-### 2.3 `redis.Router` — scene 路由
+统一 client 覆盖：
 
-| 方法 | 说明 |
-|---|---|
-| `Scene(name string) Client` | 显式指定 scene，获取 scene 级 Client |
-| `ForKey(key string) Client` | 从 key prefix 自动路由到对应 scene（查路由表） |
-| `Close() error` | 关闭所有 scene 连接池 |
+- String：Get、Set、SetNX、Del、Incr、Expire。
+- Hash：HSet、HGet、HGetAll、HIncrByFloat。
+- Set：SAdd、SMembers、SIsMember、SRem。
+- Pub/Sub：Publish、Subscribe。
+- Pipeline：显式批处理。
+- Bytes：仅供明确需要二进制值的 infrastructure adapter。
 
-上层消费者推荐使用 `Scene()` 显式路由（语义清晰），`ForKey()` 用于 Repository cache 等 key 由 metadata 驱动的场景。
+client 返回结构化 runtime failure，并传播 OperationContext、trace/request id 与 scene。
 
-### 2.4 Scene 划分
+### 2.2 Scene
 
-| Scene | 流量特征 | 典型 key prefix | 独立部署理由 |
-|---|---|---|---|
-| **rec** | 高 QPS 写密集，session 级，pipeline 读 | `rec:` | 推荐热路径独立扩容，hash tag `{userId}` |
-| **general** | 读多写少，TTL 较长，延迟容忍度高 | `cache:`, `page_ctx:`, `blocked_set:`, `counter:`, `reaction:`, `content_analysis:`, `comment_summary:`, `suggested_actions:`, `device_tokens:`, `login_fail:` | 实体缓存 + 安全限流 + 计数缓冲 |
-| **realtime** | 超低延迟，Pub/Sub 重，INCR 原子 | `rt:`(fanout), `seq:`(消息序号), `presence:`(在线), `dedup:`(幂等) | Pub/Sub 流量模式与 K/V 完全不同，必须独立 |
+首发 scene：
 
-**Pub/Sub 必须独立 scene 的原因**：Redis Cluster 的 Pub/Sub 消息广播到所有节点，若混在 `general` 中会造成不必要的资源消耗和延迟抖动。
+- `rec`：推荐 HotPath、会话特征与高 QPS pipeline。
+- `general`：对象缓存、计数、限流与低频状态。
+- `realtime`：seq、dedup、presence 与 Pub/Sub fanout。
 
-### 2.5 弹性扩展路径
+消费者必须通过 `Scene(name)` 显式选 scene。业务 Store/Reader 不接受“任意 key 自动选
+scene”的隐式依赖；key prefix 与 TTL 仍由 metadata/keyspace 合同校验。
 
-| 用户规模 | rec | general | realtime | 上层代码改动 |
-|---|---|---|---|---|
-| < 10K (dev) | 三个 scene 共用 1 个 standalone（或 in-memory） | — | — | 零 |
-| 10K ~ 50K | standalone | standalone | standalone | 零（改 config） |
-| 50K ~ 500K | cluster | standalone | cluster | 零（改 config） |
-| > 500K | cluster 独立扩缩 | cluster 独立扩缩 | cluster 独立扩缩 | 零（改 config） |
+### 2.3 配置与拓扑
 
-### 2.6 配置统一到 `runtime/config`
+typed config 声明每个 scene 的 mode、address、TLS、pool 和 secret reference。
+连接创建属于 `quwoquan_service/internal/platform/**`；公共 runtime 暴露稳定接口与
+健康/指标合同。
 
-```yaml
-redis:
-  scenes:
-    rec:
-      mode: cluster              # standalone | cluster | memory
-      addrs: [shard1:6379, shard2:6379, shard3:6379]
-      password: ${REDIS_REC_PASSWORD}
-      tls: true
-      pool: { size: 0, min_idle: 0 }  # 0 = CPU-scaled auto
-    general:
-      mode: standalone
-      addr: general-redis:6379
-      password: ${REDIS_GENERAL_PASSWORD}
-      db: 0
-      pool: { size: 0 }
-    realtime:
-      mode: cluster
-      addrs: [rt1:6379, rt2:6379, rt3:6379]
-      password: ${REDIS_REALTIME_PASSWORD}
-      tls: true
-      pool: { size: 0 }
+standalone/cluster 是同一 scene adapter 的部署配置差异，不改变业务 Facade 或数据端口。
 
-  prefix_routing:                # key prefix → scene 映射
-    rec: [rec:]
-    general: [cache:, page_ctx:, content_analysis:, comment_summary:,
-              suggested_actions:, blocked_set:, device_tokens:,
-              login_fail:, counter:, reaction:]
-    realtime: [rt:, seq:, presence:, dedup:]
-    fallback: general
-```
+## 3. 对象缓存接入
 
-### 2.7 服务接入方式（一行构建）
+每个缓存必须满足：
+
+1. 对应 metadata `storage.yaml` 声明 cache role、key、TTL 与失效事件。
+2. 服务定义业务命名 Reader，例如 `PostDetailReader`、`PersonaSnapshotReader`。
+3. `internal/infrastructure/cache/**` 实现 read-through、negative cache 或精确失效。
+4. composition root 显式把 cache Reader 注入 query Facade。
+5. command 只提交 authoritative Store + outbox；缓存写入不参与聚合事务。
+6. local contract 验证 key/TTL/失效，api integration 使用真实 Redis 验证一致性。
+
+禁止：
+
+- 跨对象缓存装饰器或动态 CRUD。
+- 由 metadata 在运行期选择业务 Store/Reader 实现。
+- application/domain 直接调用 Redis。
+- 缓存冒充 authoritative store。
+- 缓存失败静默吞错；必须按恢复策略降级并产生指标。
+
+## 4. Composition root
 
 ```go
-func main() {
-    cfg := config.MustLoad("configs/config.yaml")
-    router := redis.MustNewRouter(cfg.Redis)
-    defer router.Close()
+// 示意：具体类型由服务显式选择。
+redisScenes := platform.MustOpenRedisScenes(cfg.Redis)
 
-    // Repository cache — general scene（metadata 声明的 cache_layer 自动生效）
-    factory := repository.NewFactory(reg,
-        repository.WithMongo(db),
-        repository.WithCache(redis.NewCacheAdapter(router.Scene("general"))),
-    )
-
-    // 推荐热路径 — rec scene
-    hotPath := rtrec.NewHotPath(redis.NewRecAdapter(router.Scene("rec")))
-
-    // 页面上下文 — general scene
-    pageCtx := rctx.NewPageContext(router.Scene("general"))
-
-    // Chat seq/dedup — realtime scene
-    seqGen := chat.NewSeqGenerator(router.Scene("realtime"))
-    dedup := chat.NewDedupGuard(router.Scene("realtime"))
-
-    // Pub/Sub fanout — realtime scene
-    pubsub := router.Scene("realtime")
-}
+postDetailReader := cache.NewPostDetailReader(
+    persistence.NewMongoPostDetailReader(mongo),
+    redisScenes.Scene("general"),
+    cfg.PostDetailCache,
+)
+postQuery := application.NewPostQueryFacade(postDetailReader)
 ```
 
-## 3. 向后兼容策略
+禁止把对象名、存储类型或 cache role 交给公共工厂动态返回业务接口。
 
-### 3.1 现有接口适配
+## 5. 四环境
 
-| 现有接口 | 适配方式 | 改动量 |
-|---|---|---|
-| `repository.CacheAdapter` | `redis.NewCacheAdapter(client Client) CacheAdapter` — 桥接 Get/Set/Del | 1 个 adapter，~30 行 |
-| `recommendation.RedisClient` | `redis.NewRecAdapter(client Client) rtrec.RedisClient` — 桥接全部方法 | 1 个 adapter，~60 行 |
-| `context.RedisClient` | 删除自定义接口，直接使用 `redis.Client`（方法签名兼容） | 修改 PageContext 构造函数 |
+- **alpha**：local contract 可注入显式 fake client；不得把 fake 结果记作集成证据。
+- **beta**：使用真实 Redis 与 beta seed，验证恢复、TTL 和权限。
+- **gamma**：拓扑与 prod 同构，执行真实并发、故障与恢复验证。
+- **prod**：所有必需 scene 缺地址/secret/健康状态即 fail-fast；禁止 Memory、Noop、
+  Mock 或自动 fallback。
 
-### 3.2 content-service 迁移
+## 6. 可观测与安全
 
-```
-Before: main.go → buildRecRedisClient(cfg) → rtrec.NewHotPath(client)
-After:  main.go → redis.MustNewRouter(cfg.Redis) → rtrec.NewHotPath(adapter)
-```
+每个 scene 至少输出：
 
-同时 `repository.NewFactory` 加入 `WithCache`，metadata 声明的 Post/Circle 实体缓存**立即激活**。
+- command latency histogram、error count、timeout count。
+- pool active/idle/wait、connection failure、reconnect。
+- cache hit/miss/negative-hit/eviction（由对象 adapter 带 object/operation 维度）。
+- Pub/Sub lag、subscriber count、drop/reconnect。
 
-### 3.3 redis-storage-elastic-infra 迁移
+日志不得记录 secret、PII 或完整 value；key 仅输出经策略允许的类型/哈希。
 
-| 原节点 | 迁移目标 | 说明 |
-|---|---|---|
-| `redis-cluster-protocol` (L4) | `runtime-redis/unified-client-and-router/scene-pool-and-prefix-routing` | ClusterAdapter + hash tag 协议并入统一 Client |
-| `redis-service-multicloud-config` (L4) | `runtime-redis/config-and-keyspace-contract/multi-scene-config-schema` | 多场景配置 schema 保留，扩展 realtime scene |
-| `redis_keyspace.yaml` | 升级加入 `scene_routing` 段 + realtime 场景 key patterns | 保持唯一键空间文档地位 |
+## 7. 测试证据
 
-迁移后 `runtime-recommendation/redis-storage-elastic-infra` 标记 `archived=true`，引用指向 `runtime-redis`。
+- `local_contract`：client 接口、scene 隔离、keyspace/TTL、对象 cache Reader
+  conformance、结构化错误。
+- `api_integration`：真实 standalone/cluster Redis、并发 SetNX/Incr、Pub/Sub、断连
+  恢复、对象 cache hit/miss/失效。
+- `user_acceptance`：仅当缓存策略影响用户旅程时验证无陈旧展示、错误恢复和 SLO。
 
-## 4. 功能范围
+## 8. 验收
 
-### 4.1 V1 交付（本次）
-
-| 编号 | 功能 | 说明 |
-|---|---|---|
-| R1 | `redis.Client` 统一接口 | String + Hash + Set + Pub/Sub + Pipeline + Bytes |
-| R2 | `redis.Router` scene 路由 | Scene() 显式路由 + ForKey() 前缀路由 |
-| R3 | `ScenePool` 连接池管理 | standalone / cluster / memory 三种模式透明切换 |
-| R4 | 适配桥接层 | NewCacheAdapter / NewRecAdapter / ctx 直接兼容 |
-| R5 | 统一配置 schema | redis.scenes.{name} + prefix_routing 段 |
-| R6 | redis_keyspace.yaml 升级 | 加入 realtime scene + scene_routing 段 |
-| R7 | content-service 迁移 | 接入 Router + 激活 general cache |
-| R8 | In-memory fallback | scene 无配置时自动降级为内存实现（本地开发） |
-| R9 | 健康检查 | 每个 scene 暴露 ping + pool stats |
-| R10 | 可观测性 | Prometheus 指标：连接数/命令延迟/错误率/per-scene |
-
-### 4.2 V2 留待后续
-
-- Redis Bloom Filter 适配（超大 exposed set 优化）
-- 连接池动态调整（基于负载自动 scale pool size）
-- Lua 脚本执行器（复杂原子操作）
-- Redis Streams 适配（event sourcing 场景）
-
-## 5. 约束
-
-- 所有 Redis 操作必须通过 `runtime/redis.Router`，禁止服务层直接构建 `go-redis` 客户端
-- 数据库驱动 `github.com/redis/go-redis/v9` 仅允许在 `runtime/redis` 和 `infrastructure/` 内 import
-- key 必须以 `redis_keyspace.yaml` 中声明的 prefix 开头，未声明的 prefix → `make verify-metadata` 失败
-- Pub/Sub channel 必须使用 `rt:` 前缀，路由到 realtime scene
-- hash tag `{userId}` 约定保留（同用户 key 同 slot），扩展到 realtime scene 的 `seq:{conversationId}` 使用 `{conversationId}` hash tag
-- 每个 scene 的 standalone/cluster 切换必须零代码改动，仅改 config
-- In-memory fallback 仅用于 dev/test，prod 必须配置 Redis 地址（preflight 检查）
-
-## 6. 验收标准（L2 总览）
-
-| 编号 | 条件 | 验证层 |
-|---|---|---|
-| R-A1 | `redis.Client` 统一接口覆盖 String/Hash/Set/Pub-Sub/Pipeline/Bytes | L2 |
-| R-A2 | `Router.Scene("rec"/"general"/"realtime")` 返回正确 scene Client | L2 |
-| R-A3 | `Router.ForKey("cache:post:123")` 自动路由到 general scene | L2 |
-| R-A4 | standalone ↔ cluster 切换仅改 config，测试通过 | L2 |
-| R-A5 | NewCacheAdapter 桥接 Repository cache，FindByIDCached 走 Redis | L2 |
-| R-A6 | NewRecAdapter 桥接 HotPath，rec scene 功能不退化 | L2 |
-| R-A7 | Pub/Sub 在 realtime scene 跨两个 subscriber 正确路由 | L2 |
-| R-A8 | Incr（seq 计数器）在 realtime scene 原子递增 | L2 |
-| R-A9 | SetNX（dedup）在 realtime scene 幂等判断正确 | L2 |
-| R-A10 | In-memory fallback：scene 无配置时自动降级，不报错 | L2 |
-| R-A11 | Prometheus 指标 per-scene 可采集 | L2 |
-| R-A12 | content-service 迁移后 rec + general 双 scene 正常工作 | L2 |
-| R-A13 | make gate-full 通过（含 runtime-redis 契约测试） | L1~L2 |
-
-## 7. 跨特性依赖
-
-| 依赖 | 方向 | 说明 |
-|---|---|---|
-| runtime-repository | → | WithCache 接入 general scene |
-| runtime-recommendation | → | HotPath 接入 rec scene |
-| runtime-context | → | PageContext 接入 general scene |
-| chat-conversation | → | seq/dedup/presence 接入 realtime scene |
-| realtime-gateway | → | Pub/Sub fanout 接入 realtime scene |
-| runtime-config | ← | 读取 redis.scenes 配置 |
-| runtime-observability | ← | 指标 + 日志 + tracing |
-| runtime-governance | ← | 连接池健康检查 + 熔断 |
+1. runtime client 不依赖任何业务对象或服务 infrastructure。
+2. 所有业务缓存都通过对象 named Reader adapter 接入。
+3. service composition root 对每个 adapter 的选择清晰可审计。
+4. beta/gamma/prod 无测试替身和自动 fallback。
+5. scene 指标、健康、错误与 trace 可按 operation/object 聚合。
+6. `make gate` 与对应 local_contract/api_integration 全绿。

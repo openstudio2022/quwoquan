@@ -2,12 +2,14 @@ package httpadapter
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
 
 	rterr "quwoquan_service/runtime/errors"
 	"quwoquan_service/services/entity-service/internal/application"
+	entitygenerated "quwoquan_service/services/entity-service/internal/generated"
 )
 
 const (
@@ -393,36 +395,18 @@ func parsePositiveInt(raw string, fallback int) int {
 	return value
 }
 
-func newBadRequest(debugMessage string) *application.AppError {
-	return &application.AppError{
-		StatusCode:   http.StatusBadRequest,
-		Code:         "ENTITY.USER.invalid_argument",
-		UserMessage:  "请求参数有误，请检查后重试",
-		DebugMessage: debugMessage,
-	}
+func newBadRequest(debugMessage string) *rterr.AppError {
+	return entitygenerated.AppErrorFromInvalidArgument(debugMessage)
 }
 
 func writeError(w http.ResponseWriter, r *http.Request, err error) {
-	appErr, ok := err.(*application.AppError)
-	if !ok {
-		appErr = &application.AppError{
-			StatusCode:   http.StatusInternalServerError,
-			Code:         "ENTITY.SYSTEM.internal_error",
-			UserMessage:  "共享主页暂时不可用，请稍后再试",
-			DebugMessage: err.Error(),
-		}
-	}
-	code, parseErr := rterr.ParseCode(appErr.Code)
-	if parseErr != nil {
-		code = rterr.NewCode(rterr.ModuleEntity, rterr.KindSystem, "internal_error")
+	var appErr *rterr.AppError
+	if !errors.As(err, &appErr) {
+		appErr = entitygenerated.AppErrorFromInternalError(err.Error())
 	}
 	rterr.WriteHTTPError(
 		w,
-		rterr.NewAppError(
-			code,
-			appErr.UserMessage,
-			appErr.DebugMessage,
-		),
+		appErr,
 		rterr.HTTPWriteOptionsFromRequest(r),
 	)
 }

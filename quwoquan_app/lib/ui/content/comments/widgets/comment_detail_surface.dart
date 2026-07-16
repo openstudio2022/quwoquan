@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart'
-    show CommentDto;
+    show ContentCommentListItem;
 import 'package:quwoquan_app/components/comment_system/comment_models.dart';
 import 'package:quwoquan_app/components/comment_system/comment_toolbar.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
@@ -11,7 +11,6 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/interactions/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/comments/widgets/comment_input_overlay.dart';
-import 'package:quwoquan_app/ui/content/comments/widgets/comment_sort_menu.dart';
 import 'package:quwoquan_app/ui/content/comments/widgets/comment_thread_view.dart';
 import 'package:quwoquan_app/ui/content/comments/providers/comment_provider.dart';
 
@@ -40,7 +39,6 @@ class CommentDetailSurface extends ConsumerStatefulWidget {
     this.likeCount,
     this.shareCount,
     this.isLiked,
-    this.isShared,
     this.onLikeTap,
     this.onShareTap,
     this.onClose,
@@ -59,7 +57,6 @@ class CommentDetailSurface extends ConsumerStatefulWidget {
   final int? likeCount;
   final int? shareCount;
   final bool? isLiked;
-  final bool? isShared;
   final VoidCallback? onLikeTap;
   final VoidCallback? onShareTap;
   final VoidCallback? onClose;
@@ -121,7 +118,7 @@ class _CommentDetailSurfaceState extends ConsumerState<CommentDetailSurface> {
     return null;
   }
 
-  Future<void> _openInput({CommentDto? replyTo}) async {
+  Future<void> _openInput({ContentCommentListItem? replyTo}) async {
     final submitted = await CommentInputOverlay.show(
       context,
       postId: widget.postId,
@@ -136,7 +133,10 @@ class _CommentDetailSurfaceState extends ConsumerState<CommentDetailSurface> {
     }
   }
 
-  CommentDto? _resolveReplyTarget(List<CommentDto> comments, String commentId) {
+  ContentCommentListItem? _resolveReplyTarget(
+    List<ContentCommentListItem> comments,
+    String commentId,
+  ) {
     for (final comment in comments) {
       if (comment.id == commentId) {
         return comment;
@@ -162,7 +162,7 @@ class _CommentDetailSurfaceState extends ConsumerState<CommentDetailSurface> {
 
     final parentCommentId = widget.commentContext.targetParentCommentId?.trim();
     if (parentCommentId != null && parentCommentId.isNotEmpty) {
-      CommentDto? parent;
+      ContentCommentListItem? parent;
       for (final comment in commentState.comments) {
         if (comment.id == parentCommentId) {
           parent = comment;
@@ -270,7 +270,12 @@ class _CommentDetailSurfaceState extends ConsumerState<CommentDetailSurface> {
     final loadedCommentTotal =
         commentState.status != CommentListStatus.idle ||
         commentState.totalCount > 0;
-    final commentCount = loadedCommentTotal
+    final hasBlockingCommentFailure =
+        commentState.status == CommentListStatus.error &&
+        commentState.comments.isEmpty;
+    final int? commentCount = hasBlockingCommentFailure
+        ? null
+        : loadedCommentTotal
         ? commentState.totalCount
         : interaction.commentCountFor(
             widget.postId,
@@ -298,11 +303,7 @@ class _CommentDetailSurfaceState extends ConsumerState<CommentDetailSurface> {
           child: CommentDetailHeader(
             isDark: isDark,
             commentCount: commentCount,
-            sortMode: commentState.sortMode,
             showDragHandle: widget.showDragHandle,
-            onSortChanged: (mode) => ref
-                .read(commentProviderFamily(widget.postId).notifier)
-                .switchSort(mode),
             onClose: widget.onClose,
           ),
         ),
@@ -318,7 +319,6 @@ class _CommentDetailSurfaceState extends ConsumerState<CommentDetailSurface> {
           shareCount:
               widget.shareCount ?? interaction.shareCountFor(widget.postId),
           isLiked: widget.isLiked ?? interaction.isLiked(widget.postId),
-          isShared: widget.isShared ?? interaction.isShared(widget.postId),
           onInputTap: _openInput,
           onLikeTap:
               widget.onLikeTap ?? () => _toggleLikeFromInteraction(interaction),
@@ -373,16 +373,14 @@ class CommentDetailHeader extends StatelessWidget {
     super.key,
     required this.isDark,
     required this.commentCount,
-    required this.sortMode,
-    required this.onSortChanged,
     this.showDragHandle = false,
     this.onClose,
   });
 
   final bool isDark;
-  final int commentCount;
-  final CommentSortMode sortMode;
-  final ValueChanged<CommentSortMode> onSortChanged;
+
+  /// `null` 表示评论总数尚不可确认，避免把加载失败误写成“共 0 条评论”。
+  final int? commentCount;
   final bool showDragHandle;
   final VoidCallback? onClose;
 
@@ -420,10 +418,12 @@ class CommentDetailHeader extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  UITextConstants.commentCountTitleTemplate.replaceFirst(
-                    '%s',
-                    '$commentCount',
-                  ),
+                  commentCount == null
+                      ? UITextConstants.comment
+                      : UITextConstants.commentCountTitleTemplate.replaceFirst(
+                          '%s',
+                          '$commentCount',
+                        ),
                   style: TextStyle(
                     fontSize: AppTypography.sectionTitle,
                     fontWeight: AppTypography.semiBold,
@@ -434,16 +434,6 @@ class CommentDetailHeader extends StatelessWidget {
                   ),
                 ),
               ),
-              CommentSortMenuButton(
-                isDark: isDark,
-                sortMode: sortMode,
-                onChanged: onSortChanged,
-                bottomReserve:
-                    AppSpacing.commentToolbarInputHeight +
-                    AppSpacing.commentToolbarVerticalPadding * 2 +
-                    AppSpacing.xl,
-              ),
-              SizedBox(width: AppSpacing.sm),
               if (onClose != null)
                 CupertinoButton(
                   padding: EdgeInsets.zero,

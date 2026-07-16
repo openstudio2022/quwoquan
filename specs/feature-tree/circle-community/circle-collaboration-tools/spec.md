@@ -50,7 +50,7 @@
 
 ## 约束
 
-- 资料能力仍由 `contracts/metadata/social/circle/` 下的 typed contract 驱动。
+- 资料能力仍由 `contracts/metadata/social/circle_file/` 下的 typed contract 驱动；列表、单项读取和命令回执分别使用 `CircleFilePageSlice`、`CircleFileSlice` 和 `CircleFileCommandResult`，禁止以聚合存储模型或单项切片替代分页响应。
 - 群交流同步必须通过事件驱动而非同步 RPC。
 - 公共群由圈级或组织级治理者管理，自建群由成员发起并由群主治理。
 - 文件上传必须有大小校验和类型白名单。

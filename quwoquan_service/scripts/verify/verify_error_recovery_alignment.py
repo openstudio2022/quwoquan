@@ -62,11 +62,16 @@ FACTORY_DOMAINS = {
 CODE_RE = re.compile(r"^\s*-?\s*code:\s*(\S+)\s*$")
 ACTION_RE = re.compile(r"^\s*recovery_action:\s*(\S+)\s*$")
 AFTER_RE = re.compile(r"^\s*recovery_after_seconds:\s*(\d+)\s*$")
+STRUCTURED_RECOVERY_RE = re.compile(
+    r"^\s*recovery:\s*\{.*action:\s*([a-z_]+).*\}\s*$"
+)
+STRUCTURED_AFTER_RE = re.compile(r"afterSeconds:\s*(\d+)")
 # 生成 Go 中的工厂注释 + .WithRecovery("action", secs)，按 code 精确绑定。
 FACTORY_BLOCK_RE = re.compile(
     r"//\s+AppErrorFrom[A-Za-z0-9_]+\s+returns\s+\*AppError\s+for\s+"
     r"([A-Z][A-Z0-9_]*\.[A-Z][A-Z0-9_]*\.[a-z0-9_]+)"
-    r"[\s\S]{0,420}?\.WithRecovery\(\s*\"([a-z_]+)\"\s*,\s*(\d+)\s*\)",
+    r"[\s\S]{0,520}?\.WithRecovery(?:Directive)?\(\s*\"([a-z_]+)\"\s*,"
+    r"(?:\s*\"[A-Za-z]+\"\s*,)?\s*(\d+)\s*\)",
     re.MULTILINE,
 )
 
@@ -97,6 +102,12 @@ def parse_yaml_recoveries(rel_paths: list[str]) -> tuple[dict[str, tuple[str, in
                 m = ACTION_RE.match(line)
                 if m:
                     cur_action = m.group(1).strip('"\'')
+                    continue
+                m = STRUCTURED_RECOVERY_RE.match(line)
+                if m:
+                    cur_action = m.group(1)
+                    after_match = STRUCTURED_AFTER_RE.search(line)
+                    cur_after = int(after_match.group(1)) if after_match else 0
                     continue
                 m = AFTER_RE.match(line)
                 if m:

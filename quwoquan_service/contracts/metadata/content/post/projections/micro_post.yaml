@@ -1,262 +1,344 @@
-version: 1
-read_model: MicroPost
+client_projection:
+  base_class: PostBaseDto
+  computed_getters:
+  - body: 'if (videoUrl != null && videoUrl!.isNotEmpty) return ''video'';
 
-description: |
-  微趣类帖子 ReadModel（微趣频道）。
+      if (imageUrls.isNotEmpty) return ''image'';
+
+      return ''note'';
+
+      '
+    dart_return_type: String
+    description: 微趣的展示格式由当前素材组合推导。
+    name: displayFormat
+    nullable: false
+  - body: return imageUrls.isNotEmpty;
+    dart_return_type: bool
+    description: 是否包含图片（图文帖）。
+    name: hasImages
+    nullable: false
+  - body: return videoUrl != null;
+    dart_return_type: bool
+    description: 是否包含视频（视频帖）。
+    name: hasVideo
+    nullable: false
+  dart_class: MicroPostDto
+  dart_imports:
+  - package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart
+  fields:
+  - aliases:
+    - postId
+    - _id
+    dart_type: String
+    default: ''''''
+    name: id
+    nullable: false
+    source: postId
+  - aliases:
+    - contentType
+    - category
+    dart_type: String
+    default: '''micro'''
+    description: 内容类型轴（ContentType）；微趣帖固定为 micro
+    name: type
+    nullable: false
+    source: contentType
+  - aliases:
+    - contentIdentity
+    - identity
+    dart_type: String
+    default: '''moment'''
+    name: identity
+    nullable: false
+    source: contentIdentity
+  - aliases:
+    - assistantUsePolicy
+    dart_type: String
+    default: '''inherit'''
+    name: assistantUsePolicy
+    nullable: false
+    source: assistantUsePolicy
+  - aliases:
+    - userId
+    - author_id
+    dart_type: String
+    default: ''''''
+    name: authorId
+    nullable: false
+    source: authorId
+  - aliases:
+    - authorNickname
+    - nickname
+    - username
+    - displayName
+    dart_type: String
+    default: ''''''
+    name: displayName
+    nullable: false
+    source: authorNickname
+  - aliases:
+    - authorAvatarUrl
+    - avatarUrl
+    - avatar
+    dart_type: String
+    default: ''''''
+    name: avatarUrl
+    nullable: false
+    source: authorAvatarUrl
+  - aliases:
+    - authorBackgroundUrl
+    dart_type: String
+    default: 'null'
+    description: 作者主页背景图（反范式）；null 时 UI 显示默认渐变背景
+    name: authorBackgroundUrl
+    nullable: true
+    source: authorBackgroundUrl
+  - aliases:
+    - authorRoleLabel
+    - roleLabel
+    - authorRole
+    dart_type: String
+    default: ''''''
+    description: 作者角色短标签（反范式），首页推荐卡顶部展示
+    name: authorRoleLabel
+    nullable: false
+    source: authorRoleLabel
+  - aliases:
+    - authorIdentityTags
+    - identityTags
+    - authorTags
+    dart_type: List<String>
+    default: <String>[]
+    description: 作者身份标签（反范式），首页推荐卡顶部最多展示 2 个
+    name: authorIdentityTags
+    nullable: false
+    source: authorIdentityTags
+  - aliases:
+    - authorVerified
+    - verified
+    - isVerified
+    dart_type: bool
+    default: 'false'
+    description: 作者认证标记（反范式），驱动卡片认证角标
+    name: authorVerified
+    nullable: false
+    source: authorVerified
+  - aliases:
+    - body
+    - content
+    - text
+    - caption
+    dart_type: String
+    default: ''''''
+    description: 正文内容（必填，纯文字帖子此为唯一内容）
+    name: body
+    nullable: false
+    source: body
+  - aliases:
+    - mediaUrls
+    - images
+    - imageUrls
+    - image_urls
+    dart_type: List<String>
+    default: <String>[]
+    description: 图片列表（图文帖有值，纯文字/视频帖为空列表）
+    name: imageUrls
+    nullable: false
+    source: mediaUrls
+  - aliases:
+    - videoUrl
+    - video_url
+    dart_type: String
+    default: 'null'
+    description: 短视频 URL（视频帖有值，其余为 null）
+    name: videoUrl
+    nullable: true
+    source: videoUrl
+  - aliases:
+    - durationMs
+    - duration_ms
+    - duration
+    dart_type: int
+    default: 'null'
+    description: 短视频时长（毫秒），视频帖有值
+    name: durationMs
+    nullable: true
+    source: durationMs
+  - aliases:
+    - likeCount
+    - likesCount
+    - likes
+    - like_count
+    dart_type: int
+    default: '0'
+    name: likeCount
+    nullable: false
+    source: likeCount
+  - aliases:
+    - commentCount
+    - commentsCount
+    - comments
+    - comment_count
+    dart_type: int
+    default: '0'
+    name: commentCount
+    nullable: false
+    source: commentCount
+  - aliases:
+    - shareCount
+    - shares
+    - share_count
+    dart_type: int
+    default: '0'
+    name: shareCount
+    nullable: false
+    source: shareCount
+  - aliases:
+    - createdAt
+    - created_at
+    dart_type: DateTime
+    default: DateTime(0)
+    description: 创作时间（首次进入系统）。唯一源为 createdAt/created_at；不再以 publishedAt 借壳。
+    name: createdAt
+    nullable: false
+    source: createdAt
+  - aliases:
+    - updatedAt
+    - updated_at
+    dart_type: DateTime
+    default: 'null'
+    description: 最后实质更新时间；与 createdAt 相等或更早时 UI 只显示创作时间，更晚时显示创作+更新。
+    name: updatedAt
+    nullable: true
+    source: updatedAt
+  - aliases:
+    - publishedAt
+    - published_at
+    dart_type: DateTime
+    default: 'null'
+    description: 首次公开时间（仅首次发布置位）。
+    name: publishedAt
+    nullable: true
+    source: publishedAt
+  - aliases:
+    - contentVertical
+    - categoryId
+    - category
+    - vertical
+    dart_type: String
+    default: 'null'
+    description: 推荐垂类归一结果；端侧行为上报透传，不参与 UI 展示。
+    name: contentVertical
+    nullable: true
+    source: contentVertical
+  - aliases:
+    - recallPath
+    - recall_path
+    dart_type: String
+    default: 'null'
+    description: 推荐召回路径；端侧行为上报透传，不参与 UI 展示。
+    name: recallPath
+    nullable: true
+    source: recallPath
+  - aliases:
+    - supplySource
+    - supply_source
+    dart_type: String
+    default: 'null'
+    description: 内容供给来源；端侧行为上报透传，不参与 UI 展示。
+    name: supplySource
+    nullable: true
+    source: supplySource
+  - aliases:
+    - intersectionReasons
+    dart_type: List<IntersectionReason>
+    default: 'null'
+    description: 交集理由（云侧推荐管线预生成；端只读展示，无来源时为 null）
+    list_element_dart_class: IntersectionReason
+    name: intersectionReasons
+    nullable: true
+    source: intersectionReasons
+  output_path: cloud/runtime/generated/content/micro_post_dto.g.dart
+collection: rm_discovery_feed
+consumers:
+- app (discovery/micro tab)
+description: '微趣类帖子 ReadModel（微趣频道）。
+
   从 Post（contentType=micro）投影，供发现页微趣 Tab 消费。
+
   支持纯文字、图文混排、短视频三种子形态，imageUrls/videoUrl 均可选。
 
-storage_backend: mongodb
-collection: rm_discovery_feed
-
-source_entities:
-  - Post
-
-consumers:
-  - app (discovery/micro tab)
-
+  '
 fields:
-  - { name: postId,         type: ObjectId }
-  - { name: contentType,    type: enum,   description: "内容类型轴（ContentType），微趣固定为 micro" }
-  - { name: contentIdentity, type: enum,  description: "内容身份轴（ContentIdentity），点滴固定为 moment" }
-  - { name: authorId,              type: string }
-  - { name: authorNickname,        type: string, description: 作者昵称（反范式） }
-  - { name: authorAvatarUrl,       type: string, description: 作者头像（反范式） }
-  - { name: authorBackgroundUrl,   type: string, nullable: true, description: 作者主页背景图（反范式，null 表示未配置） }
-  - { name: authorRoleLabel,       type: string, description: 作者角色短标签（反范式，如「旅行创作者」） }
-  - { name: authorIdentityTags,    type: "[]string", description: 作者身份标签（反范式，首页卡片最多展示 2 个） }
-  - { name: authorVerified,        type: bool, description: 作者认证标记（反范式，驱动卡片认证角标） }
-  - { name: body,                  type: string, description: 正文内容 }
-  - { name: mediaUrls,      type: "[]string", description: 图片列表（可选，图文帖使用） }
-  - { name: videoUrl,       type: string, description: 短视频 URL（可选，视频帖使用） }
-  - { name: durationMs,     type: int,    description: 短视频时长毫秒（可选） }
-  - { name: likeCount,      type: int }
-  - { name: commentCount,   type: int }
-  - { name: shareCount,     type: int }
-  - { name: publishedAt,    type: timestamp }
-  - { name: createdAt,      type: timestamp, description: "内容首次进入系统时间（仅插入时写一次，永不变）" }
-  - { name: updatedAt,      type: timestamp, description: "内容最后实质变更时间（无实质变更不推进）" }
-  - { name: contentVertical, type: string, nullable: true, description: "推荐垂类归一结果，用于行为归因与观测分桶" }
-  - { name: recallPath, type: string, nullable: true, description: "推荐召回路径，用于行为归因与观测分桶" }
-  - { name: supplySource, type: string, nullable: true, description: "内容供给来源 user_generated/data_engineering/product_ops 等" }
-
-# App 端契约（client_projection）
-# 由 codegen_app_metadata 读取，生成 MicroPostDto（DO NOT EDIT 产物）
-# base_class: PostBaseDto（手写抽象基类，见 post_base_dto.dart）
-client_projection:
-  dart_class: MicroPostDto
-  base_class: PostBaseDto
-  output_path: cloud/runtime/generated/content/micro_post_dto.g.dart
-  dart_imports:
-    - package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart
-  computed_getters:
-    - name: displayFormat
-      dart_return_type: String
-      nullable: false
-      description: "微趣的展示格式由当前素材组合推导。"
-      body: |
-        if (videoUrl != null && videoUrl!.isNotEmpty) return 'video';
-        if (imageUrls.isNotEmpty) return 'image';
-        return 'note';
-    - name: hasImages
-      dart_return_type: "bool"
-      nullable: false
-      description: "是否包含图片（图文帖）。"
-      body: "return imageUrls.isNotEmpty;"
-    - name: hasVideo
-      dart_return_type: "bool"
-      nullable: false
-      description: "是否包含视频（视频帖）。"
-      body: "return videoUrl != null;"
-  fields:
-    - name: id
-      dart_type: String
-      nullable: false
-      source: postId
-      aliases: [postId, _id]
-      default: "''"
-
-    - name: type
-      dart_type: String
-      nullable: false
-      source: contentType
-      aliases: [contentType, category]
-      default: "'micro'"
-      description: "内容类型轴（ContentType）；微趣帖固定为 micro"
-
-    - name: identity
-      dart_type: String
-      nullable: false
-      source: contentIdentity
-      aliases: [contentIdentity, identity]
-      default: "'moment'"
-
-    - name: assistantUsePolicy
-      dart_type: String
-      nullable: false
-      source: assistantUsePolicy
-      aliases: [assistantUsePolicy]
-      default: "'inherit'"
-
-    - name: authorId
-      dart_type: String
-      nullable: false
-      source: authorId
-      aliases: [userId, author_id]
-      default: "''"
-
-    - name: displayName
-      dart_type: String
-      nullable: false
-      source: authorNickname
-      aliases: [authorNickname, nickname, username, displayName]
-      default: "''"
-
-    - name: avatarUrl
-      dart_type: String
-      nullable: false
-      source: authorAvatarUrl
-      aliases: [authorAvatarUrl, avatarUrl, avatar]
-      default: "''"
-
-    - name: authorBackgroundUrl
-      dart_type: String
-      nullable: true
-      source: authorBackgroundUrl
-      aliases: [authorBackgroundUrl]
-      default: "null"
-      description: "作者主页背景图（反范式）；null 时 UI 显示默认渐变背景"
-
-    - name: authorRoleLabel
-      dart_type: String
-      nullable: false
-      source: authorRoleLabel
-      aliases: [authorRoleLabel, roleLabel, authorRole]
-      default: "''"
-      description: "作者角色短标签（反范式），首页推荐卡顶部展示"
-
-    - name: authorIdentityTags
-      dart_type: List<String>
-      nullable: false
-      source: authorIdentityTags
-      aliases: [authorIdentityTags, identityTags, authorTags]
-      default: "<String>[]"
-      description: "作者身份标签（反范式），首页推荐卡顶部最多展示 2 个"
-
-    - name: authorVerified
-      dart_type: bool
-      nullable: false
-      source: authorVerified
-      aliases: [authorVerified, verified, isVerified]
-      default: "false"
-      description: "作者认证标记（反范式），驱动卡片认证角标"
-
-    - name: body
-      dart_type: String
-      nullable: false
-      source: body
-      aliases: [body, content, text, caption]
-      default: "''"
-      description: "正文内容（必填，纯文字帖子此为唯一内容）"
-
-    - name: imageUrls
-      dart_type: List<String>
-      nullable: false
-      source: mediaUrls
-      aliases: [mediaUrls, images, imageUrls, image_urls]
-      default: "<String>[]"
-      description: "图片列表（图文帖有值，纯文字/视频帖为空列表）"
-
-    - name: videoUrl
-      dart_type: String
-      nullable: true
-      source: videoUrl
-      aliases: [videoUrl, video_url]
-      default: "null"
-      description: "短视频 URL（视频帖有值，其余为 null）"
-
-    - name: durationMs
-      dart_type: int
-      nullable: true
-      source: durationMs
-      aliases: [durationMs, duration_ms, duration]
-      default: "null"
-      description: "短视频时长（毫秒），视频帖有值"
-
-    - name: likeCount
-      dart_type: int
-      nullable: false
-      source: likeCount
-      aliases: [likeCount, likesCount, likes, like_count]
-      default: "0"
-
-    - name: commentCount
-      dart_type: int
-      nullable: false
-      source: commentCount
-      aliases: [commentCount, commentsCount, comments, comment_count]
-      default: "0"
-
-    - name: shareCount
-      dart_type: int
-      nullable: false
-      source: shareCount
-      aliases: [shareCount, shares, share_count]
-      default: "0"
-
-    - name: createdAt
-      dart_type: DateTime
-      nullable: false
-      source: createdAt
-      aliases: [createdAt, created_at]
-      default: "DateTime(0)"
-      description: "创作时间（首次进入系统）。唯一源为 createdAt/created_at；不再以 publishedAt 借壳。"
-
-    - name: updatedAt
-      dart_type: DateTime
-      nullable: true
-      source: updatedAt
-      aliases: [updatedAt, updated_at]
-      default: "null"
-      description: "最后实质更新时间；与 createdAt 相等或更早时 UI 只显示创作时间，更晚时显示创作+更新。"
-
-    - name: publishedAt
-      dart_type: DateTime
-      nullable: true
-      source: publishedAt
-      aliases: [publishedAt, published_at]
-      default: "null"
-      description: "首次公开时间（仅首次发布置位）。"
-
-    - name: contentVertical
-      dart_type: String
-      nullable: true
-      source: contentVertical
-      aliases: [contentVertical, categoryId, category, vertical]
-      default: "null"
-      description: "推荐垂类归一结果；端侧行为上报透传，不参与 UI 展示。"
-
-    - name: recallPath
-      dart_type: String
-      nullable: true
-      source: recallPath
-      aliases: [recallPath, recall_path]
-      default: "null"
-      description: "推荐召回路径；端侧行为上报透传，不参与 UI 展示。"
-
-    - name: supplySource
-      dart_type: String
-      nullable: true
-      source: supplySource
-      aliases: [supplySource, supply_source]
-      default: "null"
-      description: "内容供给来源；端侧行为上报透传，不参与 UI 展示。"
-
-    - name: intersectionReasons
-      dart_type: List<IntersectionReason>
-      nullable: true
-      source: intersectionReasons
-      aliases: [intersectionReasons]
-      list_element_dart_class: IntersectionReason
-      default: "null"
-      description: "交集理由（云侧推荐管线预生成；端只读展示，无来源时为 null）"
+- name: postId
+  type: ObjectId
+- description: 内容类型轴（ContentType），微趣固定为 micro
+  name: contentType
+  type: enum
+- description: 内容身份轴（ContentIdentity），点滴固定为 moment
+  name: contentIdentity
+  type: enum
+- name: authorId
+  type: string
+- description: 作者昵称（反范式）
+  name: authorNickname
+  type: string
+- description: 作者头像（反范式）
+  name: authorAvatarUrl
+  type: string
+- description: 作者主页背景图（反范式，null 表示未配置）
+  name: authorBackgroundUrl
+  nullable: true
+  type: string
+- description: 作者角色短标签（反范式，如「旅行创作者」）
+  name: authorRoleLabel
+  type: string
+- description: 作者身份标签（反范式，首页卡片最多展示 2 个）
+  name: authorIdentityTags
+  type: '[]string'
+- description: 作者认证标记（反范式，驱动卡片认证角标）
+  name: authorVerified
+  type: bool
+- description: 正文内容
+  name: body
+  type: string
+- description: 图片列表（可选，图文帖使用）
+  name: mediaUrls
+  type: '[]string'
+- description: 短视频 URL（可选，视频帖使用）
+  name: videoUrl
+  type: string
+- description: 短视频时长毫秒（可选）
+  name: durationMs
+  type: int
+- name: likeCount
+  type: int
+- name: commentCount
+  type: int
+- name: shareCount
+  type: int
+- name: publishedAt
+  type: timestamp
+- description: 内容首次进入系统时间（仅插入时写一次，永不变）
+  name: createdAt
+  type: timestamp
+- description: 内容最后实质变更时间（无实质变更不推进）
+  name: updatedAt
+  type: timestamp
+- description: 推荐垂类归一结果，用于行为归因与观测分桶
+  name: contentVertical
+  nullable: true
+  type: string
+- description: 推荐召回路径，用于行为归因与观测分桶
+  name: recallPath
+  nullable: true
+  type: string
+- description: 内容供给来源 user_generated/data_engineering/product_ops 等
+  name: supplySource
+  nullable: true
+  type: string
+read_model: MicroPost
+source_entities:
+- Post
+storage_backend: mongodb
+version: 1

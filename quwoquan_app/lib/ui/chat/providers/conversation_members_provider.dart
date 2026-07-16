@@ -3,7 +3,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_memb
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_group_settings_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
+import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 
 /// 会话成员及设置的共享状态

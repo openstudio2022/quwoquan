@@ -7,7 +7,7 @@ collections:
     entity: AssistantRun
     indexes:
       - { name: idx_runs_user_created, keys: { userId: 1, createdAt: -1 } }
-      - { name: idx_runs_session, keys: { sessionId: 1, createdAt: -1 } }
+      - { name: idx_runs_conversation, keys: { conversationId: 1, createdAt: -1 } }
       - { name: idx_runs_skill, keys: { skillId: 1, createdAt: -1 }, sparse: true }
       - { name: idx_runs_status, keys: { status: 1, createdAt: -1 } }
       - { name: idx_runs_page, keys: { pageType: 1, pageObjectId: 1 }, sparse: true }
@@ -16,21 +16,6 @@ collections:
         field: contextEmbedding
         dimensions: 1536
         similarity: cosine
-
-  interaction_events:
-    entity: InteractionEvent
-    indexes:
-      - { name: idx_ie_run, keys: { runId: 1, createdAt: -1 } }
-      - { name: idx_ie_user_type, keys: { userId: 1, eventType: 1, createdAt: -1 } }
-      - { name: idx_ie_feedback, keys: { feedbackType: 1, createdAt: -1 }, sparse: true }
-      - { name: idx_ie_trace, keys: { traceId: 1 }, sparse: true }
-
-  scorecards:
-    entity: Scorecard
-    indexes:
-      - { name: idx_score_run, keys: { runId: 1, createdAt: -1 } }
-      - { name: idx_score_event, keys: { eventId: 1, createdAt: -1 } }
-      - { name: idx_score_user_metric, keys: { userId: 1, metricId: 1, createdAt: -1 } }
 
   rm_assistant_learning_profile:
     entity: AssistantLearningProfile

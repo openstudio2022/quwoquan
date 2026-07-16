@@ -1,0 +1,419 @@
+version: 1
+read_model: IntersectionReason
+description: |
+  交集理由（B1 契约，跨会话基建真相源）。
+  云侧推荐管线据「实时推荐结果 + 交集来源」预生成结构化交集理由随 feed / 对象详情下发；
+  端只读展示，禁止本地拼装文案（全局验收 G2）。
+  挂载点共用同一结构：feed item、对象推荐卡、对象页交集卡（你和这里的交集 / 你们的交集）、内容卡交集线索。
+
+  闭集枚举（端按字符串解析）：
+    kind:      §23 一等字段，交集 kind 真相源（registry.kinds.kind / intersectionKind，如 sharedFollowees / sameSchool / coVisitedEntity）；
+               端查 IntersectionKindMetadata 表得 iconKey/objectKind/dimensions/actionHints/tone/vertical，禁止端再 intersectionKindOf 推导。
+    vertical:  §23.4 垂类正交标注（general | travel_photography | campus，缺省 general）；与 kind 注册表 vertical 对齐。
+    dimension: identity | location | content | interest | relationship（5 源闭集，稳定用户语言来源）
+    source:    tagRef | geoTagRef | entityRef | relationship | contact
+    actionType: follow | join | add_contact | view_object
+    relationKind: follow | contact | mutual（relationship 维度无标签锚点时使用；禁止再承载对象类型语义）
+    objectKind: person | circle | school | place | enterprise | route | photo_spot | gear（对象类型闭集，统一品牌蓝角标真相源；§22.2 旅行摄影扩展）
+    intersectionClass: fact | affinity（fact = 可向用户说明的事实交集；affinity = 算法概率推荐，不伪装事实）
+    weightTier: light | heavy（内容卡交集轻/重等级，云侧离散产出；无 reason 即无交集，70/20/10 只能作为有效候选曝光节奏，不能覆盖业务对象绑定）
+    displayBinding: explicit_link | host_implicit | host_plain | hidden
+      explicit_link = 独立列表或跨对象证据，primarySpans 必须包含带 typed target 的 object span；
+      host_implicit = 内容卡/视频书/内容详情/命中对象自身的搜索结果，当前宿主对象作为上下文宾语，不渲染可点击 self-target；
+      host_plain = 用户/实体/圈子主页可展示当前宿主名，但宿主名只能是 plain span，不可点击 self-target；
+      hidden = 证据、actor、action、typed target 任一不足，云侧清空 primaryText/primarySpans 不下发展示句。
+
+  展示字段（统一视觉系统消费）：
+    avatarUrl / displayName 用于头像 + 名字卡（端只读，禁止本地拼装）。
+    confidenceLabel 仅对 affinity 展示"推荐认识/可能合得来"等克制文案。
+    freshAt / expiresAt 为保鲜期锚点（ISO8601 字符串，过期由后端重算，端只读）。
+    modelReasonBucket 为 affinity 模型理由桶（埋点与灰度用，端不直接展示原文）。
+    intersectionPoints 是交集点列表真相源；摘要数字必须由同一 snapshot 下可见点派生，
+    不得成为第二套事实来源。
+    connectionSummary 是云侧实例化的「连接说明」一句话（由具体实例构成，如"北京大学、摄影把你们连在一起"），
+    对象页交集卡顶部展示；缺省时端不展示该行，禁止端本地用维度词空说。
+    primaryText 是主交集结论句（蓝色，云侧产出，端只读直出），统一采用「上下文主谓宾一句话」格式：
+      主语[关系限定 + 代表人 + 人数] + 谓语[行为动词] + 宾语[typed object 或当前宿主上下文]。
+      当宾语等于当前内容/主页宿主对象时，宾语由 Query Slice 的 host context 承载，禁止渲染可点击 self-target；
+      仅 `displayBinding=explicit_link` 时在句内展示可点击 typed object span。表达规范见
+      specs/product/intersection-definition-and-application.md §17（事实通道禁止朋友/好友/收藏/同趣词，affinity 明确标注推荐）。
+    首页内容卡人数句额外遵守「可点开交集人数」原则：N 表示同一证据快照下可枚举、可点击的交集人列表；
+      representativeActor 只表达其中关系最密切、最能解释推荐的代表人，不要求 N 人同属同一来源。
+      代表关系优先级为：联系人/共同联系人 > 你关注的人/共同关注的人 > 同圈圈友 > 你曾互动过其内容的用户。
+      count 点击后的列表必须由 actorEvidence 完整承载，逐人说明来源（如联系人、你关注的人、某圈圈友）
+      及其在当前对象上的动作；actorEvidenceCompleteness != complete 时，端不得把人数 N 渲染成完整列表入口。
+      首页内容卡不得使用"都来这里互动过"等泛化句；若有动作证据，应具象为"赞过"、"赞过和评论过"、"赞过、评论过并转发过"等动作摘要，
+      禁止把"2赞 1评 1转"这类数字统计直接暴露为主结论句。
+    secondaryText 是副交集辅助说明（灰色）；仅列表入口（我的交集 / 为什么推荐TA / 打动）可作辅助说明，
+      紧凑 surface（首页内容卡 / spotlight）严格单句、不展示副句（§17.2）。
+    端禁止再用 intersectionPoints/EvidenceGroup 本地拼装主/副交集文案（G2）。
+    本契约已零兼容删除 displayText / label / sharedCount（§18.1 一次性收口）：紧凑结论句唯一来源为 primaryText，
+    证据组结构化字段（count / sampleText / sampleAvatarUrls / 证据名词）一律由 IntersectionPoint 承载，
+    禁止在 reason 级恢复任何第二文案/计数通道。
+    本契约已零兼容收敛 recommendationTraceId（Phase 0 漂移收口 §20）：交集证据快照/追踪 id 的唯一字段为
+    pointSummarySnapshotId（不再保留 recommendationTraceId 字段与别名）；导航级 recommendationTraceId 仍属于
+    entity/homepage 的 object_page_context 上下文，与本 reason 无关，不得在此恢复同名字段。
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: IntersectionReason
+  base_class: ""
+  output_path: cloud/runtime/generated/recommendation/intersection_reason.g.dart
+  dart_imports:
+    - intersection_point.g.dart
+    - intersection_dimension_tally.g.dart
+    - intersection_text_span.g.dart
+    - intersection_visual.g.dart
+    - intersection_representative_actor.g.dart
+    - intersection_actor_evidence.g.dart
+    - intersection_action_hint.g.dart
+  fields:
+    - name: kind
+      dart_type: String
+      nullable: false
+      source: kind
+      aliases: [kind, intersectionKind]
+      default: "''"
+    - name: vertical
+      dart_type: String
+      nullable: false
+      source: vertical
+      aliases: [vertical]
+      default: "'general'"
+    - name: dimension
+      dart_type: String
+      nullable: false
+      source: dimension
+      aliases: [dimension]
+      default: "''"
+    - name: tagRefs
+      dart_type: List<String>
+      nullable: false
+      source: tagRefs
+      aliases: [tagRefs]
+    - name: relationKind
+      dart_type: String
+      nullable: false
+      source: relationKind
+      aliases: [relationKind]
+      default: "''"
+    - name: objectKind
+      dart_type: String
+      nullable: false
+      source: objectKind
+      aliases: [objectKind]
+      default: "''"
+    - name: relationObjectId
+      dart_type: String
+      nullable: false
+      source: relationObjectId
+      aliases: [relationObjectId]
+      default: "''"
+    - name: strength
+      dart_type: double
+      nullable: false
+      source: strength
+      aliases: [strength, strengthScore, strength_score]
+      default: "0.0"
+    - name: primaryText
+      dart_type: String
+      nullable: false
+      source: primaryText
+      aliases: [primaryText]
+      default: "''"
+    - name: displayBinding
+      dart_type: String
+      nullable: false
+      source: displayBinding
+      aliases: [displayBinding]
+      default: "'explicit_link'"
+    - name: secondaryText
+      dart_type: String
+      nullable: false
+      source: secondaryText
+      aliases: [secondaryText]
+      default: "''"
+    - name: weightTier
+      dart_type: String
+      nullable: false
+      source: weightTier
+      aliases: [weightTier]
+      default: "''"
+    - name: actionType
+      dart_type: String
+      nullable: false
+      source: actionType
+      aliases: [actionType]
+      default: "''"
+    - name: actionTargetId
+      dart_type: String
+      nullable: false
+      source: actionTargetId
+      aliases: [actionTargetId]
+      default: "''"
+    - name: source
+      dart_type: String
+      nullable: false
+      source: source
+      aliases: [source, sourceRef]
+      default: "''"
+    - name: intersectionId
+      dart_type: String
+      nullable: false
+      source: intersectionId
+      aliases: [intersectionId]
+      default: "''"
+    - name: intersectionClass
+      dart_type: String
+      nullable: false
+      source: intersectionClass
+      aliases: [intersectionClass]
+      default: "'fact'"
+    - name: avatarUrl
+      dart_type: String
+      nullable: false
+      source: avatarUrl
+      aliases: [avatarUrl]
+      default: "''"
+    - name: displayName
+      dart_type: String
+      nullable: false
+      source: displayName
+      aliases: [displayName]
+      default: "''"
+    - name: confidenceLabel
+      dart_type: String
+      nullable: false
+      source: confidenceLabel
+      aliases: [confidenceLabel]
+      default: "''"
+    - name: modelReasonBucket
+      dart_type: String
+      nullable: false
+      source: modelReasonBucket
+      aliases: [modelReasonBucket]
+      default: "''"
+    - name: freshAt
+      dart_type: String
+      nullable: false
+      source: freshAt
+      aliases: [freshAt]
+      default: "''"
+    - name: expiresAt
+      dart_type: String
+      nullable: false
+      source: expiresAt
+      aliases: [expiresAt]
+      default: "''"
+    - name: intersectionPoints
+      dart_type: List<IntersectionPoint>
+      nullable: false
+      source: intersectionPoints
+      aliases: [intersectionPoints, evidenceItems]
+      list_element_dart_class: IntersectionPoint
+    - name: pointSummarySnapshotId
+      dart_type: String
+      nullable: false
+      source: pointSummarySnapshotId
+      aliases: [pointSummarySnapshotId]
+      default: "''"
+    - name: actorEvidenceTotalCount
+      dart_type: int
+      nullable: false
+      source: actorEvidenceTotalCount
+      aliases: [actorEvidenceTotalCount]
+      default: "0"
+    - name: actorEvidenceCompleteness
+      dart_type: String
+      nullable: false
+      source: actorEvidenceCompleteness
+      aliases: [actorEvidenceCompleteness]
+      default: "'unknown'"
+    - name: actorEvidence
+      dart_type: List<IntersectionActorEvidence>
+      nullable: false
+      source: actorEvidence
+      aliases: [actorEvidence, actorEvidences, actorEvidenceItems]
+      list_element_dart_class: IntersectionActorEvidence
+    - name: factPointCount
+      dart_type: int
+      nullable: false
+      source: factPointCount
+      aliases: [factPointCount]
+      default: "0"
+    - name: recommendedPointCount
+      dart_type: int
+      nullable: false
+      source: recommendedPointCount
+      aliases: [recommendedPointCount]
+      default: "0"
+    - name: totalPointCount
+      dart_type: int
+      nullable: false
+      source: totalPointCount
+      aliases: [totalPointCount, totalCount, total_count]
+      default: "0"
+    - name: dimensionPointSummary
+      dart_type: List<IntersectionDimensionTally>
+      nullable: false
+      source: dimensionPointSummary
+      aliases: [dimensionPointSummary]
+      list_element_dart_class: IntersectionDimensionTally
+    - name: pointClassLabel
+      dart_type: String
+      nullable: false
+      source: pointClassLabel
+      aliases: [pointClassLabel]
+      default: "''"
+    - name: connectionSummary
+      dart_type: String
+      nullable: false
+      source: connectionSummary
+      aliases: [connectionSummary]
+      default: "''"
+    - name: lastRecommendedAt
+      dart_type: String
+      nullable: false
+      source: lastRecommendedAt
+      aliases: [lastRecommendedAt]
+      default: "''"
+    - name: seenAt
+      dart_type: String
+      nullable: false
+      source: seenAt
+      aliases: [seenAt]
+      default: "''"
+    - name: rankState
+      dart_type: String
+      nullable: false
+      source: rankState
+      aliases: [rankState]
+      default: "'fresh'"
+    # 统一交互子契约（§20.7，只附加；不重排已冻结字段）：
+    #   primarySpans 是 primaryText 的结构化富文本切分，join(spans.text)==primaryText（契约不变量）；
+    #   sampleVisuals 是按 objectKind 的结构化样本视觉（取代裸 avatarUrl/sampleAvatarUrls），端按 assetKind 渲染。
+    - name: primarySpans
+      dart_type: List<IntersectionTextSpan>
+      nullable: false
+      source: primarySpans
+      aliases: [primarySpans]
+      list_element_dart_class: IntersectionTextSpan
+    - name: sampleVisuals
+      dart_type: List<IntersectionVisual>
+      nullable: false
+      source: sampleVisuals
+      aliases: [sampleVisuals]
+      list_element_dart_class: IntersectionVisual
+    # 代表人锚点 + 行动建议（§17.1.1 / §21.5.3）：
+    #   representativeActor 是人数句数字前的人物锚点，必须来自同一 pointSummarySnapshotId。
+    #   actionHints 是云侧按 kind/helpType 下发的下一步建议；端只渲染，不按 kind 猜测。
+    - name: representativeActor
+      dart_type: IntersectionRepresentativeActor
+      nullable: true
+      source: representativeActor
+      aliases: [representativeActor]
+      map_from_string_key_class: IntersectionRepresentativeActor
+    - name: actionHints
+      dart_type: List<IntersectionActionHint>
+      nullable: false
+      source: actionHints
+      aliases: [actionHints]
+      list_element_dart_class: IntersectionActionHint
+    # 架构基线 v2（§21）：以下字段由 content-service 交集异步物化投影真算填充
+    #   （ReadModelIntersectionSource 写/刷新路径 + intersection_graph_materializer，
+    #    读路径热命中零计算零同步打分消费，R-IX01 不变量保持；缺省仍走默认值兜底）。
+    #   lifecycleState 交集边生命周期态（§21.3 闭集 new|strengthened|stable|weakened|reactivated，仅弱标/红点，不进 primaryText）；
+    #     由 Lifecycle 状态机以上一次物化快照为基线对 edgeWeight 增量比对产出。
+    #   previousStrength/strengthDelta 上一次物化边权与本轮变化量，支撑 strengthened/weakened/reactivated 判定（缺省 0）；
+    #   edgeWeight Graph 边权（§21.2 = relationStrength × interactionFrequency × recencyDecay，确定性真算，[0,1]，缺省 0）；
+    #   iconKey 类型图标语义键（§21.5.2 闭集，端 IntersectionIconResolver 消费，缺省回退 sourceRef/dimension 推导）；
+    #   objectVisual 尾部对象封面/校徽（§21.5.1 槽③，按 assetKind 渲染，缺省回退 chevron）。
+    - name: lifecycleState
+      dart_type: String
+      nullable: false
+      source: lifecycleState
+      aliases: [lifecycleState]
+      default: "''"
+    - name: previousStrength
+      dart_type: double
+      nullable: false
+      source: previousStrength
+      aliases: [previousStrength]
+      default: "0.0"
+    - name: strengthDelta
+      dart_type: double
+      nullable: false
+      source: strengthDelta
+      aliases: [strengthDelta]
+      default: "0.0"
+    - name: edgeWeight
+      dart_type: double
+      nullable: false
+      source: edgeWeight
+      aliases: [edgeWeight]
+      default: "0.0"
+    - name: iconKey
+      dart_type: String
+      nullable: false
+      source: iconKey
+      aliases: [iconKey]
+      default: "''"
+    - name: objectVisual
+      dart_type: IntersectionVisual
+      nullable: true
+      source: objectVisual
+      aliases: [objectVisual]
+      map_from_string_key_class: IntersectionVisual
+    # 我的交集高保重构（主页/详情页事实 item 排序与分组，只读字段）：
+    #   timeBucket 为服务端归桶结果（today|yesterday|last7Days|thisMonth|lastMonth），
+    #   dedupeKey 为 viewerId + objectId + objectType + intersectionKind 的全局去重主键，
+    #   anchorUserWeight / totalPointCount / mutualCount 用于同 strength/timeBucket 时稳定择优。
+    - name: timeBucket
+      dart_type: String
+      nullable: false
+      source: timeBucket
+      aliases: [timeBucket, time_bucket]
+      default: "''"
+    - name: dedupeKey
+      dart_type: String
+      nullable: false
+      source: dedupeKey
+      aliases: [dedupeKey, dedup_key, dedupe_key]
+      default: "''"
+    - name: anchorUserWeight
+      dart_type: double
+      nullable: false
+      source: anchorUserWeight
+      aliases: [anchorUserWeight, anchorUserScore, anchor_user_score]
+      default: "0.0"
+    - name: mutualCount
+      dart_type: int
+      nullable: false
+      source: mutualCount
+      aliases: [mutualCount, mutual_count]
+      default: "0"
+    # §24 v3 可行动交集实例硬化（M0.2 moment 意图时态 + M0.4 subject 显式主体）：
+    #   moment 表交集指向过去/当下/未来（registry.moments 闭集，缺省 current），端据此调整语气与可行动性；
+    #     与 lifecycleState 正交（lifecycleState 表边强弱变化，moment 表时态意图）。
+    #   subjectId / subjectContext 是交集主体显式锚点（谁与谁的交集，通常 viewer 侧），
+    #     取代此前隐式以 viewer 为主体的推断，便于「我打动的人 / TA 打动的人」归因不混淆。
+    - name: moment
+      dart_type: String
+      nullable: false
+      source: moment
+      aliases: [moment]
+      default: "'current'"
+    - name: subjectId
+      dart_type: String
+      nullable: false
+      source: subjectId
+      aliases: [subjectId]
+      default: "''"
+    - name: subjectContext
+      dart_type: String
+      nullable: false
+      source: subjectContext
+      aliases: [subjectContext]
+      default: "''"

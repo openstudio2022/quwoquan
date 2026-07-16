@@ -1,0 +1,38 @@
+version: 1
+service:
+  name: user-service
+  domain: user
+  owner: user-platform
+  commercial_defaults:
+    status: blocked
+    block_reason: SubjectFollow PostgreSQL aggregate/outbox 与 generated client 尚未完成生产装配
+    gap_id: SUBJECT_FOLLOW_WIRING
+    target_story: app-cloud-business-object-commercial-closure
+api_routes:
+  - method: POST
+    path: /v1/relationships/subjects/{subjectType}/{subjectId}/follow
+    operation: FollowSubject
+    actor: persona
+    auth: required
+    application:
+      kind: command
+      facet: SubjectFollowCommandFacade
+      method: follow
+      aggregate_owner: SubjectFollow
+      mutation_target: SubjectFollow
+      invariant_target: SubjectFollow
+  - method: DELETE
+    path: /v1/relationships/subjects/{subjectType}/{subjectId}/follow
+    operation: UnfollowSubject
+    actor: persona
+    auth: required
+    application:
+      kind: command
+      facet: SubjectFollowCommandFacade
+      method: unfollow
+      aggregate_owner: SubjectFollow
+      mutation_target: SubjectFollow
+      invariant_target: SubjectFollow
+consumers:
+  - name: app
+    capabilities: [follow_subject, unfollow_subject]

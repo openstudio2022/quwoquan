@@ -213,7 +213,7 @@
 - `quwoquan_data/scripts/verify/verify_quwoquan_data_source_authenticity.py`
 - `python3 quwoquan_data/scripts/cli.py verify --scope current`
 
-### 3.5 `data workflow run`（任务产线）与 `content_plan`
+### 3.5 `task geo-homepages`（任务产线）与 `content_plan`
 
 | 阶段 | 输入 | 输出 | stop-if |
 |------|------|------|---------|

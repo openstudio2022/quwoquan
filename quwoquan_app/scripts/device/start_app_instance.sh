@@ -3,7 +3,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../" && pwd)"
 APP_DIR="$ROOT_DIR/quwoquan_app"
-STATE_ROOT="${APP_INSTANCE_STATE_ROOT:-$ROOT_DIR/.qwq_output/env/repo/local/app-instances}"
+QWQ_OUTPUT_ROOT="${QWQ_OUTPUT_ROOT:-$ROOT_DIR/.qwq_output}"
+STATE_ROOT="${APP_INSTANCE_STATE_ROOT:-$QWQ_OUTPUT_ROOT/env/repo/local/app-instances/process}"
 
 ENV_NAME=""
 DEVICE_ID=""

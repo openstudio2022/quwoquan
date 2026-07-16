@@ -45,6 +45,8 @@ scene_routing:
       key_prefixes:
         - "cache:"
         - "ix:"
+        - "events.content."
+        - "events.circle."
         - "events.search."
         - "page_ctx:"
         - "content_analysis:"
@@ -269,6 +271,45 @@ key_patterns:
       搜索 → 推荐在线特征流。search-service 在查询响应后 best-effort XADD，
       content-service 消费组 content-service 投影到 rm_recommend_feature.userFeatures.search*。
       消费失败进入 events.search.recommendation_signals.dlq；主搜索路径不被阻塞。
+
+  - pattern: "events.content.post_lifecycle"
+    redis_scene: general
+    ttl_seconds: 604800
+    type: stream
+    description: |
+      content-service 从 Post 权威 Mongo outbox 以独立 checkpoint 投递的跨上下文事实流。
+      circle-service 通过 consumer group、Mongo inbox 和版本投影维护 Post 外部引用；
+      重复 XADD 或 pending reclaim 不得重复产生业务副作用。持续写入会刷新 7 天保留期，
+      全量 rebuild 由 Post outbox 重置专属投递 checkpoint 后重放，不以 Redis 作为权威存储。
+
+  - pattern: "events.content.post_lifecycle.dlq"
+    redis_scene: general
+    ttl_seconds: 604800
+    type: stream
+    description: Circle Post 外部引用投影连续失败后的不可变死信；保留原 eventId、streamId 与错误摘要。
+
+  - pattern: "events.circle.post_placements"
+    redis_scene: general
+    ttl_seconds: 604800
+    type: stream
+    description: |
+      circle-service 从 CirclePostPlacement Mongo outbox 投递的跨上下文事实流；
+      每个下游使用独立 consumer group 与 durable inbox，Redis 仅承载可重放传输。
+
+  - pattern: "events.circle.memberships"
+    redis_scene: general
+    ttl_seconds: 604800
+    type: stream
+    description: |
+      circle-service 从 CircleMembership Mongo outbox 以独立 checkpoint 投递的跨上下文事实流；
+      Recommendation、Notification 等消费者必须使用独立 consumer group、durable inbox 和 DLQ，
+      Redis 仅承载可由权威 outbox 重放的传输副本。
+
+  - pattern: "events.circle.behavior_facts"
+    redis_scene: general
+    ttl_seconds: 604800
+    type: stream
+    description: CircleBehaviorFact Mongo outbox 的可重放传输副本；推荐消费者必须使用 durable inbox、checkpoint 与 DLQ。
 
   - pattern: "cache:rtask_ready:{taskType}"
     redis_scene: general

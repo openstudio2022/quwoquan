@@ -36,7 +36,7 @@ func TestUpdateConversationSettings_Pin(t *testing.T) {
 func TestMarkAsRead(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
-	conv := createConversation(t, `{"type":"direct","title":"read test"}`)
+	conv := createConversation(t, `{"type":"direct","title":"read test","initialMemberIds":["user_test_002"]}`)
 	convId := conv["_id"].(string)
 
 	msg := sendMessage(t, convId, `{"type":"text","content":"unread msg","clientMsgId":"read-uuid-1"}`)

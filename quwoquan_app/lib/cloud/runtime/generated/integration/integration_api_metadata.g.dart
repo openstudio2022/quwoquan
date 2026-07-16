@@ -40,19 +40,19 @@ class IntegrationApiMetadata {
 
   /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
   static const Map<String, String> operationToAuthMode = <String, String>{
-    'GetExternalInteractionRequest': 'public',
-    'GetNearbyLocations': 'public',
-    'ListExternalInteractionAttempts': 'public',
-    'ListExternalInteractionDeadLetters': 'public',
-    'PushDeliveryProviderCallback': 'public',
-    'SearchLocations': 'public',
-    'SendSmsOtp': 'public',
-    'SmsOtpProviderCallback': 'public',
-    'SubmitExternalInteractionRequest': 'public',
-    'SubmitPushDelivery': 'public',
+    'GetExternalInteractionRequest': 'required',
+    'GetNearbyLocations': 'optional',
+    'ListExternalInteractionAttempts': 'required',
+    'ListExternalInteractionDeadLetters': 'required',
+    'PushDeliveryProviderCallback': 'required',
+    'SearchLocations': 'optional',
+    'SendSmsOtp': 'required',
+    'SmsOtpProviderCallback': 'required',
+    'SubmitExternalInteractionRequest': 'required',
+    'SubmitPushDelivery': 'required',
   };
 
-  /// 响应读模型：operation -> 端侧 DTO 类名（service.yaml response_body 真相源，仅 object/page 形态）。
+  /// 已绑定端侧强类型的响应读模型：operation -> Dart 契约类名。
   static const Map<String, String> operationToResponseModel = <String, String>{
   };
 

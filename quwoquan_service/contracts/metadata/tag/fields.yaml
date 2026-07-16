@@ -1,9 +1,9 @@
 version: 1
-entity: TagNode
+entity: TagNodeView
 
 entities:
-  TagNode:
-    description: 路径制标签节点只读投影（源自 publish/tags 离线导入）
+  TagNodeView:
+    description: 路径制标签节点只读投影（源自 control_plane/governance/taxonomy 的发布导入）
     fields:
       - name: tagRef
         type: string

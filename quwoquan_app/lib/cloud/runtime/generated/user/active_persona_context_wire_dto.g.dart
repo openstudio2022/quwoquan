@@ -96,4 +96,3 @@ String? _firstNonEmptyWireString(Map<String, dynamic> m, List<String> keys) {
   }
   return null;
 }
-

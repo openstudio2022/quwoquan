@@ -34,7 +34,7 @@ func TestBackfillAggregatesAndDedups(t *testing.T) {
 	eligibleA2 := placePost("p2", "稻城亚丁") // same place as p1
 	eligibleB := placePost("p3", "色达")
 	bound := placePost("p4", "已绑定地点")
-	bound.CanonicalEntityId = "entity_1" // single source: carried by entity.homepage
+	bound.PrimaryHomepageId = "homepage_1" // single source: carried by entity.homepage
 	draft := placePost("p5", "草稿地点")
 	draft.Status = "draft"
 
@@ -79,6 +79,16 @@ func TestBackfillEnsureIndexFailurePropagates(t *testing.T) {
 	}
 	if len(bulk.events) != 0 {
 		t.Fatalf("no docs should be written when EnsureIndex fails: %#v", bulk.events)
+	}
+}
+
+func TestBackfillListFailurePropagates(t *testing.T) {
+	bulk := &recordingBulk{}
+	if _, err := Backfill(context.Background(), bulk, fakeReader{listErr: errors.New("malformed primary key")}, NewInMemoryPlaceStore(), 0); err == nil {
+		t.Fatal("expected list failure to stop place backfill")
+	}
+	if len(bulk.events) != 0 {
+		t.Fatalf("list failure must not write index documents: %#v", bulk.events)
 	}
 }
 

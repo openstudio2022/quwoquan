@@ -9,8 +9,6 @@ void main() {
         'items': <Object?>[
           <String, dynamic>{'a': 1},
           <String, Object?>{'b': 2},
-          'skip',
-          3,
         ],
       };
       final list = CloudResponseDecoder.mapList(obj, 'items');
@@ -19,14 +17,25 @@ void main() {
       expect(list[1]['b'], 2);
     });
 
-    test('缺 key 或非 List 时返回空列表', () {
+    test('缺 key 返回空列表，但非 List 或坏元素必须失败关闭', () {
       expect(
         CloudResponseDecoder.mapList(<String, dynamic>{}, 'items'),
         isEmpty,
       );
       expect(
-        CloudResponseDecoder.mapList(<String, dynamic>{'items': 'x'}, 'items'),
-        isEmpty,
+        () => CloudResponseDecoder.mapList(<String, dynamic>{
+          'items': 'x',
+        }, 'items'),
+        throwsA(isA<CloudException>()),
+      );
+      expect(
+        () => CloudResponseDecoder.mapList(<String, dynamic>{
+          'items': <Object?>[
+            <String, dynamic>{'id': 'valid'},
+            'bad',
+          ],
+        }, 'items'),
+        throwsA(isA<CloudException>()),
       );
     });
   });
@@ -60,12 +69,24 @@ void main() {
           <String, dynamic>{'id': 'x'},
         ],
       };
-      final list = CloudResponseDecoder.mapListFirstNonEmpty(
-        obj,
-        <String>['items', 'subAccounts'],
-      );
+      final list = CloudResponseDecoder.mapListFirstNonEmpty(obj, <String>[
+        'items',
+        'subAccounts',
+      ]);
       expect(list.length, 1);
       expect(list.first['id'], 'x');
     });
+  });
+
+  test('CursorPage 含坏元素时不得静默裁剪', () {
+    expect(
+      () => CloudResponseDecoder.asCursorPage(<String, dynamic>{
+        'items': <Object?>[
+          <String, dynamic>{'id': 'valid'},
+          1,
+        ],
+      }),
+      throwsA(isA<CloudException>()),
+    );
   });
 }

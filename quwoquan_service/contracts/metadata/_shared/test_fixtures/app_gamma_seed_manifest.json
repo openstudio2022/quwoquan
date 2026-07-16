@@ -1,6 +1,10 @@
 {
   "schemaVersion": "app-seed-manifest",
   "environment": "gamma",
+  "acceptancePrincipal": {
+    "ownerId": "fixture_user_current",
+    "personaId": "fixture_user_current"
+  },
   "description": "gamma 云侧精简清单：当前 gamma 只装载约 100 图内的 curated 业务子集，alpha/beta 继续保持全量共享池。",
   "seedRefs": [
     {
@@ -11,7 +15,7 @@
         "skill_management_core"
       ],
       "resetScope": "fixture_assistant_*",
-      "targetStore": "assistant-service:gamma_test_namespace",
+      "targetStore": "mongodb:assistant.skill_subscriptions+redis:assistant-runtime",
       "verifiedEndpoints": [
         "/v1/assistant/conversations",
         "/v1/assistant/skill-subscriptions"
@@ -23,7 +27,8 @@
       "refs": [
         "content_discovery_core",
         "intersection_core",
-        "home_showcase_core"
+        "home_showcase_core",
+        "profile_share_interaction_core"
       ],
       "verificationScopes": [
         "object-homepage-gamma-real-data-closure"
@@ -36,8 +41,8 @@
         "/v1/content/posts/fixture_photo_001/comments",
         "/v1/content/posts/fixture_photo_001/comments?sort=recommended",
         "/v1/content/posts/fixture_photo_001/comments/fixture_comment_parent_001/replies",
-        "/v1/content/comments/fixture_comment_parent_001/reaction",
-        "/v1/content/comments/fixture_comment_parent_001/media:bind"
+        "/v1/content/sub-accounts/{activePersonaId}/interactions/received?type=share",
+        "/v1/content/sub-accounts/{activePersonaId}/interactions/sent?type=share"
       ]
     },
     {

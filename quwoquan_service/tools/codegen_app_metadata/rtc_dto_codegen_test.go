@@ -5,10 +5,13 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 func TestRtcCallSessionDtoGeneration_containsAllEntityFieldNames(t *testing.T) {
-	root := filepath.Join("..", "..", "contracts", "metadata", "rtc", "call_session", "fields.yaml")
+	metadataDir := initializeTestContractGraph(t)
+	root := filepath.Join(metadataDir, "rtc", "call_session", "fields.yaml")
 	ff, err := readFields(root)
 	if err != nil {
 		t.Fatalf("read fields: %v", err)
@@ -34,11 +37,16 @@ func TestRtcCallSessionDtoGeneration_containsAllEntityFieldNames(t *testing.T) {
 
 func TestRtcCallSessionDtoGeneration_Golden(t *testing.T) {
 	path := filepath.Join("testdata", "rtc_fields_min.yaml")
-	ff, err := readFields(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read fixture: %v", err)
 	}
-	got := strings.TrimSpace(renderRtcCallSessionDtosDartFromFields(path, ff))
+	var ff fieldsFile
+	err = yaml.Unmarshal(data, &ff)
+	if err != nil {
+		t.Fatalf("parse fixture: %v", err)
+	}
+	got := strings.TrimSpace(renderRtcCallSessionDtosDartFromFields(path, &ff))
 	wantPath := filepath.Join("testdata", "rtc_call_session_dtos.want.dart")
 
 	if os.Getenv("UPDATE_RTC_GOLDEN") == "1" {

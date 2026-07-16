@@ -1,0 +1,55 @@
+id: CR-20260715-103-login-bypass-purge
+title: 登录认证旁路与验证码回传彻底清理
+slug: login-bypass-purge
+revision: 1
+status: in_progress
+
+affected_nodes:
+  - specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity
+  - specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/two-state-one-tap-login--commercial-login-entry
+
+entries:
+  - timestamp: "2026-07-15T03:15:00+08:00"
+    summary: |
+      删除 SmsOtp pass-through、gamma sandbox allowlist、验证码回传及其旧 gate、测试和技术债登记；
+      以 `verify_login_dependency_config` 验证所有环境配置的 HTTPS 外部依赖、provider/resolver
+      基本结构和递归的已退休键阻断。App 的 OTP 响应模型、状态和页面不再保存或展示验证码。
+    reason: |
+      当前服务实现已切为 provider 投递加服务端 challenge 校验，但旧规格与 gate 仍允许已删除的
+      认证旁路，并且 gate 会在缺失配置键时真空通过。这既造成 feature-tree recorded 测试漂移，
+      也会掩盖认证安全回归。
+    change_type: [security, contract, reliability, testing]
+    changed_documents:
+      - path: quwoquan_service/scripts/verify/verify_login_dependency_config.py
+        sections: [four-environment fail-closed config]
+      - path: quwoquan_service/contracts/metadata/_shared/types.yaml
+        sections: [retired SmsOtpPassThroughMode removal]
+      - path: quwoquan_app/lib/cloud/services/user/auth_repository.dart
+        sections: [OtpSendResultData]
+      - path: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/acceptance.yaml
+        sections: [GWT1, GWT2, GWT3, UAT1]
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers: [local_contract, api_integration, user_acceptance]
+      rollout_impact: high
+      breaking_contract: true
+      breaking_rationale: |
+        SendOtp 响应不再接受或表达验证码、sandbox 或 pass-through 状态；调用方必须从实际 provider
+        通道取得验证码，缺少 provider 时保持 fail-closed。
+    verification:
+      completed:
+        - command: python3 quwoquan_service/scripts/verify/verify_login_dependency_config.py
+          result: PASS
+        - command: quwoquan_data/.venv/bin/pytest quwoquan_ops/tests/local_contract/test_login_dependency_config__fail_closed__security__local_contract_test.py -q
+          result: PASS (2 tests)
+        - command: cd quwoquan_service && go test ./services/user-service/internal/application -run 'TestSendOtpProviderFailureMapsStructuredError|TestSendOtpNeverRevealsOrBypassesCodeCorrectness' -count=1
+          result: PASS
+        - command: cd quwoquan_app && flutter test test/local_contract/cloud/user/contract/auth_repository_contract__local_contract_test.dart test/local_contract/ui/user/login_page_widget__local_contract_test.dart
+          result: PASS when executed as two serial test invocations
+        - command: cd quwoquan_service && make codegen && make verify-metadata
+          result: PASS
+      planned:
+        - bash quwoquan_ops/gate/gate_repo.sh
+    remaining_blockers:
+      - 双省主页执行、Gamma 导入和动态 App UAT 仍由 R-HSE06 的真实数据准出门管理。

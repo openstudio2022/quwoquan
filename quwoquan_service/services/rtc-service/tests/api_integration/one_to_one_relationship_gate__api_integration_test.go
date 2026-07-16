@@ -2,37 +2,58 @@ package api_integration
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	rterr "quwoquan_service/runtime/errors"
+	rtchttp "quwoquan_service/services/rtc-service/internal/adapters/http"
 	"quwoquan_service/services/rtc-service/internal/application"
 	callsession "quwoquan_service/services/rtc-service/internal/domain/call_session"
 	"quwoquan_service/services/rtc-service/internal/generated"
 	rtccache "quwoquan_service/services/rtc-service/internal/infrastructure/cache"
+	"quwoquan_service/services/rtc-service/internal/infrastructure/livekit"
 	"quwoquan_service/services/rtc-service/internal/infrastructure/persistence"
 )
-
-type rtcStubRelationshipGate struct {
-	cap application.RelationshipCapability
-	err error
-}
-
-func (g rtcStubRelationshipGate) GetCapability(context.Context, string, string) (application.RelationshipCapability, error) {
-	return g.cap, g.err
-}
 
 func newGateTestOrchestrator(t *testing.T, gate application.RelationshipGate) *application.CallOrchestrator {
 	t.Helper()
 	callStore := persistence.NewMongoCallStore(requireMongoDB(t))
 	callCache := rtccache.NewCallStateCache(redisRouter.Scene("general"))
 	domainSvc := callsession.NewCallSessionService()
-	tokenSvc := application.NewTokenService("testkey", "testsecret")
-	return application.NewCallOrchestrator(callStore, callCache, domainSvc, nil, tokenSvc, nil, gate)
+	tokenIssuer := livekit.NewParticipantTokenIssuer("testkey", "testsecret")
+	return application.NewCallOrchestrator(callStore, callCache, domainSvc, nil, tokenIssuer, nil, gate, nil)
+}
+
+func rtcRelationshipGateForContractTest(
+	t *testing.T,
+	capability application.RelationshipCapability,
+) application.RelationshipGate {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || strings.TrimSpace(r.Header.Get("X-Client-User-Id")) == "" {
+			http.Error(w, "invalid relationship capability request", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]bool{
+			"isMutual":    capability.IsMutual,
+			"isBlocked":   capability.IsBlocked,
+			"isBlockedBy": capability.IsBlockedBy,
+		})
+	}))
+	t.Cleanup(server.Close)
+	return rtchttp.NewUserRelationshipGate(server.URL, server.Client())
 }
 
 func TestInitiateCall_OneToOne_RequiresMutual(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
-	orchestrator := newGateTestOrchestrator(t, rtcStubRelationshipGate{})
+	orchestrator := newGateTestOrchestrator(
+		t,
+		rtcRelationshipGateForContractTest(t, application.RelationshipCapability{}),
+	)
 
 	_, err := orchestrator.InitiateCall(context.Background(), application.InitiateCallRequest{
 		InitiatorID: "caller_a",
@@ -49,9 +70,13 @@ func TestInitiateCall_OneToOne_RequiresMutual(t *testing.T) {
 
 func TestInitiateCall_OneToOne_Blocked(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
-	orchestrator := newGateTestOrchestrator(t, rtcStubRelationshipGate{
-		cap: application.RelationshipCapability{IsBlocked: true},
-	})
+	orchestrator := newGateTestOrchestrator(
+		t,
+		rtcRelationshipGateForContractTest(
+			t,
+			application.RelationshipCapability{IsBlocked: true},
+		),
+	)
 
 	_, err := orchestrator.InitiateCall(context.Background(), application.InitiateCallRequest{
 		InitiatorID: "caller_c",
@@ -68,9 +93,13 @@ func TestInitiateCall_OneToOne_Blocked(t *testing.T) {
 
 func TestInitiateCall_OneToOne_AllowsMutual(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
-	orchestrator := newGateTestOrchestrator(t, rtcStubRelationshipGate{
-		cap: application.RelationshipCapability{IsMutual: true},
-	})
+	orchestrator := newGateTestOrchestrator(
+		t,
+		rtcRelationshipGateForContractTest(
+			t,
+			application.RelationshipCapability{IsMutual: true},
+		),
+	)
 
 	resp, err := orchestrator.InitiateCall(context.Background(), application.InitiateCallRequest{
 		InitiatorID: "caller_ok",

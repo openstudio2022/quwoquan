@@ -6,18 +6,17 @@ import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timel
 import 'package:quwoquan_app/assistant/generated/contracts/runtime_failure.g.dart';
 import 'package:quwoquan_app/cloud/assistant/generated/assistant_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/notification/app_message_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
-import 'package:quwoquan_app/cloud/services/notification/app_message_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/core/services/app_content_repository.dart';
+import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_skill_center_page.dart';
 import 'package:quwoquan_app/ui/assistant/providers/assistant_history_loader.dart';
 import 'package:quwoquan_app/ui/assistant/providers/personal_assistant_stream_controller.dart';
 import 'package:quwoquan_app/ui/assistant/providers/skill_subscription_controller.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../support/fixtures/assistant/assistant_scenario_fixtures.dart';
 
 void main() {
@@ -461,7 +460,7 @@ void main() {
         assistantRepository: _FakeAssistantRepository(
           events: <AssistantStreamEventWire>[],
         ),
-        appMessageRepository: _FakeAppMessageRepository(unreadCount: 2),
+        appMessageQuery: _FakeAppMessageQuery(unreadCount: 2),
       );
       addTearDown(container.dispose);
 
@@ -686,15 +685,15 @@ void main() {
 
 ProviderContainer _containerWith({
   required AssistantRepository assistantRepository,
-  AppMessageRepository? appMessageRepository,
+  AppMessageQuery? appMessageQuery,
   AssistantHistoryLoader? historyLoader,
   BehaviorRepository? behaviorRepository,
 }) {
   return ProviderContainer(
     overrides: [
       assistantRepositoryProvider.overrideWithValue(assistantRepository),
-      appMessageRepositoryProvider.overrideWithValue(
-        appMessageRepository ?? _FakeAppMessageRepository(),
+      appMessageQueryProvider.overrideWithValue(
+        appMessageQuery ?? _FakeAppMessageQuery(),
       ),
       activePersonaContextProvider.overrideWith(
         (ref) async => ActivePersonaContextViewData.fallback(
@@ -781,7 +780,7 @@ class _FakeAssistantRepository extends MockAssistantRepository {
   }
 
   @override
-  Future<AssistantTurnEnvelopeWire> createAssistantTurn({
+  Future<AssistantTurnEnvelopeWire> startAssistantRun({
     required String conversationId,
     required String text,
     String turnType = 'user',
@@ -802,58 +801,56 @@ class _FakeAssistantRepository extends MockAssistantRepository {
   }
 
   @override
-  Stream<AssistantStreamEventWire> streamAssistantTurn({
-    required String turnId,
+  Stream<AssistantStreamEventWire> watchAssistantRunEvents({
+    required String runId,
   }) {
     return Stream<AssistantStreamEventWire>.fromIterable(events);
   }
 }
 
-class _FakeAppMessageRepository implements AppMessageRepository {
-  _FakeAppMessageRepository({this.unreadCount = 0});
+class _FakeAppMessageQuery implements AppMessageQuery {
+  _FakeAppMessageQuery({this.unreadCount = 0});
 
   final int unreadCount;
 
   @override
-  Future<AppMessageWire> ackAppMessage(String messageId) {
-    return getAppMessage(messageId);
-  }
-
-  @override
-  Future<AppMessageWire> getAppMessage(String messageId) async {
-    return AppMessageWire(
-      messageId: messageId,
+  Future<AppMessage> getAppMessage(GetAppMessageQuery query) async {
+    return AppMessage(
+      messageId: query.messageId,
       userId: 'user_test',
       messageType: 'assistant',
       source: 'assistant_turn',
       sourceId: 'atn_test_personal',
-      destination: const AppMessageDestinationWire(
-        type: 'user',
-        id: 'user_test',
-      ),
+      destination: const AppMessageDestination(type: 'user', id: 'user_test'),
       title: '找私助提醒',
       summary: '测试消息',
-      target: const AppMessageTargetWire(
+      target: const AppMessageTarget(
         targetType: 'assistant_turn',
         targetId: 'atn_test_personal',
       ),
-      createdAt: '2026-04-29T00:00:00Z',
+      read: false,
+      createdAt: DateTime.utc(2026, 4, 29),
     );
   }
 
   @override
-  Future<int> getUnreadCount() async {
-    return unreadCount;
+  Future<AppMessageUnreadCountSlice> getUnreadCount(
+    GetAppMessageUnreadCountQuery query,
+  ) async {
+    return AppMessageUnreadCountSlice(unreadCount: unreadCount);
   }
 
   @override
-  Future<List<AppMessageWire>> listAppMessages({int limit = 20}) async {
-    return <AppMessageWire>[await getAppMessage('msg_test_personal')];
-  }
-
-  @override
-  Future<AppMessageWire> readAppMessage(String messageId) {
-    return getAppMessage(messageId);
+  Future<AppMessageInboxSlice> listAppMessages(
+    ListAppMessagesQuery query,
+  ) async {
+    return AppMessageInboxSlice(
+      items: <AppMessage>[
+        await getAppMessage(
+          const GetAppMessageQuery(messageId: 'msg_test_personal'),
+        ),
+      ],
+    );
   }
 }
 

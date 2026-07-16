@@ -8,7 +8,9 @@ import (
 	"sort"
 	"strings"
 
-	"quwoquan_service/runtime/codegen"
+	contractcodegen "quwoquan_service/internal/metadata/codegen"
+	"quwoquan_service/internal/metadata/graph"
+	"quwoquan_service/internal/metadata/validate"
 
 	"gopkg.in/yaml.v3"
 )
@@ -28,24 +30,32 @@ func main() {
 	if err != nil {
 		exitErr(fmt.Errorf("load manifest: %w", err))
 	}
+	source, err := contractcodegen.NewSource(metadataDir, validate.ProfileBaseline)
+	if err != nil {
+		exitErr(fmt.Errorf("compile ContractGraph: %w", err))
+	}
+	contractGraph := source.Graph()
 
 	// Pre-pass: merge events from all sources with same domain_pkg → one events.g.go per pkg.
-	if err := generateMergedEventConstants(manifest, metadataDir); err != nil {
+	if err := generateMergedEventConstants(manifest, contractGraph); err != nil {
 		exitErr(fmt.Errorf("gen events: %w", err))
 	}
 
 	migrationSeq := 1
 
 	for _, src := range manifest.Sources {
-		storagePath := filepath.Join(metadataDir, src.Metadata, "storage.yaml")
-		fieldsPath := filepath.Join(metadataDir, src.Metadata, "fields.yaml")
+		if src.EventsOnly {
+			continue
+		}
+		storagePath := filepath.ToSlash(filepath.Join(src.Metadata, "storage.yaml"))
+		fieldsPath := filepath.ToSlash(filepath.Join(src.Metadata, "fields.yaml"))
 
-		storage, err := loadStorageYAML(storagePath)
+		storage, err := loadStorageYAML(contractGraph, storagePath)
 		if err != nil {
 			exitErr(fmt.Errorf("load storage %s: %w", storagePath, err))
 		}
 
-		fields, err := loadFieldsYAML(fieldsPath)
+		fields, err := loadFieldsYAML(contractGraph, fieldsPath)
 		if err != nil {
 			exitErr(fmt.Errorf("load fields %s: %w", fieldsPath, err))
 		}
@@ -79,6 +89,10 @@ func main() {
 					migrationSeq++
 				}
 
+				if tableDef.InfrastructureOnly {
+					fmt.Printf("  pg_store: %s (infrastructure-only table)\n", tableName)
+					continue
+				}
 				if err := generatePGStore(ctx, tableName, tableDef); err != nil {
 					exitErr(fmt.Errorf("gen pg store %s: %w", tableName, err))
 				}
@@ -121,11 +135,28 @@ type Manifest struct {
 type Source struct {
 	Metadata            string                       `yaml:"metadata"`
 	DomainPkg           string                       `yaml:"domain_pkg"`
+	DomainPath          string                       `yaml:"domain_path"`
+	EventsOnly          bool                         `yaml:"events_only"`
 	Tables              []string                     `yaml:"tables"`
 	MigrationSkipTables []string                     `yaml:"migration_skip_tables"`
 	NameOverrides       map[string]string            `yaml:"name_overrides"`
 	TypeOverrides       map[string]map[string]string `yaml:"type_overrides"`
 	CacheOverrides      map[string]CacheOverride     `yaml:"cache_overrides"`
+}
+
+func (s Source) domainPath() string {
+	if s.DomainPath != "" {
+		return s.DomainPath
+	}
+	return s.DomainPkg
+}
+
+func (s Source) modelImport(modulePath string) string {
+	return modulePath + "/domain/" + filepath.ToSlash(s.domainPath()) + "/model"
+}
+
+func (s Source) infrastructurePath(kind string) string {
+	return filepath.Join("infrastructure", s.domainPath(), kind)
 }
 
 type CacheOverride struct {
@@ -159,6 +190,18 @@ func loadManifest(path string) (*Manifest, error) {
 	if err := yaml.Unmarshal(data, &m); err != nil {
 		return nil, err
 	}
+	for _, source := range m.Sources {
+		domainPath := filepath.Clean(source.domainPath())
+		if source.DomainPkg == "" || domainPath == "." || filepath.IsAbs(domainPath) ||
+			domainPath == ".." || strings.HasPrefix(domainPath, ".."+string(filepath.Separator)) {
+			return nil, fmt.Errorf(
+				"invalid source domain ownership: metadata=%s domain_pkg=%q domain_path=%q",
+				source.Metadata,
+				source.DomainPkg,
+				source.DomainPath,
+			)
+		}
+	}
 	return &m, nil
 }
 
@@ -175,14 +218,15 @@ type StorageYAML struct {
 }
 
 type TableDef struct {
-	Entity            string             `yaml:"entity"`
-	PK                string             `yaml:"pk"`
-	FK                *ForeignKeyDef     `yaml:"fk"`
-	Columns           []ColumnDef        `yaml:"columns"`
-	Indexes           []IndexDef         `yaml:"indexes"`
-	UniqueConstraints []UniqueConstraint `yaml:"unique_constraints"`
-	SearchIndexes     []SearchIndexDef   `yaml:"search_indexes"`
-	CacheExcluded     bool               `yaml:"cache_excluded"`
+	Entity             string             `yaml:"entity"`
+	PK                 string             `yaml:"pk"`
+	FK                 *ForeignKeyDef     `yaml:"fk"`
+	Columns            []ColumnDef        `yaml:"columns"`
+	Indexes            []IndexDef         `yaml:"indexes"`
+	UniqueConstraints  []UniqueConstraint `yaml:"unique_constraints"`
+	SearchIndexes      []SearchIndexDef   `yaml:"search_indexes"`
+	CacheExcluded      bool               `yaml:"cache_excluded"`
+	InfrastructureOnly bool               `yaml:"infrastructure_only"`
 }
 
 type ColumnDef struct {
@@ -264,32 +308,24 @@ type FieldDef struct {
 	APIExposure string   `yaml:"api_exposure"`
 }
 
-func loadStorageYAML(path string) (*StorageYAML, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
+func loadStorageYAML(contractGraph *graph.ContractGraph, path string) (*StorageYAML, error) {
 	var s StorageYAML
-	if err := yaml.Unmarshal(data, &s); err != nil {
+	if err := contractGraph.DecodeDocumentYAML(path, &s); err != nil {
 		return nil, err
 	}
 	return &s, nil
 }
 
-func loadFieldsYAML(path string) (*FieldsYAML, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
+func loadFieldsYAML(contractGraph *graph.ContractGraph, path string) (*FieldsYAML, error) {
 	var f FieldsYAML
-	if err := yaml.Unmarshal(data, &f); err != nil {
+	if err := contractGraph.DecodeDocumentYAML(path, &f); err != nil {
 		return nil, err
 	}
 	if f.Entities == nil && f.Entity != "" {
 		var flat struct {
 			Fields []FieldDef `yaml:"fields"`
 		}
-		if err := yaml.Unmarshal(data, &flat); err == nil && len(flat.Fields) > 0 {
+		if err := contractGraph.DecodeDocumentYAML(path, &flat); err == nil && len(flat.Fields) > 0 {
 			f.Entities = map[string]EntityFieldsDef{
 				f.Entity: {Fields: flat.Fields},
 			}
@@ -344,11 +380,17 @@ func hasConstraint(ss []string, target string) bool {
 	return false
 }
 
-// --- Naming (delegated to runtime/codegen) ---
+// --- Naming ---
 
-func toGoName(snakeName string) string   { return codegen.SnakeToGoName(snakeName) }
-func toSnake(s string) string            { return codegen.CamelToSnake(s) }
-func entityToSnake(entity string) string { return codegen.CamelToSnake(entity) }
+func toGoName(snakeName string) string {
+	return contractcodegen.SnakeToGoName(snakeName)
+}
+func toSnake(s string) string {
+	return contractcodegen.CamelToSnake(s)
+}
+func entityToSnake(entity string) string {
+	return contractcodegen.CamelToSnake(entity)
+}
 
 func sqlTypeToGo(sqlType string, notNull bool) string {
 	upper := strings.ToUpper(sqlType)

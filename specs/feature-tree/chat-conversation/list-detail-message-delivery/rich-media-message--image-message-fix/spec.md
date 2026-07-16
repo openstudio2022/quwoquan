@@ -41,7 +41,7 @@
 
 - 图片大小 ≤20MB（`UploadPolicy.chatImage` 已定义）
 - 格式：JPEG, PNG, GIF, WebP, HEIC
-- 多图发送：逐张上传发送（`media.items[]` 多图合并后续增强）
+- 多图发送：逐张上传发送（`content.source.media.items[]` 多图合并后续增强）
 - 全屏查看器使用 `photo_view` 包
 
 ## 适用范围与约束

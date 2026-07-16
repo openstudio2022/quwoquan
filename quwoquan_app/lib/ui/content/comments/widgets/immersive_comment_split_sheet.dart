@@ -23,7 +23,6 @@ class ImmersiveCommentSplitSheet extends ConsumerStatefulWidget {
     this.likeCount = 0,
     this.shareCount = 0,
     this.isLiked = false,
-    this.isShared = false,
     this.onLikeTap,
     this.onShareTap,
     this.onClose,
@@ -37,7 +36,6 @@ class ImmersiveCommentSplitSheet extends ConsumerStatefulWidget {
   final int likeCount;
   final int shareCount;
   final bool isLiked;
-  final bool isShared;
   final VoidCallback? onLikeTap;
   final VoidCallback? onShareTap;
   final VoidCallback? onClose;
@@ -145,7 +143,6 @@ class _ImmersiveCommentSplitSheetState
                 likeCount: widget.likeCount,
                 shareCount: widget.shareCount,
                 isLiked: widget.isLiked,
-                isShared: widget.isShared,
                 onLikeTap: widget.onLikeTap,
                 onShareTap: widget.onShareTap,
                 onClose: _close,

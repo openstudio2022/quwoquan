@@ -3,16 +3,6 @@ version: 1
 dart_class: ContentPostImmersiveWireKeys
 description: "沉浸器与详情并行 raw Map 扩展键名 SSOT"
 keys:
-  - const_name: circleSummaries
-    json_key: circleSummaries
-  - const_name: circleIds
-    json_key: circleIds
-  - const_name: circleNames
-    json_key: circleNames
-  - const_name: circleId
-    json_key: circleId
-  - const_name: circleName
-    json_key: circleName
   - const_name: tagRefs
     json_key: tagRefs
   - const_name: visibility

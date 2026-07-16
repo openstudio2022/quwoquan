@@ -27,7 +27,7 @@ import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 ///   可点击经统一 [IntersectionTargetNavigator] 进对象页 / 维度下钻，埋点保 `tag_click`
 ///   语义（[ContentBehaviorTracker.trackTagClick]，推荐 HotPath 1.8 权重）。`referralSource`
 ///   由展示面（用户主页 / 圈子 / 实体）透传，精确归因（R23/N10）。
-/// - spans 缺省时降级为纯文本（不可点击片段），整卡点击仍由宿主 `onTap` 处理。
+/// - spans 缺省或 target 不完整时 fail-closed，不回退 reason.actionTargetId 自跳转。
 class IntersectionReasonChip extends ConsumerWidget {
   const IntersectionReasonChip({
     super.key,
@@ -65,7 +65,10 @@ class IntersectionReasonChip extends ConsumerWidget {
     IntersectionTarget? contextObjectTarget,
   }) {
     if (reasons == null || reasons.isEmpty) return null;
-    final first = displayReadyIntersectionReason(reasons.first);
+    final first = displayReadyIntersectionReason(
+      reasons.first,
+      contextObjectTarget: contextObjectTarget,
+    );
     if (first == null) return null;
     final primary = first.primaryText.trim();
     if (primary.isNotEmpty) return primary;
@@ -74,9 +77,15 @@ class IntersectionReasonChip extends ConsumerWidget {
 
   /// 旅程高亮锚（§7.3）：徽标对应的最强证据组 kind；点击跳作者主页时透传，
   /// 对象页据此自动展开并高亮同一证据组，旅程无断点。
-  static String? primaryKind(List<IntersectionReason>? reasons) {
+  static String? primaryKind(
+    List<IntersectionReason>? reasons, {
+    IntersectionTarget? contextObjectTarget,
+  }) {
     if (reasons == null || reasons.isEmpty) return null;
-    final first = displayReadyIntersectionReason(reasons.first);
+    final first = displayReadyIntersectionReason(
+      reasons.first,
+      contextObjectTarget: contextObjectTarget,
+    );
     if (first == null) return null;
     final kind = resolvedIntersectionReasonKind(first).trim();
     return kind.isEmpty ? null : kind;
@@ -98,7 +107,10 @@ class IntersectionReasonChip extends ConsumerWidget {
     );
     if (text == null) return null;
     final first = reasons?.isNotEmpty == true
-        ? displayReadyIntersectionReason(reasons!.first)
+        ? displayReadyIntersectionReason(
+            reasons!.first,
+            contextObjectTarget: contextObjectTarget,
+          )
         : null;
     if (first == null) return null;
     return IntersectionReasonChip(
@@ -117,7 +129,10 @@ class IntersectionReasonChip extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final displayReason = reason == null
         ? null
-        : displayReadyIntersectionReason(reason!);
+        : displayReadyIntersectionReason(
+            reason!,
+            contextObjectTarget: contextObjectTarget,
+          );
     if (displayReason == null) {
       return const SizedBox.shrink();
     }
@@ -169,14 +184,18 @@ class IntersectionReasonChip extends ConsumerWidget {
   ) {
     final current = reason == null
         ? null
-        : displayReadyIntersectionReason(reason!);
+        : displayReadyIntersectionReason(
+            reason!,
+            contextObjectTarget: contextObjectTarget,
+          );
     if (current == null) {
       return;
     }
     final spanTarget = span.target;
-    final target = (spanTarget != null && spanTarget.objectId.trim().isNotEmpty)
-        ? spanTarget
-        : IntersectionTargetNavigator.targetForReason(current);
+    if (spanTarget == null || spanTarget.objectId.trim().isEmpty) {
+      return;
+    }
+    final target = spanTarget;
     final attribution = IntersectionNavAttribution(
       intersectionId: current.intersectionId,
       dimension: current.dimension,

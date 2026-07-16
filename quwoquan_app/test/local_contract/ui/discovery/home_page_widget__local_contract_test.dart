@@ -20,6 +20,7 @@ import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer.dart';
 import 'package:quwoquan_app/ui/search/pages/global_search_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
+import '../../../support/cloud_services/content_facet_overrides.dart';
 
 Widget _buildApp() {
   return ProviderScope(
@@ -106,9 +107,7 @@ Widget _buildAppWithStableFollowingArticles() {
   return ProviderScope(
     overrides: [
       authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
-      contentRepositoryProvider.overrideWithValue(
-        _StableFollowingArticleContentRepository(),
-      ),
+      ...mockContentFacetOverrides(_StableFollowingArticleContentRepository()),
       contentFeatureFlagProvider(
         'enable_article_distribution_profiles',
       ).overrideWith((ref) => true),
@@ -162,7 +161,7 @@ Widget _buildAppWithStableFollowingFeed({bool stableArticles = false}) {
     overrides: [
       authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
       if (stableArticles) ...[
-        contentRepositoryProvider.overrideWithValue(
+        ...mockContentFacetOverrides(
           _StableFollowingArticleContentRepository(),
         ),
         contentFeatureFlagProvider(

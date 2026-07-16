@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log"
 	"log/slog"
 	"net/http"
@@ -9,10 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-
-	rtmongo "quwoquan_service/runtime/mongodb"
-
+	rtauth "quwoquan_service/runtime/auth"
+	runtimeconfig "quwoquan_service/runtime/config"
 	rtgov "quwoquan_service/runtime/governance"
 	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
@@ -23,23 +23,44 @@ import (
 	"quwoquan_service/services/assistant-service/internal/application"
 	"quwoquan_service/services/assistant-service/internal/infrastructure/chatclient"
 	"quwoquan_service/services/assistant-service/internal/infrastructure/messaging"
-	"quwoquan_service/services/assistant-service/internal/infrastructure/persistence"
-	"quwoquan_service/services/assistant-service/internal/infrastructure/projection"
+	"quwoquan_service/services/assistant-service/internal/infrastructure/notificationclient"
 	"quwoquan_service/services/assistant-service/internal/infrastructure/userprofile"
 )
 
 func main() {
+	if err := run(); err != nil {
+		logStartupFailure(err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	serviceName, appEnv, configRoot, configVersion, imageVersion, err := resolveRuntimeIdentity()
 	if err != nil {
-		log.Fatalf("assistant-service runtime identity invalid: %v", err)
+		return fmt.Errorf("runtime identity invalid: %w", err)
 	}
 	cfg, err := loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion)
 	if err != nil {
-		log.Fatalf("assistant-service config load failed: %v", err)
+		return fmt.Errorf("config load failed: %w", err)
 	}
-	applyEnvOverrides(&cfg)
+	if err := applyEnvOverrides(&cfg); err != nil {
+		return fmt.Errorf("environment override invalid: %w", err)
+	}
 	if err := validateRuntimeCompatibility(cfg, configVersion, imageVersion); err != nil {
-		log.Fatalf("assistant-service config compatibility failed: %v", err)
+		return fmt.Errorf("config compatibility failed: %w", err)
+	}
+	if err := validateRuntimeDependenciesConfig(cfg); err != nil {
+		return err
+	}
+	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(
+		runtimeconfig.EnvRuntimeConfigProvider{},
+	)
+	if err != nil {
+		return fmt.Errorf("access token config invalid: %w", err)
+	}
+	accessVerifier, err := rtauth.NewHS256Verifier(accessTokenConfig)
+	if err != nil {
+		return fmt.Errorf("access token verifier invalid: %w", err)
 	}
 	addr := getenvOrDefault("ASSISTANT_SERVICE_ADDR", cfg.Service.HTTP.Addr)
 	if addr == "" {
@@ -49,17 +70,28 @@ func main() {
 	ioLogger := robs.NewIOAccessLogger(os.Stdout)
 	processLogger, err := robs.NewProcessTraceLogger(os.Stdout, os.Stderr, robs.TraceLogLevelInfo, nil)
 	if err != nil {
-		log.Fatalf("assistant-service process logger init failed: %v", err)
+		return fmt.Errorf("process logger init failed: %w", err)
 	}
 	exceptionLogger, err := robs.NewExceptionLogger(os.Stdout, os.Stderr, nil)
 	if err != nil {
-		log.Fatalf("assistant-service exception logger init failed: %v", err)
+		return fmt.Errorf("exception logger init failed: %w", err)
 	}
-	router := buildRedisRouter(cfg)
-	defer router.Close()
-	if err := router.PingAll(context.Background()); err != nil {
-		log.Printf("WARN: assistant-service redis PingAll: %v", err)
+	ctx := context.Background()
+	router, err := buildRedisRouter(cfg)
+	if err != nil {
+		return err
 	}
+	defer func() {
+		if err := router.Close(); err != nil {
+			log.Printf("WARN: assistant-service redis close: %v", err)
+		}
+	}()
+	redisProbeCtx, redisProbeCancel := context.WithTimeout(ctx, dependencyProbeTimeout)
+	if err := router.PingAll(redisProbeCtx); err != nil {
+		redisProbeCancel()
+		return dependencyError("redis", "connectivity", err)
+	}
+	redisProbeCancel()
 	otelShutdown := rtotel.MustInit(rtotel.Config{ServiceName: "assistant-service", SamplingRatio: 0.1})
 	defer otelShutdown()
 
@@ -68,105 +100,75 @@ func main() {
 		return router.PingAll(ctx)
 	})
 
-	ctx := context.Background()
-
-	var eventStore application.EventStore
-	var profileStore application.LearningProfileStore
-	var subscriptionStore application.SkillSubscriptionStore
-	var appMessageStore application.AppMessageStore
-	if strings.TrimSpace(cfg.MongoDB.URI) != "" {
-		mongoClient := rtmongo.MustConnect(ctx, rtmongo.ConnectConfig{URI: cfg.MongoDB.URI}, "assistant-service")
-		defer func() {
-			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			_ = mongoClient.Disconnect(shutdownCtx)
-		}()
-		dbName := cfg.MongoDB.Database
-		if strings.TrimSpace(dbName) == "" {
-			dbName = "quwoquan_assistant"
-		}
-		db := mongoClient.Database(dbName)
-		mongoStore := persistence.NewMongoEventStore(db)
-		if err := mongoStore.EnsureIndexes(ctx); err != nil {
-			log.Printf("WARN: assistant-service ensure mongo indexes: %v", err)
-		}
-		eventStore = mongoStore
-		mongoProfiles := projection.NewLearningProfileStore(db)
-		if err := mongoProfiles.EnsureIndexes(ctx); err != nil {
-			log.Printf("WARN: assistant-service ensure learning profile indexes: %v", err)
-		}
-		profileStore = mongoProfiles
-		mongoSubscriptions := persistence.NewMongoSkillSubscriptionStore(db)
-		if err := mongoSubscriptions.EnsureIndexes(ctx); err != nil {
-			log.Printf("WARN: assistant-service ensure skill subscription indexes: %v", err)
-		}
-		subscriptionStore = mongoSubscriptions
-		mongoAppMessages := persistence.NewMongoAppMessageStore(db)
-		if err := mongoAppMessages.EnsureIndexes(ctx); err != nil {
-			log.Printf("WARN: assistant-service ensure app message indexes: %v", err)
-		}
-		appMessageStore = mongoAppMessages
-		healthChecker.Register("mongodb", func(ctx context.Context) error {
-			return mongoClient.Ping(ctx, nil)
-		})
-		log.Printf("assistant-service events storage=mongodb db=%s", dbName)
-		log.Printf("assistant-service learning profile storage=mongodb db=%s", dbName)
-		log.Printf("assistant-service skill subscription storage=mongodb db=%s", dbName)
-		log.Printf("assistant-service app message storage=mongodb db=%s", dbName)
-	} else {
-		eventStore = persistence.NewMemoryEventStore()
-		profileStore = projection.NewMemoryLearningProfileStore()
-		subscriptionStore = persistence.NewMemorySkillSubscriptionStore()
-		appMessageStore = persistence.NewMemoryAppMessageStore()
-		log.Printf("assistant-service events storage=inmemory (no mongodb.uri configured)")
-		log.Printf("assistant-service learning profile storage=inmemory (no mongodb.uri configured)")
-		log.Printf("assistant-service skill subscription storage=inmemory (no mongodb.uri configured)")
-		log.Printf("assistant-service app message storage=inmemory (no mongodb.uri configured)")
+	deps, err := openPersistentDependencies(ctx, cfg)
+	if err != nil {
+		return err
 	}
+	defer func() {
+		closeCtx, cancel := context.WithTimeout(context.Background(), dependencyProbeTimeout)
+		defer cancel()
+		if err := deps.Close(closeCtx); err != nil {
+			log.Printf("WARN: assistant-service persistent dependency close: %v", err)
+		}
+	}()
+	healthChecker.Register("mongodb", func(ctx context.Context) error {
+		return deps.mongoClient.Ping(ctx, nil)
+	})
+	healthChecker.Register("postgres", func(ctx context.Context) error {
+		return deps.postgresPool.Ping(ctx)
+	})
+	log.Printf("assistant-service events storage=mongodb db=%s", cfg.MongoDB.Database)
+	log.Printf("assistant-service learning profile storage=mongodb db=%s", cfg.MongoDB.Database)
+	log.Printf("assistant-service skill subscription storage=mongodb db=%s", cfg.MongoDB.Database)
+	log.Printf("assistant-service consent storage=postgres")
 
-	var consentStore application.ConsentStore
-	if strings.TrimSpace(cfg.Postgres.DSN) != "" {
-		poolCfg, err := pgxpool.ParseConfig(cfg.Postgres.DSN)
-		if err != nil {
-			log.Fatalf("assistant-service postgres parse failed: %v", err)
-		}
-		if cfg.Postgres.MaxOpenConns > 0 {
-			poolCfg.MaxConns = int32(cfg.Postgres.MaxOpenConns)
-		}
-		if cfg.Postgres.MaxIdleConns > 0 {
-			poolCfg.MinConns = int32(cfg.Postgres.MaxIdleConns)
-		}
-		if cfg.Postgres.ConnMaxLifetimeMinutes > 0 {
-			poolCfg.MaxConnLifetime = time.Duration(cfg.Postgres.ConnMaxLifetimeMinutes) * time.Minute
-		}
-		pgPool, err := pgxpool.NewWithConfig(ctx, poolCfg)
-		if err != nil {
-			log.Fatalf("assistant-service postgres connect failed: %v", err)
-		}
-		defer pgPool.Close()
-		if err := pgPool.Ping(ctx); err != nil {
-			log.Printf("WARN: assistant-service postgres ping: %v", err)
-		}
-		healthChecker.Register("postgres", func(ctx context.Context) error {
-			return pgPool.Ping(ctx)
-		})
-		pgStore := persistence.NewPgConsentStore(pgPool)
-		if err := pgStore.EnsureSchema(ctx); err != nil {
-			log.Printf("WARN: assistant-service ensure pg schema: %v", err)
-		}
-		consentStore = pgStore
-		log.Printf("assistant-service consent storage=postgres")
-	} else {
-		consentStore = persistence.NewMemoryConsentStore()
-		log.Printf("assistant-service consent storage=inmemory (no postgres.dsn configured)")
+	notificationCredentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
+		accessTokenConfig,
+		"assistant-service",
+		[]string{"notification.app_message.create"},
+	)
+	if err != nil {
+		return dependencyError("notification-service", "credentials", err)
+	}
+	notificationHTTPConfig := rthttp.DefaultHTTPClientFactoryConfig()
+	notificationHTTPConfig.Timeout = providerTimeout(cfg.NotificationService.TimeoutMs)
+	notificationHTTPConfig.MaxRetries = 0
+	notificationHTTPConfig.RetryBackoff = 0
+	notificationHTTPConfig.RetryOnCodes = map[int]struct{}{}
+	notificationObservedClient := rthttp.NewObservedHTTPClient(
+		nil,
+		notificationHTTPConfig,
+		rthttp.HTTPClientMiddlewareConfig{
+			Service:           "assistant-service",
+			Origin:            "cloud",
+			Direction:         "outbound",
+			SourceID:          "assistant-service.notification-command",
+			Src:               "assistant-service",
+			ServiceName:       "assistant-service",
+			ServiceInstanceID: instanceID,
+		},
+		ioLogger,
+		processLogger,
+		exceptionLogger,
+	)
+	notificationWriter, err := notificationclient.NewClient(
+		rtgov.WrapClientWithCB(
+			notificationObservedClient,
+			rtgov.NewCircuitBreaker(5, 15*time.Second, slog.Default()),
+		),
+		cfg.NotificationService.BaseURL,
+		notificationCredentials,
+	)
+	if err != nil {
+		return dependencyError("notification-service", "initialization", err)
 	}
 
 	publisher := messaging.NewRedisEventPublisher(router.Scene("general"), serviceName, nil)
 	assistantOpts := []application.AssistantServiceOption{
-		application.WithLearningProfileStore(profileStore),
+		application.WithLearningProfileStore(deps.profileStore),
 		application.WithEventPublisher(publisher),
-		application.WithAppMessageStore(appMessageStore),
-		application.WithSkillSubscriptionStore(subscriptionStore),
+		application.WithNotificationAppMessageCommandWriter(notificationWriter),
+		application.WithSkillSubscriptionStore(deps.subscriptionStore),
 		application.WithAgentLoop(buildAgentLoop(cfg, appEnv)),
 	}
 	chatGroundingEnabled := false
@@ -185,21 +187,13 @@ func main() {
 		log.Printf("assistant-service chat grounding client disabled (no chat_service.base_url)")
 	}
 	service := application.NewAssistantService(
-		eventStore,
-		consentStore,
+		deps.eventStore,
+		deps.consentStore,
 		router.Scene("general"),
 		assistantOpts...,
 	)
-	if seedRefs := scenarioSeedRefsFromEnv(); len(seedRefs) > 0 {
-		pack, err := application.LoadAssistantScenarioPack()
-		if err != nil {
-			log.Fatalf("assistant-service scenario seed load failed: %v", err)
-		}
-		if err := application.SeedAssistantServiceFromScenarioPack(ctx, service, "user_m11_scenario", pack, seedRefs); err != nil {
-			log.Fatalf("assistant-service scenario seed failed: %v", err)
-		}
-		log.Printf("assistant-service scenario seed loaded refs=%s", strings.Join(seedRefs, ","))
-	}
+	serviceCtx, serviceCancel := context.WithCancel(context.Background())
+	defer serviceCancel()
 	if chatGroundingEnabled {
 		consumer := messaging.NewAssistantMentionedConsumer(
 			router.Scene("general"),
@@ -207,7 +201,7 @@ func main() {
 			instanceID,
 			slog.Default(),
 		)
-		go consumer.Run(context.Background(), 500*time.Millisecond)
+		go consumer.Run(serviceCtx, 500*time.Millisecond)
 		log.Printf("assistant-service assistant mentioned consumer enabled stream=%s group=%s", messaging.AssistantMentionedStream, messaging.AssistantMentionedConsumerGroup)
 	}
 	baseHandler := httpadapter.NewHandler(service).Routes()
@@ -227,9 +221,35 @@ func main() {
 	corsHandler := rthttp.WithCORS(observedHandler, rthttp.CORSOptionsFromEnv())
 	rateLimiter := rtgov.NewRateLimiter(1000)
 	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(corsHandler)
-	server := &http.Server{Addr: addr, Handler: rateLimited, ReadHeaderTimeout: 5 * time.Second, WriteTimeout: assistantHTTPWriteTimeout(), IdleTimeout: 60 * time.Second}
+	server := &http.Server{
+		Addr: addr,
+		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
+			AccessTokenVerifier: accessVerifier,
+		})(rateLimited),
+		ReadHeaderTimeout: 5 * time.Second,
+		WriteTimeout:      assistantHTTPWriteTimeout(),
+		IdleTimeout:       60 * time.Second,
+	}
 	log.Printf("assistant-service listening on %s env=%s (rate_limit=1000/s)", addr, appEnv)
 	if err := rthttp.ListenAndServeGraceful(server, assistantShutdownTimeout()); err != nil {
-		log.Fatalf("assistant-service listen failed: %v", err)
+		return fmt.Errorf("listen failed: %w", err)
 	}
+	return nil
+}
+
+func logStartupFailure(err error) {
+	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
+	attributes := []any{
+		"service", "assistant-service",
+		"error", err.Error(),
+	}
+	var dependencyFailure *startupDependencyError
+	if errors.As(err, &dependencyFailure) {
+		attributes = append(
+			attributes,
+			"dependency", dependencyFailure.Dependency,
+			"stage", dependencyFailure.Stage,
+		)
+	}
+	logger.Error("assistant-service startup failed", attributes...)
 }

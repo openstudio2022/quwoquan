@@ -1,0 +1,34 @@
+version: 1
+domain: content
+entity: PostModerationCase
+object_kind: aggregate_root
+
+description: |
+  针对 postId + postVersion + contentDigest 的审核 Case。审批只对绑定版本与摘要有效；
+  Post 编辑产生新版本后旧 approval 自动失效，发布必须存在当前摘要的 approved Case。
+
+storage_backend: mongodb
+cache_layer: none
+capabilities: [queryable]
+taggable: false
+vector_enabled: false
+
+business_rules:
+  - case identity 固定绑定 postId + postVersion + contentDigest
+  - 同一 Post revision 最多存在一个非 superseded Case
+  - reviewer 必须具备 TrustSafety 权限且不能伪造 actor
+  - 只允许 pending -> reviewed -> approved|rejected 或任意有效态 -> superseded
+  - Post 版本或摘要变化后旧 approval 不得用于发布
+
+lifecycle:
+  states: [pending, reviewed, approved, rejected, superseded]
+  optimistic_concurrency: version
+  idempotency: command_key
+
+ddd_layer_mapping:
+  domain_model: internal/domain/moderation/model
+  ports: internal/domain/trust_safety/post_moderation_case/ports
+  persistence: internal/infrastructure/trust_safety/post_moderation_case/persistence
+  application: internal/application/moderation
+  adapter_rest: internal/adapters/http
+  adapter_event: internal/infrastructure/messaging

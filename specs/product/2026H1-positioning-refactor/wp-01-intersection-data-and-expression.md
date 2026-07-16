@@ -98,9 +98,9 @@
 - `quwoquan_service/services/content-service/internal/infrastructure/recommendation/intersection_source.go`（新数据源 + 文案 + 字段补全 + kind 标准名迁移）
 - `quwoquan_service/services/content-service/internal/application/intersection/intersection_service.go`（`evidenceKindRank` 标准化、保鲜、候选过滤）
 - `quwoquan_service/services/content-service/internal/application/feed/feed_intersection_mixer.go`（feed 理由混排消费新 kind）
-- favorite 退场触达面：`contracts/metadata/content/post/{service,fields,behaviors,events,storage,aggregate,ui_config}.yaml`、`_shared/{request_context,types,redis_keyspace}.yaml`、5 个投影 yaml、`recommendation/rec_model/projections/learning_events.yaml`、`assistant/assistant_run/fields.yaml`；content-service handler/application/推荐管线；rec-model-service 与 `services/rec-model-service/scripts/**`；端侧（详见 WP 各包与词典退场清单）
+- favorite 退场触达面：`contracts/metadata/content/post/{service,fields,behaviors,events,storage,aggregate,ui_config}.yaml`、`_shared/{request_context,types,redis_keyspace}.yaml`、5 个投影 yaml、`recommendation/model_release/projections/learning_events.yaml`、`assistant/assistant_run/fields.yaml`；content-service handler/application/推荐管线；rec-model-service 与 `services/rec-model-service/scripts/**`；端侧（详见 WP 各包与词典退场清单）
 - `contracts/metadata/content/test_fixtures/**`、`_shared/test_fixtures/app_{alpha,beta}_seed_manifest.json`
-- `contracts/metadata/recommendation/rec_model/projections/intersection_reason.yaml`（字段收敛 + description 注记；见 §18 契约表）
+- `contracts/metadata/recommendation/model_release/projections/intersection_reason.yaml`（字段收敛 + description 注记；见 §18 契约表）
 - 足迹只读契约登记（`content/post/service.yaml` 或独立分区 + `_shared/ui_surfaces.yaml` route `myFootprint`）
 - 新增 Go 单测 / contract 测试
 

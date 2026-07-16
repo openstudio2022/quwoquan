@@ -24,8 +24,8 @@ class CircleCategoryTabConfigDto {
   }
 
   Map<String, dynamic> toMap() => {
-        'label': label,
-        'subCategories': subCategories,
-        if (desc != null) 'desc': desc,
-      };
+    'label': label,
+    'subCategories': subCategories,
+    if (desc != null) 'desc': desc,
+  };
 }

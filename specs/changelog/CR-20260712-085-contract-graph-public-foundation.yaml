@@ -1,0 +1,74 @@
+id: CR-20260712-085-contract-graph-public-foundation
+title: ContractGraph 唯一编译链与端云归因公共底座
+slug: contract-graph-public-foundation
+revision: 1
+status: implemented
+
+affected_nodes:
+  - specs/feature-tree/runtime/system-architecture-and-engineering-guide
+
+entries:
+  - timestamp: "2026-07-12T23:50:00+08:00"
+    summary: |
+      落地 metadata _schemas/v1、单一 AST/load/validate/graph/codegen/compiler、
+      qwq-contract validate/generate/check/coverage、所有 generator 的统一 Source、
+      单 Go module、Actor/OperationContext、平台数据库连接底座与确定性图产物。
+      删除 runtime generic Repository、registry 和旧 codegen，禁止生成器再次直接扫描 YAML。
+    reason: |
+      原有 generator、validator、generic Repository 与服务手写接口并行读取 metadata，
+      无法证明 operation、对象、投影和端云产物来自同一张图，也无法区分账号、
+      Persona 与游客设备归因。F1 先收敛公共机制，业务对象的 commercial binding
+      由 G1 和后续对象迁移逐项完成。
+    change_type:
+      - architecture
+      - contract
+      - breaking
+      - codegen
+      - testing
+    changed_documents:
+      - path: quwoquan_service/contracts/metadata/_schemas/v1
+        sections:
+          - ContractGraph schema v1
+      - path: quwoquan_service/internal/metadata
+        sections:
+          - ast
+          - load
+          - validate
+          - graph
+          - codegen
+          - compiler
+      - path: quwoquan_service/tools/qwq_contract
+        sections:
+          - validate
+          - generate
+          - check
+          - coverage
+      - path: quwoquan_service/scripts/verify/verify_codegen_contract_graph_source.py
+        sections:
+          - 生成器单一来源阻断门禁
+      - path: quwoquan_service/scripts/verify/verify_go_single_module.py
+        sections:
+          - 单 Go module 阻断门禁
+      - path: quwoquan_service/runtime/operation
+        sections:
+          - ActorContext
+          - Operation Context
+      - path: quwoquan_app/lib/cloud/runtime/operation_context.dart
+        sections:
+          - AppActorContext
+          - AppOperationContext
+      - path: specs/feature-tree/runtime/system-architecture-and-engineering-guide/acceptance.yaml
+        sections:
+          - SIT5
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - api_integration
+      rollout_impact: high
+      breaking_contract: true
+    notes:
+      - baseline profile 已覆盖当前 metadata 对象、全部 operation 与 projection；数量只由 qwq-contract coverage 输出，不在文档固化。
+      - commercial profile 仍会阻断缺 object_kind、application binding 和 actor 的旧 metadata；该失败是 G1 待迁移事实，不得降级为 warning。
+      - 已通过 ContractGraph/tool/runtime 合同测试、全 Go 包编译、全部 generator 重放、metadata 基线校验和 App operation context analyze。

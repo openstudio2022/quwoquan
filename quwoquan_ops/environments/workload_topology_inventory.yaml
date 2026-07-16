@@ -35,7 +35,7 @@ workloads:
     deploy_kind: modular-monolith-unit
     workload_resource: Deployment
     primary_container: seed-box
-    domains: [content, integration, chat, user, circle, notification, gateway, orchestrator]
+    domains: [content, integration, chat, user, circle, entity, tag, assistant, notification]
     kustomize_overlay: quwoquan_service/services/seed-box/deploy/kustomize/overlays/prod
     prod_root_kustomizations:
       - quwoquan_ops/environments/kustomization/aliyun-prod
@@ -62,18 +62,6 @@ workloads:
       Python 跨技术栈服务，同集群独立 Deployment，不并入 Go 二进制、不做 co-located sidecar；
       seed-box 经集群 Service DNS http://recommendation-service:8000 调用。
 
-  - name: entity-service
-    plane: application
-    deploy_kind: standalone-workload
-    workload_resource: Deployment
-    primary_container: entity-service
-    domains: [entity]
-    kustomize_overlay: null
-    prod_root_kustomizations: []
-    wired_to_prod_root: false
-    required_primitives: [Deployment, Service, HorizontalPodAutoscaler, PodDisruptionBudget]
-    notes: 进程映射已在 process_domain_mapping prod；K8s prod overlay 待补（planned，不进 prod rollout）。
-
   - name: search-service
     plane: application
     deploy_kind: standalone-workload
@@ -88,44 +76,17 @@ workloads:
       专用 ES/OpenSearch 读模型 + 独立可部署 search-service（FallbackBackend Primary=ES Fallback=native）。
       进程映射已在 process_domain_mapping prod；K8s prod overlay 待补（planned，不进 prod rollout）。
 
-  - name: tag-service
-    plane: application
-    deploy_kind: standalone-workload
-    workload_resource: Deployment
-    primary_container: tag-service
-    domains: [tag]
-    kustomize_overlay: null
-    prod_root_kustomizations: []
-    wired_to_prod_root: false
-    required_primitives: [Deployment, Service, HorizontalPodAutoscaler, PodDisruptionBudget]
-    notes: 进程映射已在 process_domain_mapping prod；K8s prod overlay 待补（planned，不进 prod rollout）。
-
   - name: product-ops-service
     plane: application
     deploy_kind: standalone-workload
     workload_resource: Deployment
     primary_container: product-ops-service
     domains: [ops]
-    kustomize_overlay: quwoquan_service/services/product-ops-service/deploy/kustomize/overlays/prod
-    prod_root_kustomizations:
-      - quwoquan_ops/environments/kustomization/aliyun-prod
-      - quwoquan_ops/environments/kustomization/volcengine-prod
-      - quwoquan_ops/environments/kustomization/huaweicloud-prod
-    wired_to_prod_root: true
-    required_primitives: [Deployment, Service, HorizontalPodAutoscaler, PodDisruptionBudget]
-    notes: 运营/运维面独立 workload；已 wired 进三朵云 prod root。
-
-  - name: assistant-service
-    plane: application
-    deploy_kind: standalone-workload
-    workload_resource: Deployment
-    primary_container: assistant-service
-    domains: [assistant]
     kustomize_overlay: null
     prod_root_kustomizations: []
     wired_to_prod_root: false
     required_primitives: [Deployment, Service, HorizontalPodAutoscaler, PodDisruptionBudget]
-    notes: 进程映射已在 process_domain_mapping prod；K8s prod overlay 待补（planned，不进 prod rollout）。
+    notes: summary/drilldown/event 写入尚未接入可信 admin/service principal，prod fail-closed；统一 operation guard 完成后才可重新接入 prod root。
 
   - name: realtime-gateway
     plane: edge-media
@@ -133,14 +94,11 @@ workloads:
     workload_resource: Deployment
     primary_container: realtime-gateway
     domains: [realtime]
-    kustomize_overlay: quwoquan_service/services/realtime-gateway/deploy/kustomize/overlays/prod
-    prod_root_kustomizations:
-      - quwoquan_ops/environments/kustomization/aliyun-prod
-      - quwoquan_ops/environments/kustomization/volcengine-prod
-      - quwoquan_ops/environments/kustomization/huaweicloud-prod
-    wired_to_prod_root: true
+    kustomize_overlay: null
+    prod_root_kustomizations: []
+    wired_to_prod_root: false
     required_primitives: [Deployment, Service, HorizontalPodAutoscaler, PodDisruptionBudget]
-    notes: WebSocket 长连接，从第一天即独立 workload；已 wired 进三朵云 prod root。
+    notes: 缺源码/build provenance 与服务端鉴权合同，prod fail-closed；补齐后才可重新接入 prod root。
 
   - name: rtc-service
     plane: edge-media
@@ -148,46 +106,11 @@ workloads:
     workload_resource: Deployment
     primary_container: rtc-service
     domains: [rtc]
-    kustomize_overlay: quwoquan_service/services/rtc-service/deploy/kustomize/overlays/prod
-    prod_root_kustomizations:
-      - quwoquan_ops/environments/kustomization/aliyun-prod
-      - quwoquan_ops/environments/kustomization/volcengine-prod
-      - quwoquan_ops/environments/kustomization/huaweicloud-prod
-    wired_to_prod_root: true
+    kustomize_overlay: null
+    prod_root_kustomizations: []
+    wired_to_prod_root: false
     required_primitives: [Deployment, Service, HorizontalPodAutoscaler, PodDisruptionBudget]
-    notes: 信令服务，独立 workload；已 wired 进三朵云 prod root。
-
-  - name: livekit-sfu
-    plane: edge-media
-    deploy_kind: standalone-workload
-    workload_resource: Deployment
-    primary_container: livekit-sfu
-    domains: [media]
-    kustomize_overlay: quwoquan_service/services/livekit-sfu/deploy/kustomize/overlays/prod
-    prod_root_kustomizations:
-      - quwoquan_ops/environments/kustomization/aliyun-prod
-      - quwoquan_ops/environments/kustomization/volcengine-prod
-      - quwoquan_ops/environments/kustomization/huaweicloud-prod
-    wired_to_prod_root: true
-    required_primitives: [Deployment, Service, HorizontalPodAutoscaler, PodDisruptionBudget]
-    notes: >
-      SFU 媒体转发（UDP/hostNetwork 特性）。当前 prod overlay 渲染为 Deployment；
-      若后续需要稳定网络标识/持久状态，可演进为 StatefulSet（同时同步本字段与 verify）。
-
-  - name: coturn
-    plane: edge-media
-    deploy_kind: standalone-workload
-    workload_resource: Deployment
-    primary_container: coturn
-    domains: [turn]
-    kustomize_overlay: quwoquan_service/services/coturn/deploy/kustomize/overlays/prod
-    prod_root_kustomizations:
-      - quwoquan_ops/environments/kustomization/aliyun-prod
-      - quwoquan_ops/environments/kustomization/volcengine-prod
-      - quwoquan_ops/environments/kustomization/huaweicloud-prod
-    wired_to_prod_root: true
-    required_primitives: [Deployment, Service]
-    notes: TURN relay（UDP）；已 wired 进三朵云 prod root。无 HPA/PDB（relay 容量按副本固定）。
+    notes: 服务端可信 actor、participant/BOLA 与短期单次 ticket 负测未闭合，prod fail-closed；安全根完成后才可重新接入 prod root。
 
 # 后续拆分单元：当前并入 seed-box modular monolith，满足拆分触发阈值时按 Strangler Fig 抽出独立 Deployment。
 # 拆分不变量：域级 API path / route / Service DNS 名 / 端侧 runtime 注入 / 数据面归属保持不变。
@@ -208,13 +131,56 @@ split_candidates:
     invariant_service_dns: 保持对外 Service/route 不变
   - domain: circle
     parent: seed-box
-    route_prefix: /v1/circle/
+    route_prefix: /v1/circles/
     invariant_service_dns: 保持对外 Service/route 不变
   - domain: integration
     parent: seed-box
-    route_prefix: /v1/integration/
+    route_prefix: /v1/integration/location/
     invariant_service_dns: 保持对外 Service/route 不变
   - domain: notification
     parent: seed-box
-    route_prefix: /v1/notification/
+    route_prefix: /v1/app-messages/
     invariant_service_dns: 保持对外 Service/route 不变
+  - domain: entity
+    parent: seed-box
+    route_prefix: /v1/homepages/
+    invariant_service_dns: 保持对外 Service/route 不变
+  - domain: tag
+    parent: seed-box
+    route_prefix: /v1/tag/
+    invariant_service_dns: 保持对外 Service/route 不变
+  - domain: assistant
+    parent: seed-box
+    route_prefix: /v1/assistant/
+    invariant_service_dns: 保持对外 Service/route 不变
+
+# 外部基础设施能力不是业务 domain，不进入 ContractGraph domain/process/module 闭包。
+external_workloads:
+  - name: livekit-sfu
+    profile: external-workload
+    plane: edge-media
+    capabilities: [sfu]
+    workload_resource: Deployment
+    primary_container: livekit-sfu
+    kustomize_overlay: quwoquan_service/services/livekit-sfu/deploy/kustomize/overlays/prod
+    prod_root_kustomizations:
+      - quwoquan_ops/environments/kustomization/aliyun-prod
+      - quwoquan_ops/environments/kustomization/volcengine-prod
+      - quwoquan_ops/environments/kustomization/huaweicloud-prod
+    wired_to_prod_root: true
+    required_primitives: [Deployment, Service, HorizontalPodAutoscaler, PodDisruptionBudget]
+    notes: SFU 媒体转发；镜像 digest、SBOM 与 provenance 由 external-workload profile 强制。
+  - name: coturn
+    profile: external-workload
+    plane: edge-media
+    capabilities: [turn-relay]
+    workload_resource: Deployment
+    primary_container: coturn
+    kustomize_overlay: quwoquan_service/services/coturn/deploy/kustomize/overlays/prod
+    prod_root_kustomizations:
+      - quwoquan_ops/environments/kustomization/aliyun-prod
+      - quwoquan_ops/environments/kustomization/volcengine-prod
+      - quwoquan_ops/environments/kustomization/huaweicloud-prod
+    wired_to_prod_root: true
+    required_primitives: [Deployment, Service]
+    notes: TURN relay；镜像 digest、SBOM 与 provenance 由 external-workload profile 强制。

@@ -12,6 +12,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
+import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
+import 'package:quwoquan_app/cloud/runtime/config/cloud_runtime_environment.dart';
+import 'package:quwoquan_app/cloud/runtime/context/cloud_client_context.dart';
+import 'package:quwoquan_app/cloud/runtime/executor/cloud_operation_client_factory.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_request_page_ids.g.dart';
@@ -26,12 +30,19 @@ import 'package:quwoquan_app/cloud/runtime/generated/user/user_api_metadata.g.da
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
-import 'package:quwoquan_app/cloud/services/content/report_repository.dart';
+import 'package:quwoquan_app/cloud/services/content/remote/footprint_query_remote.dart';
+import 'package:quwoquan_app/cloud/services/content/remote/post_query_remote.dart';
+import 'package:quwoquan_app/cloud/services/content/remote/post_reaction_facets_remote.dart';
+import 'package:quwoquan_app/cloud/services/content/remote/post_reader_remote.dart';
+import 'package:quwoquan_app/cloud/services/content/remote/report_command_remote.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
-import 'package:quwoquan_app/cloud/services/integration/integration_repository.dart';
+import 'package:quwoquan_app/cloud/services/integration/remote/location_query_remote.dart';
 import 'package:quwoquan_app/cloud/services/user/block_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_repository.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
+import '../../../support/recording_cloud_operation_telemetry_sink.dart';
 
 const _baseUrl = 'https://test-gateway.example.com';
 
@@ -40,18 +51,42 @@ typedef _CapturedRequest = ({
   String path,
   Map<String, String> query,
   Map<String, String> headers,
+  Map<String, dynamic> body,
 });
 
 MockClient _captureClient(List<_CapturedRequest> log) {
   return MockClient((request) async {
+    final decodedRequestBody = request.body.isEmpty
+        ? const <String, dynamic>{}
+        : jsonDecode(request.body);
     log.add((
       method: request.method,
       path: request.url.path,
       query: request.url.queryParameters,
       headers: Map<String, String>.from(request.headers),
+      body: decodedRequestBody is Map
+          ? Map<String, dynamic>.from(decodedRequestBody)
+          : const <String, dynamic>{},
     ));
 
     final path = request.url.path;
+    if (request.method == 'POST' &&
+        path == ContentApiMetadata.createReportPath) {
+      return http.Response('', 204);
+    }
+    if (request.method == 'GET' &&
+        path == ContentApiMetadata.getContentReactionStatePath(postId: 'p1')) {
+      return http.Response(
+        json.encode({
+          'found': false,
+          'postId': 'p1',
+          'liked': false,
+          'version': 0,
+        }),
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    }
     final isWrite =
         request.method == 'POST' ||
         request.method == 'PATCH' ||
@@ -82,6 +117,28 @@ MockClient _captureClient(List<_CapturedRequest> log) {
       headers: {'content-type': 'application/json'},
     );
   });
+}
+
+final class _TestCloudClientContext implements CloudClientContextProvider {
+  const _TestCloudClientContext();
+
+  @override
+  CloudClientContextSnapshot snapshot() {
+    return const CloudClientContextSnapshot(
+      sessionId: 'integration-contract-session',
+      deviceActorId: 'integration-contract-device',
+      platform: 'test',
+      appVersion: 'test',
+      locale: 'zh-CN',
+    );
+  }
+}
+
+final class _TestAuthTokenProvider implements CloudAuthTokenProvider {
+  const _TestAuthTokenProvider();
+
+  @override
+  Future<String?> getAccessToken() async => 'integration-contract-token';
 }
 
 void _expectPageHeaders(Map<String, String> headers, {required String pageId}) {
@@ -177,69 +234,6 @@ void main() {
       );
     });
 
-    test('joinCircle → POST /v1/circles/{circleId}/join', () async {
-      await repo.joinCircle('c1');
-      expect(log.last.method, 'POST');
-      expect(log.last.path, CircleApiMetadata.joinCirclePath(circleId: 'c1'));
-    });
-
-    test('leaveCircle → POST /v1/circles/{circleId}/leave', () async {
-      await repo.leaveCircle('c1');
-      expect(log.last.method, 'POST');
-      expect(log.last.path, CircleApiMetadata.leaveCirclePath(circleId: 'c1'));
-    });
-
-    test('listMembers → GET /v1/circles/{circleId}/members', () async {
-      try {
-        await repo.listMembers('c1');
-      } catch (_) {}
-      expect(log.last.method, 'GET');
-      expect(
-        log.last.path,
-        CircleApiMetadata.listCircleMembersPath(circleId: 'c1'),
-      );
-    });
-
-    test(
-      'updateMemberRole → PATCH /v1/circles/{id}/members/{uid}/role',
-      () async {
-        await repo.updateMemberRole('c1', 'u1', 'admin');
-        expect(log.last.method, 'PATCH');
-        expect(
-          log.last.path,
-          CircleApiMetadata.updateMemberRolePath(circleId: 'c1', userId: 'u1'),
-        );
-      },
-    );
-
-    test(
-      'searchCircleGroups → GET /v1/circles/{circleId}/groups/search',
-      () async {
-        try {
-          await repo.searchCircleGroups(
-            'c1',
-            query: '摄影',
-            visibility: 'private',
-            groupType: 'discussion',
-            limit: 5,
-          );
-        } catch (_) {}
-        expect(log.last.method, 'GET');
-        expect(
-          log.last.path,
-          CircleApiMetadata.searchCircleGroupsPath(circleId: 'c1'),
-        );
-        expect(log.last.query['query'], '摄影');
-        expect(log.last.query['visibility'], 'private');
-        expect(log.last.query['groupType'], 'discussion');
-        expect(log.last.query['limit'], '5');
-        _expectPageHeaders(
-          log.last.headers,
-          pageId: CircleRequestPageIds.searchCircleGroups,
-        );
-      },
-    );
-
     test('getCircleFeed → GET /v1/circles/{circleId}/feed', () async {
       try {
         await repo.getCircleFeed('c1');
@@ -259,90 +253,12 @@ void main() {
       expect(log.last.query['type'], 'article');
     });
 
-    test('pinPost → PATCH /v1/circles/{id}/feed/{postId}/pin', () async {
-      await repo.pinPost('c1', 'p1', pinned: true);
-      expect(log.last.method, 'PATCH');
-      expect(
-        log.last.path,
-        CircleApiMetadata.pinCirclePostPath(circleId: 'c1', postId: 'p1'),
-      );
-    });
-
-    test(
-      'featurePost → PATCH /v1/circles/{id}/feed/{postId}/feature',
-      () async {
-        await repo.featurePost('c1', 'p1', featured: true);
-        expect(log.last.method, 'PATCH');
-        expect(
-          log.last.path,
-          CircleApiMetadata.featureCirclePostPath(circleId: 'c1', postId: 'p1'),
-        );
-      },
-    );
-
     test('getCircleStats → GET /v1/circles/{circleId}/stats', () async {
       await repo.getCircleStats('c1');
       expect(log.last.method, 'GET');
       expect(
         log.last.path,
         CircleApiMetadata.getCircleStatsPath(circleId: 'c1'),
-      );
-    });
-
-    test('listFiles → GET /v1/circles/{circleId}/files', () async {
-      try {
-        await repo.listFiles('c1');
-      } catch (_) {}
-      expect(log.last.method, 'GET');
-      expect(
-        log.last.path,
-        CircleApiMetadata.listCircleFilesPath(circleId: 'c1'),
-      );
-    });
-
-    test('createFile → POST /v1/circles/{circleId}/files', () async {
-      await repo.createFile(
-        'c1',
-        CircleFileCreateWireDto.fromMap({
-          'name': 'doc.pdf',
-          'fileType': 'file',
-        }),
-      );
-      expect(log.last.method, 'POST');
-      expect(
-        log.last.path,
-        CircleApiMetadata.createCircleFilePath(circleId: 'c1'),
-      );
-    });
-
-    test('getFile → GET /v1/circles/{circleId}/files/{fileId}', () async {
-      await repo.getFile('c1', 'f1');
-      expect(log.last.method, 'GET');
-      expect(
-        log.last.path,
-        CircleApiMetadata.getCircleFilePath(circleId: 'c1', fileId: 'f1'),
-      );
-    });
-
-    test('updateFile → PATCH /v1/circles/{id}/files/{fileId}', () async {
-      await repo.updateFile(
-        'c1',
-        'f1',
-        CircleFileUpdateWireDto.fromMap({'name': 'updated'}),
-      );
-      expect(log.last.method, 'PATCH');
-      expect(
-        log.last.path,
-        CircleApiMetadata.updateCircleFilePath(circleId: 'c1', fileId: 'f1'),
-      );
-    });
-
-    test('deleteFile → DELETE /v1/circles/{id}/files/{fileId}', () async {
-      await repo.deleteFile('c1', 'f1');
-      expect(log.last.method, 'DELETE');
-      expect(
-        log.last.path,
-        CircleApiMetadata.deleteCircleFilePath(circleId: 'c1', fileId: 'f1'),
       );
     });
 
@@ -354,24 +270,39 @@ void main() {
         CircleApiMetadata.updateCircleSectionsPath(circleId: 'c1'),
       );
     });
-
-    test('reportBehavior → POST /v1/circles/behaviors', () async {
-      await repo.reportBehavior(
-        CircleBehaviorReportWireDto.fromMap({'type': 'view'}),
-      );
-      expect(log.last.method, 'POST');
-      expect(log.last.path, CircleApiMetadata.reportCircleBehaviorPath);
-    });
   });
 
-  group('ContentRepository Remote — service.yaml 路径对齐', () {
+  group('Content facets Remote — service.yaml 路径对齐', () {
     late List<_CapturedRequest> log;
     late RemoteContentRepository repo;
+    late RemoteContentPostReactionFacet reactions;
 
     setUp(() {
       log = [];
       repo = RemoteContentRepository(
         httpClient: CloudHttpClient(client: _captureClient(log)),
+      );
+      reactions = RemoteContentPostReactionFacet(
+        client: buildGeneratedCloudOperationClient(
+          httpClient: CloudHttpClient(
+            client: _captureClient(log),
+            authTokenProvider: const _TestAuthTokenProvider(),
+          ),
+          clientContextProvider: const _TestCloudClientContext(),
+          telemetrySink: RecordingCloudOperationTelemetrySink(),
+          environment: CloudRuntimeEnvironment(
+            environment: CloudEnvironment.gamma,
+            gatewayBaseUri: Uri.parse(_baseUrl),
+          ),
+        ),
+        invocationContext: (clientPageId, {required command}) =>
+            CloudOperationInvocationContext(
+              surfaceId: AppUiSurfaces.homeFeed.id,
+              routeId: AppUiSurfaces.homeFeed.routeId,
+              clientPageId: clientPageId,
+              idempotencyKey: command ? 'content-reaction-path-contract' : null,
+              actor: const CloudOperationActorContext(personaId: 'persona-1'),
+            ),
       );
     });
 
@@ -397,29 +328,6 @@ void main() {
       );
     });
 
-    test('searchPosts → GET /v1/content/posts/search', () async {
-      await repo.searchPosts(
-        query: '摄影',
-        identity: 'work',
-        type: 'article',
-        categoryId: 'art',
-        subCategory: 'photo',
-        limit: 9,
-      );
-      expect(log.last.method, 'GET');
-      expect(log.last.path, ContentApiMetadata.searchPostsPath);
-      expect(log.last.query['query'], '摄影');
-      expect(log.last.query['identity'], 'work');
-      expect(log.last.query['type'], 'article');
-      expect(log.last.query['categoryId'], 'art');
-      expect(log.last.query['subCategory'], 'photo');
-      expect(log.last.query['limit'], '9');
-      _expectPageHeaders(
-        log.last.headers,
-        pageId: ContentRequestPageIds.searchPosts,
-      );
-    });
-
     test('listDiscoveryFeed 透传 identity/type query', () async {
       await repo.listDiscoveryFeed(
         category: 'work',
@@ -428,35 +336,6 @@ void main() {
       );
       expect(log.last.query['identity'], 'work');
       expect(log.last.query['type'], 'article');
-    });
-
-    test('getPost → GET /v1/content/posts/{postId}', () async {
-      try {
-        await repo.getPost(postId: 'p1');
-      } catch (_) {}
-      expect(log.last.method, 'GET');
-      expect(log.last.path, ContentApiMetadata.getPostPath(postId: 'p1'));
-    });
-
-    test('createPost → POST /v1/content/posts', () async {
-      try {
-        await repo.createPost(
-          body: CreatePostRequestWire.fromMap({'type': 'micro'}),
-        );
-      } catch (_) {}
-      expect(log.last.method, 'POST');
-      expect(log.last.path, ContentApiMetadata.createPostPath);
-    });
-
-    test('publishPost → POST /v1/content/posts/{postId}/publish', () async {
-      try {
-        await repo.publishPost(
-          postId: 'p1',
-          body: PublishPostRequestWire.fromMap({'visibility': 'public'}),
-        );
-      } catch (_) {}
-      expect(log.last.method, 'POST');
-      expect(log.last.path, ContentApiMetadata.publishPostPath(postId: 'p1'));
     });
 
     test(
@@ -498,80 +377,20 @@ void main() {
     );
 
     test('likePost → POST /v1/content/posts/{postId}/like', () async {
-      await repo.likePost(postId: 'p1');
+      try {
+        await reactions.likePost(LikeContentPostCommand(postId: 'p1'));
+      } catch (_) {}
       expect(log.last.method, 'POST');
       expect(log.last.path, ContentApiMetadata.likePostPath(postId: 'p1'));
     });
 
     test('unlikePost → DELETE /v1/content/posts/{postId}/like', () async {
-      await repo.unlikePost(postId: 'p1');
+      try {
+        await reactions.unlikePost(UnlikeContentPostCommand(postId: 'p1'));
+      } catch (_) {}
       expect(log.last.method, 'DELETE');
       expect(log.last.path, ContentApiMetadata.unlikePostPath(postId: 'p1'));
     });
-
-    test('sharePost → POST /v1/content/posts/{postId}/share', () async {
-      await repo.sharePost(postId: 'p1');
-      expect(log.last.method, 'POST');
-      expect(log.last.path, ContentApiMetadata.sharePostPath(postId: 'p1'));
-    });
-
-    test('unsharePost → DELETE /v1/content/posts/{postId}/share', () async {
-      await repo.unsharePost(postId: 'p1');
-      expect(log.last.method, 'DELETE');
-      expect(log.last.path, ContentApiMetadata.unsharePostPath(postId: 'p1'));
-    });
-
-    test('listComments → GET /v1/content/posts/{postId}/comments', () async {
-      await repo.listComments(postId: 'p1');
-      expect(log.last.method, 'GET');
-      expect(log.last.path, ContentApiMetadata.listCommentsPath(postId: 'p1'));
-    });
-
-    test(
-      'getCommentCountsDelta → GET .../comments/counts-delta?since=<RFC3339>',
-      () async {
-        final since = DateTime.utc(2026, 6, 10, 8, 30);
-        await repo.getCommentCountsDelta(postId: 'p1', since: since);
-        expect(log.last.method, 'GET');
-        expect(
-          log.last.path,
-          ContentApiMetadata.getCommentCountsDeltaPath(postId: 'p1'),
-        );
-        expect(log.last.query['since'], since.toIso8601String());
-        _expectPageHeaders(
-          log.last.headers,
-          pageId: ContentRequestPageIds.getCommentCountsDelta,
-        );
-      },
-    );
-
-    test('getCommentCountsDelta(since=null) → 无 since query（首同步）', () async {
-      await repo.getCommentCountsDelta(postId: 'p1', since: null);
-      expect(log.last.method, 'GET');
-      expect(
-        log.last.path,
-        ContentApiMetadata.getCommentCountsDeltaPath(postId: 'p1'),
-      );
-      expect(log.last.query.containsKey('since'), isFalse);
-    });
-
-    test('createComment → POST /v1/content/posts/{postId}/comments', () async {
-      await repo.createComment(postId: 'p1', content: 'hi');
-      expect(log.last.method, 'POST');
-      expect(log.last.path, ContentApiMetadata.createCommentPath(postId: 'p1'));
-    });
-
-    test(
-      'deleteComment → DELETE /v1/content/posts/{postId}/comments/{commentId}',
-      () async {
-        await repo.deleteComment(postId: 'p1', commentId: 'c1');
-        expect(log.last.method, 'DELETE');
-        expect(
-          log.last.path,
-          ContentApiMetadata.deleteCommentPath(postId: 'p1', commentId: 'c1'),
-        );
-      },
-    );
 
     test('reportBehaviors → POST /v1/content/behaviors', () async {
       await repo.reportBehaviors(events: []);
@@ -584,40 +403,217 @@ void main() {
       expect(log.last.method, 'GET');
       expect(log.last.path, ContentApiMetadata.getCountersPath(postId: 'p1'));
     });
-
-    test(
-      'getReactionState → GET /v1/content/posts/{postId}/reactions',
-      () async {
-        await repo.getReactionState(postId: 'p1');
-        expect(log.last.method, 'GET');
-        expect(
-          log.last.path,
-          ContentApiMetadata.getReactionStatePath(postId: 'p1'),
-        );
-      },
-    );
   });
 
-  group('ReportRepository Remote — service.yaml 路径对齐', () {
+  group('RemoteContentReportAdapter — generated operation 路径对齐', () {
     late List<_CapturedRequest> log;
-    late RemoteReportRepository repo;
+    late RemoteContentReportAdapter adapter;
 
     setUp(() {
       log = [];
-      repo = RemoteReportRepository(
-        httpClient: CloudHttpClient(client: _captureClient(log)),
-        baseUrl: _baseUrl,
+      final client = buildGeneratedCloudOperationClient(
+        httpClient: CloudHttpClient(
+          client: _captureClient(log),
+          authTokenProvider: const _TestAuthTokenProvider(),
+        ),
+        clientContextProvider: const _TestCloudClientContext(),
+        telemetrySink: RecordingCloudOperationTelemetrySink(),
+        environment: CloudRuntimeEnvironment(
+          environment: CloudEnvironment.gamma,
+          gatewayBaseUri: Uri.parse(_baseUrl),
+        ),
+      );
+      adapter = RemoteContentReportAdapter(
+        client: client,
+        invocationContext: (clientPageId) {
+          return CloudOperationInvocationContext(
+            surfaceId: AppUiSurfaces.homeFeed.id,
+            routeId: AppUiSurfaces.homeFeed.routeId,
+            clientPageId: clientPageId,
+            idempotencyKey: 'report-path-contract-idempotency-key',
+            actor: const CloudOperationActorContext(personaId: 'persona-1'),
+          );
+        },
       );
     });
 
     test('createReport → POST /v1/content/reports', () async {
-      await repo.createReport(
-        targetId: 'p1',
-        targetType: 'post',
-        reason: 'spam',
+      await adapter.createReport(
+        CreateContentReportCommand(
+          targetId: 'p1',
+          targetType: ContentReportTargetType.post,
+          reason: ContentReportReason.spam,
+        ),
       );
       expect(log.last.method, 'POST');
       expect(log.last.path, ContentApiMetadata.createReportPath);
+      expect(
+        log.last.headers['Idempotency-Key'],
+        'report-path-contract-idempotency-key',
+      );
+      _expectSurfaceOperationHeaders(
+        log.last.headers,
+        clientPageId: ContentRequestPageIds.createReport,
+        surfaceId: AppUiSurfaces.homeFeed.id,
+        operationId: AppCloudOperationIds.contentReportCreateReport,
+      );
+    });
+  });
+
+  group('Content Post query adapters — generated operation 路径对齐', () {
+    late List<_CapturedRequest> log;
+    late RemoteContentPostSearchAdapter searchAdapter;
+    late RemoteFootprintRepository footprintAdapter;
+    late RemoteContentPostReaderAdapter workBrowserReader;
+    late GeneratedCloudOperationClient client;
+
+    setUp(() {
+      log = [];
+      client = buildGeneratedCloudOperationClient(
+        httpClient: CloudHttpClient(
+          client: _captureClient(log),
+          authTokenProvider: const _TestAuthTokenProvider(),
+        ),
+        clientContextProvider: const _TestCloudClientContext(),
+        telemetrySink: RecordingCloudOperationTelemetrySink(),
+        environment: CloudRuntimeEnvironment(
+          environment: CloudEnvironment.gamma,
+          gatewayBaseUri: Uri.parse(_baseUrl),
+        ),
+      );
+      searchAdapter = RemoteContentPostSearchAdapter(
+        client: client,
+        invocationContext: (clientPageId) {
+          return CloudOperationInvocationContext(
+            surfaceId: AppUiSurfaces.globalSearchNetworkResults.id,
+            routeId: AppUiSurfaces.globalSearchNetworkResults.routeId,
+            clientPageId: clientPageId,
+            actor: const CloudOperationActorContext(personaId: 'persona-1'),
+          );
+        },
+      );
+      footprintAdapter = RemoteFootprintRepository(
+        client: client,
+        invocationContext: (clientPageId) {
+          return CloudOperationInvocationContext(
+            surfaceId: AppUiSurfaces.myFootprint.id,
+            routeId: AppUiSurfaces.myFootprint.routeId,
+            clientPageId: clientPageId,
+            actor: const CloudOperationActorContext(personaId: 'persona-1'),
+          );
+        },
+      );
+      workBrowserReader = RemoteContentPostReaderAdapter(
+        client: client,
+        invocationContext: (clientPageId) {
+          return CloudOperationInvocationContext(
+            surfaceId: AppUiSurfaces.workBrowser.id,
+            routeId: AppUiSurfaces.workBrowser.routeId,
+            clientPageId: clientPageId,
+            actor: const CloudOperationActorContext(),
+          );
+        },
+      );
+    });
+
+    test('searchPosts → GET /v1/content/posts/search', () async {
+      await searchAdapter.searchPosts(
+        query: '摄影',
+        identity: 'work',
+        type: 'article',
+        categoryId: 'art',
+        subCategory: 'photo',
+        limit: 9,
+      );
+      expect(log.last.method, 'GET');
+      expect(log.last.path, ContentApiMetadata.searchPostsPath);
+      expect(log.last.query['query'], '摄影');
+      expect(log.last.query['identity'], 'work');
+      expect(log.last.query['type'], 'article');
+      expect(log.last.query['categoryId'], 'art');
+      expect(log.last.query['subCategory'], 'photo');
+      expect(log.last.query['limit'], '9');
+      _expectSurfaceOperationHeaders(
+        log.last.headers,
+        clientPageId: ContentRequestPageIds.searchPosts,
+        surfaceId: AppUiSurfaces.globalSearchNetworkResults.id,
+        operationId: AppCloudOperationIds.contentPostSearchPosts,
+      );
+    });
+
+    test('getMyFootprint → GET /v1/content/footprint', () async {
+      await footprintAdapter.getMyFootprint(
+        type: 'viewed',
+        cursor: '2026-07-13T09:00:00Z',
+        limit: 9,
+      );
+      expect(log.last.method, 'GET');
+      expect(log.last.path, ContentApiMetadata.getMyFootprintPath);
+      expect(log.last.query['type'], 'viewed');
+      expect(log.last.query['cursor'], '2026-07-13T09:00:00Z');
+      expect(log.last.query['limit'], '9');
+      _expectSurfaceOperationHeaders(
+        log.last.headers,
+        clientPageId: ContentRequestPageIds.getMyFootprint,
+        surfaceId: AppUiSurfaces.myFootprint.id,
+        operationId: AppCloudOperationIds.contentPostGetMyFootprint,
+      );
+    });
+
+    test('getPost → GET /v1/content/posts/{postId}', () async {
+      try {
+        await workBrowserReader.getPost(postId: 'p1');
+      } catch (_) {
+        // 捕获器只返回通用空 body；路径与 header 契约在此测试中仍已落盘。
+      }
+      expect(log.last.method, 'GET');
+      expect(log.last.path, ContentApiMetadata.getPostPath(postId: 'p1'));
+      _expectSurfaceOperationHeaders(
+        log.last.headers,
+        clientPageId: ContentRequestPageIds.getPost,
+        surfaceId: AppUiSurfaces.workBrowser.id,
+        operationId: AppCloudOperationIds.contentPostGetPost,
+      );
+    });
+
+    test('listUserPosts → GET author path with typed query', () async {
+      final reader = RemoteContentPostReaderAdapter(
+        client: client,
+        invocationContext: (clientPageId) {
+          return CloudOperationInvocationContext(
+            surfaceId: AppUiSurfaces.userProfile.id,
+            routeId: AppUiSurfaces.userProfile.routeId,
+            clientPageId: clientPageId,
+            actor: const CloudOperationActorContext(),
+          );
+        },
+      );
+      await reader.listUserPosts(
+        userId: 'author-1',
+        identity: 'work',
+        type: 'article',
+        visibility: 'public',
+        cursor: 'cursor-1',
+        limit: 9,
+      );
+      expect(log.last.method, 'GET');
+      expect(
+        log.last.path,
+        ContentApiMetadata.listUserPostsPath(subAccountId: 'author-1'),
+      );
+      expect(log.last.query, <String, String>{
+        'identity': 'work',
+        'type': 'article',
+        'visibility': 'public',
+        'cursor': 'cursor-1',
+        'limit': '9',
+      });
+      _expectSurfaceOperationHeaders(
+        log.last.headers,
+        clientPageId: ContentRequestPageIds.listUserPosts,
+        surfaceId: AppUiSurfaces.userProfile.id,
+        operationId: AppCloudOperationIds.contentPostListUserPosts,
+      );
     });
   });
 
@@ -920,24 +916,40 @@ void main() {
     );
   });
 
-  group('IntegrationRepository Remote — service.yaml 路径对齐', () {
+  group('RemoteLocationQueryAdapter — generated operation 路径对齐', () {
     late List<_CapturedRequest> log;
-    late RemoteIntegrationRepository repo;
+    late RemoteLocationQueryAdapter adapter;
 
     setUp(() {
       log = [];
-      repo = RemoteIntegrationRepository(
+      final client = buildGeneratedCloudOperationClient(
         httpClient: CloudHttpClient(client: _captureClient(log)),
-        baseUrl: _baseUrl,
+        clientContextProvider: const _TestCloudClientContext(),
+        telemetrySink: RecordingCloudOperationTelemetrySink(),
+        environment: CloudRuntimeEnvironment(
+          environment: CloudEnvironment.gamma,
+          gatewayBaseUri: Uri.parse(_baseUrl),
+        ),
+      );
+      adapter = RemoteLocationQueryAdapter(
+        client: client,
+        invocationContext: (clientPageId) => CloudOperationInvocationContext(
+          surfaceId: AppUiSurfaces.globalSearchNetworkResults.id,
+          routeId: AppUiSurfaces.globalSearchNetworkResults.routeId,
+          clientPageId: clientPageId,
+          actor: const CloudOperationActorContext(),
+        ),
       );
     });
 
     test('getNearbyLocations → GET /v1/integration/location/nearby', () async {
-      await repo.getNearbyLocations(
-        latitude: 30.2431,
-        longitude: 120.1500,
-        radiusMeters: 2000,
-        limit: 8,
+      await adapter.getNearbyLocations(
+        const NearbyLocationQueryParams(
+          latitude: 30.2431,
+          longitude: 120.1500,
+          radiusMeters: 2000,
+          limit: 8,
+        ),
       );
       expect(log.last.method, 'GET');
       expect(log.last.path, IntegrationApiMetadata.getNearbyLocationsPath);
@@ -949,17 +961,19 @@ void main() {
         log.last.headers,
         clientPageId: IntegrationRequestPageIds.getNearbyLocations,
         surfaceId: AppUiSurfaces.globalSearchNetworkResults.id,
-        operationId: IntegrationApiMetadata.getNearbyLocationsOperation,
+        operationId: AppCloudOperationIds.integrationLocationGetNearbyLocations,
       );
     });
 
     test('searchLocations → GET /v1/integration/location/search', () async {
-      await repo.searchLocations(
-        query: '西湖',
-        cityCode: '330100',
-        latitude: 30.2431,
-        longitude: 120.1500,
-        limit: 12,
+      await adapter.searchLocations(
+        const LocationSearchQueryParams(
+          query: '西湖',
+          cityCode: '330100',
+          latitude: 30.2431,
+          longitude: 120.1500,
+          limit: 12,
+        ),
       );
       expect(log.last.method, 'GET');
       expect(log.last.path, IntegrationApiMetadata.searchLocationsPath);
@@ -972,7 +986,7 @@ void main() {
         log.last.headers,
         clientPageId: IntegrationRequestPageIds.searchLocations,
         surfaceId: AppUiSurfaces.globalSearchNetworkResults.id,
-        operationId: IntegrationApiMetadata.searchLocationsOperation,
+        operationId: AppCloudOperationIds.integrationLocationSearchLocations,
       );
     });
   });

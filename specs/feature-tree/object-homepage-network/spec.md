@@ -110,7 +110,7 @@
 
 - 不在本节点内新增交易、预约、支付、团购闭环。
 - 不以本节点替代 user/circle/entity 各自的主档、权限、治理和生命周期归属。
-- 不新增第二套标签枚举；标签真相源仍为数据工程 `publish/tags` 与 metadata 中的 `tagRef`。
+- 不新增第二套标签枚举；标签真相源为数据工程 `control_plane/governance/taxonomy`，metadata 只声明 `tagRef` 契约，App/Service 消费发布后的 serving projection。
 - 不允许为了兼容旧 UI 保留并行主页分支；本轮按新架构替换。
 
 ## 验收重点

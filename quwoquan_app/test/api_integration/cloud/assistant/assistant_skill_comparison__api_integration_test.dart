@@ -9,7 +9,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_timeline_turn_codec.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/core/services/app_content_repository.dart';
+import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import '../../../support/fixtures/assistant/assistant_eval_scenario_fixtures.dart';
 import 'package:quwoquan_app/ui/assistant/pages/personal_assistant_conversation_page.dart';

@@ -173,7 +173,7 @@ entries:
         sections:
           - "新增顶层 actionDispatch 闭集（assistant|navigate|message|companion|connect）"
           - "actionKeyMeta 每项新增 dispatch 字段（19 项全覆盖）"
-      - path: quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_action_hint.yaml
+      - path: quwoquan_service/contracts/metadata/recommendation/model_release/projections/intersection_action_hint.yaml
         sections:
           - "IntersectionActionHint 新增 dispatch 字段（default navigate 安全兜底）"
       - path: quwoquan_service/tools/recintersectionmeta/registry.go

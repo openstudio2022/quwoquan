@@ -1,0 +1,18 @@
+version: 1
+aggregate: ConversationUserState
+backend: mongodb
+collections:
+  conversation_user_states:
+    entity: ConversationUserState
+    role: authoritative
+    indexes:
+      - { name: uq_conversation_user_states_identity, keys: { userId: 1, conversationId: 1 }, unique: true }
+      - { name: idx_conversation_user_states_inbox, keys: { userId: 1, pinned: -1, updatedAt: -1 } }
+  conversation_user_states_command_receipts:
+    entity: ConversationUserState
+    role: authoritative
+    description: 与 aggregate state 和 outbox 在同一 mongodb transaction 提交的幂等回执。
+  conversation_user_states_outbox:
+    entity: ConversationUserState
+    role: append_only
+    description: 按 aggregate version 幂等发布并支持 replay/checkpoint。

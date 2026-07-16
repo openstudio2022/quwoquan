@@ -4,14 +4,14 @@ import (
 	"context"
 
 	"quwoquan_service/services/user-service/internal/domain/user/model"
-	userrepo "quwoquan_service/services/user-service/internal/domain/user/repository"
+	userrepo "quwoquan_service/services/user-service/internal/domain/user/ports"
 )
 
 type LifeItemService struct {
-	items userrepo.LifeItemRepository
+	items userrepo.UserLifeItemReader
 }
 
-func NewLifeItemService(items userrepo.LifeItemRepository) *LifeItemService {
+func NewLifeItemService(items userrepo.UserLifeItemReader) *LifeItemService {
 	return &LifeItemService{items: items}
 }
 

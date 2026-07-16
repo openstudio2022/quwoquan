@@ -16,10 +16,10 @@ import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection
 import 'package:quwoquan_app/cloud/runtime/models/circle_detail_payload.dart';
 import 'package:quwoquan_app/cloud/services/circle/mock/circle_contract_seed_helpers.dart';
 import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
-import 'package:quwoquan_cloud_contracts/circle_repository.dart'
+import 'package:quwoquan_app/cloud/services/circle/circle_repository_contract.dart'
     show CircleRepository, kHomeCircleDiscoveryFeedDefaultLimit;
 
-export 'package:quwoquan_cloud_contracts/circle_repository.dart'
+export 'package:quwoquan_app/cloud/services/circle/circle_repository_contract.dart'
     show CircleRepository, kHomeCircleDiscoveryFeedDefaultLimit;
 
 part 'mock/circle_repository_mock_data.dart';

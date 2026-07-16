@@ -19,7 +19,7 @@ class ProfileState {
     this.activeSubTab = CreationSubTab.all,
     this.activeWorkFormat = CreationWorkFormat.all,
     this.activeVisibility = CreationVisibility.all,
-    this.interactionSubTab = InteractionSubTab.all,
+    this.interactionSubTab = InteractionSubTab.likes,
     this.interactionDirection = InteractionDirection.received,
     this.creations = const [],
     this.circles = const [],
@@ -174,7 +174,7 @@ class ProfileNotifier extends Notifier<ProfileState> {
     );
     try {
       final repo = ref.read(userProfileRepositoryProvider);
-      final contentRepo = ref.read(contentRepositoryProvider);
+      final contentRepo = ref.read(userProfileContentAuthorPostsReaderProvider);
       // 锁定决策 #1：homepage-bundle 一次聚合身份域真相（profile/stats/关系能力/
       // viewerContext），与作品/帖子内容并发补充，消除首屏串行阻塞。
       final results = await Future.wait(<Future<Object>>[

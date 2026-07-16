@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
@@ -12,7 +13,8 @@ import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.d
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/components/object_page/object_action_bar.dart';
 import 'package:quwoquan_app/components/object_page/object_impact_preview_card.dart';
-import 'package:quwoquan_app/components/object_page/object_intersection_preview_card.dart';
+import 'package:quwoquan_app/components/object_page/object_intersection_provider.dart';
+import 'package:quwoquan_app/components/object_page/object_intersection_section.dart';
 import 'package:quwoquan_app/components/object_page/object_meta_chip.dart';
 import 'package:quwoquan_app/components/object_page/object_chrome_actions.dart';
 import 'package:quwoquan_app/components/object_page/object_page_shell.dart';
@@ -405,6 +407,7 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
             ? item.title.trim()
             : (item.summary ?? '').trim(),
         contextObjectTarget: IntersectionTarget(
+          objectType: 'post',
           objectId: item.postId,
           objectKind: 'content',
           routeId: 'workBrowser',

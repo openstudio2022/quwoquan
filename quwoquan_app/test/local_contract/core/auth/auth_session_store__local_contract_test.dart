@@ -51,6 +51,7 @@ void main() {
         'identityOrigin': 'phone',
         'accountHint': <String, dynamic>{
           'displayName': _defaultNicknameSample,
+          'nicknameCustomized': false,
           'avatarUrl': 'https://cdn.example.com/avatar.png',
           'maskedPhone': '138****3909',
         },
@@ -66,8 +67,20 @@ void main() {
       expect(stored.rememberedLoginMaskedIdentifier, '138****3909');
       expect(stored.rememberedDisplayName, matches(_defaultNicknamePattern));
       expect(stored.rememberedAvatarUrl, 'https://cdn.example.com/avatar.png');
+      expect(stored.rememberedNicknameCustomized, isFalse);
     },
   );
+
+  test('旧缓存 nicknameCustomized 异常类型按 false 读取', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth.remembered_nickname_customized': 'true',
+    });
+    final store = AuthSessionStore(secureStorage: const FlutterSecureStorage());
+
+    final stored = await store.read();
+
+    expect(stored.rememberedNicknameCustomized, isFalse);
+  });
 
   test('clearSession records manual logout prompt state', () async {
     final store = AuthSessionStore(secureStorage: const FlutterSecureStorage());
@@ -96,6 +109,7 @@ void main() {
           'identityOrigin': 'phone',
           'accountHint': <String, dynamic>{
             'displayName': '趣友A',
+            'nicknameCustomized': true,
             'maskedPhone': '138****0001',
           },
         }),
@@ -110,6 +124,7 @@ void main() {
       expect(stored.refreshToken, 'refresh-soft');
       expect(stored.ownerId, 'owner-soft');
       expect(stored.rememberedDisplayName, '趣友A');
+      expect(stored.rememberedNicknameCustomized, isTrue);
       expect(stored.rememberedLoginMaskedIdentifier, '138****0001');
       expect(stored.manualLoggedOut, isTrue);
       expect(stored.quickLoginExpiresAtEpochMs, greaterThan(0));
@@ -141,23 +156,117 @@ void main() {
     );
   });
 
-  test('hardLogout (clearSession) wipes refresh credential', () async {
-    final store = AuthSessionStore(secureStorage: const FlutterSecureStorage());
-    await store.saveLoginResult(
-      AuthLoginResultDto.fromMap(<String, dynamic>{
-        'accessToken': 'access-hard',
-        'refreshToken': 'refresh-hard',
-        'ownerId': 'owner-hard',
-      }),
-    );
+  test(
+    'hardLogout (clearSession) wipes credentials and account summary',
+    () async {
+      final store = AuthSessionStore(
+        secureStorage: const FlutterSecureStorage(),
+      );
+      await store.saveLoginResult(
+        AuthLoginResultDto.fromMap(<String, dynamic>{
+          'accessToken': 'access-hard',
+          'refreshToken': 'refresh-hard',
+          'ownerId': 'owner-hard',
+          'identityOrigin': 'phone',
+          'accountHint': <String, dynamic>{
+            'displayName': '趣友Hard',
+            'nicknameCustomized': true,
+            'avatarUrl': 'https://cdn.example.com/avatar-hard.png',
+            'maskedPhone': '138****0002',
+          },
+        }),
+        rememberedLoginMethod: AuthRememberedLoginMethod.phoneOtp,
+      );
 
-    await store.clearSession(manualLogout: true);
-    final stored = await store.read();
+      await store.clearSession(manualLogout: true);
+      final stored = await store.read();
 
-    expect(stored.refreshToken, isEmpty);
-    expect(stored.quickLoginExpiresAtEpochMs, 0);
-    expect(stored.hasValidQuickLoginCredential, isFalse);
-  });
+      expect(stored.refreshToken, isEmpty);
+      expect(stored.quickLoginExpiresAtEpochMs, 0);
+      expect(stored.hasValidQuickLoginCredential, isFalse);
+      expect(stored.rememberedLoginMethod, AuthRememberedLoginMethod.unknown);
+      expect(stored.rememberedLoginMaskedIdentifier, isEmpty);
+      expect(stored.rememberedDisplayName, isEmpty);
+      expect(stored.rememberedAvatarUrl, isEmpty);
+      expect(stored.rememberedNicknameCustomized, isFalse);
+    },
+  );
+
+  test(
+    'expired session clears credentials but preserves account summary',
+    () async {
+      final store = AuthSessionStore(
+        secureStorage: const FlutterSecureStorage(),
+      );
+      await store.saveLoginResult(
+        AuthLoginResultDto.fromMap(<String, dynamic>{
+          'accessToken': 'access-expired',
+          'refreshToken': 'refresh-expired',
+          'ownerId': 'owner-expired',
+          'identityOrigin': 'phone',
+          'accountHint': <String, dynamic>{
+            'displayName': '趣友Expired',
+            'nicknameCustomized': true,
+            'avatarUrl': 'https://cdn.example.com/avatar-expired.png',
+            'maskedPhone': '138****0003',
+          },
+        }),
+        rememberedLoginMethod: AuthRememberedLoginMethod.phoneOtp,
+      );
+
+      await store.clearSession(manualLogout: false);
+      final stored = await store.read();
+
+      expect(stored.refreshToken, isEmpty);
+      expect(stored.rememberedLoginMethod, AuthRememberedLoginMethod.phoneOtp);
+      expect(stored.rememberedLoginMaskedIdentifier, '138****0003');
+      expect(stored.rememberedDisplayName, '趣友Expired');
+      expect(stored.rememberedAvatarUrl, contains('avatar-expired.png'));
+      expect(stored.rememberedNicknameCustomized, isTrue);
+    },
+  );
+
+  test(
+    'refresh accountHint replaces summary and explicit empty avatar',
+    () async {
+      final store = AuthSessionStore(
+        secureStorage: const FlutterSecureStorage(),
+      );
+      await store.saveLoginResult(
+        AuthLoginResultDto.fromMap(<String, dynamic>{
+          'accessToken': 'access-old',
+          'refreshToken': 'refresh-old',
+          'ownerId': 'owner-refresh',
+          'identityOrigin': 'phone',
+          'accountHint': <String, dynamic>{
+            'displayName': '旧昵称',
+            'nicknameCustomized': true,
+            'avatarUrl': 'https://cdn.example.com/avatar-old.png',
+            'maskedPhone': '138****0004',
+          },
+        }),
+        rememberedLoginMethod: AuthRememberedLoginMethod.phoneOtp,
+      );
+
+      await store.saveRefreshedAccountHint(<String, dynamic>{
+        'displayName': '系统默认昵称',
+        'nicknameCustomized': false,
+        'avatarUrl': '',
+        'maskedPhone': '138****0005',
+      });
+      final refreshed = await store.read();
+
+      expect(refreshed.rememberedDisplayName, '系统默认昵称');
+      expect(refreshed.rememberedNicknameCustomized, isFalse);
+      expect(refreshed.rememberedAvatarUrl, isEmpty);
+      expect(refreshed.rememberedLoginMaskedIdentifier, '138****0005');
+
+      await store.saveRefreshedAccountHint(null);
+      final unchanged = await store.read();
+      expect(unchanged.rememberedDisplayName, '系统默认昵称');
+      expect(unchanged.rememberedLoginMaskedIdentifier, '138****0005');
+    },
+  );
 
   test('saveLoginResult(phoneOtp) 记住完整手机号，软退出保留供自动预填', () async {
     final store = AuthSessionStore(secureStorage: const FlutterSecureStorage());

@@ -7,22 +7,22 @@ import (
 	"github.com/google/uuid"
 
 	"quwoquan_service/services/user-service/internal/domain/user/model"
-	userrepo "quwoquan_service/services/user-service/internal/domain/user/repository"
+	userrepo "quwoquan_service/services/user-service/internal/domain/user/ports"
 	"quwoquan_service/services/user-service/internal/generated"
 )
 
 const (
-	discoveryRateLimit   = 5   // per owner per day
-	discoveryBatchLimit  = 5000
-	discoveryTTLHours    = 72
+	discoveryRateLimit  = 5 // per owner per day
+	discoveryBatchLimit = 5000
+	discoveryTTLHours   = 72
 )
 
 // ContactDiscoveryService handles contact matching with privacy guarantees.
 type ContactDiscoveryService struct {
-	discoveries userrepo.ContactDiscoveryRepository
+	discoveries userrepo.ContactDiscoveryStore
 }
 
-func NewContactDiscoveryService(discoveries userrepo.ContactDiscoveryRepository) *ContactDiscoveryService {
+func NewContactDiscoveryService(discoveries userrepo.ContactDiscoveryStore) *ContactDiscoveryService {
 	return &ContactDiscoveryService{discoveries: discoveries}
 }
 

@@ -3,7 +3,8 @@ read_model: AuthorImpactItem
 description: |
   创作者影响力单条事实（「TA的影响 / 我的影响力」模块行真相源）。
   云侧按 helpType + action + intersectionDimension 反向聚合真实动作计数，
-  并产出 primaryText 结论句（如「23人加入相关圈子」「7人读完了TA的记录」；作者本人视角使用「你的记录」），
+  并产出 primaryText 结论句（如「读者林清越等23人加入了「AI 产品圈」」
+  「联系人周屿等7人读完了《川西雪山和校园摄影路线》」；作者本人视角仍使用同一可点击 typed object），
   端只读直出，禁止本地拼装文案（全局验收 G2）；subtitleText 为影响来源摘要
   （如「来自 AI 产品圈、摄影爱好者圈」），端只读直出；禁止下发转化率/漏斗/增长率等运营指标。
   与 IntersectionReason 单通道对齐，禁止保留 displayText 第二文案字段。

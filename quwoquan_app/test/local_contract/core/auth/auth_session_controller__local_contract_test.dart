@@ -1,10 +1,25 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
 import 'package:quwoquan_app/app/providers/startup_auth_restore_gate_provider.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
-import 'package:quwoquan_app/core/services/app_content_repository.dart';
+import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
+import '../../../support/runtime_failure_fixtures.dart';
+
+AuthSessionRefreshExecutor _refreshExecutor(
+  Future<AuthLoginResultDto> Function(
+    String refreshToken,
+    Future<void>? abortTrigger,
+  )
+  run,
+) {
+  return (String refreshToken, {Future<void>? abortTrigger}) =>
+      run(refreshToken, abortTrigger);
+}
 
 void main() {
   test('restore 遇到陈旧会话时静默 refresh 成功并保留 owner/sub 快照', () async {
@@ -28,15 +43,15 @@ void main() {
         appDataSourceModeProvider.overrideWith(_MockRemoteMode.new),
         startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
         authSessionStoreProvider.overrideWithValue(store),
-        authSessionRefreshExecutorProvider.overrideWithValue((
-          refreshToken,
-        ) async {
-          expect(refreshToken, 'old-refresh');
-          return AuthLoginResultDto.fromMap(<String, dynamic>{
-            'accessToken': 'new-access',
-            'refreshToken': 'new-refresh',
-          });
-        }),
+        authSessionRefreshExecutorProvider.overrideWithValue(
+          _refreshExecutor((refreshToken, _) async {
+            expect(refreshToken, 'old-refresh');
+            return AuthLoginResultDto.fromMap(<String, dynamic>{
+              'accessToken': 'new-access',
+              'refreshToken': 'new-refresh',
+            });
+          }),
+        ),
       ],
     );
     addTearDown(container.dispose);
@@ -60,13 +75,19 @@ void main() {
         appDataSourceModeProvider.overrideWith(_MockRemoteMode.new),
         startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
         authSessionStoreProvider.overrideWithValue(store),
-        authSessionRefreshExecutorProvider.overrideWithValue((_) async {
-          throw CloudException(
-            type: CloudErrorType.unauthorized,
-            message: 'expired',
-            statusCode: 401,
-          );
-        }),
+        authSessionRefreshExecutorProvider.overrideWithValue(
+          _refreshExecutor((_, _) async {
+            throw CloudException(
+              type: CloudErrorType.unauthorized,
+              message: 'expired',
+              statusCode: 401,
+              runtimeFailure: testRuntimeFailure(
+                code: 'USER.AUTH.session_expired',
+                kind: RuntimeFailureKind.auth,
+              ),
+            );
+          }),
+        ),
       ],
     );
     addTearDown(container.dispose);
@@ -89,12 +110,19 @@ void main() {
         appDataSourceModeProvider.overrideWith(_MockRemoteMode.new),
         startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
         authSessionStoreProvider.overrideWithValue(store),
-        authSessionRefreshExecutorProvider.overrideWithValue((_) async {
-          throw CloudException(
-            type: CloudErrorType.network,
-            message: 'offline',
-          );
-        }),
+        authSessionRefreshExecutorProvider.overrideWithValue(
+          _refreshExecutor((_, _) async {
+            throw CloudException(
+              type: CloudErrorType.network,
+              message: 'offline',
+              runtimeFailure: testRuntimeFailure(
+                code: 'APP.NETWORK.offline',
+                kind: RuntimeFailureKind.network,
+                nature: RuntimeFailureNature.transient,
+              ),
+            );
+          }),
+        ),
       ],
     );
     addTearDown(container.dispose);
@@ -109,6 +137,71 @@ void main() {
     expect(state.isAuthenticated, isTrue);
     expect(state.promptReason, isNull);
     expect(state.errorMessage, isNotNull);
+  });
+
+  test('操作取消时不应用迟到的 refresh token', () async {
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final store = _MemoryAuthSessionStore(
+      stored: StoredAuthSession(
+        accessToken: 'old-access',
+        refreshToken: 'old-refresh',
+        ownerId: 'owner-1',
+        activeSubAccountId: 'sub-1',
+        accountState: 'active',
+        identityOrigin: 'phone',
+        installId: 'install-id',
+        lastRefreshAtEpochMs: nowMs,
+        lastForegroundAuthCheckAtEpochMs: nowMs,
+        manualLoggedOut: false,
+        launchPromptDismissed: true,
+      ),
+    );
+    final refreshStarted = Completer<void>();
+    final delayedResult = Completer<AuthLoginResultDto>();
+    final cancellation = Completer<void>();
+    final container = ProviderContainer(
+      overrides: [
+        appDataSourceModeProvider.overrideWith(_MockRemoteMode.new),
+        startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
+        authSessionStoreProvider.overrideWithValue(store),
+        authSessionRefreshExecutorProvider.overrideWithValue(
+          _refreshExecutor((_, abortTrigger) async {
+            refreshStarted.complete();
+            await abortTrigger;
+            return delayedResult.future;
+          }),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    container.read(authSessionControllerProvider);
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    final notifier = container.read(authSessionControllerProvider.notifier);
+    final refresh = notifier.refreshSessionIfNeeded(
+      force: true,
+      abortTrigger: cancellation.future,
+    );
+    await refreshStarted.future;
+    cancellation.complete();
+
+    expect(await refresh, isFalse);
+    expect(
+      container.read(authSessionControllerProvider).accessToken,
+      'old-access',
+    );
+    delayedResult.complete(
+      AuthLoginResultDto.fromMap(<String, dynamic>{
+        'accessToken': 'late-access',
+        'refreshToken': 'late-refresh',
+      }),
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    expect(
+      container.read(authSessionControllerProvider).accessToken,
+      'old-access',
+    );
   });
 
   test(
@@ -139,7 +232,7 @@ void main() {
           startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
           authSessionStoreProvider.overrideWithValue(store),
           authSessionRefreshExecutorProvider.overrideWithValue(
-            (_) async => AuthLoginResultDto(),
+            _refreshExecutor((_, _) async => AuthLoginResultDto()),
           ),
         ],
       );
@@ -187,7 +280,7 @@ void main() {
         startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
         authSessionStoreProvider.overrideWithValue(store),
         authSessionRefreshExecutorProvider.overrideWithValue(
-          (_) async => AuthLoginResultDto(),
+          _refreshExecutor((_, _) async => AuthLoginResultDto()),
         ),
       ],
     );
@@ -273,6 +366,11 @@ final class _MemoryAuthSessionStore implements AuthSessionStore {
       launchPromptDismissed: false,
     );
   }
+
+  @override
+  Future<void> saveRefreshedAccountHint(
+    Map<String, dynamic>? accountHint,
+  ) async {}
 
   @override
   Future<void> updateActiveSubAccount(String subAccountId) async {

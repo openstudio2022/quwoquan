@@ -8,7 +8,10 @@ import (
 	"time"
 
 	mqpkg "quwoquan_service/services/chat-service/internal/adapters/mq"
-	event "quwoquan_service/services/chat-service/internal/domain/conversation/event"
+	membershipevent "quwoquan_service/services/chat-service/internal/domain/chat/conversation_membership/event"
+	userstateevent "quwoquan_service/services/chat-service/internal/domain/chat/conversation_user_state/event"
+	conversationevent "quwoquan_service/services/chat-service/internal/domain/chat/event"
+	messageevent "quwoquan_service/services/chat-service/internal/domain/chat/message/event"
 )
 
 // collectEvents subscribes to a Redis Pub/Sub channel and collects events
@@ -111,7 +114,7 @@ func TestEventPublish_MessageSent(t *testing.T) {
 			if err := json.Unmarshal([]byte(msg.Payload), &evt); err != nil {
 				t.Fatalf("unmarshal event: %v", err)
 			}
-			if evt.Type == event.MessageSent {
+			if evt.Type == messageevent.MessageSent {
 				if evt.ConversationID != convId {
 					t.Errorf("expected conversationId=%s, got %s", convId, evt.ConversationID)
 				}
@@ -129,7 +132,7 @@ func TestEventPublish_MessageSent(t *testing.T) {
 func TestEventPublish_MessageRecalled(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
-	conv := createConversation(t, `{"type":"direct","title":"recall event"}`)
+	conv := createConversation(t, `{"type":"direct","title":"recall event","initialMemberIds":["user_test_002"]}`)
 	convId := conv["_id"].(string)
 	msg := sendMessage(t, convId, `{"type":"text","content":"will recall","clientMsgId":"evt-recall-1"}`)
 	msgId := msg["messageId"].(string)
@@ -154,8 +157,8 @@ func TestEventPublish_MessageRecalled(t *testing.T) {
 		if err := json.Unmarshal([]byte(raw.Payload), &evt); err != nil {
 			t.Fatalf("unmarshal: %v", err)
 		}
-		if evt.Type != event.MessageRecalled {
-			t.Errorf("expected type=%s, got %s", event.MessageRecalled, evt.Type)
+		if evt.Type != messageevent.MessageRecalled {
+			t.Errorf("expected type=%s, got %s", messageevent.MessageRecalled, evt.Type)
 		}
 		if evt.Payload["messageId"] != msgId {
 			t.Errorf("expected payload.messageId=%s, got %v", msgId, evt.Payload["messageId"])
@@ -194,7 +197,7 @@ func TestEventPublish_ConversationRosterUpdatedOnAddMembers(t *testing.T) {
 			if err := json.Unmarshal([]byte(raw.Payload), &evt); err != nil {
 				t.Fatalf("unmarshal: %v", err)
 			}
-			if evt.Type != event.ConversationRosterUpdated {
+			if evt.Type != conversationevent.ConversationRosterUpdated {
 				continue
 			}
 			if evt.Payload["membersRosterRevision"] == nil {
@@ -243,7 +246,7 @@ func TestEventPublish_ConversationRosterUpdatedDebouncedMerge(t *testing.T) {
 			if err := json.Unmarshal([]byte(raw.Payload), &evt); err != nil {
 				t.Fatalf("unmarshal: %v", err)
 			}
-			if evt.Type == event.ConversationRosterUpdated {
+			if evt.Type == conversationevent.ConversationRosterUpdated {
 				rosterCount++
 				if rosterCount > 1 {
 					t.Fatalf("expected single merged roster event, got %d", rosterCount)
@@ -258,7 +261,7 @@ func TestEventPublish_ConversationRosterUpdatedDebouncedMerge(t *testing.T) {
 	}
 }
 
-func TestEventPublish_MemberLeft(t *testing.T) {
+func TestEventPublish_ConversationMemberRemoved(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"group","title":"member leave event"}`)
@@ -288,11 +291,14 @@ func TestEventPublish_MemberLeft(t *testing.T) {
 			if err := json.Unmarshal([]byte(raw.Payload), &evt); err != nil {
 				t.Fatalf("unmarshal: %v", err)
 			}
-			if evt.Type == event.MemberLeft {
+			if evt.Type == membershipevent.ConversationMemberRemoved {
+				if evt.Payload["userId"] != "user_leave_1" {
+					t.Fatalf("expected removed userId, got %v", evt.Payload["userId"])
+				}
 				return
 			}
 		case <-deadline:
-			t.Fatal("MemberLeft event not received within timeout")
+			t.Fatal("ConversationMemberRemoved event not received within timeout")
 		}
 	}
 }
@@ -327,10 +333,10 @@ func TestEventPublish_ConversationCreated(t *testing.T) {
 	// This test verifies the handler wiring doesn't panic and completes.
 }
 
-func TestEventPublish_ConversationSettingsUpdated(t *testing.T) {
+func TestEventPublish_ConversationUserSettingsChanged(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
-	conv := createConversation(t, `{"type":"direct","title":"settings event"}`)
+	conv := createConversation(t, `{"type":"direct","title":"settings event","initialMemberIds":["user_test_002"]}`)
 	convId := conv["_id"].(string)
 
 	channel := "rt:conversation:" + convId
@@ -351,18 +357,18 @@ func TestEventPublish_ConversationSettingsUpdated(t *testing.T) {
 		if err := json.Unmarshal([]byte(raw.Payload), &evt); err != nil {
 			t.Fatalf("unmarshal: %v", err)
 		}
-		if evt.Type != event.ConversationSettingsUpdated {
-			t.Errorf("expected type=%s, got %s", event.ConversationSettingsUpdated, evt.Type)
+		if evt.Type != userstateevent.ConversationUserSettingsChanged {
+			t.Errorf("expected type=%s, got %s", userstateevent.ConversationUserSettingsChanged, evt.Type)
 		}
 	case <-time.After(3 * time.Second):
-		t.Fatal("ConversationSettingsUpdated event not received within timeout")
+		t.Fatal("ConversationUserSettingsChanged event not received within timeout")
 	}
 }
 
-func TestEventPublish_ReadReceiptSent(t *testing.T) {
+func TestEventPublish_ConversationReadWatermarkAdvanced(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
-	conv := createConversation(t, `{"type":"direct","title":"receipt event","maxGroupSize":2}`)
+	conv := createConversation(t, `{"type":"direct","title":"receipt event","maxGroupSize":2,"initialMemberIds":["user_test_002"]}`)
 	convId := conv["_id"].(string)
 	msg := sendMessage(t, convId, `{"type":"text","content":"read me","clientMsgId":"evt-read-1"}`)
 	msgId := msg["messageId"].(string)
@@ -387,15 +393,18 @@ func TestEventPublish_ReadReceiptSent(t *testing.T) {
 		if err := json.Unmarshal([]byte(raw.Payload), &evt); err != nil {
 			t.Fatalf("unmarshal: %v", err)
 		}
-		if evt.Type != event.ReadReceiptSent {
-			t.Errorf("expected type=%s, got %s", event.ReadReceiptSent, evt.Type)
+		if evt.Type != userstateevent.ConversationReadWatermarkAdvanced {
+			t.Errorf("expected type=%s, got %s", userstateevent.ConversationReadWatermarkAdvanced, evt.Type)
+		}
+		if evt.Payload["readSeq"] == nil {
+			t.Error("expected readSeq in ConversationReadWatermarkAdvanced payload")
 		}
 	case <-time.After(3 * time.Second):
-		t.Fatal("ReadReceiptSent event not received within timeout")
+		t.Fatal("ConversationReadWatermarkAdvanced event not received within timeout")
 	}
 }
 
-func TestEventPublish_AssistantInvited(t *testing.T) {
+func TestEventPublish_AssistantMembershipAdded(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"group","title":"assistant event"}`)
@@ -419,11 +428,14 @@ func TestEventPublish_AssistantInvited(t *testing.T) {
 		if err := json.Unmarshal([]byte(raw.Payload), &evt); err != nil {
 			t.Fatalf("unmarshal: %v", err)
 		}
-		if evt.Type != event.AssistantInvited {
-			t.Errorf("expected type=%s, got %s", event.AssistantInvited, evt.Type)
+		if evt.Type != membershipevent.ConversationMemberAdded {
+			t.Errorf("expected type=%s, got %s", membershipevent.ConversationMemberAdded, evt.Type)
+		}
+		if evt.Payload["memberType"] != "assistant" {
+			t.Errorf("expected assistant member payload, got %v", evt.Payload["memberType"])
 		}
 	case <-time.After(3 * time.Second):
-		t.Fatal("AssistantInvited event not received within timeout")
+		t.Fatal("ConversationMemberAdded event not received within timeout")
 	}
 }
 
@@ -453,7 +465,7 @@ func TestEventPublish_AssistantMentioned(t *testing.T) {
 			if err := json.Unmarshal([]byte(raw.Payload), &evt); err != nil {
 				t.Fatalf("unmarshal: %v", err)
 			}
-			if evt.Type != event.AssistantMentioned {
+			if evt.Type != messageevent.AssistantMentioned {
 				continue
 			}
 			if evt.ConversationID != convId {
@@ -475,7 +487,7 @@ func TestEventPublish_AssistantMentioned(t *testing.T) {
 	}
 }
 
-func TestEventPublish_AssistantRemoved(t *testing.T) {
+func TestEventPublish_AssistantMembershipRemoved(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	convId := "fixture_assistant_removed_event_conv"
@@ -501,7 +513,7 @@ func TestEventPublish_AssistantRemoved(t *testing.T) {
 			if err := json.Unmarshal([]byte(raw.Payload), &evt); err != nil {
 				t.Fatalf("unmarshal: %v", err)
 			}
-			if evt.Type != event.AssistantRemoved {
+			if evt.Type != membershipevent.ConversationMemberRemoved {
 				continue
 			}
 			if evt.ConversationID != convId {
@@ -516,12 +528,12 @@ func TestEventPublish_AssistantRemoved(t *testing.T) {
 			if evt.Payload["removedBy"] != "user_test_001" {
 				t.Errorf("expected removedBy=user_test_001, got %v", evt.Payload["removedBy"])
 			}
-			if evt.Payload["assistantMemberId"] == "" {
-				t.Errorf("expected assistantMemberId in payload, got %#v", evt.Payload)
+			if evt.Payload["memberId"] == "" {
+				t.Errorf("expected memberId in payload, got %#v", evt.Payload)
 			}
 			return
 		case <-deadline:
-			t.Fatal("AssistantRemoved event not received within timeout")
+			t.Fatal("ConversationMemberRemoved event not received within timeout")
 		}
 	}
 }
@@ -546,7 +558,7 @@ func TestEventPublish_DirectPublishRoundTrip(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	evt := mqpkg.DomainEvent{
-		Type:           event.MessageSent,
+		Type:           messageevent.MessageSent,
 		ConversationID: convId,
 		ActorID:        "user_test_001",
 		Timestamp:      time.Now(),
@@ -563,8 +575,8 @@ func TestEventPublish_DirectPublishRoundTrip(t *testing.T) {
 		if err := json.Unmarshal([]byte(msg.Payload), &received); err != nil {
 			t.Fatalf("unmarshal received event: %v", err)
 		}
-		if received.Type != event.MessageSent {
-			t.Errorf("expected type=%s, got %s", event.MessageSent, received.Type)
+		if received.Type != messageevent.MessageSent {
+			t.Errorf("expected type=%s, got %s", messageevent.MessageSent, received.Type)
 		}
 		if received.ConversationID != convId {
 			t.Errorf("expected conversationId=%s, got %s", convId, received.ConversationID)
@@ -597,9 +609,9 @@ func TestEventPublish_BatchPublish(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	events := []mqpkg.DomainEvent{
-		{Type: event.MemberJoined, ConversationID: convId, ActorID: "user_a", Timestamp: time.Now()},
-		{Type: event.MessageSent, ConversationID: convId, ActorID: "user_a", Timestamp: time.Now()},
-		{Type: event.ReadReceiptSent, ConversationID: convId, ActorID: "user_b", Timestamp: time.Now()},
+		{Type: membershipevent.ConversationMemberAdded, ConversationID: convId, ActorID: "user_a", Timestamp: time.Now()},
+		{Type: messageevent.MessageSent, ConversationID: convId, ActorID: "user_a", Timestamp: time.Now()},
+		{Type: userstateevent.ConversationReadWatermarkAdvanced, ConversationID: convId, ActorID: "user_b", Timestamp: time.Now()},
 	}
 
 	if err := publisher.PublishBatch(ctx, events); err != nil {
@@ -624,17 +636,18 @@ func TestEventPublish_BatchPublish(t *testing.T) {
 
 func TestEventPublish_SupportedEventTypesComplete(t *testing.T) {
 	expectedTypes := []string{
-		event.MessageSent,
-		event.MessageRecalled,
-		event.MemberJoined,
-		event.ConversationRosterUpdated,
-		event.MemberLeft,
-		event.ConversationCreated,
-		event.ConversationSettingsUpdated,
-		event.ReadReceiptSent,
-		event.AssistantInvited,
-		event.AssistantMentioned,
-		event.AssistantRemoved,
+		conversationevent.ConversationCreated,
+		conversationevent.ConversationRosterUpdated,
+		conversationevent.ConversationAvatarUpdated,
+		conversationevent.ConversationArchived,
+		membershipevent.ConversationMemberAdded,
+		membershipevent.ConversationMemberRemoved,
+		membershipevent.ConversationMemberRoleChanged,
+		userstateevent.ConversationReadWatermarkAdvanced,
+		userstateevent.ConversationUserSettingsChanged,
+		messageevent.MessageSent,
+		messageevent.MessageRecalled,
+		messageevent.AssistantMentioned,
 	}
 
 	supported := make(map[string]bool, len(mqpkg.SupportedEventTypes))
@@ -651,7 +664,7 @@ func TestEventPublish_SupportedEventTypesComplete(t *testing.T) {
 
 func TestEventPublish_ChannelFormat(t *testing.T) {
 	evt := mqpkg.DomainEvent{
-		Type:           event.MessageSent,
+		Type:           messageevent.MessageSent,
 		ConversationID: "abc-123",
 	}
 

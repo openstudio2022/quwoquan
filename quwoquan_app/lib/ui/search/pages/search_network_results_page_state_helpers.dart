@@ -645,7 +645,7 @@ extension _SearchNetworkResultsPageStateHelpers
     }
     try {
       final detail = await ref
-          .read(contentRepositoryProvider)
+          .read(globalSearchContentPostDetailReaderProvider)
           .getPost(postId: postId);
       applyConfirmedInteractionPost(ref, detail.post);
       if (!mounted) {

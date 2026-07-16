@@ -321,6 +321,21 @@ func (c *instrumentedClient) XAck(ctx context.Context, stream string, group stri
 	return err
 }
 
+func (c *instrumentedClient) XAutoClaim(
+	ctx context.Context,
+	stream string,
+	group string,
+	consumer string,
+	minIdle time.Duration,
+	start string,
+	count int64,
+) ([]StreamMessage, string, error) {
+	t := time.Now()
+	messages, next, err := c.inner.XAutoClaim(ctx, stream, group, consumer, minIdle, start, count)
+	c.record(t, err)
+	return messages, next, err
+}
+
 func (c *instrumentedClient) Pipeline(ctx context.Context) Pipeliner {
 	return c.inner.Pipeline(ctx)
 }

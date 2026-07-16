@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""验证公网 gamma-proxy（Caddy）是否将 /v1/content、/v1/chat、/v1/user、/v1/assistant 正确反代，而非落入默认占位响应。
+"""验证公网 gamma-proxy（Caddy）是否将业务路由正确反代，而非落入默认占位响应。
 
 用于 ECS onebox / local-gamma 镜像公网入口自检。仅依赖 urllib，不读取密钥。
 
@@ -67,7 +67,7 @@ def main() -> int:
         "--base-url",
         default=os.environ.get(
             "GAMMA_BASE_URL",
-            "https://gamma-api.quwoquan-env.test:19000",
+            "https://gamma-api.localhost:19000",
         ).rstrip("/"),
     )
     ap.add_argument("--request-timeout-seconds", type=float, default=12.0)
@@ -93,7 +93,7 @@ def main() -> int:
     # content：任意受管控 JSON 即可（404 若路由正确也可能是业务 JSON）
     code, content_body = _req(
         f"{base}/v1/content/posts?limit=1",
-        headers={"X-Client-User-Id": "gamma_route_smoke", "X-Test-Local-Gamma": "true"},
+        headers={"X-Test-Local-Gamma": "true"},
         timeout=timeout_seconds,
         retry_attempts=retry_attempts,
         retry_sleep_seconds=retry_sleep_seconds,
@@ -118,7 +118,6 @@ def main() -> int:
         data=payload,
         headers={
             "Content-Type": "application/json",
-            "X-Client-User-Id": "gamma_smoke_m01",
             "X-Test-Local-Gamma": "true",
         },
         timeout=timeout_seconds,
@@ -140,16 +139,15 @@ def main() -> int:
             "请使用 LOCAL_GAMMA_HTTP_PORT 映射的 gamma-proxy 端口作为 GAMMA_BASE_URL",
         )
 
+    # PullUserSync is a private account boundary. This routing smoke must not
+    # forge identity headers; a structured 401 proves Caddy reached the real
+    # service and the service rejected the request before its handler.
     user_sync_payload = json.dumps({"afterSeq": 0, "limit": 1}).encode("utf-8")
     code, user_body = _req(
         f"{base}/v1/user/sync",
         method="POST",
         data=user_sync_payload,
-        headers={
-            "Content-Type": "application/json",
-            "X-Client-User-Id": "gamma_route_smoke",
-            "X-Test-Local-Gamma": "true",
-        },
+        headers={"Content-Type": "application/json"},
         timeout=timeout_seconds,
         retry_attempts=retry_attempts,
         retry_sleep_seconds=retry_sleep_seconds,
@@ -160,18 +158,29 @@ def main() -> int:
         failures.append("user: still hitting Caddy plain-text catch-all — /v1/user* 未反代到 user-service")
     if "local-gamma mirror route is not ready" in user_body:
         failures.append("user: Caddy 404 catch-all — /v1/user* 未反代到 user-service")
-    stripped = user_body.strip()
-    if 200 <= code < 300:
-        if not stripped.startswith("{"):
-            failures.append(f"user: expected JSON body, got http {code}: {stripped[:160]!r}")
-        else:
-            try:
-                user_json = json.loads(stripped)
-            except json.JSONDecodeError as exc:
-                failures.append(f"user: invalid JSON body http {code}: {exc}")
-            else:
-                if "patches" not in user_json:
-                    failures.append("user: sync response missing patches field")
+    if code != 401 or "GATEWAY.USER.unauthorized" not in user_body:
+        failures.append(
+            "user: expected generated authorization 401 for an anonymous sync request, "
+            f"got http {code}: {user_body[:200]!r}"
+        )
+
+    # auth：发送空 payload 仅验证 Caddy → user-service 路由，不创建 OTP challenge。
+    code, auth_body = _req(
+        f"{base}/v1/auth/otp/send",
+        method="POST",
+        data=b"{}",
+        headers={"Content-Type": "application/json"},
+        timeout=timeout_seconds,
+        retry_attempts=retry_attempts,
+        retry_sleep_seconds=retry_sleep_seconds,
+    )
+    if code != 400:
+        failures.append(
+            "auth: expected user-service validation 400 for an empty OTP request, "
+            f"got http {code}: {auth_body[:200]!r}"
+        )
+    if "local-gamma mirror route is not ready" in auth_body:
+        failures.append("auth: Caddy 404 catch-all — /v1/auth* 未反代到 user-service")
 
     assistant_payload = json.dumps({"summary": "gamma-route-smoke"}).encode("utf-8")
     code, assistant_body = _req(
@@ -180,7 +189,6 @@ def main() -> int:
         data=assistant_payload,
         headers={
             "Content-Type": "application/json",
-            "X-Client-User-Id": "gamma_route_smoke",
             "X-Test-Local-Gamma": "true",
         },
         timeout=timeout_seconds,

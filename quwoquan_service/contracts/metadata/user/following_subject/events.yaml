@@ -1,11 +1,12 @@
 version: 1
 entity: FollowingSubject
 
-events:
-  - name: FollowingSubjectVisited
-    description: 当前 viewer 从关注对象列表进入了某个关注对象主页
-    fields:
-      - viewerSubAccountId
-      - subjectType
-      - subjectId
-      - visitedAt
+# FollowingSubject 是组合读模型，不发布领域事件；Projector 消费各 owner 的事件。
+events: []
+
+subscriptions:
+  - PersonaFollowStateChanged
+  - CircleJoined
+  - CircleLeft
+  - SubjectFollowStateChanged
+  - FollowingSubjectVisited

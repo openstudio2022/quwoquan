@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/core/media/content_media_url.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
 
 void main() {
@@ -26,11 +27,17 @@ void main() {
     final dto = postBaseDtoFromMap(wire);
     final view = ContentSurfaceViewMapper.fromDto(dto, wire: wire);
 
-    expect(dto.mediaVideoUrl, contains('/clip.mp4'));
-    expect(dto.mediaVideoCoverUrl, contains('/thumb.jpg'));
-    expect(view.video!.url, dto.mediaVideoUrl);
-    expect(view.video!.thumbnailUrl, dto.mediaVideoCoverUrl);
-    expect(view.cover!.url, dto.mediaVideoCoverUrl);
+    expect(dto.mediaVideoUrl, 'media/video/s/fixture/video-sync/v1/clip.mp4');
+    expect(
+      dto.mediaVideoCoverUrl,
+      'media/image/s/fixture/video-sync/v1/thumb.jpg',
+    );
+    expect(view.video!.url, resolveContentVideoUrl(dto.mediaVideoUrl));
+    expect(
+      view.video!.thumbnailUrl,
+      resolveContentMediaUrl(dto.mediaVideoCoverUrl),
+    );
+    expect(view.cover!.url, view.video!.thumbnailUrl);
     expect(view.video!.durationMs, 15000);
     expect(view.video!.aspectRatio, closeTo(1080 / 1920, 0.001));
   });

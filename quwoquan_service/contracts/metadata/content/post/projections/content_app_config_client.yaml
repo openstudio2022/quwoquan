@@ -19,7 +19,6 @@ documented_keys:
   - comment.reply_first_expand_page_size
   - comment.reply_expand_page_size
   - comment.fold_line_count
-  - comment.sort.default
   - comment.attachment.max_images
 comment_defaults:
   max_length: 500
@@ -29,7 +28,5 @@ comment_defaults:
   reply_first_expand_page_size: 5
   reply_expand_page_size: 10
   fold_line_count: 3
-  sort:
-    default: recommended
   attachment:
     max_images: 1

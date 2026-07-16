@@ -1,131 +1,112 @@
-# 实体级可复制链接与应用内导航对齐（唯一结构真相源）
-#
-# - 公网 HTTPS 的 **主机/origin** 不写入本文件，由部署或 Remote Config 提供，
-#   客户端用 dart-define（过渡期）或 Remote Config SDK 读取，再与本文件 path_template 组合。
-# - **scheme 深链** 结构由本文件定义；scheme 不随环境变化。
-# - navigation.route_id 必须对应 contracts/metadata/_shared/app_routes.yaml 中已有 id，
-#   param_bindings 表示：链接占位符名 → GoRouter path 参数名。
-#
-# codegen（plan）：由 tools/codegen_app_metadata 生成 Dart `AppLinkTemplates` / `EntityLinkSpec`，
-# 并可选校验 route_id 存在于 app_routes codegen 常量集。
-#
-version: 1
-
-runtime_origin_binding:
-  description: |
-    公网可复制链接的 origin 仅来自运行时：
-    - 过渡期：`--dart-define=PUBLIC_WEB_BASE_URL=https://…`（与现有 AppPublicContentLinks 对齐）
-    - 目标态：Remote Config 键（如 `public_web_base_url`），由产品/运维按 env 下发
-  dart_define_key: PUBLIC_WEB_BASE_URL
-  remote_config_key: public_web_base_url
-
-entities:
-  post:
-    description: 内容帖（点滴/作品等），与 Post 聚合 id 对齐
-    primary_params: [postId]
-    app_deep_link:
-      scheme: quwoquan
-      host: content
-      path_template: post/{postId}
-      query_rules:
-        - when: visibility_is_circle_visible
-          append_query: scope=circle
-    web:
-      path_template: post/{postId}
-    navigation:
-      route_id: workBrowser
-      param_bindings:
-        postId: workId
-
-  circle:
-    description: 圈子主页
-    primary_params: [circleId]
-    app_deep_link:
-      scheme: quwoquan
-      host: circle
-      path_template: "{circleId}"
-    web:
-      path_template: circle/{circleId}
-    navigation:
-      route_id: circleDetail
-      param_bindings:
-        circleId: id
-
-  user:
-    description: 用户公开主页（路由键为 username）
-    primary_params: [username]
-    app_deep_link:
-      scheme: quwoquan
-      host: user
-      path_template: "{username}"
-    web:
-      path_template: u/{username}
-    navigation:
-      route_id: userProfile
-      param_bindings:
-        username: username
-
-  chat:
-    description: 单聊/群聊会话
-    primary_params: [conversationId]
-    app_deep_link:
-      scheme: quwoquan
-      host: chat
-      path_template: "{conversationId}"
-    web:
-      path_template: chat/{conversationId}
-    navigation:
-      route_id: chatDetail
-      param_bindings:
-        conversationId: id
-
-  entity_homepage:
-    description: 主页实体（共享主页网络）
-    primary_params: [homepageId]
-    app_deep_link:
-      scheme: quwoquan
-      host: homepages
-      path_template: "{homepageId}"
-    web:
-      path_template: homepages/{homepageId}
-    navigation:
-      route_id: homepageDetail
-      param_bindings:
-        homepageId: id
-
-# ---------------------------------------------------------------------------
-# 对外引流扩展（external-acquisition-and-deeplink）
-# 以下三段为对外分享 / 深链回流 / 跨 App 口令引流的统一结构真相源，
-# 由 external-inbound-deeplink-routing 与 outbound-share-distribution 消费。
-# 与上方 entities 解耦：codegen 对 entities 的产物不受影响；
-# 下面三段的 codegen 支持（AppShareLinks / AppShareToken / AppTransferPages）
-# 在对应 L3 的 /dev 切片落地，本文件先冻结结构。
-# ---------------------------------------------------------------------------
-
-# 1) 归因参数：所有对外可复制 / 分享链接统一支持的 query 参数。
-#    由分享侧在运行时按渠道注入，不写入实体 path_template；
-#    入站后由 DeepLinkResolver 剥离并转交埋点与延迟深链归因，不参与 route 匹配。
 attribution_params:
   params:
-    - key: utm_source
-      desc: 渠道来源（wechat_session / wechat_timeline / xiaohongshu / toutiao / browser / poster_qr 等）
-    - key: utm_medium
-      desc: 媒介（social / poster / token / qr / seo）
-    - key: utm_campaign
-      desc: 运营活动标识
-    - key: share_id
-      desc: 单次分享事件 id，与 content/post SharePost 落库及埋点对齐
-    - key: inviter
-      desc: 邀请者 subAccountId，拉新归因，对齐 user/invite_record
-    - key: referral
-      desc: referralSource 语义来源标识（对齐端侧 ReferralSource）
+  - desc: 渠道来源（wechat_session / wechat_timeline / xiaohongshu / toutiao / browser / poster_qr 等）
+    key: utm_source
+  - desc: 媒介（social / poster / token / qr / seo）
+    key: utm_medium
+  - desc: 运营活动标识
+    key: utm_campaign
+  - desc: 单次站外分享事实 id，与 content/outbound_share_fact CreateOutboundShare 追加事实及埋点对齐
+    key: share_id
+  - desc: 邀请者 subAccountId，拉新归因，对齐 user/invite_record
+    key: inviter
+  - desc: referralSource 语义来源标识（对齐端侧 ReferralSource）
+    key: referral
   rules:
-    - 仅追加到 web HTTPS 链接与中转页；scheme 深链通过 extinfo / 透传字段携带等价归因。
-    - 入站解析时全部剥离，仅交给埋点与归因，绝不参与 GoRouter route 匹配。
+  - 仅追加到 web HTTPS 链接与中转页；scheme 深链通过 extinfo / 透传字段携带等价归因。
+  - 入站解析时全部剥离，仅交给埋点与归因，绝不参与 GoRouter route 匹配。
+entities:
+  chat:
+    app_deep_link:
+      host: chat
+      path_template: '{conversationId}'
+      scheme: quwoquan
+    description: 单聊/群聊会话
+    navigation:
+      param_bindings:
+        conversationId: id
+      route_id: chatDetail
+    primary_params:
+    - conversationId
+    web:
+      path_template: chat/{conversationId}
+  circle:
+    app_deep_link:
+      host: circle
+      path_template: '{circleId}'
+      scheme: quwoquan
+    description: 圈子主页
+    navigation:
+      param_bindings:
+        circleId: id
+      route_id: circleDetail
+    primary_params:
+    - circleId
+    web:
+      path_template: circle/{circleId}
+  entity_homepage:
+    app_deep_link:
+      host: homepages
+      path_template: '{homepageId}'
+      scheme: quwoquan
+    description: 主页实体（共享主页网络）
+    navigation:
+      param_bindings:
+        homepageId: id
+      route_id: homepageDetail
+    primary_params:
+    - homepageId
+    web:
+      path_template: homepages/{homepageId}
+  post:
+    app_deep_link:
+      host: content
+      path_template: post/{postId}
+      scheme: quwoquan
+    description: 内容帖（点滴/作品等），与 Post 聚合 id 对齐
+    navigation:
+      param_bindings:
+        postId: workId
+      route_id: workBrowser
+    primary_params:
+    - postId
+    web:
+      path_template: post/{postId}
+  user:
+    app_deep_link:
+      host: user
+      path_template: '{username}'
+      scheme: quwoquan
+    description: 用户公开主页（路由键为 username）
+    navigation:
+      param_bindings:
+        username: username
+      route_id: userProfile
+    primary_params:
+    - username
+    web:
+      path_template: u/{username}
+runtime_origin_binding:
+  dart_define_key: PUBLIC_WEB_BASE_URL
+  description: '公网可复制链接的 origin 仅来自运行时：
 
-# 2) 智能中转落地页：站外默认落点，做 UA 分流（唤起 / 下载 / 口令 / web 预览）。
-#    与各实体 web.path_template 协同：分享侧默认生成 universal_landing 链接，
-#    其 target_entity / target_id 指向真实实体，解析回上方 entities 的同一行。
+    - 过渡期：`--dart-define=PUBLIC_WEB_BASE_URL=https://…`（与现有 AppPublicContentLinks 对齐）
+
+    - 目标态：Remote Config 键（如 `public_web_base_url`），由产品/运维按 env 下发
+
+    '
+  remote_config_key: public_web_base_url
+share_token:
+  format:
+    body_charset: base62
+    body_length: 8
+    pattern: '{prefix}{body}{suffix}'
+    prefix: 【趣窝圈】
+    suffix: 「复制本条 {token} 打开趣窝圈App查看」
+  resolution:
+  - 客户端识别 prefix / suffix 包裹后提取 token，调用短链解析还原 target_entity / target_id + 归因。
+  - 剪贴板读取遵循 iOS14+ / Android12+ 系统限制，仅在用户主动粘贴或显式授权场景读取（见 external-inbound-deeplink-routing）。
+  - 口令 token 与 transfer_pages.short_link 的 {token} 同源，可互转。
 transfer_pages:
   short_link:
     description: 短链中转页，承载口令 / 海报二维码默认落点，解析后跳转 universal_landing 或直接渲染分流页。
@@ -133,27 +114,13 @@ transfer_pages:
       path_template: s/{token}
   universal_landing:
     description: 通用智能跳转中转页，按 UA 分流（微信 / 浏览器 / iOS / Android / PC）唤起 App、下载或 web 预览。
+    query_rules:
+    - desc: 目标实体类型（post / circle / user / entity_homepage）
+      key: target_entity
+    - desc: 目标实体主键（postId / circleId / username / homepageId）
+      key: target_id
+    - desc: 可选，携带口令归因短码
+      key: token
     web:
       path_template: open
-    query_rules:
-      - key: target_entity
-        desc: 目标实体类型（post / circle / user / entity_homepage）
-      - key: target_id
-        desc: 目标实体主键（postId / circleId / username / homepageId）
-      - key: token
-        desc: 可选，携带口令归因短码
-
-# 3) 口令（可识别码）：用于不支持外链的 UGC 平台（小红书 / 今日头条评论区等）。
-#    复制到剪贴板的可识别码，App 启动时在用户授权下读取剪贴板识别并还原目标对象（淘口令式）。
-#    口令只携带短 token，真实目标与归因在服务端短链表解析，避免明文长链被平台屏蔽。
-share_token:
-  format:
-    pattern: "{prefix}{body}{suffix}"
-    prefix: "【趣窝圈】"
-    body_charset: base62
-    body_length: 8
-    suffix: "「复制本条 {token} 打开趣窝圈App查看」"
-  resolution:
-    - 客户端识别 prefix / suffix 包裹后提取 token，调用短链解析还原 target_entity / target_id + 归因。
-    - 剪贴板读取遵循 iOS14+ / Android12+ 系统限制，仅在用户主动粘贴或显式授权场景读取（见 external-inbound-deeplink-routing）。
-    - 口令 token 与 transfer_pages.short_link 的 {token} 同源，可互转。
+version: 1

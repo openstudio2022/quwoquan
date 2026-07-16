@@ -1,462 +1,557 @@
-version: 1
-read_model: DiscoveryFeed
+client_projection:
+  computed_getters:
+  - body: 'if (type == ''video'' || (videoUrl != null && videoUrl!.isNotEmpty)) return ''video'';
 
-description: |
-  发现流 ReadModel。聚合 Post + 用户行为 + 推荐特征，
+      if (type == ''article'') return ''note'';
+
+      if (type == ''image'') return ''image'';
+
+      if (imageUrls.isNotEmpty) return ''image'';
+
+      return ''note'';
+
+      '
+    dart_return_type: String
+    description: 发现流展示格式：moment 由素材组合推导，work 由 type 映射。
+    name: displayFormat
+    nullable: false
+  dart_class: FeedItemDto
+  dart_imports:
+  - package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart
+  fields:
+  - aliases:
+    - postId
+    - _id
+    dart_type: String
+    default: ''''''
+    name: id
+    nullable: false
+    source: postId
+  - aliases:
+    - contentType
+    - category
+    dart_type: String
+    default: ''''''
+    description: photo / video / article / moment（客户端展示类型，micro→moment 在服务侧已处理）
+    name: type
+    nullable: false
+    source: contentType
+  - aliases:
+    - contentIdentity
+    - identity
+    dart_type: String
+    default: '(m[''contentType'']?.toString() == ''micro'' ? ''moment'' : ''work'')'
+    name: identity
+    nullable: false
+    source: contentIdentity
+  - aliases:
+    - assistantUsePolicy
+    dart_type: String
+    default: '''inherit'''
+    name: assistantUsePolicy
+    nullable: false
+    source: assistantUsePolicy
+  - aliases:
+    - userId
+    - author_id
+    dart_type: String
+    default: ''''''
+    name: authorId
+    nullable: false
+    source: authorId
+  - aliases:
+    - authorNickname
+    - nickname
+    - username
+    - displayName
+    dart_type: String
+    default: ''''''
+    name: displayName
+    nullable: false
+    source: authorNickname
+  - aliases:
+    - authorAvatarUrl
+    - avatarUrl
+    - avatar
+    dart_type: String
+    default: ''''''
+    name: avatarUrl
+    nullable: false
+    source: authorAvatarUrl
+  - aliases:
+    - authorRoleLabel
+    - roleLabel
+    - authorRole
+    dart_type: String
+    default: ''''''
+    description: 作者角色短标签（反范式），首页推荐卡顶部展示
+    name: authorRoleLabel
+    nullable: false
+    source: authorRoleLabel
+  - aliases:
+    - authorIdentityTags
+    - identityTags
+    - authorTags
+    dart_type: List<String>
+    default: <String>[]
+    description: 作者身份标签（反范式），首页推荐卡顶部最多展示 2 个
+    name: authorIdentityTags
+    nullable: false
+    source: authorIdentityTags
+  - aliases:
+    - authorVerified
+    - verified
+    - isVerified
+    dart_type: bool
+    default: 'false'
+    description: 作者认证标记（反范式），驱动卡片认证角标
+    name: authorVerified
+    nullable: false
+    source: authorVerified
+  - aliases:
+    - title
+    dart_type: String
+    default: 'null'
+    name: title
+    nullable: true
+    source: title
+  - aliases:
+    - body
+    - description
+    - content
+    dart_type: String
+    default: 'null'
+    description: 微趣/文章正文；图片/视频可选配文
+    name: body
+    nullable: true
+    source: body
+  - aliases:
+    - coverUrl
+    - cover
+    - thumbnail
+    - thumbnailUrl
+    dart_type: String
+    default: ''''''
+    name: coverUrl
+    nullable: false
+    source: coverUrl
+  - aliases:
+    - thumbnailUrl
+    - thumbnail
+    - coverUrl
+    dart_type: String
+    default: ''''''
+    description: 视频封面/图片缩略图；优先 thumbnailUrl，回退 coverUrl
+    name: thumbnailUrl
+    nullable: false
+    source: thumbnailUrl
+  - aliases:
+    - videoUrl
+    - video_url
+    dart_type: String
+    default: 'null'
+    name: videoUrl
+    nullable: true
+    source: videoUrl
+  - aliases:
+    - mediaUrls
+    - images
+    - imageUrls
+    - image_urls
+    dart_type: List<String>
+    default: <String>[]
+    description: 图片帖子的图片列表
+    name: imageUrls
+    nullable: false
+    source: mediaUrls
+  - aliases:
+    - durationMs
+    - duration_ms
+    - duration
+    dart_type: int
+    default: 'null'
+    description: 视频时长（毫秒）；图片帖子为 null
+    name: durationMs
+    nullable: true
+    source: durationMs
+  - aliases:
+    - coverStrategy
+    - cover_strategy
+    dart_type: String
+    default: 'null'
+    description: 视频封面策略 first_frame/manual；非视频内容为 null
+    name: coverStrategy
+    nullable: true
+    source: coverStrategy
+  - aliases:
+    - coverFrameTimeMs
+    - cover_frame_time_ms
+    dart_type: int
+    default: 'null'
+    description: 视频封面帧时间点（毫秒）；非视频内容为 null
+    name: coverFrameTimeMs
+    nullable: true
+    source: coverFrameTimeMs
+  - aliases:
+    - width
+    - imageWidth
+    - image_width
+    - w
+    dart_type: int
+    default: 'null'
+    description: 主媒体宽度（px）；Mock/沉浸布局用，可为空
+    name: width
+    nullable: true
+    source: width
+  - aliases:
+    - height
+    - imageHeight
+    - image_height
+    - h
+    dart_type: int
+    default: 'null'
+    description: 主媒体高度（px）；Mock/沉浸布局用，可为空
+    name: height
+    nullable: true
+    source: height
+  - aliases:
+    - likeCount
+    - likesCount
+    - likes
+    - like_count
+    dart_type: int
+    default: '0'
+    name: likeCount
+    nullable: false
+    source: likeCount
+  - aliases:
+    - commentCount
+    - commentsCount
+    - comments
+    - comment_count
+    dart_type: int
+    default: '0'
+    name: commentCount
+    nullable: false
+    source: commentCount
+  - aliases:
+    - shareCount
+    - shares
+    - share_count
+    dart_type: int
+    default: '0'
+    name: shareCount
+    nullable: false
+    source: shareCount
+  - aliases:
+    - createdAt
+    - created_at
+    dart_type: DateTime
+    default: DateTime(0)
+    description: 创作时间（首次进入系统）。唯一源为 createdAt/created_at；不再以 publishedAt 借壳。
+    name: createdAt
+    nullable: false
+    source: createdAt
+  - aliases:
+    - updatedAt
+    - updated_at
+    dart_type: DateTime
+    default: 'null'
+    description: 最后实质更新时间；与 createdAt 相等或更早时 UI 只显示创作时间，更晚时显示创作+更新。
+    name: updatedAt
+    nullable: true
+    source: updatedAt
+  - aliases:
+    - publishedAt
+    - published_at
+    dart_type: DateTime
+    default: 'null'
+    description: 首次公开时间（仅首次发布置位）。
+    name: publishedAt
+    nullable: true
+    source: publishedAt
+  - aliases:
+    - tagRefs
+    dart_type: List<String>
+    default: 'null'
+    name: tagRefs
+    nullable: true
+    source: tagRefs
+  - aliases:
+    - visibility
+    dart_type: String
+    default: 'null'
+    name: visibility
+    nullable: true
+    source: visibility
+  - aliases:
+    - summary
+    - highlightText
+    dart_type: String
+    default: 'null'
+    name: summary
+    nullable: true
+    source: summary
+  - aliases:
+    - authorBackgroundUrl
+    dart_type: String
+    default: 'null'
+    name: authorBackgroundUrl
+    nullable: true
+    source: authorBackgroundUrl
+  - aliases:
+    - articleTemplate
+    dart_type: String
+    default: 'null'
+    name: articleTemplate
+    nullable: true
+    source: articleTemplate
+  - aliases:
+    - articleFontPreset
+    dart_type: String
+    default: 'null'
+    name: articleFontPreset
+    nullable: true
+    source: articleFontPreset
+  - aliases:
+    - articleMarkdownDigest
+    dart_type: String
+    default: 'null'
+    name: articleMarkdownDigest
+    nullable: true
+    source: articleMarkdownDigest
+  - aliases:
+    - articleRenderProfile
+    dart_type: Map<String, dynamic>
+    default: 'null'
+    name: articleRenderProfile
+    nullable: true
+    source: articleRenderProfile
+  - aliases:
+    - contentVertical
+    - categoryId
+    - category
+    - vertical
+    dart_type: String
+    default: 'null'
+    name: contentVertical
+    nullable: true
+    source: contentVertical
+  - aliases:
+    - recallPath
+    - recall_path
+    dart_type: String
+    default: 'null'
+    description: 推荐召回路径；端侧行为上报原样透传，不参与 UI 展示。
+    name: recallPath
+    nullable: true
+    source: recallPath
+  - aliases:
+    - supplySource
+    - supply_source
+    dart_type: String
+    default: 'null'
+    description: 内容供给来源；端侧行为上报原样透传，用于 UGC/数据工程分桶。
+    name: supplySource
+    nullable: true
+    source: supplySource
+  - aliases:
+    - paperThemeMode
+    dart_type: String
+    default: 'null'
+    name: paperThemeMode
+    nullable: true
+    source: paperThemeMode
+  - aliases:
+    - paperTexture
+    - articlePaperTexture
+    dart_type: String
+    default: 'null'
+    name: paperTexture
+    nullable: true
+    source: paperTexture
+  - aliases:
+    - cards
+    dart_type: List<Map<String, dynamic>>
+    default: 'null'
+    name: cards
+    nullable: true
+    source: cards
+  - aliases:
+    - articlePresentationVersion
+    dart_type: int
+    default: 'null'
+    name: articlePresentationVersion
+    nullable: true
+    source: articlePresentationVersion
+  - aliases:
+    - intersectionReasons
+    dart_type: List<IntersectionReason>
+    default: 'null'
+    list_element_dart_class: IntersectionReason
+    name: intersectionReasons
+    nullable: true
+    source: intersectionReasons
+  - aliases:
+    - sourceTaskId
+    dart_type: String
+    default: 'null'
+    description: 内容溯源——生成此内容的数据工程任务 id
+    name: sourceTaskId
+    nullable: true
+    source: sourceTaskId
+  - aliases:
+    - conditionProfile
+    dart_type: Map<String, dynamic>
+    default: 'null'
+    description: 条件画像 {regions:[]string, seasons:[]string, altitudeMeters:int?}（从主实体冗余）
+    name: conditionProfile
+    nullable: true
+    source: conditionProfile
+  output_path: cloud/runtime/generated/content/feed_item_dto.g.dart
+collection: rm_discovery_feed
+consumers:
+- app (feed)
+- recommendation-engine
+description: '发现流 ReadModel。聚合 Post + 用户行为 + 推荐特征，
+
   供 App 信息流消费。由 Projector 从 Post 和行为事件投影构建。
 
-storage_backend: mongodb
-collection: rm_discovery_feed
-
-source_entities:
-  - Post
-  - ContentReaction
-  - VisitRecord
-
-source_events:
-  - PostCreated
-  - PostPublished
-  - ContentReacted
-  - BehaviorBatchReported
-
-consumers:
-  - app (feed)
-  - recommendation-engine
-
+  '
 fields:
-  - { name: postId, type: ObjectId }
-  - { name: contentType, type: enum }
-  - { name: contentIdentity, type: enum, description: "内容身份层。moment/work，用于跨面统一过滤" }
-  - { name: authorId, type: string }
-  - { name: creatorProfileId, type: string, description: "系统/平台创作者画像 ID" }
-  - { name: creatorArchetype, type: string, description: "创作者类型，用于推荐多样性与作者分布控制" }
-  - { name: creatorProfileVersion, type: string, description: "内容写入时绑定的作者画像版本" }
-  - { name: creatorDisclosure, type: object, description: "用户可见的虚拟创作者披露" }
-  - { name: experienceClaimMode, type: string, description: "经验声明模式，禁止伪真实亲历" }
-  - { name: authorQualitySignals, type: object, description: "作者质量/疲劳/风险调度信号" }
-  - { name: title, type: string }
-  - { name: tagRefs, type: "[]string" }
-  - { name: entityRefs, type: "[]string", description: "实体引用（POI/主页等），承载交集实体维度与推荐实体亲和" }
-  - { name: coverUrl, type: string }
-  - { name: thumbnailUrl, type: string, description: "视频未播放态主封面；默认首帧，手工选帧覆盖" }
-  - { name: videoUrl, type: string, description: "视频播放 URL；非视频内容为空" }
-  - { name: coverStrategy, type: enum, description: "视频封面策略 first_frame/manual；非视频内容为空" }
-  - { name: coverFrameTimeMs, type: int, description: "视频封面帧时间点；非视频内容为空" }
-  - { name: durationMs, type: int, description: "视频时长（毫秒）；非视频内容为空" }
-  - { name: width, type: int, description: "主媒体宽度（px）；可为空" }
-  - { name: height, type: int, description: "主媒体高度（px）；可为空" }
-  - { name: likeCount, type: int }
-  - { name: commentCount, type: int }
-  - { name: viewCount, type: int }
-  - { name: publishedAt, type: timestamp }
-  - { name: createdAt, type: timestamp, description: "内容首次进入系统时间（仅插入时写一次，永不变）" }
-  - { name: updatedAt, type: timestamp, description: "内容最后实质变更时间（无实质变更不推进）" }
-  - { name: recScore, type: float, description: 推荐分（实时计算） }
-  - { name: qualityScore, type: float, description: "内容质量分投影；推荐读路径只消费该投影，不同步打分" }
-  - { name: recallPath, type: string, description: "本次下发命中的召回路径（tag/hot/social/collab_i2i/collab_u2i/explore/repository_fallback 等），用于行为归因与运营分桶" }
-  - { name: contentVertical, type: string, description: "推荐垂类归一结果（general/travel_photography/...），用于垂类推荐与观测分桶" }
-  - { name: supplySource, type: string, description: "内容供给来源 user_generated/data_engineering/product_ops 等，用于 UGC 与数据工程内容效果分桶" }
-  - { name: authorNickname, type: string, description: 作者昵称（反范式） }
-  - { name: authorAvatarUrl, type: string, description: 作者头像（反范式） }
-  - { name: authorRoleLabel, type: string, description: 作者角色短标签（反范式，如「旅行创作者」） }
-  - { name: authorIdentityTags, type: "[]string", description: 作者身份标签（反范式，首页卡片最多展示 2 个） }
-  - { name: authorVerified, type: bool, description: 作者认证标记（反范式，驱动卡片认证角标） }
-  - { name: intersectionReasons, type: "[]object", description: "交集理由（云侧推荐管线预生成，B1；端只读展示，无来源时为空）" }
-  - { name: sourceTaskId, type: string, description: "内容溯源——生成此内容的数据工程任务 id（效果回流按 sourceTask 归因；从 Post 冗余）" }
-  - { name: conditionProfile, type: object, description: "条件画像（从主实体冗余）：结构化子键 {regions:[]string, seasons:[]string, altitudeMeters:int?}，供地域/季节召回与精排匹配" }
-
+- name: postId
+  type: ObjectId
+- name: contentType
+  type: enum
+- description: 内容身份层。moment/work，用于跨面统一过滤
+  name: contentIdentity
+  type: enum
+- name: authorId
+  type: string
+- description: 系统/平台创作者画像 ID
+  name: creatorProfileId
+  type: string
+- description: 创作者类型，用于推荐多样性与作者分布控制
+  name: creatorArchetype
+  type: string
+- description: 内容写入时绑定的作者画像版本
+  name: creatorProfileVersion
+  type: string
+- description: 用户可见的虚拟创作者披露
+  name: creatorDisclosure
+  type: object
+- description: 经验声明模式，禁止伪真实亲历
+  name: experienceClaimMode
+  type: string
+- description: 作者质量/疲劳/风险调度信号
+  name: authorQualitySignals
+  type: object
+- name: title
+  type: string
+- name: tagRefs
+  type: '[]string'
+- description: 实体引用（POI/主页等），承载交集实体维度与推荐实体亲和
+  name: entityRefs
+  type: '[]string'
+- name: coverUrl
+  type: string
+- description: 视频未播放态主封面；默认首帧，手工选帧覆盖
+  name: thumbnailUrl
+  type: string
+- description: 视频播放 URL；非视频内容为空
+  name: videoUrl
+  type: string
+- description: 视频封面策略 first_frame/manual；非视频内容为空
+  name: coverStrategy
+  type: enum
+- description: 视频封面帧时间点；非视频内容为空
+  name: coverFrameTimeMs
+  type: int
+- description: 视频时长（毫秒）；非视频内容为空
+  name: durationMs
+  type: int
+- description: 主媒体宽度（px）；可为空
+  name: width
+  type: int
+- description: 主媒体高度（px）；可为空
+  name: height
+  type: int
+- name: likeCount
+  type: int
+- name: commentCount
+  type: int
+- name: viewCount
+  type: int
+- name: publishedAt
+  type: timestamp
+- description: 内容首次进入系统时间（仅插入时写一次，永不变）
+  name: createdAt
+  type: timestamp
+- description: 内容最后实质变更时间（无实质变更不推进）
+  name: updatedAt
+  type: timestamp
+- description: 推荐分（实时计算）
+  name: recScore
+  type: float
+- description: 内容质量分投影；推荐读路径只消费该投影，不同步打分
+  name: qualityScore
+  type: float
+- description: 本次下发命中的具名读路径（tag/hot/social/collab_i2i/collab_u2i/explore/post_query 等），用于行为归因与运营分桶
+  name: recallPath
+  type: string
+- description: 推荐垂类归一结果（general/travel_photography/...），用于垂类推荐与观测分桶
+  name: contentVertical
+  type: string
+- description: 内容供给来源 user_generated/data_engineering/product_ops 等，用于 UGC 与数据工程内容效果分桶
+  name: supplySource
+  type: string
+- description: 作者昵称（反范式）
+  name: authorNickname
+  type: string
+- description: 作者头像（反范式）
+  name: authorAvatarUrl
+  type: string
+- description: 作者角色短标签（反范式，如「旅行创作者」）
+  name: authorRoleLabel
+  type: string
+- description: 作者身份标签（反范式，首页卡片最多展示 2 个）
+  name: authorIdentityTags
+  type: '[]string'
+- description: 作者认证标记（反范式，驱动卡片认证角标）
+  name: authorVerified
+  type: bool
+- description: 交集理由（云侧推荐管线预生成，B1；端只读展示，无来源时为空）
+  name: intersectionReasons
+  type: '[]object'
+- description: 内容溯源——生成此内容的数据工程任务 id（效果回流按 sourceTask 归因；从 Post 冗余）
+  name: sourceTaskId
+  type: string
+- description: 条件画像（从主实体冗余）：结构化子键 {regions:[]string, seasons:[]string, altitudeMeters:int?}，供地域/季节召回与精排匹配
+  name: conditionProfile
+  type: object
 indexes:
-  - { name: idx_df_rec_score, keys: { recScore: -1, publishedAt: -1 } }
-  - { name: idx_df_type, keys: { contentType: 1, recScore: -1 } }
-  - { name: idx_df_author, keys: { authorId: 1, publishedAt: -1 } }
-
-# App 端契约（client_projection）
-# 由 codegen_app_metadata 读取，生成 FeedItemDto（DO NOT EDIT 产物）
-# aliases：旧字段名兼容列表，fromMap 的 alias resolver 由 codegen 自动生成
-client_projection:
-  dart_class: FeedItemDto
-  output_path: cloud/runtime/generated/content/feed_item_dto.g.dart
-  dart_imports:
-    - package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart
-  computed_getters:
-    - name: displayFormat
-      dart_return_type: String
-      nullable: false
-      description: "发现流展示格式：moment 由素材组合推导，work 由 type 映射。"
-      body: |
-        if (type == 'video' || (videoUrl != null && videoUrl!.isNotEmpty)) return 'video';
-        if (type == 'article') return 'note';
-        if (type == 'image') return 'image';
-        if (imageUrls.isNotEmpty) return 'image';
-        return 'note';
-  fields:
-    - name: id
-      dart_type: String
-      nullable: false
-      source: postId            # 服务侧字段名
-      aliases: [postId, _id]
-      default: "''"
-
-    - name: type
-      dart_type: String
-      nullable: false
-      source: contentType
-      aliases: [contentType, category]
-      default: "''"
-      description: "photo / video / article / moment（客户端展示类型，micro→moment 在服务侧已处理）"
-
-    - name: identity
-      dart_type: String
-      nullable: false
-      source: contentIdentity
-      aliases: [contentIdentity, identity]
-      default: "(m['contentType']?.toString() == 'micro' ? 'moment' : 'work')"
-
-    - name: assistantUsePolicy
-      dart_type: String
-      nullable: false
-      source: assistantUsePolicy
-      aliases: [assistantUsePolicy]
-      default: "'inherit'"
-
-    - name: authorId
-      dart_type: String
-      nullable: false
-      source: authorId
-      aliases: [userId, author_id]
-      default: "''"
-
-    - name: displayName
-      dart_type: String
-      nullable: false
-      source: authorNickname    # 反范式字段
-      aliases: [authorNickname, nickname, username, displayName]
-      default: "''"
-
-    - name: avatarUrl
-      dart_type: String
-      nullable: false
-      source: authorAvatarUrl   # 反范式字段
-      aliases: [authorAvatarUrl, avatarUrl, avatar]
-      default: "''"
-
-    - name: authorRoleLabel
-      dart_type: String
-      nullable: false
-      source: authorRoleLabel
-      aliases: [authorRoleLabel, roleLabel, authorRole]
-      default: "''"
-      description: "作者角色短标签（反范式），首页推荐卡顶部展示"
-
-    - name: authorIdentityTags
-      dart_type: List<String>
-      nullable: false
-      source: authorIdentityTags
-      aliases: [authorIdentityTags, identityTags, authorTags]
-      default: "<String>[]"
-      description: "作者身份标签（反范式），首页推荐卡顶部最多展示 2 个"
-
-    - name: authorVerified
-      dart_type: bool
-      nullable: false
-      source: authorVerified
-      aliases: [authorVerified, verified, isVerified]
-      default: "false"
-      description: "作者认证标记（反范式），驱动卡片认证角标"
-
-    - name: title
-      dart_type: String
-      nullable: true
-      source: title
-      aliases: [title]
-      default: "null"
-
-    - name: body
-      dart_type: String
-      nullable: true
-      source: body
-      aliases: [body, description, content]
-      default: "null"
-      description: "微趣/文章正文；图片/视频可选配文"
-
-    - name: coverUrl
-      dart_type: String
-      nullable: false
-      source: coverUrl
-      aliases: [coverUrl, cover, thumbnail, thumbnailUrl]
-      default: "''"
-
-    - name: thumbnailUrl
-      dart_type: String
-      nullable: false
-      source: thumbnailUrl
-      aliases: [thumbnailUrl, thumbnail, coverUrl]
-      default: "''"
-      description: "视频封面/图片缩略图；优先 thumbnailUrl，回退 coverUrl"
-
-    - name: videoUrl
-      dart_type: String
-      nullable: true
-      source: videoUrl
-      aliases: [videoUrl, video_url]
-      default: "null"
-
-    - name: imageUrls
-      dart_type: List<String>
-      nullable: false
-      source: mediaUrls
-      aliases: [mediaUrls, images, imageUrls, image_urls]
-      default: "<String>[]"
-      description: "图片帖子的图片列表"
-
-    - name: durationMs
-      dart_type: int
-      nullable: true
-      source: durationMs
-      aliases: [durationMs, duration_ms, duration]
-      default: "null"
-      description: "视频时长（毫秒）；图片帖子为 null"
-
-    - name: coverStrategy
-      dart_type: String
-      nullable: true
-      source: coverStrategy
-      aliases: [coverStrategy, cover_strategy]
-      default: "null"
-      description: "视频封面策略 first_frame/manual；非视频内容为 null"
-
-    - name: coverFrameTimeMs
-      dart_type: int
-      nullable: true
-      source: coverFrameTimeMs
-      aliases: [coverFrameTimeMs, cover_frame_time_ms]
-      default: "null"
-      description: "视频封面帧时间点（毫秒）；非视频内容为 null"
-
-    - name: width
-      dart_type: int
-      nullable: true
-      source: width
-      aliases: [width, imageWidth, image_width, w]
-      default: "null"
-      description: "主媒体宽度（px）；Mock/沉浸布局用，可为空"
-
-    - name: height
-      dart_type: int
-      nullable: true
-      source: height
-      aliases: [height, imageHeight, image_height, h]
-      default: "null"
-      description: "主媒体高度（px）；Mock/沉浸布局用，可为空"
-
-    - name: likeCount
-      dart_type: int
-      nullable: false
-      source: likeCount
-      aliases: [likeCount, likesCount, likes, like_count]
-      default: "0"
-
-    - name: commentCount
-      dart_type: int
-      nullable: false
-      source: commentCount
-      aliases: [commentCount, commentsCount, comments, comment_count]
-      default: "0"
-
-    - name: shareCount
-      dart_type: int
-      nullable: false
-      source: shareCount
-      aliases: [shareCount, shares, share_count]
-      default: "0"
-
-    - name: createdAt
-      dart_type: DateTime
-      nullable: false
-      source: createdAt
-      aliases: [createdAt, created_at]
-      default: "DateTime(0)"
-      description: "创作时间（首次进入系统）。唯一源为 createdAt/created_at；不再以 publishedAt 借壳。"
-
-    - name: updatedAt
-      dart_type: DateTime
-      nullable: true
-      source: updatedAt
-      aliases: [updatedAt, updated_at]
-      default: "null"
-      description: "最后实质更新时间；与 createdAt 相等或更早时 UI 只显示创作时间，更晚时显示创作+更新。"
-
-    - name: publishedAt
-      dart_type: DateTime
-      nullable: true
-      source: publishedAt
-      aliases: [publishedAt, published_at]
-      default: "null"
-      description: "首次公开时间（仅首次发布置位）。"
-
-    # Mock / 沉浸器扩展（OpenAPI FeedItem.metadata 可承载；此处为 App 强类型投影）
-    - name: circleSummaries
-      dart_type: List<Map<String, dynamic>>
-      nullable: true
-      source: circleSummaries
-      aliases: [circleSummaries]
-      default: "null"
-
-    - name: circleIds
-      dart_type: List<String>
-      nullable: true
-      source: circleIds
-      aliases: [circleIds]
-      default: "null"
-
-    - name: circleNames
-      dart_type: List<String>
-      nullable: true
-      source: circleNames
-      aliases: [circleNames]
-      default: "null"
-
-    - name: circleId
-      dart_type: String
-      nullable: true
-      source: circleId
-      aliases: [circleId]
-      default: "null"
-
-    - name: circleName
-      dart_type: String
-      nullable: true
-      source: circleName
-      aliases: [circleName]
-      default: "null"
-
-    - name: tagRefs
-      dart_type: List<String>
-      nullable: true
-      source: tagRefs
-      aliases: [tagRefs]
-      default: "null"
-
-    - name: visibility
-      dart_type: String
-      nullable: true
-      source: visibility
-      aliases: [visibility]
-      default: "null"
-
-    - name: summary
-      dart_type: String
-      nullable: true
-      source: summary
-      aliases: [summary, highlightText]
-      default: "null"
-
-    - name: authorBackgroundUrl
-      dart_type: String
-      nullable: true
-      source: authorBackgroundUrl
-      aliases: [authorBackgroundUrl]
-      default: "null"
-
-    - name: articleTemplate
-      dart_type: String
-      nullable: true
-      source: articleTemplate
-      aliases: [articleTemplate]
-      default: "null"
-
-    - name: articleFontPreset
-      dart_type: String
-      nullable: true
-      source: articleFontPreset
-      aliases: [articleFontPreset]
-      default: "null"
-
-    - name: articleMarkdownDigest
-      dart_type: String
-      nullable: true
-      source: articleMarkdownDigest
-      aliases: [articleMarkdownDigest]
-      default: "null"
-
-    - name: articleRenderProfile
-      dart_type: Map<String, dynamic>
-      nullable: true
-      source: articleRenderProfile
-      aliases: [articleRenderProfile]
-      default: "null"
-
-    - name: contentVertical
-      dart_type: String
-      nullable: true
-      source: contentVertical
-      aliases: [contentVertical, categoryId, category, vertical]
-      default: "null"
-
-    - name: recallPath
-      dart_type: String
-      nullable: true
-      source: recallPath
-      aliases: [recallPath, recall_path]
-      default: "null"
-      description: "推荐召回路径；端侧行为上报原样透传，不参与 UI 展示。"
-
-    - name: supplySource
-      dart_type: String
-      nullable: true
-      source: supplySource
-      aliases: [supplySource, supply_source]
-      default: "null"
-      description: "内容供给来源；端侧行为上报原样透传，用于 UGC/数据工程分桶。"
-
-    - name: paperThemeMode
-      dart_type: String
-      nullable: true
-      source: paperThemeMode
-      aliases: [paperThemeMode]
-      default: "null"
-
-    - name: paperTexture
-      dart_type: String
-      nullable: true
-      source: paperTexture
-      aliases: [paperTexture, articlePaperTexture]
-      default: "null"
-
-    - name: cards
-      dart_type: List<Map<String, dynamic>>
-      nullable: true
-      source: cards
-      aliases: [cards]
-      default: "null"
-
-    - name: articlePresentationVersion
-      dart_type: int
-      nullable: true
-      source: articlePresentationVersion
-      aliases: [articlePresentationVersion]
-      default: "null"
-
-    - name: intersectionReasons
-      dart_type: List<IntersectionReason>
-      nullable: true
-      source: intersectionReasons
-      aliases: [intersectionReasons]
-      list_element_dart_class: IntersectionReason
-      default: "null"
-
-    - name: sourceTaskId
-      dart_type: String
-      nullable: true
-      source: sourceTaskId
-      aliases: [sourceTaskId]
-      default: "null"
-      description: "内容溯源——生成此内容的数据工程任务 id"
-
-    - name: conditionProfile
-      dart_type: Map<String, dynamic>
-      nullable: true
-      source: conditionProfile
-      aliases: [conditionProfile]
-      default: "null"
-      description: "条件画像 {regions:[]string, seasons:[]string, altitudeMeters:int?}（从主实体冗余）"
+- keys:
+    publishedAt: -1
+    recScore: -1
+  name: idx_df_rec_score
+- keys:
+    contentType: 1
+    recScore: -1
+  name: idx_df_type
+- keys:
+    authorId: 1
+    publishedAt: -1
+  name: idx_df_author
+read_model: DiscoveryFeed
+source_entities:
+- Post
+- ContentReaction
+- VisitRecord
+source_events:
+- PostCreated
+- PostPublished
+- ContentReactionActivated
+- ContentReactionRemoved
+- EventBatchReported
+storage_backend: mongodb
+version: 1

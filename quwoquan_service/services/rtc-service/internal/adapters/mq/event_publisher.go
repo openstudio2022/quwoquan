@@ -7,21 +7,11 @@ import (
 	"time"
 
 	rtredis "quwoquan_service/runtime/redis"
+	"quwoquan_service/services/rtc-service/internal/application"
 	event "quwoquan_service/services/rtc-service/internal/domain/call_session/event"
 )
 
-// DomainEvent represents a domain event published by the rtc service.
-type DomainEvent struct {
-	Type    string         `json:"type"`
-	CallID  string         `json:"callId"`
-	ActorID string         `json:"actorId,omitempty"`
-	Timestamp time.Time    `json:"timestamp"`
-	Payload map[string]any `json:"payload,omitempty"`
-}
-
-func (e DomainEvent) channel() string {
-	return fmt.Sprintf("rt:rtc:call:%s", e.CallID)
-}
+var _ application.CallEventPublisher = (*EventPublisher)(nil)
 
 // SupportedEventTypes lists all event types published by the rtc service.
 var SupportedEventTypes = []string{
@@ -48,7 +38,7 @@ func NewEventPublisher(client rtredis.Client) *EventPublisher {
 	return &EventPublisher{client: client}
 }
 
-func (p *EventPublisher) Publish(ctx context.Context, evt DomainEvent) error {
+func (p *EventPublisher) Publish(ctx context.Context, evt application.CallEvent) error {
 	if evt.Timestamp.IsZero() {
 		evt.Timestamp = time.Now()
 	}
@@ -56,14 +46,9 @@ func (p *EventPublisher) Publish(ctx context.Context, evt DomainEvent) error {
 	if err != nil {
 		return fmt.Errorf("marshal event: %w", err)
 	}
-	return p.client.Publish(ctx, evt.channel(), string(payload))
+	return p.client.Publish(ctx, eventChannel(evt.CallID), string(payload))
 }
 
-func (p *EventPublisher) PublishBatch(ctx context.Context, events []DomainEvent) error {
-	for i := range events {
-		if err := p.Publish(ctx, events[i]); err != nil {
-			return fmt.Errorf("publish event[%d] type=%s: %w", i, events[i].Type, err)
-		}
-	}
-	return nil
+func eventChannel(callID string) string {
+	return fmt.Sprintf("rt:rtc:call:%s", callID)
 }

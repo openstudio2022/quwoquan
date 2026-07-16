@@ -1,0 +1,324 @@
+bounded_contexts:
+- access_policy:
+    child_objects: aggregate_root_only
+    commands: aggregate_facade_only
+    cross_context: public_contract_only
+    queries: named_reader_slice_only
+  context_id: ops.product_ops
+  name: ProductOps
+  role: supporting
+- access_policy:
+    child_objects: aggregate_root_only
+    commands: aggregate_facade_only
+    cross_context: public_contract_only
+    queries: named_reader_slice_only
+  context_id: ops.platform_ops
+  name: PlatformOps
+  role: supporting
+decision_refs:
+- DDD-OBJ-001
+- CTX-OWNERSHIP-007
+- CQRS-COMMAND-003
+domain: ops
+objects:
+- access:
+    commands: aggregate_facade
+    cross_context: public_contract_only
+    queries: named_reader
+  bounded_context: ProductOps
+  canonical_object: Experiment
+  event_consumers: []
+  field_roles:
+    append_only_fact: []
+    authoritative_state:
+    - id
+    - key
+    - version
+    - status
+    - variants
+    - audienceRule
+    - allocationSeed
+    - startsAt
+    - endsAt
+    - createdAt
+    - updatedAt
+    owned_value: []
+    projection: []
+    reference: []
+    transport_only: []
+  identity:
+    fields:
+    - id
+    version_field: version
+    version_source: field
+  invariant_refs:
+  - ops/experiment/aggregate.yaml#business_rules
+  lifecycle_refs:
+  - ops/experiment/aggregate.yaml#lifecycle
+  member_bounds: {}
+  mutation_entrypoints:
+  - UpdateExperimentRollout
+  object_kind: aggregate_root
+  relationships: []
+  source_document: ops/experiment/fields.yaml
+  source_entity: Experiment
+  storage_backend: postgres
+  storage_role: authoritative
+- access:
+    commands: append_only_sink
+    cross_context: event_only
+    queries: named_reader
+  bounded_context: ProductOps
+  canonical_object: ExperimentAssignmentFact
+  event_consumers: []
+  field_roles:
+    append_only_fact:
+    - id
+    - experimentId
+    - subjectKey
+    - variant
+    - policyVersion
+    - assignedAt
+    authoritative_state: []
+    owned_value: []
+    projection: []
+    reference:
+    - experimentId
+    transport_only: []
+  identity:
+    fields:
+    - id
+    version_source: immutable
+  invariant_refs: []
+  lifecycle_refs: []
+  member_bounds: {}
+  mutation_entrypoints:
+  - AssignExperimentVariant
+  object_kind: append_only_fact
+  relationships:
+  - access: event
+    cardinality: N:1
+    consistency: eventual
+    kind: event_source
+    name: experiment
+    on_delete: retain
+    reference_fields:
+    - experimentId
+    target_object: ops.Experiment
+  source_document: ops/experiment_assignment_fact/fields.yaml
+  source_entity: ExperimentAssignmentFact
+  storage_backend: postgres
+  storage_role: append_only
+- access:
+    commands: append_only_sink
+    cross_context: event_only
+    queries: named_reader
+  bounded_context: ProductOps
+  canonical_object: EventRecord
+  event_consumers: []
+  field_roles:
+    append_only_fact:
+    - id
+    - eventId
+    - eventType
+    - eventName
+    - eventVersion
+    - priority
+    - producer
+    - source
+    - userIdHash
+    - sessionId
+    - pageVisitId
+    - surfaceId
+    - routeId
+    - operationId
+    - requestId
+    - traceId
+    - pageName
+    - targetType
+    - targetKey
+    - entityType
+    - entityId
+    - experimentBucket
+    - errorCode
+    - errorModule
+    - errorKind
+    - errorReason
+    - origin
+    - nature
+    - failurePoint
+    - stackHash
+    - businessObject
+    - functionModule
+    - appRuntimeEnv
+    - appVersion
+    - platform
+    - networkClass
+    - occurredAt
+    - clientSentAt
+    - ingestedAt
+    - eventDate
+    - payload
+    - metrics
+    authoritative_state: []
+    owned_value: []
+    projection: []
+    reference: []
+    transport_only: []
+  identity:
+    fields:
+    - id
+    version_source: immutable
+  invariant_refs: []
+  lifecycle_refs: []
+  member_bounds: {}
+  mutation_entrypoints:
+  - ReportEventBatch
+  object_kind: append_only_fact
+  relationships: []
+  source_document: ops/event_record/fields.yaml
+  source_entity: EventRecord
+  storage_backend: mongodb
+  storage_role: append_only
+  local_identity_reasons:
+    entityId: telemetry entity dimension normalized at ingestion; domain access is forbidden from EventRecord
+    eventId: immutable correlation or idempotency key scoped to this fact or command; it is not a business-object reference
+    operationId: generated route, surface, or operation registry key used only for navigation or telemetry attribution
+    pageVisitId: generated route, surface, or operation registry key used only for navigation or telemetry attribution
+    requestId: immutable correlation or idempotency key scoped to this fact or command; it is not a business-object reference
+    routeId: generated route, surface, or operation registry key used only for navigation or telemetry attribution
+    sessionId: runtime session correlation key injected by OperationInvocationContext, not an aggregate reference
+    surfaceId: generated route, surface, or operation registry key used only for navigation or telemetry attribution
+    traceId: immutable correlation or idempotency key scoped to this fact or command; it is not a business-object reference
+- access:
+    commands: append_only_sink
+    cross_context: event_only
+    queries: named_reader
+  bounded_context: ProductOps
+  canonical_object: VisitRecord
+  event_consumers: []
+  field_roles:
+    append_only_fact:
+    - userId
+    - targetType
+    - targetKey
+    - visitCount
+    - lastSeenAt
+    - sessionId
+    - source
+    - timestamp
+    authoritative_state: []
+    owned_value: []
+    projection: []
+    reference: []
+    transport_only: []
+  identity:
+    fields:
+    - userId
+    - targetType
+    - targetKey
+    - timestamp
+    version_source: immutable
+  invariant_refs: []
+  lifecycle_refs: []
+  member_bounds: {}
+  mutation_entrypoints:
+  - RecordVisit
+  object_kind: append_only_fact
+  relationships: []
+  source_document: ops/visit_record/fields.yaml
+  source_entity: VisitRecord
+  storage_backend: mongodb
+  storage_role: append_only
+  local_identity_reasons:
+    sessionId: runtime session correlation key injected by OperationInvocationContext, not an aggregate reference
+- access:
+    commands: aggregate_facade
+    cross_context: public_contract_only
+    queries: named_reader
+  bounded_context: PlatformOps
+  canonical_object: ConfigLayer
+  event_consumers: []
+  field_roles:
+    append_only_fact: []
+    authoritative_state:
+    - id
+    - version
+    - scopeLevel
+    - scopeId
+    - environment
+    - cluster
+    - service
+    - status
+    - createdAt
+    - updatedAt
+    owned_value:
+    - entries
+    projection: []
+    reference: []
+    transport_only: []
+  identity:
+    fields:
+    - id
+    version_field: version
+    version_source: field
+  invariant_refs:
+  - ops/config_layer/aggregate.yaml#business_rules
+  lifecycle_refs:
+  - ops/config_layer/aggregate.yaml#lifecycle
+  member_bounds:
+    ConfigEntry: 256
+  mutation_entrypoints:
+  - UpdateServiceConfig
+  object_kind: aggregate_root
+  relationships:
+  - access: aggregate_root
+    cardinality: 1:N
+    consistency: strong
+    kind: owned
+    name: entries
+    on_delete: cascade
+    reference_fields: []
+    target_object: ops.ConfigEntry
+  source_document: ops/config_layer/fields.yaml
+  source_entity: ConfigLayer
+  storage_backend: postgres
+  storage_role: authoritative
+  local_identity_reasons:
+    scopeId: ConfigLayer-local scope discriminator key; scope ownership is enforced by the ConfigLayer aggregate
+- access:
+    commands: via_aggregate_root
+    cross_context: forbidden
+    queries: via_aggregate_projection
+  aggregate_owner: ConfigLayer
+  bounded_context: PlatformOps
+  canonical_object: ConfigEntry
+  event_consumers: []
+  field_roles:
+    append_only_fact: []
+    authoritative_state:
+    - key
+    - kind
+    - stringValue
+    - intValue
+    - floatValue
+    - boolValue
+    owned_value: []
+    projection: []
+    reference: []
+    transport_only: []
+  identity:
+    fields:
+    - key
+    version_source: owner
+  invariant_refs:
+  - ops/config_layer/aggregate.yaml#business_rules
+  lifecycle_refs:
+  - ops/config_layer/aggregate.yaml#lifecycle
+  member_bounds: {}
+  mutation_entrypoints: []
+  object_kind: owned_entity
+  relationships: []
+  source_document: ops/config_layer/fields.yaml
+  source_entity: ConfigEntry
+  storage_role: owned

@@ -2,7 +2,7 @@
 
 > 真相源：`specs/product/intersection-definition-and-application.md` §17–§18
 > 状态：2026-06 规格收口完成；实现会话按本索引并行推进
-> 计划追踪：`docs/intersection-unification-plan.md`
+> 计划追踪：`docs/intersection-unification-content.execution.planning.md`
 
 ---
 

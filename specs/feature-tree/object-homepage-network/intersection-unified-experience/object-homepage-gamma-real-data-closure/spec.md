@@ -34,7 +34,7 @@
 - 交集事实契约：商用可见理由只消费 `IntersectionReason.primaryText / primarySpans / sampleVisuals / representativeActor / objectVisual / lifecycleState / actionHints / iconKey`；`join(primarySpans.text) == primaryText` 必须可测。
 - 可观测闭环：首页曝光、理由曝光、span 点击、证据展开、关注/加入/私信、Tab 切换、记录点击、错误态和空态都有 `surface/objectType/objectId/reasonId/targetType/targetId/env` 归因。
 - 实体主页 author 阶段默认通过 `cursor_sdk` 使用**最新 `composer`** 模型执行，并记录 startup、throughput、firstPassRate、authoritative ledger 等真实执行证据。
-- 实体主页主权威源冻结为 `Wikipedia/Wikivoyage + 百度百科 + 搜狗百科`；`今日头条百科` 只允许作为 supporting/reference 补事实，不得进入 `primaryEvidenceRef`。
+- 实体主页正文主源闭集冻结为 `Wikipedia + 百度百科 + 搜狗百科 + 今日头条百科`；权威 rank 为 `0/1/2/2`。Wikidata、OSM、百科搜索只做候选发现；Wikivoyage、360、官网、政府、门户、媒体、OTA 不得进入 source plan/source unit/writing pack/`primaryEvidenceRef`。
 
 ### Out of Scope
 

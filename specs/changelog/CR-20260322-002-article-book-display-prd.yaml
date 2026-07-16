@@ -79,7 +79,7 @@ entries:
       - path: specs/feature-tree/discovery-content/content-display-journey-consistency/article-display-journey/design.md
         sections:
           - 全文重写
-      - path: specs/feature-tree/discovery-content/content-display-journey-consistency/article-display-journey/plan.yaml
+      - path: specs/feature-tree/discovery-content/content-display-journey-consistency/article-display-journey/content.execution.planning.yaml
         sections:
           - P1
           - P2

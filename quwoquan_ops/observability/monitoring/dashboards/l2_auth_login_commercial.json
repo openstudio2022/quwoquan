@@ -1,0 +1,67 @@
+{
+  "dashboard": {
+    "title": "L2 — 登录商业漏斗与 Provider 健康度",
+    "uid": "qwq-l2-auth-login",
+    "tags": ["quwoquan", "l2", "auth", "login", "commercial"],
+    "timezone": "browser",
+    "refresh": "30s",
+    "panels": [
+      {
+        "title": "端侧登录漏斗（全环境）",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+        "targets": [
+          {
+            "expr": "sum(rate(ops_events_total{event_name=~\"login_page_exposed|login_primary_clicked|login_otp_send_succeeded|login_phone_login_succeeded|login_success|login_failed\"}[5m])) by (event_name, app_runtime_env, platform)",
+            "legendFormat": "{{ app_runtime_env }} {{ platform }} {{ event_name }}"
+          }
+        ]
+      },
+      {
+        "title": "登录 API 请求结果",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+        "targets": [
+          {
+            "expr": "sum(rate(http_server_requests_total{service=\"user-service\",route=~\"/v1/auth/(otp/send|authorization/alipay|login/(phone|wechat|alipay|qq|one-tap.*))\"}[5m])) by (route, status)",
+            "legendFormat": "{{ route }} {{ status }}"
+          }
+        ]
+      },
+      {
+        "title": "Provider 非 2xx 比率",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+        "targets": [
+          {
+            "expr": "sum(rate(http_server_requests_total{service=\"user-service\",route=~\"/v1/auth/(authorization/alipay|login/(wechat|alipay|qq|one-tap.*))\",status!~\"2..\"}[5m])) by (route) / (sum(rate(http_server_requests_total{service=\"user-service\",route=~\"/v1/auth/(authorization/alipay|login/(wechat|alipay|qq|one-tap.*))\"}[5m])) by (route) + 0.001)",
+            "legendFormat": "{{ route }}"
+          }
+        ]
+      },
+      {
+        "title": "登录 API P95 延迟",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(http_server_duration_seconds_bucket{service=\"user-service\",route=~\"/v1/auth/(otp/send|authorization/alipay|login/(phone|wechat|alipay|qq|one-tap.*))\"}[5m])) by (le, route))",
+            "legendFormat": "P95 {{ route }}"
+          }
+        ]
+      },
+      {
+        "title": "登录错误码分布",
+        "type": "table",
+        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
+        "targets": [
+          {
+            "expr": "topk(30, sum(increase(http_server_error_codes_total{service=\"user-service\",module=\"USER\"}[1h])) by (error_code, kind))",
+            "format": "table",
+            "instant": true
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -10,16 +10,14 @@ import 'package:quwoquan_app/cloud/runtime/generated/user/persona_lifecycle_guar
 import 'package:quwoquan_app/cloud/runtime/generated/user/persona_management_item_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/persona_management_summary_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/persona_update_request_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/user_setting_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
+import 'package:quwoquan_app/cloud/services/user/user_setting_model.dart';
 import 'package:quwoquan_app/core/auth/mock_session_identity.dart';
 
-UserSettingDto _userSettingDtoFromWire(Map<String, dynamic> json) {
-  final m = Map<String, dynamic>.from(json);
-  m.putIfAbsent('userId', () => '');
-  return UserSettingDto.fromJson(m);
+UserSettingModel _userSettingFromWire(Map<String, dynamic> json) {
+  return UserSettingModel.fromWire(json);
 }
 
 /// User 域 Repository：分身管理、活动身份上下文与用户设置。
@@ -57,8 +55,8 @@ abstract class UserRepository {
   Future<void> retirePersona(String subAccountId);
   Future<void> deleteEmptyPersona(String subAccountId);
 
-  Future<UserSettingDto> getNotificationSettings();
-  Future<UserSettingDto> getPrivacySettings();
+  Future<UserSettingModel> getNotificationSettings();
+  Future<UserSettingModel> getPrivacySettings();
 }
 
 /// 与网关 `ListSubAccounts` 同形 JSON，经 `jsonDecode` 再走 Wire → View（与 Remote 对齐）。
@@ -209,13 +207,13 @@ class MockUserRepository implements UserRepository {
   }
 
   @override
-  Future<UserSettingDto> getNotificationSettings() async {
-    return _userSettingDtoFromWire(<String, dynamic>{'enablePush': true});
+  Future<UserSettingModel> getNotificationSettings() async {
+    return _userSettingFromWire(<String, dynamic>{'enablePush': true});
   }
 
   @override
-  Future<UserSettingDto> getPrivacySettings() async {
-    return _userSettingDtoFromWire(<String, dynamic>{
+  Future<UserSettingModel> getPrivacySettings() async {
+    return _userSettingFromWire(<String, dynamic>{
       'profileVisibility': 'public',
     });
   }
@@ -487,7 +485,7 @@ class RemoteUserRepository implements UserRepository {
   }
 
   @override
-  Future<UserSettingDto> getNotificationSettings() async {
+  Future<UserSettingModel> getNotificationSettings() async {
     final uri = _uri(UserApiMetadata.getNotificationSettingsPath);
     final object = await _httpClient.getJsonObject(
       uri,
@@ -496,17 +494,17 @@ class RemoteUserRepository implements UserRepository {
       ),
       context: UserRequestPageIds.getNotificationSettings,
     );
-    return _userSettingDtoFromWire(object);
+    return _userSettingFromWire(object);
   }
 
   @override
-  Future<UserSettingDto> getPrivacySettings() async {
+  Future<UserSettingModel> getPrivacySettings() async {
     final uri = _uri(UserApiMetadata.getPrivacySettingsPath);
     final object = await _httpClient.getJsonObject(
       uri,
       headers: await _resolveHeaders(UserRequestPageIds.getPrivacySettings),
       context: UserRequestPageIds.getPrivacySettings,
     );
-    return _userSettingDtoFromWire(object);
+    return _userSettingFromWire(object);
   }
 }

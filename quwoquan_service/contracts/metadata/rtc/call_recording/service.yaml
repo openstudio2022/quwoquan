@@ -1,0 +1,38 @@
+version: 1
+service:
+  name: rtc-service
+  domain: rtc
+  owner: realtime-team
+  description: CallRecording 对象专属命令 packet。
+  commercial_defaults:
+    status: blocked
+    block_reason: LiveKit Egress、Media Facade 和 recording Store/outbox 尚未完成生产装配
+    gap_id: RTC_CALL_RECORDING_WIRING
+    target_story: app-cloud-business-object-commercial-closure
+api_routes:
+  - method: POST
+    path: /v1/rtc/calls/{callId}/recordings
+    operation: StartCallRecording
+    actor: persona
+    application:
+      kind: command
+      facet: CallRecordingCommandFacade
+      method: start
+      aggregate_owner: CallRecording
+      mutation_target: CallRecording
+      invariant_target: CallRecording
+    request_fields: [consentSnapshot, clientRequestId]
+    auth: required
+  - method: POST
+    path: /v1/rtc/call-recordings/{recordingId}:stop
+    operation: StopCallRecording
+    actor: persona
+    application:
+      kind: command
+      facet: CallRecordingCommandFacade
+      method: stop
+      aggregate_owner: CallRecording
+      mutation_target: CallRecording
+      invariant_target: CallRecording
+    request_fields: [expectedVersion, idempotencyKey]
+    auth: required

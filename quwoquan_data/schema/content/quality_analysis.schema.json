@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "stage",
+    "executionId",
+    "executionBinding",
+    "sourcePolicyRevision",
+    "sourceRevision",
+    "recommendation",
+    "sourcePaths",
+    "sourceAdmissions",
+    "rejectionReasons",
+    "evidenceHashes"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "quwoquan_data.quality_analysis/2" },
+    "stage": { "const": "2.quality" },
+    "executionId": { "type": "string", "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(canary|m1|m2|m3)-[0-9]{3,}$" },
+    "executionBinding": { "enum": ["frozen", "standalone"] },
+    "sourcePolicyRevision": { "const": "encyclopedia-primary-v2" },
+    "sourceRevision": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "promptBundleRevision": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "topicId": { "type": "string" },
+    "qualityScore": { "type": "number", "minimum": 0, "maximum": 100 },
+    "breakdown": {
+      "type": "object",
+      "properties": {
+        "depth": { "type": "number" },
+        "originality": { "type": "number" },
+        "practicality": { "type": "number" },
+        "readability": { "type": "number" }
+      }
+    },
+    "recommendation": { "type": "string", "enum": ["proceed", "skip", "needs_improvement", "needs_source_repair", "rejected"] },
+    "templateId": { "type": "string" },
+    "title": { "type": "string" },
+    "evidenceBundle": { "type": "object" },
+    "storySpine": { "type": "object" },
+    "sourceQuality": { "type": "array" },
+    "relatedSearchPlan": { "type": "object" },
+    "sourceUrls": { "type": "array", "items": { "type": "string" } },
+    "sourcePaths": { "type": "array", "items": { "type": "string" } },
+    "sourceAdmissions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["sourceRef", "decision", "evidenceHash"],
+        "properties": {
+          "sourceRef": { "type": "string", "minLength": 1 },
+          "decision": { "enum": ["selected", "eligible", "rejected"] },
+          "evidenceHash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+        }
+      }
+    },
+    "rejectionReasons": { "type": "array", "items": { "type": "string" } },
+    "evidenceHashes": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+    }
+  }
+}

@@ -5,5 +5,11 @@ from .request_response import (
     CandidateScore,
     ModelScoreRequest,
     ModelScoreResponse,
+    BatchModelScoreRequest,
+    BatchModelScoreResponse,
 )
-from .projections import LearningEvent, ModelRegistryEntry, TrainingSample
+from .projections import (
+    LearningEvent,
+    TrainingSample,
+    ModelRegistryEntry,
+)

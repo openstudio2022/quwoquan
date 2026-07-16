@@ -71,9 +71,7 @@ asset://cover
       expect(doc.html, contains('<figure>'));
       expect(
         doc.html,
-        contains(
-          resolvedMedia('media/image/s/seo/post_seo_1/v1/cover.jpg'),
-        ),
+        contains(resolvedMedia('media/image/s/seo/post_seo_1/v1/cover.jpg')),
       );
       expect(doc.html, contains('data-asset-id="cover"'));
       expect(doc.html, contains('class="qwq-gallery"'));
@@ -84,9 +82,7 @@ asset://cover
       expect(doc.jsonLd['identifier'], 'sha256:abc');
       expect(
         doc.referencedAssetUrls,
-        contains(
-          resolvedMedia('media/image/s/seo/post_seo_1/v1/bridge.jpg'),
-        ),
+        contains(resolvedMedia('media/image/s/seo/post_seo_1/v1/bridge.jpg')),
       );
     });
 
@@ -190,7 +186,9 @@ asset://cover
       expect(
         doc.referencedAssetUrls,
         contains(
-          resolvedMedia('media/image/s/seo/post_variants/v1/cover-display.webp'),
+          resolvedMedia(
+            'media/image/s/seo/post_variants/v1/cover-display.webp',
+          ),
         ),
       );
     });
@@ -381,22 +379,18 @@ coverImage: asset://海螺沟_cover_01
       expect(doc.jsonLd, isEmpty);
     });
 
-    test('circle visible content exposes controlled preview only', () {
-      final doc = renderer.render(
-        const MarkdownSeoRenderInput(
-          postId: 'circle_preview',
-          title: '圈内可见路线',
-          summary: '公开页只展示摘要。',
-          visibility: 'circle_visible',
-          articleMarkdown: '# 圈内可见路线\n\n完整正文不应该进入公开 HTML。',
+    test('retired Post visibility is rejected instead of exposed', () {
+      expect(
+        () => renderer.render(
+          const MarkdownSeoRenderInput(
+            postId: 'retired_visibility',
+            title: '已退役可见性',
+            visibility: 'circle_visible',
+            articleMarkdown: '# 不应渲染',
+          ),
         ),
+        throwsArgumentError,
       );
-
-      expect(doc.indexable, isFalse);
-      expect(doc.html, contains('class="qwq-controlled-preview"'));
-      expect(doc.html, contains('公开页只展示摘要。'));
-      expect(doc.html, isNot(contains('完整正文不应该进入公开 HTML')));
-      expect(doc.openGraph['og:url'], doc.canonicalUrl);
     });
   });
 }

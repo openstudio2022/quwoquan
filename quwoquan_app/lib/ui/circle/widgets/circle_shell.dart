@@ -14,7 +14,8 @@ import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';
 import 'package:quwoquan_app/components/object_page/object_chrome_actions.dart';
 import 'package:quwoquan_app/components/object_page/object_impact_preview_card.dart';
-import 'package:quwoquan_app/components/object_page/object_intersection_preview_card.dart';
+import 'package:quwoquan_app/components/object_page/object_intersection_provider.dart';
+import 'package:quwoquan_app/components/object_page/object_intersection_section.dart';
 import 'package:quwoquan_app/components/media/app_media_image.dart';
 import 'package:quwoquan_app/components/object_page/object_page_shell.dart';
 import 'package:quwoquan_app/components/object_page/object_slogan_card.dart';
@@ -135,10 +136,10 @@ class _CircleShellState extends ConsumerState<CircleShell> {
   }
 
   bool _isMemberLike(CircleState state) {
-    return state.role == CircleRole.owner ||
-        state.role == CircleRole.admin ||
-        state.role == CircleRole.member ||
-        state.joinStatus == 'joined';
+    return state.joinStatus == 'joined' &&
+        (state.role == CircleRole.owner ||
+            state.role == CircleRole.admin ||
+            state.role == CircleRole.member);
   }
 
   bool _canAccessPrimaryContent(CircleState state) {
@@ -315,6 +316,19 @@ class _CircleShellState extends ConsumerState<CircleShell> {
         state.loadError != null) {
       return AppScaffold(
         backgroundColor: bg,
+        navigationBar: AppNavigationBar(
+          automaticallyImplyLeading: false,
+          backgroundColor: bg,
+          leading: AppNavigationBarIconButton(
+            key: const ValueKey<String>('circle-shell-error-back'),
+            icon: CupertinoIcons.back,
+            onPressed:
+                widget.onBack ??
+                () {
+                  Navigator.of(context).maybePop();
+                },
+          ),
+        ),
         body: AppPageErrorState(
           semantic: runtimeErrorSemantic(
             context,

@@ -1,0 +1,7 @@
+# content_plan checkpoint prompt 变量契约。
+system:
+  required: []
+  optional: []
+task:
+  required: [execution_id, active_targets_json, effective_spec_json, quotas_json]
+  optional: []

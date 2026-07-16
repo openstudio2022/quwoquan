@@ -40,10 +40,7 @@ void main() {
       final caps = CapabilityProfile.mobile.copyWith(
         realtimeCommunication: false,
       );
-      expect(
-        resolveIncomingCallChannel(caps),
-        IncomingCallChannel.unsupported,
-      );
+      expect(resolveIncomingCallChannel(caps), IncomingCallChannel.unsupported);
     });
 
     test('原生来电屏优先于 Web Push', () {
@@ -68,7 +65,7 @@ void main() {
       expect(caps.webPushIncomingCall, isFalse);
       expect(caps.realtimeCommunication, isTrue);
       expect(caps.appleNativeLogin, isTrue);
-      expect(caps.wechatNativeLogin, isFalse);
+      expect(caps.wechatNativeLogin, isTrue);
       expect(caps.systemCredentialLogin, isTrue);
       expect(caps.passkeyLogin, isTrue);
     });

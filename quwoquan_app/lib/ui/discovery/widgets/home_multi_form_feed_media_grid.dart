@@ -408,6 +408,7 @@ class _HomeFeedVideoCard extends ConsumerWidget {
       ColorType.surfaceMuted,
     );
     final videoUrl = dto.mediaVideoUrl.trim();
+    final videoUrlCandidates = resolveContentVideoUrlCandidates(videoUrl);
     return GestureDetector(
       onTap: onTap,
       child: ClipRRect(
@@ -418,11 +419,11 @@ class _HomeFeedVideoCard extends ConsumerWidget {
           fit: StackFit.expand,
           children: [
             DecoratedBox(decoration: BoxDecoration(color: surfaceMuted)),
-            if (videoUrl.isNotEmpty)
+            if (videoUrlCandidates.isNotEmpty)
               VideoPlayerWidget(
                 key: ValueKey<String>('home-video-player-${dto.id}'),
                 videoUrl: videoUrl,
-                videoUrlCandidates: resolveContentVideoUrlCandidates(videoUrl),
+                videoUrlCandidates: videoUrlCandidates,
                 thumbnailUrl: dto.mediaVideoCoverUrl.isNotEmpty
                     ? dto.mediaVideoCoverUrl
                     : dto.primaryVisualUrl,

@@ -2,17 +2,17 @@ package behavior
 
 import (
 	"context"
-	"quwoquan_service/services/content-service/internal/application/identity"
 	"strings"
 	"time"
 
 	rterr "quwoquan_service/runtime/errors"
 	rtimpact "quwoquan_service/runtime/impact"
+	messaging "quwoquan_service/runtime/messaging"
 	rtrec "quwoquan_service/runtime/recommendation"
-	"quwoquan_service/runtime/repository"
+	"quwoquan_service/services/content-service/internal/application/identity"
 	"quwoquan_service/services/content-service/internal/application/ports"
-	"quwoquan_service/services/content-service/internal/domain/post/event"
 	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
+	postports "quwoquan_service/services/content-service/internal/domain/post/ports"
 	"quwoquan_service/services/content-service/internal/generated"
 )
 
@@ -140,9 +140,8 @@ func wishlistEventFromInput(input BehaviorEventInput, userID, contentID, action 
 type BehaviorService struct {
 	hotPath              rtrec.SignalProcessor
 	feedbackIngestor     rtrec.FeedbackIngestor
-	store                ports.PostRepository
-	publisher            repository.EventPublisher
-	projector            ports.Projector
+	store                postports.DetailReader
+	publisher            messaging.EventPublisher
 	feedback             *rtrec.FeedbackRecorder
 	eventStore           ports.BehaviorEventStore
 	wishlistStore        ports.WishlistEventStore
@@ -156,12 +155,8 @@ type BehaviorService struct {
 
 type BehaviorServiceOption func(*BehaviorService)
 
-func WithBehaviorEventPublisher(pub repository.EventPublisher) BehaviorServiceOption {
+func WithBehaviorEventPublisher(pub messaging.EventPublisher) BehaviorServiceOption {
 	return func(s *BehaviorService) { s.publisher = pub }
-}
-
-func WithBehaviorProjector(p ports.Projector) BehaviorServiceOption {
-	return func(s *BehaviorService) { s.projector = p }
 }
 
 func WithBehaviorFeedbackRecorder(f *rtrec.FeedbackRecorder) BehaviorServiceOption {
@@ -208,7 +203,7 @@ func WithIntersectionFeedbackSink(sink IntersectionFeedbackSink) BehaviorService
 	}
 }
 
-func NewBehaviorService(hotPath rtrec.SignalProcessor, store ports.PostRepository, opts ...BehaviorServiceOption) *BehaviorService {
+func NewBehaviorService(hotPath rtrec.SignalProcessor, store postports.DetailReader, opts ...BehaviorServiceOption) *BehaviorService {
 	svc := &BehaviorService{
 		hotPath: hotPath,
 		store:   store,
@@ -497,25 +492,13 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 	}
 	if s.publisher != nil {
 		aggregateID := firstNonEmptyLocal(batchSessionID, batchUserID, occurredAt.Format(time.RFC3339Nano))
-		_ = s.publisher.Publish(ctx, repository.DomainEvent{
-			Type:          event.BehaviorBatchReported,
+		_ = s.publisher.Publish(ctx, messaging.DomainEvent{
+			Type:          "EventBatchReported",
 			AggregateType: "BehaviorBatch",
 			AggregateID:   aggregateID,
 			Payload:       payload,
 			OccurredAt:    occurredAt.Format(time.RFC3339),
 		})
-	}
-	if s.projector != nil {
-		aggregateID := firstNonEmptyLocal(batchSessionID, batchUserID, occurredAt.Format(time.RFC3339Nano))
-		if err := s.projector.Project(ctx, ports.ProjectorEvent{
-			Type:          event.BehaviorBatchReported,
-			AggregateType: "BehaviorBatch",
-			AggregateID:   aggregateID,
-			Payload:       payload,
-			OccurredAt:    occurredAt,
-		}); err != nil {
-			return err
-		}
 	}
 	if s.sessionInvalid != nil && batchUserID != "" && batchSessionID != "" {
 		s.sessionInvalid(batchUserID, batchSessionID)

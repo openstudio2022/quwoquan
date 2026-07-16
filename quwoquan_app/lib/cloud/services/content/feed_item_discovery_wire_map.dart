@@ -64,14 +64,6 @@ extension FeedItemDtoDiscoveryWireMap on FeedItemDto {
       if (supplySource != null && supplySource!.trim().isNotEmpty)
         'supplySource': supplySource,
       if (cards != null && cards!.isNotEmpty) 'cards': cards,
-      if (circleSummaries != null && circleSummaries!.isNotEmpty)
-        'circleSummaries': circleSummaries,
-      if (circleIds != null && circleIds!.isNotEmpty) 'circleIds': circleIds,
-      if (circleNames != null && circleNames!.isNotEmpty)
-        'circleNames': circleNames,
-      if (circleId != null && circleId!.trim().isNotEmpty) 'circleId': circleId,
-      if (circleName != null && circleName!.trim().isNotEmpty)
-        'circleName': circleName,
       if (visibility != null && visibility!.trim().isNotEmpty)
         'visibility': visibility,
       if (intersectionReasons != null && intersectionReasons!.isNotEmpty)

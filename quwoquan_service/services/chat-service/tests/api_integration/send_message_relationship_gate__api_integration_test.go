@@ -4,10 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/alicebob/miniredis/v2"
-
 	rterr "quwoquan_service/runtime/errors"
-	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/services/chat-service/internal/application"
 	chatcache "quwoquan_service/services/chat-service/internal/infrastructure/cache"
 	"quwoquan_service/services/chat-service/internal/infrastructure/persistence"
@@ -15,30 +12,30 @@ import (
 
 func newGateTestMessageService(t *testing.T, gate application.RelationshipGate) (*application.ConversationService, *application.MessageService) {
 	t.Helper()
-	mr, err := miniredis.Run()
-	if err != nil {
-		t.Fatalf("miniredis: %v", err)
-	}
-	t.Cleanup(mr.Close)
-	router := rtredis.MustNewRouter(rtredis.RouterConfig{
-		Scenes: map[string]rtredis.SceneConfig{
-			"general": {Mode: "standalone", Addr: mr.Addr()},
-		},
-		DefaultScene: "general",
-	})
-	t.Cleanup(func() { _ = router.Close() })
 	store := persistence.NewMongoChatStore(requireMongoDB(t))
-	cache := chatcache.NewConversationCache(router.Scene("general"))
-	convSvc := application.NewConversationService(store, cache, nil, testProfileResolver{}, application.AllowRelationshipGateForTest(), nil, nil, nil)
-	msgSvc := application.NewMessageService(store, cache, nil, gate)
+	storage := chatStoragePorts(store)
+	cache := chatcache.NewConversationCache(redisRouter.Scene("general"))
+	convSvc := application.NewConversationService(
+		storage,
+		cache,
+		eventPublisherForContractTest(),
+		testProfileResolver{},
+		application.AllowRelationshipGateForTest(),
+		nil,
+		nil,
+		groupAvatarSchedulerForContractTest(),
+	)
+	msgSvc := application.NewMessageService(storage, cache, eventPublisherForContractTest(), gate, testMediaAssetDeliveryReader{})
 	return convSvc, msgSvc
 }
 
 func TestSendMessage_Direct_RequiresRelationshipGate(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
-	convSvc, msgSvc := newGateTestMessageService(t, stubRelationshipGate{
-		cap: application.RelationshipCapability{},
-	})
+	convSvc, msgSvc := newGateTestMessageService(t, relationshipGateForContractTest(
+		t,
+		application.RelationshipCapability{},
+		nil,
+	))
 
 	conv, err := convSvc.CreateOrReuseDirect(context.Background(), "sender_gate", "peer_gate")
 	if err != nil {
@@ -66,12 +63,14 @@ func TestSendMessage_Direct_RequiresRelationshipGate(t *testing.T) {
 
 func TestSendMessage_Direct_AllowsFormalConversation(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
-	convSvc, msgSvc := newGateTestMessageService(t, stubRelationshipGate{
-		cap: application.RelationshipCapability{
+	convSvc, msgSvc := newGateTestMessageService(t, relationshipGateForContractTest(
+		t,
+		application.RelationshipCapability{
 			CanSendMessage:        true,
 			HasFormalConversation: true,
 		},
-	})
+		nil,
+	))
 
 	conv, err := convSvc.CreateOrReuseDirect(context.Background(), "sender_ok", "peer_ok")
 	if err != nil {

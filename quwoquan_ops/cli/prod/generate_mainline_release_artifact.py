@@ -26,6 +26,9 @@ RELEASE_SERVICES = (
     "circle-service",
     "recommendation-service",
     "product-ops-service",
+    "assistant-service",
+    "tag-service",
+    "entity-service",
 )
 
 
@@ -66,7 +69,7 @@ SERVICE_TEMPLATES: dict[str, dict[str, Any]] = {
         },
         "rec_model_service": {
             "enabled": False,
-            "url": "http://127.0.0.1:8000",
+            "url": "http://recommendation-service:8000",
             "timeout_ms": 80,
         },
         "experiments": {

@@ -8,36 +8,76 @@ class RecommendationApiMetadata {
 
   static const String domain = 'recommendation';
   static const List<String> apiPrefixes = <String>[
-    '/v1/score',
+    '/internal/v1',
+    '/v1/recommendation',
   ];
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
-    'Health': '/health',
-    'Score': '/v1/score',
+    'ActivateRecommendationModelRelease': '/internal/v1/recommendation/model-releases/{releaseId}:activate',
+    'BatchScoreRecommendationCandidates': '/internal/v1/recommendation/model-releases:batch-score',
+    'MarkRecommendationIntersectionsVisited': '/v1/recommendation/intersections/visit',
+    'RollbackRecommendationModelRelease': '/internal/v1/recommendation/model-releases/{releaseId}:rollback',
+    'ScoreRecommendationCandidates': '/internal/v1/recommendation/model-releases:score',
+    'StageRecommendationModelRelease': '/internal/v1/recommendation/model-releases',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
-    'Health': 'GET',
-    'Score': 'POST',
+    'ActivateRecommendationModelRelease': 'POST',
+    'BatchScoreRecommendationCandidates': 'POST',
+    'MarkRecommendationIntersectionsVisited': 'POST',
+    'RollbackRecommendationModelRelease': 'POST',
+    'ScoreRecommendationCandidates': 'POST',
+    'StageRecommendationModelRelease': 'POST',
   };
 
   /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
   static const Map<String, String> operationToAuthMode = <String, String>{
-    'Health': 'public',
-    'Score': 'public',
+    'ActivateRecommendationModelRelease': 'required',
+    'BatchScoreRecommendationCandidates': 'required',
+    'MarkRecommendationIntersectionsVisited': 'required',
+    'RollbackRecommendationModelRelease': 'required',
+    'ScoreRecommendationCandidates': 'required',
+    'StageRecommendationModelRelease': 'required',
   };
 
-  /// 响应读模型：operation -> 端侧 DTO 类名（service.yaml response_body 真相源，仅 object/page 形态）。
+  /// 已绑定端侧强类型的响应读模型：operation -> Dart 契约类名。
   static const Map<String, String> operationToResponseModel = <String, String>{
   };
 
   /// 响应体形态：object 单对象 | page 分页列表（items） | ack 仅状态确认（无读模型）。
   static const Map<String, String> operationToResponseKind = <String, String>{
+    'MarkRecommendationIntersectionsVisited': 'ack',
   };
 
-  static const String healthOperation = 'Health';
-  static const String scoreOperation = 'Score';
+  static const String activateRecommendationModelReleaseOperation = 'ActivateRecommendationModelRelease';
+  static const String batchScoreRecommendationCandidatesOperation = 'BatchScoreRecommendationCandidates';
+  static const String markRecommendationIntersectionsVisitedOperation = 'MarkRecommendationIntersectionsVisited';
+  static const String rollbackRecommendationModelReleaseOperation = 'RollbackRecommendationModelRelease';
+  static const String scoreRecommendationCandidatesOperation = 'ScoreRecommendationCandidates';
+  static const String stageRecommendationModelReleaseOperation = 'StageRecommendationModelRelease';
 
-  static const String healthPath = '/health';
-  static const String scorePath = '/v1/score';
+  static const String activateRecommendationModelReleasePathTemplate = '/internal/v1/recommendation/model-releases/{releaseId}:activate';
+  static String activateRecommendationModelReleasePath({required String releaseId}) {
+    return _fillPath(activateRecommendationModelReleasePathTemplate, <String, String>{
+      'releaseId': releaseId,
+    });
+  }
+  static const String batchScoreRecommendationCandidatesPath = '/internal/v1/recommendation/model-releases:batch-score';
+  static const String markRecommendationIntersectionsVisitedPath = '/v1/recommendation/intersections/visit';
+  static const String rollbackRecommendationModelReleasePathTemplate = '/internal/v1/recommendation/model-releases/{releaseId}:rollback';
+  static String rollbackRecommendationModelReleasePath({required String releaseId}) {
+    return _fillPath(rollbackRecommendationModelReleasePathTemplate, <String, String>{
+      'releaseId': releaseId,
+    });
+  }
+  static const String scoreRecommendationCandidatesPath = '/internal/v1/recommendation/model-releases:score';
+  static const String stageRecommendationModelReleasePath = '/internal/v1/recommendation/model-releases';
+
+  static String _fillPath(String template, Map<String, String> params) {
+    var path = template;
+    params.forEach((key, value) {
+      path = path.replaceAll('{$key}', Uri.encodeComponent(value));
+    });
+    return path;
+  }
 }

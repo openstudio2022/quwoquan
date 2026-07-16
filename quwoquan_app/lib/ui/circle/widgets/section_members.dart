@@ -4,6 +4,7 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_stats_list_view_data.dart';
 import 'package:quwoquan_app/ui/circle/services/circle_stats_row_wire.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// 圈子成员板块：展示成员摘要列表（含独立 loading/error 状态）。
 class SectionMembers extends ConsumerStatefulWidget {
@@ -37,14 +38,17 @@ class _SectionMembersState extends ConsumerState<SectionMembers> {
       _errorSemantic = null;
     });
     try {
-      final repo = ref.read(circleRepositoryProvider);
-      final roster = await repo.listMembers(widget.circleId, limit: 6);
+      final roster = await ref
+          .read(circleDetailMembershipQueryProvider)
+          .listMemberships(
+            CircleMembershipListQuery(circleId: widget.circleId, limit: 6),
+          );
       if (!mounted) {
         return;
       }
       setState(() {
-        _members = roster
-            .map(circleStatsMemberRowFromRosterItem)
+        _members = roster.items
+            .map(circleStatsMemberRowFromMembership)
             .toList(growable: false);
         _isLoading = false;
       });

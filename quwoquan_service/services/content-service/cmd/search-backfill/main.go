@@ -40,6 +40,7 @@ func main() {
 	esIndex := flag.String("es-index", "", "ES index name (default: quwoquan_objects)")
 	esEndpoints := flag.String("es-endpoints", "", "comma-separated ES endpoints (overrides SEARCH_ES_ENDPOINTS)")
 	batchSize := flag.Int("batch-size", 0, "bulk batch size (0 = default)")
+	requestTimeout := flag.Duration("request-timeout", 0, "per-request ES timeout for this reconcile run (0 = configured/default)")
 	env := flag.String("env", "", "environment label (for logging)")
 	flag.Parse()
 
@@ -62,6 +63,9 @@ func main() {
 		log.Fatalf("[search-backfill] no ES endpoints: set SEARCH_ES_ENDPOINTS or --es-endpoints")
 	}
 	esCfg.Enabled = true
+	if *requestTimeout > 0 {
+		esCfg.RequestTimeoutMs = int(requestTimeout.Milliseconds())
+	}
 
 	ctx := context.Background()
 	client, err := mongo.Connect(options.Client().ApplyURI(*mongoURI))

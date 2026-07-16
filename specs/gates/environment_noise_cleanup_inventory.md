@@ -47,7 +47,7 @@
 
 - `beta-local`
   - `quwoquan_ops/cli/beta/start_beta-local.sh` 已改为启动时覆盖写日志
-  - `quwoquan_ops/cli/lib/beta_manual_lifecycle.sh` 已改为覆盖写 `.qwq_output/env/beta/local/beta-local/*.log`
+  - `quwoquan_ops/cli/lib/beta_manual_lifecycle.sh` 已改为覆盖写 `QWQ_OUTPUT_ROOT/env/beta/local/beta-local/process/*.log`
 
 结论：
 
@@ -110,8 +110,8 @@
 
 验证结果：
 
-- 当前轮次 `.qwq_output/env/beta/local/beta-local/platform-ops.log` 不再出现 `load config_schema.yaml failed`
-- 当前轮次 `.qwq_output/env/beta/local/beta-local/product-ops.log` 不再出现 `config report failed`
+- 当前轮次 `QWQ_OUTPUT_ROOT/env/beta/local/beta-local/process/platform-ops.log` 不再出现 `load config_schema.yaml failed`
+- 当前轮次 `QWQ_OUTPUT_ROOT/env/beta/local/beta-local/process/product-ops.log` 不再出现 `config report failed`
 - `go test ./cmd/api`
   - `quwoquan_service/services/platform-ops-service`
   - `quwoquan_service/services/product-ops-service`
@@ -124,7 +124,7 @@
 现状：
 
 - `gamma-local` 当前健康检查全绿
-- 过往 `.qwq_output/env/gamma/runs/*/app-launch-*.log` 中存在：
+- 过往 `QWQ_OUTPUT_ROOT/env/gamma/runs/*/app-launch-*.log` 中存在：
   - 旧代码编译失败
   - `Lost connection to device.`
 
@@ -149,15 +149,15 @@
 
 - `gamma-local`
   - 当前 health 已覆盖主路径
-  - `.qwq_output/env/gamma/local/gamma-local/runs` 已在本轮过往产物清理中移除
-  - 当前需关注的是本轮 `.qwq_output/env/gamma/local/gamma-local/*.json` 证据，而非旧 runtime 目录
+  - 旧 gamma-local runtime 目录已在本轮过往产物清理中移除
+  - 当前需关注的是本轮 `QWQ_OUTPUT_ROOT/env/gamma/local/gamma-local/process/*.json` 证据，而非旧 runtime 目录
 
 ### 8. 过往 report / log 的保留策略
 
 当前状态：
 
 - 运行态日志已按轮次覆盖
-- `.qwq_output/env/repo/runs/**` 已执行 retention 收缩：每个环境/目标/命令分组仅保留最新一份时间戳报告
+- `QWQ_OUTPUT_ROOT/env/repo/runs/**` 已执行 retention 收缩：每个环境/目标/命令分组仅保留最新一份时间戳报告
 
 后续建议：
 

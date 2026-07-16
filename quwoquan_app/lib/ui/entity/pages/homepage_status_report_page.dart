@@ -329,7 +329,6 @@ class _HomepageStatusReportPageState
         return;
       case UiErrorActionType.openSettings:
       case UiErrorActionType.login:
-      case UiErrorActionType.back:
         return;
     }
   }
@@ -341,10 +340,6 @@ class _HomepageStatusReportPageState
         await _load();
         return;
       case UiErrorActionType.dismiss:
-      case UiErrorActionType.back:
-        if (mounted && Navigator.of(context).canPop()) {
-          Navigator.of(context).pop();
-        }
         return;
       case UiErrorActionType.openSettings:
       case UiErrorActionType.login:

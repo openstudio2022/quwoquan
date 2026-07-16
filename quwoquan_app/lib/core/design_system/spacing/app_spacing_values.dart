@@ -1,39 +1,27 @@
 part of 'app_spacing.dart';
+
 class AppSpacing {
   // ==================== 扩展语义尺寸（用于记录页面去字面量） ====================
   /// 占位/未测量维度（如媒体元数据占位）
-  static const double zero = 0.0;
-  static const double one = 1.0;
-  static const double hairline = 0.5;
-  static const double two = 2.0;
-  static const double oneHalf = 1.5;
-  static const double six = 6.0;
-  static const double twoPointFour = 2.4;
-  static const double three = 3.0;
-  static const double seven = 7.0;
-  static const double ten = 10.0;
-  static const double fourteen = 14.0;
-  static const double eighteen = 18.0;
-  static const double twenty = 20.0;
-  static const double thirtySix = 36.0;
-  static const double twentyEight = 28.0;
-  static const double forty = 40.0;
-  static const double oneHundred = 100.0;
-  static const double twoHundredTwenty = 220.0;
-  static const double threeHundredTwenty = 320.0;
-  static const double radiusTwo = 2.0;
-  static const double radiusTen = 10.0;
-  static const double radiusEighteen = 18.0;
-  static const double radiusTwenty = 20.0;
-  static const double radiusTwentyFour = 24.0;
-  static const double radiusTwentyEight = 28.0;
-  static const double radiusThirtyTwo = 32.0;
+  static const double zero = 0.0, one = 1.0;
+  static const double hairline = 0.5, two = 2.0;
+  static const double oneHalf = 1.5, six = 6.0;
+  static const double twoPointFour = 2.4, three = 3.0;
+  static const double seven = 7.0, ten = 10.0;
+  static const double fourteen = 14.0, eighteen = 18.0;
+  static const double twenty = 20.0, thirtySix = 36.0;
+  static const double twentyEight = 28.0, forty = 40.0;
+  static const double oneHundred = 100.0, twoHundredTwenty = 220.0;
+  static const double threeHundredTwenty = 320.0, radiusTwo = 2.0;
+  static const double radiusTen = 10.0, radiusEighteen = 18.0;
+  static const double radiusTwenty = 20.0, radiusTwentyFour = 24.0;
+  static const double radiusTwentyEight = 28.0, radiusThirtyTwo = 32.0;
   static const double radiusNinetyNine = 99.0;
   // ==================== 响应式断点 ====================
   static const double compactBreakpoint = 360.0;
   static const double markdownCompactBreakpoint = 420.0;
-  static const double expandedBreakpoint = 600.0;
-  static const double wideBreakpoint = 1024.0;
+  static const double expandedBreakpoint = 600.0, wideBreakpoint = 1024.0;
+
   /// Web/桌面公开内容入口布局语义尺寸。
   static const double webContentMaxWidth = 1120.0;
   static const double webInstallBannerCompactHeight = 72.0;
@@ -45,12 +33,11 @@ class AppSpacing {
   static const double webPcToolbarActionSize = 36.0;
   static const double webPcToolbarActionIconSize = 18.0;
   static const double webPcMasonryColumnWidth = 236.0;
-  static const double webPcMasonryGap = 20.0;
-  static const double webPcReadingMinWidth = 720.0;
-  static const double webPcReadingMaxWidth = 820.0;
-  static const double webPcRightRailWidth = 240.0;
+  static const double webPcMasonryGap = 20.0, webPcReadingMinWidth = 720.0;
+  static const double webPcReadingMaxWidth = 820.0, webPcRightRailWidth = 240.0;
   static const double webPcInstallCtaCardWidth = 260.0;
   static const double webPcShellMaxWidth = 1320.0;
+
   /// 宽屏认证态页面（消息/我的/设置/更多）统一的内容最大宽度。
   /// 中间内容区固定该宽度并居中，左右用 page background 填充以区分阅读区。
   static const double webPageContentMaxWidth = 860.0;
@@ -59,8 +46,7 @@ class AppSpacing {
   static const double webPcWelcomeHeroHeight = 144.0;
   static const double webPcWelcomeVisualDiameter = 88.0;
   static const double webPcDownloadQrSize = 64.0;
-  static const double webPcCreateCardWidth = 260.0;
-  static const double webPcFeedCardWidth = 220.0;
+  static const double webPcCreateCardWidth = 260.0, webPcFeedCardWidth = 220.0;
   static const double webPcHeroCardHeight = 240.0;
   static const double webPcFeedCardImageHeight = 124.0;
   static const double webPcContextTabSelectedIndicatorWidth = 20.0;
@@ -81,95 +67,132 @@ class AppSpacing {
   );
   static const Duration webPcLoginSurfaceDuration = Duration(milliseconds: 220);
   // ==================== 基础间距 ====================
-  /// 极小间距: 4.0
   static const double xs = 4.0;
-  /// 小间距: 8.0
+
   static const double sm = 8.0;
-  /// 中等间距: 16.0
+
   static const double md = 16.0;
-  /// 大间距: 24.0
+
   static const double lg = 24.0;
-  /// 超大间距: 32.0
+
   static const double xl = 32.0;
   // ==================== 组件尺寸 ====================
-  /// 按钮尺寸: 44.0
   static const double buttonSize = 44.0;
-  /// 按钮高度: 48.0
+
   static const double buttonHeight = 48.0;
-  /// 大按钮尺寸: 48.0
+
   static const double largeButtonSize = 48.0;
-  /// 小按钮尺寸: 32.0
+
   static const double smallButtonSize = 32.0;
+
   /// 两状态登录品牌图标容器尺寸（完整应用图标：蓝底圆角 + 花瓣）。
   static const double loginBrandMarkSize = 64.0;
+
   /// 两状态登录品牌图标字号。
   static const double loginBrandMarkIconSize = 36.0;
+
   /// 两状态登录品牌图标圆角（≈ iOS 图标圆角比例 0.2237 * 尺寸）。
   static const double loginBrandMarkRadius = 14.5;
+
   /// 两状态登录 Account Area 固定高度（容纳加高输入框 + 发码后验证码区，保持各状态等高）。
   /// 收紧到常见 iPhone 安全区一屏可容纳，避免底部"其他方式"被截断或触发滚动。
   static const double loginAccountAreaHeight = 196.0;
+
   /// 两状态登录已记住账号头像尺寸。
   static const double loginAvatarSize = 72.0;
+  static const Duration loginAvatarRevealDuration = webPcLoginSurfaceDuration;
+
   /// 两状态登录主按钮高度。
   static const double loginPrimaryButtonHeight = 56.0;
+
   /// 两状态登录其他方式圆形入口尺寸。
   static const double loginOtherMethodSize = 46.0;
+
   /// 两状态登录其他方式品牌图标字号（微信/QQ/支付宝/手机均为白色字形，圆内视觉较满）。
   static const double loginOtherMethodIconSize = 17.0;
+
   /// 手机号验证码输入框高度。
   static const double loginPhoneFieldHeight = 56.0;
+
   /// 验证码单格尺寸。
   static const double loginOtpBoxSize = 48.0;
+
   /// 验证码单格最小尺寸，窄屏下允许轻微收缩避免横向溢出。
   static const double loginOtpBoxMinSize = 44.0;
+
   /// 验证码单格间距。
   static const double loginOtpBoxGap = 10.0;
+
   /// 登录页整体最大内容宽度（iPhone 高保宽度内收敛，iPad/Web 居中）。
   static const double loginFrameMaxWidth = 430.0;
+
   /// 登录页左右安全边距。
   static const double loginFrameHorizontalPadding = 28.0;
+
   /// 登录页正文纵向边距。
   static const double loginFrameVerticalPadding = 18.0;
+
   /// 登录页顶部栏到品牌区距离。
   static const double loginTopBarToHeroGap = 18.0;
+
   /// 登录页品牌名到标题距离。
   static const double loginBrandToTitleGap = 14.0;
+
   /// 登录页标题到账号区距离。
   static const double loginHeroToAccountGap = 24.0;
+
   /// 登录页账号区到主按钮距离。
   static const double loginAccountToButtonGap = 20.0;
+
   /// 登录页主按钮到协议距离。
   static const double loginButtonToAgreementGap = 20.0;
+
   /// 登录页协议到其他登录方式距离。
   static const double loginAgreementToOtherGap = 18.0;
+
   /// 登录页其他方式标题到图标行距离。
   static const double loginOtherTitleToIconsGap = 12.0;
+
   /// 手机号输入初始态账号区高度，只容纳单行输入框，避免挤压首屏底部入口。
   static const double loginPhoneIdleAccountAreaHeight = loginPhoneFieldHeight;
+
   /// 登录页输入框圆角。
   static const double loginInputRadius = 18.0;
+
   /// 登录页验证码格圆角。
   static const double loginOtpBoxRadius = 12.0;
+
   /// 登录页返回账号态三列其他方式最大宽度。
   static const double loginOtherMethodsThreeColumnWidth = 320.0;
   // ==================== 按钮语义尺寸（小、正常、中、大，不受容器约束） ====================
-  /// 按钮高度 xs: 28.0
   static const double buttonHeightXs = 28.0;
-  /// 按钮高度 sm: 32.0
+
   static const double buttonHeightSm = 32.0;
+
   /// 按钮高度 md: 36.0（与「重置」等次要操作一致）
   static const double buttonHeightMd = 36.0;
-  /// 按钮高度 lg: 48.0
+
   static const double buttonHeightLg = 48.0;
-  /// 图标按钮最小点击区域 sm: 44.0
+
   static const double iconButtonMinSizeSm = 44.0;
-  /// 图标按钮最小点击区域 md: 64.0
+
   static const double iconButtonMinSizeMd = 64.0;
+
   /// 统一可点击区域最低标准（WCAG 触控建议）
   static const double minInteractiveSize = 44.0;
+
+  /// 我的主页转发互动行最小高度。
+  static const double profileShareInteractionRowMinHeight = 104.0;
+
+  /// 我的主页转发互动头像、未读角标与目标预览。
+  static const double profileShareInteractionAvatarSize = 44.0;
+  static const double profileShareInteractionUnreadBadgeSize = 18.0;
+  static const double profileShareInteractionPreviewSize = 64.0;
+  static const double profileShareDirectionSegmentMinWidth = 64.0;
+
   /// 首页统一对象推荐卡最大宽度（横滑流内单卡上限，避免过宽）。
   static const double homeObjectCardMaxWidth = 260.0;
+
   /// 首页统一对象推荐卡横滑流固定高度（含两行文案 + 行动按钮触控余量）。
   static const double homeObjectCardRailHeight = 88.0;
   static const double objectIntersectionCardWideWidth = 132.0;
@@ -177,38 +200,46 @@ class AppSpacing {
   // ==================== 文本行高语义 ====================
   /// 单行紧凑标题/标签（line height 倍数 1.0）
   static const double textLineHeightSingle = 1.0;
+
   /// 紧凑文案行高，适用于 badge / 紧凑标签
   static const double textLineHeightCompact = 1.2;
+
   /// 极紧标题行高，适用于用户名/时间等单行紧凑排版
   static const double textLineHeightDense = 1.02;
+
   /// 默认正文行高，适用于表单与说明文案
   static const double textLineHeightBody = 1.35;
+
   /// 宽松正文行高，适用于 feed 文本内容
   static const double textLineHeightBodyRelaxed = 1.36;
+
   /// 标题行高，适用于中大字号标题
   static const double textLineHeightHeadline = 1.4;
+
   /// 标签/说明行高，适用于 footnote / caption
   static const double textLineHeightLabel = 1.5;
+
   /// 长文正文行高，适用于文章分页阅读场景
   static const double textLineHeightArticleBody = 1.82;
+
   /// 辅助文案行高，适用于 footnote 级别的说明文本
   static const double textLineHeightFootnote = 1.3;
+
   /// 角标说明行高，适用于 caption 级别的短说明文本
   static const double textLineHeightCaption = 1.25;
+
   /// 获取文案按钮内边距（按断点适配，不受容器约束）
   static EdgeInsets buttonPadding(BuildContext context, String size) =>
       _appSpacingButtonPadding(context, size);
+
   /// 获取文案按钮高度（固定语义值，不受容器约束）
   static double buttonHeightForSize(String size) =>
       _appSpacingButtonHeightForSize(size);
   // ==================== 按钮紧凑语义（每档尺寸对应更小内边距/高度，用于关注等紧凑场景） ====================
-  /// 紧凑按钮高度 sm: 26.0
   static const double buttonHeightSmCompact = 26.0;
 
-  /// 紧凑按钮高度 md: 28.0（复用 xs）
   static const double buttonHeightMdCompact = 28.0;
 
-  /// 紧凑按钮高度 lg: 32.0（复用 sm）
   static const double buttonHeightLgCompact = 32.0;
 
   /// 获取文案按钮内边距（紧凑模式：左右上下更小，语义统一）
@@ -227,31 +258,19 @@ class AppSpacing {
 
   /// 大头像尺寸: 64.0（向后兼容）
   static const double largeAvatarSize = 64.0;
-
   // ==================== 头像语义尺寸（AVATAR_DESIGN_SYSTEM，Mobile 基准） ====================
-  /// 个人/作者/AI 头像 xs: 24px
-  static const double avatarUserXs = 24.0;
-  static const double avatarCircleXs = 24.0;
+  static const double avatarUserXs = 24.0, avatarCircleXs = 24.0;
 
-  /// 个人/作者/AI 头像 sm: 32px
-  static const double avatarUserSm = 32.0;
-  static const double avatarCircleSm = 32.0;
+  static const double avatarUserSm = 32.0, avatarCircleSm = 32.0;
 
-  /// 个人/作者/AI 头像 md: 40px
-  static const double avatarUserMd = 40.0;
-  static const double avatarCircleMd = 40.0;
+  static const double avatarUserMd = 40.0, avatarCircleMd = 40.0;
 
-  /// 个人/作者/AI 头像 lg: 56px
-  static const double avatarUserLg = 56.0;
-  static const double avatarCircleLg = 56.0;
+  static const double avatarUserLg = 56.0, avatarCircleLg = 56.0;
 
-  /// 个人/作者/AI 头像 xl: 72px
-  static const double avatarUserXl = 72.0;
-  static const double avatarCircleXl = 72.0;
+  static const double avatarUserXl = 72.0, avatarCircleXl = 72.0;
 
   /// 横向头像栏高度
   static const double avatarRailHeight = 90.0;
-
   // ==================== 个人主页统计行（关注/粉丝/圈子列表行） ====================
   /// 关系行/圈子行/骨架行的左侧圆形头像直径
   static const double profileStatsRowAvatarSize = 52.0;
@@ -261,15 +280,17 @@ class AppSpacing {
 
   /// 关注按钮骨架占位胶囊高度
   static const double profileStatsFollowSkeletonHeight = 34.0;
-
   // ==================== 欢迎页动效（Figma WelcomeScreen） ====================
-  static const double welcomeGraphicDiameter = 256.0;
-  static const double welcomePetalWidth = 52.0;
+  static const double welcomeGraphicDiameter = 256.0, welcomePetalWidth = 52.0;
   static const double welcomePetalHeight = 94.0;
   static const double welcomePetalRadialOffset = 54.0;
 
   /// 花瓣下层径向柔光直径（羽化至透明，提亮花心叠色区；刻意避开早前「独立光圈」像素断言）。
   static const double welcomeBloomDiameter = 92.0;
+
+  /// 花蕊外层柔光与中心实心圆直径；欢迎页与全平台应用图标共用。
+  static const double welcomeStamenHaloDiameter = 24.0;
+  static const double welcomeStamenCoreDiameter = 9.0;
 
   /// 圈子头像圆角比例（border-radius: 20%）
   static const double avatarCircleBorderRadiusRatio = 0.2;
@@ -431,12 +452,6 @@ class AppSpacing {
 
   /// 评论赞/踩图标尺寸。
   static const double commentReactionIconSize = iconSmall;
-
-  /// 评论排序锚定菜单最小宽度。
-  static const double commentSortMenuMinWidth = 132.0;
-
-  /// 评论排序锚定菜单单项高度。
-  static const double commentSortMenuItemHeight = minInteractiveSize;
 
   /// 侵入式分屏评论区默认占屏高比例（评论区 2/3，媒体区 1/3）。
   static const double immersiveCommentSheetRatio = 0.66;
@@ -660,7 +675,6 @@ class AppSpacing {
   /// 底部工具栏最小触控高度
   static const double toolbarMinTouchHeight = 48.0;
 
-  /// 模态框头部高度: 56.0
   static const double modalHeaderHeight = 56.0;
 
   /// 创作入口抽屉最大高度比例 (67vh)
@@ -715,13 +729,10 @@ class AppSpacing {
   /// 帖子间距 - 极小
   static const double postSpacingXs = 4.0;
 
-  /// 故事高度: 80.0
   static const double storyHeight = 80.0;
 
-  /// 用户名最小宽度: 60.0
   static const double usernameMinWidth = 60.0;
 
-  /// 关注按钮宽度: 80.0
   static const double followButtonWidth = 80.0;
 
   /// 关注按钮宽度（紧凑，用于媒体查看器顶栏，左右间距更小）: 56.0
@@ -779,13 +790,10 @@ class AppSpacing {
   static const double immersiveEngagementActionLabelSize = 11.0;
 
   // ==================== 图标尺寸 ====================
-  /// 小图标: 16.0
   static const double iconSmall = 16.0;
 
-  /// 中图标: 24.0
   static const double iconMedium = 24.0;
 
-  /// 大图标: 32.0
   static const double iconLarge = 32.0;
 
   /// iOS 列表行尾导航 chevron 尺寸（介于小/中图标之间，对齐系统 disclosure indicator）
@@ -853,7 +861,6 @@ class AppSpacing {
   /// 圆形: 999.0 (小头像、圆形按钮、圆形图标)
   static const double circularBorderRadius = 999.0;
 
-  /// 完全圆形: 999.0
   static const double fullBorderRadius = 999.0;
 
   // ==================== 语义间距（基础值，Mobile屏幕） ====================
@@ -869,24 +876,18 @@ class AppSpacing {
 
   // ==================== 语义间距快捷常量（向后兼容） ====================
   // 组内间距
-  static const double intraGroupXs = 4.0;
-  static const double intraGroupSm = 6.0;
-  static const double intraGroupMd = 8.0;
-  static const double intraGroupLg = 12.0;
+  static const double intraGroupXs = 4.0, intraGroupSm = 6.0;
+  static const double intraGroupMd = 8.0, intraGroupLg = 12.0;
   static const double intraGroupXl = 16.0;
 
   // 组间间距
-  static const double interGroupXs = 8.0;
-  static const double interGroupSm = 12.0;
-  static const double interGroupMd = 16.0;
-  static const double interGroupLg = 24.0;
+  static const double interGroupXs = 8.0, interGroupSm = 12.0;
+  static const double interGroupMd = 16.0, interGroupLg = 24.0;
   static const double interGroupXl = 32.0;
 
   // 容器间距
-  static const double containerXs = 8.0;
-  static const double containerSm = 12.0;
-  static const double containerMd = 16.0;
-  static const double containerLg = 20.0;
+  static const double containerXs = 8.0, containerSm = 12.0;
+  static const double containerMd = 16.0, containerLg = 20.0;
   static const double containerXl = 24.0;
 
   // ==================== 响应式间距方法 ====================

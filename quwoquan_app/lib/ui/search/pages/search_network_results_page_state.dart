@@ -59,11 +59,11 @@ class _SearchNetworkResultsPageState
     _activeTabId = _tabs.any((tab) => tab.id == initialTabId)
         ? initialTabId!
         : _tabAll;
-    _scheduleRefresh(immediate: true);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
       }
+      _scheduleRefresh(immediate: true);
       _focusNode.requestFocus();
       _trackPageImpressionIfNeeded();
     });
@@ -440,8 +440,7 @@ class _SearchNetworkResultsPageState
       final isVideo = item.contentType == 'video';
       final isArticle = item.contentType == 'article';
       // §3：发现/交集线索区的交集句只来自云侧 primaryText；无 primaryText 不拼装。
-      final intersectionSentence =
-          item.intersectionReason?.primaryText.trim() ?? '';
+      final intersectionSentence = _contentIntersectionPrimaryText(item);
       models.add(
         _IntersectionCardModel(
           targetType: _IntersectionTargetType.post,
@@ -722,12 +721,79 @@ class _SearchNetworkResultsPageState
   }
 
   // 云侧交集结论句（G2 端只读 primaryText，不回退 displayText/label，不本地拼装）。
+  static String _contentIntersectionPrimaryText(PostSearchItemView item) {
+    final reason = item.intersectionReason;
+    if (reason == null) {
+      return '';
+    }
+    final displayReason = displayReadyIntersectionReason(
+      reason,
+      contextObjectTarget: IntersectionTarget(
+        objectType: 'post',
+        objectId: item.postId,
+        objectKind: 'content',
+        routeId: 'workBrowser',
+      ),
+    );
+    return displayReason?.primaryText.trim() ?? '';
+  }
+
   static String _hitIntersectionPrimaryText(SearchHit hit) {
     final reason = hit.payload.toWireMap()['intersectionReason'];
     if (reason is Map) {
-      return reason['primaryText']?.toString().trim() ?? '';
+      final displayReason = displayReadyIntersectionReason(
+        IntersectionReason.fromMap(Map<String, dynamic>.from(reason)),
+        contextObjectTarget: _searchHitContextTarget(hit),
+      );
+      return displayReason?.primaryText.trim() ?? '';
     }
     return '';
+  }
+
+  static IntersectionTarget? _searchHitContextTarget(SearchHit hit) {
+    final id = hit.objectId.trim();
+    if (id.isEmpty) {
+      return null;
+    }
+    switch (hit.objectType) {
+      case SearchObjectType.contentPost:
+        return IntersectionTarget(
+          objectType: 'post',
+          objectId: id,
+          objectKind: 'content',
+          routeId: 'workBrowser',
+        );
+      case SearchObjectType.circleCircle:
+        return IntersectionTarget(
+          objectType: 'circle',
+          objectId: id,
+          objectKind: 'circle',
+          routeId: 'circleDetail',
+        );
+      case SearchObjectType.entityHomepage:
+      case SearchObjectType.locationPlace:
+      case SearchObjectType.integrationLocationPoi:
+        return IntersectionTarget(
+          objectType: 'homepage',
+          objectId: id,
+          objectKind: 'place',
+          routeId: 'homepageDetail',
+        );
+      case SearchObjectType.userProfile:
+        return IntersectionTarget(
+          objectType: 'user',
+          objectId: id,
+          objectKind: 'person',
+          routeId: 'userProfile',
+        );
+      case SearchObjectType.webDocument:
+      case SearchObjectType.chatContact:
+      case SearchObjectType.chatConversation:
+      case SearchObjectType.chatMessage:
+      case SearchObjectType.circleGroup:
+      case SearchObjectType.tag:
+        return null;
+    }
   }
 
   _EntityTopResultModel? _entityTopResult() {

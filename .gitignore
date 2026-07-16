@@ -66,6 +66,10 @@ ref/
 # All runtime-phase output lives here (gitignored); only publish/** stays version-controlled.
 .qwq_output/
 
+# Persistent local runtime state (PKI, volumes, control snapshots, instance state).
+# This root is not safe for broad output cleanup; reset/rotation must be category-scoped.
+.qwq_state/
+
 # Retired generated roots and local-only assistant state.
 .mainline-release-artifact/
 quwoquan_app/assistant/
@@ -113,7 +117,8 @@ quwoquan_data/data/
 # and quwoquan_ops/gate/verify_root_layout.py fails when they exist in repo root.
 .qwq_output/runs/
 state/
-runtime/
+/runtime/
+# App runtime verification scripts are source assets and must stay trackable.
 app_log/
 tmp/
 build/
@@ -131,3 +136,10 @@ quwoquan_service/services/*/state/
 
 # Git worktrees
 .worktrees/
+
+# 阿里云号码认证客户端 SDK 由受控构建缓存注入，禁止提交授权二进制。
+quwoquan_app/vendor/commercial_auth/aliyun/android/*.aar
+quwoquan_app/vendor/commercial_auth/aliyun/android/*.jar
+quwoquan_app/vendor/commercial_auth/aliyun/ios/*.framework/
+quwoquan_app/vendor/commercial_auth/aliyun/ios/*.xcframework/
+quwoquan_app/vendor/commercial_auth/aliyun/ios/*.bundle/

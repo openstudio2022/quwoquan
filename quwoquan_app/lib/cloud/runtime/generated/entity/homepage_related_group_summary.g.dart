@@ -7,6 +7,10 @@ class HomepageRelatedGroupSummary {
   final int memberCount;
   final String? linkedHomepageId;
   final String? linkedHomepageTitle;
+  final String ownerUserId;
+  final String ownerDisplayNameSnapshot;
+  final String ownerAvatarUrlSnapshot;
+  final String evidenceSnapshotId;
 
   HomepageRelatedGroupSummary({
     this.circleId = '',
@@ -14,15 +18,23 @@ class HomepageRelatedGroupSummary {
     this.memberCount = 0,
     this.linkedHomepageId,
     this.linkedHomepageTitle,
+    this.ownerUserId = '',
+    this.ownerDisplayNameSnapshot = '',
+    this.ownerAvatarUrlSnapshot = '',
+    this.evidenceSnapshotId = '',
   });
 
   factory HomepageRelatedGroupSummary.fromMap(Map<String, dynamic> m) {
     return HomepageRelatedGroupSummary(
-      circleId: m['circleId']?.toString() ?? m['id']?.toString() ?? '',
+      circleId: m['circleId']?.toString() ?? '',
       name: m['name']?.toString() ?? '',
       memberCount: (m['memberCount'] as num?)?.toInt() ?? 0,
       linkedHomepageId: m['linkedHomepageId']?.toString() ?? null,
       linkedHomepageTitle: m['linkedHomepageTitle']?.toString() ?? null,
+      ownerUserId: m['ownerUserId']?.toString() ?? '',
+      ownerDisplayNameSnapshot: m['ownerDisplayNameSnapshot']?.toString() ?? '',
+      ownerAvatarUrlSnapshot: m['ownerAvatarUrlSnapshot']?.toString() ?? '',
+      evidenceSnapshotId: m['evidenceSnapshotId']?.toString() ?? '',
     );
   }
 
@@ -33,6 +45,10 @@ class HomepageRelatedGroupSummary {
       'memberCount': memberCount,
       'linkedHomepageId': linkedHomepageId,
       'linkedHomepageTitle': linkedHomepageTitle,
+      'ownerUserId': ownerUserId,
+      'ownerDisplayNameSnapshot': ownerDisplayNameSnapshot,
+      'ownerAvatarUrlSnapshot': ownerAvatarUrlSnapshot,
+      'evidenceSnapshotId': evidenceSnapshotId,
     };
   }
 
@@ -42,6 +58,10 @@ class HomepageRelatedGroupSummary {
     int? memberCount,
     String? linkedHomepageId,
     String? linkedHomepageTitle,
+    String? ownerUserId,
+    String? ownerDisplayNameSnapshot,
+    String? ownerAvatarUrlSnapshot,
+    String? evidenceSnapshotId,
   }) {
     return HomepageRelatedGroupSummary(
       circleId: circleId ?? this.circleId,
@@ -49,7 +69,10 @@ class HomepageRelatedGroupSummary {
       memberCount: memberCount ?? this.memberCount,
       linkedHomepageId: linkedHomepageId ?? this.linkedHomepageId,
       linkedHomepageTitle: linkedHomepageTitle ?? this.linkedHomepageTitle,
+      ownerUserId: ownerUserId ?? this.ownerUserId,
+      ownerDisplayNameSnapshot: ownerDisplayNameSnapshot ?? this.ownerDisplayNameSnapshot,
+      ownerAvatarUrlSnapshot: ownerAvatarUrlSnapshot ?? this.ownerAvatarUrlSnapshot,
+      evidenceSnapshotId: evidenceSnapshotId ?? this.evidenceSnapshotId,
     );
   }
 }
-

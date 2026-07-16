@@ -9,25 +9,13 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"quwoquan_service/services/rtc-service/internal/application"
 )
 
-// RoomAdapter abstracts LiveKit room management operations.
-type RoomAdapter interface {
-	CreateRoom(ctx context.Context, roomName string, maxParticipants int) error
-	DeleteRoom(ctx context.Context, roomName string) error
-	ListParticipants(ctx context.Context, roomName string) ([]RoomParticipant, error)
-	RemoveParticipant(ctx context.Context, roomName string, identity string) error
-	StartRoomCompositeEgress(ctx context.Context, roomName string, outputBucket string) (string, error)
-	StopEgress(ctx context.Context, egressID string) error
-}
+var _ application.RoomManager = (*LiveKitRoomAdapter)(nil)
 
-type RoomParticipant struct {
-	Identity string `json:"identity"`
-	SID      string `json:"sid"`
-	State    string `json:"state"`
-}
-
-// LiveKitRoomAdapter implements RoomAdapter via LiveKit's TWIRP HTTP API.
+// LiveKitRoomAdapter 通过 LiveKit TWIRP API 实现应用层房间端口。
 type LiveKitRoomAdapter struct {
 	httpURL   string
 	apiKey    string
@@ -72,7 +60,7 @@ func (a *LiveKitRoomAdapter) DeleteRoom(ctx context.Context, roomName string) er
 	return err
 }
 
-func (a *LiveKitRoomAdapter) ListParticipants(ctx context.Context, roomName string) ([]RoomParticipant, error) {
+func (a *LiveKitRoomAdapter) ListParticipants(ctx context.Context, roomName string) ([]application.RoomParticipant, error) {
 	body := map[string]any{"room": roomName}
 	respBody, err := a.twirpCall(ctx, "/twirp/livekit.RoomService/ListParticipants", body)
 	if err != nil {
@@ -90,7 +78,7 @@ func (a *LiveKitRoomAdapter) ListParticipants(ctx context.Context, roomName stri
 		return nil, fmt.Errorf("parse participants response: %w", err)
 	}
 
-	participants := make([]RoomParticipant, 0, len(result.Participants))
+	participants := make([]application.RoomParticipant, 0, len(result.Participants))
 	for _, p := range result.Participants {
 		state := "ACTIVE"
 		if p.State == 1 {
@@ -98,7 +86,7 @@ func (a *LiveKitRoomAdapter) ListParticipants(ctx context.Context, roomName stri
 		} else if p.State == 3 {
 			state = "DISCONNECTED"
 		}
-		participants = append(participants, RoomParticipant{
+		participants = append(participants, application.RoomParticipant{
 			Identity: p.Identity,
 			SID:      p.SID,
 			State:    state,

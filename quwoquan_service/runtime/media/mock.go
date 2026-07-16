@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 )
@@ -39,22 +40,33 @@ func (m *MockMediaStore) InitUpload(_ context.Context, opts InitUploadOpts) (*Up
 	ossKey := buildTemporaryOSSKey(opts.Category, opts.OwnerID, sessionID, opts.FileName)
 
 	session := &UploadSession{
-		SessionID:      sessionID,
-		Category:       opts.Category,
-		OwnerID:        opts.OwnerID,
-		FileName:       opts.FileName,
-		ContentType:    opts.ContentType,
-		FileSize:       opts.FileSize,
-		PresignURL:     fmt.Sprintf("https://mock-oss.example.com/%s?upload=true", ossKey),
-		OSSKey:         ossKey,
+		SessionID:       sessionID,
+		Category:        opts.Category,
+		OwnerID:         opts.OwnerID,
+		FileName:        opts.FileName,
+		ContentType:     opts.ContentType,
+		FileSize:        opts.FileSize,
+		PresignURL:      fmt.Sprintf("https://mock-oss.example.com/%s?upload=true", ossKey),
+		OSSKey:          ossKey,
 		TemporaryOSSKey: ossKey,
-		Status:         "pending",
-		CreatedAt:      now,
-		ExpiresAt:      now.Add(15 * time.Minute),
+		Status:          "pending",
+		CreatedAt:       now,
+		ExpiresAt:       now.Add(15 * time.Minute),
 	}
 
 	m.sessions[sessionID] = session
 	return session, nil
+}
+
+func (m *MockMediaStore) GetUploadSession(_ context.Context, sessionID string) (*UploadSession, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	session, ok := m.sessions[strings.TrimSpace(sessionID)]
+	if !ok {
+		return nil, fmt.Errorf("session %s not found", sessionID)
+	}
+	copy := *session
+	return &copy, nil
 }
 
 func (m *MockMediaStore) CompleteUpload(_ context.Context, sessionID string, opts CompleteUploadOpts) (*MediaAsset, error) {
@@ -79,22 +91,22 @@ func (m *MockMediaStore) CompleteUpload(_ context.Context, sessionID string, opt
 	finalKey := buildCASObjectKey(sha256Digest, session.FileName)
 
 	asset := &MediaAsset{
-		AssetID:        fmt.Sprintf("mock_ma_%d", m.counter),
-		SessionID:      sessionID,
-		Category:       session.Category,
-		OwnerID:        session.OwnerID,
-		FileName:       session.FileName,
-		ContentType:    session.ContentType,
-		FileSize:       session.FileSize,
-		OSSKey:         finalKey,
+		AssetID:         fmt.Sprintf("mock_ma_%d", m.counter),
+		SessionID:       sessionID,
+		Category:        session.Category,
+		OwnerID:         session.OwnerID,
+		FileName:        session.FileName,
+		ContentType:     session.ContentType,
+		FileSize:        session.FileSize,
+		OSSKey:          finalKey,
 		TemporaryOSSKey: session.OSSKey,
-		CDNURL:         fmt.Sprintf("https://mock-cdn.example.com/%s", finalKey),
-		Sha256:         sha256Digest,
-		DurationMs:     opts.DurationMs,
-		Width:          opts.Width,
-		Height:         opts.Height,
-		Metadata:       opts.Metadata,
-		CreatedAt:      time.Now(),
+		CDNURL:          fmt.Sprintf("https://mock-cdn.example.com/%s", finalKey),
+		Sha256:          sha256Digest,
+		DurationMs:      opts.DurationMs,
+		Width:           opts.Width,
+		Height:          opts.Height,
+		Metadata:        opts.Metadata,
+		CreatedAt:       time.Now(),
 	}
 
 	m.assets[asset.AssetID] = asset

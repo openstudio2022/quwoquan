@@ -249,6 +249,10 @@ String pageNameFromRouteLocation(String location) {
       return 'profile_media_camera';
     case PageAccessInternalRoutes.profileMediaPickerGallery:
       return 'profile_media_gallery';
+    case PageAccessInternalRoutes.commentMediaPickerCamera:
+      return 'comment_media_camera';
+    case PageAccessInternalRoutes.commentMediaPickerGallery:
+      return 'comment_media_gallery';
     case PageAccessInternalRoutes.globalSurfaceCircleEditCreate:
       return 'circle_edit_create';
     case PageAccessInternalRoutes.publishLocationSearch:
@@ -259,8 +263,6 @@ String pageNameFromRouteLocation(String location) {
       return 'assistant_chat_settings_modal';
     case PageAccessInternalRoutes.assistantConversationReferenceWeb:
       return 'assistant_reference_webview_modal';
-    case PageAccessInternalRoutes.assistantConversationDevReplay:
-      return 'assistant_dev_replay_modal';
     case PageAccessInternalRoutes.assistantChatSettingsHistory:
       return 'assistant_chat_history';
   }

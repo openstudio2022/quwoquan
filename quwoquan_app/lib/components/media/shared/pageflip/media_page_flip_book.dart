@@ -168,6 +168,7 @@ class MediaPageFlipBook extends StatefulWidget {
     this.textureSnapshotBuilder,
     this.onPageChanged,
     this.onMotionEvent,
+    this.onTextureTransactionActiveChanged,
     this.onOverflowPrevious,
     this.onOverflowNext,
     this.gestureIntentController,
@@ -185,6 +186,7 @@ class MediaPageFlipBook extends StatefulWidget {
   final MediaPageFlipTextureSnapshotBuilder? textureSnapshotBuilder;
   final ValueChanged<int>? onPageChanged;
   final ValueChanged<MediaPageFlipMotionEvent>? onMotionEvent;
+  final ValueChanged<bool>? onTextureTransactionActiveChanged;
   final VoidCallback? onOverflowPrevious;
   final VoidCallback? onOverflowNext;
   final ImmersiveGestureIntentController? gestureIntentController;
@@ -200,9 +202,6 @@ class _MediaPageFlipBookState extends State<MediaPageFlipBook>
   static const double _overflowEdgeStartInset =
       AppSpacing.minInteractiveSize / 2;
   static const double _swipeIntentDistance = AppSpacing.sm;
-  static const double _dragTravelFactor = 1.0;
-  static const double _edgeLiftTravelPx = 24.0;
-  static const double _edgeLiftTravelFactor = 0.38;
   static const double _reducedMotionCommitDistance = AppSpacing.buttonHeight;
 
   final Map<int, GlobalKey> _captureBoundaryKeys = <int, GlobalKey>{};
@@ -225,8 +224,8 @@ class _MediaPageFlipBookState extends State<MediaPageFlipBook>
   StPageFlipCorner? _activeDragCorner;
   StPageFlipDirection? _pendingOverflowDirection;
   double _edgeOverflowDistance = 0;
-  double _activeDragTravel = 0;
   bool _dragActive = false;
+  bool _textureTransactionActive = false;
   bool _overflowTriggered = false;
   bool _captureScheduled = false;
   bool _captureInFlight = false;
@@ -485,7 +484,6 @@ class _MediaPageFlipBookState extends State<MediaPageFlipBook>
     _dragStartedAt = DateTime.now();
     _activeDragDirection = null;
     _activeDragCorner = null;
-    _activeDragTravel = 0;
     _dragActive = false;
     _reducedMotionTurnCommitted = false;
     _resetOverflowTracking();
@@ -506,7 +504,7 @@ class _MediaPageFlipBookState extends State<MediaPageFlipBook>
         _dragActive = false;
         _activeDragDirection = null;
         _activeDragCorner = null;
-        _activeDragTravel = 0;
+        _setTextureTransactionActive(false);
         setState(() {});
       }
       return;
@@ -543,7 +541,9 @@ class _MediaPageFlipBookState extends State<MediaPageFlipBook>
           dragDx.abs() < _reducedMotionCommitDistance) {
         return;
       }
+      _setTextureTransactionActive(true);
       _commitReducedMotionPageTurn(controller, direction);
+      _setTextureTransactionActive(false);
       return;
     }
     _beginFullSurfaceSwipe(controller, direction, localPosition);
@@ -607,6 +607,7 @@ class _MediaPageFlipBookState extends State<MediaPageFlipBook>
         _startAnimation(plan);
       } else {
         controller.cancelInteraction();
+        _setTextureTransactionActive(false);
         setState(() {});
       }
       if (direction != null && releaseDecision != null) {
@@ -633,7 +634,6 @@ class _MediaPageFlipBookState extends State<MediaPageFlipBook>
     _dragStartedAt = null;
     _activeDragDirection = null;
     _activeDragCorner = null;
-    _activeDragTravel = 0;
     _reducedMotionTurnCommitted = false;
     _resetOverflowTracking();
     _applyDeferredDirectTextureRefreshIfIdle();
@@ -663,8 +663,8 @@ class _MediaPageFlipBookState extends State<MediaPageFlipBook>
     _dragStartedAt = null;
     _activeDragDirection = null;
     _activeDragCorner = null;
-    _activeDragTravel = 0;
     _reducedMotionTurnCommitted = false;
+    _setTextureTransactionActive(false);
     _resetOverflowTracking();
     _applyDeferredDirectTextureRefreshIfIdle();
     if (mounted) {
@@ -690,6 +690,14 @@ class _MediaPageFlipBookState extends State<MediaPageFlipBook>
     );
   }
 
+  void _setTextureTransactionActive(bool active) {
+    if (_textureTransactionActive == active) {
+      return;
+    }
+    _textureTransactionActive = active;
+    widget.onTextureTransactionActiveChanged?.call(active);
+  }
+
   void _beginFullSurfaceSwipe(
     StPageFlipController controller,
     StPageFlipDirection direction,
@@ -710,6 +718,7 @@ class _MediaPageFlipBookState extends State<MediaPageFlipBook>
       return;
     }
     _dragActive = true;
+    _setTextureTransactionActive(true);
     _activeDragDirection = direction;
     _activeDragCorner = corner;
     _applyFullSurfaceSwipe(controller, currentLocalPosition);
@@ -730,18 +739,7 @@ class _MediaPageFlipBookState extends State<MediaPageFlipBook>
     if (start == null || direction == null) {
       return;
     }
-    final dragDx = currentLocalPosition.dx - start.dx;
-    _activeDragTravel = switch (direction) {
-      StPageFlipDirection.forward => math.max(0, -dragDx),
-      StPageFlipDirection.back => math.max(0, dragDx),
-    };
-    final foldPoint = _syntheticFoldPoint(
-      controller.layout,
-      direction: direction,
-      touchY: currentLocalPosition.dy,
-      travel: _activeDragTravel,
-    );
-    controller.fold(foldPoint);
+    controller.fold(currentLocalPosition);
     _queueSceneTextureWindow(
       controller.scene,
       _textureBindingForScene(controller.scene),
@@ -763,36 +761,6 @@ class _MediaPageFlipBookState extends State<MediaPageFlipBook>
       StPageFlipDirection.back => bounds.left + AppSpacing.hairline,
     };
     return Offset(x, y);
-  }
-
-  Offset _syntheticFoldPoint(
-    StPageFlipLayout layout, {
-    required StPageFlipDirection direction,
-    required double touchY,
-    required double travel,
-  }) {
-    final bounds = layout.bounds;
-    final pageWidth = bounds.pageWidth;
-    final directTravel = travel * _dragTravelFactor;
-    final edgeLiftTravel = directTravel <= _edgeLiftTravelPx
-        ? directTravel * _edgeLiftTravelFactor
-        : _edgeLiftTravelPx * _edgeLiftTravelFactor +
-              (directTravel - _edgeLiftTravelPx);
-    final pageTravel = edgeLiftTravel.clamp(0.0, pageWidth * 2);
-    final localX = switch (direction) {
-      StPageFlipDirection.forward =>
-        (pageWidth - pageTravel).clamp(-pageWidth, pageWidth).toDouble(),
-      StPageFlipDirection.back =>
-        (-pageTravel).clamp(-pageWidth, 0.0).toDouble(),
-    };
-    final localY = (touchY - bounds.top)
-        .clamp(AppSpacing.hairline, bounds.height - AppSpacing.hairline)
-        .toDouble();
-    return convertBookPointToViewport(
-      Offset(localX, localY),
-      bounds,
-      direction: direction,
-    );
   }
 
   double _viewportYForTouch(
@@ -880,7 +848,6 @@ class _MediaPageFlipBookState extends State<MediaPageFlipBook>
     _dragActive = false;
     _activeDragDirection = direction;
     _activeDragCorner = null;
-    _activeDragTravel = 0;
     _currentPage = nextPage;
     controller.setCurrentPage(_currentPage);
     widget.onPageChanged?.call(_currentPage);
@@ -960,36 +927,19 @@ class _MediaPageFlipBookState extends State<MediaPageFlipBook>
     if (plan == null || controller == null || plan.frames.isEmpty) {
       return;
     }
-    final easedValue = Curves.easeOutCubic.transform(
-      _animationController.value.clamp(0.0, 1.0).toDouble(),
-    );
-    final framePosition = easedValue * (plan.frames.length - 1);
-    final lowerFrameIndex = framePosition
-        .floor()
-        .clamp(0, plan.frames.length - 1)
-        .toInt();
-    final upperFrameIndex = framePosition
-        .ceil()
-        .clamp(0, plan.frames.length - 1)
-        .toInt();
-    final blend = (framePosition - lowerFrameIndex).clamp(0.0, 1.0).toDouble();
-    final sampledFrame =
-        Offset.lerp(
-          plan.frames[lowerFrameIndex],
-          plan.frames[upperFrameIndex],
-          blend,
-        ) ??
-        plan.frames[lowerFrameIndex];
-    final sampledFrameKey = (framePosition * 1000).round();
-    if (sampledFrameKey == _lastAnimationFrameIndex) {
+    final maxIndex = plan.frames.length - 1;
+    final nextIndex = maxIndex == 0
+        ? 0
+        : (_animationController.value * maxIndex).round().clamp(0, maxIndex);
+    if (nextIndex == _lastAnimationFrameIndex) {
       return;
     }
-    _lastAnimationFrameIndex = sampledFrameKey;
+    _lastAnimationFrameIndex = nextIndex;
     controller.applyAnimationFrame(
-      sampledFrame,
+      plan.frames[nextIndex],
       reversePose: plan.reversePoses == null
           ? null
-          : plan.reversePoses![lowerFrameIndex.clamp(
+          : plan.reversePoses![nextIndex.clamp(
               0,
               plan.reversePoses!.length - 1,
             )],
@@ -1011,16 +961,32 @@ class _MediaPageFlipBookState extends State<MediaPageFlipBook>
     final controller = _controller;
     if (controller == null) {
       _activePlan = null;
+      _setTextureTransactionActive(false);
       return;
+    }
+    final lastFrameIndex = plan.frames.length - 1;
+    if (lastFrameIndex >= 0 && _lastAnimationFrameIndex != lastFrameIndex) {
+      controller.applyAnimationFrame(
+        plan.frames[lastFrameIndex],
+        reversePose: plan.reversePoses == null
+            ? null
+            : plan.reversePoses![lastFrameIndex.clamp(
+                0,
+                plan.reversePoses!.length - 1,
+              )],
+      );
+      _lastAnimationFrameIndex = lastFrameIndex;
     }
     controller.completeAnimation(plan);
     final nextPage = controller.currentPageIndex;
     final changed = nextPage != _currentPage;
     _currentPage = nextPage;
     _activePlan = null;
+    _lastAnimationFrameIndex = -1;
     if (changed) {
       widget.onPageChanged?.call(_currentPage);
     }
+    _setTextureTransactionActive(false);
     _queueStaticTextureSnapshots();
     _applyDeferredDirectTextureRefreshIfIdle();
     if (mounted) {
@@ -1029,7 +995,7 @@ class _MediaPageFlipBookState extends State<MediaPageFlipBook>
   }
 
   _MediaPageTextureBinding? _textureBindingForScene(StPageFlipScene scene) {
-    final direction = scene.effectiveRenderDirection ?? scene.direction;
+    final direction = scene.direction;
     if (direction == null || scene.flippingPageIndex == null) {
       return null;
     }
@@ -1045,7 +1011,7 @@ class _MediaPageFlipBookState extends State<MediaPageFlipBook>
           face: MediaPageFlipSurfaceFace.front,
         ),
         verso: _MediaPageTextureRef(
-          pageIndex: targetPageIndex,
+          pageIndex: scene.currentPageIndex,
           face: MediaPageFlipSurfaceFace.back,
         ),
         bottom: _MediaPageTextureRef(
@@ -1089,7 +1055,7 @@ class _MediaPageFlipBookState extends State<MediaPageFlipBook>
       scene.layout.bounds.pageWidth,
       scene.layout.bounds.height,
     );
-    final direction = renderFrame.renderDirection;
+    final direction = scene.direction ?? renderFrame.renderDirection;
     if (direction == StPageFlipDirection.forward) {
       return <Widget>[
         if (renderFrame.bottomClipArea.length >= 3)
@@ -1108,6 +1074,7 @@ class _MediaPageFlipBookState extends State<MediaPageFlipBook>
             bounds: scene.layout.bounds,
             isFlippingPage: false,
             progress: renderFrame.progress,
+            shadow: renderFrame.shadow,
           ),
         if (renderFrame.flippingClipArea.length >= 3)
           _buildDynamicPageLayer(
@@ -1131,6 +1098,10 @@ class _MediaPageFlipBookState extends State<MediaPageFlipBook>
     }
 
     return <Widget>[
+      _buildBackwardPageSpaceReplacementLayer(
+        pageRect: resolveBookPageRect(scene.layout, isRightPage: true),
+        textureRef: binding.recto,
+      ),
       if (renderFrame.bottomClipArea.length >= 3)
         _buildDynamicPageLayer(
           key: const ValueKey<String>('media-pageflip-bottom-layer'),
@@ -1147,6 +1118,7 @@ class _MediaPageFlipBookState extends State<MediaPageFlipBook>
           bounds: scene.layout.bounds,
           isFlippingPage: false,
           progress: renderFrame.progress,
+          shadow: renderFrame.shadow,
         ),
       if (renderFrame.flippingClipArea.length >= 3)
         _buildDynamicPageLayer(
@@ -1183,6 +1155,7 @@ class _MediaPageFlipBookState extends State<MediaPageFlipBook>
     required StPageFlipBoundsRect bounds,
     required bool isFlippingPage,
     required double progress,
+    StPageFlipShadowData? shadow,
   }) {
     final geometryDirection = visualGeometryDirection;
     final layerOrigin = anchor;
@@ -1236,17 +1209,22 @@ class _MediaPageFlipBookState extends State<MediaPageFlipBook>
                       rectoRef: rectoTextureRef,
                       versoRef: textureRef,
                       direction: direction,
-                      progress: progress,
+                      visualAngle: angle,
                     )
                   else
                     _buildTextureSurface(textureRef),
                   _buildDynamicSurfaceOverlay(
                     direction: direction,
-                    isBackFace:
-                        rectoTextureRef == null &&
-                        textureRef.face == MediaPageFlipSurfaceFace.back,
+                    isBackFace: isFlippingPage && rectoTextureRef != null
+                        ? _shouldShowFlippingBackside(
+                            direction: direction,
+                            visualAngle: angle,
+                          )
+                        : textureRef.face == MediaPageFlipSurfaceFace.back,
                     isFlippingPage: isFlippingPage,
                     progress: progress,
+                    pageSize: pageSize,
+                    shadow: shadow,
                   ),
                 ],
               ),
@@ -1261,42 +1239,41 @@ class _MediaPageFlipBookState extends State<MediaPageFlipBook>
     required _MediaPageTextureRef rectoRef,
     required _MediaPageTextureRef versoRef,
     required StPageFlipDirection direction,
-    required double progress,
+    required double visualAngle,
   }) {
-    final easedProgress = Curves.easeInOutCubic.transform(
-      progress.clamp(0.0, 1.0).toDouble(),
+    final showBackside = _shouldShowFlippingBackside(
+      direction: direction,
+      visualAngle: visualAngle,
     );
-    final rectoWidthFactor = (1.0 - easedProgress * 0.82)
-        .clamp(0.18, 1.0)
-        .toDouble();
-    final versoWidthFactor = (0.22 + easedProgress * 0.78)
-        .clamp(0.22, 1.0)
-        .toDouble();
-    final rectoAlignment = direction == StPageFlipDirection.forward
-        ? Alignment.centerRight
-        : Alignment.centerLeft;
-    final versoAlignment = direction == StPageFlipDirection.forward
-        ? Alignment.centerLeft
-        : Alignment.centerRight;
-    return Stack(
-      fit: StackFit.expand,
-      children: <Widget>[
-        FractionallySizedBox(
-          alignment: rectoAlignment,
-          widthFactor: rectoWidthFactor,
-          heightFactor: 1,
-          child: SizedBox.expand(child: _buildTextureSurface(rectoRef)),
-        ),
-        FractionallySizedBox(
-          alignment: versoAlignment,
-          widthFactor: versoWidthFactor,
-          heightFactor: 1,
-          child: Opacity(
-            opacity: (0.18 + easedProgress * 0.82).clamp(0.18, 1.0).toDouble(),
-            child: SizedBox.expand(child: _buildTextureSurface(versoRef)),
-          ),
-        ),
-      ],
+    final faceRef = showBackside ? versoRef : rectoRef;
+    return KeyedSubtree(
+      key: ValueKey<String>(
+        'media-pageflip-moving-face-${faceRef.pageIndex}-${faceRef.face.name}',
+      ),
+      child: _buildTextureSurface(faceRef),
+    );
+  }
+
+  bool _shouldShowFlippingBackside({
+    required StPageFlipDirection direction,
+    required double visualAngle,
+  }) {
+    if (direction == StPageFlipDirection.forward) {
+      return true;
+    }
+    return visualAngle.abs() <= math.pi / 2;
+  }
+
+  Widget _buildBackwardPageSpaceReplacementLayer({
+    required Rect pageRect,
+    required _MediaPageTextureRef textureRef,
+  }) {
+    return Positioned.fromRect(
+      key: const ValueKey<String>(
+        'media-pageflip-backward-previous-front-replacement',
+      ),
+      rect: pageRect,
+      child: _buildTextureSurface(textureRef),
     );
   }
 
@@ -1332,7 +1309,40 @@ class _MediaPageFlipBookState extends State<MediaPageFlipBook>
     required bool isBackFace,
     required bool isFlippingPage,
     required double progress,
+    required Size pageSize,
+    StPageFlipShadowData? shadow,
   }) {
+    if (!isFlippingPage) {
+      if (shadow == null || shadow.opacity <= 0.001 || pageSize.width <= 0) {
+        return const SizedBox.expand();
+      }
+      final widthFactor =
+          (math.max(shadow.width, pageSize.width * 0.12) / pageSize.width)
+              .clamp(0.12, 0.72)
+              .toDouble();
+      return IgnorePointer(
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: FractionallySizedBox(
+            widthFactor: widthFactor,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: <Color>[
+                    AppColors.black.withValues(alpha: shadow.opacity * 0.26),
+                    AppColors.black.withValues(alpha: shadow.opacity * 0.10),
+                    AppColors.transparent,
+                  ],
+                  stops: const <double>[0.0, 0.32, 1.0],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     final settledProgress = progress.clamp(0.0, 1.0).toDouble();
     final lift = Curves.easeOutCubic.transform(settledProgress);
     final edgeAlignment = direction == StPageFlipDirection.forward
@@ -1382,26 +1392,6 @@ class _MediaPageFlipBookState extends State<MediaPageFlipBook>
                   ),
                 ],
                 stops: const <double>[0.0, 0.5, 1.0],
-              ),
-            ),
-          ),
-          Align(
-            alignment: edgeAlignment,
-            child: FractionallySizedBox(
-              widthFactor: (isBackFace ? 0.16 : 0.08) + lift * 0.04,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: edgeAlignment,
-                    end: oppositeEdge,
-                    colors: <Color>[
-                      AppColors.white.withValues(
-                        alpha: isBackFace ? 0.055 : 0.12,
-                      ),
-                      AppColors.transparent,
-                    ],
-                  ),
-                ),
               ),
             ),
           ),

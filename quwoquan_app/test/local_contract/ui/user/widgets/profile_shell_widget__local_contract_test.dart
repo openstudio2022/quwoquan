@@ -37,6 +37,8 @@ import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
 
 import '../../../../support/harness/profile_shell_scroll_utils.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_interaction_tab.dart';
+import 'package:quwoquan_app/ui/user/widgets/profile_secondary_tab_bar.dart';
+import '../../../../support/cloud_services/content_facet_overrides.dart';
 
 /// 在 UI 测试中使 capability 保持 null（current 关注/私信 布局）
 class _ThrowingCapabilityRepository extends RelationshipCapabilityRepository {
@@ -168,6 +170,7 @@ class _NoUserPostsContentRepository extends MockContentRepository {
     required String userId,
     String? identity,
     String? type,
+    String? visibility,
     String? cursor,
     int limit = 20,
   }) async {
@@ -217,13 +220,13 @@ Widget _scopedApp({
   RelationshipCapabilityRepository? capabilityRepository,
   UserProfileRepository userProfileRepository =
       const MockUserProfileRepository(),
-  ContentRepository? contentRepository,
+  MockContentRepository? contentRepository,
   List overrides = const [],
 }) {
   return ProviderScope(
     overrides: [
       userProfileRepositoryProvider.overrideWithValue(userProfileRepository),
-      contentRepositoryProvider.overrideWithValue(
+      ...mockContentFacetOverrides(
         contentRepository ?? MockContentRepository(),
       ),
       relationshipCapabilityRepositoryProvider.overrideWithValue(
@@ -626,6 +629,9 @@ void main() {
         _scopedApp(
           mode: ProfileMode.other,
           capabilityRepository: _StaticCapabilityRepository(),
+          overrides: [
+            currentUserIdProvider.overrideWithValue('viewer-profile'),
+          ],
         ),
       );
       await _pumpFrames(tester);
@@ -668,20 +674,11 @@ void main() {
                 IntersectionReason(
                   dimension: 'relationship',
                   primaryText: '你和林清越都关注胶片摄影',
-                  objectKind: 'topic',
+                  objectKind: 'entity',
                   actionTargetId: 'homepage_topic_film_photo',
                   primarySpans: <IntersectionTextSpan>[
                     IntersectionTextSpan(text: '你和', role: 'plain'),
-                    IntersectionTextSpan(
-                      text: '林清越',
-                      role: 'object',
-                      target: IntersectionTarget(
-                        objectType: 'user',
-                        objectId: 'u_lin',
-                        objectKind: 'person',
-                        routeId: 'userProfile',
-                      ),
-                    ),
+                    IntersectionTextSpan(text: '林清越', role: 'plain'),
                     IntersectionTextSpan(text: '都关注', role: 'plain'),
                     IntersectionTextSpan(
                       text: '胶片摄影',
@@ -689,7 +686,7 @@ void main() {
                       target: IntersectionTarget(
                         objectType: 'homepage',
                         objectId: 'homepage_topic_film_photo',
-                        objectKind: 'topic',
+                        objectKind: 'entity',
                         routeId: 'homepageDetail',
                       ),
                     ),
@@ -1045,23 +1042,24 @@ void main() {
             const ValueKey<String>('profile-interaction-direction-switch'),
           ),
         ),
-        findsOneWidget,
+        findsNothing,
       );
+      final secondaryTabs = find.byType(ProfileSecondaryTabBar);
       expect(
         find.descendant(
-          of: primaryTabs,
+          of: secondaryTabs,
           matching: find.text(
             UITextConstants.profileInteractionDirectionReceived,
           ),
         ),
-        findsOneWidget,
+        findsNothing,
       );
       expect(
         find.descendant(
-          of: primaryTabs,
+          of: secondaryTabs,
           matching: find.text(UITextConstants.profileInteractionDirectionSent),
         ),
-        findsOneWidget,
+        findsNothing,
       );
     });
 

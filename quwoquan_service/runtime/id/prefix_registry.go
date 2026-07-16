@@ -10,13 +10,14 @@ import (
 type Prefix string
 
 const (
-	PrefixAssistantConversation Prefix = "acv_"
-	PrefixAssistantTurn         Prefix = "atn_"
-	PrefixSkillSubscription     Prefix = "sub_"
-	PrefixDeviceContext         Prefix = "dcx_"
-	PrefixToolUse               Prefix = "tu_"
-	PrefixAppMessage            Prefix = "msg_"
-	PrefixFeedRequest           Prefix = "frq_"
+	PrefixAssistantConversation   Prefix = "acv_"
+	PrefixAssistantTurn           Prefix = "atn_"
+	PrefixSkillSubscription       Prefix = "sub_"
+	PrefixDeviceContext           Prefix = "dcx_"
+	PrefixToolUse                 Prefix = "tu_"
+	PrefixAppMessage              Prefix = "msg_"
+	PrefixNotificationDeliveryJob Prefix = "ndj_"
+	PrefixFeedRequest             Prefix = "frq_"
 )
 
 var prefixPattern = regexp.MustCompile(`^[a-z][a-z0-9]{1,15}_$`)
@@ -85,5 +86,6 @@ func init() {
 	DefaultRegistry.MustRegister(PrefixDeviceContext, "DeviceContext")
 	DefaultRegistry.MustRegister(PrefixToolUse, "ToolUse")
 	DefaultRegistry.MustRegister(PrefixAppMessage, "AppMessage")
+	DefaultRegistry.MustRegister(PrefixNotificationDeliveryJob, "NotificationDeliveryJob")
 	DefaultRegistry.MustRegister(PrefixFeedRequest, "FeedRequest")
 }

@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
+import 'package:quwoquan_app/cloud/runtime/auth/realtime_connection_credential.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/realtime/realtime_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/realtime/realtime_request_page_ids.g.dart';
@@ -17,15 +19,17 @@ typedef LongPollEventCallback =
 class LongPollTransport {
   LongPollTransport({
     required this.config,
-    required this.userId,
+    required this.authTokenProvider,
     required this.onEvents,
     http.Client? client,
-  }) : _client = client ?? http.Client();
+  }) : _client = client ?? http.Client(),
+       _ownsClient = client == null;
 
   final RealtimeConfig config;
-  final String userId;
+  final CloudAuthTokenProvider authTokenProvider;
   final LongPollEventCallback onEvents;
   final http.Client _client;
+  final bool _ownsClient;
 
   bool _running = false;
   bool _disposed = false;
@@ -45,17 +49,23 @@ class LongPollTransport {
   Future<void> _poll() async {
     while (_running && !_disposed) {
       try {
+        final credential = await RealtimeConnectionCredential.resolveHttp(
+          authTokenProvider,
+        );
+        if (credential == null) {
+          _running = false;
+          break;
+        }
         final url =
             Uri.parse(
               '${config.gatewayBaseUrl}${RealtimeApiMetadata.longPollPath}',
             ).replace(
               queryParameters: <String, String>{
-                'userId': userId,
-                'hold': '${config.longPollHoldSec}',
+                'timeout': '${config.longPollHoldSec}',
               },
             );
-        final headers = CloudRequestHeaders.forPage(
-          RealtimeRequestPageIds.longPoll,
+        final headers = credential.authorizeHttp(
+          CloudRequestHeaders.forPage(RealtimeRequestPageIds.longPoll),
         );
         final resp = await _client
             .get(url, headers: headers)
@@ -74,12 +84,17 @@ class LongPollTransport {
           }
         } else if (resp.statusCode == 204) {
           _consecutiveErrors = 0;
+        } else if (resp.statusCode == 401 || resp.statusCode == 403) {
+          _running = false;
+          break;
         } else {
           _consecutiveErrors++;
         }
-      } catch (e) {
+      } catch (_) {
         _consecutiveErrors++;
-        debugPrint('LongPollTransport: error: $e');
+        if (kDebugMode) {
+          debugPrint('LongPollTransport: request failed');
+        }
       }
 
       if (_consecutiveErrors >= _maxConsecutiveErrors) {
@@ -97,5 +112,8 @@ class LongPollTransport {
   void dispose() {
     _disposed = true;
     _running = false;
+    if (_ownsClient) {
+      _client.close();
+    }
   }
 }

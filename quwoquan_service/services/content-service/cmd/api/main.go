@@ -3,46 +3,49 @@ package main
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"log"
 	"log/slog"
 	"net/http"
 	"os"
-	"path/filepath"
-	"strconv"
-	"strings"
-	"time"
-
-	"gopkg.in/yaml.v3"
-
-	rtmongo "quwoquan_service/runtime/mongodb"
-	rtotel "quwoquan_service/runtime/otel"
-
+	operationsecurity "quwoquan_service/generated/operationsecurity"
+	rtmongo "quwoquan_service/internal/platform/mongodb"
+	rtauth "quwoquan_service/runtime/auth"
+	runtimeconfig "quwoquan_service/runtime/config"
 	rtgov "quwoquan_service/runtime/governance"
 	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
 	runtimelearning "quwoquan_service/runtime/learning"
 	runtimemedia "quwoquan_service/runtime/media"
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtmetrics "quwoquan_service/runtime/metrics"
 	robs "quwoquan_service/runtime/observability"
+	rtotel "quwoquan_service/runtime/otel"
 	rtrec "quwoquan_service/runtime/recommendation"
 	rtrecpolicy "quwoquan_service/runtime/recpolicy"
 	rtredis "quwoquan_service/runtime/redis"
 	httpadapter "quwoquan_service/services/content-service/internal/adapters/http"
 	behaviorapp "quwoquan_service/services/content-service/internal/application/behavior"
+	commentapp "quwoquan_service/services/content-service/internal/application/comment"
+	outboundshareapp "quwoquan_service/services/content-service/internal/application/content/outbound_share_fact/command"
 	feedapp "quwoquan_service/services/content-service/internal/application/feed"
 	importerapp "quwoquan_service/services/content-service/internal/application/importer"
 	intersectionapp "quwoquan_service/services/content-service/internal/application/intersection"
+	mediaapp "quwoquan_service/services/content-service/internal/application/media"
 	"quwoquan_service/services/content-service/internal/application/ports"
 	postapp "quwoquan_service/services/content-service/internal/application/post"
+	reactionapp "quwoquan_service/services/content-service/internal/application/reaction"
 	reportapp "quwoquan_service/services/content-service/internal/application/report"
-	"quwoquan_service/services/content-service/internal/infrastructure/cache"
+	mediainfra "quwoquan_service/services/content-service/internal/infrastructure/content/media"
+	outboundshareinfra "quwoquan_service/services/content-service/internal/infrastructure/content/outbound_share_fact/persistence"
 	"quwoquan_service/services/content-service/internal/infrastructure/intersectionmetrics"
+	learninginfra "quwoquan_service/services/content-service/internal/infrastructure/learning"
 	"quwoquan_service/services/content-service/internal/infrastructure/messaging"
 	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
 	"quwoquan_service/services/content-service/internal/infrastructure/placeindex"
 	recinfra "quwoquan_service/services/content-service/internal/infrastructure/recommendation"
 	"quwoquan_service/services/content-service/internal/infrastructure/searchindex"
+	"strings"
+	"time"
 )
 
 // redisSceneCfg holds configuration for a single Redis deployment (one logical scene).
@@ -61,26 +64,22 @@ type redisSceneCfg struct {
 		DialTimeoutMs  int `yaml:"dial_timeout_ms"`
 	} `yaml:"pool"`
 }
-
 type config struct {
 	Config struct {
 		Version         string `yaml:"version"`
 		MinImageVersion string `yaml:"min_image_version"`
 		MaxImageVersion string `yaml:"max_image_version"`
 	} `yaml:"config"`
-
 	Service struct {
 		HTTP struct {
 			Addr string `yaml:"addr"`
 		} `yaml:"http"`
 	} `yaml:"service"`
-
 	Mongo struct {
 		URI        string `yaml:"uri"`
 		Database   string `yaml:"database"`
 		Collection string `yaml:"collection"`
 	} `yaml:"mongo"`
-
 	Postgres struct {
 		ReportDSN string `yaml:"report_dsn"`
 	} `yaml:"postgres"`
@@ -176,6 +175,7 @@ func main() {
 	}
 	hotPath := rtrec.NewHotPath(rtredis.NewRecAdapter(router.Scene("rec")))
 	eventPub := messaging.NewRedisEventPublisher(router.Scene("general"), "content-service", logger)
+	behaviorEventPub := runtimemessaging.EventPublisher(eventPub)
 
 	// Read path: SessionCache wraps HotPath with L1 cache + singleflight
 	sessionCache := rtrec.NewSessionCache(hotPath, 2*time.Second, 10000)
@@ -184,15 +184,21 @@ func main() {
 	bufferedWriter := rtrec.NewBufferedHotPath(hotPath, rtrec.WithBufferLogger(logger))
 	defer bufferedWriter.Stop()
 
-	// Storage layer: MongoDB when mongo.uri is configured, else InMemory with seeds.
-	var store persistence.PostRepository
-	var reportStore persistence.ReportRepository
+	// SIT6 商用装配：Mongo/PostgreSQL/OSS 均为启动必需依赖，不存在内存降级。
+	var store *persistence.MongoPostStore
+	var postQueryReader *persistence.MongoPostQueryReader
+	var reactionStore *persistence.MongoContentReactionStore
+	var reactionServiceCore *reactionapp.Service
+	var commentDataAdapter *persistence.MongoCommentDataAdapter
+	var commentServiceCore *commentapp.CommentService
+	var outboundShareFacades *outboundshareapp.Facades
+	var reportStore *persistence.PGReportStore
 	var postServiceOpts []postapp.PostServiceOption
-	var sharedProjector ports.Projector
+	var mediaStore *persistence.MongoMediaStore
 	var mongoCandidateSources []rtrec.CandidateSource
 	var bulkImportService *importerapp.BulkImportService
-	var behaviorEventStore persistence.BehaviorEventStore = persistence.NoopBehaviorEventStore{}
-	var wishlistEventStore ports.WishlistEventStore = persistence.NoopWishlistEventStore{}
+	var behaviorEventStore ports.BehaviorEventStore
+	var wishlistEventStore ports.WishlistEventStore
 	var dailyMetricsStore *persistence.DailyMetricsStore
 	var authorImpactStore *persistence.AuthorImpactStore
 	var authorImpactEvidenceStore *persistence.AuthorImpactEvidenceStore
@@ -201,7 +207,7 @@ func main() {
 		rtrec.WithRecallTimeout(150 * time.Millisecond),
 		rtrec.WithLogger(logger),
 	}
-	var learningSink runtimelearning.Sink = &runtimelearning.LogSink{Logger: logger}
+	var learningSink runtimelearning.Sink
 	postServiceOpts = append(postServiceOpts, postapp.WithSignalProcessor(bufferedWriter))
 	postServiceOpts = append(postServiceOpts, postapp.WithLogger(logger))
 	postServiceOpts = append(postServiceOpts, postapp.WithStoryRuntimeConfig(resolveStoryRuntimeConfig()))
@@ -232,31 +238,117 @@ func main() {
 		}
 		db := mongoClient.Database(dbName)
 		mongoStore := persistence.NewMongoPostStore(db.Collection(collName))
-		store = cache.NewPostCacheRepository(mongoStore, router.Scene("general"), logger)
+		if err := mongoStore.EnsureIndexes(ctx); err != nil {
+			log.Fatalf("content-service post indexes init failed: %v", err)
+		}
+		store = mongoStore
+		postQueryReader = persistence.NewMongoPostQueryReader(db.Collection(collName))
+		outboundShareSink := outboundshareinfra.NewMongoAppendSink(db)
+		if err := outboundShareSink.EnsureIndexes(ctx); err != nil {
+			log.Fatalf("content-service OutboundShareFact indexes init failed: %v", err)
+		}
+		outboundShareFacades = outboundshareapp.BindFacades(outboundshareapp.NewService(
+			outboundShareSink,
+			outboundshareinfra.NewShareablePostReader(postQueryReader),
+		))
+		mediaStore = persistence.NewMongoMediaStore(db.Collection("media_upload_sessions"))
+		if err := mediaStore.EnsureIndexes(ctx); err != nil {
+			log.Fatalf("content-service MediaUploadSession/MediaAsset indexes init failed: %v", err)
+		}
+		commentDataAdapter = persistence.NewMongoCommentDataAdapter(db)
+		if err := commentDataAdapter.EnsureIndexes(ctx); err != nil {
+			log.Fatalf("content-service Comment indexes init failed: %v", err)
+		}
+		postServiceOpts = append(postServiceOpts, postapp.WithCommentReaders(commentDataAdapter))
+		startCommentOutboxRelay(
+			ctx, commentDataAdapter, commentDataAdapter,
+			messaging.NewCommentOutboxPublisher(eventPub),
+			"content-comment-runtime-events", "content_comment_outbox_events",
+			healthChecker, logger,
+		)
+		startCommentOutboxRelay(
+			ctx, commentDataAdapter, commentDataAdapter,
+			commentapp.NewCommentCountProjector(commentDataAdapter, mongoStore),
+			"content-comment-post-count", "content_comment_post_count",
+			healthChecker, logger,
+		)
+		reactionStore = persistence.NewMongoContentReactionStore(db)
+		if err := reactionStore.EnsureIndexes(ctx); err != nil {
+			log.Fatalf("content-service ContentReaction indexes init failed: %v", err)
+		}
+		postServiceOpts = append(postServiceOpts, postapp.WithProfileReactionActivityReader(reactionStore))
+		postServiceOpts = append(postServiceOpts, postapp.WithProfileCommentReactionValueReader(reactionStore))
+		reactionServiceCore = reactionapp.NewService(
+			reactionapp.BindDataPorts(
+				reactionStore,
+				persistence.NewReactionTargetReader(postQueryReader, commentDataAdapter),
+			),
+		)
+		startPostOutboxRelay(
+			ctx,
+			store,
+			store,
+			reactionapp.NewPostDeletionConsumer(reactionServiceCore, reactionStore),
+			"content-post-deletion-reaction-lifecycle",
+			"content_post_deletion_reaction_lifecycle",
+			healthChecker,
+			logger,
+		)
+		startReactionOutboxRelay(
+			ctx,
+			reactionStore,
+			reactionStore,
+			messaging.NewContentReactionOutboxPublisher(eventPub),
+			"content-reaction-runtime-events",
+			"content_reaction_outbox_events",
+			healthChecker,
+			logger,
+		)
+		startReactionOutboxRelay(
+			ctx,
+			reactionStore,
+			reactionStore,
+			reactionapp.NewActiveReactionCountProjector(reactionStore, mongoStore),
+			"content-reaction-post-like-count",
+			"content_reaction_post_like_count",
+			healthChecker,
+			logger,
+		)
+		startReactionOutboxRelay(
+			ctx,
+			reactionStore,
+			reactionStore,
+			reactionapp.NewActiveReactionCountProjector(
+				reactionStore,
+				persistence.NewMongoDiscoveryFeedLikeCountWriter(db),
+			),
+			"content-reaction-discovery-like-count",
+			"content_reaction_discovery_like_count",
+			healthChecker,
+			logger,
+		)
+		startReactionOutboxRelay(
+			ctx,
+			reactionStore,
+			reactionStore,
+			reactionapp.NewPersonaLikeCountProjector(
+				reactionStore,
+				persistence.NewMongoRecommendFeatureLikeCountWriter(db),
+			),
+			"content-reaction-recommend-like-count",
+			"content_reaction_recommend_like_count",
+			healthChecker,
+			logger,
+		)
 		log.Printf("content-service storage=mongodb db=%s collection=%s", dbName, collName)
 
-		learningSink = runtimelearning.NewMongoSink(db, logger)
+		learningSink = learninginfra.NewMongoSink(db, logger)
 
-		// Comments (R-CMT01): authoritative Mongo store (comments +
-		// comment_reactions collections). Ranking and counting are served by
-		// keyset pagination over compound indexes and exact indexed Count — the
-		// previous Redis ZSet leaderboards and per-comment reaction counters were
-		// write-only / racy and have been removed (no second drifting source,
-		// R24/R26). The post comment total stays single-sourced on the comments
-		// collection; Post.commentCount is a denormalized accelerator maintained
-		// by atomic $inc and self-healed on read. Without mongo the PostService
-		// constructor defaults to the in-memory store (alpha degrade), so this
-		// branch is the only place the persistent comment path is wired.
-		commentStore := persistence.NewMongoCommentStore(db, logger)
-		commentReactionStore := persistence.NewMongoCommentReactionStore(db, logger)
+		shareInteractionStore := persistence.NewMongoShareInteractionStore(db, logger)
 		postServiceOpts = append(postServiceOpts,
-			postapp.WithCommentStore(commentStore),
-			postapp.WithCommentReactionStore(commentReactionStore),
+			postapp.WithShareInteractionStore(shareInteractionStore),
 		)
-		log.Printf("content-service comments storage=mongodb (collections=comments,comment_reactions; ranking/count=indexed keyset)")
-
-		// Event publisher: Redis Pub/Sub for cross-service consumption
-		postServiceOpts = append(postServiceOpts, postapp.WithEventPublisher(eventPub))
+		log.Printf("content-service interaction storage=mongodb (Comment aggregate + ContentReaction aggregate + rm_profile_share_interactions)")
 
 		// Entity tag index for entity interest propagation in projector
 		entityTagIndex := recinfra.NewMongoEntityTagIndex(db)
@@ -278,6 +370,13 @@ func main() {
 		}
 		interestAgg := recinfra.NewInterestProfileAggregator(db, recinfra.DefaultInterestProfileConfig(), eventPub, recinfra.WithSegments(segDefs))
 		recommendProjector := recinfra.NewRecommendFeatureProjector(db, recinfra.WithEntityPropagation(entityPropagation), recinfra.WithSignalProcessor(bufferedWriter), recinfra.WithInterestAggregator(interestAgg))
+		relationshipProjection := recinfra.NewPersonaRelationshipProjection(db)
+		if err := relationshipProjection.EnsureIndexes(ctx); err != nil {
+			log.Fatalf("content-service persona relationship projection startup failed: %v", err)
+		}
+		go recinfra.NewPersonaRelationshipProjectionConsumer(
+			router.Scene("general"), relationshipProjection, instanceID, logger,
+		).Run(ctx, 500*time.Millisecond)
 		premiumPoolProjector := recinfra.NewPremiumPoolProjector(db)
 		go recinfra.NewPremiumPoolEventConsumer(router.Scene("general"), premiumPoolProjector, logger).Run(ctx)
 		searchSignalConsumer := recinfra.NewSearchSignalConsumer(router.Scene("general"), recommendProjector, instanceID, logger)
@@ -305,7 +404,49 @@ func main() {
 			placeProjector = placeindex.NewProjector(searchBuilt.Indexer, store, placeStore, placeindex.WithLogger(logger))
 			log.Printf("content-service search index projector enabled (es endpoints=%d index=%s, place objects on)", len(cfg.ES.Endpoints), searchBuilt.Client.IndexName())
 		}
-		sharedProjector = &projectorAdapter{discovery: discoveryProjector, recommend: recommendProjector, premium: premiumPoolProjector, search: searchBuilt.Projector, place: placeProjector}
+		// Each derived read model and the external event bus owns an independent
+		// durable checkpoint. A late sink outage therefore cannot replay sinks
+		// that already converged, and a failed sink never gets acknowledged by a
+		// shared fan-out watermark.
+		startPostOutboxRelay(ctx, store, store,
+			messaging.NewPostOutboxPublisher(eventPub),
+			"content-runtime-events", "post_outbox_events", healthChecker, logger)
+		startPostOutboxRelay(ctx, store, store,
+			messaging.NewPostLifecycleStreamPublisher(router.Scene("general")),
+			"content-post-lifecycle-stream", "post_outbox_lifecycle_stream", healthChecker, logger)
+		startPostOutboxRelay(ctx, store, store,
+			messaging.NewPostOutboxPublisher(messaging.NewInProcessProjectorPublisher(
+				&projectorAdapter{discovery: discoveryProjector},
+			)),
+			"content-discovery-projection", "post_outbox_discovery", healthChecker, logger)
+		startPostOutboxRelay(ctx, store, store,
+			messaging.NewPostOutboxPublisher(messaging.NewInProcessProjectorPublisher(
+				&projectorAdapter{recommend: recommendProjector},
+			)),
+			"content-recommend-projection", "post_outbox_recommend", healthChecker, logger)
+		startPostOutboxRelay(ctx, store, store,
+			messaging.NewPostOutboxPublisher(messaging.NewInProcessProjectorPublisher(
+				&projectorAdapter{premium: premiumPoolProjector},
+			)),
+			"content-premium-projection", "post_outbox_premium", healthChecker, logger)
+		if searchBuilt.Projector != nil {
+			startPostOutboxRelay(ctx, store, store,
+				messaging.NewPostOutboxPublisher(messaging.NewInProcessProjectorPublisher(
+					&projectorAdapter{search: searchBuilt.Projector},
+				)),
+				"content-search-projection", "post_outbox_search", healthChecker, logger)
+		}
+		if placeProjector != nil {
+			startPostOutboxRelay(ctx, store, store,
+				messaging.NewPostOutboxPublisher(messaging.NewInProcessProjectorPublisher(
+					&projectorAdapter{place: placeProjector},
+				)),
+				"content-place-projection", "post_outbox_place", healthChecker, logger)
+		}
+		// Non-Post interaction facts still use the transport publisher.
+		// Post lifecycle facts are emitted exclusively by the durable relays above.
+		postServiceOpts = append(postServiceOpts, postapp.WithEventPublisher(eventPub))
+		behaviorEventPub = eventPub
 
 		// Periodic raw-affinity decay so $inc growth never permanently
 		// fossilizes stale interests. A per-day Redis single-flight lock
@@ -313,7 +454,6 @@ func main() {
 		// decay each day. Read-time freshness decay (ComputeInterestProfile) is
 		// separate; this decays the stored affinity counters themselves.
 		startDailyAffinityDecay(ctx, interestAgg, router.Scene("general"), logger)
-		postServiceOpts = append(postServiceOpts, postapp.WithProjector(sharedProjector))
 		recOpts = append(recOpts, rtrec.WithFeatureProvider(recinfra.NewFeatureStore(db)))
 
 		// Multi-channel recall sources
@@ -417,13 +557,6 @@ func main() {
 		dailyMetricsStore = persistence.NewDailyMetricsStore(db, logger)
 		authorImpactStore = persistence.NewAuthorImpactStore(db, logger)
 		authorImpactEvidenceStore = persistence.NewAuthorImpactEvidenceStore(db, logger)
-	} else {
-		store = persistence.NewPostStore(recinfra.DefaultSeedPosts())
-		postServiceOpts = append(postServiceOpts,
-			postapp.WithCommentStore(persistence.NewMemoryCommentStore()),
-			postapp.WithCommentReactionStore(persistence.NewMemoryCommentReactionStore()),
-		)
-		log.Printf("content-service storage=inmemory (no mongo.uri configured)")
 	}
 
 	learningRecorder := runtimelearning.NewBufferedRecorder(learningSink, logger, runtimelearning.WithFlushSize(32), runtimelearning.WithFlushInterval(2*time.Second))
@@ -449,15 +582,15 @@ func main() {
 			return db.PingContext(hctx)
 		})
 		reportStore = pgReportStore
+		startReportOutboxRelay(ctx, reportStore, reportStore,
+			messaging.NewReportOutboxPublisher(eventPub),
+			"content-report-runtime-events", "report_outbox_events", healthChecker, logger)
 		log.Printf("content-service report storage=postgres")
-	} else {
-		reportStore = persistence.NewInMemoryReportStore()
-		log.Printf("content-service report storage=inmemory (no postgres.report_dsn configured)")
 	}
 
 	// OSS / Media storage
 	ossCfg := runtimemedia.OSSConfig{
-		Endpoint:        getenvOrDefault("CONTENT_OSS_ENDPOINT", cfg.OSS.Endpoint),
+		Endpoint:        contentOSSEndpoint(getenvOrDefault("CONTENT_OSS_ENDPOINT", cfg.OSS.Endpoint), cfg.OSS.UseSSL),
 		Bucket:          getenvOrDefault("CONTENT_OSS_BUCKET", cfg.OSS.Bucket),
 		Region:          getenvOrDefault("CONTENT_OSS_REGION", cfg.OSS.Region),
 		AccessKeyID:     getenvOrDefault("CONTENT_OSS_ACCESS_KEY_ID", cfg.OSS.AccessKeyID),
@@ -473,28 +606,32 @@ func main() {
 	if ossCfg.CDNTTL == 0 {
 		ossCfg.CDNTTL = 60 * time.Minute
 	}
-	var ossPresigner runtimemedia.PresignClient
-	if ossCfg.AccessKeyID != "" && ossCfg.Endpoint != "" {
-		ossPresigner = runtimemedia.NewS3PresignClient(ossCfg)
-		log.Printf("content-service oss presigner=s3 endpoint=%s bucket=%s", ossCfg.Endpoint, ossCfg.Bucket)
-	} else {
-		log.Printf("content-service oss presigner=stub (no access_key_id or endpoint)")
+	if strings.TrimSpace(ossCfg.Endpoint) == "" || strings.TrimSpace(ossCfg.Bucket) == "" ||
+		strings.TrimSpace(ossCfg.Region) == "" || strings.TrimSpace(ossCfg.AccessKeyID) == "" ||
+		strings.TrimSpace(ossCfg.AccessKeySecret) == "" || strings.TrimSpace(ossCfg.CDNDomain) == "" ||
+		strings.TrimSpace(ossCfg.CDNSignKey) == "" {
+		log.Fatal("content-service OSS endpoint, bucket, region, credentials, CDN domain and signing key are required")
 	}
-	if ossCfg.CDNDomain != "" || ossCfg.Endpoint != "" {
-		postServiceOpts = append(postServiceOpts, postapp.WithMediaURLConfig(ossCfg.CDNDomain, ossCfg.Endpoint))
+	ossPresigner := runtimemedia.NewS3PresignClient(ossCfg)
+	log.Printf("content-service oss presigner=s3 endpoint=%s bucket=%s", ossCfg.Endpoint, ossCfg.Bucket)
+	mediaObjectGateway, err := mediainfra.NewObjectGateway(mediainfra.ObjectGatewayConfig{
+		Bucket: ossCfg.Bucket, CDNDomain: ossCfg.CDNDomain, CDNSignKey: ossCfg.CDNSignKey, DeliveryTTL: ossCfg.CDNTTL,
+	}, ossPresigner)
+	if err != nil {
+		log.Fatalf("content-service media object gateway invalid: %v", err)
 	}
-	if ossCfg.CDNDomain != "" && ossCfg.Bucket != "" {
-		mediaStore := runtimemedia.NewOSSMediaStore(
-			ossCfg,
-			runtimemedia.NewInMemorySessionStore(),
-			runtimemedia.NewInMemoryAssetStore(),
-			nil,
-			ossPresigner,
-		)
-		postServiceOpts = append(postServiceOpts, postapp.WithMediaStore(mediaStore))
+	if mediaStore == nil {
+		log.Fatal("content-service MediaUploadSession/MediaAsset store is not configured")
 	}
+	mediaServiceCore := mediaapp.NewMediaService(mediaapp.BindDataPorts(mediaStore), mediaObjectGateway)
+	mediaService := mediaapp.BindFacades(mediaServiceCore)
+	commentServiceCore = commentapp.NewCommentService(commentapp.BindDataPorts(
+		commentDataAdapter,
+		persistence.NewCommentAttachmentReader(mediaStore, mediaObjectGateway),
+		reactionStore,
+	))
 
-	source := recinfra.NewPostRepositorySource(store)
+	source := recinfra.NewPostProjectionSource(store, store)
 	rawCandidateSources := append(mongoCandidateSources, source)
 	candidateSources := make([]rtrec.CandidateSource, 0, len(rawCandidateSources))
 	for _, candidateSource := range rawCandidateSources {
@@ -503,17 +640,39 @@ func main() {
 		}
 	}
 
+	if (appEnv == "beta" || appEnv == "gamma" || appEnv == "prod") &&
+		(!cfg.RecModelService.Enabled || strings.TrimSpace(cfg.RecModelService.URL) == "") {
+		log.Fatalf("recommendation service is required in APP_ENV=%s", appEnv)
+	}
 	if cfg.RecModelService.Enabled && cfg.RecModelService.URL != "" {
 		timeout := time.Duration(cfg.RecModelService.TimeoutMs) * time.Millisecond
 		if timeout <= 0 {
 			timeout = 50 * time.Millisecond
 		}
-		client := recinfra.NewHTTPModelServiceClient(cfg.RecModelService.URL, timeout)
+		modelTokenConfig, err := rtauth.LoadAccessTokenConfig(
+			runtimeconfig.EnvRuntimeConfigProvider{},
+		)
+		if err != nil {
+			log.Fatalf("recommendation service auth config invalid: %v", err)
+		}
+		modelCredentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
+			modelTokenConfig,
+			"content-service",
+			[]string{"recommendation.model.score"},
+		)
+		if err != nil {
+			log.Fatalf("recommendation service credentials invalid: %v", err)
+		}
+		client, err := recinfra.NewHTTPModelServiceClient(
+			cfg.RecModelService.URL,
+			timeout,
+			modelCredentials,
+		)
+		if err != nil {
+			log.Fatalf("recommendation service client invalid: %v", err)
+		}
 		remoteScorer := rtrec.NewRemoteModelScorer(client, "content_feed")
-		ruleScorer := &rtrec.RuleScorer{}
-		cascade := rtrec.NewCascadeScorer(remoteScorer, ruleScorer, timeout)
-		cascade.Logger = logger
-		recOpts = append(recOpts, rtrec.WithScorer(cascade))
+		recOpts = append(recOpts, rtrec.WithScorer(remoteScorer))
 		log.Printf("content-service rec-model-service enabled url=%s timeout=%v", cfg.RecModelService.URL, timeout)
 	}
 
@@ -543,9 +702,30 @@ func main() {
 	if intersectionService != nil {
 		feedServiceOpts = append(feedServiceOpts, feedapp.WithFeedIntersectionProvider(intersectionService))
 	}
-	feedService := feedapp.NewFeedService(engine, source, feedServiceOpts...)
-	postService := postapp.NewPostService(store, postServiceOpts...)
-	reportService := reportapp.NewReportService(reportStore, eventPub)
+	if postQueryReader == nil {
+		log.Fatal("content-service Post query reader is not configured")
+	}
+	feedService := feedapp.NewFeedService(engine, postQueryReader, feedServiceOpts...)
+	postQueryService := postapp.NewPostQueryFacade(postapp.PostQueryDependencies{
+		Detail: postQueryReader,
+		Author: postQueryReader,
+	})
+	if reactionStore == nil || reactionServiceCore == nil || commentDataAdapter == nil || commentServiceCore == nil {
+		log.Fatal("content-service Comment/ContentReaction object composition is not configured")
+	}
+	reactionService := reactionapp.BindFacades(reactionServiceCore)
+	commentService := commentapp.BindFacades(commentServiceCore)
+	postDataPorts := postapp.WithMediaAssetBindingReader(
+		postapp.BindDataPorts(store),
+		mediainfra.NewPostBindingReader(mediaStore),
+	)
+	postServiceCore := postapp.NewPostService(postDataPorts, postServiceOpts...)
+	postService := postapp.BindFacades(postServiceCore)
+	var reportFacades *reportapp.Facades
+	if reportStore != nil {
+		reportServiceCore := reportapp.NewReportService(reportapp.BindDataPorts(reportStore))
+		reportFacades = reportapp.BindFacades(reportServiceCore)
+	}
 	// 低风险实时推荐 patch（阶段七 §G）：复用 realtime redis scene 的 per-user pub/sub
 	// 在安全边界发射 negative_feedback_removal / new_candidate_hint / refresh_suggestion。
 	feedPatchEmitter := rtrec.NewFeedPatchEmitter(
@@ -553,8 +733,7 @@ func main() {
 		rtrec.WithFeedPatchLogger(logger),
 	)
 	behaviorOpts := []behaviorapp.BehaviorServiceOption{
-		behaviorapp.WithBehaviorEventPublisher(eventPub),
-		behaviorapp.WithBehaviorProjector(sharedProjector),
+		behaviorapp.WithBehaviorEventPublisher(behaviorEventPub),
 		behaviorapp.WithBehaviorFeedbackRecorder(recFeedback),
 		behaviorapp.WithSessionCacheInvalidator(sessionCache.Invalidate),
 		behaviorapp.WithBehaviorEventStore(behaviorEventStore),
@@ -574,6 +753,11 @@ func main() {
 
 	var handlerOpts []httpadapter.ContentHandlerOption
 	handlerOpts = append(handlerOpts, httpadapter.WithHealthChecker(healthChecker))
+	if outboundShareFacades == nil {
+		log.Fatal("content-service OutboundShareFact object composition is not configured")
+	}
+	handlerOpts = append(handlerOpts, httpadapter.WithOutboundShareService(outboundShareFacades))
+	handlerOpts = append(handlerOpts, httpadapter.WithMediaService(mediaService))
 	if bulkImportService != nil {
 		handlerOpts = append(handlerOpts, httpadapter.WithBulkImportService(bulkImportService))
 	}
@@ -590,11 +774,47 @@ func main() {
 		handlerOpts = append(handlerOpts, httpadapter.WithAuthorImpactEvidenceStore(authorImpactEvidenceStore))
 	}
 
-	handler := httpadapter.NewContentHandler(feedService, postService, reportService, behaviorService, handlerOpts...).Routes()
+	handler := httpadapter.NewContentHandler(
+		feedService,
+		postService,
+		postQueryService,
+		commentService,
+		reactionService,
+		reportFacades,
+		behaviorService,
+		handlerOpts...,
+	).Routes()
+	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(
+		runtimeconfig.EnvRuntimeConfigProvider{},
+	)
+	if err != nil {
+		log.Fatalf("access token config invalid: %v", err)
+	}
+	accessVerifier, err := rtauth.NewHS256Verifier(accessTokenConfig)
+	if err != nil {
+		log.Fatalf("access token verifier invalid: %v", err)
+	}
+	deviceTicketConfig, err := rtauth.LoadDeviceTicketConfig(
+		runtimeconfig.EnvRuntimeConfigProvider{},
+	)
+	if err != nil {
+		log.Fatalf("device ticket config invalid: %v", err)
+	}
+	deviceTicketVerifier, err := rtauth.NewHS256Verifier(deviceTicketConfig)
+	if err != nil {
+		log.Fatalf("device ticket verifier invalid: %v", err)
+	}
+	sensitiveOperationGuard := httpadapter.RequireSensitiveOperationPrincipal(handler)
+	generatedOperationGuard := rtauth.RequireGeneratedOperationAuthorization(
+		operationsecurity.ForDomain("content"),
+	)(sensitiveOperationGuard)
 
 	outerMux := http.NewServeMux()
 	outerMux.Handle("/metrics", rtmetrics.Handler())
-	outerMux.Handle("/", handler)
+	outerMux.HandleFunc("/healthz", healthChecker.Handler())
+	outerMux.HandleFunc("/livez", healthChecker.Handler())
+	outerMux.HandleFunc("/startupz", healthChecker.Handler())
+	outerMux.Handle("/", generatedOperationGuard)
 
 	observedHandler := rthttp.NewHTTPServerMiddleware(outerMux, rthttp.HTTPServerMiddlewareConfig{
 		Service:           "content-service",
@@ -611,8 +831,11 @@ func main() {
 	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(corsHandler)
 
 	server := &http.Server{
-		Addr:              addr,
-		Handler:           rateLimited,
+		Addr: addr,
+		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
+			AccessTokenVerifier:  accessVerifier,
+			DeviceTicketVerifier: deviceTicketVerifier,
+		})(rateLimited),
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
@@ -622,410 +845,3 @@ func main() {
 		log.Fatalf("content-service: %v", err)
 	}
 }
-
-func resolveRuntimeIdentity() (serviceName, appEnv, configRoot, configVersion, imageVersion string, err error) {
-	serviceName = getenvOrDefault("SERVICE_NAME", "content-service")
-	appEnv = getenvOrDefault("APP_ENV", "alpha")
-	configRoot = os.Getenv("CONFIG_ROOT")
-	configVersion = os.Getenv("CONFIG_VERSION")
-	imageVersion = os.Getenv("IMAGE_VERSION")
-
-	if !isValidAppEnv(appEnv) {
-		return "", "", "", "", "", fmt.Errorf("APP_ENV must be one of alpha|beta|gamma|prod, got %q", appEnv)
-	}
-	// Enforce explicit config version in prod so rollout always binds image+config.
-	if requiresConfigVersion(appEnv) && strings.TrimSpace(configVersion) == "" {
-		return "", "", "", "", "", fmt.Errorf("CONFIG_VERSION is required when APP_ENV=%s", appEnv)
-	}
-	return serviceName, appEnv, configRoot, configVersion, imageVersion, nil
-}
-
-func isValidAppEnv(env string) bool {
-	switch env {
-	case "alpha", "beta", "gamma", "prod":
-		return true
-	default:
-		return false
-	}
-}
-
-func requiresConfigVersion(env string) bool {
-	switch env {
-	case "gamma", "prod":
-		return true
-	default:
-		return false
-	}
-}
-
-func getenvOrDefault(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
-}
-
-func loadConfig(path string) config {
-	cfg := config{}
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return cfg
-	}
-	if err := yaml.Unmarshal(raw, &cfg); err != nil {
-		log.Printf("content-service config parse failed: %v", err)
-	}
-	return cfg
-}
-
-func mergeConfigFile(cfg *config, path string) error {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-	if err := yaml.Unmarshal(raw, cfg); err != nil {
-		return fmt.Errorf("parse %s: %w", path, err)
-	}
-	return nil
-}
-
-func loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion string) (config, error) {
-	cfg := config{}
-
-	// External mounted config root mode:
-	//   <root>/configs/<service>/default/config.yaml
-	//   <root>/configs/<service>/<env>/config.yaml
-	//   <root>/quwoquan_service/services/<service>/configs/releases/<version>.yaml
-	if strings.TrimSpace(configRoot) != "" {
-		defaultFile := filepath.Join(configRoot, "configs", serviceName, "default", "config.yaml")
-		envFile := filepath.Join(configRoot, "configs", serviceName, appEnv, "config.yaml")
-
-		if err := mergeConfigFile(&cfg, defaultFile); err != nil {
-			return config{}, fmt.Errorf("read default config: %w", err)
-		}
-		if err := mergeConfigFile(&cfg, envFile); err != nil {
-			return config{}, fmt.Errorf("read env config: %w", err)
-		}
-		if strings.TrimSpace(configVersion) != "" {
-			versionFile := filepath.Join(configRoot, "quwoquan_service", "services", serviceName, "configs", "releases", configVersion+".yaml")
-			if err := mergeConfigFile(&cfg, versionFile); err != nil {
-				return config{}, fmt.Errorf("read version config: %w", err)
-			}
-		}
-		return cfg, nil
-	}
-
-	// Repository local mode (service-relative):
-	//   configs/default/config.yaml + configs/<env>/config.yaml (+ optional version under releases/)
-	localDefault := filepath.Join("configs", "default", "config.yaml")
-	localEnv := filepath.Join("configs", appEnv, "config.yaml")
-	if _, err := os.Stat(localDefault); err == nil {
-		if err := mergeConfigFile(&cfg, localDefault); err != nil {
-			return config{}, fmt.Errorf("read local default config: %w", err)
-		}
-		if err := mergeConfigFile(&cfg, localEnv); err != nil {
-			return config{}, fmt.Errorf("read local env config: %w", err)
-		}
-		if strings.TrimSpace(configVersion) != "" {
-			versionFile := filepath.Join("configs", "releases", configVersion+".yaml")
-			if _, err := os.Stat(versionFile); err == nil {
-				if err := mergeConfigFile(&cfg, versionFile); err != nil {
-					return config{}, fmt.Errorf("read local version config: %w", err)
-				}
-			}
-		}
-		return cfg, nil
-	}
-
-	// Current fallback mode.
-	return loadConfig(filepath.Join("configs", "config.yaml")), nil
-}
-
-func validateRuntimeCompatibility(cfg config, configVersion, imageVersion string) error {
-	if strings.TrimSpace(configVersion) != "" && strings.TrimSpace(cfg.Config.Version) != "" && cfg.Config.Version != configVersion {
-		return fmt.Errorf("CONFIG_VERSION mismatch: env=%s file=%s", configVersion, cfg.Config.Version)
-	}
-	if strings.TrimSpace(imageVersion) == "" {
-		// Allow local dev without image version.
-		return nil
-	}
-	if cfg.Config.MinImageVersion != "" && compareSemver(imageVersion, cfg.Config.MinImageVersion) < 0 {
-		return fmt.Errorf("IMAGE_VERSION=%s below min_image_version=%s", imageVersion, cfg.Config.MinImageVersion)
-	}
-	if cfg.Config.MaxImageVersion != "" && compareSemver(imageVersion, cfg.Config.MaxImageVersion) > 0 {
-		return fmt.Errorf("IMAGE_VERSION=%s above max_image_version=%s", imageVersion, cfg.Config.MaxImageVersion)
-	}
-	return nil
-}
-
-func preflightConfig(cfg config, appEnv string) error {
-	mode := strings.ToLower(strings.TrimSpace(cfg.Redis.Rec.Mode))
-	if mode == "" {
-		mode = "standalone"
-	}
-	if mode != "standalone" && mode != "cluster" && mode != "memory" {
-		return fmt.Errorf("redis.rec.mode must be standalone|cluster|memory, got %q", cfg.Redis.Rec.Mode)
-	}
-	if mode == "cluster" && len(cfg.Redis.Rec.Addrs) == 0 {
-		return fmt.Errorf("redis.rec.mode=cluster requires redis.rec.addrs")
-	}
-	if appEnv == "prod" {
-		if mode == "standalone" && strings.TrimSpace(cfg.Redis.Rec.Addr) == "" {
-			return fmt.Errorf("prod requires redis.rec.addr when mode=standalone")
-		}
-		if mode == "cluster" && len(cfg.Redis.Rec.Addrs) == 0 {
-			return fmt.Errorf("prod requires redis.rec.addrs when mode=cluster")
-		}
-	}
-	return nil
-}
-
-func compareSemver(a, b string) int {
-	parse := func(v string) [3]int {
-		var out [3]int
-		parts := strings.Split(strings.TrimPrefix(strings.TrimSpace(v), "v"), ".")
-		for i := 0; i < len(parts) && i < 3; i++ {
-			n, _ := strconv.Atoi(parts[i])
-			out[i] = n
-		}
-		return out
-	}
-	av := parse(a)
-	bv := parse(b)
-	for i := 0; i < 3; i++ {
-		if av[i] > bv[i] {
-			return 1
-		}
-		if av[i] < bv[i] {
-			return -1
-		}
-	}
-	return 0
-}
-
-// applyEnvOverrides applies environment variable overrides to all config sections.
-// Env vars take precedence over config.yaml values — intended for CI/CD injection.
-//
-// Rec Redis overrides:
-//
-//	CONTENT_REDIS_REC_MODE         standalone | cluster
-//	CONTENT_REDIS_REC_ADDR         host:port  (standalone)
-//	CONTENT_REDIS_REC_ADDRS        host1:port,host2:port,...  (cluster)
-//	CONTENT_REDIS_REC_PASSWORD     password
-//	CONTENT_REDIS_REC_TLS          true | 1
-//
-// General Redis overrides:
-//
-//	CONTENT_REDIS_GENERAL_MODE, _ADDR, _ADDRS, _PASSWORD, _TLS  (same pattern)
-//
-// Backward-compatible current vars (mapped to rec scene):
-//
-//	CONTENT_REDIS_ADDR, CONTENT_REDIS_PASSWORD, CONTENT_REDIS_DB
-//
-// RecModelService overrides:
-//
-//	REC_MODEL_SERVICE_URL, REC_MODEL_SERVICE_ENABLED, REC_MODEL_SERVICE_TIMEOUT_MS
-func applyEnvOverrides(cfg *config) {
-	applyRedisSceneEnv("CONTENT_REDIS_REC", &cfg.Redis.Rec)
-	applyRedisSceneEnv("CONTENT_REDIS_GENERAL", &cfg.Redis.General)
-	searchindex.ApplyESEnvOverrides(&cfg.ES)
-
-	// Current single-Redis env vars → rec scene (backward compat)
-	if v := os.Getenv("CONTENT_REDIS_ADDR"); v != "" && cfg.Redis.Rec.Addr == "" {
-		cfg.Redis.Rec.Addr = v
-	}
-	if v := os.Getenv("CONTENT_REDIS_PASSWORD"); v != "" && cfg.Redis.Rec.Password == "" {
-		cfg.Redis.Rec.Password = v
-	}
-	if raw := os.Getenv("CONTENT_REDIS_DB"); raw != "" && cfg.Redis.Rec.DB == 0 {
-		if n, err := strconv.Atoi(raw); err == nil {
-			cfg.Redis.Rec.DB = n
-		}
-	}
-
-	// MongoDB
-	if v := os.Getenv("MONGO_URI"); v != "" {
-		cfg.Mongo.URI = v
-	}
-
-	// RecModelService
-	if v := os.Getenv("REC_MODEL_SERVICE_URL"); v != "" {
-		cfg.RecModelService.URL = v
-	}
-	if v := os.Getenv("REC_MODEL_SERVICE_ENABLED"); v == "true" || v == "1" {
-		cfg.RecModelService.Enabled = true
-	}
-	if v := os.Getenv("REC_MODEL_SERVICE_TIMEOUT_MS"); v != "" {
-		if ms, err := strconv.Atoi(v); err == nil && ms > 0 {
-			cfg.RecModelService.TimeoutMs = ms
-		}
-	}
-}
-
-// applyRedisSceneEnv reads env vars with the given prefix and writes them into cfg.
-// prefix example: "CONTENT_REDIS_REC" → reads CONTENT_REDIS_REC_MODE, _ADDR, etc.
-func applyRedisSceneEnv(prefix string, cfg *redisSceneCfg) {
-	if v := os.Getenv(prefix + "_MODE"); v != "" {
-		cfg.Mode = v
-	}
-	if v := os.Getenv(prefix + "_ADDR"); v != "" {
-		cfg.Addr = v
-	}
-	if v := os.Getenv(prefix + "_ADDRS"); v != "" {
-		cfg.Addrs = strings.Split(v, ",")
-	}
-	if v := os.Getenv(prefix + "_PASSWORD"); v != "" {
-		cfg.Password = v
-	}
-	if v := os.Getenv(prefix + "_TLS"); v == "true" || v == "1" {
-		cfg.TLS = true
-	}
-}
-
-func hostname() string {
-	h, _ := os.Hostname()
-	if h == "" {
-		h = "unknown"
-	}
-	return h
-}
-
-// projectorAdapter bridges content read-model projectors to ports.Projector.
-type projectorAdapter struct {
-	discovery *recinfra.DiscoveryFeedProjector
-	recommend *recinfra.RecommendFeatureProjector
-	premium   *recinfra.PremiumPoolProjector
-	search    *searchindex.Projector
-	place     *placeindex.PlaceProjector
-}
-
-func (a *projectorAdapter) Project(ctx context.Context, event ports.ProjectorEvent) error {
-	projectorEvent := recinfra.ProjectorEvent{
-		Type:          event.Type,
-		AggregateType: event.AggregateType,
-		AggregateID:   event.AggregateID,
-		Payload:       event.Payload,
-		OccurredAt:    event.OccurredAt,
-	}
-	if a.discovery != nil {
-		if err := a.discovery.Project(ctx, projectorEvent); err != nil {
-			return err
-		}
-	}
-	if a.recommend != nil {
-		if err := a.recommend.Project(ctx, projectorEvent); err != nil {
-			return err
-		}
-	}
-	if a.premium != nil {
-		if err := a.premium.Project(ctx, projectorEvent); err != nil {
-			return err
-		}
-	}
-	// Search index is a derived read store and runs last: it swallows its own
-	// failures (returns nil) so an ES outage never blocks the primary write path
-	// nor the discovery/recommend projections above.
-	if a.search != nil {
-		if err := a.search.Project(ctx, event); err != nil {
-			return err
-		}
-	}
-	// First-party place index (location.place) is likewise a derived read store
-	// that swallows its own failures; it shares the same ES client.
-	if a.place != nil {
-		if err := a.place.Project(ctx, event); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func resolveMongoURI(cfg config) string {
-	uri := strings.TrimSpace(cfg.Mongo.URI)
-	if uri == "" || uri == "${MONGO_URI}" {
-		return ""
-	}
-	return uri
-}
-
-func resolveReportDSN(cfg config) string {
-	if v := strings.TrimSpace(os.Getenv("REPORT_DATABASE_URL")); v != "" {
-		return v
-	}
-	dsn := strings.TrimSpace(cfg.Postgres.ReportDSN)
-	if dsn == "" || dsn == "${REPORT_DATABASE_URL}" {
-		return ""
-	}
-	return dsn
-}
-
-func resolveStoryRuntimeConfig() postapp.StoryRuntimeConfig {
-	return postapp.StoryRuntimeConfig{
-		FeatureFlags: map[string]bool{
-			"enable_create_action_entry": parseBoolEnv(
-				"CONTENT_FLAG_ENABLE_CREATE_ACTION_ENTRY",
-				false,
-			),
-			"enable_unified_create_editor": parseBoolEnv(
-				"CONTENT_FLAG_ENABLE_UNIFIED_CREATE_EDITOR",
-				true,
-			),
-			"enable_identity_based_surfaces": parseBoolEnv(
-				"CONTENT_FLAG_ENABLE_IDENTITY_BASED_SURFACES",
-				true,
-			),
-			"enable_identity_share_template": parseBoolEnv(
-				"CONTENT_FLAG_ENABLE_IDENTITY_SHARE_TEMPLATE",
-				true,
-			),
-			"enable_assistant_content_identity_index": parseBoolEnv(
-				"CONTENT_FLAG_ENABLE_ASSISTANT_CONTENT_IDENTITY_INDEX",
-				true,
-			),
-		},
-		ExperimentBucket: getenvOrDefault(
-			"CONTENT_STORY_EXPERIMENT_BUCKET",
-			"local_story_enabled",
-		),
-		CurrentStage: getenvOrDefault("CONTENT_STORY_CURRENT_STAGE", "100%"),
-		CanaryMatrix: []postapp.StoryCanaryStage{
-			{Stage: "5%", RolloutPercent: 5},
-			{Stage: "20%", RolloutPercent: 20},
-			{Stage: "50%", RolloutPercent: 50},
-			{Stage: "100%", RolloutPercent: 100},
-		},
-	}
-}
-
-func parseBoolEnv(key string, fallback bool) bool {
-	switch strings.TrimSpace(strings.ToLower(os.Getenv(key))) {
-	case "1", "true", "yes", "on":
-		return true
-	case "0", "false", "no", "off":
-		return false
-	default:
-		return fallback
-	}
-}
-
-func collaborativeRecallRollbackDisabled() bool {
-	return parseBoolEnv("QWQ_DISABLE_COLLABORATIVE_RECALL_SOURCES", false) ||
-		parseBoolEnv("DISABLE_COLLABORATIVE_RECALL_SOURCES", false) ||
-		parseBoolEnv("disable_collaborative_recall_sources", false)
-}
-
-func premiumPoolSourceRollbackDisabled() bool {
-	return parseBoolEnv("QWQ_DISABLE_PREMIUM_POOL_SOURCE", false) ||
-		parseBoolEnv("DISABLE_PREMIUM_POOL_SOURCE", false) ||
-		parseBoolEnv("disable_premium_pool_source", false)
-}
-
-// dailyAffinityDecayCheckInterval is how often each replica checks whether the
-// daily affinity decay still needs to run; the per-day Redis lock makes the
-// actual decay run at most once per UTC day across all replicas.
-const dailyAffinityDecayCheckInterval = time.Hour
-
-// startDailyAffinityDecay launches a background ticker that decays raw affinity
-// counters once per UTC day. With multiple replicas a per-day Redis
-// single-flight lock (SET NX) guarantees only one replica performs the
-// non-idempotent $multiply decay, preventing over-decay. A nil aggregator
-// degrades to a no-op; a nil lock degrades to an unguarded single run.

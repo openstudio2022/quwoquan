@@ -1,0 +1,114 @@
+version: 1
+aggregate: ProfileUpdateProposal
+
+entities:
+  ProfileUpdateProposal:
+    description: 资料修改提案（状态机 + 乐观锁）
+    fields:
+      - name: id
+        type: string
+        constraints: [PK]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: personaId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: source
+        type: enum
+        enum_ref: ProposalSource
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: proposedChanges
+        type: jsonb
+        constraints: [NOT_NULL]
+        classification: SENSITIVE
+        log_policy: mask
+        api_exposure: read
+        ops_exposure: read
+        description: ProfileChangeSet typed value object 的持久化编码；领域层禁止动态 Map。
+
+      - name: status
+        type: enum
+        enum_ref: ProposalStatus
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read_write
+
+      - name: reviewedBy
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+      - name: targetPersonaExpectedVersion
+        type: int
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+        description: apply 时调用 Persona Command Facade 的乐观锁版本。
+
+      - name: version
+        type: int
+        constraints: [NOT_NULL, DEFAULT_1]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: drop
+        description: 乐观锁版本号
+
+      - name: createdAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: updatedAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: resolvedAt
+        type: timestamp
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+    indexes:
+      - columns: [personaId, status]
+        condition: "status IN ('pending', 'confirmed')"
+        description: 活跃提案快速查询
+
+    state_machine:
+      field: status
+      transitions:
+        - from: pending
+          to: [confirmed, rejected]
+        - from: confirmed
+          to: [applied, rejected]
+      concurrency: optimistic_lock
+      lock_field: version

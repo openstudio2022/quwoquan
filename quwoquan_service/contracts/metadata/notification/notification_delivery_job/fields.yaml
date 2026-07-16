@@ -1,0 +1,17 @@
+version: 1
+aggregate: NotificationDeliveryJob
+
+entities:
+  NotificationDeliveryJob:
+    description: Notification outbox 派生的外部投递生命周期；不承载通知正文真相。
+    fields:
+      - { name: id, type: string, constraints: [PK, NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read }
+      - { name: notificationId, type: string, constraints: [NOT_NULL], classification: PII, log_policy: hash, api_exposure: drop, ops_exposure: read }
+      - { name: channel, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read }
+      - { name: destinationRef, type: string, constraints: [NOT_NULL], classification: SECRET, log_policy: drop, api_exposure: drop, ops_exposure: drop }
+      - { name: status, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read }
+      - { name: attemptCount, type: int, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read }
+      - { name: nextAttemptAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read }
+      - { name: externalInteractionId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: drop, ops_exposure: read }
+      - { name: createdAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read }
+      - { name: updatedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read }

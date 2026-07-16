@@ -1,0 +1,14 @@
+version: 1
+domain: user
+entity: RelationshipDirection
+object_kind: owned_entity
+aggregate_owner: PersonaRelationship
+description: PersonaRelationship 内最多两个的方向状态，只能由聚合根创建和修改。
+capabilities: []
+taggable: false
+vector_enabled: false
+ddd_layer_mapping:
+  domain_model: internal/domain/relationship/persona_relationship/model
+  repository: none
+  application: none
+  adapter_rest: none

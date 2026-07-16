@@ -25,30 +25,32 @@ const (
 func seedIntersectionSourceFixtures(t *testing.T) {
 	t.Helper()
 	ctx := context.Background()
-	follow := mongoDB.Collection("follow_edges")
+	relationships := mongoDB.Collection("persona_follow_projection")
 	members := mongoDB.Collection("circle_members")
 	events := mongoDB.Collection("rm_behavior_events")
+	posts := mongoDB.Collection("posts")
 	cleanup := func() {
-		_, _ = follow.DeleteMany(ctx, bson.M{"followerId": bson.M{"$regex": "^ixsrc_"}})
+		_, _ = relationships.DeleteMany(ctx, bson.M{"sourcePersonaId": bson.M{"$regex": "^ixsrc_"}})
 		_, _ = members.DeleteMany(ctx, bson.M{"userId": bson.M{"$regex": "^ixsrc_"}})
 		_, _ = events.DeleteMany(ctx, bson.M{"userId": bson.M{"$regex": "^ixsrc_"}})
+		_, _ = posts.DeleteMany(ctx, bson.M{"authorId": bson.M{"$regex": "^ixsrc_"}})
 	}
 	cleanup()
 	t.Cleanup(cleanup)
 
 	// sharedFollowees：viewer 与 object 共同关注 third_a / third_b。
-	followDocs := []any{
-		bson.M{"followerId": ixViewer, "followeeId": "ixsrc_third_a"},
-		bson.M{"followerId": ixViewer, "followeeId": "ixsrc_third_b"},
-		bson.M{"followerId": ixViewer, "followeeId": "ixsrc_only_viewer"},
-		bson.M{"followerId": ixObject, "followeeId": "ixsrc_third_a"},
-		bson.M{"followerId": ixObject, "followeeId": "ixsrc_third_b"},
-		bson.M{"followerId": ixObject, "followeeId": "ixsrc_only_object"},
+	relationshipDocs := []any{
+		bson.M{"sourcePersonaId": ixViewer, "targetPersonaId": "ixsrc_third_a", "following": true},
+		bson.M{"sourcePersonaId": ixViewer, "targetPersonaId": "ixsrc_third_b", "following": true},
+		bson.M{"sourcePersonaId": ixViewer, "targetPersonaId": "ixsrc_only_viewer", "following": true},
+		bson.M{"sourcePersonaId": ixObject, "targetPersonaId": "ixsrc_third_a", "following": true},
+		bson.M{"sourcePersonaId": ixObject, "targetPersonaId": "ixsrc_third_b", "following": true},
+		bson.M{"sourcePersonaId": ixObject, "targetPersonaId": "ixsrc_only_object", "following": true},
 		// followeeVisited：viewer 关注 visitor_c，visitor_c 到访过 ixEntity。
-		bson.M{"followerId": ixViewer, "followeeId": "ixsrc_visitor_c"},
+		bson.M{"sourcePersonaId": ixViewer, "targetPersonaId": "ixsrc_visitor_c", "following": true},
 	}
-	if _, err := follow.InsertMany(ctx, followDocs); err != nil {
-		t.Fatalf("seed follow_edges: %v", err)
+	if _, err := relationships.InsertMany(ctx, relationshipDocs); err != nil {
+		t.Fatalf("seed persona follow projection: %v", err)
 	}
 
 	// sharedCircle：双方同在一个圈子。
@@ -71,6 +73,18 @@ func seedIntersectionSourceFixtures(t *testing.T) {
 	}
 	if _, err := events.InsertMany(ctx, eventDocs); err != nil {
 		t.Fatalf("seed rm_behavior_events: %v", err)
+	}
+
+	// 交集事实句只能使用内容域内已投影的真实作者展示快照。测试数据显式写入
+	// 该权威读模型，禁止实现用 userId、占位名或客户端文案猜测用户身份。
+	profileDocs := []any{
+		bson.M{"authorId": ixObject, "status": "published", "authorDisplayNameSnapshot": "陆衡", "authorAvatarUrlSnapshot": "https://static.quwoquan.test/ix-object.png", "updatedAt": time.Now()},
+		bson.M{"authorId": "ixsrc_visitor_c", "status": "published", "authorDisplayNameSnapshot": "周屿", "authorAvatarUrlSnapshot": "https://static.quwoquan.test/visitor-c.png", "updatedAt": time.Now()},
+		bson.M{"authorId": "ixsrc_homepage_friend", "status": "published", "authorDisplayNameSnapshot": "林清越", "authorAvatarUrlSnapshot": "https://static.quwoquan.test/homepage-friend.png", "updatedAt": time.Now()},
+		bson.M{"authorId": "ixsrc_circle_friend", "status": "published", "authorDisplayNameSnapshot": "顾南", "authorAvatarUrlSnapshot": "https://static.quwoquan.test/circle-friend.png", "updatedAt": time.Now()},
+	}
+	if _, err := posts.InsertMany(ctx, profileDocs); err != nil {
+		t.Fatalf("seed author display projections: %v", err)
 	}
 }
 
@@ -225,14 +239,14 @@ func TestIntersectionSource_EntityObjectProducesFolloweeVisited(t *testing.T) {
 func TestIntersectionSource_HomepageAndCircleObjectsUseConcreteActionSemantics(t *testing.T) {
 	seedIntersectionSourceFixtures(t)
 	ctx := context.Background()
-	follow := mongoDB.Collection("follow_edges")
+	relationships := mongoDB.Collection("persona_follow_projection")
 	events := mongoDB.Collection("rm_behavior_events")
 	docs := []any{
-		bson.M{"followerId": ixViewer, "followeeId": "ixsrc_homepage_friend"},
-		bson.M{"followerId": ixViewer, "followeeId": "ixsrc_circle_friend"},
+		bson.M{"sourcePersonaId": ixViewer, "targetPersonaId": "ixsrc_homepage_friend", "following": true},
+		bson.M{"sourcePersonaId": ixViewer, "targetPersonaId": "ixsrc_circle_friend", "following": true},
 	}
-	if _, err := follow.InsertMany(ctx, docs); err != nil {
-		t.Fatalf("seed followees: %v", err)
+	if _, err := relationships.InsertMany(ctx, docs); err != nil {
+		t.Fatalf("seed relationship projection: %v", err)
 	}
 	eventDocs := []any{
 		bson.M{
@@ -327,7 +341,7 @@ func TestIntersectionSource_FeedFactReasonUsesRegistryKinds(t *testing.T) {
 			switch p.SourceRef {
 			case "sharedTagSample", "followeeDiscussedThis", "followeeViewing":
 				found = true
-			case "circleTag", "followEdge", "tagRef", "social_friend":
+			case "circleTag", "tagRef", "social_friend":
 				t.Fatalf("point kind must be registry standard name, got data-source id %q", p.SourceRef)
 			}
 		}

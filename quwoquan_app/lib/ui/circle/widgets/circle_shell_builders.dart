@@ -146,15 +146,22 @@ extension _CircleShellBuilders on _CircleShellState {
 
   /// 「我的交集」预览卡：viewer × 圈子，与实体/用户主页同壳。
   Widget _buildIntersectionCard(bool isDark) {
-    return ObjectIntersectionPreviewCard(
-      objectId: widget.circleId,
-      objectType: 'circle',
+    final query = ObjectIntersectionQuery(
+      objectAId: ref.watch(currentUserIdProvider),
+      objectAType: 'user',
+      objectBId: widget.circleId,
+      objectBType: 'circle',
+    );
+    if (!query.isResolvable) {
+      return const SizedBox.shrink();
+    }
+    return ObjectIntersectionSection(
+      key: const ValueKey<String>('circle-my-intersection-card'),
+      query: query,
       title: UITextConstants.objectMyIntersectionsTitle,
+      isDark: isDark,
       emptyText: UITextConstants.objectIntersectionEmptyCircle,
-      referralSource: ReferralSource.circlePost,
-      cardKey: const ValueKey<String>('circle-my-intersection-card'),
       emptyKey: const ValueKey<String>('circle-my-intersection-empty'),
-      topPadding: false,
     );
   }
 

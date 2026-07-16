@@ -1,0 +1,20 @@
+version: 1
+
+service:
+  name: tag-service
+  domain: tag
+  owner: tag-platform-team
+  commercial_defaults:
+    status: blocked
+    block_reason: canonical operation awaits object-centered commercial migration
+    gap_id: TAG_TAG_FEEDBACK_COMMERCIAL_EVIDENCE
+    target_story: app-cloud-business-object-commercial-closure
+  description: |
+    TagFeedback 写模型尚未完成真实存储、outbox 与鉴权闭环，因此不暴露 transport。
+    旧 reserved/501 路由已删除；完成对象 packet 前不得恢复。
+
+api_routes: []
+
+consumers:
+  - name: recommendation-engine
+    capabilities: [project_tag_feedback]

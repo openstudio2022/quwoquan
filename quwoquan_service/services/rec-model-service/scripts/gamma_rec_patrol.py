@@ -6,7 +6,7 @@ Probes:
 1. Feed non-empty: GET /v1/content/feed returns items
 2. Model path hit: /metrics/rec shows model usage > 0
 3. AB bucket distribution: chi-square test for fairness
-4. rec-model-service health: /health and /v1/model/status return ok
+4. recommendation-service health: /health returns ok
 
 Usage:
   python3 gamma_rec_patrol.py --gateway http://content-service:18080
@@ -104,22 +104,13 @@ def probe_ab_distribution(gateway: str) -> bool:
 
 
 def probe_rec_model_health(rec_model_url: str) -> bool:
-    """Check rec-model-service health and model status."""
-    print("[probe] rec-model-service health")
+    """Check recommendation-service health without using a business API bypass."""
+    print("[probe] recommendation-service health")
     health = _get_json(f"{rec_model_url}/health")
     if health is None or health.get("status") != "ok":
         print("  FAIL: health check failed")
         return False
-    print("  health: ok")
-
-    status = _get_json(f"{rec_model_url}/v1/model/status")
-    if status:
-        print(f"  model versions: {status.get('versions', {})}")
-        print(f"  last reload: {status.get('last_reload', 'never')}")
-    else:
-        print("  WARN: model status endpoint unavailable")
-
-    print("  PASS")
+    print("  PASS: health ok")
     return True
 
 

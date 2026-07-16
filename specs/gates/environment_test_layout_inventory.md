@@ -1,6 +1,6 @@
 # Environment Test Layout Contract
 
-环境不参与测试目录分层。测试对象按三层目录组织，环境只进入 runner 参数、`.qwq_output/env/<env>/runs/**` 报告和 recorded artifact。
+环境不参与测试目录分层。测试对象按三层目录组织，环境只进入 runner 参数、`QWQ_OUTPUT_ROOT/env/<env>/runs/**` 报告和 recorded artifact。
 
 ## App
 
@@ -44,5 +44,5 @@ quwoquan_ops/tests/
 
 - `ENV=beta|gamma|prod make test-api-integration`
 - `TARGET=local|gamma-local|prod-hosted make test-user-acceptance`
-- 运行报告只写 `.qwq_output/env/<env>/runs/**` 或 `.qwq_output/env/repo/runs/tests/**`
+- 运行报告只写 `QWQ_OUTPUT_ROOT/env/<env>/runs/**` 或 `QWQ_OUTPUT_ROOT/env/repo/runs/tests/**`
 - 测试 fixture 来自 `contracts/metadata/**/test_fixtures` 或 `test/support/**`，不通过环境目录复制。

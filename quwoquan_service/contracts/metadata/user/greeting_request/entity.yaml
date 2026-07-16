@@ -1,7 +1,7 @@
 version: 1
 domain: user
 entity: GreetingRequest
-is_aggregate: true
+object_kind: aggregate_root
 
 description: |
   打招呼请求对象（请求箱容器）。
@@ -18,9 +18,20 @@ capabilities:
 taggable: false
 vector_enabled: false
 
+business_rules:
+  - sender persona、recipient persona 与首条消息创建后不可变
+  - 同一 persona pair 只能存在一个 pending request
+  - sender 不能向自己或已 block 的 persona 发起请求
+  - accept 只能执行一次并通过 Chat Command Facade 创建正式 Conversation
+  - reject 或 expire 后不得恢复原 request
+lifecycle:
+  states: [pending, accepted, rejected, expired, cancelled]
+  optimistic_concurrency: version
+  idempotency: command_receipt
+
 ddd_layer_mapping:
   domain_model: internal/domain/user/model
-  repository: internal/domain/user/repository
+  ports: internal/domain/user/greeting_request/ports
   application: internal/application
   adapter_rest: internal/adapters/http
   adapter_event: internal/adapters/mq

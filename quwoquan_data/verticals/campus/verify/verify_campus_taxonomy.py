@@ -31,9 +31,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _common.paths import PUBLISH_ROOT
+from core.paths import CONTROL_PLANE_TAXONOMY_ROOT
 
-TAGS_ROOT = PUBLISH_ROOT / "tags"
+TAGS_ROOT = CONTROL_PLANE_TAXONOMY_ROOT
 errors: list[str] = []
 
 SCHOOL_INSTANCE_PATTERN = re.compile(

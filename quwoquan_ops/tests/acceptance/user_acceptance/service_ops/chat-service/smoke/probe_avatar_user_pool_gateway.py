@@ -25,8 +25,7 @@ ROOT = _find_repo_root()
 SHARED = ROOT / "quwoquan_service" / "contracts" / "metadata" / "_shared" / "test_fixtures"
 MEDIA_ROOT = SHARED / "media"
 USER_POOL_PATH = SHARED / "user_pool.json"
-USER_POOL_MANIFEST_PATH = SHARED / "user_pool.manifest.travel_photo_1k_v1.json"
-METADATA_ROOT = ROOT / "quwoquan_service" / "contracts" / "metadata"
+CREATOR_POOL_PATH = SHARED / "user_pool.creator_pool.travel_photo_1k_v1.json"
 
 
 def free_port() -> int:
@@ -83,29 +82,18 @@ def require(condition: bool, message: str) -> None:
 
 
 def load_pool() -> dict[str, Any]:
-    pool = json.loads(USER_POOL_PATH.read_text(encoding="utf-8"))
-    if not USER_POOL_MANIFEST_PATH.is_file():
-        return pool
-    manifest = json.loads(USER_POOL_MANIFEST_PATH.read_text(encoding="utf-8"))
-    merge_rules = manifest.get("mergeRules") if isinstance(manifest.get("mergeRules"), dict) else {}
-    archive_rel = str(merge_rules.get("archivePath") or "").strip()
-    creator_rel = str(merge_rules.get("creatorPoolPath") or "").strip()
-    archive_path = METADATA_ROOT / archive_rel if archive_rel else USER_POOL_PATH
-    creator_path = METADATA_ROOT / creator_rel if creator_rel else None
-    archive_pool = json.loads(archive_path.read_text(encoding="utf-8")) if archive_path.is_file() else pool
-    if creator_path is None or not creator_path.is_file():
-        return archive_pool
-    creator_pool = json.loads(creator_path.read_text(encoding="utf-8"))
+    shared_pool = json.loads(USER_POOL_PATH.read_text(encoding="utf-8"))
+    creator_pool = json.loads(CREATOR_POOL_PATH.read_text(encoding="utf-8"))
     merged_users: dict[str, dict[str, Any]] = {}
-    for item in list(archive_pool.get("users") or []) + list(creator_pool.get("users") or []):
+    for item in list(shared_pool.get("users") or []) + list(creator_pool.get("users") or []):
         if not isinstance(item, dict):
             continue
         user_id = str(item.get("userId") or "").strip()
         if user_id:
             merged_users[user_id] = item
-    merged_pool = dict(archive_pool)
-    merged_pool["users"] = list(merged_users.values())
-    return merged_pool
+    combined_pool = dict(shared_pool)
+    combined_pool["users"] = list(merged_users.values())
+    return combined_pool
 
 
 def first_object_key(pool: dict[str, Any], prefix: str | tuple[str, ...], *, exclude_suffix: str | None = None) -> str:

@@ -251,13 +251,7 @@
 
 ### KD10：发布、观测与回滚
 
-本次虽然是非兼容统一升级，仍需具备发布控制，但不允许旧新双语义并行。
-
-建议最小开关：
-
-- `ops.user.persona_model_v2`
-- `ops.user.persona_sync_v2`
-- `ops.user.persona_graph_v2`
+本次是非兼容统一升级。发布控制仅使用镜像/配置版本、环境准入和 prod rollout stage；不提供任何 persona 旧模型运行时开关，也不允许旧新双语义并行。
 
 关键观测：
 

@@ -6,6 +6,7 @@ description: >
 status_legend:
   production: 生产路径已接通，存在真实实现
   mock: 仅 mock provider 或 mock SDK
+  test_fixture_only: 仅 local_contract/alpha runner 可达，任何 service/production 组合根均不可达
   sandbox: 仅沙箱 / allowlist / 半真实路径
   planned: metadata 或接口存在，但真实实现未落地
   registered_only: 只在注册表或目录中声明，未发现运行时调用
@@ -42,7 +43,7 @@ entries:
     consumers: [app, content-service, circle-service, platform-ops]
     metadata_ref:
       - quwoquan_service/contracts/metadata/integration/location/service.yaml
-    impl_status: production
+    impl_status: implemented_fail_closed
     env_matrix:
       alpha: enabled
       beta: enabled
@@ -74,7 +75,7 @@ entries:
     notes: integration-service 当前备用 provider
 
   - service_id: ext.sms.mock
-    display_name: Mock SMS Provider
+    display_name: SMS Contract Fixture
     category: sms
     vendor: mock
     endpoint: mock_sms
@@ -83,36 +84,43 @@ entries:
     metadata_ref:
       - quwoquan_service/contracts/metadata/integration/external_interaction/service.yaml
       - quwoquan_service/contracts/metadata/integration/external_interaction/fields.yaml
-    impl_status: mock
+    impl_status: test_fixture_only
     env_matrix:
-      alpha: mock
-      beta: mock
-      gamma: mock
-      prod: mock
+      alpha: not_in_service_runtime
+      beta: not_in_service_runtime
+      gamma: not_in_service_runtime
+      prod: not_in_service_runtime
     secrets: []
     compliance: compliant
-    gap: 仅有 mock provider，未接真实短信厂商
-    notes: integration-service external_interaction 默认短信 provider
+    gap: 无；仅供 local_contract 测试构造，不进入任何环境的 service runtime
+    notes: production 组合根禁止 mock provider，启用时由 validateRuntimeConfig fail-closed
 
   - service_id: ext.sms.aliyun
     display_name: 阿里云短信
     category: sms
     vendor: aliyun
-    endpoint: ""
+    endpoint: deployment_injected_https_endpoint
     access_layer: integration-service
     consumers: [user-service, platform-ops]
     metadata_ref:
       - quwoquan_service/contracts/metadata/integration/external_interaction/fields.yaml
-    impl_status: planned
+    impl_status: implemented_fail_closed
     env_matrix:
-      alpha: not_implemented
-      beta: not_implemented
-      gamma: not_implemented
-      prod: not_implemented
-    secrets: []
+      alpha: fixed_test_public_plane_or_runner
+      beta: fixed_test_default_or_real_credentials
+      gamma: fixed_test_default_or_real_credentials
+      prod: real_credentials_required
+    secrets:
+      - INTEGRATION_SMS_ENDPOINT
+      - INTEGRATION_SMS_TOKEN
+      - OTP_CODE_REF_ACTIVE_KEY_VERSION
+      - OTP_CODE_REF_KEYS_JSON
+      - INTEGRATION_SERVICE_MTLS_CA_FILE
+      - INTEGRATION_SERVICE_MTLS_CLIENT_CERT_FILE
+      - INTEGRATION_SERVICE_MTLS_CLIENT_KEY_FILE
     compliance: compliant
-    gap: metadata 已登记 provider，但未实现 adapter
-    notes: 生产短信候选 provider
+    gap: beta/gamma/prod 真实 endpoint、token、mTLS 证书、provider 回执与设备 UAT 仍需发布密钥系统注入
+    notes: integration-service 通过具名 aliyun_sms HTTP adapter 投递；provider 模式使用短时 codeRef、service principal、scope 与 HTTPS/mTLS，缺任一凭据或证书材料时启动失败
 
   - service_id: ext.sms.tencent
     display_name: 腾讯云短信
@@ -222,23 +230,26 @@ entries:
   - service_id: ext.auth.carrier_one_tap
     display_name: 运营商一键登录置换
     category: auth_carrier
-    vendor: carrier
-    endpoint: ""
-    access_layer: integration-service
+    vendor: aliyun_pnvs
+    endpoint: https://dypnsapi.aliyuncs.com
+    access_layer: domain-direct
     consumers: [user-service, app, platform-ops]
     metadata_ref:
       - quwoquan_service/contracts/metadata/integration/external_interaction/service.yaml
       - quwoquan_service/contracts/metadata/user/user_profile/service.yaml
-    impl_status: planned
+    impl_status: implemented_fail_closed
     env_matrix:
-      alpha: stub
-      beta: stub
-      gamma: sandbox_or_stub
-      prod: resolver_configured_but_unavailable
-    secrets: []
-    compliance: compliant
-    gap: App 原生通道和服务端 carrier resolver 都未真正落地
-    notes: 生产 config resolver=carrier，但未发现真实 provider 实现
+      alpha: app_runner_fixture_only
+      beta: real_path_requires_controlled_sdk_and_credentials
+      gamma: real_path_requires_controlled_sdk_and_credentials
+      prod: real_path_requires_controlled_sdk_and_credentials
+    secrets:
+      - QWQ_ALIYUN_PNVS_SECRET_INFO
+      - ALIYUN_DYPNS_ACCESS_KEY_ID
+      - ALIYUN_DYPNS_ACCESS_KEY_SECRET
+    compliance: violation
+    gap: 阿里云客户端 SDK 仅能从登录控制台下载；当前仓库已完成可选二进制接线，但发布密钥系统尚未注入 SDK、方案密钥和 AccessKey，prod 因而 fail-closed
+    notes: 服务端使用 GetMobile；客户端和服务端密钥分离，缺失时隐藏一键入口并回退短信验证码
 
   - service_id: ext.webhook.deliver
     display_name: 外部 webhook 投递
@@ -270,62 +281,66 @@ entries:
     consumers: [user-service, app]
     metadata_ref:
       - quwoquan_service/contracts/metadata/user/user_profile/service.yaml
-    impl_status: production
+    impl_status: implemented_fail_closed
     env_matrix:
-      alpha: mock
-      beta: mock
-      gamma: sandbox_with_real_fallback
-      prod: real_path_expected
+      alpha: app_runner_fixture_only_or_not_configured
+      beta: real_path_fail_closed_without_credentials
+      gamma: real_path_fail_closed_without_credentials
+      prod: real_path_fail_closed_without_credentials
     secrets:
-      - integration.social.providers.wechat.app_id
-      - integration.social.providers.wechat.app_secret
+      - QWQ_WECHAT_APP_ID
+      - WECHAT_OAUTH_APP_ID
+      - WECHAT_OAUTH_APP_SECRET
     compliance: violation
-    gap: 当前在 user-service 直连厂商，未纳入 integration-service
-    notes: prod checked-in config providers 为空，依赖部署密钥注入
+    gap: 当前在 user-service 直连厂商，未纳入 integration-service；商用 App ID/Secret 尚未注入
+    notes: Android/iOS 官方 SDK 已接线；支持平台缺配置时入口保留并解释，beta/gamma/prod 发布门禁失败
 
   - service_id: ext.auth.alipay
     display_name: 支付宝 OAuth 登录
     category: auth_oauth
     vendor: alipay
-    endpoint: ""
+    endpoint: https://openapi.alipay.com/gateway.do
     access_layer: domain-direct
     consumers: [user-service, app]
     metadata_ref:
       - quwoquan_service/contracts/metadata/user/user_profile/service.yaml
-    impl_status: none
+    impl_status: implemented_fail_closed
     env_matrix:
-      alpha: mock
-      beta: mock
-      gamma: sandbox_with_unavailable_fallback
-      prod: unavailable
+      alpha: app_runner_fixture_only_or_not_configured
+      beta: real_path_fail_closed_without_credentials
+      gamma: real_path_fail_closed_without_credentials
+      prod: real_path_requires_credentials
     secrets:
-      - integration.social.providers.alipay.app_id
-      - integration.social.providers.alipay.app_secret
+      - QWQ_ALIPAY_CALLBACK_SCHEME
+      - ALIPAY_OAUTH_APP_ID
+      - ALIPAY_OAUTH_APP_PRIVATE_KEY_PEM
+      - ALIPAY_OAUTH_PLATFORM_PUBLIC_KEY_PEM
+      - ALIPAY_OAUTH_MERCHANT_PID
     compliance: violation
-    gap: 路由已定义，真实置换未实现
-    notes: prod 默认返回 unavailable
+    gap: 商用应用、RSA2 密钥和商户 PID 尚未注入
+    notes: 官方原生 SDK、服务端 authV2 签名、token/profile 置换和响应验签已接线，缺凭据 fail-closed
 
   - service_id: ext.auth.qq
     display_name: QQ OAuth 登录
     category: auth_oauth
     vendor: qq
-    endpoint: ""
+    endpoint: https://graph.qq.com
     access_layer: domain-direct
     consumers: [user-service, app]
     metadata_ref:
       - quwoquan_service/contracts/metadata/user/user_profile/service.yaml
-    impl_status: none
+    impl_status: implemented_fail_closed
     env_matrix:
-      alpha: mock
-      beta: mock
-      gamma: sandbox_with_unavailable_fallback
-      prod: unavailable
+      alpha: app_runner_fixture_only_or_not_configured
+      beta: real_path_fail_closed_without_credentials
+      gamma: real_path_fail_closed_without_credentials
+      prod: real_path_requires_credentials
     secrets:
-      - integration.social.providers.qq.app_id
-      - integration.social.providers.qq.app_secret
+      - QWQ_QQ_APP_ID
+      - QQ_OAUTH_APP_ID
     compliance: violation
-    gap: 路由已定义，真实置换未实现
-    notes: prod 默认返回 unavailable
+    gap: 商用 QQ App ID 尚未注入
+    notes: 官方原生 SDK 返回 accessToken/openId，服务端调用 get_user_info 校验绑定；缺 App ID fail-closed
 
   - service_id: ext.auth.apple
     display_name: Apple ID Token 登录
@@ -668,7 +683,7 @@ entries:
     access_layer: data-pipeline
     consumers: [quwoquan_data]
     metadata_ref:
-      - quwoquan_data/templates/_registry/catalogs/source_catalog.yaml
+      - quwoquan_data/control_plane/_shared/catalogs/source_catalog.yaml
     impl_status: production
     env_matrix:
       alpha: enabled
@@ -688,7 +703,7 @@ entries:
     access_layer: data-pipeline
     consumers: [quwoquan_data]
     metadata_ref:
-      - quwoquan_data/templates/_registry/catalogs/source_catalog.yaml
+      - quwoquan_data/control_plane/_shared/catalogs/source_catalog.yaml
     impl_status: production
     env_matrix:
       alpha: enabled
@@ -708,7 +723,7 @@ entries:
     access_layer: data-pipeline
     consumers: [quwoquan_data]
     metadata_ref:
-      - quwoquan_data/templates/_registry/catalogs/source_catalog.yaml
+      - quwoquan_data/control_plane/_shared/catalogs/source_catalog.yaml
     impl_status: production
     env_matrix:
       alpha: enabled
@@ -728,7 +743,7 @@ entries:
     access_layer: data-pipeline
     consumers: [quwoquan_data]
     metadata_ref:
-      - quwoquan_data/templates/_registry/catalogs/source_catalog.yaml
+      - quwoquan_data/control_plane/_shared/catalogs/source_catalog.yaml
     impl_status: production
     env_matrix:
       alpha: enabled
@@ -738,7 +753,7 @@ entries:
     secrets: []
     compliance: waived
     gap: 公开目的地指南抓取，不适用业务统一网关
-    notes: site_supply 和 fetch.py 都会使用
+    notes: 下载阶段与 fetch.py 都会使用
 
   - service_id: data.wikimedia_commons
     display_name: Wikimedia Commons
@@ -748,7 +763,7 @@ entries:
     access_layer: data-pipeline
     consumers: [quwoquan_data]
     metadata_ref:
-      - quwoquan_data/templates/_registry/catalogs/content_source_registry.yaml
+      - quwoquan_data/control_plane/_shared/catalogs/content_source_registry.yaml
     impl_status: production
     env_matrix:
       alpha: enabled
@@ -768,7 +783,7 @@ entries:
     access_layer: data-pipeline
     consumers: [quwoquan_data]
     metadata_ref:
-      - quwoquan_data/templates/_registry/catalogs/source_catalog.yaml
+      - quwoquan_data/control_plane/_shared/catalogs/source_catalog.yaml
     impl_status: production
     env_matrix:
       alpha: enabled
@@ -778,7 +793,7 @@ entries:
     secrets: []
     compliance: waived
     gap: 公开站点发现接口，不适用业务统一网关
-    notes: site_supply 发现候选时调用
+    notes: 下载阶段发现候选时调用
 
   - service_id: data.qunar_html
     display_name: 去哪儿攻略 / 游记 HTML
@@ -788,7 +803,7 @@ entries:
     access_layer: data-pipeline
     consumers: [quwoquan_data]
     metadata_ref:
-      - quwoquan_data/templates/_registry/catalogs/source_catalog.yaml
+      - quwoquan_data/control_plane/_shared/catalogs/source_catalog.yaml
     impl_status: production
     env_matrix:
       alpha: enabled
@@ -808,7 +823,7 @@ entries:
     access_layer: data-pipeline
     consumers: [quwoquan_data]
     metadata_ref:
-      - quwoquan_data/templates/_registry/catalogs/source_catalog.yaml
+      - quwoquan_data/control_plane/_shared/catalogs/source_catalog.yaml
     impl_status: production
     env_matrix:
       alpha: source_selected
@@ -828,7 +843,7 @@ entries:
     access_layer: data-pipeline
     consumers: [quwoquan_data]
     metadata_ref:
-      - quwoquan_data/templates/_registry/catalogs/source_catalog.yaml
+      - quwoquan_data/control_plane/_shared/catalogs/source_catalog.yaml
     impl_status: production
     env_matrix:
       alpha: source_selected
@@ -848,7 +863,7 @@ entries:
     access_layer: data-pipeline
     consumers: [quwoquan_data]
     metadata_ref:
-      - quwoquan_data/templates/_registry/catalogs/source_catalog.yaml
+      - quwoquan_data/control_plane/_shared/catalogs/source_catalog.yaml
     impl_status: production
     env_matrix:
       alpha: source_selected
@@ -868,8 +883,8 @@ entries:
     access_layer: data-pipeline
     consumers: [quwoquan_data]
     metadata_ref:
-      - quwoquan_data/templates/_registry/catalogs/source_catalog.yaml
-      - quwoquan_data/templates/_registry/catalogs/content_source_registry.yaml
+      - quwoquan_data/control_plane/_shared/catalogs/source_catalog.yaml
+      - quwoquan_data/control_plane/_shared/catalogs/content_source_registry.yaml
     impl_status: registered_only
     env_matrix:
       alpha: registry_only
@@ -889,8 +904,8 @@ entries:
     access_layer: data-pipeline
     consumers: [quwoquan_data]
     metadata_ref:
-      - quwoquan_data/templates/_registry/catalogs/source_catalog.yaml
-      - quwoquan_data/templates/_registry/catalogs/content_source_registry.yaml
+      - quwoquan_data/control_plane/_shared/catalogs/source_catalog.yaml
+      - quwoquan_data/control_plane/_shared/catalogs/content_source_registry.yaml
     impl_status: registered_only
     env_matrix:
       alpha: registry_only
@@ -910,8 +925,8 @@ entries:
     access_layer: data-pipeline
     consumers: [quwoquan_data]
     metadata_ref:
-      - quwoquan_data/templates/_registry/catalogs/source_catalog.yaml
-      - quwoquan_data/templates/_registry/catalogs/content_source_registry.yaml
+      - quwoquan_data/control_plane/_shared/catalogs/source_catalog.yaml
+      - quwoquan_data/control_plane/_shared/catalogs/content_source_registry.yaml
     impl_status: registered_only
     env_matrix:
       alpha: registry_only
@@ -931,8 +946,8 @@ entries:
     access_layer: data-pipeline
     consumers: [quwoquan_data]
     metadata_ref:
-      - quwoquan_data/templates/_registry/catalogs/source_catalog.yaml
-      - quwoquan_data/templates/_registry/catalogs/content_source_registry.yaml
+      - quwoquan_data/control_plane/_shared/catalogs/source_catalog.yaml
+      - quwoquan_data/control_plane/_shared/catalogs/content_source_registry.yaml
     impl_status: registered_only
     env_matrix:
       alpha: registry_only
@@ -952,7 +967,7 @@ entries:
     access_layer: data-pipeline
     consumers: [quwoquan_data]
     metadata_ref:
-      - quwoquan_data/templates/_registry/catalogs/content_source_registry.yaml
+      - quwoquan_data/control_plane/_shared/catalogs/content_source_registry.yaml
     impl_status: registered_only
     env_matrix:
       alpha: registry_only
@@ -972,7 +987,7 @@ entries:
     access_layer: data-pipeline
     consumers: [quwoquan_data]
     metadata_ref:
-      - quwoquan_data/templates/_registry/catalogs/content_source_registry.yaml
+      - quwoquan_data/control_plane/_shared/catalogs/content_source_registry.yaml
     impl_status: registered_only
     env_matrix:
       alpha: registry_only
@@ -1061,7 +1076,7 @@ entries:
     notes: 离线唤醒仍依赖推送链路
 
   - service_id: cap.auth.one_tap_method_channel
-    display_name: 一键登录原生通道占位
+    display_name: 阿里云一键登录原生通道
     category: client_capability
     vendor: method_channel
     endpoint: quwoquan/auth/one_tap
@@ -1069,16 +1084,17 @@ entries:
     consumers: [quwoquan_app]
     metadata_ref:
       - quwoquan_service/contracts/metadata/user/user_profile/service.yaml
-    impl_status: planned
+    impl_status: implemented_fail_closed
     env_matrix:
-      alpha: not_configured
-      beta: not_configured
-      gamma: not_configured
-      prod: not_configured
-    secrets: []
+      alpha: alpha_runner_fixture_only
+      beta: controlled_sdk_required
+      gamma: controlled_sdk_required
+      prod: controlled_sdk_required
+    secrets:
+      - QWQ_ALIYUN_PNVS_SECRET_INFO
     compliance: waived
-    gap: Android/iOS 当前都返回 one_tap_sdk_not_configured
-    notes: 需要与 ext.auth.carrier_one_tap 同步落地
+    gap: 发布密钥系统尚未提供控制台下载的 Android/iOS SDK 与方案密钥，真实设备 UAT 被阻断
+    notes: Android/iOS 已实现 isAvailable/probe/requestLoginToken；缺包或缺密钥时返回不可用
 
   - service_id: cap.auth.native_bridge_social
     display_name: 社交登录原生桥抽象
@@ -1089,13 +1105,16 @@ entries:
     consumers: [quwoquan_app]
     metadata_ref:
       - quwoquan_service/contracts/metadata/user/user_profile/service.yaml
-    impl_status: planned
+    impl_status: implemented_fail_closed
     env_matrix:
-      alpha: sandbox_or_stub
-      beta: sandbox_or_stub
-      gamma: sandbox_or_stub
-      prod: not_fully_wired
-    secrets: []
+      alpha: alpha_runner_fixture_only
+      beta: official_sdk_requires_app_ids
+      gamma: official_sdk_requires_app_ids
+      prod: official_sdk_requires_app_ids
+    secrets:
+      - QWQ_WECHAT_APP_ID
+      - QWQ_QQ_APP_ID
+      - QWQ_ALIPAY_CALLBACK_SCHEME
     compliance: waived
-    gap: Dart 侧有抽象，未发现完整厂商 SDK 接线
-    notes: 与 wechat/alipay/qq/apple/passkey 登录路径相关
+    gap: 商用 App ID、iOS Universal Link 与签名应用登记尚未注入，真实设备 UAT 被阻断
+    notes: 微信/支付宝/QQ Android/iOS 官方 SDK 已接线；Apple/passkey 不在本次三方登录范围

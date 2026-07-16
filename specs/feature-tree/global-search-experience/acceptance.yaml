@@ -27,7 +27,7 @@ domain_acceptance:
       path，透传商用字段，按数据源切换。
     - 反馈/热力/排序（R-S07）与搜索信号注入推荐 Feed（R-S07-5）落地；结果页排序 term-heat 已闭环。
     - 端到端 /v1/search 真实冒烟（R-S06-S）：stackctl gamma 实例化 search-service，网关 /v1/search
-      200、/v1/search/feedback 202（证据 .qwq_output/env/gamma/local/gamma-local/search_smoke_report.json）。
+      200、/v1/search/feedback 202（证据 QWQ_OUTPUT_ROOT/env/gamma/local/gamma-local/process/search_smoke_report.json）。
     - 两阶段商用合同成立：suggest 本地对象即时，result 云侧最终结果不混入本地对象。
     - 搜索准确性/可重复性/热力推荐闭环具备 local_contract/local_contract/api_integration/user_acceptance
       证据；真集群 measured 容量和版本落盘仍作为发布阻断项跟踪。
@@ -37,9 +37,9 @@ domain_acceptance:
     - integration.location_poi 不作为统一 result 对象。
     tests:
       planned:
-      - artifact: .qwq_output/env/repo/runs/search-load/<prod-sim-or-real-cluster>/search_capacity_report.json
-      - artifact: .qwq_output/env/repo/runs/search-load/<prod-sim-or-real-cluster>/search_repeatability_multi_replica_report.json
-      - artifact: .qwq_output/env/prod/runs/<run-id>/search_release_verify_report.json
+      - artifact: QWQ_OUTPUT_ROOT/env/repo/runs/search-load/<prod-sim-or-real-cluster>/search_capacity_report.json
+      - artifact: QWQ_OUTPUT_ROOT/env/repo/runs/search-load/<prod-sim-or-real-cluster>/search_repeatability_multi_replica_report.json
+      - artifact: QWQ_OUTPUT_ROOT/env/prod/runs/<run-id>/search_release_verify_report.json
       recorded:
       - file: quwoquan_service/services/search-service/tests/api_integration/search_contract__api_integration_test.go
       - file: quwoquan_service/services/search-service/tests/api_integration/storage_ttl_contract__api_integration_test.go
@@ -57,14 +57,14 @@ domain_acceptance:
     - 推荐信号真实 Redis 双服务 api_integration 已证明：发布/消费/投影/RuleScorer 消费链路 recorded（`search_signal_t3_report.json`
       + search_signal_consumer/runtime recommendation tests）。
     - 保持 partial 的原因不是功能链路缺口，而是商用发布阻断仍未闭合：R-S06-S-1 真集群 measured 容量、多副本 repeatability；R-S06-S-2
-      写时增量/backfill 长稳；R-S06-S-3 search-service module/config/backlog 版本落盘与 CI 干净检出。
+      写时增量/backfill 长稳。R-S06-S-3 已收口为唯一根 Go module，并有构建与测试门禁。
     - '[migrated_from_recorded_noncanonical] quwoquan_service/runtime/search/retrieve_contract_test.go'
     - '[migrated_from_recorded_noncanonical] quwoquan_service/runtime/search/core_test.go'
     - '[migrated_from_recorded_noncanonical] quwoquan_service/runtime/search/sort_stable_test.go'
-    - '[migrated_from_recorded_artifact] .qwq_output/env/gamma/local/gamma-local/search_smoke_report.json'
-    - '[migrated_from_recorded_artifact] .qwq_output/env/gamma/local/gamma-local/search_signal_t3_report.json'
-    - '[migrated_from_recorded_artifact] .qwq_output/env/gamma/local/gamma-local/search_repeatability_golden_diff.json'
-    - '[migrated_from_recorded_artifact] .qwq_output/env/gamma/runs/search_rollback_rehearsal.md'
+    - '[migrated_from_recorded_artifact] 已迁移 canonical run evidence（search_smoke_report.json）'
+    - '[migrated_from_recorded_artifact] 已迁移 canonical run evidence（search_signal_t3_report.json）'
+    - '[migrated_from_recorded_artifact] 已迁移 canonical run evidence（search_repeatability_golden_diff.json）'
+    - '[migrated_from_recorded_artifact] 已迁移 canonical run evidence（search_rollback_rehearsal.md）'
     test_evidence:
       primary:
       - layer: local_contract

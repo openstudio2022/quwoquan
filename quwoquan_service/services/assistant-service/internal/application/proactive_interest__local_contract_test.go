@@ -129,12 +129,13 @@ func TestTickSkillSubscriptionCron_PersonalizesFromReader(t *testing.T) {
 		LifecycleStage: "dormant",
 		Segments:       []string{"travel_enthusiast"},
 	}}
+	notifications := newRecordingNotificationCommandWriter()
 	service := NewAssistantService(
 		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
 		WithSkillSubscriptionStore(persistence.NewMemorySkillSubscriptionStore()),
-		WithAppMessageStore(persistence.NewMemoryAppMessageStore()),
+		WithNotificationAppMessageCommandWriter(notifications),
 		WithProactiveInterestReader(reader),
 	)
 	service.now = func() time.Time { return time.Date(2026, 4, 29, 7, 0, 0, 0, time.UTC) }
@@ -157,15 +158,15 @@ func TestTickSkillSubscriptionCron_PersonalizesFromReader(t *testing.T) {
 	if reader.calls == 0 {
 		t.Fatalf("reader was not consulted on proactive tick")
 	}
-	messages, err := service.ListAppMessages(context.Background(), "user_travel", 20, "")
-	if err != nil {
-		t.Fatalf("ListAppMessages error: %v", err)
+	messages := notifications.CommandsForUser("user_travel")
+	if len(messages) != 1 {
+		t.Fatalf("notification commands=%d, want 1", len(messages))
 	}
-	if len(messages.Items) != 1 {
-		t.Fatalf("messages=%d, want 1", len(messages.Items))
+	if !strings.HasPrefix(messages[0].Summary, "好久不见") {
+		t.Fatalf("personalized dormant lead-in not reflected in message: %q", messages[0].Summary)
 	}
-	if !strings.HasPrefix(messages.Items[0].Summary, "好久不见") {
-		t.Fatalf("personalized dormant lead-in not reflected in message: %q", messages.Items[0].Summary)
+	if !messages[0].Provenance.Personalized || messages[0].Provenance.LifecycleStage != "dormant" {
+		t.Fatalf("notification provenance was not preserved: %+v", messages[0].Provenance)
 	}
 }
 
@@ -173,12 +174,13 @@ func TestTickSkillSubscriptionCron_PersonalizesFromReader(t *testing.T) {
 // not block the proactive message (best-effort degradation).
 func TestTickSkillSubscriptionCron_ReaderErrorDegrades(t *testing.T) {
 	reader := &fakeProactiveInterestReader{err: context.DeadlineExceeded}
+	notifications := newRecordingNotificationCommandWriter()
 	service := NewAssistantService(
 		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
 		WithSkillSubscriptionStore(persistence.NewMemorySkillSubscriptionStore()),
-		WithAppMessageStore(persistence.NewMemoryAppMessageStore()),
+		WithNotificationAppMessageCommandWriter(notifications),
 		WithProactiveInterestReader(reader),
 	)
 	service.now = func() time.Time { return time.Date(2026, 4, 29, 8, 0, 0, 0, time.UTC) }
@@ -199,11 +201,8 @@ func TestTickSkillSubscriptionCron_ReaderErrorDegrades(t *testing.T) {
 	if result.ProcessedCount != 1 {
 		t.Fatalf("processed=%d, want 1 despite reader error", result.ProcessedCount)
 	}
-	messages, err := service.ListAppMessages(context.Background(), "user_news", 20, "")
-	if err != nil {
-		t.Fatalf("ListAppMessages error: %v", err)
-	}
-	if len(messages.Items) != 1 {
-		t.Fatalf("messages=%d, want 1", len(messages.Items))
+	messages := notifications.CommandsForUser("user_news")
+	if len(messages) != 1 {
+		t.Fatalf("notification commands=%d, want 1", len(messages))
 	}
 }

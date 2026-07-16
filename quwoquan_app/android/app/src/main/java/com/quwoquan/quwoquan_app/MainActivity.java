@@ -1,8 +1,6 @@
 package com.quwoquan.quwoquan_app;
 
-import android.content.ActivityNotFoundException;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.util.Log;
@@ -18,13 +16,12 @@ import java.util.Map;
 
 public class MainActivity extends FlutterFragmentActivity {
   private static final String STARTUP_TAG = "QWQStartup";
-  private static final String WECHAT_PACKAGE = "com.tencent.mm";
-  private static final String WECHAT_FRIEND_ACTIVITY = "com.tencent.mm.ui.tools.ShareImgUI";
-  private static final String WECHAT_MOMENTS_ACTIVITY =
-      "com.tencent.mm.ui.tools.ShareToTimeLineUI";
   private static final long processStartElapsedMs = SystemClock.elapsedRealtime();
   private static long activityOnCreateElapsedMs;
   private static long flutterEngineConfiguredElapsedMs;
+  private WechatSdkCoordinator wechatSdkCoordinator;
+  private CommercialAuthPlugin commercialAuthPlugin;
+  private AliyunOneTapPlugin aliyunOneTapPlugin;
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
@@ -39,27 +36,19 @@ public class MainActivity extends FlutterFragmentActivity {
     Log.i(
         STARTUP_TAG,
         "android_flutter_engine_configured elapsedMs=" + flutterEngineConfiguredElapsedMs);
+    registerStartupTimingsChannel(flutterEngine);
     super.configureFlutterEngine(flutterEngine);
+    wechatSdkCoordinator = new WechatSdkCoordinator(this);
+    commercialAuthPlugin = new CommercialAuthPlugin(this, wechatSdkCoordinator);
+    new MethodChannel(
+            flutterEngine.getDartExecutor().getBinaryMessenger(),
+            "quwoquan/auth/native_bridge")
+        .setMethodCallHandler(commercialAuthPlugin::handle);
+    aliyunOneTapPlugin = new AliyunOneTapPlugin(this);
     new MethodChannel(
             flutterEngine.getDartExecutor().getBinaryMessenger(),
             "quwoquan/auth/one_tap")
-        .setMethodCallHandler(
-            (MethodCall call, MethodChannel.Result result) -> {
-              switch (call.method) {
-                case "isAvailable":
-                  result.success(false);
-                  break;
-                case "requestLoginToken":
-                  result.error(
-                      "one_tap_sdk_not_configured",
-                      "One-tap login SDK is not configured for this build.",
-                      null);
-                  break;
-                default:
-                  result.notImplemented();
-                  break;
-              }
-            });
+        .setMethodCallHandler(aliyunOneTapPlugin::handle);
     new MethodChannel(
             flutterEngine.getDartExecutor().getBinaryMessenger(),
             "quwoquan/runtime/local_dev_https_trust")
@@ -78,10 +67,14 @@ public class MainActivity extends FlutterFragmentActivity {
             (MethodCall call, MethodChannel.Result result) -> {
               switch (call.method) {
                 case "getCapability":
-                  result.success(nativeShareCapability(call));
+                  result.success(
+                      wechatSdkCoordinator.capability(stringArgument(call, "target")));
                   break;
-                case "shareText":
-                  result.success(nativeShareText(call));
+                case "shareWebpageCard":
+                  result.success(wechatSdkCoordinator.shareWebpageCard(call));
+                  break;
+                case "consumePendingOutcomes":
+                  result.success(wechatSdkCoordinator.consumePendingOutcomes());
                   break;
                 default:
                   result.notImplemented();
@@ -111,6 +104,9 @@ public class MainActivity extends FlutterFragmentActivity {
                   break;
               }
             });
+  }
+
+  private void registerStartupTimingsChannel(@NonNull FlutterEngine flutterEngine) {
     new MethodChannel(
             flutterEngine.getDartExecutor().getBinaryMessenger(),
             "quwoquan/startup/timings")
@@ -121,68 +117,30 @@ public class MainActivity extends FlutterFragmentActivity {
                 payload.put("androidActivityOnCreateMs", activityOnCreateElapsedMs);
                 payload.put(
                     "androidFlutterEngineConfiguredMs", flutterEngineConfiguredElapsedMs);
+                payload.put(
+                    "elapsedSinceProcessStartMs",
+                    SystemClock.elapsedRealtime() - processStartElapsedMs);
+                payload.put("deadlineOrigin", "android_process");
                 result.success(payload);
+                return;
+              }
+              if ("recordStartupEvent".equals(call.method)) {
+                Object event = call.arguments;
+                Log.i(STARTUP_TAG, "startup_event " + (event == null ? "{}" : event));
+                result.success(null);
                 return;
               }
               result.notImplemented();
             });
   }
 
-  private Map<String, Object> nativeShareCapability(MethodCall call) {
-    Map<String, Object> payload = new HashMap<>();
-    String target = stringArgument(call, "target");
-    payload.put("target", target);
-    if (!isWeChatInstalled()) {
-      payload.put("available", false);
-      payload.put("reason", "wechat_not_installed");
-      return payload;
+  @Override
+  protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+    if (commercialAuthPlugin != null
+        && commercialAuthPlugin.onActivityResult(requestCode, resultCode, data)) {
+      return;
     }
-    payload.put("available", true);
-    payload.put("reason", "android_intent");
-    return payload;
-  }
-
-  private Map<String, Object> nativeShareText(MethodCall call) {
-    Map<String, Object> payload = new HashMap<>();
-    String target = stringArgument(call, "target");
-    String text = stringArgument(call, "text");
-    String subject = stringArgument(call, "subject");
-    payload.put("target", target);
-    if (!isWeChatInstalled()) {
-      payload.put("delivered", false);
-      payload.put("reason", "wechat_not_installed");
-      return payload;
-    }
-    Intent intent = new Intent(Intent.ACTION_SEND);
-    intent.setType("text/plain");
-    intent.putExtra(Intent.EXTRA_TEXT, text);
-    if (!subject.isEmpty()) {
-      intent.putExtra(Intent.EXTRA_SUBJECT, subject);
-    }
-    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-    if ("wechatMoments".equals(target)) {
-      intent.setClassName(WECHAT_PACKAGE, WECHAT_MOMENTS_ACTIVITY);
-    } else {
-      intent.setClassName(WECHAT_PACKAGE, WECHAT_FRIEND_ACTIVITY);
-    }
-    try {
-      startActivity(intent);
-      payload.put("delivered", true);
-      payload.put("reason", "android_intent");
-    } catch (ActivityNotFoundException error) {
-      payload.put("delivered", false);
-      payload.put("reason", "activity_not_found");
-    }
-    return payload;
-  }
-
-  private boolean isWeChatInstalled() {
-    try {
-      getPackageManager().getPackageInfo(WECHAT_PACKAGE, 0);
-      return true;
-    } catch (PackageManager.NameNotFoundException error) {
-      return false;
-    }
+    super.onActivityResult(requestCode, resultCode, data);
   }
 
   private String stringArgument(MethodCall call, String key) {

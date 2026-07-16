@@ -1,7 +1,7 @@
 version: 1
 domain: content
 entity: Report
-is_aggregate: false
+object_kind: aggregate_root
 
 description: |
   举报记录。合规审计不可丢失，状态机需 ACID。
@@ -15,10 +15,22 @@ capabilities:
 taggable: false
 vector_enabled: false
 
+business_rules:
+  - reporter persona、targetType 与 targetId 创建后不可变
+  - 同一 reporter 对同一 target 与 reason 的活动举报按 idempotency key 去重
+  - 只有 pending 可以进入 reviewing，只有 reviewing 可以 resolved 或 dismissed
+  - reviewer 必须具备 TrustSafety 权限且写入不可篡改审计
+  - aggregate、command receipt 与 outbox 必须在同一 PostgreSQL transaction 提交
+
+lifecycle:
+  states: [pending, reviewing, resolved, dismissed]
+  optimistic_concurrency: version
+  idempotency: command_key
+
 ddd_layer_mapping:
   domain_model: internal/domain/report/model
-  repository: internal/application/ports
-  repository_implementation: internal/infrastructure/persistence
+  ports: internal/domain/trust_safety/report/ports
+  persistence: internal/infrastructure/trust_safety/report/persistence
   application: internal/application/report
   adapter_rest: internal/adapters/http
   adapter_event: internal/infrastructure/messaging

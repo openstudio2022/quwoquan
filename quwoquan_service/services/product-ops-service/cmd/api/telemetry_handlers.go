@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -14,13 +15,28 @@ func (s *productService) handleReportEventBatch(w http.ResponseWriter, r *http.R
 	var body struct {
 		Events []application.EventRecordInput `json:"events"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil {
 		writeRuntimeError(w, r, http.StatusBadRequest, "请求体无效", err.Error())
+		return
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		writeRuntimeError(w, r, http.StatusBadRequest, "请求体无效", "request body must contain exactly one JSON object")
 		return
 	}
 	if len(body.Events) == 0 {
 		writeRuntimeError(w, r, http.StatusBadRequest, "事件不能为空", "events are required")
 		return
+	}
+	actorHash, ok := verifiedTelemetryActorHash(r)
+	if !ok {
+		writeRuntimeError(w, r, http.StatusUnauthorized, "请先登录", "verified telemetry actor is required")
+		return
+	}
+	for index := range body.Events {
+		body.Events[index].UserIDHash = actorHash
 	}
 	ack, err := s.telemetry.ReportEventBatch(r.Context(), body.Events)
 	if err != nil {

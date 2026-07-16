@@ -15,7 +15,7 @@
 
 ## 范围
 - V1 只支持中国行政区两级选择：一级为省级行政区，二级为该省直接子节点；普通省为地级市/州/地区/省直辖县级单位，直辖市为区县。
-- `quwoquan_data/publish/tags` 是行政区标签源头真相；服务端 Mongo `tag_nodes` 是线上 serving projection；App 不内置地区配置，user-service 不维护行政区 catalog。
+- `quwoquan_data/control_plane/governance/taxonomy` 是行政区标签源头真相；服务端 Mongo `tag_nodes` 是线上 serving projection；App 不内置地区配置，user-service 不维护行政区 catalog。
 - tag-service 新增公共只读层级接口 `GET /v1/tag/children?parentTagRef=...&limit=500`，与地图/POI 同属公共能力，但语义归属标签系统。
 
 ## Out Of Scope
@@ -30,13 +30,13 @@
 - Storage：`TagNode` serving projection 包含 `parentTagRef / displayLabel / releaseId / lifecycleStatus`，索引为 `{ parentTagRef, lifecycleStatus, tagRef }`。
 
 ## 数据更新路径
-- 数据工程通过 taxonomy CLI/脚本生成并校验 `publish/tags/Topic/地理/行政区/中国/**/_definition.json`。
+- 数据工程通过 taxonomy CLI/脚本生成并校验 `control_plane/governance/taxonomy/Topic/地理/行政区/中国/**/_definition.json`，发布时构建 importer 输入。
 - 发布后由 `services/tag-service/cmd/import` 幂等导入 Mongo `tag_nodes`，导入器派生 direct parent、短展示名、releaseId 与 active lifecycle。
 - tag-service 可做只读缓存，但缓存只能从 Mongo warm；不得从 App 本地文件、user-service 配置或镜像配置维护第二份行政区树。
 
 ## 三层测试
 - local_contract：
-  - `quwoquan_data/tests/local_contract/publish/test_admin_region_tags__local_contract_test.py` 校验中国 34 省级、广东 21 direct children、北京 16 区县。
+  - `quwoquan_data/tests/local_contract/release/test_admin_region_tags__behavior__functional__local_contract_test.py` 校验中国 34 省级、广东 21 direct children、北京 16 区县。
   - tag-service contract 测 `ListTagChildren` direct children、`hasChildren`、未知 parent 404。
   - App `TagChild.fromJson` 和 Mock `TagRepository.listChildren` 锁定字段一致性。
   - user-service contract 测有效 `regionTagRef` 更新、非行政区/展示文案写入返回 `USER.PROFILE.invalid_region`。

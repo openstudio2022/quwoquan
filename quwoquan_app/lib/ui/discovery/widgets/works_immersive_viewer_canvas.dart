@@ -1,12 +1,5 @@
 part of 'works_immersive_viewer.dart';
 
-class _PostCircleTarget {
-  const _PostCircleTarget({required this.id, required this.name});
-
-  final String id;
-  final String name;
-}
-
 @immutable
 class _WorksTopChromeTheme {
   const _WorksTopChromeTheme({

@@ -3,55 +3,38 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"hash/fnv"
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
-	rtmongo "quwoquan_service/runtime/mongodb"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	operationsecurity "quwoquan_service/generated/operationsecurity"
+	controlplanepersistence "quwoquan_service/internal/platform/controlplane/persistence"
+	rtmongo "quwoquan_service/internal/platform/mongodb"
 
 	"log/slog"
 
+	rtauth "quwoquan_service/runtime/auth"
+	runtimeconfig "quwoquan_service/runtime/config"
 	"quwoquan_service/runtime/controlplane"
 	rterr "quwoquan_service/runtime/errors"
 	rtgov "quwoquan_service/runtime/governance"
 	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	robs "quwoquan_service/runtime/observability"
 	rtotel "quwoquan_service/runtime/otel"
-	"quwoquan_service/runtime/repository"
+	experimenthttp "quwoquan_service/services/product-ops-service/internal/adapters/http/experiment"
 	"quwoquan_service/services/product-ops-service/internal/application"
+	experimentapp "quwoquan_service/services/product-ops-service/internal/application/product_ops/experiment"
 	"quwoquan_service/services/product-ops-service/internal/infrastructure/messaging"
 	telemetrypersistence "quwoquan_service/services/product-ops-service/internal/infrastructure/persistence"
+	experimentpersistence "quwoquan_service/services/product-ops-service/internal/infrastructure/product_ops/experiment/persistence"
 )
-
-type bucketDef struct {
-	Name      string `json:"name"`
-	WeightPct int    `json:"weightPct"`
-}
-
-type assignment struct {
-	ExperimentID    string `json:"experimentId"`
-	SubjectKey      string `json:"subjectKey"`
-	Bucket          string `json:"bucket"`
-	PolicyVersion   string `json:"policyVersion"`
-	AssignmentTrace string `json:"assignmentTrace"`
-}
-
-type experimentDef struct {
-	ID            string                `json:"id"`
-	Name          string                `json:"name"`
-	Enabled       bool                  `json:"enabled"`
-	PolicyVersion string                `json:"policyVersion"`
-	Buckets       []bucketDef           `json:"buckets"`
-	BucketStats   map[string]int        `json:"bucketStats"`
-	Assignments   map[string]assignment `json:"assignments"`
-}
 
 type moderationCase struct {
 	ID            string   `json:"id"`
@@ -121,9 +104,10 @@ type visitRecord struct {
 }
 
 type productService struct {
-	store     *controlplane.FileStore
-	telemetry *application.TelemetryService
-	publisher repository.EventPublisher
+	store          controlplane.StateStore
+	telemetry      *application.TelemetryService
+	experimentHTTP *experimenthttp.Handler
+	publisher      runtimemessaging.EventPublisher
 }
 
 func main() {
@@ -139,6 +123,27 @@ func main() {
 	if err := validateRuntimeCompatibility(cfg, configVersion, imageVersion); err != nil {
 		log.Fatalf("product-ops-service config compatibility failed: %v", err)
 	}
+	if err := validateRequiredRuntimeConfig(cfg); err != nil {
+		log.Fatalf("product-ops-service required runtime config invalid: %v", err)
+	}
+	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(
+		runtimeconfig.EnvRuntimeConfigProvider{},
+	)
+	if err != nil {
+		log.Fatalf("product-ops-service access token config invalid: %v", err)
+	}
+	accessVerifier, err := rtauth.NewHS256Verifier(accessTokenConfig)
+	if err != nil {
+		log.Fatalf("product-ops-service access token verifier invalid: %v", err)
+	}
+	deviceTicketConfig, err := rtauth.LoadDeviceTicketConfig(runtimeconfig.EnvRuntimeConfigProvider{})
+	if err != nil {
+		log.Fatalf("product-ops-service device ticket config invalid: %v", err)
+	}
+	deviceTicketVerifier, err := rtauth.NewHS256Verifier(deviceTicketConfig)
+	if err != nil {
+		log.Fatalf("product-ops-service device ticket verifier invalid: %v", err)
+	}
 	addr := getenvOrDefault("PRODUCT_OPS_SERVICE_ADDR", cfg.Service.HTTP.Addr)
 	if strings.TrimSpace(addr) == "" {
 		addr = ":18086"
@@ -146,43 +151,85 @@ func main() {
 	otelShutdown := rtotel.MustInit(rtotel.Config{ServiceName: "product-ops-service", SamplingRatio: 0.1})
 	defer otelShutdown()
 
-	ctx := context.Background()
-	repoRoot := resolveRepoRoot()
-	store := controlplane.NewFileStore(localControlPlaneStorePath(repoRoot, "product-ops-service"))
-	router := buildRedisRouter(cfg)
+	ctx, cancelRuntime := context.WithCancel(context.Background())
+	defer cancelRuntime()
+	postgresConfig, err := pgxpool.ParseConfig(cfg.Postgres.DSN)
+	if err != nil {
+		log.Fatalf("product-ops-service postgres config invalid: %v", err)
+	}
+	postgresConfig.MaxConns = 20
+	postgresConfig.MinConns = 2
+	postgresConfig.HealthCheckPeriod = 30 * time.Second
+	postgresPool, err := pgxpool.NewWithConfig(ctx, postgresConfig)
+	if err != nil {
+		log.Fatalf("product-ops-service postgres connect failed: %v", err)
+	}
+	defer postgresPool.Close()
+	if err := postgresPool.Ping(ctx); err != nil {
+		log.Fatalf("product-ops-service postgres unavailable: %v", err)
+	}
+	store, err := controlplanepersistence.NewPostgresStore(postgresPool, "product-ops")
+	if err != nil {
+		log.Fatalf("product-ops-service control plane store invalid: %v", err)
+	}
+	if err := store.EnsureSchema(ctx); err != nil {
+		log.Fatalf("product-ops-service control plane schema initialization failed: %v", err)
+	}
+	experimentStore, err := experimentpersistence.NewPostgresStore(postgresPool)
+	if err != nil {
+		log.Fatalf("product-ops-service experiment store invalid: %v", err)
+	}
+	if err := experimentStore.EnsureSchema(ctx); err != nil {
+		log.Fatalf("product-ops-service experiment schema initialization failed: %v", err)
+	}
+	experimentFacade, err := experimentapp.NewFacade(
+		experimentStore,
+		experimentStore,
+		experimentStore,
+		experimentStore,
+	)
+	if err != nil {
+		log.Fatalf("product-ops-service experiment facade invalid: %v", err)
+	}
+	router, err := buildRedisRouter(cfg)
+	if err != nil {
+		log.Fatalf("product-ops-service redis config invalid: %v", err)
+	}
 	defer router.Close()
 	if err := router.PingAll(ctx); err != nil {
-		log.Printf("WARN: product-ops-service redis PingAll: %v", err)
+		log.Fatalf("product-ops-service redis unavailable: %v", err)
 	}
 	healthChecker := rthealth.NewChecker()
 	healthChecker.Register("redis", func(ctx context.Context) error {
 		return router.PingAll(ctx)
 	})
 	publisher := messaging.NewRedisEventPublisher(router.Scene("general"), serviceName, nil)
-	telemetryStore := application.TelemetryStore(telemetrypersistence.NewMemoryTelemetryStore())
-	if strings.TrimSpace(cfg.MongoDB.URI) != "" {
-		mongoClient := rtmongo.MustConnect(ctx, rtmongo.ConnectConfig{URI: cfg.MongoDB.URI}, "product-ops-service")
-		defer func() {
-			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			_ = mongoClient.Disconnect(shutdownCtx)
-		}()
-		dbName := cfg.MongoDB.Database
-		if strings.TrimSpace(dbName) == "" {
-			dbName = "quwoquan_product_ops"
-		}
-		mongoStore := telemetrypersistence.NewMongoTelemetryStore(mongoClient.Database(dbName))
-		if err := mongoStore.EnsureIndexes(context.Background()); err != nil {
-			log.Printf("WARN: product-ops-service ensure mongo indexes: %v", err)
-		}
-		healthChecker.Register("mongodb", func(ctx context.Context) error {
-			return mongoClient.Ping(ctx, nil)
-		})
-		telemetryStore = mongoStore
-		log.Printf("product-ops-service telemetry storage=mongodb db=%s", dbName)
-	} else {
-		log.Printf("product-ops-service telemetry storage=inmemory (no mongodb.uri configured)")
+	outboxDispatcher, err := experimentpersistence.NewOutboxDispatcher(postgresPool, publisher)
+	if err != nil {
+		log.Fatalf("product-ops-service outbox dispatcher invalid: %v", err)
 	}
+	go outboxDispatcher.Run(ctx)
+	mongoClient, err := rtmongo.Connect(ctx, rtmongo.ConnectConfig{URI: cfg.MongoDB.URI})
+	if err != nil {
+		log.Fatalf("product-ops-service mongodb unavailable: %v", err)
+	}
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = mongoClient.Disconnect(shutdownCtx)
+	}()
+	dbName := strings.TrimSpace(cfg.MongoDB.Database)
+	telemetryStore := telemetrypersistence.NewMongoTelemetryStore(mongoClient.Database(dbName))
+	if err := telemetryStore.EnsureIndexes(ctx); err != nil {
+		log.Fatalf("product-ops-service telemetry index initialization failed: %v", err)
+	}
+	healthChecker.Register("mongodb", func(ctx context.Context) error {
+		return mongoClient.Ping(ctx, nil)
+	})
+	healthChecker.Register("postgres", func(ctx context.Context) error {
+		return postgresPool.Ping(ctx)
+	})
+	log.Printf("product-ops-service telemetry storage=mongodb db=%s", dbName)
 	var eventMirror application.EventMirror
 	if esURL := strings.TrimSpace(os.Getenv("PRODUCT_OPS_ES_URL")); esURL != "" {
 		esCB := rtgov.NewCircuitBreaker(5, 15*time.Second, slog.Default())
@@ -190,11 +237,22 @@ func main() {
 		eventMirror = telemetrypersistence.NewElasticsearchEventMirror(esURL, telemetrypersistence.WithESHTTPClient(esClient))
 		log.Printf("product-ops-service exception ES mirror enabled url=%s", esURL)
 	}
-	service := newProductService(store, application.NewTelemetryServiceWithMirror(telemetryStore, publisher, eventMirror), publisher)
-	if err := service.seed(); err != nil {
-		log.Fatalf("seed product ops service: %v", err)
-	}
+	service := newProductService(
+		store,
+		application.NewTelemetryServiceWithMirror(telemetryStore, publisher, eventMirror),
+		experimentFacade,
+		publisher,
+	)
 	mux := newServerMux(service, healthChecker)
+	outerMux := http.NewServeMux()
+	outerMux.HandleFunc("/healthz", healthChecker.Handler())
+	outerMux.Handle("/metrics", mux)
+	outerMux.Handle(
+		"/",
+		rtauth.RequireGeneratedOperationAuthorization(
+			operationsecurity.ForDomain("ops"),
+		)(mux),
+	)
 
 	instanceID, _ := os.Hostname()
 	ioLogger := robs.NewIOAccessLogger(os.Stdout)
@@ -206,7 +264,7 @@ func main() {
 	if eErr != nil {
 		log.Fatalf("product-ops-service exception logger init failed: %v", eErr)
 	}
-	observedHandler := rthttp.NewHTTPServerMiddleware(mux, rthttp.HTTPServerMiddlewareConfig{
+	observedHandler := rthttp.NewHTTPServerMiddleware(outerMux, rthttp.HTTPServerMiddlewareConfig{
 		Service:           "product-ops-service",
 		ServiceName:       "product-ops-service",
 		ServiceInstanceID: instanceID,
@@ -218,8 +276,11 @@ func main() {
 	rateLimiter := rtgov.NewRateLimiter(1000)
 	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(corsHandler)
 	server := &http.Server{
-		Addr:              addr,
-		Handler:           rateLimited,
+		Addr: addr,
+		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
+			AccessTokenVerifier:  accessVerifier,
+			DeviceTicketVerifier: deviceTicketVerifier,
+		})(rateLimited),
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
@@ -230,12 +291,27 @@ func main() {
 	}
 }
 
-func newProductService(store *controlplane.FileStore, telemetry *application.TelemetryService, publishers ...repository.EventPublisher) *productService {
-	var publisher repository.EventPublisher
+func newProductService(
+	store controlplane.StateStore,
+	telemetry *application.TelemetryService,
+	experiments *experimentapp.Facade,
+	publishers ...runtimemessaging.EventPublisher,
+) *productService {
+	var publisher runtimemessaging.EventPublisher
 	if len(publishers) > 0 {
 		publisher = publishers[0]
 	}
-	return &productService{store: store, telemetry: telemetry, publisher: publisher}
+	if store == nil || telemetry == nil || experiments == nil {
+		panic("product service requires control-plane store, telemetry and experiment facade")
+	}
+	experimentHandler, err := experimenthttp.NewHandler(experiments)
+	if err != nil {
+		panic(err)
+	}
+	return &productService{
+		store: store, telemetry: telemetry,
+		experimentHTTP: experimentHandler, publisher: publisher,
+	}
 }
 
 func (s *productService) buildL1L4Cards() ([]map[string]any, error) {
@@ -297,54 +373,6 @@ func safeString(value any) string {
 		return text
 	}
 	return ""
-}
-
-func (s *productService) resolveExperimentAssignment(experimentID, subjectKey string) (assignment, error) {
-	experiment, ok, err := s.getExperiment(experimentID)
-	if err != nil {
-		return assignment{}, err
-	}
-	if !ok || !experiment.Enabled {
-		return assignment{
-			ExperimentID:    experimentID,
-			SubjectKey:      subjectKey,
-			Bucket:          "control",
-			PolicyVersion:   "not-found",
-			AssignmentTrace: "experiment not found or disabled",
-		}, nil
-	}
-	if existing, ok := experiment.Assignments[subjectKey]; ok {
-		return existing, nil
-	}
-	bucket := assignBucket(experimentID, subjectKey, experiment.Buckets)
-	out := assignment{
-		ExperimentID:    experimentID,
-		SubjectKey:      subjectKey,
-		Bucket:          bucket,
-		PolicyVersion:   experiment.PolicyVersion,
-		AssignmentTrace: "hash",
-	}
-	if experiment.Assignments == nil {
-		experiment.Assignments = map[string]assignment{}
-	}
-	if experiment.BucketStats == nil {
-		experiment.BucketStats = map[string]int{}
-	}
-	experiment.Assignments[subjectKey] = out
-	experiment.BucketStats[bucket]++
-	if err := s.putDocument("experiments", experiment.ID, experiment); err != nil {
-		return assignment{}, err
-	}
-	return out, nil
-}
-
-func (s *productService) getExperiment(id string) (experimentDef, bool, error) {
-	item, ok, err := s.store.GetDocument("experiments", id)
-	if err != nil || !ok {
-		return experimentDef{}, ok, err
-	}
-	out, err := decodeDocument[experimentDef](item)
-	return out, true, err
 }
 
 func (s *productService) getRecommendationPolicy(id string) (recommendationPolicy, bool, error) {
@@ -411,23 +439,6 @@ func documentFromStruct(value any) controlplane.Document {
 	return out
 }
 
-func assignBucket(experimentID, subjectKey string, buckets []bucketDef) string {
-	if len(buckets) == 0 {
-		return "control"
-	}
-	hasher := fnv.New32a()
-	_, _ = hasher.Write([]byte(experimentID + ":" + subjectKey))
-	position := int(hasher.Sum32() % 100)
-	cumulative := 0
-	for _, bucket := range buckets {
-		cumulative += bucket.WeightPct
-		if position < cumulative {
-			return bucket.Name
-		}
-	}
-	return buckets[len(buckets)-1].Name
-}
-
 func approvalExists(items []controlplane.ApprovalDecision, actor string) bool {
 	for _, item := range items {
 		if item.Actor == actor {
@@ -449,31 +460,6 @@ func distinctApprovalActors(items []controlplane.ApprovalDecision) []string {
 	}
 	sort.Strings(out)
 	return out
-}
-
-func resolveRepoRoot() string {
-	if root := strings.TrimSpace(os.Getenv("REPO_ROOT")); root != "" {
-		return root
-	}
-	wd, err := os.Getwd()
-	if err != nil {
-		return "."
-	}
-	current := wd
-	for {
-		if _, err := os.Stat(filepath.Join(current, "quwoquan_service", "contracts", "metadata")); err == nil {
-			return current
-		}
-		parent := filepath.Dir(current)
-		if parent == current {
-			return wd
-		}
-		current = parent
-	}
-}
-
-func localControlPlaneStorePath(repoRoot, serviceName string) string {
-	return filepath.Join(repoRoot, ".qwq_output", "env", "repo", "local", "control-plane", serviceName, serviceName+".json")
 }
 
 func actorFromRequest(r *http.Request) string {
@@ -540,31 +526,24 @@ func writeRuntimeError(
 ) {
 	reason := "internal_error"
 	kind := rterr.KindSystem
-	if status == http.StatusBadRequest || status == http.StatusMethodNotAllowed || status == http.StatusNotFound {
+	if status == http.StatusUnauthorized {
+		reason = "unauthorized"
+		kind = rterr.KindUser
+	} else if status == http.StatusBadRequest || status == http.StatusMethodNotAllowed || status == http.StatusNotFound {
 		reason = "invalid_argument"
 		kind = rterr.KindUser
 	}
+	appError := rterr.NewAppError(
+		rterr.NewCode(rterr.ModuleOps, kind, reason),
+		userMessage,
+		debugMessage,
+	)
+	if status == http.StatusUnauthorized {
+		appError.WithMetadata("unauthorized", http.StatusUnauthorized)
+	}
 	rterr.WriteHTTPError(
 		w,
-		rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleOps, kind, reason),
-			userMessage,
-			debugMessage,
-		),
+		appError,
 		rterr.HTTPWriteOptionsFromRequest(r),
 	)
 }
-
-func must(err error) {
-	if err != nil {
-		panic(err)
-	}
-}
-
-func check(err error) bool {
-	return err == nil
-}
-
-var _ = errors.New
-var _ = must
-var _ = check

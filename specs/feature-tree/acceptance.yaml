@@ -19,8 +19,12 @@ uat_acceptance:
     performance_points: []
     tests:
       planned: []
-      recorded: []
-    status: pending
+      recorded:
+      - file: quwoquan_app/test/user_acceptance/journeys/user/my_profile_journey__user_acceptance_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_share_interaction__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/providers/share_interaction_provider__local_contract_test.dart
+      - file: quwoquan_service/services/content-service/tests/api_integration/profile_share_interaction__api_integration_test.go
+    status: implemented
     test_evidence:
       primary:
       - layer: user_acceptance
@@ -37,6 +41,68 @@ uat_acceptance:
         envs: &id001
         - beta
         - gamma
+      - layer: local_contract
+        suite: user_journey_contract
+        cases:
+        - local_contract.specs.feature_tree.uat1.user_journey_contract
+        envs:
+        - local
+    notes: []
+  UAT_PROFILE_SHARE_INTERACTION:
+    title: 我的主页转发互动双向历史
+    journey: 当前用户在我的主页互动二级控制行查看收到的与我发起的转发，可靠恢复方向状态，正确打开目标，且任何他人或旧分身均不可读取。
+    scenario_refs:
+    - profile-private-activity-history
+    - profile-share-interaction-history
+    done_when:
+    - 互动保持两层导航且选中转发后可切换收到的/我发起的。
+    - received 与 initiated 文案、预览、空态、分页、刷新、滚动恢复和点击优先级符合规格。
+    - received 未读与真实 impact 正确，initiated 不显示未读或 impact。
+    - 他人主页不请求转发列表，子账号切换不残留旧数据，服务端拒绝越权。
+    - 八个 share interaction 观测事件携带完整公共归因参数。
+    experience_points:
+    - share received and initiated list
+    - cached direction switch and scroll restoration
+    - unavailable content fallback
+    - owner-only privacy
+    performance_points:
+    - cached direction switch visible in next frame
+    - first page API p95 <= 500ms
+    - first data visible p95 <= 1.5s
+    - unauthorized reads and cursor duplicate or omission count = 0
+    tests:
+      planned: []
+      recorded: []
+    status: pending
+    test_evidence:
+      primary:
+      - layer: user_acceptance
+        suite: profile_share_journey
+        cases:
+        - user_acceptance.user.profile.interaction.share.full_journey
+        - user_acceptance.user.profile.interaction.share.identity_switch
+        envs:
+        - gamma_local
+        test_object: page
+        quality_facet: experience
+      supporting:
+      - layer: api_integration
+        suite: profile_share_api
+        cases:
+        - api_integration.content.profile_share.contract
+        - api_integration.content.profile_share.owner_isolation
+        envs: *id001
+        test_object: api_operation
+        quality_facet: security
+      - layer: local_contract
+        suite: profile_share_contract
+        cases:
+        - local_contract.user.profile.interaction.share.widget
+        - local_contract.user.profile.interaction.share.state
+        envs:
+        - local
+        test_object: widget
+        quality_facet: functional
     notes: []
   UAT_EDGE_SWIPE:
     title: iOS/Android 边缘滑动返回与退出保护
@@ -186,11 +252,12 @@ uat_acceptance:
       - file: quwoquan_app/test/local_contract/ui/chat/widgets/chat_page_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/chat/widgets/start_group_chat_page_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/chat/widgets/chat_settings_page_widget__local_contract_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/chat/chat_conversation_page_realtime_journey__user_acceptance_test.dart
+      - file: quwoquan_app/test/local_contract/ui/chat/widgets/chat_conversation_realtime_fixture__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/chat/chat_conversation/chat_conversation_page__user_acceptance_test.dart
       - file: quwoquan_app/test/user_acceptance/journeys/chat/chat_assistant_journey__user_acceptance_test.dart
       - file: quwoquan_app/test/local_contract/ui/circle/widgets/circle_shell_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/circle/widgets/section_widgets__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/cloud/circle/contract/circle_group_dto_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/circle/circle_object_facets__local_contract_test.dart
       - file: quwoquan_service/services/rtc-service/tests/api_integration/one_to_one_relationship_gate__api_integration_test.go
     status: partial
     test_evidence:
@@ -256,7 +323,7 @@ uat_acceptance:
       - file: quwoquan_service/services/assistant-service/internal/application/chat_mention_service__local_contract_test.go
       - file: quwoquan_service/services/assistant-service/internal/application/service__local_contract_test.go
       - file: quwoquan_service/services/assistant-service/internal/application/skill_subscription_service__local_contract_test.go
-      - file: quwoquan_service/services/assistant-service/tests/api_integration/assistant_mentioned_chat_integration__api_integration_test.go
+      - file: quwoquan_service/services/assistant-service/tests/local_contract/assistant_mentioned_chat_contract__local_contract_test.go
       - file: quwoquan_service/services/assistant-service/internal/infrastructure/chatclient/client__local_contract_test.go
       - file: quwoquan_service/services/assistant-service/internal/infrastructure/messaging/assistant_mentioned_consumer__local_contract_test.go
     status: partial
@@ -289,6 +356,68 @@ uat_acceptance:
     - '[migrated_from_recorded_noncanonical] quwoquan_service/scripts/contract/verify_assistant_context_contract.py'
     - '[migrated_from_recorded_noncanonical] quwoquan_service/scripts/contract/verify_assistant_security_contract.py'
     - '[migrated_from_recorded_reference] specs/feature-tree/assistant-run-learning/commercial_slo_observability.md'
+  UAT_BUSINESS_OBJECT_COMMERCIALIZATION:
+    title: 十条跨对象 Journey 商用准出
+    journey: 用户在身份、内容、搜索、导航、消息、圈子/实体/群、助手、站外回流、交集行动和我的私有历史十条 Journey 中获得端到端真实结果，且每个对象可观测、可运维、可灰度回滚。
+    scenario_refs:
+    - identity-entry-persona-continuation
+    - content-feed-open-detail
+    - global-search-query-and-filter
+    - global-route-edge-pop-contract
+    - message-direct-and-greeting-upgrade
+    - circle-entity-group-handoff
+    - assistant-context-grounded-answering
+    - outbound-object-share-distribution
+    - intersection-action-deepening-on-object
+    - profile-share-interaction-history
+    done_when:
+    - 十条 Journey 的全部 page/surface/operation/object/store/event/behavior/metric 节点可正向追踪，且无反向孤儿。
+    - command 经过 aggregate owner，query 读取 named Slice；App 只访问 generated Gateway operation。
+    - 每条 Journey 至少跨两个真实业务对象，并验证权限、错误恢复、幂等、副作用、投影收敛和推荐/运营回流。
+    - 所有页面通过 light/dark、多屏、无障碍、语义 token、性能、弱网和 capability 降级检查。
+    - alpha 使用 contract seed；beta/gamma 使用 Remote + 真实依赖；prod 无 seed/Mock/Memory/Noop，并完成实时 SLO、灰度和回滚。
+    - local_contract、api_integration、user_acceptance 均有真实断言和 CaseResult；禁止路径存在、动态 skip 或 Memory 假集成充当证据。
+    experience_points:
+    - 入口、主动作、恢复动作和跨对象 handoff 一致
+    - 登录关闭无循环且成功续接原动作
+    - 页面主题、多屏、无障碍与弱网体验一致
+    performance_points:
+    - 每个 Journey 的首屏、主动作、API P95/P99、队列 lag 和投影 freshness 阈值来自各能力 acceptance/SLO
+    - 发布前容量、压测、故障注入和回滚恢复时间有实时报告
+    tests:
+      planned: []
+      recorded: []
+    status: pending
+    test_evidence:
+      primary:
+      - layer: user_acceptance
+        suite: business_object_commercial_journeys
+        cases:
+        - user_acceptance.app_root.business_object_commercialization.ten_journeys
+        envs:
+        - gamma_local
+        test_object: page
+        quality_facet: experience
+      supporting:
+      - layer: api_integration
+        suite: object_operation_storage_event_chain
+        cases:
+        - api_integration.app_root.business_object_commercialization.operation_store_event
+        envs:
+        - beta
+        - gamma
+        test_object: api_operation
+        quality_facet: reliability
+      - layer: local_contract
+        suite: contract_graph_coverage
+        cases:
+        - local_contract.app_root.business_object_commercialization.contract_graph_coverage
+        envs:
+        - local
+        test_object: metadata
+        quality_facet: contract
+    notes:
+    - 本 UAT 是商用总准出，不替代各 Journey、领域能力和 Story 的 UAT/SIT/GWT/contract。
 execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh

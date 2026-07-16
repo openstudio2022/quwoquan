@@ -189,11 +189,11 @@ void main() {
             videoCdnBaseUrl: 'https://${scenario.video}',
           ),
           <String>[
-            'https://localhost:$videoPort/$videoObjectKey',
             'https://127.0.0.1:$videoPort/$videoObjectKey',
+            'https://localhost:$videoPort/$videoObjectKey',
             'https://${scenario.video}/$videoObjectKey',
-            'https://localhost:$apiPort/$videoObjectKey',
             'https://127.0.0.1:$apiPort/$videoObjectKey',
+            'https://localhost:$apiPort/$videoObjectKey',
             'https://${scenario.api}/$videoObjectKey',
           ],
           reason: scenario.api,
@@ -285,10 +285,10 @@ void main() {
           imageCdnBaseUrl: 'https://10.0.2.2:18088/',
         ),
         <String>[
-          'https://localhost:18088/media/image/s/archived-image/post/demo/v1/cover.png',
           'https://127.0.0.1:18088/media/image/s/archived-image/post/demo/v1/cover.png',
-          'https://localhost:18080/media/image/s/archived-image/post/demo/v1/cover.png',
+          'https://localhost:18088/media/image/s/archived-image/post/demo/v1/cover.png',
           'https://127.0.0.1:18080/media/image/s/archived-image/post/demo/v1/cover.png',
+          'https://localhost:18080/media/image/s/archived-image/post/demo/v1/cover.png',
         ],
       );
     });
@@ -302,10 +302,10 @@ void main() {
           imageCdnBaseUrl: '$cleartextScheme://10.0.2.2:18088/',
         ),
         <String>[
-          'https://localhost:18088/media/image/s/archived-image/post/demo/v1/cover.png',
           'https://127.0.0.1:18088/media/image/s/archived-image/post/demo/v1/cover.png',
-          'https://localhost:18080/media/image/s/archived-image/post/demo/v1/cover.png',
+          'https://localhost:18088/media/image/s/archived-image/post/demo/v1/cover.png',
           'https://127.0.0.1:18080/media/image/s/archived-image/post/demo/v1/cover.png',
+          'https://localhost:18080/media/image/s/archived-image/post/demo/v1/cover.png',
         ],
       );
     });
@@ -340,11 +340,11 @@ void main() {
           imageCdnBaseUrl: 'https://${scenario.image}',
         );
         expect(candidates, <String>[
-          'https://localhost:$imagePort/$objectKey',
           'https://127.0.0.1:$imagePort/$objectKey',
+          'https://localhost:$imagePort/$objectKey',
           'https://${scenario.image}/$objectKey',
-          'https://localhost:$apiPort/$objectKey',
           'https://127.0.0.1:$apiPort/$objectKey',
+          'https://localhost:$apiPort/$objectKey',
           'https://${scenario.api}/$objectKey',
         ], reason: scenario.api);
         expect(candidates.join('\n'), isNot(contains('https://10.0.2.2')));
@@ -376,6 +376,36 @@ void main() {
         ],
       );
     });
+
+    test(
+      'loopback transport plane omits unresolvable canonical env.test hosts',
+      () {
+        expect(
+          resolveContentMediaUrlCandidates(
+            'https://alpha-image.quwoquan-env.test:17100/media/image/s/archived-image/post/demo/v1/cover.png',
+            gatewayBaseUrl: 'https://localhost:17000',
+            imageCdnBaseUrl: 'https://localhost:17100',
+          ),
+          <String>[
+            'https://127.0.0.1:17100/media/image/s/archived-image/post/demo/v1/cover.png',
+            'https://localhost:17100/media/image/s/archived-image/post/demo/v1/cover.png',
+            'https://127.0.0.1:17000/media/image/s/archived-image/post/demo/v1/cover.png',
+            'https://localhost:17000/media/image/s/archived-image/post/demo/v1/cover.png',
+          ],
+        );
+        expect(
+          resolveContentMediaUrlCandidates(
+            'media/image/s/archived-image/post/demo/v1/cover.png',
+            gatewayBaseUrl: 'https://alpha-api.localhost:17000',
+            imageCdnBaseUrl: 'https://alpha-image.localhost:17100',
+          ),
+          <String>[
+            'https://alpha-image.localhost:17100/media/image/s/archived-image/post/demo/v1/cover.png',
+            'https://alpha-api.localhost:17000/media/image/s/archived-image/post/demo/v1/cover.png',
+          ],
+        );
+      },
+    );
 
     test('identifies private dev content media URLs', () {
       expect(

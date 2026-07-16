@@ -5,23 +5,25 @@
 ## 一键启动
 
 ```bash
-quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh
+python3 quwoquan_ops/cli/stackctl.py up --target gamma-local --skip-app
 ```
 
 默认会生成：
 
-- `.qwq_output/env/gamma/local/gamma-local/config-root`：满足 `CONFIG_ROOT` 与 `CONFIG_VERSION=local-gamma-v1` 的本地配置树。
-- `.qwq_output/env/gamma/local/gamma-local/media`：本地 media/CDN 测试目录。
-- `.qwq_output/env/gamma/local/gamma-local/report.json`：后续 gate 汇总报告。
+- `QWQ_OUTPUT_ROOT/env/gamma/local/gamma-local/process/config/config-root`：满足 `CONFIG_ROOT` 与 `CONFIG_VERSION=local-gamma-v1` 的本地配置树。
+- `QWQ_OUTPUT_ROOT/env/gamma/local/gamma-local/cache/media`：本地 media/CDN 测试目录。
+- `QWQ_OUTPUT_ROOT/env/gamma/local/gamma-local/app-instances/stack_status.json`：实例状态；后续 gate 证据写入 `env/gamma/runs/**`。
 
-若 `quwoquan_data/publish/tags` 不存在，启动脚本会按当前标签真相源自动生成 taxonomy，并重建 `publish/index/` 派生索引后继续 local-gamma 启动。
+`quwoquan_data/control_plane/governance/taxonomy` 是受版本控制的唯一标签真相源。启动脚本只读导入该树；目录缺失时直接失败，不在运行期生成 `publish/tags` 副本。
+
+`user-service` 的微信、支付宝、QQ 与阿里云一键登录必须由部署密钥系统注入真实凭据：`WECHAT_OAUTH_*`、`ALIPAY_OAUTH_*`、`QQ_OAUTH_APP_ID`、`ALIYUN_DYPNS_ACCESS_KEY_*`。本地 Gamma 不生成占位密钥，也不以 Mock provider 替代；缺任一已暴露能力的凭据时 Compose 在启动前失败。
 
 ## 实际运行形态
 
 `local-gamma mirror` 的运行时口径是单机 `docker compose` 单栈，不是 K8s，也没有 Pod 概念。
 
-- Compose 定义 12 个服务：`postgres`、`mongodb`、`mongo-init`、`redis`、`rec-model-service`、`content-service`、`chat-service`、`user-service`、`assistant-service`、`product-ops-service`、`tag-service`、`gamma-proxy`。
-- `mongo-init` 是一次性 init 容器；稳定态为 11 个常驻容器。
+- Compose 定义 25 个服务，覆盖数据库、对象存储、Content/User/Chat/Assistant、Product/Platform Ops、Tag/Search/Entity/Circle/Integration/Notification、Recommendation、RTC/Realtime 及统一 `gamma-proxy`；服务清单以 `docker-compose.gamma-local.yaml` 的 `services` 为唯一真相源。
+- `mongo-init` 与 `object-storage-init` 是一次性 init 容器；`object-storage` 是固定版本的本地 S3-compatible 服务。本地 JWT、设备票据、对象存储密钥和 TLS 物料只在仓外 `QWQ_DEPLOY_WORK_ROOT/gamma-local/`，不会写入 `.qwq_output` 或仓库。
 - 宿主机还会额外启动 1 个 `media-origin` 进程，监听 `19110`，用于本地 media origin 验证。
 - 对外入口以 `gamma-proxy` 为主：`19000` 提供 API edge，`19100` 提供 media edge；`19010` 直连 `product-ops-service`。
 
@@ -60,7 +62,7 @@ gamma-upload.quwoquan-env.test
 
 - `T1`：静态、metadata、拓扑、环境包、seed manifest。
 - `T2`：模块、Widget、Provider/Journey。
-- `T3`：真实 API、真实存储副作用、错误响应与 RemoteRepository。
+- `T3`：真实 API、真实存储副作用、错误响应与 generated client/typed Remote Facet。
 - `T4`：模拟器/真机 Patrol 核心旅程。
 
 本地通过不替代云侧 gamma、prod 的 K8s、Ingress/LB、Secret、云观测、SLO、回滚与真实分发验证。

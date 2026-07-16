@@ -15,10 +15,23 @@ import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/core/platform/platform_target.dart';
 import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/core/services/app_content_repository.dart';
+import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import 'package:quwoquan_app/quwoquan_app_shell.dart';
 import 'package:quwoquan_app/ui/user/pages/login_page.dart';
 import 'package:quwoquan_app/ui/welcome/pages/welcome_screen.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
+import '../../support/runtime_failure_fixtures.dart';
+
+AuthSessionRefreshExecutor _refreshExecutor(
+  Future<AuthLoginResultDto> Function(
+    String refreshToken,
+    Future<void>? abortTrigger,
+  )
+  run,
+) {
+  return (String refreshToken, {Future<void>? abortTrigger}) =>
+      run(refreshToken, abortTrigger);
+}
 
 void main() {
   setUpAll(() async {
@@ -67,8 +80,9 @@ void main() {
       ),
     );
 
-    expect(blockingStore.readStarted, isFalse);
-    expect(find.text(UITextConstants.welcomeTitle), findsNothing);
+    // pumpWidget 已提交 Flutter 首帧；认证从此刻开始并行，但不阻塞品牌终态。
+    expect(blockingStore.readStarted, isTrue);
+    expect(find.text(UITextConstants.welcomeTitle), findsOneWidget);
 
     await tester.pump();
 
@@ -80,13 +94,19 @@ void main() {
   });
 
   Future<void> pumpStartupThroughWelcome(WidgetTester tester) async {
-    for (var i = 0; i < 80; i++) {
+    // 正常路径一轮约 1.04s；3s 内应进入主壳，6s 仅是异常硬门。
+    for (var i = 0; i < 60; i++) {
       await tester.pump(const Duration(milliseconds: 50));
       if (find.byType(MainAppShell).evaluate().isNotEmpty) {
         break;
       }
     }
-    await tester.pump();
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 20));
+      if (find.byType(WelcomeScreen).evaluate().isEmpty) {
+        break;
+      }
+    }
     await tester.pump();
   }
 
@@ -112,6 +132,32 @@ void main() {
     expect(find.text('恢复账号状态'), findsNothing);
 
     await tester.pump(const Duration(seconds: 16));
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 50));
+  });
+
+  testWidgets('debug 环境前置任务未完成也不触发欢迎重放或阻断安全主壳', (tester) async {
+    suppressExpectedErrors();
+    final prerequisites = Completer<void>();
+    final store = _BlockingAuthSessionStore();
+
+    await tester.pumpWidget(
+      wrapRoot(
+        ProviderScope(
+          overrides: startupOverrides(authStore: store),
+          child: QuWoQuanAppRoot(startupPrerequisites: prerequisites.future),
+        ),
+      ),
+    );
+
+    await pumpStartupThroughWelcome(tester);
+
+    expect(prerequisites.isCompleted, isFalse);
+    expect(find.byType(WelcomeScreen), findsNothing);
+    expect(find.byType(MainAppShell), findsOneWidget);
+    expect(find.text(UITextConstants.startupStillStartingInline), findsNothing);
+
+    prerequisites.complete();
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 50));
   });
@@ -173,7 +219,7 @@ void main() {
       ),
     );
 
-    expect(blockingStore.readStarted, isFalse);
+    expect(blockingStore.readStarted, isTrue);
     expect(find.byType(MainAppShell), findsNothing);
     expect(find.byType(WelcomeScreen), findsOneWidget);
     expect(find.textContaining('登录后，趣我圈'), findsNothing);
@@ -216,15 +262,15 @@ void main() {
           overrides: startupOverrides(
             authStore: store,
             extra: [
-              authSessionRefreshExecutorProvider.overrideWithValue((
-                refreshToken,
-              ) async {
-                expect(refreshToken, 'stale-refresh');
-                return AuthLoginResultDto.fromMap(<String, dynamic>{
-                  'accessToken': 'fresh-access',
-                  'refreshToken': 'fresh-refresh',
-                });
-              }),
+              authSessionRefreshExecutorProvider.overrideWithValue(
+                _refreshExecutor((refreshToken, _) async {
+                  expect(refreshToken, 'stale-refresh');
+                  return AuthLoginResultDto.fromMap(<String, dynamic>{
+                    'accessToken': 'fresh-access',
+                    'refreshToken': 'fresh-refresh',
+                  });
+                }),
+              ),
             ],
           ),
           child: const QuWoQuanAppRoot(),
@@ -265,13 +311,19 @@ void main() {
           overrides: startupOverrides(
             authStore: store,
             extra: [
-              authSessionRefreshExecutorProvider.overrideWithValue((_) async {
-                throw CloudException(
-                  type: CloudErrorType.unauthorized,
-                  message: 'expired',
-                  statusCode: 401,
-                );
-              }),
+              authSessionRefreshExecutorProvider.overrideWithValue(
+                _refreshExecutor((_, _) async {
+                  throw CloudException(
+                    type: CloudErrorType.unauthorized,
+                    message: 'expired',
+                    statusCode: 401,
+                    runtimeFailure: testRuntimeFailure(
+                      code: 'USER.AUTH.session_expired',
+                      kind: RuntimeFailureKind.auth,
+                    ),
+                  );
+                }),
+              ),
             ],
           ),
           child: const QuWoQuanAppRoot(),
@@ -324,6 +376,11 @@ final class _BlockingAuthSessionStore implements AuthSessionStore {
     required String accessToken,
     required String refreshToken,
   }) async {}
+
+  @override
+  Future<void> saveRefreshedAccountHint(
+    Map<String, dynamic>? accountHint,
+  ) async {}
 
   @override
   Future<void> updateActiveSubAccount(String subAccountId) async {}
@@ -381,6 +438,11 @@ final class _ImmediateAuthSessionStore implements AuthSessionStore {
       launchPromptDismissed: false,
     );
   }
+
+  @override
+  Future<void> saveRefreshedAccountHint(
+    Map<String, dynamic>? accountHint,
+  ) async {}
 
   @override
   Future<void> updateActiveSubAccount(String subAccountId) async {

@@ -1,0 +1,34 @@
+version: 1
+domain: content
+entity: MediaAsset
+object_kind: aggregate_root
+
+description: |
+  已完成并通过 CAS digest 定址的媒体资产聚合。资产独立拥有上传人、对象存储 key、
+  digest、处理状态和访问策略；Post 与 Comment 仅保存有序 mediaAssetId 引用。
+
+storage_backend: mongodb
+cache_layer: none
+capabilities: [queryable]
+taggable: false
+vector_enabled: false
+
+business_rules:
+  - sourceSessionId 只能绑定一个完成且摘要一致的 MediaUploadSession
+  - objectKey 与 sha256 创建后不可变，重复完成按摘要幂等返回同一资产
+  - processing -> ready|rejected 只能由受信处理结果命令推进
+  - accessPolicy 变更必须校验 owner persona 与 expectedVersion
+  - deleted 资产不再被新 Post、Comment 或 Message 引用
+
+lifecycle:
+  states: [processing, ready, rejected, deleted]
+  optimistic_concurrency: version
+  idempotency: command_key
+
+ddd_layer_mapping:
+  domain_model: internal/domain/media/model
+  ports: internal/domain/media/media_asset/ports
+  persistence: internal/infrastructure/media/media_asset/persistence
+  application: internal/application/media
+  adapter_rest: internal/adapters/http
+  adapter_event: internal/infrastructure/messaging

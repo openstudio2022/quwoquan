@@ -15,6 +15,7 @@ from quwoquan_ops.cli.lib.environment_topology import (
     forbidden_host_tokens,
     load_environment_topology,
 )
+from quwoquan_ops.cli.lib.output_paths import app_release_dir, env_release_root
 
 # 隔离校验对象是每个环境包的「生效配置」（env overlay），不是 config-provider-layering
 # 的 dev 默认基层，也不是共享的多环境拓扑清单：
@@ -35,10 +36,10 @@ EXCLUDED_BASENAMES = frozenset(
 
 def artifact_files(env_name: str) -> list[Path]:
     files: list[Path] = []
-    app_dir = ROOT / ".qwq_output" / "env" / env_name / "release" / "app"
+    app_dir = app_release_dir(env_name)
     if app_dir.exists():
         files.extend(path for path in app_dir.rglob("*") if path.is_file())
-    service_root = ROOT / ".qwq_output" / "env" / env_name / "release" / "service"
+    service_root = env_release_root(env_name) / "service"
     if service_root.exists():
         files.extend(path for path in service_root.rglob("*") if path.is_file())
     files = [path for path in files if path.name not in EXCLUDED_BASENAMES]

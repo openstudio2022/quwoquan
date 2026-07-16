@@ -1,12 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
-import 'package:flutter/services.dart';
-import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
+import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/domain_error_code.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 class CloudErrorMapper {
   const CloudErrorMapper._();
@@ -15,15 +14,21 @@ class CloudErrorMapper {
     int statusCode, {
     String? body,
     String? requestPath,
+    String? retryAfter,
   }) {
     final code = _readCode(body);
     final domainErrorCode = DomainErrorCodeRegistry.fromCode(code);
+    final runtimeResponse = _readRuntimeErrorResponse(
+      body,
+      transportStatus: statusCode,
+    );
     final runtimeFailure = runtimeFailureFromStatusCode(
       statusCode,
       body: body,
       requestPath: requestPath,
     );
     final suffix = requestPath == null ? '' : ' ($requestPath)';
+    final retryDelay = _parseRetryAfter(retryAfter);
     if (statusCode == 401) {
       return CloudException(
         type: CloudErrorType.unauthorized,
@@ -33,6 +38,9 @@ class CloudErrorMapper {
         domainErrorCode: domainErrorCode,
         runtimeFailure: runtimeFailure,
         userMessage: parsedUserMessage(body),
+        requestId: runtimeResponse?.requestId,
+        traceId: runtimeResponse?.traceId,
+        retryAfter: retryDelay,
       );
     }
     if (statusCode == 403) {
@@ -44,6 +52,9 @@ class CloudErrorMapper {
         domainErrorCode: domainErrorCode,
         runtimeFailure: runtimeFailure,
         userMessage: parsedUserMessage(body),
+        requestId: runtimeResponse?.requestId,
+        traceId: runtimeResponse?.traceId,
+        retryAfter: retryDelay,
       );
     }
     if (statusCode == 404) {
@@ -55,6 +66,9 @@ class CloudErrorMapper {
         domainErrorCode: domainErrorCode,
         runtimeFailure: runtimeFailure,
         userMessage: parsedUserMessage(body),
+        requestId: runtimeResponse?.requestId,
+        traceId: runtimeResponse?.traceId,
+        retryAfter: retryDelay,
       );
     }
     if (statusCode >= 500) {
@@ -66,16 +80,22 @@ class CloudErrorMapper {
         domainErrorCode: domainErrorCode,
         runtimeFailure: runtimeFailure,
         userMessage: parsedUserMessage(body),
+        requestId: runtimeResponse?.requestId,
+        traceId: runtimeResponse?.traceId,
+        retryAfter: retryDelay,
       );
     }
     return CloudException(
-      type: CloudErrorType.unknown,
+      type: _cloudTypeFromFailure(runtimeFailure),
       statusCode: statusCode,
       message: 'HTTP $statusCode$suffix',
       code: code,
       domainErrorCode: domainErrorCode,
       runtimeFailure: runtimeFailure,
       userMessage: parsedUserMessage(body),
+      requestId: runtimeResponse?.requestId,
+      traceId: runtimeResponse?.traceId,
+      retryAfter: retryDelay,
     );
   }
 
@@ -128,11 +148,13 @@ class CloudErrorMapper {
     Object error, {
     String? requestPath,
   }) {
-    if (error is CloudException && error.runtimeFailure != null) {
-      final failure = error.runtimeFailure!;
+    if (error is CloudException) {
+      final failure = error.runtimeFailure;
       if (failure is RuntimeFailure) return failure;
       return RuntimeFailure(
         code: failure.code,
+        semanticReason: failure.semanticReason,
+        transportStatus: failure.transportStatus,
         origin: failure.origin,
         kind: failure.kind,
         nature: failure.nature,
@@ -147,9 +169,25 @@ class CloudErrorMapper {
         kind: RuntimeFailureKind.timeout,
         nature: RuntimeFailureNature.transient,
         requestPath: requestPath,
+        recovery: const RuntimeRecoveryDirective(
+          action: 'retry',
+          disruptionLevel: 'snackbar',
+        ),
       );
     }
-    if (error is SocketException) {
+    if (error is CloudOperationCancelledException) {
+      return _localFailure(
+        code: 'APP.CANCELLED.operation_cancelled',
+        kind: RuntimeFailureKind.cancelled,
+        nature: RuntimeFailureNature.permanent,
+        requestPath: requestPath,
+        recovery: const RuntimeRecoveryDirective(
+          action: 'absorb',
+          disruptionLevel: 'silent',
+        ),
+      );
+    }
+    if (error is http.ClientException) {
       return _localFailure(
         code: 'APP.NETWORK.offline',
         kind: RuntimeFailureKind.network,
@@ -163,34 +201,10 @@ class CloudErrorMapper {
         kind: RuntimeFailureKind.parsing,
         nature: RuntimeFailureNature.bug,
         requestPath: requestPath,
-      );
-    }
-    if (error is FileSystemException) {
-      return _localFailure(
-        code: 'APP.STORAGE.file_system_failure',
-        kind: RuntimeFailureKind.storage,
-        nature: RuntimeFailureNature.transient,
-        requestPath: requestPath,
-      );
-    }
-    if (error is PlatformException) {
-      final permissionLike =
-          error.code.toLowerCase().contains('permission') ||
-          error.code.toLowerCase().contains('denied');
-      return _localFailure(
-        code: permissionLike
-            ? 'APP.PERMISSION.platform_permission_denied'
-            : 'APP.SYSTEM.platform_exception',
-        kind: permissionLike
-            ? RuntimeFailureKind.permission
-            : RuntimeFailureKind.internal,
-        nature: permissionLike
-            ? RuntimeFailureNature.requiresPermission
-            : RuntimeFailureNature.bug,
-        requestPath: requestPath,
-        attributes: <RuntimeContextAttribute>[
-          RuntimeContextAttribute(key: 'platformCode', value: error.code),
-        ],
+        recovery: const RuntimeRecoveryDirective(
+          action: 'surface',
+          disruptionLevel: 'inlineCard',
+        ),
       );
     }
     return _localFailure(
@@ -212,11 +226,15 @@ class CloudErrorMapper {
     String? body,
     String? requestPath,
   }) {
-    final parsedResponse = _readRuntimeErrorResponse(body);
+    final parsedResponse = _readRuntimeErrorResponse(
+      body,
+      transportStatus: statusCode,
+    );
     if (parsedResponse != null) return parsedResponse.failure;
     final code = _readCode(body) ?? _codeFromStatus(statusCode);
     return RuntimeFailure(
       code: code,
+      transportStatus: statusCode,
       origin: statusCode >= 500
           ? RuntimeFailureOrigin.remoteDependency
           : RuntimeFailureOrigin.user,
@@ -261,28 +279,25 @@ class CloudErrorMapper {
     return null;
   }
 
-  static RuntimeErrorResponse? _readRuntimeErrorResponse(String? body) {
+  static RuntimeErrorResponse? _readRuntimeErrorResponse(
+    String? body, {
+    int? transportStatus,
+  }) {
     if (body == null || body.isEmpty || !body.contains('"code"')) return null;
     try {
       final decoded = jsonDecode(body);
       if (decoded is Map<String, dynamic> &&
           decoded['location'] is Map &&
           decoded['context'] is Map) {
-        return RuntimeErrorResponse.fromJson(decoded);
+        return RuntimeErrorResponse.fromJson(
+          decoded,
+          transportStatus: transportStatus,
+        );
       }
     } catch (_) {
       return null;
     }
     return null;
-  }
-
-  /// Map a structured error response body to a typed [ContentErrorCode].
-  /// Returns [ContentErrorCode.unknown] when the code is absent or unrecognised.
-  static ContentErrorCode fromErrorResponse(String? body) {
-    final code = _readCode(body);
-    final domain = DomainErrorCodeRegistry.fromCode(code);
-    final value = domain?.value;
-    return value is ContentErrorCode ? value : ContentErrorCode.unknown;
   }
 
   static String? parsedUserMessage(String? body) {
@@ -324,6 +339,46 @@ class CloudErrorMapper {
   }
 }
 
+Duration? _parseRetryAfter(String? value) {
+  final normalized = value?.trim() ?? '';
+  final seconds = int.tryParse(normalized);
+  if (seconds != null) {
+    return seconds < 0 ? null : Duration(seconds: seconds);
+  }
+  final match = RegExp(
+    r'^[A-Za-z]{3}, (\d{2}) ([A-Za-z]{3}) (\d{4}) '
+    r'(\d{2}):(\d{2}):(\d{2}) GMT$',
+  ).firstMatch(normalized);
+  if (match == null) return null;
+  const months = <String, int>{
+    'Jan': 1,
+    'Feb': 2,
+    'Mar': 3,
+    'Apr': 4,
+    'May': 5,
+    'Jun': 6,
+    'Jul': 7,
+    'Aug': 8,
+    'Sep': 9,
+    'Oct': 10,
+    'Nov': 11,
+    'Dec': 12,
+  };
+  final month = months[match.group(2)];
+  if (month == null) return null;
+  final retryAt = DateTime.utc(
+    int.parse(match.group(3)!),
+    month,
+    int.parse(match.group(1)!),
+    int.parse(match.group(4)!),
+    int.parse(match.group(5)!),
+    int.parse(match.group(6)!),
+  );
+  final delay = retryAt.difference(DateTime.now().toUtc());
+  if (delay <= Duration.zero) return Duration.zero;
+  return delay;
+}
+
 String? _firstNonEmptyString(Map<String, dynamic> map, List<String> keys) {
   for (final key in keys) {
     final value = map[key];
@@ -340,6 +395,7 @@ RuntimeFailure _localFailure({
   required RuntimeFailureNature nature,
   String? requestPath,
   List<RuntimeContextAttribute> attributes = const <RuntimeContextAttribute>[],
+  RuntimeRecoveryDirective recovery = const RuntimeRecoveryDirective.none(),
 }) {
   return RuntimeFailure(
     code: code,
@@ -357,12 +413,14 @@ RuntimeFailure _localFailure({
         ...attributes,
       ],
     ),
+    recovery: recovery,
   );
 }
 
 CloudErrorType _cloudTypeFromFailure(RuntimeFailureBase failure) {
   return switch (failure.kind) {
     RuntimeFailureKind.timeout => CloudErrorType.timeout,
+    RuntimeFailureKind.cancelled => CloudErrorType.cancelled,
     RuntimeFailureKind.network => CloudErrorType.network,
     RuntimeFailureKind.auth => CloudErrorType.unauthorized,
     RuntimeFailureKind.permission => CloudErrorType.forbidden,
@@ -370,6 +428,7 @@ CloudErrorType _cloudTypeFromFailure(RuntimeFailureBase failure) {
     RuntimeFailureKind.parsing ||
     RuntimeFailureKind.contract => CloudErrorType.invalidResponse,
     RuntimeFailureKind.unavailable => CloudErrorType.server,
+    RuntimeFailureKind.rateLimited => CloudErrorType.rateLimited,
     _ => CloudErrorType.unknown,
   };
 }
@@ -386,6 +445,7 @@ RuntimeFailureKind _kindFromStatus(int statusCode) {
   if (statusCode == 401) return RuntimeFailureKind.auth;
   if (statusCode == 403) return RuntimeFailureKind.permission;
   if (statusCode == 404) return RuntimeFailureKind.notFound;
+  if (statusCode == 429) return RuntimeFailureKind.rateLimited;
   if (statusCode >= 500) return RuntimeFailureKind.unavailable;
   return RuntimeFailureKind.internal;
 }
@@ -394,6 +454,7 @@ RuntimeFailureNature _natureFromStatus(int statusCode) {
   if (statusCode == 401 || statusCode == 403) {
     return RuntimeFailureNature.requiresUserAction;
   }
+  if (statusCode == 429) return RuntimeFailureNature.transient;
   if (statusCode >= 500) return RuntimeFailureNature.transient;
   return RuntimeFailureNature.permanent;
 }

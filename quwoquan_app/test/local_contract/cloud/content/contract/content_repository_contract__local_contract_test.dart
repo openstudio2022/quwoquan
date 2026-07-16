@@ -1,12 +1,11 @@
 import 'package:test/test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
-import 'package:quwoquan_app/cloud/runtime/models/content_reaction_state.dart';
 import 'package:quwoquan_app/cloud/runtime/models/post_engagement_counters.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 
 void main() {
-  group('ContentRepository — 常规契约', () {
-    late ContentRepository repo;
+  group('Content facets — 常规契约', () {
+    late MockContentRepository repo;
 
     setUp(() {
       repo = MockContentRepository();
@@ -222,23 +221,7 @@ void main() {
       );
     });
 
-    test('createPost 返回创建结果', () async {
-      final result = await repo.createPost(
-        body: CreatePostRequestWire.fromMap({
-          'type': 'micro',
-          'body': 'test moment',
-        }),
-      );
-      expect(result, isA<PostBaseDto>());
-      expect(result.id, isNotEmpty);
-      expect(result.normalizedBody, contains('test moment'));
-    });
-
-    test('publishPost / updatePostSettings / promotePostToWork 返回结果', () async {
-      final published = await repo.publishPost(
-        postId: 'test_post',
-        body: PublishPostRequestWire.fromMap({'visibility': 'public'}),
-      );
+    test('updatePostSettings / promotePostToWork 返回结果', () async {
       final settings = await repo.updatePostSettings(
         postId: 'test_post',
         body: UpdatePostSettingsRequestWire.fromMap({
@@ -253,8 +236,6 @@ void main() {
         }),
       );
 
-      expect(published, isA<PostBaseDto>());
-      expect(published.id, 'test_post');
       expect(settings, isA<PostBaseDto>());
       expect(settings.id, 'test_post');
       expect(promoted, isA<PostBaseDto>());
@@ -330,42 +311,6 @@ void main() {
       expect(article.post.isArticleLike, isTrue);
     });
 
-    test('likePost / unlikePost 不崩溃', () async {
-      await repo.likePost(postId: 'test');
-      await repo.unlikePost(postId: 'test');
-    });
-
-    test('sharePost / unsharePost 返回幂等变化标记', () async {
-      final changed = await repo.sharePost(postId: 'test');
-      final unchanged = await repo.sharePost(postId: 'test');
-      final removed = await repo.unsharePost(postId: 'test');
-      expect(changed, isTrue);
-      expect(unchanged, isFalse);
-      expect(removed, isTrue);
-    });
-
-    test('getReactionState 返回互动状态', () async {
-      final state = await repo.getReactionState(postId: 'test');
-      expect(state, isA<ContentReactionState>());
-      expect(state.postId, 'test');
-    });
-
-    test('listComments 返回评论列表', () async {
-      final comments = await repo.listComments(postId: 'test');
-      expect(comments, isA<CommentPage>());
-      expect(comments.items, isA<List<CommentDto>>());
-    });
-
-    test('createComment 返回新评论', () async {
-      final comment = await repo.createComment(postId: 'test', content: '测试评论');
-      expect(comment, isA<CommentDto>());
-      expect(comment.content, '测试评论');
-    });
-
-    test('deleteComment 不崩溃', () async {
-      await repo.deleteComment(postId: 'test', commentId: 'c1');
-    });
-
     test('reportBehaviors 不崩溃', () async {
       await repo.reportBehaviors(events: []);
     });
@@ -426,8 +371,8 @@ void main() {
     });
   });
 
-  group('ContentRepository — 异常/边界契约', () {
-    late ContentRepository repo;
+  group('Content facets — 异常/边界契约', () {
+    late MockContentRepository repo;
 
     setUp(() {
       repo = MockContentRepository();

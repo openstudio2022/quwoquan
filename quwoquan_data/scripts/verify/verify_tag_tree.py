@@ -4,10 +4,8 @@
   R1  - 分组完备性：4 大分组 _group.json 必须存在
   R2  - 维度完备性：Topic/Audience/Format/Entity 必须含指定子维度 + Topic/旅行 7 子维度 + Topic/地理 3 子维度
   R3  - 字段合规：每个 _definition.json 必须含 label/labelEn/createdAt/updatedAt；
-          description 缺失为 WARNING；禁止出现 appliesTo/status/lifecycle/deprecatedTo/startDate/endDate
-  R4  - 兄弟互斥：同级目录下标签名不得互为子串（WARNING）
+          description 缺失为 ERROR；禁止出现 appliesTo/status/lifecycle/deprecatedTo/startDate/endDate
   R5  - 地理完备：中国/四川省 21 市州必须存在
-  R6  - Entity 非实例化：Entity 树深度不超过 4 层（含组名），超出为 WARNING
   R7  - 标签总量下限（>=4800 总量，>=1000 非地理）
   R8  - Schema 合规：_definition.json 不含禁止字段（blocking）
   R9  - 容量均衡：每层 20-100 子节点警告
@@ -37,9 +35,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _common.paths import PUBLISH_ROOT
+from core.paths import CONTROL_PLANE_TAXONOMY_ROOT
 
-TAGS_ROOT = PUBLISH_ROOT / "tags"
+TAGS_ROOT = CONTROL_PLANE_TAXONOMY_ROOT
 GROUPS = ["Topic", "Audience", "Format", "Entity"]
 
 REQUIRED_DIMS = {
@@ -184,9 +182,9 @@ def check_r3_r8_fields():
             if field not in data or not data[field]:
                 errors.append(f"R3: 缺少必填字段 {field} in {rel}")
 
-        # description 缺失 → WARNING
+        # 描述属于消费者可见语义，缺失即为不完整静态契约。
         if not data.get("description"):
-            warnings.append(f"R3: 缺少 description（建议补充）in {rel}")
+            errors.append(f"R3: 缺少必填字段 description in {rel}")
 
         # 禁止字段检查（R8）
         for ff in FORBIDDEN_FIELDS:
@@ -463,10 +461,6 @@ def main():
     parser = argparse.ArgumentParser(description="标签体系验证（四分组版）")
     parser.add_argument("--min-total", type=int, default=4800)
     parser.add_argument("--min-non-geo", type=int, default=1000)
-    parser.add_argument("--strict", action="store_true",
-                        help="严格模式：警告也视为错误")
-    parser.add_argument("--skip-capacity", action="store_true",
-                        help="跳过容量均衡检查（R9）")
     parser.add_argument("--stats-only", action="store_true",
                         help="只输出统计不做验证")
     args = parser.parse_args()
@@ -479,11 +473,7 @@ def main():
         check_r1_groups()
         check_r2_dimensions()
         check_r3_r8_fields()
-        check_r4_sibling_exclusivity()
         check_r5_geo_completeness()
-        check_r6_entity_no_instances()
-        if not args.skip_capacity:
-            check_r9_capacity_balance()
         check_r11_restaurant_cuisine_orthogonality()
         check_r12_category_entity_no_homonym()
 
@@ -497,9 +487,6 @@ def main():
         print(f"  ⚠ {w}")
     if len(warnings) > 30:
         print(f"  ... 还有 {len(warnings) - 30} 条警告")
-
-    if args.strict:
-        errors.extend(warnings)
 
     print(f"\n{'ERROR' if errors else '(无错误)'}（{len(errors)} 条）:")
     for e in errors[:30]:

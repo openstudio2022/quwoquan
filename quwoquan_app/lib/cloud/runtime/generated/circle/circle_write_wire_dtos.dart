@@ -116,150 +116,6 @@ class CircleUpdateWireDto {
       CircleUpdateWireDto._(Map<String, dynamic>.from(m));
 }
 
-/// CreateCircleGroup 可写字段（[CircleWriteWireWritableKeys.createCircleGroup]）。
-class CircleGroupCreateWireDto {
-  CircleGroupCreateWireDto({
-    this.parentGroupId,
-    this.groupType,
-    this.nodeType,
-    this.name,
-    this.description,
-    this.visibility,
-    this.joinPolicy,
-    this.managerIds,
-    this.storageEnabled,
-    this.noticeEnabled,
-    Map<String, dynamic>? extra,
-  }) : extra = extra ?? const {};
-
-  final String? parentGroupId;
-  final String? groupType;
-  final String? nodeType;
-  final String? name;
-  final String? description;
-  final String? visibility;
-  final String? joinPolicy;
-  final List<String>? managerIds;
-  final bool? storageEnabled;
-  final bool? noticeEnabled;
-  final Map<String, dynamic> extra;
-
-  static const Set<String> _writableKeys =
-      CircleWriteWireWritableKeys.createCircleGroup;
-
-  Map<String, dynamic> toMap() {
-    final m = <String, dynamic>{...extra};
-    if (parentGroupId != null) m['parentGroupId'] = parentGroupId;
-    if (groupType != null) m['groupType'] = groupType;
-    if (nodeType != null) m['nodeType'] = nodeType;
-    if (name != null) m['name'] = name;
-    if (description != null) m['description'] = description;
-    if (visibility != null) m['visibility'] = visibility;
-    if (joinPolicy != null) m['joinPolicy'] = joinPolicy;
-    if (managerIds != null) m['managerIds'] = managerIds;
-    if (storageEnabled != null) m['storageEnabled'] = storageEnabled;
-    if (noticeEnabled != null) m['noticeEnabled'] = noticeEnabled;
-    return m;
-  }
-
-  factory CircleGroupCreateWireDto.fromMap(Map<String, dynamic> raw) {
-    final m = Map<String, dynamic>.from(raw);
-    final extra = <String, dynamic>{};
-    for (final e in m.entries) {
-      if (!_writableKeys.contains(e.key)) {
-        extra[e.key] = e.value;
-      }
-    }
-    List<String>? managers;
-    final mm = m['managerIds'];
-    if (mm is List) {
-      managers = mm.map((e) => e.toString()).toList(growable: false);
-    }
-    return CircleGroupCreateWireDto(
-      parentGroupId: m['parentGroupId']?.toString(),
-      groupType: m['groupType']?.toString(),
-      nodeType: m['nodeType']?.toString(),
-      name: m['name']?.toString(),
-      description: m['description']?.toString(),
-      visibility: m['visibility']?.toString(),
-      joinPolicy: m['joinPolicy']?.toString(),
-      managerIds: managers,
-      storageEnabled: m['storageEnabled'] as bool?,
-      noticeEnabled: m['noticeEnabled'] as bool?,
-      extra: extra,
-    );
-  }
-}
-
-/// UpdateCircleGroup PATCH 体。
-class CircleGroupUpdateWireDto {
-  CircleGroupUpdateWireDto._(this._patch);
-
-  final Map<String, dynamic> _patch;
-
-  Map<String, dynamic> toMap() => Map<String, dynamic>.from(_patch);
-
-  factory CircleGroupUpdateWireDto.fromMap(Map<String, dynamic> m) =>
-      CircleGroupUpdateWireDto._(Map<String, dynamic>.from(m));
-}
-
-/// CreateCircleFile 可写字段。
-class CircleFileCreateWireDto {
-  const CircleFileCreateWireDto({
-    this.parentFolderId,
-    required this.name,
-    required this.fileType,
-    this.mimeType,
-    this.sizeBytes,
-  });
-
-  final String? parentFolderId;
-  final String name;
-  final String fileType;
-  final String? mimeType;
-  final int? sizeBytes;
-
-  Map<String, dynamic> toMap() => {
-        if (parentFolderId != null) 'parentFolderId': parentFolderId,
-        'name': name,
-        'fileType': fileType,
-        if (mimeType != null) 'mimeType': mimeType,
-        if (sizeBytes != null) 'sizeBytes': sizeBytes,
-      };
-
-  factory CircleFileCreateWireDto.fromMap(Map<String, dynamic> m) {
-    return CircleFileCreateWireDto(
-      parentFolderId: m['parentFolderId']?.toString(),
-      name: (m['name'] ?? '').toString(),
-      fileType: (m['fileType'] ?? 'file').toString(),
-      mimeType: m['mimeType']?.toString(),
-      sizeBytes: (m['sizeBytes'] as num?)?.toInt(),
-    );
-  }
-}
-
-/// UpdateCircleFile PATCH 体。
-class CircleFileUpdateWireDto {
-  const CircleFileUpdateWireDto({this.name, this.status});
-
-  final String? name;
-  final String? status;
-
-  Map<String, dynamic> toMap() {
-    final o = <String, dynamic>{};
-    if (name != null) o['name'] = name;
-    if (status != null) o['status'] = status;
-    return o;
-  }
-
-  factory CircleFileUpdateWireDto.fromMap(Map<String, dynamic> m) {
-    return CircleFileUpdateWireDto(
-      name: m['name']?.toString(),
-      status: m['status']?.toString(),
-    );
-  }
-}
-
 /// ReportCircleBehavior 请求体（fields.yaml `CircleBehaviorReport`）。
 class CircleBehaviorReportWireDto {
   const CircleBehaviorReportWireDto({
@@ -283,13 +139,13 @@ class CircleBehaviorReportWireDto {
   final Map<String, dynamic> extra;
 
   Map<String, dynamic> toMap() => {
-        if (userId != null) 'userId': userId,
-        if (circleId != null) 'circleId': circleId,
-        if (eventType != null) 'eventType': eventType,
-        if (type != null) 'type': type,
-        if (sessionId != null) 'sessionId': sessionId,
-        ...extra,
-      };
+    if (userId != null) 'userId': userId,
+    if (circleId != null) 'circleId': circleId,
+    if (eventType != null) 'eventType': eventType,
+    if (type != null) 'type': type,
+    if (sessionId != null) 'sessionId': sessionId,
+    ...extra,
+  };
 
   factory CircleBehaviorReportWireDto.fromMap(Map<String, dynamic> m) {
     final copy = Map<String, dynamic>.from(m);

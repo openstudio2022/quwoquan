@@ -1,0 +1,218 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "作品 manifest — posts/{type}/{angle}/{title}/{seq}/manifest.json",
+  "type": "object",
+  "$defs": {
+    "sourceFact": {
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "object", "minProperties": 1 }
+      ]
+    },
+    "semanticMention": {
+      "type": "object",
+      "required": ["mentionId", "kind", "surface", "location", "rangeStart", "rangeEnd", "status"],
+      "properties": {
+        "mentionId": { "type": "string" },
+        "kind": { "type": "string", "enum": ["entity", "tag"] },
+        "surface": { "type": "string" },
+        "location": { "type": "string" },
+        "rangeStart": { "type": "integer", "minimum": 0 },
+        "rangeEnd": { "type": "integer", "minimum": 1 },
+        "status": { "type": "string", "enum": ["published", "pending_review", "rejected", "offline"] },
+        "candidateId": { "type": ["string", "null"] },
+        "targetRef": { "type": ["string", "null"] }
+      }
+    }
+  },
+  "properties": {
+    "topicId": { "type": "string", "description": "如'峨眉山_金顶日出攻略'" },
+    "contentType": { "type": "string", "enum": ["article", "image", "video"] },
+    "title": { "type": "string" },
+    "caption": { "type": "string" },
+    "entityRefs": { "type": "array", "items": { "type": "string" }, "description": "中文实体名数组" },
+    "tagRefs": { "type": "array", "items": { "type": "string" }, "description": "路径格式标签ID数组" },
+    "semanticMentions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/semanticMention" }
+    },
+    "authorId": { "type": "string" },
+    "creatorProfileId": { "type": "string" },
+    "creatorArchetype": { "type": "string" },
+    "creatorProfileVersion": { "type": "string" },
+    "creatorDisclosure": {
+      "type": "object",
+      "required": ["type", "displayText", "visible"],
+      "properties": {
+        "type": { "const": "platform_virtual_creator" },
+        "displayText": { "type": "string" },
+        "visible": { "const": true }
+      }
+    },
+    "experienceClaimMode": {
+      "enum": ["editorial_synthesis", "authorized_first_person", "public_data_analysis", "visual_discovery"]
+    },
+    "authorQualitySignals": { "type": "object" },
+    "sourceUrls": { "type": "array", "items": { "type": "string" } },
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "assetId": { "type": "string" },
+          "fileName": { "type": "string" },
+          "caption": { "type": "string" },
+          "kind": { "type": "string", "enum": ["image", "video"] },
+          "sourceCollectionId": { "type": "string" },
+          "objectKey": { "type": "string" },
+          "cdnUrl": { "type": "string" },
+          "sha256": { "type": "string" },
+          "mimeType": { "type": "string" },
+          "thumbnailUrl": { "type": "string" },
+          "coverUrl": { "type": "string" },
+          "coverStrategy": { "type": "string", "enum": ["first_frame", "manual", "auto"] },
+          "coverFrameTimeMs": { "type": "integer", "minimum": 0 },
+          "durationMs": { "type": "integer", "minimum": 0 },
+          "width": { "type": "integer", "minimum": 1 },
+          "height": { "type": "integer", "minimum": 1 },
+          "creator": { "$ref": "#/$defs/sourceFact" },
+          "collectionPageUrl": { "$ref": "#/$defs/sourceFact" },
+          "license": { "$ref": "#/$defs/sourceFact" },
+          "termsUrl": { "$ref": "#/$defs/sourceFact" },
+          "authorizationProof": { "$ref": "#/$defs/sourceFact" },
+          "page": { "$ref": "#/$defs/sourceFact" },
+          "licenseProof": { "$ref": "#/$defs/sourceFact" },
+          "imageLayout": { "type": "string", "enum": ["fullWidth", "wrapLeft", "wrapRight", "gallery"] }
+        },
+        "required": ["assetId", "fileName"]
+      }
+    },
+    "sourceCollectionId": { "type": "string" },
+    "creator": { "$ref": "#/$defs/sourceFact" },
+    "collectionPageUrl": { "$ref": "#/$defs/sourceFact" },
+    "license": { "$ref": "#/$defs/sourceFact" },
+    "termsUrl": { "$ref": "#/$defs/sourceFact" },
+    "authorizationProof": { "$ref": "#/$defs/sourceFact" },
+    "page": { "$ref": "#/$defs/sourceFact" },
+    "licenseProof": { "$ref": "#/$defs/sourceFact" },
+    "template": { "type": "string", "description": "使用的模板名称" },
+    "carrier": { "type": "string", "enum": ["article", "image", "review"], "description": "内容载体：article 长文 / image 图片作品 / review 评测" },
+    "generator": { "type": "string", "enum": ["agent"], "description": "正文创作来源；交付面仅允许 agent（会话模型创作），脚本拼接/占位被门禁拒绝" },
+    "generatorModel": { "type": ["string", "null"], "description": "创作所用模型标识（draft_meta.model）" },
+    "citedSourceRefs": { "type": "array", "items": { "type": "string" }, "description": "正文创作时引用的 source 证据路径" },
+    "reviewDecision": { "type": "string", "enum": ["approved", "revision_needed", "rejected"] },
+    "articleMarkdownVersion": { "type": "string" },
+    "articleRenderProfile": { "type": "object" },
+    "publishLayout": { "type": "string" },
+    "publishAngle": { "type": "string" },
+    "publishTitle": { "type": "string" },
+    "publishSeq": { "type": "integer" },
+    "createdAt": { "type": "string", "format": "date-time", "description": "内容首次创建时间（来自 draft_meta 事实）" },
+    "updatedAt": { "type": "string", "format": "date-time", "description": "内容最后编辑时间（来自 draft_meta 事实）" },
+    "publishedAt": { "type": "string", "format": "date-time", "description": "首次公开可见时间（由 promote 注入并保留）" },
+    "executionId": { "type": ["string", "null"], "description": "生成此内容的 execution id" },
+    "writingIntent": {
+      "type": "string",
+      "enum": ["planning_consultation", "decision_experience", "post_trip_journal"],
+      "description": "写作主线：计划前咨询/攻略 | 决策体验 | 游后过程记录。单篇唯一，门禁校验正文结构与之匹配"
+    },
+    "baseSourceRef": { "type": ["string", "null"], "description": "主底稿来源 ref（风格与事实锚点）；其它来源只能补事实" },
+    "imageBindings": {
+      "type": "array",
+      "description": "图文绑定：每条把一张 asset 绑定到正文锚点/节点，确保图片服务段落而非仅做封面",
+      "items": {
+        "type": "object",
+        "properties": {
+          "assetId": { "type": "string" },
+          "figureId": { "type": "string" },
+          "sectionAnchor": { "type": "string", "description": "绑定到的章节标题或路线节点实体名" },
+          "layout": { "type": "string", "enum": ["fullWidth", "wrapLeft", "wrapRight", "gallery"] }
+        },
+        "required": ["assetId"]
+      }
+    },
+    "videoBindings": {
+      "type": "array",
+      "description": "视频绑定：把视频资产绑定到正文锚点/路线节点，声明适合载体",
+      "items": {
+        "type": "object",
+        "properties": {
+          "assetId": { "type": "string" },
+          "sectionAnchor": { "type": "string" },
+          "role": { "type": "string", "enum": ["cover", "embedded", "node", "shortVideo"] }
+        },
+        "required": ["assetId"]
+      }
+    }
+  },
+  "required": ["topicId", "contentType", "entityRefs", "tagRefs", "sourceUrls", "generator", "createdAt", "updatedAt"],
+  "allOf": [
+    {
+      "if": {
+        "properties": { "contentType": { "const": "image" } },
+        "required": ["contentType"]
+      },
+      "then": {
+        "required": [
+          "assets",
+          "sourceCollectionId",
+          "creator",
+          "collectionPageUrl",
+          "license"
+        ],
+        "properties": {
+          "title": { "type": "string", "maxLength": 80 },
+          "caption": { "type": "string", "maxLength": 300 },
+          "assets": { "type": "array", "minItems": 1, "maxItems": 20 },
+          "sourceCollectionId": { "type": "string", "minLength": 1 },
+          "creator": { "$ref": "#/$defs/sourceFact" },
+          "collectionPageUrl": { "$ref": "#/$defs/sourceFact" },
+          "license": { "$ref": "#/$defs/sourceFact" }
+        },
+        "anyOf": [
+          {
+            "required": ["termsUrl"],
+            "properties": { "termsUrl": { "$ref": "#/$defs/sourceFact" } }
+          },
+          {
+            "required": ["authorizationProof"],
+            "properties": { "authorizationProof": { "$ref": "#/$defs/sourceFact" } }
+          }
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": { "contentType": { "const": "video" } },
+        "required": ["contentType"]
+      },
+      "then": {
+        "required": ["assets"],
+        "properties": {
+          "title": { "type": "string", "maxLength": 80 },
+          "caption": { "type": "string", "maxLength": 300 },
+          "assets": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "contains": {
+              "type": "object",
+              "required": ["kind"],
+              "properties": {
+                "kind": { "const": "video" }
+              },
+              "anyOf": [
+                { "required": ["cdnUrl"] },
+                { "required": ["objectKey"] }
+              ],
+              "anyOf": [
+                { "required": ["thumbnailUrl"] },
+                { "required": ["coverUrl"] }
+              ]
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -34,6 +34,8 @@ func renderStandaloneDtoDart(proj clientProjection, sourcePath string) string {
 		dt := normalizeDartType(f.DartType)
 		if f.Nullable {
 			b.WriteString(fmt.Sprintf("    this.%s,\n", f.Name))
+		} else if proj.Strict {
+			b.WriteString(fmt.Sprintf("    required this.%s,\n", f.Name))
 		} else if md := mapEmptyCtorDefaultFromYaml(f, dt); md != "" {
 			b.WriteString(fmt.Sprintf("    this.%s = %s,\n", f.Name, md))
 		} else if cd := constSafeCtorDefaultFromYaml(f, dt); cd != "" {
@@ -46,14 +48,27 @@ func renderStandaloneDtoDart(proj clientProjection, sourcePath string) string {
 	}
 	b.WriteString("  });\n\n")
 	b.WriteString(fmt.Sprintf("  factory %s.fromMap(Map<String, dynamic> m) {\n", className))
+	if proj.Strict {
+		b.WriteString(fmt.Sprintf("    _validate%sWire(m);\n", className))
+	}
 	b.WriteString(fmt.Sprintf("    return %s(\n", className))
 	for _, f := range proj.Fields {
-		b.WriteString(fmt.Sprintf("      %s: %s,\n", f.Name, buildAliasResolver(f)))
+		resolver := buildAliasResolver(f)
+		if proj.Strict {
+			resolver = buildStrictProjectionResolver(f)
+		}
+		b.WriteString(fmt.Sprintf("      %s: %s,\n", f.Name, resolver))
 	}
 	b.WriteString("    );\n  }\n\n")
 	b.WriteString("  Map<String, dynamic> toMap() {\n    return <String, dynamic>{\n")
 	for _, f := range proj.Fields {
-		b.WriteString(fmt.Sprintf("      '%s': %s,\n", f.Name, f.Name))
+		key := f.Name
+		value := f.Name
+		if proj.Strict {
+			key = projectionWireKey(f)
+			value = strictProjectionToWireValue(f)
+		}
+		b.WriteString(fmt.Sprintf("      '%s': %s,\n", key, value))
 	}
 	b.WriteString("    };\n  }\n\n")
 
@@ -90,6 +105,9 @@ func renderStandaloneDtoDart(proj clientProjection, sourcePath string) string {
 	}
 
 	b.WriteString("}\n\n")
+	if proj.Strict {
+		writeStrictProjectionValidator(&b, className, proj.Fields)
+	}
 	needsStringKeyMap := false
 	needsDateTime := false
 	needsStringList := false
@@ -199,7 +217,125 @@ func renderStandaloneDtoDart(proj clientProjection, sourcePath string) string {
 		b.WriteString("  return null;\n")
 		b.WriteString("}\n")
 	}
-	return b.String()
+	return strings.TrimRight(b.String(), "\n") + "\n"
+}
+
+func projectionWireKey(f projectionFieldDef) string {
+	if key := strings.TrimSpace(f.Source); key != "" {
+		return key
+	}
+	return strings.TrimSpace(f.Name)
+}
+
+func buildStrictProjectionResolver(f projectionFieldDef) string {
+	key := projectionWireKey(f)
+	dartType := normalizeDartType(f.DartType)
+	nullableSuffix := ""
+	if f.Nullable {
+		nullableSuffix = "?"
+	}
+	switch dartType {
+	case "String", "int", "double", "bool":
+		return fmt.Sprintf("m['%s'] as %s%s", key, dartType, nullableSuffix)
+	case "DateTime":
+		return fmt.Sprintf("m['%s'] == null ? null : DateTime.parse(m['%s'] as String)", key, key)
+	case "List<String>":
+		if f.Nullable {
+			return fmt.Sprintf("m['%s'] == null ? null : List<String>.unmodifiable(List<String>.from(m['%s'] as List))", key, key)
+		}
+		return fmt.Sprintf("List<String>.unmodifiable(List<String>.from(m['%s'] as List))", key)
+	case "Map<String, dynamic>":
+		if f.Nullable {
+			return fmt.Sprintf("m['%s'] == null ? null : Map<String, dynamic>.unmodifiable(Map<String, dynamic>.from(m['%s'] as Map))", key, key)
+		}
+		return fmt.Sprintf("Map<String, dynamic>.unmodifiable(Map<String, dynamic>.from(m['%s'] as Map))", key)
+	default:
+		return buildAliasResolver(f)
+	}
+}
+
+func strictProjectionToWireValue(f projectionFieldDef) string {
+	if f.MapFromStringKeyClass != "" {
+		if f.Nullable {
+			return fmt.Sprintf("%s?.toMap()", f.Name)
+		}
+		return fmt.Sprintf("%s.toMap()", f.Name)
+	}
+	if f.ListElementDartClass != "" {
+		if f.Nullable {
+			return fmt.Sprintf("%s?.map((value) => value.toMap()).toList(growable: false)", f.Name)
+		}
+		return fmt.Sprintf("%s.map((value) => value.toMap()).toList(growable: false)", f.Name)
+	}
+	if normalizeDartType(f.DartType) != "DateTime" {
+		return f.Name
+	}
+	if f.Nullable {
+		return fmt.Sprintf("%s?.toIso8601String()", f.Name)
+	}
+	return fmt.Sprintf("%s.toIso8601String()", f.Name)
+}
+
+func writeStrictProjectionValidator(b *strings.Builder, className string, fields []projectionFieldDef) {
+	b.WriteString(fmt.Sprintf("void _validate%sWire(Map<String, dynamic> m) {\n", className))
+	b.WriteString("  const allowed = <String>{\n")
+	seen := map[string]bool{}
+	for _, f := range fields {
+		key := projectionWireKey(f)
+		if !seen[key] {
+			b.WriteString(fmt.Sprintf("    '%s',\n", key))
+			seen[key] = true
+		}
+	}
+	b.WriteString("  };\n")
+	b.WriteString("  final unknown = m.keys.where((key) => !allowed.contains(key)).toList(growable: false);\n")
+	b.WriteString("  if (unknown.isNotEmpty) {\n")
+	b.WriteString(fmt.Sprintf("    throw FormatException('%s contains unknown fields: ${unknown.join(',')}');\n", className))
+	b.WriteString("  }\n")
+	for _, f := range fields {
+		key := projectionWireKey(f)
+		condition := strictProjectionInvalidCondition(f, key)
+		if condition == "" {
+			continue
+		}
+		b.WriteString(fmt.Sprintf("  if (%s) {\n", condition))
+		b.WriteString(fmt.Sprintf("    throw FormatException('%s.%s has an invalid wire value');\n", className, key))
+		b.WriteString("  }\n")
+	}
+	b.WriteString("}\n\n")
+}
+
+func strictProjectionInvalidCondition(f projectionFieldDef, key string) string {
+	dartType := normalizeDartType(f.DartType)
+	presentValue := fmt.Sprintf("m['%s']", key)
+	typeCheck := ""
+	if f.MapFromStringKeyClass != "" {
+		typeCheck = fmt.Sprintf("%s is! Map || (%s as Map).keys.any((key) => key is! String)", presentValue, presentValue)
+	} else if f.ListElementDartClass != "" {
+		typeCheck = fmt.Sprintf("%s is! List || (%s as List).any((value) => value is! Map || (value as Map).keys.any((key) => key is! String))", presentValue, presentValue)
+	}
+	if typeCheck != "" {
+		if f.Nullable {
+			return fmt.Sprintf("m.containsKey('%s') && %s != null && (%s)", key, presentValue, typeCheck)
+		}
+		return fmt.Sprintf("!m.containsKey('%s') || %s == null || (%s)", key, presentValue, typeCheck)
+	}
+	switch dartType {
+	case "String", "int", "double", "bool":
+		typeCheck = fmt.Sprintf("%s is! %s", presentValue, dartType)
+	case "DateTime":
+		typeCheck = fmt.Sprintf("%s is! String || DateTime.tryParse(%s as String) == null", presentValue, presentValue)
+	case "List<String>":
+		typeCheck = fmt.Sprintf("%s is! List || (%s as List).any((value) => value is! String)", presentValue, presentValue)
+	case "Map<String, dynamic>":
+		typeCheck = fmt.Sprintf("%s is! Map || (%s as Map).keys.any((key) => key is! String)", presentValue, presentValue)
+	default:
+		return ""
+	}
+	if f.Nullable {
+		return fmt.Sprintf("m.containsKey('%s') && %s != null && (%s)", key, presentValue, typeCheck)
+	}
+	return fmt.Sprintf("!m.containsKey('%s') || %s == null || (%s)", key, presentValue, typeCheck)
 }
 
 // renderFeedItemDtoDart generates the strongly-typed FeedItemDto class

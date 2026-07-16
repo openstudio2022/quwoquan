@@ -1,39 +1,45 @@
 # L1：runtime（统一运行时能力域）
 
-- 特性路径前缀：`capability.runtime`
-- 关联服务：各领域服务复用 runtime 子包
-- L2 特性数：20 个（底座层 9 + 框架层 5 + 业务能力层 6）
+本目录是 `runtime` L1 领域服务的特性树入口。节点数量、层级和路径只以
+`specs/feature-tree/tree_index.yaml` 为准，本文件不维护手工统计。
 
-## 特性树结构
+## 权威入口
 
-### 底座层：已有 runtime 能力组件
-| L2 | 状态 | 说明 |
-|----|------|------|
-| runtime-config | ✅ 核心完成 | 配置 Provider（env/map），secrets/动态刷新待补 |
-| runtime-errors | ✅ 完成 | ErrorCode + AppError + 全模块注册 |
-| runtime-observability | ✅ 95% | 日志/中间件/客户端工厂，OTEL exporter 待补 |
-| runtime-http | ✅ 完成 | HTTP facade + wrapper 函数 |
-| runtime-rpc | 🔲 接口 | RPCMetadata 类型定义，gRPC 实现待补 |
-| runtime-messaging | ✅ 完成 | MessageEnvelope + MQ 中间件 |
-| runtime-governance | 🔲 接口 | ResiliencePolicy 接口，熔断/限流待实现 |
-| runtime-experiments | 🔲 接口 | Assignment/Resolver 接口，分桶实现待补 |
-| runtime-learning | 🔲 接口 | Event/Scorecard 接口，反馈记录待补 |
+- D0/F1/G1：
+  `system-architecture-and-engineering-guide/design.md` 与 `acceptance.yaml`
+- Metadata/ContractGraph：
+  `quwoquan_service/contracts/metadata/DESIGN.md`
+- 扩展执行：
+  `specs/runtime_extension_catalog.md`
 
-### 框架层：元数据驱动的 DDD 领域框架
-| L2 | 状态 | 说明 |
-|----|------|------|
-| runtime-registry | 🔲 待开发 | EntityRegistry + metadata v3 loader |
-| runtime-repository | 🔲 待开发 | 多存储 Repository 框架 + PG/Mongo/Cache/Vector 适配器 |
-| runtime-codegen | 🔲 待开发 | 元数据驱动代码生成 |
-| runtime-interceptor | 🔲 待开发 | 读写拦截链（安全/校验/事件/指标） |
-| runtime-testinfra | 🔲 待开发 | 契约测试基础设施（embedded-pg/testcontainers/miniredis） |
+## 边界
 
-### 业务能力层：CQRS / 推荐 / 流式 / 上下文 / Skill
-| L2 | 状态 | 说明 |
-|----|------|------|
-| runtime-eventstore | 🔲 待开发 | Event Store + 事件发布（P1） |
-| runtime-projector | 🔲 待开发 | CQRS Projector + ReadModel（P1） |
-| runtime-recommendation | ✅ 核心完成 | 双通道实时推荐引擎 — HotPath+Engine+7阶段管线+SessionCache+BufferedHotPath+ModelScorer+CascadeScorer+FeatureProvider+PreRanker；AB路由/metric待补 |
-| runtime-streaming | 🔲 待开发 | SSE + Change Stream（P1） |
-| runtime-context | 🔲 待开发 | 三层上下文模型（P2） |
-| runtime-skill | 🔲 待开发 | Skill 框架（P2/P3） |
+公共 runtime 只承载跨域机制：
+
+- OperationContext、RuntimeFailure/RecoveryPolicy/ErrorResponse。
+- typed config、HTTP client/server、observability、messaging、governance、health、
+  clock/id。
+- Page、Version、IdempotencyKey 等值类型。
+
+业务对象的 command/query Facade、AggregateStore、named Reader、typed Slice 与具体
+存储 adapter 都归属各服务；adapter 放在服务 `internal/infrastructure/**`，由服务
+composition root 显式装配。
+
+Metadata 只由构建期 ContractGraph compiler 消费。Go、Dart、OpenAPI 与 coverage
+共享同一个 Graph；服务运行期不扫描 metadata，也不根据存储类型动态创建业务数据访问
+实现。
+
+## 主要能力入口
+
+- `runtime-config`：typed config 与环境 overlay。
+- `runtime-errors`：结构化错误与恢复策略。
+- `runtime-observability`：日志、指标、trace 与 OperationContext。
+- `runtime-http` / `runtime-rpc`：transport 公共机制。
+- `runtime-messaging`：消息 envelope、outbox/inbox 公共机制。
+- `runtime-governance`：限流、熔断与健康治理。
+- `runtime-codegen`：唯一 ContractGraph compiler 与派生产物。
+- `runtime-testinfra` / `runtime-test-pyramid`：三层测试基础设施与证据治理。
+- `runtime-client-foundation`：App 公共底座。
+- `system-architecture-and-engineering-guide`：D0/F1/G1 架构和准出。
+
+其余当前节点按 `tree_index.yaml` 导航；不得在 README 复制第二套状态或实施计划。

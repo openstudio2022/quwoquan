@@ -4,7 +4,7 @@ service:
     addr: ":18087"
 
 postgres:
-  dsn: ""
+  dsn: "postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable"
 
 mongodb:
   uri: ""
@@ -30,3 +30,7 @@ model_provider:
 search_provider:
   provider: duckduckgo_html
   timeout_ms: 30000
+
+notification_service:
+  base_url: "http://notification-service:18087"
+  timeout_ms: 5000

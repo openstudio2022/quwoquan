@@ -35,15 +35,14 @@ class CircleMemberDto {
   }
 
   Map<String, dynamic> toMap() => {
-        'id': id,
-        'circleId': circleId,
-        'userId': userId,
-        'role': role,
-        'joinedAt': joinedAt.toIso8601String(),
-        if (lastActiveAt != null)
-          'lastActiveAt': lastActiveAt!.toIso8601String(),
-        'contribution': contribution,
-      };
+    'id': id,
+    'circleId': circleId,
+    'userId': userId,
+    'role': role,
+    'joinedAt': joinedAt.toIso8601String(),
+    if (lastActiveAt != null) 'lastActiveAt': lastActiveAt!.toIso8601String(),
+    'contribution': contribution,
+  };
 
   static DateTime _parseDateTime(dynamic v) {
     if (v is DateTime) return v;

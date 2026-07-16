@@ -22,7 +22,7 @@ createdAt 递减唯一且按运行时 UTC 当前分钟置顶，使推荐频道�
 用法（gamma-local）：
   python3 quwoquan_service/services/seed-box/scripts/apply_content_moment_channel_seed.py \
     --container quwoquan_service-mongodb-1 --redis-container quwoquan_service-redis-1 --db quwoquan_content \
-    --report .qwq_output/env/gamma/local/gamma-local/app-artifacts/moment-channel-seed-report.json
+    --report .qwq_output/env/gamma/runs/<runId>/moment-channel-seed-report.json
 """
 
 from __future__ import annotations

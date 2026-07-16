@@ -1,0 +1,196 @@
+version: 1
+service:
+  name: notification-service
+  domain: notification
+  owner: notification-platform
+  description: NotificationDeliveryJob 对象专属租约、重试与 DLQ command packet。
+  commercial_defaults:
+    status: blocked
+    block_reason: Gamma 尚未装配真实 Push provider 与签名 delivery-result callback，无法证明 provider delivered 收敛
+    gap_id: NOTIFICATION_DELIVERY_JOB_GAMMA_PROVIDER
+    target_story: app-cloud-business-object-commercial-closure
+api_routes:
+  - method: GET
+    path: /internal/v1/notifications/delivery-jobs/metrics
+    operation: GetNotificationDeliveryJobMetrics
+    actor: account
+    application:
+      kind: query
+      facet: NotificationDeliveryJobQueryFacade
+      method: getMetrics
+      reader: NotificationDeliveryJobMetricsReader
+      slice: NotificationDeliveryJobMetricsSnapshot
+    authorization:
+      principal: operator
+      scopes: [ops.notification.read]
+      permissions: [notification.delivery.read]
+      ownership_policy: operator_delivery_plane
+    commercial:
+      status: blocked
+      block_reason: Gamma 尚未装配真实 Push provider 与签名 delivery-result callback，无法证明 provider delivered 收敛
+      gap_id: NOTIFICATION_DELIVERY_JOB_GAMMA_PROVIDER
+      target_story: app-cloud-business-object-commercial-closure
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - NOTIFICATION.USER.unauthorized
+      - NOTIFICATION.SYSTEM.storage_read_failed
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: notification_delivery_job_metrics_read
+      trace: true
+      attributes: [outcome, dead_job_bucket]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    response_body: NotificationDeliveryJobMetricsSnapshot
+    response_body_kind: object
+    description: operator 读取 DeliveryJob、recipient ledger 与 provider attempt 的权威指标快照。
+    security:
+      auth_mode: required
+      principal: operator
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: internal
+
+  - method: GET
+    path: /internal/v1/notifications/delivery-jobs/dead-letters
+    operation: ListNotificationDeliveryJobDeadLetters
+    actor: account
+    application:
+      kind: query
+      facet: NotificationDeliveryJobQueryFacade
+      method: listDeadLetters
+      reader: NotificationDeliveryJobDeadLetterReader
+      slice: NotificationDeliveryJobDeadLetterSlice
+    authorization:
+      principal: operator
+      scopes: [ops.notification.read]
+      permissions: [notification.delivery.read]
+      ownership_policy: operator_delivery_plane
+    commercial:
+      status: blocked
+      block_reason: Gamma 尚未装配真实 Push provider 与签名 delivery-result callback，无法证明 provider delivered 收敛
+      gap_id: NOTIFICATION_DELIVERY_JOB_GAMMA_PROVIDER
+      target_story: app-cloud-business-object-commercial-closure
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - NOTIFICATION.USER.unauthorized
+      - NOTIFICATION.USER.invalid_argument
+      - NOTIFICATION.SYSTEM.storage_read_failed
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: notification_delivery_job_dead_letter_list
+      trace: true
+      attributes: [outcome, result_count, event_type]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    query_params: [eventType, limit]
+    response_body: NotificationDeliveryJobDeadLetterSlice
+    response_body_kind: page
+    description: operator 查询已耗尽重试预算的 DeliveryJob。
+    security:
+      auth_mode: required
+      principal: operator
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: internal
+
+  - method: POST
+    path: /internal/v1/notifications/delivery-jobs/{jobId}:recover
+    operation: RecoverNotificationDeliveryJob
+    actor: account
+    application:
+      kind: command
+      facet: NotificationDeliveryJobCommandFacade
+      method: recoverDeadLetter
+      aggregate_owner: NotificationDeliveryJob
+      mutation_target: NotificationDeliveryJob
+      invariant_target: NotificationDeliveryJob
+    authorization:
+      principal: operator
+      scopes: [ops.notification.write]
+      permissions: [notification.delivery.recover]
+      ownership_policy: operator_delivery_plane
+    commercial:
+      status: blocked
+      block_reason: Gamma 尚未装配真实 Push provider 与签名 delivery-result callback，无法证明 provider delivered 收敛
+      gap_id: NOTIFICATION_DELIVERY_JOB_GAMMA_PROVIDER
+      target_story: app-cloud-business-object-commercial-closure
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - NOTIFICATION.USER.unauthorized
+      - NOTIFICATION.USER.invalid_argument
+      - NOTIFICATION.USER.idempotency_conflict
+      - NOTIFICATION.USER.delivery_not_found
+      - NOTIFICATION.SYSTEM.storage_write_failed
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: notification_delivery_job_recovery
+      trace: true
+      attributes: [outcome, attempt_epoch, replayed]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    response_body: RecoverNotificationDeliveryJobResult
+    response_body_kind: object
+    description: 使用强制幂等回执将 dead DeliveryJob 推进到新的 attempt epoch。
+    security:
+      auth_mode: required
+      principal: operator
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: internal
+
+consumers:
+  - name: notification-service-worker
+    capabilities: [lease, dispatch, retry, dead_letter]
+  - name: platform-ops
+    capabilities: [inspect_delivery_job, recover_delivery_job]
+
+contract_test:
+  service_side:
+    real_engines:
+      mongodb: testcontainers (mongo:7 replica set)
+    mock_targets: [integration-provider-endpoint]
+    scenarios:
+      - name: delivery_job_transactional_lifecycle
+        assertions:
+          - Notification and NotificationDeliveryJob are created in one MongoDB transaction
+          - lease and terminal transitions use optimistic version increments
+          - created dispatched dead-lettered and recovered events use aggregate-version dedupe
+      - name: delivery_job_idempotent_recovery
+        command: RecoverNotificationDeliveryJob
+        assertions:
+          - missing Idempotency-Key is rejected
+          - same key returns the persisted typed result with replayed true
+          - same key bound to another job returns NOTIFICATION.USER.idempotency_conflict
+          - a new key cannot recover a non-dead job
+          - state receipt and NotificationDeliveryJobRecovered outbox event commit atomically
+      - name: removed_delivery_route_unavailable
+        assertions:
+          - POST /internal/v1/notifications/dead-letters/{id}/recovery returns 404

@@ -181,43 +181,6 @@ void syncProfileFollowIntent(
       );
 }
 
-Future<bool> syncPostShareIntent(
-  WidgetRef ref, {
-  required String postId,
-  required int baselineShareCount,
-}) async {
-  // 分享为「游客设备态可写」：游客与登录用户均可写入权威分享记录。云侧按
-  // deviceActorId（游客）/ userId（登录）独立累加、不并账；设备头由
-  // CloudRequestHeaders 统一注入。
-  ref
-      .read(postInteractionStateProvider.notifier)
-      .stageOptimisticShare(postId, baseShareCount: baselineShareCount);
-  try {
-    final changed = await ref
-        .read(contentRepositoryProvider)
-        .sharePost(postId: postId);
-    if (!changed) {
-      ref
-          .read(postInteractionStateProvider.notifier)
-          .rollbackOptimisticShare(
-            postId,
-            baseShareCount: baselineShareCount,
-            isShared: true,
-          );
-    }
-    return changed;
-  } catch (_) {
-    ref
-        .read(postInteractionStateProvider.notifier)
-        .rollbackOptimisticShare(
-          postId,
-          baseShareCount: baselineShareCount,
-          isShared: false,
-        );
-    rethrow;
-  }
-}
-
 void syncPostCommentCount(
   WidgetRef ref, {
   required String postId,

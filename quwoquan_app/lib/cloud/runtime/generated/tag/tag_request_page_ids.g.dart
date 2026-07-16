@@ -5,6 +5,7 @@ class TagRequestPageIds {
   const TagRequestPageIds._();
 
   static const Map<String, String> operationToPageId = <String, String>{
+    'ActivateTagTaxonomyRelease': 'tag.activate.tag.taxonomy.release',
     'InvertedObjects': 'tag.inverted.objects',
     'ListDimensions': 'tag.list.dimensions',
     'ListTagChildren': 'tag.list.tag.children',
@@ -14,12 +15,13 @@ class TagRequestPageIds {
     'SearchByTags': 'tag.search.by.tags',
     'SearchTags': 'tag.search.tags',
     'SharedTags': 'tag.shared.tags',
+    'StageTagTaxonomyRelease': 'tag.stage.tag.taxonomy.release',
     'SuggestTags': 'tag.suggest.tags',
     'TagCooccurrence': 'tag.tag.cooccurrence',
-    'TagFeedback': 'tag.tag.feedback',
     'ValidateTagRefs': 'tag.validate.tag.refs',
   };
 
+  static const String activateTagTaxonomyRelease = 'tag.activate.tag.taxonomy.release';
   static const String invertedObjects = 'tag.inverted.objects';
   static const String listDimensions = 'tag.list.dimensions';
   static const String listTagChildren = 'tag.list.tag.children';
@@ -29,8 +31,8 @@ class TagRequestPageIds {
   static const String searchByTags = 'tag.search.by.tags';
   static const String searchTags = 'tag.search.tags';
   static const String sharedTags = 'tag.shared.tags';
+  static const String stageTagTaxonomyRelease = 'tag.stage.tag.taxonomy.release';
   static const String suggestTags = 'tag.suggest.tags';
   static const String tagCooccurrence = 'tag.tag.cooccurrence';
-  static const String tagFeedback = 'tag.tag.feedback';
   static const String validateTagRefs = 'tag.validate.tag.refs';
 }

@@ -75,6 +75,33 @@ entities:
         api_exposure: read
         ops_exposure: read
 
+      - name: sourceOwner
+        type: string
+        constraints: [NULLABLE]
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+        description: 写入主页投影的受控来源所有者；仅用于 release sync 的归属隔离
+
+      - name: sourceEntityRef
+        type: string
+        constraints: [NULLABLE]
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+        description: 来源系统内的稳定实体引用；同 sourceOwner 下唯一定位导入主页
+
+      - name: sourceReleaseId
+        type: string
+        constraints: [NULLABLE]
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+        description: 最近一次写入该主页投影的不可变数据发布批次
+
       - name: claimStatus
         type: enum
         enum_ref: HomepageClaimStatus
@@ -93,7 +120,7 @@ entities:
         ops_exposure: read
         recommend_feature: true
         tag_ref: true
-        description: 路径制 tagRef 列表（对象类目锚点）；真相源 publish/tags（Entity/Topic 分组）
+        description: 路径制 tagRef 列表（对象类目锚点）；真相源 control_plane/governance/taxonomy（Entity/Topic 分组）
 
       - name: coverUrl
         type: string
@@ -441,7 +468,7 @@ entities:
         api_exposure: read
         ops_exposure: read
         tag_ref: true
-        description: 路径制 tagRef 列表（对象亮点锚点）；真相源 publish/tags
+        description: 路径制 tagRef 列表（对象亮点锚点）；真相源 control_plane/governance/taxonomy
 
       - name: dimensionScores
         type: "[]object"

@@ -1,5 +1,4 @@
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_file_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_member_roster_item_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_stats_wire_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
@@ -371,7 +370,7 @@ class CircleMockData {
     },
   ];
 
-  /// 成员行真源（[ListCircleMembers] / Mock 富集字段）；[members] wire 由此派生。
+  /// 成员行真源（[ListCircleMemberships] / Mock 富集字段）；[members] wire 由此派生。
   static final List<CircleMemberRosterItemDto> catalogMemberRosterRows = [
     CircleMemberRosterItemDto(
       membershipId: 'u1',
@@ -418,61 +417,6 @@ class CircleMockData {
               '${r.joinedAt.day.toString().padLeft(2, '0')}',
         },
       )
-      .toList(growable: false);
-
-  static final List<Map<String, dynamic>> _fileWireSeeds = [
-    {
-      'id': 'f1',
-      'name': '摄影指南.pdf',
-      'fileType': 'file',
-      'mimeType': 'application/pdf',
-      'sizeBytes': 2097152,
-      'uploaderId': 'u3',
-      'status': 'active',
-      'createdAt': '2024-02-01',
-      'updatedAt': '2024-02-01',
-    },
-    {
-      'id': 'f2',
-      'name': '器材对比表.xlsx',
-      'fileType': 'file',
-      'mimeType':
-          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'sizeBytes': 524288,
-      'uploaderId': 'u2',
-      'status': 'active',
-      'createdAt': '2024-02-10',
-      'updatedAt': '2024-02-10',
-    },
-    {
-      'id': 'f3',
-      'name': '活动照片',
-      'fileType': 'folder',
-      'mimeType': null,
-      'sizeBytes': 0,
-      'uploaderId': 'u1',
-      'status': 'active',
-      'createdAt': '2024-01-20',
-      'updatedAt': '2024-01-20',
-    },
-  ];
-
-  static List<CircleFileDto>? _catalogCircleFileDtosCache;
-
-  static List<CircleFileDto> get catalogCircleFileDtos {
-    return _catalogCircleFileDtosCache ??= [
-      for (final w in _fileWireSeeds)
-        CircleFileDto.fromMap(Map<String, dynamic>.from(w)),
-    ];
-  }
-
-  /// 与记录 Mock 一致：不含 `circleId`（由仓库在 [CircleFileDto.fromMap] 时注入）。
-  static List<Map<String, dynamic>> get files => catalogCircleFileDtos
-      .map((d) {
-        final m = Map<String, dynamic>.from(d.toMap());
-        m.remove('circleId');
-        return m;
-      })
       .toList(growable: false);
 
   static final List<Map<String, dynamic>> _circleFeedWireSeeds = [

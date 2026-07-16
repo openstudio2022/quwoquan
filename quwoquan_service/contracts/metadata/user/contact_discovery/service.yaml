@@ -1,16 +1,28 @@
 version: 1
-entity: ContactDiscoveryRecord
 
 service:
   name: user-service
   domain: user
   owner: backend-team
+  commercial_defaults:
+    status: blocked
+    block_reason: canonical operation awaits object-centered commercial migration
+    gap_id: USER_CONTACT_DISCOVERY_COMMERCIAL_EVIDENCE
+    target_story: app-cloud-business-object-commercial-closure
   description: 通讯录发现——哈希匹配已注册用户，结果只暴露 subAccountId
 
 api_routes:
   - method: POST
     path: /v1/owner/contact-discovery
     operation: InitiateContactDiscovery
+    actor: account
+    application:
+      kind: command
+      facet: ContactDiscoveryCommandFacade
+      method: initiateContactDiscovery
+      aggregate_owner: ContactDiscoveryRecord
+      mutation_target: ContactDiscoveryRecord
+      invariant_target: ContactDiscoveryRecord
     description: 上传哈希手机号列表，触发异步匹配
     auth_required: true
     request_fields: [hashedPhones]
@@ -20,6 +32,13 @@ api_routes:
   - method: GET
     path: /v1/owner/contact-discovery/latest
     operation: GetLatestContactDiscovery
+    actor: account
+    application:
+      kind: query
+      facet: ContactDiscoveryQueryFacade
+      method: getLatestContactDiscovery
+      reader: GetLatestContactDiscoveryReader
+      slice: GetLatestContactDiscoverySlice
     description: >
       获取最近一次发现结果。matchedSubAccountIds 保留为隐私基线（仅 ID）；
       matches[] 为富化投影 ContactDiscoveryMatchWire，回显发起者上传的 hashedPhone（端侧据此映射回本地通讯录显示名）、
@@ -32,6 +51,14 @@ api_routes:
   - method: DELETE
     path: /v1/owner/contact-discovery/{id}
     operation: DismissContactDiscovery
+    actor: account
+    application:
+      kind: command
+      facet: ContactDiscoveryCommandFacade
+      method: dismissContactDiscovery
+      aggregate_owner: ContactDiscoveryRecord
+      mutation_target: ContactDiscoveryRecord
+      invariant_target: ContactDiscoveryRecord
     description: 主动删除/忽略发现记录
 
 consumers:

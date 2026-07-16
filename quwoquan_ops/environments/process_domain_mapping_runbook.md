@@ -165,7 +165,7 @@ make gate-full
 2. 本地 Docker compose 的进程/domain 归属必须按 `gamma` 映射设计，不能引入本地独有 domain 绑定。
 3. 本地配置版本必须显式绑定，例如 `CONFIG_VERSION=local-gamma-v1`；配置挂载结构遵守 `CONFIG_ROOT/configs/<service>/<env>/config.yaml` 与 `CONFIG_ROOT/quwoquan_service/services/<service>/<version>.yaml`。
 4. App 以 `APP_RUNTIME_ENV=gamma`、`APP_DATA_SOURCE=remote` 连接本地 mirror endpoint，测试数据来自 `app_gamma_seed_manifest.json`。
-5. 每次提交前运行 `make gate-local-gamma`，报告写入 `.qwq_output/env/gamma/local/gamma-local/report.json`；缺少 DNS、TLS、设备或服务依赖时状态为 `GATE_BLOCK`。
+5. 每次提交前运行 `make gate-local-gamma`，报告写入 `.qwq_output/env/gamma/local/gamma-local/process/report.json`；缺少 DNS、TLS、设备或服务依赖时状态为 `GATE_BLOCK`。
 
 本地通过只证明提交前左移质量，不代表云侧 gamma 或 prod 的发布真实性已通过。
 

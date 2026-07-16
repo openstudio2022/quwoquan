@@ -1,0 +1,84 @@
+id: CR-20260715-101-circle-file-wire-contract-closure
+title: CircleFile 分页响应与强类型 wire 契约收口
+slug: circle-file-wire-contract-closure
+revision: 2
+status: in_progress
+
+affected_nodes:
+  - specs/feature-tree/circle-community/circle-collaboration-tools
+  - specs/feature-tree/runtime/system-architecture-and-engineering-guide
+
+entries:
+  - timestamp: "2026-07-15T02:15:00+08:00"
+    summary: |
+      CircleFile metadata 补齐稳定的 `CircleFileSlice`、`CircleFilePageSlice` 和
+      `CircleFileCommandResult`；ListCircleFiles 的 response_entity 从错误的单项
+      `CircleFileSlice` 更正为分页 `CircleFilePageSlice`。
+    reason: |
+      App 与服务 Facade 一直使用 items/cursor 分页 wire，但 service metadata 未声明
+      分页响应实体，导致 metadata verifier 输出 warning，且 ContractGraph 将该接口错误
+      描述为单项读取。该错误契约不保留兼容形态。
+    change_type: [contract, architecture, reliability, testing]
+    changed_documents:
+      - path: quwoquan_service/contracts/metadata/social/circle_file/fields.yaml
+        sections: [CircleFileSlice, CircleFilePageSlice, CircleFileCommandResult]
+      - path: quwoquan_service/contracts/metadata/social/circle_file/service.yaml
+        sections: [ListCircleFiles response_entity]
+      - path: specs/feature-tree/circle-community/circle-collaboration-tools/spec.md
+        sections: [constraints]
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers: [local_contract, api_integration]
+      rollout_impact: controlled
+      breaking_contract: true
+      breaking_rationale: |
+        ContractGraph 中 ListCircleFiles 的 response_entity 从单项切片变为分页切片。
+        App 与现有 Facade 已使用分页 decoder；本次移除错误的 metadata 表述，不保留旧
+        单项响应兼容。
+    verification:
+      completed:
+        - command: cd quwoquan_service && go run ./tools/verify_metadata/ contracts/metadata
+          result: PASS；CircleFile response entities 均可解析，metadata warnings=0。
+      planned:
+        - cd quwoquan_service && make codegen && make verify-metadata
+        - python3 quwoquan_ops/cli/cloud_contract_handoff.py accept --owner app-cloud-governance --approve-breaking
+        - python3 quwoquan_ops/cli/cloud_contract_handoff.py verify
+        - cd quwoquan_app && flutter test test/local_contract/cloud/circle
+        - bash quwoquan_ops/gate/gate_repo.sh
+    remaining_blockers:
+      - 双省主页执行、Gamma 导入和动态 App UAT 仍由 R-HSE06 的真实数据准出门管理。
+  - timestamp: "2026-07-15T02:35:00+08:00"
+    summary: |
+      CircleFile 的商业准出仍保持 `blocked` 与同一
+      `CIRCLE_FILE_COMMERCIAL_CLOSURE`，但阻断说明收敛为 Gamma 真实上传、下载、
+      目录导航、BOLA、恢复 Journey 与 production 工件证据；不再把已完成的
+      MediaAsset owner Reader、transaction/outbox 与 typed Facet 当作当前缺口。
+    reason: |
+      ContractGraph 把 commercial defaults 纳入每个 App-exposed operation 的不可变
+      snapshot。仅修改文字也会影响五个 CircleFile operation 的审计输入，因此必须
+      显式记录并批准，不能以重生 lock 或忽略 stale graph 的方式绕过。
+    change_type: [contract, observability, reliability]
+    changed_documents:
+      - path: quwoquan_service/contracts/metadata/social/circle_file/service.yaml
+        sections: [service.commercial_defaults]
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers: [local_contract, api_integration]
+      rollout_impact: controlled
+      breaking_contract: true
+      breaking_rationale: |
+        五个 CircleFile operation 的 ContractGraph commercial snapshot 改变，但 API
+        transport、DTO、授权规则和运行行为不变。新描述更严格地限定未闭环的 Gamma 与
+        production 证据；不保留旧描述、别名或放行路径。
+    verification:
+      completed: []
+      planned:
+        - cd quwoquan_service && make codegen && make verify-metadata
+        - python3 quwoquan_ops/cli/cloud_contract_handoff.py accept --owner app-cloud-governance --approve-breaking
+        - python3 quwoquan_ops/cli/cloud_contract_handoff.py verify
+        - make codegen-app && make verify-app-generated-manifest
+        - bash quwoquan_ops/gate/gate_repo.sh
+    remaining_blockers:
+      - CircleFile Gamma 真实上传、下载、目录导航、BOLA、恢复 Journey 与 production 工件证据仍未闭环。

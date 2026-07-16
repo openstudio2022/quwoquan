@@ -36,7 +36,7 @@ entries:
       - path: specs/feature-tree/chat-conversation/group-creation-member-management/group-settings/acceptance.yaml
         sections:
           - A9–A13
-      - path: specs/feature-tree/chat-conversation/group-creation-member-management/group-settings/plan.yaml
+      - path: specs/feature-tree/chat-conversation/group-creation-member-management/group-settings/content.execution.planning.yaml
         sections:
           - all
     impact:

@@ -1,5 +1,7 @@
 import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 
@@ -8,22 +10,50 @@ class AppToast {
   static OverlayEntry? _currentEntry;
   static Timer? _timer;
 
-  static void show(BuildContext context, String message, {Duration duration = const Duration(seconds: 3)}) {
-    _currentEntry?.remove();
-    _timer?.cancel();
+  /// Shows a toast.
+  ///
+  /// Insertion is deferred until after the current frame when the scheduler is
+  /// mid-build, avoiding Riverpod `markNeedsBuild during build` when Overlay /
+  /// TickerMode resumes provider watchers.
+  static void show(
+    BuildContext context,
+    String message, {
+    Duration duration = const Duration(seconds: 3),
+  }) {
+    final overlay = Overlay.maybeOf(context);
+    if (overlay == null) {
+      return;
+    }
+    final messengerContext = context;
 
-    final overlay = Overlay.of(context);
-    _currentEntry = OverlayEntry(
-      builder: (context) => _ToastWidget(message: message),
-    );
-
-    overlay.insert(_currentEntry!);
-
-    _timer = Timer(duration, () {
+    void insert() {
+      if (!messengerContext.mounted) {
+        return;
+      }
+      final liveOverlay = Overlay.maybeOf(messengerContext);
+      if (liveOverlay == null) {
+        return;
+      }
       _currentEntry?.remove();
-      _currentEntry = null;
-      _timer = null;
-    });
+      _timer?.cancel();
+      _currentEntry = OverlayEntry(
+        builder: (context) => _ToastWidget(message: message),
+      );
+      liveOverlay.insert(_currentEntry!);
+      _timer = Timer(duration, () {
+        _currentEntry?.remove();
+        _currentEntry = null;
+        _timer = null;
+      });
+    }
+
+    final phase = SchedulerBinding.instance.schedulerPhase;
+    if (phase == SchedulerPhase.idle ||
+        phase == SchedulerPhase.postFrameCallbacks) {
+      insert();
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) => insert());
   }
 
   static void dismiss() {
@@ -42,7 +72,7 @@ class _ToastWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-    
+
     return Positioned(
       bottom: MediaQuery.of(context).viewInsets.bottom + 100,
       left: AppSpacing.containerMd,
@@ -54,7 +84,9 @@ class _ToastWidget extends StatelessWidget {
             vertical: AppSpacing.containerSm,
           ),
           decoration: BoxDecoration(
-            color: isDark ? CupertinoColors.systemGrey6.darkColor.withValues(alpha: 0.9) : CupertinoColors.black.withValues(alpha: 0.9),
+            color: isDark
+                ? CupertinoColors.systemGrey6.darkColor.withValues(alpha: 0.9)
+                : CupertinoColors.black.withValues(alpha: 0.9),
             borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
           ),
           child: DefaultTextStyle(
@@ -63,10 +95,7 @@ class _ToastWidget extends StatelessWidget {
               fontSize: AppTypography.base,
               fontWeight: FontWeight.w400,
             ),
-            child: Text(
-              message,
-              textAlign: TextAlign.center,
-            ),
+            child: Text(message, textAlign: TextAlign.center),
           ),
         ),
       ),

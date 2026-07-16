@@ -30,7 +30,7 @@ void main() {
       );
       final candidates = image.imageUrlCandidates ?? const <String>[];
       expect(image.cdnPreset, CdnImagePreset.avatar);
-      expect(image.imageUrl, startsWith('https://localhost:17100/'));
+      expect(image.imageUrl, startsWith('https://127.0.0.1:17100/'));
       expect(
         candidates,
         containsAll(<String>[

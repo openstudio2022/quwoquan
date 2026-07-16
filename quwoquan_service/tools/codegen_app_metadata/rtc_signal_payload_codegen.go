@@ -2,11 +2,8 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
-
-	"gopkg.in/yaml.v3"
 )
 
 // rtcEventsYAML mirrors rtc/call_session/events.yaml (client WS payload codegen).
@@ -23,12 +20,8 @@ type rtcEventYAML struct {
 }
 
 func readRtcEvents(path string) (*rtcEventsYAML, error) {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
 	var out rtcEventsYAML
-	if err := yaml.Unmarshal(raw, &out); err != nil {
+	if err := decodeMetadataDocument(path, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -236,8 +229,8 @@ func emitRtcPayloadManifest(b *strings.Builder, ev *rtcEventYAML) {
 func writeRtcSignalPayloads(appDir, metadataDir string) error {
 	eventsPath := filepath.Join(metadataDir, "rtc", "call_session", "events.yaml")
 	fieldsPath := filepath.Join(metadataDir, "rtc", "call_session", "fields.yaml")
-	if _, err := os.Stat(eventsPath); err != nil {
-		return fmt.Errorf("rtc events: %w", err)
+	if !hasMetadataDocument(eventsPath) {
+		return fmt.Errorf("rtc events metadata is absent")
 	}
 	ff, err := readFields(fieldsPath)
 	if err != nil {

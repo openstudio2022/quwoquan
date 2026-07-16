@@ -1,14 +1,27 @@
 version: 1
-entity: GreetingRequest
 
 service:
   name: user-service
   domain: user
+  owner: user-platform
+  commercial_defaults:
+    status: blocked
+    block_reason: canonical operation awaits object-centered commercial migration
+    gap_id: USER_GREETING_REQUEST_COMMERCIAL_EVIDENCE
+    target_story: app-cloud-business-object-commercial-closure
 
 api_routes:
   - method: POST
     path: /v1/user/greeting-request
     operation: SendGreetingRequest
+    actor: persona
+    application:
+      kind: command
+      facet: GreetingRequestCommandFacade
+      method: sendGreetingRequest
+      aggregate_owner: GreetingRequest
+      mutation_target: GreetingRequest
+      invariant_target: GreetingRequest
     description: 发起打招呼（创建请求箱条目，未回复前不进入聊天列表）
     writable_fields: [targetSubAccountId, requestMessage, source]
     security:
@@ -21,6 +34,13 @@ api_routes:
   - method: GET
     path: /v1/user/greeting-request/inbox
     operation: ListGreetingInbox
+    actor: persona
+    application:
+      kind: query
+      facet: GreetingRequestQueryFacade
+      method: listGreetingInbox
+      reader: ListGreetingInboxReader
+      slice: ListGreetingInboxSlice
     description: 收件箱（我收到的待处理请求）
     query_params: [status, cursor, limit]
     security:
@@ -33,6 +53,13 @@ api_routes:
   - method: GET
     path: /v1/user/greeting-request/outbox
     operation: ListGreetingOutbox
+    actor: persona
+    application:
+      kind: query
+      facet: GreetingRequestQueryFacade
+      method: listGreetingOutbox
+      reader: ListGreetingOutboxReader
+      slice: ListGreetingOutboxSlice
     description: 发件箱（我发出的请求）
     query_params: [status, cursor, limit]
     security:
@@ -45,6 +72,14 @@ api_routes:
   - method: POST
     path: /v1/user/greeting-request/{requestId}/reply
     operation: ReplyGreetingRequest
+    actor: persona
+    application:
+      kind: command
+      facet: GreetingRequestCommandFacade
+      method: replyGreetingRequest
+      aggregate_owner: GreetingRequest
+      mutation_target: GreetingRequest
+      invariant_target: GreetingRequest
     description: 回复打招呼（同步创建或复用正式 1v1 会话，写入 promotedConversationId 后发布 GreetingRequestReplied）
     security:
       auth_mode: required
@@ -56,6 +91,14 @@ api_routes:
   - method: POST
     path: /v1/user/greeting-request/{requestId}/ignore
     operation: IgnoreGreetingRequest
+    actor: persona
+    application:
+      kind: command
+      facet: GreetingRequestCommandFacade
+      method: ignoreGreetingRequest
+      aggregate_owner: GreetingRequest
+      mutation_target: GreetingRequest
+      invariant_target: GreetingRequest
     description: 忽略打招呼
     security:
       auth_mode: required
@@ -67,6 +110,14 @@ api_routes:
   - method: DELETE
     path: /v1/user/greeting-request/{requestId}
     operation: CancelGreetingRequest
+    actor: persona
+    application:
+      kind: command
+      facet: GreetingRequestCommandFacade
+      method: cancelGreetingRequest
+      aggregate_owner: GreetingRequest
+      mutation_target: GreetingRequest
+      invariant_target: GreetingRequest
     description: 撤回打招呼（仅发起方可操作，仅 pending 状态可撤回）
     security:
       auth_mode: required
@@ -102,7 +153,7 @@ contract_test:
 
         - name: mutual_contact_greeting_rejected
           route: POST /v1/user/greeting-request
-          seed: [mutual_follow_edge]
+          seed: [mutual_persona_relationship]
           assertions: [status_409, error_code_USER.GREETING.already_contact]
 
         - name: reply_upgrades_conversation
@@ -135,7 +186,7 @@ contract_test:
 
         - name: blocked_user_gets_rejected
           command: SendGreetingRequest to blocked user
-          seed: [block_edge(target → requester)]
+          seed: [persona_relationship_block(target → requester)]
           assertions:
             - "status_403"
             - "error_code_USER.GREETING.target_blocked_sender"

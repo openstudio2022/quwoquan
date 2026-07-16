@@ -56,7 +56,6 @@
 | path | domain | entry | dual_theme | exemption_reason | owner | evidence |
 |------|--------|-------|------------|------------------|-------|----------|
 | `lib/ui/chat/pages/chat_page.dart` | chat | Tab 根 | full | | TBD | 子树：`streaming_scroll_fab`/`voice_message_bubble`/`chat_message_bubble`（尾阴影 `dropShadow`）/`secondary_capsule_tab_bar`（`secondaryCapsuleTrack`、角标 `badgeForeground`）等走 `AppColorsFunctional` + `brightness`。 |
-| `lib/ui/chat/pages/chat_detail_page.dart` | chat | 委托入口 | full | | TBD | 仅包装 `ChatConversationPage`，与对话页同结论。 |
 | `lib/ui/chat/pages/chat_conversation_page.dart` | chat | 全屏/嵌套 | full | | TBD | `isDarkProvider` + 功能色。 |
 | `lib/ui/chat/pages/chat_settings_page.dart` | chat | GoRoute | full | | TBD | `isDarkProvider`。 |
 | `lib/ui/chat/pages/start_group_chat_page.dart` | chat | 模态 | full | | TBD | `isDarkProvider` + 功能色。 |

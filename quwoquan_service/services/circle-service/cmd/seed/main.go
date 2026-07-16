@@ -22,8 +22,11 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	rtmongo "quwoquan_service/internal/platform/mongodb"
 	"quwoquan_service/runtime/contractfixture"
-	rtmongo "quwoquan_service/runtime/mongodb"
+	filemodel "quwoquan_service/services/circle-service/internal/domain/circle/circle_file/model"
+	groupmodel "quwoquan_service/services/circle-service/internal/domain/circle/circle_group/model"
+	membershipmodel "quwoquan_service/services/circle-service/internal/domain/circle/circle_membership/model"
 	model "quwoquan_service/services/circle-service/internal/domain/circle/model"
 )
 
@@ -44,6 +47,7 @@ type circleFixtureCircle struct {
 	Description          string `json:"description"`
 	CoverURL             string `json:"coverUrl"`
 	OwnerID              string `json:"ownerId"`
+	OwnerDisplayName     string `json:"ownerDisplayNameSnapshot"`
 	CategoryID           string `json:"categoryId"`
 	SubCategory          string `json:"subCategory"`
 	DomainID             string `json:"domainId"`
@@ -61,14 +65,16 @@ type circleFixtureCircle struct {
 
 type circleFixtureGroup struct {
 	ID                   string `json:"_id"`
+	Version              int64  `json:"version"`
 	CircleID             string `json:"circleId"`
+	ParentGroupID        string `json:"parentGroupId"`
 	GroupType            string `json:"groupType"`
+	NodeType             string `json:"nodeType"`
 	Name                 string `json:"name"`
 	Description          string `json:"description"`
 	Visibility           string `json:"visibility"`
 	JoinPolicy           string `json:"joinPolicy"`
-	OwnerUserID          string `json:"ownerUserId"`
-	MemberCount          int64  `json:"memberCount"`
+	CreatedByPersonaID   string `json:"createdByPersonaId"`
 	ConversationID       string `json:"conversationId"`
 	StorageEnabled       bool   `json:"storageEnabled"`
 	NoticeEnabled        bool   `json:"noticeEnabled"`
@@ -81,7 +87,7 @@ type circleFixtureGroup struct {
 type circleFixtureMember struct {
 	ID           string `json:"_id"`
 	CircleID     string `json:"circleId"`
-	UserID       string `json:"userId"`
+	PersonaID    string `json:"personaId"`
 	Role         string `json:"role"`
 	JoinedAt     string `json:"joinedAt"`
 	LastActiveAt string `json:"lastActiveAt"`
@@ -89,18 +95,20 @@ type circleFixtureMember struct {
 }
 
 type circleFixtureFile struct {
-	ID         string `json:"_id"`
-	CircleID   string `json:"circleId"`
-	GroupID    string `json:"groupId"`
-	Name       string `json:"name"`
-	FileType   string `json:"fileType"`
-	MimeType   string `json:"mimeType"`
-	SizeBytes  int64  `json:"sizeBytes"`
-	ObjectKey  string `json:"objectKey"`
-	UploaderID string `json:"uploaderId"`
-	Status     string `json:"status"`
-	CreatedAt  string `json:"createdAt"`
-	UpdatedAt  string `json:"updatedAt"`
+	ID                string `json:"_id"`
+	Version           int64  `json:"version"`
+	CircleID          string `json:"circleId"`
+	GroupID           string `json:"groupId"`
+	ParentFolderID    string `json:"parentFolderId"`
+	Name              string `json:"name"`
+	FileType          string `json:"fileType"`
+	AssetID           string `json:"assetId"`
+	MimeType          string `json:"mimeType"`
+	SizeBytes         int64  `json:"sizeBytes"`
+	UploaderPersonaID string `json:"uploaderPersonaId"`
+	Status            string `json:"status"`
+	CreatedAt         string `json:"createdAt"`
+	UpdatedAt         string `json:"updatedAt"`
 }
 
 type contentFixturePack struct {
@@ -143,25 +151,26 @@ func circleFromFixture(fc circleFixtureCircle) *model.Circle {
 		joinPolicy = model.CircleJoinPolicyOpen
 	}
 	return &model.Circle{
-		ID:                   fc.ID,
-		Name:                 fc.Name,
-		Description:          fc.Description,
-		CoverUrl:             fc.CoverURL,
-		OwnerID:              fc.OwnerID,
-		Category:             fc.CategoryID,
-		SubCategory:          fc.SubCategory,
-		MemberCount:          fc.MemberCount,
-		PostCount:            fc.PostCount,
-		WeeklyActiveCount:    fc.WeeklyActiveCount,
-		Status:               model.CircleStatusActive,
-		Visibility:           visibility,
-		JoinPolicy:           joinPolicy,
-		Kind:                 model.CircleKindInterest,
-		DisplaySubjectType:   model.CircleDisplaySubjectTypeCircle,
-		FollowEnabled:        true,
-		DefaultPublicGroupID: fc.DefaultPublicGroupID,
-		ConversationID:       fc.ConversationID,
-		AutoSyncChat:         fc.AutoSyncChat,
+		ID:                       fc.ID,
+		Name:                     fc.Name,
+		Description:              fc.Description,
+		CoverUrl:                 fc.CoverURL,
+		OwnerID:                  fc.OwnerID,
+		OwnerDisplayNameSnapshot: fc.OwnerDisplayName,
+		Category:                 fc.CategoryID,
+		SubCategory:              fc.SubCategory,
+		MemberCount:              fc.MemberCount,
+		PostCount:                fc.PostCount,
+		WeeklyActiveCount:        fc.WeeklyActiveCount,
+		Status:                   model.CircleStatusActive,
+		Visibility:               visibility,
+		JoinPolicy:               joinPolicy,
+		Kind:                     model.CircleKindInterest,
+		DisplaySubjectType:       model.CircleDisplaySubjectTypeCircle,
+		FollowEnabled:            true,
+		DefaultPublicGroupID:     fc.DefaultPublicGroupID,
+		ConversationID:           fc.ConversationID,
+		AutoSyncChat:             fc.AutoSyncChat,
 		SectionConfig: []model.CircleSectionConfig{
 			{SectionType: model.CircleSectionTypeWorks, Visible: true, Order: 0},
 			{SectionType: model.CircleSectionTypeChat, Visible: true, Order: 1},
@@ -175,54 +184,63 @@ func circleFromFixture(fc circleFixtureCircle) *model.Circle {
 	}
 }
 
-func circleMemberFromFixture(fm circleFixtureMember) *model.CircleMember {
-	return &model.CircleMember{
+func circleMembershipFromFixture(fm circleFixtureMember) *membershipmodel.CircleMembership {
+	joinedAt := parseFixtureTime(fm.JoinedAt)
+	lastActiveAt := parseFixtureTime(fm.LastActiveAt)
+	return &membershipmodel.CircleMembership{
 		ID:           fm.ID,
+		Version:      1,
 		CircleID:     fm.CircleID,
-		UserID:       fm.UserID,
-		Role:         model.CircleMemberRole(fm.Role),
-		JoinedAt:     parseFixtureTime(fm.JoinedAt),
-		LastActiveAt: parseFixtureTime(fm.LastActiveAt),
+		PersonaID:    fm.PersonaID,
+		Role:         membershipmodel.CircleMemberRole(fm.Role),
+		State:        membershipmodel.CircleMembershipStateActive,
+		JoinedAt:     joinedAt,
+		LastActiveAt: lastActiveAt,
 		Contribution: fm.Contribution,
+		CreatedAt:    joinedAt,
+		UpdatedAt:    lastActiveAt,
 	}
 }
 
-func circleGroupFromFixture(fg circleFixtureGroup) *model.CircleGroup {
-	return &model.CircleGroup{
+func circleGroupFromFixture(fg circleFixtureGroup) *groupmodel.CircleGroup {
+	return &groupmodel.CircleGroup{
 		ID:                   fg.ID,
+		Version:              fg.Version,
 		CircleID:             fg.CircleID,
-		GroupType:            model.CircleGroupType(fg.GroupType),
+		ParentGroupID:        fg.ParentGroupID,
+		GroupType:            groupmodel.CircleGroupType(fg.GroupType),
+		NodeType:             groupmodel.OrganizationNodeType(fg.NodeType),
 		Name:                 fg.Name,
 		Description:          fg.Description,
-		Visibility:           model.CircleGroupVisibility(fg.Visibility),
-		JoinPolicy:           model.CircleGroupJoinPolicy(fg.JoinPolicy),
-		OwnerUserID:          fg.OwnerUserID,
-		MemberCount:          fg.MemberCount,
+		Visibility:           groupmodel.CircleGroupVisibility(fg.Visibility),
+		JoinPolicy:           groupmodel.CircleGroupJoinPolicy(fg.JoinPolicy),
+		CreatedByPersonaID:   fg.CreatedByPersonaID,
 		ConversationID:       fg.ConversationID,
 		StorageEnabled:       fg.StorageEnabled,
 		NoticeEnabled:        fg.NoticeEnabled,
 		IsDefaultPublicGroup: fg.IsDefaultPublicGroup,
-		LastActiveAt:         parseFixtureTime(fg.UpdatedAt),
-		Status:               model.CircleGroupStatus(fg.Status),
+		Status:               groupmodel.CircleGroupStatus(fg.Status),
 		CreatedAt:            parseFixtureTime(fg.CreatedAt),
 		UpdatedAt:            parseFixtureTime(fg.UpdatedAt),
 	}
 }
 
-func circleFileFromFixture(ff circleFixtureFile) *model.CircleFile {
-	return &model.CircleFile{
-		ID:         ff.ID,
-		CircleID:   ff.CircleID,
-		GroupID:    ff.GroupID,
-		Name:       ff.Name,
-		FileType:   model.CircleFileType(ff.FileType),
-		MimeType:   ff.MimeType,
-		SizeBytes:  ff.SizeBytes,
-		ObjectKey:  ff.ObjectKey,
-		UploaderID: ff.UploaderID,
-		Status:     model.CircleFileStatus(ff.Status),
-		CreatedAt:  parseFixtureTime(ff.CreatedAt),
-		UpdatedAt:  parseFixtureTime(ff.UpdatedAt),
+func circleFileFromFixture(ff circleFixtureFile) *filemodel.CircleFile {
+	return &filemodel.CircleFile{
+		ID:                ff.ID,
+		Version:           ff.Version,
+		CircleID:          ff.CircleID,
+		GroupID:           ff.GroupID,
+		ParentFolderID:    ff.ParentFolderID,
+		Name:              ff.Name,
+		FileType:          filemodel.CircleFileType(ff.FileType),
+		AssetID:           ff.AssetID,
+		MimeType:          ff.MimeType,
+		SizeBytes:         ff.SizeBytes,
+		UploaderPersonaID: ff.UploaderPersonaID,
+		Status:            filemodel.CircleFileStatus(ff.Status),
+		CreatedAt:         parseFixtureTime(ff.CreatedAt),
+		UpdatedAt:         parseFixtureTime(ff.UpdatedAt),
 	}
 }
 
@@ -307,7 +325,7 @@ func main() {
 	db := client.Database(*database)
 
 	// Reset previously seeded fixture rows so reseeding stays deterministic.
-	for _, coll := range []string{"circles", "circle_members", "circle_groups", "circle_files", "posts"} {
+	for _, coll := range []string{"circles", "circle_memberships", "circle_groups", "circle_files", "posts"} {
 		if _, err := db.Collection(coll).DeleteMany(ctx, bson.M{
 			"$or": []bson.M{
 				{"_id": bson.M{"$regex": "^fixture_"}},
@@ -347,8 +365,8 @@ func main() {
 		}
 		for _, members := range seedSet.Members {
 			for _, fm := range members {
-				m := circleMemberFromFixture(fm)
-				upsert("circle_members", m.ID, m)
+				m := circleMembershipFromFixture(fm)
+				upsert("circle_memberships", m.ID, m)
 				inserted++
 			}
 		}

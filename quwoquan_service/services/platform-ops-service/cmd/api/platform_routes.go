@@ -10,7 +10,14 @@ import (
 
 func newServerMux(service *platformService) *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		if service.health == nil || service.health(r.Context()) != nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+				"status": "degraded",
+				"error":  "postgres unavailable",
+			})
+			return
+		}
 		if _, err := os.Stat(service.repoRoot); err != nil {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]any{
 				"status": "degraded",
@@ -92,35 +99,20 @@ func newServerMux(service *platformService) *http.ServeMux {
 		service.handleListNamespace(w, r, "capacity_profiles")
 	})
 	mux.HandleFunc("/v1/control-plane/platform/configs", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		service.handleListConfigKeys(w, r)
+		service.configLayers.ServeHTTP(w, r)
 	})
 	mux.HandleFunc("/v1/control-plane/platform/configs/", func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, ":effective"):
-			service.handleGetEffectiveConfig(w, r)
-		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, ":update"):
-			service.handleUpdateNamespaceDocument(w, r, "config_layers", "config_layer_updated")
-		default:
+		if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, ":update") {
 			writeRuntimeNotFound(w, r)
+			return
 		}
+		service.configLayers.ServeHTTP(w, r)
 	})
 	mux.HandleFunc("/v1/control-plane/platform/configs/layers", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		service.handleListNamespace(w, r, "config_layers")
+		service.configLayers.ServeHTTP(w, r)
 	})
 	mux.HandleFunc("/v1/control-plane/platform/configs/resolve", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		service.handleResolveConfig(w, r)
+		service.configLayers.ServeHTTP(w, r)
 	})
 	mux.HandleFunc("/v1/control-plane/platform/configs/packages", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {

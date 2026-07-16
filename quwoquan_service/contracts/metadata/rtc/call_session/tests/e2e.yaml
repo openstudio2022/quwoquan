@@ -20,7 +20,7 @@ scenarios:
     test_type: ui_journey
     patrol_flow: rtc_call_reconnect user_acceptance pending PlatformAutomator scenario
     actors:
-      app: lib/ui/chat/pages/chat_detail_page.dart
+      app: lib/ui/chat/pages/chat_conversation_page.dart
       gateway: realtime-gateway websocket upgrade
       service: rtc-service POST /v1/rtc/call-sessions
       media: livekit-sfu

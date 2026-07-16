@@ -3,12 +3,14 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart';
+import 'package:quwoquan_app/assistant/observability/logging/app_log_models.dart';
+import 'package:quwoquan_app/assistant/observability/logging/app_log_service.dart';
+import 'package:quwoquan_app/assistant/observability/logging/app_trace_context_store.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_analytics_event_payload.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_analytics_event_summary.g.dart';
 import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/core/services/app_content_repository.dart';
+import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
+import 'package:quwoquan_app/core/di/ops_event_dependencies.dart';
 
 class AnalyticsEvent {
   final String eventType;
@@ -43,7 +45,9 @@ class AnalyticsService {
        _eventRepository =
            eventRepository ??
            (mode == AppDataSourceMode.remote
-               ? RemoteOpsEventRepository()
+               ? (throw ArgumentError(
+                   'remote analytics test requires an explicit repository',
+                 ))
                : MockOpsEventRepository()),
        _appLogService = appLogService ?? AppLogService.instance;
 

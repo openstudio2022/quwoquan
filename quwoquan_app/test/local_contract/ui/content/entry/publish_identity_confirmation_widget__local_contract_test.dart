@@ -4,11 +4,11 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
@@ -22,49 +22,10 @@ import 'package:quwoquan_app/ui/content/entry/providers/create_editor_provider.d
 import 'package:quwoquan_app/ui/entity/models/homepage_route_models.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_picker_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
-class _TrackingContentRepository extends MockContentRepository {
-  int createCallCount = 0;
-  int publishCallCount = 0;
-  Map<String, dynamic>? lastCreatePayload;
-  Map<String, dynamic>? lastPublishPayload;
-
-  @override
-  Future<PostBaseDto> createPost({required CreatePostRequestWire body}) async {
-    createCallCount += 1;
-    lastCreatePayload = Map<String, dynamic>.from(body.toWire());
-    const postId = 'post_test_1';
-    return postBaseDtoFromMap(<String, dynamic>{
-      '_id': postId,
-      'postId': postId,
-      ...lastCreatePayload!,
-      'authorId': 'test_author',
-      'displayName': 'Test',
-      'authorAvatarUrl': 'https://example.com/a.jpg',
-      'publishedAt': DateTime.now().toUtc().toIso8601String(),
-    });
-  }
-
-  @override
-  Future<PostBaseDto> publishPost({
-    required String postId,
-    PublishPostRequestWire? body,
-  }) async {
-    publishCallCount += 1;
-    final wire = body ?? PublishPostRequestWire();
-    lastPublishPayload = Map<String, dynamic>.from(wire.toWire());
-    return postBaseDtoFromMap(<String, dynamic>{
-      'postId': postId,
-      ...wire.toWire(),
-      'authorId': 'test_author',
-      'displayName': 'Test',
-      'authorAvatarUrl': 'https://example.com/a.jpg',
-      'contentType': 'micro',
-      'body': '',
-      'publishedAt': DateTime.now().toUtc().toIso8601String(),
-    });
-  }
-}
+import '../../../../support/cloud_services/content_facet_overrides.dart';
+import '../../../../support/recording_content_media_facet.dart';
+import '../../../../support/recording_content_post_lifecycle_writer.dart';
+import '../../../../support/recording_circle_post_placement_writer.dart';
 
 class _AuthedSessionStore implements AuthSessionStore {
   const _AuthedSessionStore();
@@ -98,6 +59,11 @@ class _AuthedSessionStore implements AuthSessionStore {
     required String accessToken,
     required String refreshToken,
   }) async {}
+
+  @override
+  Future<void> saveRefreshedAccountHint(
+    Map<String, dynamic>? accountHint,
+  ) async {}
 
   @override
   Future<void> updateActiveSubAccount(String subAccountId) async {}
@@ -145,7 +111,9 @@ class _AuthWarmup extends ConsumerWidget {
 }
 
 class _CreateHostApp extends StatelessWidget {
-  const _CreateHostApp();
+  const _CreateHostApp({this.initialCircleId});
+
+  final String? initialCircleId;
 
   @override
   Widget build(BuildContext context) {
@@ -154,7 +122,12 @@ class _CreateHostApp extends StatelessWidget {
         child: ElevatedButton(
           onPressed: () {
             Navigator.of(context).push<void>(
-              MaterialPageRoute<void>(builder: (_) => const CreatePage()),
+              MaterialPageRoute<void>(
+                builder: (_) => CreatePage(
+                  initialCircleId: initialCircleId,
+                  initialCircleName: initialCircleId == null ? null : '测试圈子',
+                ),
+              ),
             );
           },
           child: const Text('打开创作'),
@@ -164,10 +137,40 @@ class _CreateHostApp extends StatelessWidget {
   }
 }
 
-Widget _buildApp(_TrackingContentRepository repository) {
+List<Override> _createPublishOverrides(
+  MockContentRepository repository,
+  RecordingContentPostLifecycleWriter postLifecycle,
+) => <Override>[
+  ...mockContentFacetOverrides(repository),
+  createContentPostLifecycleCommandWriterProvider.overrideWithValue(
+    postLifecycle,
+  ),
+  createContentMediaFacetProvider.overrideWithValue(
+    RecordingContentMediaFacet(),
+  ),
+  contentMediaObjectUploadProvider.overrideWithValue(
+    (
+      uploadUri,
+      bytes, {
+      required contentType,
+      required expectedSha256,
+    }) async {},
+  ),
+];
+
+Widget _buildApp(
+  MockContentRepository repository,
+  RecordingContentPostLifecycleWriter postLifecycle, {
+  RecordingCirclePostPlacementWriter? placements,
+  String? initialCircleId,
+}) {
   return ProviderScope(
     overrides: [
-      contentRepositoryProvider.overrideWithValue(repository),
+      ..._createPublishOverrides(repository, postLifecycle),
+      if (placements != null)
+        createWorkspaceCirclePostPlacementWriterProvider.overrideWithValue(
+          placements,
+        ),
       circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
       authSessionStoreProvider.overrideWithValue(const _AuthedSessionStore()),
       authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
@@ -180,13 +183,16 @@ Widget _buildApp(_TrackingContentRepository repository) {
         supportedLocales: AppLocalizations.supportedLocales,
         builder: (context, child) =>
             _AuthWarmup(child: child ?? const SizedBox.shrink()),
-        home: const _CreateHostApp(),
+        home: _CreateHostApp(initialCircleId: initialCircleId),
       ),
     ),
   );
 }
 
-Widget _buildRouterApp(_TrackingContentRepository repository) {
+Widget _buildRouterApp(
+  MockContentRepository repository,
+  RecordingContentPostLifecycleWriter postLifecycle,
+) {
   final router = GoRouter(
     routes: <RouteBase>[
       GoRoute(path: '/', builder: (context, state) => const _CreateHostApp()),
@@ -207,7 +213,7 @@ Widget _buildRouterApp(_TrackingContentRepository repository) {
 
   return ProviderScope(
     overrides: [
-      contentRepositoryProvider.overrideWithValue(repository),
+      ..._createPublishOverrides(repository, postLifecycle),
       circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
       authSessionStoreProvider.overrideWithValue(const _AuthedSessionStore()),
       authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
@@ -249,9 +255,10 @@ void main() {
   });
 
   testWidgets('短文本直接按 micro 契约发布，且不暴露旧 taxonomy', (tester) async {
-    final repository = _TrackingContentRepository();
+    final repository = MockContentRepository();
+    final postLifecycle = RecordingContentPostLifecycleWriter();
 
-    await tester.pumpWidget(_buildApp(repository));
+    await tester.pumpWidget(_buildApp(repository, postLifecycle));
     await tester.pumpAndSettle();
     await tester.tap(find.text('打开创作'));
     await tester.pumpAndSettle();
@@ -267,11 +274,11 @@ void main() {
     await tester.tap(find.byKey(TestKeys.createPublishConfirmButton));
     await tester.pumpAndSettle();
 
-    expect(repository.createCallCount, 1);
-    expect(repository.publishCallCount, 1);
-    expect(repository.lastCreatePayload?['contentType'], 'micro');
+    expect(postLifecycle.createCommands, hasLength(1));
+    expect(postLifecycle.publishCommands, hasLength(1));
+    expect(postLifecycle.lastCreatePayload?['contentType'], 'micro');
     expect(
-      repository.lastCreatePayload?.containsKey('contentIdentity'),
+      postLifecycle.lastCreatePayload?.containsKey('contentIdentity'),
       isFalse,
     );
     expect(find.text('当前内容更适合作为作品发布'), findsNothing);
@@ -281,9 +288,10 @@ void main() {
   });
 
   testWidgets('长文本直接进入下一步并按 article 契约发布，且不暴露旧 taxonomy', (tester) async {
-    final repository = _TrackingContentRepository();
+    final repository = MockContentRepository();
+    final postLifecycle = RecordingContentPostLifecycleWriter();
 
-    await tester.pumpWidget(_buildApp(repository));
+    await tester.pumpWidget(_buildApp(repository, postLifecycle));
     await tester.pumpAndSettle();
     await tester.tap(find.text('打开创作'));
     await tester.pumpAndSettle();
@@ -302,48 +310,54 @@ void main() {
     await tester.tap(find.byKey(TestKeys.createPublishConfirmButton));
     await tester.pumpAndSettle();
 
-    expect(repository.createCallCount, 1);
-    expect(repository.publishCallCount, 1);
-    expect(repository.lastCreatePayload?['contentType'], 'article');
-    expect(repository.lastCreatePayload?.containsKey('body'), isFalse);
+    expect(postLifecycle.createCommands, hasLength(1));
+    expect(postLifecycle.publishCommands, hasLength(1));
+    expect(postLifecycle.lastCreatePayload?['contentType'], 'article');
+    expect(postLifecycle.lastCreatePayload?.containsKey('body'), isFalse);
     expect(
-      repository.lastCreatePayload?.containsKey('articleTemplate'),
+      postLifecycle.lastCreatePayload?.containsKey('articleTemplate'),
       isFalse,
     );
     expect(
-      repository.lastCreatePayload?.containsKey('articleFontPreset'),
+      postLifecycle.lastCreatePayload?.containsKey('articleFontPreset'),
       isFalse,
     );
-    expect(repository.lastCreatePayload?['articleMarkdown'], isA<String>());
+    expect(postLifecycle.lastCreatePayload?['articleMarkdown'], isA<String>());
     expect(
-      repository.lastCreatePayload?['articleMarkdownVersion'],
+      postLifecycle.lastCreatePayload?['articleMarkdownVersion'],
       'qwq-rich-md/1',
     );
     expect(
-      repository.lastCreatePayload?['articleAssetManifest'],
+      postLifecycle.lastCreatePayload?['articleAssetManifest'],
       isA<Map<String, dynamic>>(),
     );
     expect(
-      repository.lastCreatePayload?['articleRenderProfile'],
+      postLifecycle.lastCreatePayload?['articleRenderProfile'],
       isA<Map<String, dynamic>>(),
     );
     final articleMarkdown =
-        repository.lastCreatePayload?['articleMarkdown'] as String;
+        postLifecycle.lastCreatePayload?['articleMarkdown'] as String;
     expect(articleMarkdown.contains(longText), isTrue);
     final renderProfile =
-        repository.lastCreatePayload?['articleRenderProfile']
+        postLifecycle.lastCreatePayload?['articleRenderProfile']
             as Map<String, dynamic>;
     expect(renderProfile['template'], isNotNull);
     expect(renderProfile['fontPreset'], isNotNull);
-    expect(repository.lastCreatePayload?.containsKey('articlePages'), isFalse);
-    expect(repository.lastCreatePayload?.containsKey('articleBlocks'), isFalse);
-    expect(repository.lastCreatePayload?.containsKey('cards'), isFalse);
     expect(
-      repository.lastCreatePayload?.containsKey('articleDocument'),
+      postLifecycle.lastCreatePayload?.containsKey('articlePages'),
       isFalse,
     );
     expect(
-      repository.lastCreatePayload?.containsKey('contentIdentity'),
+      postLifecycle.lastCreatePayload?.containsKey('articleBlocks'),
+      isFalse,
+    );
+    expect(postLifecycle.lastCreatePayload?.containsKey('cards'), isFalse);
+    expect(
+      postLifecycle.lastCreatePayload?.containsKey('articleDocument'),
+      isFalse,
+    );
+    expect(
+      postLifecycle.lastCreatePayload?.containsKey('contentIdentity'),
       isFalse,
     );
     await tester.pump(const Duration(seconds: 3));
@@ -352,11 +366,12 @@ void main() {
   });
 
   testWidgets('媒体编辑器对图片使用首图预览并写入 payload', (tester) async {
-    final repository = _TrackingContentRepository();
+    final repository = MockContentRepository();
+    final postLifecycle = RecordingContentPostLifecycleWriter();
     const coverA = 'https://example.com/test/create/cover_a.jpg';
     const coverB = 'https://example.com/test/create/cover_b.jpg';
 
-    await tester.pumpWidget(_buildApp(repository));
+    await tester.pumpWidget(_buildApp(repository, postLifecycle));
     await tester.pumpAndSettle();
     await tester.tap(find.text('打开创作'));
     await tester.pumpAndSettle();
@@ -383,11 +398,11 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    for (var i = 0; i < 10 && repository.lastCreatePayload == null; i++) {
+    for (var i = 0; i < 10 && postLifecycle.lastCreatePayload == null; i++) {
       await tester.pump(const Duration(milliseconds: 200));
     }
 
-    final payload = repository.lastCreatePayload;
+    final payload = postLifecycle.lastCreatePayload;
     expect(payload, isNotNull);
     expect(payload?['contentType'] ?? payload?['type'], 'image');
     expect(payload?['mediaUrls'], isA<List<dynamic>>());
@@ -400,10 +415,43 @@ void main() {
     await tester.pump();
   });
 
-  testWidgets('发布设置页可进入统一返回页风格的主页与圈子选择', (tester) async {
-    final repository = _TrackingContentRepository();
+  testWidgets('圈子锚点在 Post 发布后通过 CirclePostPlacement Facade 放置', (tester) async {
+    final repository = MockContentRepository();
+    final postLifecycle = RecordingContentPostLifecycleWriter();
+    final placements = RecordingCirclePostPlacementWriter();
 
-    await tester.pumpWidget(_buildRouterApp(repository));
+    await tester.pumpWidget(
+      _buildApp(
+        repository,
+        postLifecycle,
+        placements: placements,
+        initialCircleId: 'circle-west-sichuan',
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('打开创作'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(TestKeys.createMomentInput), '圈内发布');
+    await tester.tap(find.byKey(TestKeys.createPublishButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(TestKeys.createPublishConfirmButton));
+    await tester.pumpAndSettle();
+
+    expect(postLifecycle.createCommands, hasLength(1));
+    expect(postLifecycle.publishCommands, hasLength(1));
+    expect(postLifecycle.lastCreatePayload, isNot(contains('circleIds')));
+    expect(placements.commands, hasLength(1));
+    expect(placements.commands.single.circleId, 'circle-west-sichuan');
+    expect(placements.commands.single.postId, 'post_test_1');
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump();
+  });
+
+  testWidgets('发布设置页可进入统一返回页风格的主页与圈子选择', (tester) async {
+    final repository = MockContentRepository();
+    final postLifecycle = RecordingContentPostLifecycleWriter();
+
+    await tester.pumpWidget(_buildRouterApp(repository, postLifecycle));
     await tester.pumpAndSettle();
     await tester.tap(find.text('打开创作'));
     await tester.pumpAndSettle();

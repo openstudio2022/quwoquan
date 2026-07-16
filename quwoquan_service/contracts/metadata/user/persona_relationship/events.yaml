@@ -1,0 +1,6 @@
+version: 1
+aggregate: PersonaRelationship
+events:
+  - { name: PersonaFollowStateChanged, producer: user-service, consumers: [recommendation-engine, notification-service, chat-service, content-service], channel: event_store, payload_fields: [eventId, pairId, sourcePersonaId, targetPersonaId, following, version, occurredAt] }
+  - { name: PersonaBlocked, producer: user-service, consumers: [chat-service, recommendation-engine, content-service], channel: event_store, payload_fields: [eventId, pairId, sourcePersonaId, targetPersonaId, clearedFollowDirections, version, occurredAt] }
+  - { name: PersonaUnblocked, producer: user-service, consumers: [chat-service, recommendation-engine, content-service], channel: event_store, payload_fields: [eventId, pairId, sourcePersonaId, targetPersonaId, version, occurredAt] }

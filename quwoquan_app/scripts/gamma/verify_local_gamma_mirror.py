@@ -7,26 +7,24 @@ import argparse
 import json
 import os
 import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-
 ROOT = Path(__file__).resolve().parents[3]
-# 统一输出根：local-gamma 辅助报告属于本地环境状态，正式运行证据由 stackctl 写入 .qwq_output/env/<env>/runs/<runId>。
-LOCAL_GAMMA_ARTIFACT_ROOT = Path(
-    os.environ.get(
-        "LOCAL_GAMMA_ARTIFACT_ROOT",
-        Path(os.environ.get("QWQ_OUTPUT_ROOT", ROOT / ".qwq_output"))
-        / "env"
-        / "gamma"
-        / "local"
-        / "gamma-local"
-        / "app-artifacts",
-    )
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from quwoquan_ops.cli.lib.output_paths import env_run_dir, target_process_dir  # noqa: E402
+# Gamma verification evidence belongs to one run. Stack status is process
+# state, so it remains in the only allowed local/process directory.
+GAMMA_RUN_ROOT = Path(
+    os.environ.get("QWQ_RUN_ROOT")
+    or env_run_dir("gamma", "verify-local-gamma", target="gamma-local")
 )
-DEFAULT_REPORT = LOCAL_GAMMA_ARTIFACT_ROOT / "report.json"
-DEFAULT_STACK_REPORT = ROOT / ".qwq_output/env/gamma/local/gamma-local/stack_status.json"
+DEFAULT_REPORT = GAMMA_RUN_ROOT / "report.json"
+DEFAULT_STACK_REPORT = target_process_dir("gamma-local") / "stack_status.json"
 START_SCRIPT = ROOT / "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"
 README = ROOT / "quwoquan_ops/environments/local-gamma/README.md"
 
@@ -54,7 +52,7 @@ def status_of(section: dict[str, Any]) -> str:
 
 
 def static_contract_issues() -> list[str]:
-    """Guard local-gamma against falling back to the retired versioned publish tree."""
+    """Guard local-gamma against falling back to retired taxonomy projections."""
     retired_tags_path = "/".join(("publish", "v1", "tags"))
     issues: list[str] = []
     for path in (START_SCRIPT, README):
@@ -62,11 +60,14 @@ def static_contract_issues() -> list[str]:
         if retired_tags_path in text:
             issues.append(f"{path.relative_to(ROOT)} still references {retired_tags_path}")
     script = START_SCRIPT.read_text(encoding="utf-8")
-    expected = "$ROOT/quwoquan_data/publish/tags"
+    expected = "$ROOT/quwoquan_data/control_plane/governance/taxonomy"
     if expected not in script:
-        issues.append("start_local_gamma_mirror.sh must default LOCAL_GAMMA_TAGS_DIR to quwoquan_data/publish/tags")
-    if "build_publish_lookup_indexes.py" not in script:
-        issues.append("local-gamma tag bootstrap must rebuild publish lookup/link target indexes")
+        issues.append(
+            "start_local_gamma_mirror.sh must default LOCAL_GAMMA_TAGS_DIR "
+            "to quwoquan_data/control_plane/governance/taxonomy"
+        )
+    if "bootstrap_local_gamma_tag_taxonomy" in script:
+        issues.append("local-gamma must not materialize a runtime taxonomy copy")
     return issues
 
 
@@ -74,8 +75,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--report", default=str(DEFAULT_REPORT))
     parser.add_argument("--stack-report", default=str(DEFAULT_STACK_REPORT))
-    parser.add_argument("--t3-report", default=str(LOCAL_GAMMA_ARTIFACT_ROOT / "t3_report.json"))
-    parser.add_argument("--t4-report", default=str(LOCAL_GAMMA_ARTIFACT_ROOT / "t4_report.json"))
+    parser.add_argument("--t3-report", default=str(GAMMA_RUN_ROOT / "t3_report.json"))
+    parser.add_argument("--t4-report", default=str(GAMMA_RUN_ROOT / "t4_report.json"))
     parser.add_argument("--config-version", default="local-gamma-v1")
     parser.add_argument("--image-version", default="0.0.1")
     parser.add_argument("--dry-run", action="store_true")

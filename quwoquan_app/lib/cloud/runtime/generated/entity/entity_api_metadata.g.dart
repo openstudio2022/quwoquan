@@ -8,13 +8,16 @@ class EntityApiMetadata {
 
   static const String domain = 'entity';
   static const List<String> apiPrefixes = <String>[
+    '/v1/homepage-reviews',
     '/v1/homepages',
     '/v1/homepages:reload',
   ];
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
     'CreateHomepageClaimRequest': '/v1/homepages/{homepageId}/claim-requests',
+    'CreateHomepageReview': '/v1/homepages/{homepageId}/reviews',
     'CreateHomepageStatusReport': '/v1/homepages/{homepageId}/status-reports',
+    'DeleteHomepageReview': '/v1/homepage-reviews/{reviewId}',
     'FollowHomepage': '/v1/homepages/{homepageId}/follow',
     'GetEntityImpact': '/v1/homepages/{homepageId}/impact',
     'GetHomepageDetail': '/v1/homepages/{homepageId}',
@@ -32,11 +35,14 @@ class EntityApiMetadata {
     'SuggestHomepageCandidate': '/v1/homepages/candidates/suggest',
     'UnfollowHomepage': '/v1/homepages/{homepageId}/follow',
     'UpdateClaimedHomepageBasics': '/v1/homepages/{homepageId}/claimed-basics',
+    'UpdateHomepageReview': '/v1/homepage-reviews/{reviewId}',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
     'CreateHomepageClaimRequest': 'POST',
+    'CreateHomepageReview': 'POST',
     'CreateHomepageStatusReport': 'POST',
+    'DeleteHomepageReview': 'DELETE',
     'FollowHomepage': 'POST',
     'GetEntityImpact': 'GET',
     'GetHomepageDetail': 'GET',
@@ -54,32 +60,36 @@ class EntityApiMetadata {
     'SuggestHomepageCandidate': 'POST',
     'UnfollowHomepage': 'DELETE',
     'UpdateClaimedHomepageBasics': 'PATCH',
+    'UpdateHomepageReview': 'PATCH',
   };
 
   /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
   static const Map<String, String> operationToAuthMode = <String, String>{
     'CreateHomepageClaimRequest': 'required',
+    'CreateHomepageReview': 'required',
     'CreateHomepageStatusReport': 'required',
+    'DeleteHomepageReview': 'required',
     'FollowHomepage': 'required',
     'GetEntityImpact': 'required',
-    'GetHomepageDetail': 'public',
-    'GetHomepageIntroduction': 'public',
-    'GetHomepageRelatedGroups': 'public',
-    'GetHomepageReviewSummary': 'public',
-    'GetHomepageShell': 'public',
-    'GetObjectPageBundle': 'public',
+    'GetHomepageDetail': 'required',
+    'GetHomepageIntroduction': 'optional',
+    'GetHomepageRelatedGroups': 'required',
+    'GetHomepageReviewSummary': 'required',
+    'GetHomepageShell': 'required',
+    'GetObjectPageBundle': 'optional',
     'IntakeHomepageCandidate': 'required',
     'PublishHomepageCandidate': 'required',
     'ReloadHomepageState': 'required',
     'ReviewHomepageClaimRequest': 'required',
     'ReviewHomepageStatusReport': 'required',
-    'SearchHomepages': 'required',
+    'SearchHomepages': 'optional',
     'SuggestHomepageCandidate': 'required',
     'UnfollowHomepage': 'required',
     'UpdateClaimedHomepageBasics': 'required',
+    'UpdateHomepageReview': 'required',
   };
 
-  /// 响应读模型：operation -> 端侧 DTO 类名（service.yaml response_body 真相源，仅 object/page 形态）。
+  /// 已绑定端侧强类型的响应读模型：operation -> Dart 契约类名。
   static const Map<String, String> operationToResponseModel = <String, String>{
   };
 
@@ -88,7 +98,9 @@ class EntityApiMetadata {
   };
 
   static const String createHomepageClaimRequestOperation = 'CreateHomepageClaimRequest';
+  static const String createHomepageReviewOperation = 'CreateHomepageReview';
   static const String createHomepageStatusReportOperation = 'CreateHomepageStatusReport';
+  static const String deleteHomepageReviewOperation = 'DeleteHomepageReview';
   static const String followHomepageOperation = 'FollowHomepage';
   static const String getEntityImpactOperation = 'GetEntityImpact';
   static const String getHomepageDetailOperation = 'GetHomepageDetail';
@@ -106,6 +118,7 @@ class EntityApiMetadata {
   static const String suggestHomepageCandidateOperation = 'SuggestHomepageCandidate';
   static const String unfollowHomepageOperation = 'UnfollowHomepage';
   static const String updateClaimedHomepageBasicsOperation = 'UpdateClaimedHomepageBasics';
+  static const String updateHomepageReviewOperation = 'UpdateHomepageReview';
 
   static const String createHomepageClaimRequestPathTemplate = '/v1/homepages/{homepageId}/claim-requests';
   static String createHomepageClaimRequestPath({required String homepageId}) {
@@ -113,10 +126,22 @@ class EntityApiMetadata {
       'homepageId': homepageId,
     });
   }
+  static const String createHomepageReviewPathTemplate = '/v1/homepages/{homepageId}/reviews';
+  static String createHomepageReviewPath({required String homepageId}) {
+    return _fillPath(createHomepageReviewPathTemplate, <String, String>{
+      'homepageId': homepageId,
+    });
+  }
   static const String createHomepageStatusReportPathTemplate = '/v1/homepages/{homepageId}/status-reports';
   static String createHomepageStatusReportPath({required String homepageId}) {
     return _fillPath(createHomepageStatusReportPathTemplate, <String, String>{
       'homepageId': homepageId,
+    });
+  }
+  static const String deleteHomepageReviewPathTemplate = '/v1/homepage-reviews/{reviewId}';
+  static String deleteHomepageReviewPath({required String reviewId}) {
+    return _fillPath(deleteHomepageReviewPathTemplate, <String, String>{
+      'reviewId': reviewId,
     });
   }
   static const String followHomepagePathTemplate = '/v1/homepages/{homepageId}/follow';
@@ -201,6 +226,12 @@ class EntityApiMetadata {
   static String updateClaimedHomepageBasicsPath({required String homepageId}) {
     return _fillPath(updateClaimedHomepageBasicsPathTemplate, <String, String>{
       'homepageId': homepageId,
+    });
+  }
+  static const String updateHomepageReviewPathTemplate = '/v1/homepage-reviews/{reviewId}';
+  static String updateHomepageReviewPath({required String reviewId}) {
+    return _fillPath(updateHomepageReviewPathTemplate, <String, String>{
+      'reviewId': reviewId,
     });
   }
 

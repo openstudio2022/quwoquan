@@ -14,37 +14,6 @@ func TestGetCircle_NotFound(t *testing.T) {
 	}
 }
 
-func TestJoinCircle_NotFound(t *testing.T) {
-	defer cleanCollections(t)
-
-	rec := doRequest(t, http.MethodPost, "/v1/circles/nonexistent_id_000/join", nil)
-	if rec.Code != http.StatusNotFound {
-		t.Errorf("expected 404, got %d: %s", rec.Code, rec.Body.String())
-	}
-}
-
-func TestLeaveCircle_NotMember(t *testing.T) {
-	defer cleanCollections(t)
-
-	circleID := createTestCircle(t, "非成员退出")
-
-	rec := doRequestAs(t, http.MethodPost, "/v1/circles/"+circleID+"/leave", "user_not_member", nil)
-	if rec.Code != http.StatusForbidden {
-		t.Errorf("expected 403, got %d: %s", rec.Code, rec.Body.String())
-	}
-}
-
-func TestLeaveCircle_OwnerCannotLeave(t *testing.T) {
-	defer cleanCollections(t)
-
-	circleID := createTestCircle(t, "圈主退出测试")
-
-	rec := doRequest(t, http.MethodPost, "/v1/circles/"+circleID+"/leave", nil)
-	if rec.Code != http.StatusForbidden {
-		t.Errorf("expected 403, got %d: %s", rec.Code, rec.Body.String())
-	}
-}
-
 func TestArchiveCircle_NotFound(t *testing.T) {
 	defer cleanCollections(t)
 
@@ -87,7 +56,11 @@ func TestFileTooLarge(t *testing.T) {
 		"mimeType":  "application/octet-stream",
 		"sizeBytes": 60000000, // 60MB > 50MB limit
 	})
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Errorf("expected 413, got %d: %s", rec.Code, rec.Body.String())
+	}
+	body := decodeBody(t, rec)
+	if body["code"] != "CIRCLE.USER.file_too_large" {
+		t.Errorf("expected CIRCLE.USER.file_too_large, got %v", body["code"])
 	}
 }

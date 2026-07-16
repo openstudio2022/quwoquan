@@ -14,7 +14,7 @@ enum CreationWorkFormat { all, image, video, note }
 enum CreationVisibility { all, public_, private_ }
 
 /// 互动子维度。
-enum InteractionSubTab { all, comments, likes, shares, views }
+enum InteractionSubTab { likes, comments, shares, views }
 
 /// 互动方向。
 enum InteractionDirection { received, sent }
@@ -37,9 +37,8 @@ extension CreationSubTabMetadata on CreationSubTab {
 
 extension InteractionSubTabMetadata on InteractionSubTab {
   String get id => switch (this) {
-    InteractionSubTab.all => 'all',
-    InteractionSubTab.comments => 'comments',
     InteractionSubTab.likes => 'likes',
+    InteractionSubTab.comments => 'comments',
     InteractionSubTab.shares => 'shares',
     InteractionSubTab.views => 'views',
   };
@@ -68,7 +67,7 @@ InteractionSubTab interactionSubTabFromId(String id) {
     'likes' => InteractionSubTab.likes,
     'shares' => InteractionSubTab.shares,
     'views' => InteractionSubTab.views,
-    _ => InteractionSubTab.all,
+    _ => InteractionSubTab.likes,
   };
 }
 

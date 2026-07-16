@@ -18,13 +18,62 @@ import 'package:flutter/services.dart';
 /// structured "unavailable" instead of crashing.
 enum NativeAuthProvider { wechat, alipay, qq, apple, systemCredential, passkey }
 
-enum NativeAuthAvailability { available, unavailable }
+enum NativeAuthAvailability {
+  available,
+  notConfigured,
+  clientNotInstalled,
+  probeTimeout,
+  sdkUnavailable,
+  unsupportedPlatform,
+}
 
 enum NativeShareTarget { wechatFriend, wechatMoments }
 
 enum NativeShareAvailability { available, unavailable }
 
-enum NativeShareDelivery { delivered, unavailable }
+enum NativeShareOutcome { accepted, completed, cancelled, unavailable, failed }
+
+class NativeShareWebpageCard {
+  const NativeShareWebpageCard({
+    required this.target,
+    required this.requestId,
+    required this.title,
+    required this.description,
+    required this.webpageUrl,
+    this.thumbnail = const <int>[],
+    this.referralDigest = '',
+  });
+
+  static const int maxThumbnailBytes = 32 * 1024;
+
+  final NativeShareTarget target;
+  final String requestId;
+  final String title;
+  final String description;
+  final String webpageUrl;
+  final List<int> thumbnail;
+  final String referralDigest;
+
+  bool get isValid {
+    final uri = Uri.tryParse(webpageUrl.trim());
+    return requestId.trim().isNotEmpty &&
+        title.trim().isNotEmpty &&
+        uri != null &&
+        uri.scheme == 'https' &&
+        uri.host.isNotEmpty &&
+        thumbnail.length <= maxThumbnailBytes;
+  }
+
+  Map<String, dynamic> toChannelArguments() => <String, dynamic>{
+    'target': target.name,
+    'requestId': requestId.trim(),
+    'title': title.trim(),
+    'description': description.trim(),
+    'webpageUrl': webpageUrl.trim(),
+    'thumbnail': Uint8List.fromList(thumbnail),
+    'referralDigest': referralDigest.trim(),
+  };
+}
 
 class NativeShareCapability {
   const NativeShareCapability({
@@ -43,15 +92,25 @@ class NativeShareCapability {
 class NativeShareResult {
   const NativeShareResult({
     required this.target,
-    required this.delivery,
+    required this.outcome,
+    this.requestId = '',
+    this.channel = '',
+    this.referralDigest = '',
+    this.occurredAt,
     this.reason = '',
   });
 
   final NativeShareTarget target;
-  final NativeShareDelivery delivery;
+  final NativeShareOutcome outcome;
+  final String requestId;
+  final String channel;
+  final String referralDigest;
+  final DateTime? occurredAt;
   final String reason;
 
-  bool get isDelivered => delivery == NativeShareDelivery.delivered;
+  bool get isAccepted => outcome == NativeShareOutcome.accepted;
+  bool get isCompleted => outcome == NativeShareOutcome.completed;
+  bool get isCancelled => outcome == NativeShareOutcome.cancelled;
 }
 
 class NativeAuthCapability {
@@ -66,6 +125,9 @@ class NativeAuthCapability {
   final String reason;
 
   bool get isAvailable => availability == NativeAuthAvailability.available;
+
+  bool get isDiscoverable =>
+      availability != NativeAuthAvailability.unsupportedPlatform;
 }
 
 class NativeAuthResult {
@@ -87,7 +149,10 @@ class NativeAuthResult {
 abstract interface class NativeAuthBridge {
   Future<NativeAuthCapability> getCapability(NativeAuthProvider provider);
 
-  Future<NativeAuthResult> signIn(NativeAuthProvider provider);
+  Future<NativeAuthResult> signIn(
+    NativeAuthProvider provider, {
+    String authorizationPayload = '',
+  });
 
   Future<NativeAuthResult> signInWithPasskey({
     String? relyingPartyId,
@@ -98,11 +163,9 @@ abstract interface class NativeAuthBridge {
 abstract interface class NativeShareBridge {
   Future<NativeShareCapability> getCapability(NativeShareTarget target);
 
-  Future<NativeShareResult> shareText({
-    required NativeShareTarget target,
-    required String text,
-    required String subject,
-  });
+  Future<NativeShareResult> shareWebpageCard(NativeShareWebpageCard card);
+
+  Future<List<NativeShareResult>> consumePendingOutcomes();
 }
 
 abstract interface class AssistantLocalContextBridge {
@@ -155,40 +218,58 @@ class MethodChannelNativeShareBridge implements NativeShareBridge {
   }
 
   @override
-  Future<NativeShareResult> shareText({
-    required NativeShareTarget target,
-    required String text,
-    required String subject,
-  }) async {
+  Future<NativeShareResult> shareWebpageCard(
+    NativeShareWebpageCard card,
+  ) async {
+    if (!card.isValid) {
+      return NativeShareResult(
+        target: card.target,
+        outcome: NativeShareOutcome.failed,
+        requestId: card.requestId,
+        reason: 'invalid_webpage_card',
+      );
+    }
     try {
       final result = await channel.invokeMapMethod<String, dynamic>(
-        'shareText',
-        <String, dynamic>{
-          'target': target.name,
-          'text': text,
-          'subject': subject,
-        },
+        'shareWebpageCard',
+        card.toChannelArguments(),
       );
-      final delivered = result?['delivered'] == true;
-      return NativeShareResult(
-        target: target,
-        delivery: delivered
-            ? NativeShareDelivery.delivered
-            : NativeShareDelivery.unavailable,
-        reason: result?['reason']?.toString() ?? '',
-      );
+      return _nativeShareResultFromMap(result, fallbackTarget: card.target);
     } on MissingPluginException {
       return NativeShareResult(
-        target: target,
-        delivery: NativeShareDelivery.unavailable,
+        target: card.target,
+        outcome: NativeShareOutcome.unavailable,
+        requestId: card.requestId,
         reason: 'missing_plugin',
       );
     } on PlatformException catch (error) {
       return NativeShareResult(
-        target: target,
-        delivery: NativeShareDelivery.unavailable,
+        target: card.target,
+        outcome: NativeShareOutcome.failed,
+        requestId: card.requestId,
         reason: error.code,
       );
+    }
+  }
+
+  @override
+  Future<List<NativeShareResult>> consumePendingOutcomes() async {
+    try {
+      final results = await channel.invokeListMethod<Map<dynamic, dynamic>>(
+        'consumePendingOutcomes',
+      );
+      return (results ?? const <Map<dynamic, dynamic>>[])
+          .map(
+            (item) => _nativeShareResultFromMap(
+              item.cast<String, dynamic>(),
+              fallbackTarget: NativeShareTarget.wechatFriend,
+            ),
+          )
+          .toList(growable: false);
+    } on MissingPluginException {
+      return const <NativeShareResult>[];
+    } on PlatformException {
+      return const <NativeShareResult>[];
     }
   }
 }
@@ -206,17 +287,53 @@ class UnsupportedNativeShareBridge implements NativeShareBridge {
   }
 
   @override
-  Future<NativeShareResult> shareText({
-    required NativeShareTarget target,
-    required String text,
-    required String subject,
-  }) async {
+  Future<NativeShareResult> shareWebpageCard(
+    NativeShareWebpageCard card,
+  ) async {
     return NativeShareResult(
-      target: target,
-      delivery: NativeShareDelivery.unavailable,
+      target: card.target,
+      outcome: NativeShareOutcome.unavailable,
+      requestId: card.requestId,
       reason: 'unsupported_platform',
     );
   }
+
+  @override
+  Future<List<NativeShareResult>> consumePendingOutcomes() async =>
+      const <NativeShareResult>[];
+}
+
+NativeShareResult _nativeShareResultFromMap(
+  Map<String, dynamic>? result, {
+  required NativeShareTarget fallbackTarget,
+}) {
+  final target = NativeShareTarget.values.firstWhere(
+    (value) => value.name == result?['target']?.toString(),
+    orElse: () => fallbackTarget,
+  );
+  final outcome = NativeShareOutcome.values.firstWhere(
+    (value) => value.name == result?['outcome']?.toString(),
+    orElse: () => NativeShareOutcome.failed,
+  );
+  return NativeShareResult(
+    target: target,
+    outcome: outcome,
+    requestId: result?['requestId']?.toString() ?? '',
+    channel: result?['channel']?.toString() ?? '',
+    referralDigest: result?['referralDigest']?.toString() ?? '',
+    occurredAt: _dateTimeFromMilliseconds(result?['occurredAtMillis']),
+    reason: result?['reason']?.toString() ?? '',
+  );
+}
+
+DateTime? _dateTimeFromMilliseconds(Object? raw) {
+  final milliseconds = switch (raw) {
+    int value => value,
+    String value => int.tryParse(value),
+    _ => null,
+  };
+  if (milliseconds == null || milliseconds <= 0) return null;
+  return DateTime.fromMillisecondsSinceEpoch(milliseconds, isUtc: true);
 }
 
 /// Default implementation backed by the `personal_assistant/native_api` channel.
@@ -282,34 +399,40 @@ class MethodChannelNativeAuthBridge implements NativeAuthBridge {
         <String, dynamic>{'provider': provider.name},
       );
       final available = result?['available'] == true;
+      final reason = result?['reason']?.toString() ?? '';
       return NativeAuthCapability(
         provider: provider,
         availability: available
             ? NativeAuthAvailability.available
-            : NativeAuthAvailability.unavailable,
-        reason: result?['reason']?.toString() ?? '',
+            : nativeAuthAvailabilityFromReason(reason),
+        reason: reason,
       );
     } on MissingPluginException {
       return NativeAuthCapability(
         provider: provider,
-        availability: NativeAuthAvailability.unavailable,
+        availability: NativeAuthAvailability.sdkUnavailable,
         reason: 'missing_plugin',
       );
     } on PlatformException catch (error) {
       return NativeAuthCapability(
         provider: provider,
-        availability: NativeAuthAvailability.unavailable,
+        availability: nativeAuthAvailabilityFromReason(error.code),
         reason: error.code,
       );
     }
   }
 
   @override
-  Future<NativeAuthResult> signIn(NativeAuthProvider provider) async {
-    final result = await channel.invokeMapMethod<String, dynamic>(
-      'signIn',
-      <String, dynamic>{'provider': provider.name},
-    );
+  Future<NativeAuthResult> signIn(
+    NativeAuthProvider provider, {
+    String authorizationPayload = '',
+  }) async {
+    final result = await channel
+        .invokeMapMethod<String, dynamic>('signIn', <String, dynamic>{
+          'provider': provider.name,
+          if (authorizationPayload.isNotEmpty)
+            'authorizationPayload': authorizationPayload,
+        });
     return _resultFromMap(provider, result);
   }
 
@@ -349,64 +472,6 @@ class MethodChannelNativeAuthBridge implements NativeAuthBridge {
   }
 }
 
-/// Release-safe sandbox bridge for non-production environments (alpha/beta/gamma).
-///
-/// It is the端侧 counterpart of the server's mock/sandbox social provider client:
-/// instead of invoking a real vendor SDK, it returns a short-lived sandbox
-/// authorization ticket. The ticket is prefixed `sandbox-<provider>-` so the
-/// gamma server-side controlled pass-through allowlist can recognize it; in
-/// alpha/beta the server uses the mock provider client and accepts any ticket.
-///
-/// This is NOT test code: it is selected by runtime environment in
-/// [nativeAuthBridgeProvider] and never wired in production.
-class SandboxNativeAuthBridge implements NativeAuthBridge {
-  SandboxNativeAuthBridge({Set<NativeAuthProvider>? socialProviders})
-    : _socialProviders =
-          socialProviders ??
-          const <NativeAuthProvider>{
-            NativeAuthProvider.wechat,
-            NativeAuthProvider.alipay,
-            NativeAuthProvider.qq,
-          };
-
-  final Set<NativeAuthProvider> _socialProviders;
-
-  @override
-  Future<NativeAuthCapability> getCapability(
-    NativeAuthProvider provider,
-  ) async {
-    final available = _socialProviders.contains(provider);
-    return NativeAuthCapability(
-      provider: provider,
-      availability: available
-          ? NativeAuthAvailability.available
-          : NativeAuthAvailability.unavailable,
-      reason: available ? 'sandbox' : 'unsupported_in_sandbox',
-    );
-  }
-
-  @override
-  Future<NativeAuthResult> signIn(NativeAuthProvider provider) async {
-    if (!_socialProviders.contains(provider)) {
-      throw StateError('${provider.name} sandbox auth is unavailable');
-    }
-    final entropy = DateTime.now().microsecondsSinceEpoch.toRadixString(36);
-    return NativeAuthResult(
-      provider: provider,
-      ticket: 'sandbox-${provider.name}-$entropy',
-      displayLabel: 'sandbox-${provider.name}',
-    );
-  }
-
-  @override
-  Future<NativeAuthResult> signInWithPasskey({
-    String? relyingPartyId,
-    String? challenge,
-  }) async {
-    throw StateError('passkey sandbox auth is unavailable');
-  }
-}
-
 class UnsupportedNativeAuthBridge implements NativeAuthBridge {
   const UnsupportedNativeAuthBridge();
 
@@ -416,13 +481,16 @@ class UnsupportedNativeAuthBridge implements NativeAuthBridge {
   ) async {
     return NativeAuthCapability(
       provider: provider,
-      availability: NativeAuthAvailability.unavailable,
+      availability: NativeAuthAvailability.unsupportedPlatform,
       reason: 'unsupported_platform',
     );
   }
 
   @override
-  Future<NativeAuthResult> signIn(NativeAuthProvider provider) async {
+  Future<NativeAuthResult> signIn(
+    NativeAuthProvider provider, {
+    String authorizationPayload = '',
+  }) async {
     throw StateError('${provider.name} native auth is unavailable');
   }
 
@@ -433,4 +501,23 @@ class UnsupportedNativeAuthBridge implements NativeAuthBridge {
   }) async {
     throw StateError('passkey native auth is unavailable');
   }
+}
+
+NativeAuthAvailability nativeAuthAvailabilityFromReason(String raw) {
+  final reason = raw.trim().toLowerCase();
+  if (reason.contains('not_configured') ||
+      reason.contains('missing_config') ||
+      reason.contains('credential')) {
+    return NativeAuthAvailability.notConfigured;
+  }
+  if (reason.contains('not_installed') || reason.contains('client_missing')) {
+    return NativeAuthAvailability.clientNotInstalled;
+  }
+  if (reason.contains('timeout')) {
+    return NativeAuthAvailability.probeTimeout;
+  }
+  if (reason.contains('unsupported') || reason.contains('platform')) {
+    return NativeAuthAvailability.unsupportedPlatform;
+  }
+  return NativeAuthAvailability.sdkUnavailable;
 }

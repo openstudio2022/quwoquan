@@ -24,13 +24,19 @@ class UserProfileSubTabConfig {
   final String labelKey;
   final String? contentType;
   final String? lifeCategory;
+  final bool isDefault;
+  /// 限制该二级 Tab 仅在指定主页模式（mine/other）可见；空表示全模式可见。
+  final List<String> modes;
 
   const UserProfileSubTabConfig({
     required this.id,
     required this.labelKey,
     this.contentType,
     this.lifeCategory,
+    this.isDefault = false,
+    this.modes = const <String>[],
   });
+  bool visibleInMode(String mode) => modes.isEmpty || modes.contains(mode);
 }
 
 class UserProfileHeaderLayoutConfig {
@@ -110,10 +116,10 @@ class UserProfileUIConfig {
   ];
 
   static const List<UserProfileSubTabConfig> creationSubTabs = <UserProfileSubTabConfig>[
-    UserProfileSubTabConfig(id: "all", labelKey: "creation_sub_all", contentType: null, lifeCategory: null),
-    UserProfileSubTabConfig(id: "image", labelKey: "creation_sub_image", contentType: "image", lifeCategory: null),
-    UserProfileSubTabConfig(id: "video", labelKey: "creation_sub_video", contentType: "video", lifeCategory: null),
-    UserProfileSubTabConfig(id: "article", labelKey: "creation_sub_text", contentType: "article", lifeCategory: null),
+    UserProfileSubTabConfig(id: "all", labelKey: "creation_sub_all", contentType: null, lifeCategory: null, isDefault: false, modes: <String>[]),
+    UserProfileSubTabConfig(id: "image", labelKey: "creation_sub_image", contentType: "image", lifeCategory: null, isDefault: false, modes: <String>[]),
+    UserProfileSubTabConfig(id: "video", labelKey: "creation_sub_video", contentType: "video", lifeCategory: null, isDefault: false, modes: <String>[]),
+    UserProfileSubTabConfig(id: "article", labelKey: "creation_sub_text", contentType: "article", lifeCategory: null, isDefault: false, modes: <String>[]),
   ];
 
   static const Map<String, List<String>> creationVisibilityFiltersByMode = <String, List<String>>{
@@ -122,11 +128,10 @@ class UserProfileUIConfig {
   };
 
   static const List<UserProfileSubTabConfig> interactionSubTabs = <UserProfileSubTabConfig>[
-    UserProfileSubTabConfig(id: "all", labelKey: "interaction_sub_all", contentType: null, lifeCategory: null),
-    UserProfileSubTabConfig(id: "comments", labelKey: "interaction_sub_comments", contentType: null, lifeCategory: null),
-    UserProfileSubTabConfig(id: "likes", labelKey: "interaction_sub_likes", contentType: null, lifeCategory: null),
-    UserProfileSubTabConfig(id: "shares", labelKey: "interaction_sub_shares", contentType: null, lifeCategory: null),
-    UserProfileSubTabConfig(id: "views", labelKey: "interaction_sub_views", contentType: null, lifeCategory: null),
+    UserProfileSubTabConfig(id: "likes", labelKey: "interaction_sub_likes", contentType: null, lifeCategory: null, isDefault: true, modes: <String>[]),
+    UserProfileSubTabConfig(id: "comments", labelKey: "interaction_sub_comments", contentType: null, lifeCategory: null, isDefault: false, modes: <String>[]),
+    UserProfileSubTabConfig(id: "shares", labelKey: "interaction_sub_shares", contentType: null, lifeCategory: null, isDefault: false, modes: <String>["mine"]),
+    UserProfileSubTabConfig(id: "views", labelKey: "interaction_sub_views", contentType: null, lifeCategory: null, isDefault: false, modes: <String>[]),
   ];
 
   static const Map<String, List<String>> interactionDirectionFiltersByMode = <String, List<String>>{

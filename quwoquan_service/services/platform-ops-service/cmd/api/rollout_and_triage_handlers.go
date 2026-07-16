@@ -316,7 +316,7 @@ func (s *platformService) handleApplyRelease(w http.ResponseWriter, r *http.Requ
 		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
-	if err := s.syncConfigPackageDesiredHashes(); err != nil {
+	if err := s.syncConfigPackageDesiredHashes(r.Context()); err != nil {
 		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
@@ -400,7 +400,7 @@ func (s *platformService) handleRollbackRelease(w http.ResponseWriter, r *http.R
 		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
-	if err := s.syncConfigPackageDesiredHashes(); err != nil {
+	if err := s.syncConfigPackageDesiredHashes(r.Context()); err != nil {
 		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}

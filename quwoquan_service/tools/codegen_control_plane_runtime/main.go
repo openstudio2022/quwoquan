@@ -9,7 +9,9 @@ import (
 	"sort"
 	"strings"
 
-	"gopkg.in/yaml.v3"
+	contractcodegen "quwoquan_service/internal/metadata/codegen"
+	metacontrolplane "quwoquan_service/internal/metadata/controlplane"
+	"quwoquan_service/internal/metadata/validate"
 )
 
 type artifact struct {
@@ -17,6 +19,8 @@ type artifact struct {
 	constName string
 	data      any
 }
+
+var compileContractSource = contractcodegen.NewSource
 
 func main() {
 	var metadataDir string
@@ -28,7 +32,9 @@ func main() {
 	flag.StringVar(&pythonOutDir, "python-out-dir", "services/rec-model-service/generated/control_plane", "Python output directory")
 	flag.Parse()
 
-	artifacts := collectArtifacts(metadataDir)
+	source, err := compileContractSource(metadataDir, validate.ProfileBaseline)
+	must(err)
+	artifacts := collectArtifacts(source)
 
 	must(os.MkdirAll(goOutDir, 0o755))
 	must(os.MkdirAll(pythonOutDir, 0o755))
@@ -40,45 +46,45 @@ func main() {
 	writePythonIndex(filepath.Join(pythonOutDir, "__init__.py"), artifacts)
 }
 
-func collectArtifacts(metadataDir string) []artifact {
-	sharedRoot := filepath.Join(metadataDir, "_shared")
-	controlRoot := filepath.Join(metadataDir, "_control_plane")
+func collectArtifacts(source *contractcodegen.Source) []artifact {
+	const sharedRoot = "_shared"
+	const controlRoot = "_control_plane"
 
 	items := []artifact{
 		{
 			fileName:  "shared_control_plane",
 			constName: "SharedControlPlane",
-			data:      readYAMLAny(filepath.Join(sharedRoot, "control_plane.yaml")),
+			data:      readYAMLAny(source, filepath.Join(sharedRoot, "control_plane.yaml")),
 		},
 		{
 			fileName:  "portal_shell",
 			constName: "PortalShell",
-			data:      readYAMLAny(filepath.Join(controlRoot, "portal_shell.yaml")),
+			data:      readYAMLAny(source, filepath.Join(controlRoot, "portal_shell.yaml")),
 		},
 		{
 			fileName:  "portal_menu",
 			constName: "PortalMenu",
-			data:      readYAMLAny(filepath.Join(controlRoot, "portal_menu.yaml")),
+			data:      readYAMLAny(source, filepath.Join(controlRoot, "portal_menu.yaml")),
 		},
 	}
-	if fileExists(filepath.Join(controlRoot, "domain_onboarding_schema.yaml")) {
+	if source.Has(filepath.Join(controlRoot, "domain_onboarding_schema.yaml")) {
 		items = append(items, artifact{
 			fileName:  "domain_onboarding_schema",
 			constName: "DomainOnboardingSchema",
-			data:      readYAMLAny(filepath.Join(controlRoot, "domain_onboarding_schema.yaml")),
+			data:      readYAMLAny(source, filepath.Join(controlRoot, "domain_onboarding_schema.yaml")),
 		})
 	}
-	if fileExists(filepath.Join(controlRoot, "domains")) {
+	if len(source.Paths(filepath.Join(controlRoot, "domains"), ".yaml")) > 0 {
 		items = append(items, artifact{
 			fileName:  "domain_onboarding_domains",
 			constName: "DomainOnboardingDomains",
-			data:      readOnboardingDomains(filepath.Join(controlRoot, "domains")),
+			data:      readOnboardingDomains(source, filepath.Join(controlRoot, "domains")),
 		})
 	}
 
 	for _, domain := range []string{"platform", "product"} {
 		baseDir := filepath.Join(controlRoot, domain)
-		if !fileExists(baseDir) {
+		if len(source.Paths(baseDir, ".yaml")) == 0 {
 			continue
 		}
 
@@ -92,13 +98,22 @@ func collectArtifacts(metadataDir string) []artifact {
 			{fileName: domain + "_workflow", constName: toPascalCase(domain) + "Workflow", path: filepath.Join(baseDir, "workflow.yaml")},
 			{fileName: domain + "_audit_schema", constName: toPascalCase(domain) + "AuditSchema", path: filepath.Join(baseDir, "audit_schema.yaml")},
 		} {
-			if !fileExists(def.path) {
+			if !source.Has(def.path) {
 				continue
+			}
+			data := readYAMLAny(source, def.path)
+			if strings.HasSuffix(def.path, "control_plane.yaml") {
+				document, ok := data.(map[string]any)
+				if !ok {
+					must(fmt.Errorf("%s must decode to an object", def.path))
+				}
+				must(metacontrolplane.HydrateOperationReferences(document, source.Graph()))
+				data = document
 			}
 			items = append(items, artifact{
 				fileName:  def.fileName,
 				constName: def.constName,
-				data:      readYAMLAny(def.path),
+				data:      data,
 			})
 		}
 	}
@@ -109,36 +124,27 @@ func collectArtifacts(metadataDir string) []artifact {
 	return items
 }
 
-func readOnboardingDomains(dir string) any {
-	entries, err := os.ReadDir(dir)
-	must(err)
-
+func readOnboardingDomains(source *contractcodegen.Source, dir string) any {
 	out := map[string]any{}
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".yaml") {
-			continue
-		}
-		path := filepath.Join(dir, entry.Name())
-		data := readYAMLAny(path)
+	for _, path := range source.Paths(dir, ".yaml") {
+		data := readYAMLAny(source, path)
 		doc, ok := data.(map[string]any)
 		if !ok {
 			continue
 		}
 		domain := fmt.Sprint(doc["domain"])
 		if strings.TrimSpace(domain) == "" {
-			domain = strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name()))
+			name := filepath.Base(path)
+			domain = strings.TrimSuffix(name, filepath.Ext(name))
 		}
 		out[domain] = doc
 	}
 	return out
 }
 
-func readYAMLAny(path string) any {
-	data, err := os.ReadFile(path)
-	must(err)
-
+func readYAMLAny(source *contractcodegen.Source, path string) any {
 	var out any
-	must(yaml.Unmarshal(data, &out))
+	must(source.Decode(path, &out))
 	return normalizeYAML(out)
 }
 
@@ -217,11 +223,6 @@ func writeFile(path, content string) {
 	must(os.MkdirAll(filepath.Dir(path), 0o755))
 	must(os.WriteFile(path, []byte(content), 0o644))
 	fmt.Printf("generated: %s\n", path)
-}
-
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
 }
 
 func toPascalCase(s string) string {

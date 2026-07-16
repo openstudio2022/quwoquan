@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
-"""Generate native launch-screen transition assets.
+"""Generate / refresh native launch-screen assets.
 
-The Flutter welcome screen is the only place that may show the petal mark,
-brand title, slogan, and welcome animation. Native launch surfaces only cover
-the OS window before Flutter draws its first frame, so they intentionally avoid
-mirroring welcome content.
+Canonical welcome-final-frame pixels come from Flutter:
+
+  flutter test --no-pub tool/generate_native_launch_welcome_final_test.dart
+
+That Dart tool writes a same-source transparent brand cluster plus adaptive
+gradient resources. Android 12+ uses the static app icon configured by v31
+styles; native code never owns motion, replay, hints, or Flutter progress.
 """
 
 from __future__ import annotations
 
+import subprocess
+import sys
 from pathlib import Path
 
 from PIL import Image
@@ -17,11 +22,7 @@ from PIL import Image
 APP_DIR = Path(__file__).resolve().parents[2]
 ANDROID_RES = APP_DIR / "android" / "app" / "src" / "main" / "res"
 IOS_LAUNCH_IMAGESET = (
-    APP_DIR
-    / "ios"
-    / "Runner"
-    / "Assets.xcassets"
-    / "LaunchImage.imageset"
+    APP_DIR / "ios" / "Runner" / "Assets.xcassets" / "LaunchImage.imageset"
 )
 IOS_LAUNCH_TRANSITION_IMAGESET = (
     APP_DIR
@@ -30,6 +31,8 @@ IOS_LAUNCH_TRANSITION_IMAGESET = (
     / "Assets.xcassets"
     / "LaunchTransitionBackground.imageset"
 )
+MASTER = APP_DIR / "assets" / "brand" / "launch_welcome_final_master.png"
+ANDROID_FINAL = ANDROID_RES / "drawable-nodpi" / "launch_welcome_final.png"
 
 BRAND_BLUE = (10, 132, 255, 255)
 WELCOME_GRADIENT_START = (20, 145, 255, 255)
@@ -54,49 +57,50 @@ def vertical_gradient(size: tuple[int, int]) -> Image.Image:
     return img
 
 
-def generate_android_splash_icon() -> None:
-    densities = {
-        "mdpi": 1.0,
-        "hdpi": 1.5,
-        "xhdpi": 2.0,
-        "xxhdpi": 3.0,
-        "xxxhdpi": 4.0,
-    }
-    for density, factor in densities.items():
-        out_dir = ANDROID_RES / f"drawable-{density}"
-        out_dir.mkdir(parents=True, exist_ok=True)
-        size = round(288 * factor)
-        img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-        img.save(out_dir / "launch_splash_icon.png")
+def run_flutter_final_frame_export() -> None:
+    result = subprocess.run(
+        [
+            "flutter",
+            "test",
+            "--no-pub",
+            "tool/generate_native_launch_welcome_final_test.dart",
+        ],
+        cwd=APP_DIR,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise SystemExit(result.returncode)
 
 
-def generate_ios_launch_overlay() -> None:
+def ensure_fallback_assets() -> None:
+    """Only used if Flutter export did not produce the master bitmap."""
+    if MASTER.exists() and ANDROID_FINAL.exists():
+        return
+    print(
+        "WARN: Flutter master missing; writing gradient-only fallback "
+        "(re-run with Flutter export for branded final frame).",
+        file=sys.stderr,
+    )
+    ANDROID_FINAL.parent.mkdir(parents=True, exist_ok=True)
+    vertical_gradient((1179, 2556)).save(ANDROID_FINAL)
     IOS_LAUNCH_IMAGESET.mkdir(parents=True, exist_ok=True)
-    sizes = {
-        "LaunchImage.png": (393, 852),
-        "LaunchImage@2x.png": (786, 1704),
-        "LaunchImage@3x.png": (1179, 2556),
-    }
-    for filename, (width, height) in sizes.items():
-        img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
-        img.save(IOS_LAUNCH_IMAGESET / filename)
-
-
-def generate_ios_launch_background() -> None:
     IOS_LAUNCH_TRANSITION_IMAGESET.mkdir(parents=True, exist_ok=True)
     sizes = {
-        "LaunchTransitionBackground.png": (393, 852),
-        "LaunchTransitionBackground@2x.png": (786, 1704),
-        "LaunchTransitionBackground@3x.png": (1179, 2556),
+        "LaunchTransitionBackground.png": (1, 3),
+        "LaunchTransitionBackground@2x.png": (2, 6),
+        "LaunchTransitionBackground@3x.png": (3, 9),
     }
     for filename, size in sizes.items():
-        vertical_gradient(size).save(IOS_LAUNCH_TRANSITION_IMAGESET / filename)
+        img = vertical_gradient(size)
+        img.save(IOS_LAUNCH_TRANSITION_IMAGESET / filename)
+        img.save(IOS_LAUNCH_IMAGESET / filename.replace("LaunchTransitionBackground", "LaunchImage"))
 
 
 def main() -> None:
-    generate_android_splash_icon()
-    generate_ios_launch_overlay()
-    generate_ios_launch_background()
+    run_flutter_final_frame_export()
+    if not MASTER.exists() or not ANDROID_FINAL.exists():
+        ensure_fallback_assets()
+    print(f"OK: native launch final frame at {ANDROID_FINAL}")
 
 
 if __name__ == "__main__":

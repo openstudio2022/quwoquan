@@ -31,10 +31,10 @@ gwt_acceptance:
       以 local-gamma 或 beta/gamma 结果直接代替。
     done_when:
     - 生产灰度口径已统一为 prod rollout stage，不再出现 prod-gray 第二环境。
-    - 发布前只认 prod_gray_initial 的远端证据，和 local-gamma-mirror 职责不重叠。
+    - 发布前只认 prod gray-initial rollout stage 的远端证据，和 local-gamma-mirror 职责不重叠。
     edge_cases:
     - gray-initial 不可用时必须 GATE_BLOCK，不能回退为“只看 beta/gamma”。
-    - 只读/幂等 api_integration 才能进入 prod_gray_initial 自动链，写操作需显式审批。
+    - 只读/幂等 api_integration 才能进入 prod gray-initial 自动链，写操作需显式审批。
     contract_refs:
     - quwoquan_ops/environments/environment_topology_manifest.yaml
     - quwoquan_ops/environments/gamma_validation_suites.json
@@ -50,17 +50,21 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: api_integration
-        suite: prod_gray_initial_release_contract
+        suite: gray_initial_release_contract
         cases:
-        - api_integration.runtime.deliver_deploy_prod_pipeline.gray_release_to_prod.prod_gray_initial_release_contract
+        - api_integration.runtime.deliver_deploy_prod_pipeline.gray_release_to_prod.gray_initial_release_contract
         envs: &id001
-        - prod_gray_initial
+        - prod
+        rollout_stages:
+        - gray_initial
       - layer: user_acceptance
-        suite: prod_gray_initial_journey_page_matrix
+        suite: gray_initial_journey_page_matrix
         cases:
-        - user_acceptance.runtime.deliver_deploy_prod_pipeline.gray_release_to_prod.prod_gray_initial_journey_page_matrix
+        - user_acceptance.runtime.deliver_deploy_prod_pipeline.gray_release_to_prod.gray_initial_journey_page_matrix
         envs:
-        - prod_gray_initial
+        - prod
+        rollout_stages:
+        - gray_initial
       supporting:
       - layer: local_contract
         suite: gray_release_stage_contract
@@ -70,7 +74,7 @@ gwt_acceptance:
         - alpha
         - local
     notes:
-    - 2026-06-22 口径收敛：生产只有 prod，一个 rollout stage 命名为 prod_gray_initial；不新增 prod-gray。
+    - 2026-06-22 口径收敛：生产只有 prod，一个 rollout stage 命名为 gray_initial；不新增 prod-gray。
 execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh

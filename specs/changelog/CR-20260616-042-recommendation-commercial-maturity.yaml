@@ -28,7 +28,7 @@ entries:
       - acceptance
       - observability
     changed_documents:
-      - path: docs/recommendation-commercial-maturity-plan.md
+      - path: docs/recommendation-commercial-maturity-content.execution.planning.md
         sections:
           - 八维商用成熟度门槛
           - L3 能力拆分

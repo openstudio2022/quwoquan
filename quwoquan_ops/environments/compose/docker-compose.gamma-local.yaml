@@ -66,6 +66,60 @@ services:
       timeout: 3s
       retries: 20
 
+  object-storage:
+    image: "${LOCAL_GAMMA_MINIO_IMAGE:-minio/minio:RELEASE.2025-04-22T22-12-26Z}"
+    networks:
+      default:
+        aliases:
+          - gamma-upload.quwoquan-env.test
+          - gamma-upload.localhost
+    environment:
+      MINIO_ROOT_USER: "${LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_ID:?LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_ID is required}"
+      MINIO_ROOT_PASSWORD: "${LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_SECRET:?LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_SECRET is required}"
+      MINIO_BROWSER: "off"
+      MINIO_CERTS_DIR: /root/.minio/certs
+    command:
+      - server
+      - /data
+      - --address
+      - ":${LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT:?LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT is required}"
+      - --console-address
+      - ":9001"
+    ports:
+      - "${LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT:?LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT is required}:${LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT:?LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT is required}"
+    volumes:
+      - local-gamma-object-storage:/data
+      - ${LOCAL_GAMMA_OBJECT_STORAGE_TLS_DIR:?LOCAL_GAMMA_OBJECT_STORAGE_TLS_DIR is required}:/root/.minio/certs:ro
+
+  object-storage-init:
+    image: "${LOCAL_GAMMA_MINIO_MC_IMAGE:-minio/mc:RELEASE.2025-03-12T17-29-24Z}"
+    depends_on:
+      object-storage:
+        condition: service_started
+    environment:
+      LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT: "${LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT:?LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT is required}"
+      LOCAL_GAMMA_OBJECT_STORAGE_BUCKET: "${LOCAL_GAMMA_OBJECT_STORAGE_BUCKET:?LOCAL_GAMMA_OBJECT_STORAGE_BUCKET is required}"
+      LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_ID: "${LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_ID:?LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_ID is required}"
+      LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_SECRET: "${LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_SECRET:?LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_SECRET is required}"
+    volumes:
+      - ${LOCAL_GAMMA_OBJECT_STORAGE_CA_FILE:?LOCAL_GAMMA_OBJECT_STORAGE_CA_FILE is required}:/etc/qwq-object-storage/ca.crt:ro
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        install -d -m 0700 /root/.mc/certs/CAs
+        cp /etc/qwq-object-storage/ca.crt /root/.mc/certs/CAs/qwq-gamma-object-storage.crt
+        for attempt in $(seq 1 60); do
+          if mc alias set qwq "https://gamma-upload.quwoquan-env.test:${LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT}" "$LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_ID" "$LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_SECRET"; then
+            mc mb --ignore-existing "qwq/${LOCAL_GAMMA_OBJECT_STORAGE_BUCKET}"
+            exit 0
+          fi
+          sleep 2
+        done
+        echo "object-storage did not become ready" >&2
+        exit 1
+    restart: "no"
+
   rec-model-service:
     # 对外 DNS 名与 prod K8s Service 统一为 recommendation-service；rec-model-service 仅作工件名/兼容别名。
     networks:
@@ -99,11 +153,15 @@ services:
       REC_MODEL_MODEL_BUDGET_MS: "${LOCAL_GAMMA_REC_MODEL_MODEL_BUDGET_MS:-80}"
       REC_MODEL_RETRY_BUDGET_MS: "${LOCAL_GAMMA_REC_MODEL_RETRY_BUDGET_MS:-15}"
       REC_MODEL_GUARDRAIL_MODE: suggest_only
+      AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}"
+      AUTH_JWT_ISSUER: "${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}"
+      AUTH_JWT_AUDIENCE: "${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}"
+      AUTH_JWT_TOKEN_VERSION: "${AUTH_JWT_TOKEN_VERSION:?AUTH_JWT_TOKEN_VERSION is required}"
     ports:
       - "${LOCAL_GAMMA_REC_MODEL_PORT:-19240}:8000"
     volumes:
-      - ../../../.qwq_output/env/gamma/local/gamma-local/config-root:/etc/qwq-config:ro
-      - local-gamma-model-cache:/app/cache
+      - ${LOCAL_GAMMA_CONFIG_ROOT:?LOCAL_GAMMA_CONFIG_ROOT is required}:/etc/qwq-config:ro
+      - ${LOCAL_GAMMA_MODEL_CACHE_ROOT:-../../../.qwq_output/env/gamma/local/gamma-local/cache/model}:/app/cache
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')\" || exit 1"]
       interval: 10s
@@ -127,10 +185,31 @@ services:
       CONFIG_VERSION: "${LOCAL_GAMMA_CONFIG_VERSION:-local-gamma-v1}"
       IMAGE_VERSION: "${LOCAL_GAMMA_IMAGE_VERSION:-0.0.1}"
       MONGO_URI: mongodb://mongodb:27017
+      REPORT_DATABASE_URL: postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable
       CONTENT_REDIS_REC_ADDR: redis:6379
       CONTENT_REDIS_GENERAL_ADDR: redis:6379
+      CONTENT_REDIS_REALTIME_ADDR: redis:6379
+      CONTENT_OSS_ENDPOINT: "${LOCAL_GAMMA_OBJECT_STORAGE_ENDPOINT:?LOCAL_GAMMA_OBJECT_STORAGE_ENDPOINT is required}"
+      CONTENT_OSS_BUCKET: "${LOCAL_GAMMA_OBJECT_STORAGE_BUCKET:?LOCAL_GAMMA_OBJECT_STORAGE_BUCKET is required}"
+      CONTENT_OSS_REGION: "${LOCAL_GAMMA_OBJECT_STORAGE_REGION:?LOCAL_GAMMA_OBJECT_STORAGE_REGION is required}"
+      CONTENT_OSS_ACCESS_KEY_ID: "${LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_ID:?LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_ID is required}"
+      CONTENT_OSS_ACCESS_KEY_SECRET: "${LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_SECRET:?LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_SECRET is required}"
+      CONTENT_CDN_DOMAIN: "${LOCAL_GAMMA_OBJECT_STORAGE_CDN_DOMAIN:?LOCAL_GAMMA_OBJECT_STORAGE_CDN_DOMAIN is required}"
+      CONTENT_CDN_SIGN_KEY: "${LOCAL_GAMMA_OBJECT_STORAGE_CDN_SIGN_KEY:?LOCAL_GAMMA_OBJECT_STORAGE_CDN_SIGN_KEY is required}"
+      SSL_CERT_FILE: /etc/ssl/local-ca/object-storage-ca.crt
+      SEARCH_ES_ENABLED: "true"
+      SEARCH_ES_ENDPOINTS: http://elasticsearch:9200
       REC_MODEL_SERVICE_ENABLED: "true"
       REC_MODEL_SERVICE_URL: http://recommendation-service:8000
+      CIRCLE_SERVICE_BASE_URL: http://circle-service:18082
+      AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}"
+      AUTH_JWT_ISSUER: "${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}"
+      AUTH_JWT_AUDIENCE: "${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}"
+      AUTH_JWT_TOKEN_VERSION: "${AUTH_JWT_TOKEN_VERSION:?AUTH_JWT_TOKEN_VERSION is required}"
+      AUTH_DEVICE_TICKET_SECRET: "${AUTH_DEVICE_TICKET_SECRET:?AUTH_DEVICE_TICKET_SECRET is required}"
+      AUTH_DEVICE_TICKET_ISSUER: "${AUTH_DEVICE_TICKET_ISSUER:?AUTH_DEVICE_TICKET_ISSUER is required}"
+      AUTH_DEVICE_TICKET_AUDIENCE: "${AUTH_DEVICE_TICKET_AUDIENCE:?AUTH_DEVICE_TICKET_AUDIENCE is required}"
+      AUTH_DEVICE_TICKET_TOKEN_VERSION: "${AUTH_DEVICE_TICKET_TOKEN_VERSION:?AUTH_DEVICE_TICKET_TOKEN_VERSION is required}"
     depends_on:
       mongodb:
         condition: service_healthy
@@ -140,10 +219,13 @@ services:
         condition: service_healthy
       rec-model-service:
         condition: service_healthy
+      circle-service:
+        condition: service_healthy
     ports:
       - "${LOCAL_GAMMA_CONTENT_PORT:-19220}:18080"
     volumes:
-      - ../../../.qwq_output/env/gamma/local/gamma-local/config-root:/etc/qwq-config:ro
+      - ${LOCAL_GAMMA_CONFIG_ROOT:?LOCAL_GAMMA_CONFIG_ROOT is required}:/etc/qwq-config:ro
+      - ${LOCAL_GAMMA_OBJECT_STORAGE_CA_FILE:?LOCAL_GAMMA_OBJECT_STORAGE_CA_FILE is required}:/etc/ssl/local-ca/object-storage-ca.crt:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18080/healthz >/dev/null 2>&1"]
       interval: 10s
@@ -179,7 +261,15 @@ services:
       RELIABLE_TASK_READY_INDEX_QUEUE: reliabletask.chat.avatar
       CHAT_GROUP_AVATAR_CDN_BASE_URL: "${LOCAL_GAMMA_MEDIA_PUBLIC_BASE_URL:-${LOCAL_GAMMA_MEDIA_BASE_URL:-http://127.0.0.1:19100}}"
       CHAT_GROUP_AVATAR_LOCAL_MEDIA_ROOT: /var/lib/quwoquan/chat-media
+      SSL_CERT_FILE: /etc/ssl/local-ca/object-storage-ca.crt
+      USER_SERVICE_BASE_URL: http://user-service:18082
+      CIRCLE_SERVICE_BASE_URL: http://circle-service:18082
+      CONTENT_SERVICE_BASE_URL: http://content-service:18080
       RUNTIME_SYNC_PATCH_TTL_HOURS: "720"
+      AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}"
+      AUTH_JWT_ISSUER: "${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}"
+      AUTH_JWT_AUDIENCE: "${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}"
+      AUTH_JWT_TOKEN_VERSION: "${AUTH_JWT_TOKEN_VERSION:?AUTH_JWT_TOKEN_VERSION is required}"
     depends_on:
       mongodb:
         condition: service_healthy
@@ -187,11 +277,16 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+      object-storage-init:
+        condition: service_completed_successfully
+      content-service:
+        condition: service_healthy
     ports:
       - "${LOCAL_GAMMA_CHAT_PORT:-19200}:18081"
     volumes:
-      - ../../../.qwq_output/env/gamma/local/gamma-local/config-root:/etc/qwq-config:ro
-      - ../../../.qwq_output/env/gamma/local/gamma-local/media:/var/lib/quwoquan/chat-media
+      - ${LOCAL_GAMMA_CONFIG_ROOT:?LOCAL_GAMMA_CONFIG_ROOT is required}:/etc/qwq-config:ro
+      - ${LOCAL_GAMMA_MEDIA_ROOT:-../../../.qwq_output/env/gamma/local/gamma-local/cache/media}:/var/lib/quwoquan/chat-media
+      - ${LOCAL_GAMMA_OBJECT_STORAGE_CA_FILE:?LOCAL_GAMMA_OBJECT_STORAGE_CA_FILE is required}:/etc/ssl/local-ca/object-storage-ca.crt:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18081/healthz >/dev/null 2>&1"]
       interval: 10s
@@ -207,7 +302,7 @@ services:
       args:
         GO_BASE_IMAGE: "${LOCAL_GAMMA_GO_ALPINE_BASE_IMAGE:-golang:1.24-bookworm}"
         ALPINE_BASE_IMAGE: "${LOCAL_GAMMA_ALPINE_BASE_IMAGE:-alpine:3.19}"
-        GO_BUILD_FLAGS: "${LOCAL_GAMMA_GO_BUILD_FLAGS:--p=1}"
+        GO_BUILD_FLAGS: "${LOCAL_GAMMA_USER_GO_BUILD_FLAGS:--p=1 -tags=nonprod}"
     environment:
       SERVICE_NAME: user-service
       APP_ENV: gamma
@@ -215,10 +310,29 @@ services:
       CONFIG_VERSION: "${LOCAL_GAMMA_CONFIG_VERSION:-local-gamma-v1}"
       IMAGE_VERSION: "${LOCAL_GAMMA_IMAGE_VERSION:-0.0.1}"
       USER_SERVICE_ADDR: ":18082"
+      OTP_CODE_REF_ACTIVE_KEY_VERSION: "${OTP_CODE_REF_ACTIVE_KEY_VERSION:?OTP_CODE_REF_ACTIVE_KEY_VERSION is required}"
+      OTP_CODE_REF_KEYS_JSON: "${OTP_CODE_REF_KEYS_JSON:?OTP_CODE_REF_KEYS_JSON is required}"
       POSTGRES_DSN: postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable
       MONGODB_URI: mongodb://mongodb:27017
       MONGODB_DATABASE: quwoquan_user
       REDIS_ADDR: redis:6379
+      CHAT_SERVICE_BASE_URL: http://chat-service:18081
+      # Gamma 使用 production Remote composition；外部身份凭据缺失时必须在
+      # compose 展开/启动前失败，不能退化为 anonymous-only 能力子集。
+      USER_AUTH_EXTERNAL_PROVIDER_MODE: required
+      WECHAT_OAUTH_APP_ID: "${WECHAT_OAUTH_APP_ID:?WECHAT_OAUTH_APP_ID is required}"
+      WECHAT_OAUTH_APP_SECRET: "${WECHAT_OAUTH_APP_SECRET:?WECHAT_OAUTH_APP_SECRET is required}"
+      ALIPAY_OAUTH_APP_ID: "${ALIPAY_OAUTH_APP_ID:?ALIPAY_OAUTH_APP_ID is required}"
+      ALIPAY_OAUTH_APP_PRIVATE_KEY_PEM: "${ALIPAY_OAUTH_APP_PRIVATE_KEY_PEM:?ALIPAY_OAUTH_APP_PRIVATE_KEY_PEM is required}"
+      ALIPAY_OAUTH_PLATFORM_PUBLIC_KEY_PEM: "${ALIPAY_OAUTH_PLATFORM_PUBLIC_KEY_PEM:?ALIPAY_OAUTH_PLATFORM_PUBLIC_KEY_PEM is required}"
+      ALIPAY_OAUTH_MERCHANT_PID: "${ALIPAY_OAUTH_MERCHANT_PID:?ALIPAY_OAUTH_MERCHANT_PID is required}"
+      QQ_OAUTH_APP_ID: "${QQ_OAUTH_APP_ID:?QQ_OAUTH_APP_ID is required}"
+      ALIYUN_DYPNS_ACCESS_KEY_ID: "${ALIYUN_DYPNS_ACCESS_KEY_ID:?ALIYUN_DYPNS_ACCESS_KEY_ID is required}"
+      ALIYUN_DYPNS_ACCESS_KEY_SECRET: "${ALIYUN_DYPNS_ACCESS_KEY_SECRET:?ALIYUN_DYPNS_ACCESS_KEY_SECRET is required}"
+      AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}"
+      AUTH_JWT_ISSUER: "${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}"
+      AUTH_JWT_AUDIENCE: "${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}"
+      AUTH_JWT_TOKEN_VERSION: "${AUTH_JWT_TOKEN_VERSION:?AUTH_JWT_TOKEN_VERSION is required}"
     depends_on:
       postgres:
         condition: service_healthy
@@ -231,7 +345,7 @@ services:
     ports:
       - "${LOCAL_GAMMA_USER_PORT:-19210}:18082"
     volumes:
-      - ../../../.qwq_output/env/gamma/local/gamma-local/config-root:/etc/qwq-config:ro
+      - ${LOCAL_GAMMA_CONFIG_ROOT:?LOCAL_GAMMA_CONFIG_ROOT is required}:/etc/qwq-config:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18082/healthz >/dev/null 2>&1"]
       interval: 10s
@@ -262,6 +376,11 @@ services:
       ASSISTANT_MODEL_PROVIDER: "${ASSISTANT_MODEL_PROVIDER:-deterministic}"
       ALLOW_DETERMINISTIC_BETA: "${ALLOW_DETERMINISTIC_BETA:-1}"
       ASSISTANT_SCENARIO_SEED_REFS: "${ASSISTANT_SCENARIO_SEED_REFS:-assistant_p0_core}"
+      ASSISTANT_NOTIFICATION_BASE_URL: "http://notification-service:18087"
+      AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}"
+      AUTH_JWT_ISSUER: "${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}"
+      AUTH_JWT_AUDIENCE: "${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}"
+      AUTH_JWT_TOKEN_VERSION: "${AUTH_JWT_TOKEN_VERSION:?AUTH_JWT_TOKEN_VERSION is required}"
     depends_on:
       mongodb:
         condition: service_healthy
@@ -269,8 +388,10 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+      notification-service:
+        condition: service_healthy
     volumes:
-      - ../../../.qwq_output/env/gamma/local/gamma-local/config-root:/etc/qwq-config:ro
+      - ${LOCAL_GAMMA_CONFIG_ROOT:?LOCAL_GAMMA_CONFIG_ROOT is required}:/etc/qwq-config:ro
     ports:
       - "${LOCAL_GAMMA_ASSISTANT_PORT:-19230}:18087"
     healthcheck:
@@ -297,24 +418,72 @@ services:
       IMAGE_VERSION: "${LOCAL_GAMMA_IMAGE_VERSION:-0.0.1}"
       PRODUCT_OPS_SERVICE_ADDR: ":18086"
       MONGO_URI: mongodb://mongodb:27017
+      POSTGRES_DSN: postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable
       PRODUCT_OPS_REDIS_REC_ADDR: redis:6379
       PRODUCT_OPS_REDIS_GENERAL_ADDR: redis:6379
+      AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}"
+      AUTH_JWT_ISSUER: "${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}"
+      AUTH_JWT_AUDIENCE: "${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}"
+      AUTH_JWT_TOKEN_VERSION: "${AUTH_JWT_TOKEN_VERSION:?AUTH_JWT_TOKEN_VERSION is required}"
+      AUTH_DEVICE_TICKET_SECRET: "${AUTH_DEVICE_TICKET_SECRET:?AUTH_DEVICE_TICKET_SECRET is required}"
+      AUTH_DEVICE_TICKET_ISSUER: "${AUTH_DEVICE_TICKET_ISSUER:?AUTH_DEVICE_TICKET_ISSUER is required}"
+      AUTH_DEVICE_TICKET_AUDIENCE: "${AUTH_DEVICE_TICKET_AUDIENCE:?AUTH_DEVICE_TICKET_AUDIENCE is required}"
+      AUTH_DEVICE_TICKET_TOKEN_VERSION: "${AUTH_DEVICE_TICKET_TOKEN_VERSION:?AUTH_DEVICE_TICKET_TOKEN_VERSION is required}"
     depends_on:
       mongodb:
         condition: service_healthy
       mongo-init:
         condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
     ports:
       - "${LOCAL_GAMMA_PRODUCT_OPS_SERVICE_PORT:-19250}:18086"
     volumes:
-      - ../../../.qwq_output/env/gamma/local/gamma-local/config-root:/etc/qwq-config:ro
+      - ${LOCAL_GAMMA_CONFIG_ROOT:?LOCAL_GAMMA_CONFIG_ROOT is required}:/etc/qwq-config:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18086/healthz >/dev/null 2>&1"]
       interval: 10s
       timeout: 3s
       start_period: 240s
+      retries: 10
+
+  platform-ops-service:
+    image: "${LOCAL_GAMMA_PLATFORM_OPS_SERVICE_IMAGE:-localhost/quwoquan_service_platform-ops-service:latest}"
+    build:
+      context: ../../../quwoquan_service
+      dockerfile: services/platform-ops-service/deploy/Dockerfile
+      args:
+        GO_BASE_IMAGE: "${LOCAL_GAMMA_GO_ALPINE_BASE_IMAGE:-golang:1.24-bookworm}"
+        ALPINE_BASE_IMAGE: "${LOCAL_GAMMA_ALPINE_BASE_IMAGE:-alpine:3.19}"
+        GO_BUILD_FLAGS: "${LOCAL_GAMMA_GO_BUILD_FLAGS:--p=1}"
+    environment:
+      SERVICE_NAME: platform-ops-service
+      APP_ENV: gamma
+      CONFIG_ROOT: /etc/qwq-config
+      CONFIG_VERSION: "${LOCAL_GAMMA_CONFIG_VERSION:-local-gamma-v1}"
+      IMAGE_VERSION: "${LOCAL_GAMMA_IMAGE_VERSION:-0.0.1}"
+      PLATFORM_OPS_SERVICE_ADDR: ":18088"
+      REPO_ROOT: /app
+      POSTGRES_DSN: postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable
+      AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}"
+      AUTH_JWT_ISSUER: "${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}"
+      AUTH_JWT_AUDIENCE: "${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}"
+      AUTH_JWT_TOKEN_VERSION: "${AUTH_JWT_TOKEN_VERSION:?AUTH_JWT_TOKEN_VERSION is required}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${LOCAL_GAMMA_PLATFORM_OPS_SERVICE_PORT:-19260}:18088"
+    volumes:
+      - ${LOCAL_GAMMA_CONFIG_ROOT:?LOCAL_GAMMA_CONFIG_ROOT is required}:/etc/qwq-config:ro
+      - ${QWQ_OUTPUT_ROOT:?QWQ_OUTPUT_ROOT is required}/env/repo/local/control-plane/process/platform-ops-service:/app/.qwq_output/env/repo/local/control-plane/process/platform-ops-service
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18088/healthz >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 3s
+      start_period: 60s
       retries: 10
 
   tag-service:
@@ -341,7 +510,7 @@ services:
       mongo-init:
         condition: service_completed_successfully
     volumes:
-      - ../../../.qwq_output/env/gamma/local/gamma-local/config-root:/etc/qwq-config:ro
+      - ${LOCAL_GAMMA_CONFIG_ROOT:?LOCAL_GAMMA_CONFIG_ROOT is required}:/etc/qwq-config:ro
     ports:
       - "${LOCAL_GAMMA_TAG_PORT:-19270}:18092"
     healthcheck:
@@ -363,6 +532,10 @@ services:
       discovery.type: single-node
       xpack.security.enabled: "false"
       xpack.security.http.ssl.enabled: "false"
+      # gamma-local 的单节点 ES 共享 Colima 虚拟磁盘；宿主构建缓存水位不代表
+      # 托管 Gamma 集群容量。关闭本地 allocation threshold 会解除历史
+      # read_only_allow_delete block，同时 Search backfill 仍然失败关闭。
+      cluster.routing.allocation.disk.threshold_enabled: "false"
       ES_JAVA_OPTS: "-Xms512m -Xmx512m"
     ports:
       - "${LOCAL_GAMMA_ES_PORT:-19430}:9200"
@@ -413,7 +586,7 @@ services:
     ports:
       - "${LOCAL_GAMMA_SEARCH_PORT:-19280}:18095"
     volumes:
-      - ../../../.qwq_output/env/gamma/local/gamma-local/config-root:/etc/qwq-config:ro
+      - ${LOCAL_GAMMA_CONFIG_ROOT:?LOCAL_GAMMA_CONFIG_ROOT is required}:/etc/qwq-config:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18095/healthz >/dev/null 2>&1"]
       interval: 10s
@@ -452,7 +625,7 @@ services:
     ports:
       - "${LOCAL_GAMMA_ENTITY_PORT:-19290}:18084"
     volumes:
-      - ../../../.qwq_output/env/gamma/local/gamma-local/config-root:/etc/qwq-config:ro
+      - ${LOCAL_GAMMA_CONFIG_ROOT:?LOCAL_GAMMA_CONFIG_ROOT is required}:/etc/qwq-config:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18084/healthz >/dev/null 2>&1"]
       interval: 10s
@@ -479,8 +652,17 @@ services:
       CIRCLE_MONGO_URI: mongodb://mongodb:27017
       CIRCLE_MONGO_DATABASE: quwoquan_circle
       CIRCLE_REDIS_ADDR: redis:6379
+      CONTENT_SERVICE_BASE_URL: http://content-service:18080
       SEARCH_ES_ENABLED: "true"
       SEARCH_ES_ENDPOINTS: "http://elasticsearch:9200"
+      AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}"
+      AUTH_JWT_ISSUER: "${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}"
+      AUTH_JWT_AUDIENCE: "${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}"
+      AUTH_JWT_TOKEN_VERSION: "${AUTH_JWT_TOKEN_VERSION:?AUTH_JWT_TOKEN_VERSION is required}"
+      AUTH_DEVICE_TICKET_SECRET: "${AUTH_DEVICE_TICKET_SECRET:?AUTH_DEVICE_TICKET_SECRET is required}"
+      AUTH_DEVICE_TICKET_ISSUER: "${AUTH_DEVICE_TICKET_ISSUER:?AUTH_DEVICE_TICKET_ISSUER is required}"
+      AUTH_DEVICE_TICKET_AUDIENCE: "${AUTH_DEVICE_TICKET_AUDIENCE:?AUTH_DEVICE_TICKET_AUDIENCE is required}"
+      AUTH_DEVICE_TICKET_TOKEN_VERSION: "${AUTH_DEVICE_TICKET_TOKEN_VERSION:?AUTH_DEVICE_TICKET_TOKEN_VERSION is required}"
     depends_on:
       mongodb:
         condition: service_healthy
@@ -493,9 +675,102 @@ services:
     ports:
       - "${LOCAL_GAMMA_CIRCLE_PORT:-19300}:18082"
     volumes:
-      - ../../../.qwq_output/env/gamma/local/gamma-local/config-root:/etc/qwq-config:ro
+      - ${LOCAL_GAMMA_CONFIG_ROOT:?LOCAL_GAMMA_CONFIG_ROOT is required}:/etc/qwq-config:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18082/healthz >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 3s
+      start_period: 240s
+      retries: 10
+
+  integration-service:
+    image: "${LOCAL_GAMMA_INTEGRATION_SERVICE_IMAGE:-localhost/quwoquan_service_integration-service:latest}"
+    build:
+      context: ../../../quwoquan_service
+      dockerfile: services/integration-service/deploy/Dockerfile
+      args:
+        GO_BASE_IMAGE: "${LOCAL_GAMMA_GO_ALPINE_BASE_IMAGE:-golang:1.24-bookworm}"
+        ALPINE_BASE_IMAGE: "${LOCAL_GAMMA_ALPINE_BASE_IMAGE:-alpine:3.19}"
+        GO_BUILD_FLAGS: "${LOCAL_GAMMA_GO_BUILD_FLAGS:--p=1}"
+    environment:
+      SERVICE_NAME: integration-service
+      APP_ENV: gamma
+      CONFIG_ROOT: /etc/qwq-config
+      CONFIG_VERSION: "${LOCAL_GAMMA_CONFIG_VERSION:-local-gamma-v1}"
+      IMAGE_VERSION: "${LOCAL_GAMMA_IMAGE_VERSION:-0.0.1}"
+      INTEGRATION_SERVICE_ADDR: ":18086"
+      INTEGRATION_MONGO_URI: mongodb://mongodb:27017
+      INTEGRATION_MONGO_DATABASE: quwoquan_integration
+      INTEGRATION_LOCATION_BAIDU_AK: "${LOCAL_GAMMA_BAIDU_AK:-}"
+      INTEGRATION_LOCATION_AMAP_KEY: "${LOCAL_GAMMA_AMAP_KEY:-}"
+      AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}"
+      AUTH_JWT_ISSUER: "${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}"
+      AUTH_JWT_AUDIENCE: "${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}"
+      AUTH_JWT_TOKEN_VERSION: "${AUTH_JWT_TOKEN_VERSION:?AUTH_JWT_TOKEN_VERSION is required}"
+      AUTH_DEVICE_TICKET_SECRET: "${AUTH_DEVICE_TICKET_SECRET:?AUTH_DEVICE_TICKET_SECRET is required}"
+      AUTH_DEVICE_TICKET_ISSUER: "${AUTH_DEVICE_TICKET_ISSUER:?AUTH_DEVICE_TICKET_ISSUER is required}"
+      AUTH_DEVICE_TICKET_AUDIENCE: "${AUTH_DEVICE_TICKET_AUDIENCE:?AUTH_DEVICE_TICKET_AUDIENCE is required}"
+      AUTH_DEVICE_TICKET_TOKEN_VERSION: "${AUTH_DEVICE_TICKET_TOKEN_VERSION:?AUTH_DEVICE_TICKET_TOKEN_VERSION is required}"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
+    ports:
+      - "${LOCAL_GAMMA_INTEGRATION_PORT:-19310}:18086"
+    volumes:
+      - ${LOCAL_GAMMA_CONFIG_ROOT:?LOCAL_GAMMA_CONFIG_ROOT is required}:/etc/qwq-config:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18086/healthz >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 3s
+      start_period: 240s
+      retries: 10
+
+  notification-service:
+    image: "${LOCAL_GAMMA_NOTIFICATION_SERVICE_IMAGE:-localhost/quwoquan_service_notification-service:latest}"
+    build:
+      context: ../../../quwoquan_service
+      dockerfile: services/notification-service/deploy/Dockerfile
+      args:
+        GO_BASE_IMAGE: "${LOCAL_GAMMA_GO_ALPINE_BASE_IMAGE:-golang:1.24-bookworm}"
+        ALPINE_BASE_IMAGE: "${LOCAL_GAMMA_ALPINE_BASE_IMAGE:-alpine:3.19}"
+        GO_BUILD_FLAGS: "${LOCAL_GAMMA_GO_BUILD_FLAGS:--p=1}"
+    environment:
+      SERVICE_NAME: notification-service
+      APP_ENV: gamma
+      CONFIG_ROOT: /etc/qwq-config
+      CONFIG_VERSION: "${LOCAL_GAMMA_CONFIG_VERSION:-local-gamma-v1}"
+      IMAGE_VERSION: "${LOCAL_GAMMA_IMAGE_VERSION:-0.0.1}"
+      NOTIFICATION_SERVICE_ADDR: ":18087"
+      NOTIFICATION_MONGO_URI: "mongodb://mongodb:27017/?replicaSet=rs0"
+      NOTIFICATION_MONGO_DATABASE: quwoquan_notification
+      NOTIFICATION_INTEGRATION_BASE_URL: "http://integration-service:18086"
+      NOTIFICATION_INTEGRATION_TIMEOUT_MS: "1500"
+      NOTIFICATION_CLAIM_PER_SECOND: "100"
+      NOTIFICATION_DISPATCH_PER_SECOND: "100"
+      NOTIFICATION_RETRY_PER_SECOND: "20"
+      AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}"
+      AUTH_JWT_ISSUER: "${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}"
+      AUTH_JWT_AUDIENCE: "${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}"
+      AUTH_JWT_TOKEN_VERSION: "${AUTH_JWT_TOKEN_VERSION:?AUTH_JWT_TOKEN_VERSION is required}"
+      AUTH_DEVICE_TICKET_SECRET: "${AUTH_DEVICE_TICKET_SECRET:?AUTH_DEVICE_TICKET_SECRET is required}"
+      AUTH_DEVICE_TICKET_ISSUER: "${AUTH_DEVICE_TICKET_ISSUER:?AUTH_DEVICE_TICKET_ISSUER is required}"
+      AUTH_DEVICE_TICKET_AUDIENCE: "${AUTH_DEVICE_TICKET_AUDIENCE:?AUTH_DEVICE_TICKET_AUDIENCE is required}"
+      AUTH_DEVICE_TICKET_TOKEN_VERSION: "${AUTH_DEVICE_TICKET_TOKEN_VERSION:?AUTH_DEVICE_TICKET_TOKEN_VERSION is required}"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
+      integration-service:
+        condition: service_healthy
+    ports:
+      - "${LOCAL_GAMMA_NOTIFICATION_PORT:-19320}:18087"
+    volumes:
+      - ${LOCAL_GAMMA_CONFIG_ROOT:?LOCAL_GAMMA_CONFIG_ROOT is required}:/etc/qwq-config:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18087/healthz >/dev/null 2>&1"]
       interval: 10s
       timeout: 3s
       start_period: 240s
@@ -522,6 +797,10 @@ services:
         condition: service_healthy
       circle-service:
         condition: service_healthy
+      integration-service:
+        condition: service_healthy
+      notification-service:
+        condition: service_healthy
     environment:
       LOCAL_GAMMA_TLS_MODE: "${LOCAL_GAMMA_TLS_MODE:-internal}"
     ports:
@@ -530,11 +809,11 @@ services:
       - "${LOCAL_GAMMA_MEDIA_EDGE_PORT:-19100}:443"
       - "${LOCAL_GAMMA_ADMIN_PORT:-2019}:2019"
     volumes:
-      - ../../../.qwq_output/env/gamma/local/gamma-local/Caddyfile:/etc/caddy/Caddyfile:ro
-      - ../../../.qwq_output/env/gamma/local/gamma-local/media:/srv/media:ro
+      - ${LOCAL_GAMMA_CADDYFILE:-../local-gamma/Caddyfile}:/etc/caddy/Caddyfile:ro
+      - ${LOCAL_GAMMA_MEDIA_ROOT:-../../../.qwq_output/env/gamma/local/gamma-local/cache/media}:/srv/media:ro
       - ${LOCAL_GAMMA_LEGAL_STATIC_ROOT:-../../../.qwq_output/env/gamma/release/legal-static/current/public}:/srv/legal:ro
-      - ${LOCAL_GAMMA_CADDY_DATA_ROOT:-../../../.qwq_output/env/gamma/local/gamma-local/caddy/data}:/data
-      - ${LOCAL_GAMMA_CADDY_CONFIG_ROOT:-../../../.qwq_output/env/gamma/local/gamma-local/caddy/config}:/config
+      - ${LOCAL_GAMMA_CADDY_DATA_VOLUME:-local-gamma-caddy-data}:/data
+      - ${LOCAL_GAMMA_CADDY_CONFIG_VOLUME:-local-gamma-caddy-config}:/config
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/healthz >/dev/null 2>&1"]
       interval: 10s
@@ -630,8 +909,10 @@ services:
 
 volumes:
   local-gamma-postgres:
-  local-gamma-model-cache:
   local-gamma-mongo:
   local-gamma-redis:
   local-gamma-go-cache:
   local-gamma-es:
+  local-gamma-object-storage:
+  local-gamma-caddy-data:
+  local-gamma-caddy-config:

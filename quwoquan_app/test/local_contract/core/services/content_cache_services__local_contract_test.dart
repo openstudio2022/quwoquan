@@ -13,6 +13,23 @@ import 'package:quwoquan_app/core/services/cache/object_cache_store.dart';
 import 'package:quwoquan_app/core/services/cache/user_profile_cache_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+CachedContentRepository _cachedContentRepository({
+  required _CountingContentRepository delegate,
+  required PostObjectCacheService postCache,
+  required ContentQuerySnapshotStore querySnapshotStore,
+  UserProfileCacheService? userProfileCache,
+  Future<void> Function(String avatarUrl)? avatarPreloader,
+}) {
+  return CachedContentRepository(
+    readDelegate: delegate,
+    writeDelegate: MockContentRepository(),
+    postCache: postCache,
+    querySnapshotStore: querySnapshotStore,
+    userProfileCache: userProfileCache,
+    avatarPreloader: avatarPreloader,
+  );
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -36,7 +53,7 @@ void main() {
   group('CachedContentRepository', () {
     test('feed 查询优先请求远端，失败时才回退快照', () async {
       final delegate = _CountingContentRepository();
-      final repo = CachedContentRepository(
+      final repo = _cachedContentRepository(
         delegate: delegate,
         postCache: PostObjectCacheService(),
         querySnapshotStore: ContentQuerySnapshotStore(),
@@ -57,7 +74,7 @@ void main() {
 
     test('个人作品优先请求远端，失败时才回退快照', () async {
       final delegate = _CountingContentRepository();
-      final repo = CachedContentRepository(
+      final repo = _cachedContentRepository(
         delegate: delegate,
         postCache: PostObjectCacheService(),
         querySnapshotStore: ContentQuerySnapshotStore(),
@@ -78,7 +95,7 @@ void main() {
 
     test('post 详情命中对象缓存后不重复请求远端', () async {
       final delegate = _CountingContentRepository();
-      final repo = CachedContentRepository(
+      final repo = _cachedContentRepository(
         delegate: delegate,
         postCache: PostObjectCacheService(),
         querySnapshotStore: ContentQuerySnapshotStore(),
@@ -92,61 +109,6 @@ void main() {
       expect(delegate.detailRequestCount, 1);
     });
 
-    test('评论增删精确同步详情缓存 commentCount，无需重新请求远端', () async {
-      final delegate = _CountingContentRepository(post: _postDto('post_1'));
-      final repo = CachedContentRepository(
-        delegate: delegate,
-        postCache: PostObjectCacheService(),
-        querySnapshotStore: ContentQuerySnapshotStore(),
-      );
-
-      final initial = await repo.getPost(postId: 'post_1');
-      expect(initial.post.commentCount, 0);
-      expect(delegate.detailRequestCount, 1);
-
-      await repo.createComment(postId: 'post_1', content: '新评论');
-      final afterCreate = await repo.getPost(postId: 'post_1');
-      expect(
-        afterCreate.post.commentCount,
-        1,
-        reason: '新增评论后缓存详情 commentCount 应 +1',
-      );
-      expect(delegate.detailRequestCount, 1, reason: '精确同步缓存，不应重新请求详情');
-
-      // 回复（二级）同样计入 post 总评论数。
-      await repo.createComment(
-        postId: 'post_1',
-        content: '回复',
-        replyToCommentId: 'comment_1',
-      );
-      expect((await repo.getPost(postId: 'post_1')).post.commentCount, 2);
-
-      await repo.deleteComment(postId: 'post_1', commentId: 'comment_1');
-      final afterDelete = await repo.getPost(postId: 'post_1');
-      expect(
-        afterDelete.post.commentCount,
-        1,
-        reason: '删除评论后缓存详情 commentCount 应 -1',
-      );
-      expect(delegate.detailRequestCount, 1);
-    });
-
-    test('未命中详情缓存时评论增删不创建错误缓存', () async {
-      final delegate = _CountingContentRepository(post: _postDto('post_1'));
-      final repo = CachedContentRepository(
-        delegate: delegate,
-        postCache: PostObjectCacheService(),
-        querySnapshotStore: ContentQuerySnapshotStore(),
-      );
-
-      // 未预热详情缓存即评论 → 同步是 no-op，不得凭空写入缓存。
-      await repo.createComment(postId: 'post_1', content: '无缓存评论');
-
-      final detail = await repo.getPost(postId: 'post_1');
-      expect(detail.post.commentCount, 0, reason: '首次仍以远端权威 commentCount 为准');
-      expect(delegate.detailRequestCount, 1, reason: '同步未命中缓存时不应造出缓存项');
-    });
-
     test('feed 和详情写入时同步登记作者头像快照并预热头像资源', () async {
       final delegate = _CountingContentRepository(
         post: _postDto(
@@ -156,7 +118,7 @@ void main() {
       );
       final userCache = UserProfileCacheService();
       final preloaded = <String>[];
-      final repo = CachedContentRepository(
+      final repo = _cachedContentRepository(
         delegate: delegate,
         postCache: PostObjectCacheService(),
         querySnapshotStore: ContentQuerySnapshotStore(),
@@ -368,7 +330,7 @@ void main() {
   });
 }
 
-class _CountingContentRepository extends Fake implements ContentRepository {
+class _CountingContentRepository extends Fake implements ContentReadRepository {
   _CountingContentRepository({PostBaseDto? post})
     : post = post ?? _postDto('post_1');
 
@@ -410,43 +372,12 @@ class _CountingContentRepository extends Fake implements ContentRepository {
     return _detailPayload(postId, post: post);
   }
 
-  int createCommentCount = 0;
-  int deleteCommentCount = 0;
-
-  @override
-  Future<CommentDto> createComment({
-    required String postId,
-    required String content,
-    String? replyToCommentId,
-    List<String> attachmentMediaIds = const <String>[],
-    List<Map<String, dynamic>> mentions = const <Map<String, dynamic>>[],
-    String? subAccountId,
-    String? personaContextVersion,
-  }) async {
-    createCommentCount += 1;
-    return CommentDto.fromMap(<String, dynamic>{
-      '_id': 'comment_$createCommentCount',
-      'postId': postId,
-      'authorId': 'user_1',
-      'content': content,
-      'replyToCommentId': replyToCommentId,
-      'createdAt': DateTime.now().toIso8601String(),
-    });
-  }
-
-  @override
-  Future<void> deleteComment({
-    required String postId,
-    required String commentId,
-  }) async {
-    deleteCommentCount += 1;
-  }
-
   @override
   Future<CursorPage<PostBaseDto>> listUserPosts({
     required String userId,
     String? identity,
     String? type,
+    String? visibility,
     String? cursor,
     int limit = 20,
   }) async {

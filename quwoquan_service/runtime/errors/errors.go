@@ -13,24 +13,25 @@ type Module string
 type Kind string
 
 const (
-	ModuleGateway     Module = "GATEWAY"
-	ModuleOrch        Module = "ORCH"
-	ModuleContent     Module = "CONTENT"
-	ModuleCircle      Module = "CIRCLE"
-	ModuleEntity      Module = "ENTITY"
-	ModuleIntegration Module = "INTEGRATION"
-	ModuleUser        Module = "USER"
-	ModuleChat        Module = "CHAT"
-	ModuleRTC         Module = "RTC"
-	ModuleOps         Module = "OPS"
-	ModuleAssistant   Module = "ASSISTANT"
-	ModuleSearch      Module = "SEARCH"
-	ModuleDB          Module = "DB"
-	ModuleMQ          Module = "MQ"
-	ModuleCache       Module = "CACHE"
-	ModuleOSS         Module = "OSS"
-	ModuleCDN         Module = "CDN"
-	ModuleUnknown     Module = "UNKNOWN"
+	ModuleGateway      Module = "GATEWAY"
+	ModuleOrch         Module = "ORCH"
+	ModuleContent      Module = "CONTENT"
+	ModuleCircle       Module = "CIRCLE"
+	ModuleEntity       Module = "ENTITY"
+	ModuleIntegration  Module = "INTEGRATION"
+	ModuleUser         Module = "USER"
+	ModuleChat         Module = "CHAT"
+	ModuleRTC          Module = "RTC"
+	ModuleOps          Module = "OPS"
+	ModuleAssistant    Module = "ASSISTANT"
+	ModuleNotification Module = "NOTIFICATION"
+	ModuleSearch       Module = "SEARCH"
+	ModuleDB           Module = "DB"
+	ModuleMQ           Module = "MQ"
+	ModuleCache        Module = "CACHE"
+	ModuleOSS          Module = "OSS"
+	ModuleCDN          Module = "CDN"
+	ModuleUnknown      Module = "UNKNOWN"
 )
 
 const (
@@ -55,12 +56,14 @@ const (
 )
 
 type AppError struct {
-	Code         ErrorCode
-	UserMessage  string
-	DebugMessage string
-	Location     RuntimeErrorLocation
-	Context      RuntimeErrorContext
-	Recovery     RuntimeErrorRecovery
+	Code           ErrorCode
+	SemanticReason string
+	HTTPStatus     int
+	UserMessage    string
+	DebugMessage   string
+	Location       RuntimeErrorLocation
+	Context        RuntimeErrorContext
+	Recovery       RuntimeErrorRecovery
 }
 
 type ErrorResponse struct {
@@ -191,24 +194,25 @@ func localeFromRequest(r *http.Request) string {
 var reasonPattern = regexp.MustCompile(`^[a-z0-9_]+$`)
 
 var allowedModules = map[Module]struct{}{
-	ModuleGateway:     {},
-	ModuleOrch:        {},
-	ModuleContent:     {},
-	ModuleCircle:      {},
-	ModuleEntity:      {},
-	ModuleIntegration: {},
-	ModuleUser:        {},
-	ModuleChat:        {},
-	ModuleRTC:         {},
-	ModuleOps:         {},
-	ModuleAssistant:   {},
-	ModuleSearch:      {},
-	ModuleDB:          {},
-	ModuleMQ:          {},
-	ModuleCache:       {},
-	ModuleOSS:         {},
-	ModuleCDN:         {},
-	ModuleUnknown:     {},
+	ModuleGateway:      {},
+	ModuleOrch:         {},
+	ModuleContent:      {},
+	ModuleCircle:       {},
+	ModuleEntity:       {},
+	ModuleIntegration:  {},
+	ModuleUser:         {},
+	ModuleChat:         {},
+	ModuleRTC:          {},
+	ModuleOps:          {},
+	ModuleAssistant:    {},
+	ModuleNotification: {},
+	ModuleSearch:       {},
+	ModuleDB:           {},
+	ModuleMQ:           {},
+	ModuleCache:        {},
+	ModuleOSS:          {},
+	ModuleCDN:          {},
+	ModuleUnknown:      {},
 }
 
 var kindPattern = regexp.MustCompile(`^[A-Z][A-Z0-9_]*$`)
@@ -309,6 +313,34 @@ func (e *AppError) WithRecovery(action string, afterSeconds int) *AppError {
 	return e
 }
 
+// WithMetadata binds the stable public code to the semantic reason and HTTP
+// status declared by errors.yaml. The public code remains MODULE.KIND.REASON;
+// semantic reason is used only for transport classification and recovery.
+func (e *AppError) WithMetadata(semanticReason string, httpStatus int) *AppError {
+	if e == nil {
+		return e
+	}
+	e.SemanticReason = strings.TrimSpace(semanticReason)
+	if httpStatus >= 400 && httpStatus <= 599 {
+		e.HTTPStatus = httpStatus
+	}
+	return e
+}
+
+// WithRecoveryDirective 注入 errors.yaml 的完整恢复指令。
+func (e *AppError) WithRecoveryDirective(
+	action string,
+	disruptionLevel string,
+	afterSeconds int,
+) *AppError {
+	if e == nil {
+		return e
+	}
+	e.WithRecovery(action, afterSeconds)
+	e.Recovery.DisruptionLevel = strings.TrimSpace(disruptionLevel)
+	return e
+}
+
 func (e *AppError) WithContextAttributes(attributes ...RuntimeErrorContextAttribute) *AppError {
 	if e == nil {
 		return e
@@ -345,22 +377,33 @@ func ToResponseWithOptions(err *AppError, opts ResponseOptions) ErrorResponse {
 			debugMessage = err.DebugMessage
 		}
 	}
+	semanticReason := effectiveSemanticReason(err)
 	return ErrorResponse{
 		Code:         err.Code.String(),
 		Origin:       runtimeOriginFromCurrentKind(err.Code.Kind),
-		Nature:       runtimeNatureFromCurrentKind(err.Code.Kind, err.Code.Reason),
+		Nature:       runtimeNatureFromCurrentKind(err.Code.Kind, semanticReason),
 		UserMessage:  resolveUserMessage(err.Code, err.UserMessage, opts.Locale),
 		DebugMessage: debugMessage,
 		Module:       string(err.Code.Module),
-		Kind:         runtimeKindFromCurrent(err.Code.Kind, err.Code.Reason),
-		Reason:       err.Code.Reason,
+		Kind:         runtimeKindFromCurrent(err.Code.Kind, semanticReason),
+		Reason:       semanticReason,
 		Message:      debugMessage,
 		RequestID:    opts.RequestID,
 		TraceID:      opts.TraceID,
 		Location:     normalizeRuntimeErrorLocation(err.Location),
-		Context:      normalizeRuntimeErrorContext(err.Context, err.Code),
-		Recovery:     resolveRuntimeRecovery(err.Recovery, err.Code.Kind, err.Code.Reason),
+		Context:      normalizeRuntimeErrorContext(err.Context, err.Code, semanticReason),
+		Recovery:     resolveRuntimeRecovery(err.Recovery, err.Code.Kind, semanticReason),
 	}
+}
+
+func effectiveSemanticReason(err *AppError) string {
+	if err == nil {
+		return DefaultInternalReason
+	}
+	if reason := strings.TrimSpace(err.SemanticReason); reason != "" {
+		return reason
+	}
+	return err.Code.Reason
 }
 
 // resolveRuntimeRecovery 以 AppError 携带的恢复指令为准（来自 errors.yaml/codegen）；
@@ -422,7 +465,11 @@ func normalizeRuntimeErrorLocation(location RuntimeErrorLocation) RuntimeErrorLo
 	return location
 }
 
-func normalizeRuntimeErrorContext(context RuntimeErrorContext, code ErrorCode) RuntimeErrorContext {
+func normalizeRuntimeErrorContext(
+	context RuntimeErrorContext,
+	code ErrorCode,
+	semanticReason string,
+) RuntimeErrorContext {
 	out := RuntimeErrorContext{Attributes: make([]RuntimeErrorContextAttribute, 0, len(context.Attributes)+2)}
 	seen := map[string]struct{}{}
 	for _, attribute := range context.Attributes {
@@ -440,7 +487,7 @@ func normalizeRuntimeErrorContext(context RuntimeErrorContext, code ErrorCode) R
 		out.Attributes = append(out.Attributes, RuntimeErrorContextAttribute{Key: "module", Value: string(code.Module)})
 	}
 	if _, ok := seen["reason"]; !ok {
-		out.Attributes = append(out.Attributes, RuntimeErrorContextAttribute{Key: "reason", Value: code.Reason})
+		out.Attributes = append(out.Attributes, RuntimeErrorContextAttribute{Key: "reason", Value: semanticReason})
 	}
 	return out
 }
@@ -540,7 +587,10 @@ func HTTPStatusFromError(err *AppError) int {
 	if err == nil {
 		return http.StatusInternalServerError
 	}
-	reason := err.Code.Reason
+	if err.HTTPStatus >= 400 && err.HTTPStatus <= 599 {
+		return err.HTTPStatus
+	}
+	reason := effectiveSemanticReason(err)
 	kind := err.Code.Kind
 	if isUserLikeKind(kind) {
 		switch reason {
@@ -563,11 +613,14 @@ func HTTPStatusFromError(err *AppError) int {
 			"invalid_region",
 			"invalid_tag_ref",
 			"invalid_media_asset",
+			"interaction_type_invalid",
+			"interaction_cursor_invalid",
 			"qr_token_invalid":
 			return http.StatusBadRequest
 		case "unauthorized", "token_expired":
 			return http.StatusUnauthorized
 		case "forbidden", "original_access_denied",
+			"interaction_owner_forbidden",
 			"not_participant", "not_mutual", "blocked", "recording_not_allowed":
 			return http.StatusForbidden
 		case "not_found", "route_not_found":

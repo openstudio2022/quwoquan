@@ -22,16 +22,9 @@ redis:
 
 integration:
   external_interaction_base_url: "https://integration-service.local"
-  # alpha：完全离线 mock；社交身份与一键号码均为离线确定性 mock，不出网。
-  sms_otp:
-    pass_through_enabled: true
-    pass_through_debt_id: TECHDEBT-SMS-OTP-PASSTHROUGH-001
-    pass_through_owner: backend-team
-    pass_through_expires_at: "2026-08-31"
-    debug_reveal_enabled: true
+  otp:
+    mode: fixed_test
   social:
-    sandbox_allowlist:
-      enabled: false
     providers: {}
   one_tap:
-    resolver: dev
+    resolver: aliyun

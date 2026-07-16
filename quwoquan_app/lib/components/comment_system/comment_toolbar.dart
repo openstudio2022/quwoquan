@@ -15,7 +15,6 @@ class CommentToolbar extends StatelessWidget {
     required this.likeCount,
     required this.shareCount,
     this.isLiked = false,
-    this.isShared = false,
     this.placeholder = UITextConstants.commentPlaceholder,
     this.onInputTap,
     this.onLikeTap,
@@ -25,7 +24,6 @@ class CommentToolbar extends StatelessWidget {
   final int likeCount;
   final int shareCount;
   final bool isLiked;
-  final bool isShared;
   final String placeholder;
   final VoidCallback? onInputTap;
   final VoidCallback? onLikeTap;
@@ -129,12 +127,10 @@ class CommentToolbar extends StatelessWidget {
           SizedBox(width: AppSpacing.xs),
           _CountAction(
             buttonKey: TestKeys.shareButton,
-            icon: isShared
-                ? CupertinoIcons.arrowshape_turn_up_right_fill
-                : CupertinoIcons.arrowshape_turn_up_right,
+            icon: CupertinoIcons.arrowshape_turn_up_right,
             count: shareCount,
             zeroLabel: UITextConstants.interactionSubShares,
-            active: isShared,
+            active: false,
             onTap: onShareTap,
           ),
         ],

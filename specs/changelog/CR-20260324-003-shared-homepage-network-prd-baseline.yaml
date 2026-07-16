@@ -52,7 +52,7 @@ entries:
           - C3
           - C4
           - C5
-      - path: specs/feature-tree/shared-homepage-network/plan.yaml
+      - path: specs/feature-tree/shared-homepage-network/content.execution.planning.yaml
         sections:
           - P1
           - P2
@@ -288,13 +288,13 @@ entries:
       rollout_impact: medium
       breaking_contract: false
     notes:
-      - 本次完成的是全量 PRD 拆分，不包含 design.md 与 plan.yaml 的 Journey/Scenario 深化。
+      - 本次完成的是全量 PRD 拆分，不包含 design.md 与 content.execution.planning.yaml 的 Journey/Scenario 深化。
       - 共享主页主线现已具备直接进入 design 阶段的特性树骨架。
   - timestamp: "2026-03-24T21:10:00+08:00"
     summary: >
       完成 `shared-homepage-network` 三个 L2 Journey 的正式 `/design` 设计基线：
       为 `homepage-discovery-and-attach-journey`、`homepage-review-and-content-journey`、
-      `homepage-claim-maintain-and-offline-journey` 分别补齐 `design.md + plan.yaml`，
+      `homepage-claim-maintain-and-offline-journey` 分别补齐 `design.md + content.execution.planning.yaml`，
       并执行 G1 metadata/codegen 基线校验。
     reason: >
       全量 PRD 已完成 L1/L2/L3 拆分，但若没有 Journey 级设计与实施切片，后续 `/dev`
@@ -312,7 +312,7 @@ entries:
           - 关键设计决策
           - metadata / codegen 方案
           - TDD / ATDD 策略
-      - path: specs/feature-tree/shared-homepage-network/homepage-discovery-and-attach-journey/plan.yaml
+      - path: specs/feature-tree/shared-homepage-network/homepage-discovery-and-attach-journey/content.execution.planning.yaml
         sections:
           - P1
           - P2
@@ -325,7 +325,7 @@ entries:
           - 关键设计决策
           - metadata / codegen 方案
           - TDD / ATDD 策略
-      - path: specs/feature-tree/shared-homepage-network/homepage-review-and-content-journey/plan.yaml
+      - path: specs/feature-tree/shared-homepage-network/homepage-review-and-content-journey/content.execution.planning.yaml
         sections:
           - P1
           - P2
@@ -339,7 +339,7 @@ entries:
           - 关键设计决策
           - metadata / codegen 方案
           - TDD / ATDD 策略
-      - path: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline-journey/plan.yaml
+      - path: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline-journey/content.execution.planning.yaml
         sections:
           - P1
           - P2

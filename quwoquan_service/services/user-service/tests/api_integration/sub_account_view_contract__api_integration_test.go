@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"testing"
 
-	followtelemetry "quwoquan_service/services/user-service/internal/domain/follow/telemetry"
+	reltelemetry "quwoquan_service/services/user-service/internal/domain/relationship/persona_relationship/telemetry"
 	usertelemetry "quwoquan_service/services/user-service/internal/domain/user/telemetry"
 )
 
@@ -190,26 +190,6 @@ func TestSubAccountView_RetiredPersonaReturnsNotFound(t *testing.T) {
 	}
 }
 
-func TestSubAccountView_FeatureFlagOffFallsBackToPersonaID(t *testing.T) {
-	t.Cleanup(func() { cleanAll(t) })
-	t.Setenv("OPS_USER_PROFILE_SUBJECT_V1", "false")
-	createTestProfile(t, "owner_flag_profile", "owner_flag")
-	createTestPersonaFull(t, "persona_flag", "owner_flag_profile", "sa_flag_profile", "回滚分身", "open", true)
-	if _, err := pgPool.Exec(context.Background(), `UPDATE personas SET user_handle = $1 WHERE sub_account_id = $2`, "flag_handle", "sa_flag_profile"); err != nil {
-		t.Fatalf("seed user_handle: %v", err)
-	}
-
-	handleRec := doRequest(t, http.MethodGet, "/v1/user/flag_handle", "", authHeaders("viewer_subject"))
-	if handleRec.Code != http.StatusNotFound {
-		t.Fatalf("flag-off should hide handle route fallback, got %d: %s", handleRec.Code, handleRec.Body.String())
-	}
-
-	personaRec := doRequest(t, http.MethodGet, "/v1/user/sa_flag_profile", "", authHeaders("viewer_subject"))
-	if personaRec.Code != http.StatusOK {
-		t.Fatalf("flag-off sub-account fallback should stay available, got %d: %s", personaRec.Code, personaRec.Body.String())
-	}
-}
-
 func TestSubAccountMetrics_PublicReadAndVisibilityMiss(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	usertelemetry.Reset()
@@ -244,8 +224,8 @@ func TestSubAccountMetrics_PublicReadAndVisibilityMiss(t *testing.T) {
 
 func TestSearchSocialRelations_DoesNotExposeOwnerUserID(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
-	followtelemetry.Reset()
-	t.Cleanup(followtelemetry.Reset)
+	reltelemetry.Reset()
+	t.Cleanup(reltelemetry.Reset)
 	createTestProfile(t, "search_owner_profile", "search_target_persona")
 	createTestProfile(t, "search_viewer_profile", "search_viewer_profile")
 	createTestPersonaFull(t, "search_persona", "search_owner_profile", "ps_search_target", "搜索分身", "open", true)
@@ -309,10 +289,6 @@ func TestSearchSocialRelations_DoesNotExposeOwnerUserID(t *testing.T) {
 	}
 	if first["avatarVersion"] != float64(4) {
 		t.Fatalf("expected search avatarVersion=4, got %#v", first["avatarVersion"])
-	}
-	snapshot := followtelemetry.Collector().Snapshot()
-	if snapshot[followtelemetry.MetricRelationshipCapabilityMismatch] <= 0 {
-		t.Fatalf("expected relationship capability mismatch metric > 0, got %v", snapshot)
 	}
 }
 

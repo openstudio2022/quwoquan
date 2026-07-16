@@ -13,6 +13,15 @@ entities:
         api_exposure: read
         ops_exposure: read
 
+      - name: version
+        type: int
+        constraints: [NOT_NULL, DEFAULT_1]
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: Post 乐观并发版本；每次聚合提交原子递增
+
       - name: authorId
         type: string
         constraints: [NOT_NULL]
@@ -156,7 +165,7 @@ entities:
         ops_exposure: read
         recommend_feature: true
         tag_ref: true
-        description: 只读活动投影；仅由 semanticMentions 中 status=published 且 targetRef 合法的 tag mention 派生。旧数据无 semanticMentions 时兼容既有值
+        description: 只读活动投影；仅由 semanticMentions 中 status=published 且 targetRef 合法的 tag mention 派生
 
       - name: entityRefs
         type: "[]string"
@@ -166,7 +175,7 @@ entities:
         api_exposure: read
         ops_exposure: read
         recommend_feature: true
-        description: 只读活动投影；仅由 semanticMentions 中 status=published 且 targetRef 合法的 entity mention 派生。旧数据无 semanticMentions 时兼容既有值
+        description: 只读活动投影；仅由 semanticMentions 中 status=published 且 targetRef 合法的 entity mention 派生
 
       - name: semanticMentions
         type: "[]object"
@@ -179,6 +188,15 @@ entities:
           标题/正文/文章中的语义标注事实：
           [{mentionId,kind,surface,location,rangeStart,rangeEnd,status,candidateId,targetRef}]。
           status 支持 published/pending_review/rejected/offline；只有 published 且 targetRef 合法的项进入活动 entityRefs/tagRefs。
+
+      - name: mediaAssetIds
+        type: "[]string"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 有序 MediaAsset ID 引用；Post 不内嵌媒体对象
 
       - name: mediaUrls
         type: "[]string"
@@ -286,7 +304,7 @@ entities:
         log_policy: allow
         api_exposure: read_write
         ops_exposure: read
-        description: "文章行内实体标签列表 [{subjectType,subjectId,displayName,rangeStart,rangeEnd}]，由 QWQ Rich Markdown 派生。"
+        description: "文章行内实体标签列表 [{subjectType,subjectId,homepageId,displayName,rangeStart,rangeEnd}]，由 QWQ Rich Markdown 派生并由实体投影解析 canonical Homepage。"
 
       - name: articleTemplate
         type: enum
@@ -364,16 +382,6 @@ entities:
         ops_exposure: read
         description: 内容绑定的 canonical 共享主页 ID
 
-      - name: canonicalEntityId
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read_write
-        ops_exposure: read
-        recommend_feature: true
-        description: 内容绑定共享主页对应的数据工程实体归一 ID；与 primaryHomepageId 一一映射或为空
-
       - name: primaryHomepageType
         type: enum
         enum_ref: HomepageType
@@ -421,43 +429,6 @@ entities:
         api_exposure: read_write
         ops_exposure: read
         description: 小趣内容消费策略。inherit=遵循全局授权，exclude=排除当前内容
-
-      - name: circleId
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read_write
-        ops_exposure: read
-        recommend_feature: true
-        description: 兼容字段（记录单圈子）。新写入请使用 circleIds + groupId/nodeId 与分发表
-
-      - name: circleIds
-        type: "[]string"
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read_write
-        ops_exposure: read
-        description: 作者主动分发圈子列表（发布后可增删，最终以分发表为准）
-
-      - name: groupId
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read_write
-        ops_exposure: read
-        description: 发布归属的群组 ID（默认公共群 / 自建群 / 组织节点）
-
-      - name: nodeId
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read_write
-        ops_exposure: read
-        description: 发布归属的组织节点 ID（父节点聚合时使用）
 
       - name: sourcePostId
         type: ObjectId
@@ -532,6 +503,15 @@ entities:
         ops_exposure: read
         recommend_feature: true
 
+      - name: pinnedCommentId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read_write
+        description: 唯一置顶 Comment ID；评论本体拥有独立生命周期
+
       - name: shareCount
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
@@ -576,6 +556,15 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read_write
+
+      - name: contentDigest
+        type: string
+        constraints: [NOT_NULL]
+        classification: INTERNAL
+        log_policy: hash
+        api_exposure: none
+        ops_exposure: read
+        description: 当前可审核内容的 canonical SHA-256；PostModerationCase 必须绑定此值与 version
 
       - name: createdAt
         type: timestamp
@@ -631,885 +620,6 @@ entities:
         api_exposure: read
         ops_exposure: read
 
-  Comment:
-    description: 评论与回复（楼中楼）
-    fields:
-      - name: _id
-        type: ObjectId
-        constraints: [PK]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: postId
-        type: ObjectId
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: authorId
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 评论作者稳定公开主体 ID（subAccountId）
-
-      - name: authorDisplayNameSnapshot
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 评论作者显示名快照
-
-      - name: authorAvatarUrlSnapshot
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 评论作者头像快照
-
-      - name: ipLocation
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 评论发表时由服务端从受信代理头解析的省级 IP 属地（仅到省级，原始 IP 不落库；未知留空）
-
-      - name: personaContextVersion
-        type: int
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 发表评论时绑定的 subAccount 上下文版本
-
-      - name: content
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read_write
-        ops_exposure: read
-        search_field: true
-
-      - name: replyToCommentId
-        type: ObjectId
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read_write
-        ops_exposure: read
-        description: 被回复评论 id；回复二级评论时仍指向实际被回复项
-
-      - name: replyToUserId
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: parentCommentId
-        type: ObjectId
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 二级回复归属的一级评论 id；一级评论为空，禁止形成三级楼中楼
-
-      - name: attachmentMediaIds
-        type: "[]ObjectId"
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read_write
-        ops_exposure: read
-        description: 评论图片附件媒体 ID 列表，assetScope=comment_attachment
-
-      - name: attachments
-        type: "[]object"
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 评论附件回显快照 [{mediaId,type,url,thumbnailUrl,width,height,moderationStatus}]
-
-      - name: mentions
-        type: "[]object"
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read_write
-        ops_exposure: read
-        description: 结构化 @ 提及列表 [{subjectType,subjectId,displayName,rangeStart,rangeEnd}]
-
-      - name: entityRefs
-        type: "[]string"
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read_write
-        ops_exposure: read
-        recommend_feature: true
-        description: 评论关联实体引用；用于 comment_about_entity 关系边
-
-      - name: primaryHomepageId
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read_write
-        ops_exposure: read
-        description: 评论主要关联共享主页 ID；允许用户评论明确指向某个对象
-
-      - name: canonicalEntityId
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read_write
-        ops_exposure: read
-        recommend_feature: true
-        description: 评论主要关联数据工程实体归一 ID；由 primaryHomepageId 或 entityRefs 归一得到
-
-      - name: assistantMentioned
-        type: bool
-        constraints: [NOT_NULL, DEFAULT_FALSE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read_write
-        ops_exposure: read
-        description: 用户是否在评论中显式 @小趣，作为助手回复上下文触发条件
-
-      - name: assistantReplySource
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 小趣评论回复来源，如 user_mention、quality_boost、ops_seed
-
-      - name: assistantCorrectionStatus
-        type: enum
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read_write
-        description: 小趣回复纠错状态，如 none、pending、corrected、dismissed
-
-      - name: replyCount
-        type: int
-        constraints: [NOT_NULL, DEFAULT_0]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 回复数（用于回复折叠预览计数）
-
-      - name: replyPreview
-        type: "[]object"
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 一级评论随列表返回的二级回复预览，数量由 sys.content.comment.reply_preview_count 控制
-
-      - name: replyNextCursor
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 展开更多二级回复的不透明游标
-
-      - name: postSummary
-        type: object
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 个人评论列表回跳原内容使用的原帖摘要 {postId,contentType,title,coverUrl,status,visibility,authorId}
-
-      - name: likeCount
-        type: int
-        constraints: [NOT_NULL, DEFAULT_0]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: dislikeCount
-        type: int
-        constraints: [NOT_NULL, DEFAULT_0]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: viewerReaction
-        type: enum
-        enum_ref: CommentReactionType
-        constraints: [NOT_NULL, DEFAULT_NONE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 当前 viewer 对评论的反应状态：none/like/dislike
-
-      - name: authorLiked
-        type: bool
-        constraints: [NOT_NULL, DEFAULT_FALSE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 内容作者是否点赞过该评论（服务端派生，用于「作者赞过」标识）
-
-      - name: recommendedScore
-        type: float64
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: drop
-        api_exposure: read
-        ops_exposure: read
-        recommend_feature: true
-        description: recommended 排序的可解释分数快照，仅用于排序诊断
-
-      - name: status
-        type: enum
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read_write
-        description: visible/deleted/hidden
-
-      - name: isPinned
-        type: bool
-        constraints: [NOT_NULL, DEFAULT_FALSE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read_write
-        description: 是否被内容作者置顶（仅一级评论可置顶，置顶项排在评论区最前）
-
-      - name: pinnedAt
-        type: timestamp
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 置顶时间；用于多条置顶评论的稳定排序（按置顶时间倒序）
-
-      - name: canDelete
-        type: bool
-        constraints: [NOT_NULL, DEFAULT_FALSE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 当前 viewer 是否可删除该评论
-
-      - name: canReply
-        type: bool
-        constraints: [NOT_NULL, DEFAULT_TRUE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 当前 viewer 是否可回复该评论
-
-      - name: canReport
-        type: bool
-        constraints: [NOT_NULL, DEFAULT_TRUE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 当前 viewer 是否可举报该评论
-
-      - name: canPin
-        type: bool
-        constraints: [NOT_NULL, DEFAULT_FALSE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 当前 viewer 是否可置顶该评论（仅内容作者且为一级评论时为 true）
-
-      - name: createdAt
-        type: timestamp
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: deletedAt
-        type: timestamp
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 软删落时间戳（status=deleted 时写入，记录保留可查）；计数仍排除 deleted，支撑 GetCommentCountsDelta 的「此期间删除 M」可解释增量
-
-  MediaAsset:
-    description: 媒体资源（异步处理管线）
-    fields:
-      - name: _id
-        type: ObjectId
-        constraints: [PK]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: postId
-        type: ObjectId
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 绑定的帖子 ID；draft/cold_start 素材允许先于帖子存在，发布时再绑定
-
-      - name: ownerId
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 素材所有者，用户或系统运营账号
-
-      - name: assetScope
-        type: enum
-        enum_ref: MediaAssetScope
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: draft/published/cold_start 生命周期 scope
-
-      - name: type
-        type: enum
-        enum_ref: MediaType
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: originUrl
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: objectKey
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 对象存储 key
-
-      - name: sha256
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 原始文件 sha256
-
-      - name: sourceKind
-        type: enum
-        enum_ref: MediaAssetSourceKind
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: user_upload/ai_generated/cold_start_crawl/remote_import
-
-      - name: sourceUrl
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 冷启动或导入素材来源 URL
-
-      - name: license
-        type: object
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 授权和审计信息
-
-      - name: cdnUrl
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: thumbnailUrl
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: width
-        type: int
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: height
-        type: int
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: durationMs
-        type: int
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: fileSizeBytes
-        type: int
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: drop
-        ops_exposure: read
-
-      - name: mimeType
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: status
-        type: enum
-        enum_ref: MediaStatus
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: moderationStatus
-        type: enum
-        enum_ref: ModerationStatus
-        constraints: [NOT_NULL, DEFAULT_PENDING]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read_write
-
-      - name: derivatives
-        type: "[]object"
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 转码/缩略图衍生物
-
-      - name: dominantColor
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: lqip
-        type: object
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: contentProfile
-        type: object
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: derivativePolicyVersion
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: accessPolicy
-        type: object
-        constraints: [NULLABLE]
-        classification: INTERNAL
-        log_policy: mask
-        api_exposure: read
-        ops_exposure: read_write
-
-      - name: originalAccess
-        type: object
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: coverStrategy
-        type: enum
-        enum_ref: MediaCoverStrategy
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 视频封面策略（first_frame/manual）
-
-      - name: coverFrameTimeMs
-        type: int
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 视频封面帧时间点（毫秒），manual 时用于追溯，first_frame 默认为 0
-
-      - name: manualCoverAssetId
-        type: ObjectId
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 手工指定封面引用的媒体 ID
-
-      - name: createdAt
-        type: timestamp
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: updatedAt
-        type: timestamp
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-  ContentReaction:
-    description: 用户互动状态（幂等）
-    fields:
-      - name: _id
-        type: ObjectId
-        constraints: [PK]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: drop
-        ops_exposure: drop
-
-      - name: postId
-        type: ObjectId
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: userId
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: deviceActorId
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 隐私安全的派生设备标识（installId hash 派生，非原始设备 ID）。游客以此维度独立计数；登录用户写入时仅做关联，不与账号维度并账
-
-      - name: liked
-        type: bool
-        constraints: [NOT_NULL, DEFAULT_FALSE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: shared
-        type: bool
-        constraints: [NOT_NULL, DEFAULT_FALSE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: reported
-        type: bool
-        constraints: [NOT_NULL, DEFAULT_FALSE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: drop
-        ops_exposure: read
-
-      - name: likedAt
-        type: timestamp
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: updatedAt
-        type: timestamp
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-    unique_constraints:
-      - columns: [postId, userId]
-        description: 幂等保证（MongoDB upsert）
-
-  PostCircleDistribution:
-    description: 作者主动分发到圈子的关系（可增删）
-    fields:
-      - name: _id
-        type: ObjectId
-        constraints: [PK]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: drop
-        ops_exposure: read
-      - name: postId
-        type: ObjectId
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: ownerAuthorId
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: circleId
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: groupId
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 命中的群组上下文（默认公共群 / 自建群 / 组织节点）
-      - name: nodeId
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 命中的组织节点上下文（可与 groupId 相同或为空）
-      - name: state
-        type: enum
-        enum_ref: DistributionState
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read_write
-      - name: pinned
-        type: bool
-        constraints: [NOT_NULL, DEFAULT_FALSE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read_write
-      - name: pinnedAt
-        type: timestamp
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: featured
-        type: bool
-        constraints: [NOT_NULL, DEFAULT_FALSE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read_write
-      - name: featuredAt
-        type: timestamp
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: lastActiveAt
-        type: timestamp
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 节点 / 父节点聚合排序真相源
-      - name: createdAt
-        type: timestamp
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: updatedAt
-        type: timestamp
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-    unique_constraints:
-      - columns: [postId, circleId]
-        description: 作者主动分发在同一圈子唯一
-
-  PostCircleReshare:
-    description: 用户转发/引用到圈子的关系
-    fields:
-      - name: _id
-        type: ObjectId
-        constraints: [PK]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: drop
-        ops_exposure: read
-      - name: postId
-        type: ObjectId
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: sourcePostId
-        type: ObjectId
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: resharerUserId
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: circleId
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: quoteText
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: state
-        type: enum
-        enum_ref: DistributionState
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read_write
-      - name: createdAt
-        type: timestamp
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: updatedAt
-        type: timestamp
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-    unique_constraints:
-      - columns: [postId, circleId, resharerUserId]
-        description: 同一用户对同一内容在同一圈子唯一
 
   DeletedPostTombstone:
     description: 删除内容墓碑记录，用于 URL 访问提示已删除
@@ -1609,6 +719,27 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+      - name: counterpartSubAccountId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: counterpartDisplayName
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: counterpartAvatarUrl
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
       - name: targetSubAccountId
         type: string
         constraints: [NOT_NULL]
@@ -1633,6 +764,29 @@ entities:
         ops_exposure: read
       - name: targetContentSummary
         type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: targetKind
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: record/discussion
+      - name: targetAvailability
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: active/deleted/private/reviewing/author_deactivated
+      - name: targetReplyCount
+        type: int
         constraints: [NULLABLE]
         classification: PUBLIC
         log_policy: allow
@@ -1722,6 +876,34 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+      - name: outboundShareEventId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: shareText
+        type: string
+        constraints: [NULLABLE]
+        classification: PRIVATE
+        log_policy: redact
+        api_exposure: read
+        ops_exposure: redacted
+      - name: impactPrimaryText
+        type: string
+        constraints: [NULLABLE]
+        classification: PRIVATE
+        log_policy: redact
+        api_exposure: read
+        ops_exposure: redacted
+      - name: impactDeepLink
+        type: string
+        constraints: [NULLABLE]
+        classification: PRIVATE
+        log_policy: redact
+        api_exposure: read
+        ops_exposure: redacted
       - name: commentId
         type: string
         constraints: [NULLABLE]
@@ -1759,6 +941,27 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+      - name: occurredAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: seenAt
+        type: timestamp
+        constraints: [NULLABLE]
+        classification: PRIVATE
+        log_policy: redact
+        api_exposure: read
+        ops_exposure: redacted
+      - name: readAt
+        type: timestamp
+        constraints: [NULLABLE]
+        classification: PRIVATE
+        log_policy: redact
+        api_exposure: read
+        ops_exposure: redacted
 
   PostSearchItemView:
     description: 内容搜索结果项视图，用于全局搜索结果分组
@@ -1830,22 +1033,6 @@ entities:
         ops_exposure: read
 
       - name: authorAvatarUrl
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: circleId
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: circleName
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC

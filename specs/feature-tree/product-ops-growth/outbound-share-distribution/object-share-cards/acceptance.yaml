@@ -94,15 +94,15 @@ gwt_acceptance:
   GWT3:
     title: 可见性分级控制卡片生成
     given:
-    - 对象 visibility 为 public / circle_visible / private。
+    - 对象 visibility 为 public / private 或未知值。
     when:
     - 用户尝试生成对外卡片。
     then:
-    - public 生成完整卡；circle_visible 生成受控预览卡（隐藏正文，提示加入圈子）；private 不生成。
+    - public 生成完整卡；private 不生成；未知值严格拒绝。
     done_when:
-    - 三档可见性卡片生成行为测试通过。
+    - public/private/未知值卡片生成行为测试通过。
     edge_cases:
-    - circle_visible 海报不含正文与二维码直达内容。
+    - 已退役 visibility 不生成海报、正文或二维码。
     contract_refs:
     - specs/feature-tree/product-ops-growth/outbound-share-distribution/object-share-cards/spec.md
     performance_points: []

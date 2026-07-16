@@ -3,7 +3,8 @@ read_model: HomepageIntroduction
 
 description: |
   主页完整介绍页读模型。用户前台文案为「认识{对象名}」，禁止展示「实体介绍」等工程词。
-  内容来源为数据工程实体主页三件套或维护后台导入；sourceRefs 必须可追溯，端侧只读展示。
+  内容来源为数据工程实体主页三件套或维护后台导入；App 只消费公开 primarySource/sourceUrls，
+  内部 sourceRefs/primaryEvidenceRef 不进入客户端投影。
 
 source_entities:
   - Homepage
@@ -18,6 +19,7 @@ client_projection:
   dart_imports:
     - homepage_introduction_section.g.dart
     - homepage_related_group_summary.g.dart
+    - homepage_source.g.dart
   fields:
     - name: homepageId
       dart_type: String
@@ -67,11 +69,18 @@ client_projection:
       aliases: [relatedObjects, relatedGroups]
       list_element_dart_class: HomepageRelatedGroupSummary
 
-    - name: sourceRefs
+    - name: primarySource
+      dart_type: HomepageSource
+      nullable: true
+      source: primarySource
+      aliases: [primarySource]
+      map_from_string_key_class: HomepageSource
+
+    - name: sourceUrls
       dart_type: List<String>
       nullable: false
-      source: sourceRefs
-      aliases: [sourceRefs]
+      source: sourceUrls
+      aliases: [sourceUrls]
 
     - name: updatedAt
       dart_type: String

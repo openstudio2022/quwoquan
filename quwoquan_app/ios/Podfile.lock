@@ -64,6 +64,8 @@ PODS:
   - photo_manager (3.9.0):
     - Flutter
     - FlutterMacOS
+  - QWQVendorAlipaySDK (15.8.40.1)
+  - QWQVendorQQOpenSDK (3.6.20)
   - record_ios (2.0.0):
     - Flutter
   - share_plus (0.0.1):
@@ -88,6 +90,7 @@ PODS:
   - webview_flutter_wkwebview (0.0.1):
     - Flutter
     - FlutterMacOS
+  - WechatOpenSDK-XCFramework (2.0.5)
 
 DEPENDENCIES:
   - audio_session (from `.symlinks/plugins/audio_session/ios`)
@@ -110,6 +113,8 @@ DEPENDENCIES:
   - patrol (from `.symlinks/plugins/patrol/darwin`)
   - permission_handler_apple (from `.symlinks/plugins/permission_handler_apple/ios`)
   - photo_manager (from `.symlinks/plugins/photo_manager/darwin`)
+  - QWQVendorAlipaySDK (from `../vendor/commercial_auth/alipay/ios`)
+  - QWQVendorQQOpenSDK (from `../vendor/commercial_auth/qq/ios`)
   - record_ios (from `.symlinks/plugins/record_ios/ios`)
   - share_plus (from `.symlinks/plugins/share_plus/ios`)
   - shared_preferences_foundation (from `.symlinks/plugins/shared_preferences_foundation/darwin`)
@@ -119,6 +124,7 @@ DEPENDENCIES:
   - video_thumbnail (from `.symlinks/plugins/video_thumbnail/ios`)
   - wakelock_plus (from `.symlinks/plugins/wakelock_plus/ios`)
   - webview_flutter_wkwebview (from `.symlinks/plugins/webview_flutter_wkwebview/darwin`)
+  - WechatOpenSDK-XCFramework (= 2.0.5)
 
 SPEC REPOS:
   trunk:
@@ -126,6 +132,7 @@ SPEC REPOS:
     - CryptoSwift
     - libwebp
     - WebRTC-SDK
+    - WechatOpenSDK-XCFramework
 
 EXTERNAL SOURCES:
   audio_session:
@@ -168,6 +175,10 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/permission_handler_apple/ios"
   photo_manager:
     :path: ".symlinks/plugins/photo_manager/darwin"
+  QWQVendorAlipaySDK:
+    :path: "../vendor/commercial_auth/alipay/ios"
+  QWQVendorQQOpenSDK:
+    :path: "../vendor/commercial_auth/qq/ios"
   record_ios:
     :path: ".symlinks/plugins/record_ios/ios"
   share_plus:
@@ -211,6 +222,8 @@ SPEC CHECKSUMS:
   patrol: d49fcd015892f19189a4cec572f21f3c3358e761
   permission_handler_apple: ee2fe0fd04551b304eb002714ff067c371c822ed
   photo_manager: d8a1055c2d3ee24fc300461c66e0defdec58b3d6
+  QWQVendorAlipaySDK: 4b70402b79be6d1a42e0da6d562d4d54a711f9c8
+  QWQVendorQQOpenSDK: 97087f6c520288e3e2c1959f931ba76728a2819e
   record_ios: 41f9412c3311401689babe6d7ba69362f10b8325
   share_plus: 8b6f8b3447e494cca5317c8c3073de39b3600d1f
   shared_preferences_foundation: 5086985c1d43c5ba4d5e69a4e8083a389e2909e6
@@ -221,7 +234,8 @@ SPEC CHECKSUMS:
   wakelock_plus: 76957ab028e12bfa4e66813c99e46637f367fc7e
   WebRTC-SDK: ab9b5319e458c2bfebdc92b3600740da35d5630d
   webview_flutter_wkwebview: 29eb20d43355b48fe7d07113835b9128f84e3af4
+  WechatOpenSDK-XCFramework: ff342ae616bb86df3d236aca38059dfd4bc4a949
 
-PODFILE CHECKSUM: 9e59bcd3357f851df74026e02306d3fc02b7273c
+PODFILE CHECKSUM: 39e81972947d3011d75dbd95f0474b5914b4df94
 
 COCOAPODS: 1.16.2

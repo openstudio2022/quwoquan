@@ -6,20 +6,20 @@
 ///   ```
 ///   API_CONTRACT_ENV=gamma \
 ///   GAMMA_BASE_URL=https://gamma-api.quwoquan.com \
-///   GAMMA_TEST_AUTH_TOKEN=TOKEN \
 ///   make test-api-contract-chat
 ///
 ///   # 或直接执行本文件：
 ///   flutter test test/api_integration/cloud/chat/api_contract_runner.dart \
 ///     --dart-define=API_CONTRACT_ENV=gamma \
-///     --dart-define=API_CONTRACT_BASE_URL=... \
-///     --dart-define=TEST_AUTH_TOKEN=...
+///     --dart-define=API_CONTRACT_BASE_URL=...
 ///   ```
+///
+/// Runner 通过公开匿名登录取得短期 bearer；不接收外部 token，也不注入用户身份头。
 ///
 /// CI 策略：
 ///   - daily（gamma 可用时自动触发）
 ///   - pre-release 必须通过
-///   - gamma 不可用 → markTestSkipped，不 fail
+///   - gamma 不可用 → fail，禁止将真实端云阻断降级为 skip
 ///
 /// Mock Wall：本文件发真实 HTTP，位于 Mock Wall 右侧，禁止注入 MockRepository。
 library;
@@ -32,33 +32,27 @@ import 'package:quwoquan_app/cloud/chat/generated/chat_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 
 import '../../../support/api_contract/local_bad_certificate_overrides.dart';
+import '../../../support/api_contract/local_gamma_anonymous_session.dart';
 
 const _apiContractEnv = String.fromEnvironment(
   'API_CONTRACT_ENV',
   defaultValue: 'gamma',
 );
 const _apiBase = String.fromEnvironment('API_CONTRACT_BASE_URL');
-const _testToken = String.fromEnvironment('TEST_AUTH_TOKEN');
 const _allowBadCertificateForLocalApiContract = bool.fromEnvironment(
   'API_CONTRACT_ALLOW_BAD_CERT',
 );
-const _currentUserId = 'fixture_user_current';
-const _currentSubAccountId = 'fixture_user_current';
 
 // ─── Shared state ───────────────────────────────────────────────────────────
 
 bool _apiAvailable = false;
 late http.Client _client;
+late LocalGammaAnonymousSession _session;
 
-Map<String, String> _authHeaders(String pageId) =>
-    CloudRequestHeaders.withOwnerSubAccountContext(
-      <String, String>{
-        ...CloudRequestHeaders.forPage(pageId),
-        if (_testToken.isNotEmpty) 'Authorization': 'Bearer $_testToken',
-      },
-      ownerUserId: _currentUserId,
-      subAccountId: _currentSubAccountId,
-    );
+Map<String, String> _authHeaders(String pageId) => <String, String>{
+  ...CloudRequestHeaders.forPage(pageId),
+  'Authorization': _session.authorizationHeader,
+};
 
 /// 创建一个测试会话，返回 conversationId。
 Future<String> _seedConversation() async {
@@ -105,7 +99,6 @@ Future<Map<String, dynamic>> _sendMessage(
           'type': 'text',
           'content': 'L3 contract test message',
           'clientMsgId': clientMsgId,
-          'senderSubAccountId': _currentSubAccountId,
         }),
       )
       .timeout(const Duration(seconds: 10));
@@ -123,26 +116,24 @@ void main() {
       enabled: _allowBadCertificateForLocalApiContract,
     );
     if (_apiBase.isEmpty) {
-      markTestSkipped(
-        'L3: ${_apiContractEnv.toUpperCase()}_BASE_URL not set — all api_contract tests skipped',
-      );
-      return;
+      throw StateError('L3: ${_apiContractEnv.toUpperCase()}_BASE_URL not set');
     }
     try {
       final probe = await http
           .get(Uri.parse('$_apiBase/healthz'))
           .timeout(const Duration(seconds: 5));
       if (probe.statusCode >= 500) {
-        markTestSkipped(
-          'L3: $_apiContractEnv returned ${probe.statusCode} — tests skipped',
-        );
-        return;
+        throw StateError('L3: $_apiContractEnv returned ${probe.statusCode}');
       }
     } catch (e) {
-      markTestSkipped('L3: $_apiContractEnv unreachable ($e) — tests skipped');
-      return;
+      throw StateError('L3: $_apiContractEnv unreachable ($e)');
     }
     _client = http.Client();
+    _session = await LocalGammaAnonymousSession.login(
+      client: _client,
+      baseUrl: _apiBase,
+      subject: 'chat-api-contract-v1',
+    );
     _apiAvailable = true;
   });
 
@@ -156,14 +147,10 @@ void main() {
     late String convId;
 
     setUpAll(() async {
-      if (!_apiAvailable) return;
       convId = await _seedConversation();
     });
 
     test('GET /v1/chat/conversations 返回 200 + items 数组', () async {
-      if (!_apiAvailable) {
-        return markTestSkipped('$_apiContractEnv unavailable');
-      }
       final url = Uri.parse('$_apiBase/v1/chat/conversations?limit=5');
       final sw = Stopwatch()..start();
       final resp = await _client
@@ -203,9 +190,6 @@ void main() {
     });
 
     test('conversation 字段结构完整', () async {
-      if (!_apiAvailable) {
-        return markTestSkipped('$_apiContractEnv unavailable');
-      }
       final resp = await _client
           .get(
             Uri.parse('$_apiBase/v1/chat/conversations/$convId'),
@@ -227,14 +211,10 @@ void main() {
     late String convId;
 
     setUpAll(() async {
-      if (!_apiAvailable) return;
       convId = await _seedConversation();
     });
 
     test('发送消息返回 201 + seq + messageId', () async {
-      if (!_apiAvailable) {
-        return markTestSkipped('$_apiContractEnv unavailable');
-      }
       final sw = Stopwatch()..start();
       final result = await _sendMessage(convId, 'l3-send-001');
       sw.stop();
@@ -251,9 +231,6 @@ void main() {
     });
 
     test('相同 clientMsgId 幂等（dedup）', () async {
-      if (!_apiAvailable) {
-        return markTestSkipped('$_apiContractEnv unavailable');
-      }
       final msg1 = await _sendMessage(convId, 'l3-dedup-001');
       final msg2 = await _sendMessage(convId, 'l3-dedup-001');
 
@@ -270,9 +247,6 @@ void main() {
     });
 
     test('撤回消息返回 200 + status=recalled', () async {
-      if (!_apiAvailable) {
-        return markTestSkipped('$_apiContractEnv unavailable');
-      }
       final msg = await _sendMessage(convId, 'l3-recall-001');
       final msgId = msg['messageId'] as String;
 
@@ -295,9 +269,6 @@ void main() {
     });
 
     test('消息列表包含已发送消息', () async {
-      if (!_apiAvailable) {
-        return markTestSkipped('$_apiContractEnv unavailable');
-      }
       await _sendMessage(convId, 'l3-list-001');
 
       final resp = await _client
@@ -328,9 +299,6 @@ void main() {
     test(
       '不存在的 conversationId → 404 + CHAT.USER.conversation_not_found',
       () async {
-        if (!_apiAvailable) {
-          return markTestSkipped('$_apiContractEnv unavailable');
-        }
         final resp = await _client
             .get(
               Uri.parse(
@@ -363,7 +331,6 @@ void main() {
     late String convId;
 
     setUpAll(() async {
-      if (!_apiAvailable) return;
       convId = await _seedConversation();
       for (int i = 0; i < 5; i++) {
         await _sendMessage(convId, 'l3-sync-seed-$i');
@@ -371,9 +338,6 @@ void main() {
     });
 
     test('POST /sync 返回增量消息', () async {
-      if (!_apiAvailable) {
-        return markTestSkipped('$_apiContractEnv unavailable');
-      }
       final sw = Stopwatch()..start();
       final resp = await _client
           .post(
@@ -402,14 +366,10 @@ void main() {
     late String convId;
 
     setUpAll(() async {
-      if (!_apiAvailable) return;
       convId = await _seedConversation();
     });
 
     test('添加成员 → 成员列表包含新成员', () async {
-      if (!_apiAvailable) {
-        return markTestSkipped('$_apiContractEnv unavailable');
-      }
       final addResp = await _client
           .post(
             Uri.parse('$_apiBase/v1/chat/conversations/$convId/members'),

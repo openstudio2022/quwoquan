@@ -1,0 +1,44 @@
+id: CR-20260714-099-notification-delivery-recovery-action-contract
+title: 通知投递恢复动作强类型化
+slug: notification-delivery-recovery-action-contract
+revision: 1
+status: in_progress
+
+affected_nodes:
+  - specs/feature-tree/runtime/system-architecture-and-engineering-guide
+
+entries:
+  - timestamp: "2026-07-14T23:50:00+08:00"
+    summary: |
+      Notification delivery integration adapter 删除 `Retryable bool`，只暴露 runtime
+      `RecoveryAction` 闭集。远端 RuntimeErrorResponse 的 `recovery.action` 是第一
+      真相源；无效或缺失动作才根据 HTTP status 映射为 retry 或 surface。
+    reason: |
+      `Retryable bool` 丢失 absorb、fallback、surface、escalate 与 compensate 的恢复
+      语义，且会将远端明确的 `surface` 误判为 status 驱动的 retry。该弱类型同时违反
+      runtime-error-cutover 规则，导致 repo gate 不能证明端云错误契约一致。
+    change_type: [contract, reliability, observability, testing]
+    changed_documents:
+      - path: quwoquan_service/contracts/metadata/notification/notification_delivery_job/entity.yaml
+        sections: [capabilities, business_rules]
+      - path: quwoquan_service/services/notification-service/internal/infrastructure/integration/external_interaction_delivery_adapter.go
+        sections: [DeliveryError, decodeRemoteFailure, recoveryActionFromRemote]
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers: [local_contract, api_integration]
+      rollout_impact: controlled
+      breaking_contract: false
+      breaking_rationale: |
+        HTTP RuntimeErrorResponse 未变；内部 adapter 错误表达从无信息的布尔值改为
+        runtime 已定义的恢复动作闭集。通知 worker 仍受同一 attempt budget 管理。
+    verification:
+      completed: []
+      planned:
+        - cd quwoquan_service && go test ./services/notification-service/tests/local_contract -run TestIntegrationDeliveryAdapter -count=1
+        - cd quwoquan_service && go test ./services/notification-service/tests/api_integration -run TestNotificationDelivery -count=1
+        - cd quwoquan_service && make verify-metadata && make codegen
+        - dart quwoquan_ops/tools/runtime_error_codegen/bin/check_runtime_error_cutover.dart
+        - bash quwoquan_ops/gate/gate_repo.sh
+    remaining_blockers:
+      - 双省主页执行、Gamma 导入和动态 App UAT 仍由 R-HSE06 的真实数据准出门管理。

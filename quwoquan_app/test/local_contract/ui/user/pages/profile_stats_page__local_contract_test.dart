@@ -18,6 +18,7 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/ui/user/pages/profile_stats_page.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 class _FakeHttpOverrides extends HttpOverrides {
   @override
@@ -309,16 +310,6 @@ class _TestUserProfileRepository extends MockUserProfileRepository {
     return _paginate(_filterRows(following, query), cursor, limit);
   }
 
-  @override
-  Future<CursorPage<CircleDto>> listUserCirclesPage(
-    String userId, {
-    String? query,
-    String? cursor,
-    int limit = 20,
-  }) async {
-    return _paginate(_filterCircles(circles, query), cursor, limit);
-  }
-
   List<ProfileSocialRelationRowViewData> _filterRows(
     List<ProfileSocialRelationRowViewData> rows,
     String? query,
@@ -333,16 +324,6 @@ class _TestUserProfileRepository extends MockUserProfileRepository {
               row.username.toLowerCase().contains(normalized) ||
               row.userHandle.toLowerCase().contains(normalized);
         })
-        .toList(growable: false);
-  }
-
-  List<CircleDto> _filterCircles(List<CircleDto> items, String? query) {
-    final normalized = query?.trim().toLowerCase() ?? '';
-    if (normalized.isEmpty) {
-      return items;
-    }
-    return items
-        .where((circle) => circle.name.toLowerCase().contains(normalized))
         .toList(growable: false);
   }
 
@@ -361,6 +342,60 @@ class _TestUserProfileRepository extends MockUserProfileRepository {
       totalCount: items.length,
     );
   }
+}
+
+final class _TestCircleMembershipQuery implements CircleMembershipQuery {
+  const _TestCircleMembershipQuery(this.circles);
+
+  final List<CircleDto> circles;
+
+  @override
+  Future<CircleMembershipSlice> getMyMembership(
+    MyCircleMembershipQuery query,
+  ) => throw StateError('self membership is not used by ProfileStatsPage');
+
+  @override
+  Future<CircleMembershipPageSlice> listMemberships(
+    CircleMembershipListQuery query,
+  ) async => const CircleMembershipPageSlice(items: <CircleMembershipSlice>[]);
+
+  @override
+  Future<PersonaCirclePageSlice> listPersonaCircles(
+    PersonaCircleListQuery query,
+  ) async => PersonaCirclePageSlice(
+    items: circles
+        .take(query.limit)
+        .map(
+          (circle) => PersonaCircleSummary(
+            circleId: circle.id,
+            name: circle.name,
+            description: circle.description ?? '',
+            coverUrl: circle.coverUrl ?? '',
+            iconUrl: circle.iconUrl ?? '',
+            ownerPersonaId: circle.ownerId,
+            ownerDisplayNameSnapshot: '',
+            category: circle.category ?? '',
+            subCategory: circle.subCategory ?? '',
+            tags: circle.tags,
+            memberCount: circle.memberCount,
+            postCount: circle.postCount,
+            weeklyActiveCount: circle.weeklyActiveCount,
+            state: circle.status,
+            visibility: circle.visibility,
+            joinPolicy: circle.joinPolicy,
+            kind: circle.kind,
+            displaySubjectType: circle.displaySubjectType,
+            followEnabled: circle.followEnabled,
+            defaultPublicGroupId: circle.defaultPublicGroupId ?? '',
+            linkedHomepageId: '',
+            linkedHomepageType: '',
+            linkedHomepageTitle: '',
+            createdAt: circle.createdAt,
+            updatedAt: circle.updatedAt,
+          ),
+        )
+        .toList(growable: false),
+  );
 }
 
 UserHomepageBundleViewData _bundle({
@@ -522,6 +557,9 @@ Widget _buildTestApp({
   return ProviderScope(
     overrides: [
       userProfileRepositoryProvider.overrideWithValue(repository),
+      userProfileCircleMembershipQueryProvider.overrideWithValue(
+        _TestCircleMembershipQuery(repository.circles),
+      ),
       authSessionControllerProvider.overrideWith(
         authenticated
             ? _AuthenticatedAuthSessionController.new

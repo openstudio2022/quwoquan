@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[3]
 INVENTORY = ROOT / "quwoquan_data" / "scripts" / "verify" / "data_role_gate_inventory.json"
 DATA_AGENTS = ROOT / "quwoquan_data" / "AGENTS.md"
 CONTEXT_CONTRACT = ROOT / "docs" / "agent_context_contract.md"
-VERIFY_SCRIPT = ROOT / "quwoquan_data" / "scripts" / "verify" / "verify_quwoquan_data.sh"
+VERIFY_HANDLER = ROOT / "quwoquan_data" / "scripts" / "verify" / "handler.py"
 
 REQUIRED_ROLE_IDS = {
     "senior_software_engineer",
@@ -39,7 +39,7 @@ def main() -> int:
     seen_ids: set[str] = set()
     data_agents_text = DATA_AGENTS.read_text(encoding="utf-8")
     context_text = CONTEXT_CONTRACT.read_text(encoding="utf-8")
-    verify_text = VERIFY_SCRIPT.read_text(encoding="utf-8")
+    verify_text = VERIFY_HANDLER.read_text(encoding="utf-8")
 
     for role in roles:
         if not isinstance(role, dict):
@@ -77,8 +77,8 @@ def main() -> int:
         issues.append("quwoquan_data/AGENTS.md must keep the 数据工程七角色 section")
     if "数据工程七角色" not in context_text:
         issues.append("docs/agent_context_contract.md must reference 数据工程七角色")
-    if "verify data-role-gate" not in verify_text:
-        issues.append("verify_quwoquan_data.sh must call qwq-data verify data-role-gate")
+    if '"data-role-gate"' not in verify_text or '"all"' not in verify_text:
+        issues.append("verify handler must register data-role-gate and the canonical all gate")
 
     if issues:
         print("[verify_data_role_gate_inventory] FAIL", file=sys.stderr)

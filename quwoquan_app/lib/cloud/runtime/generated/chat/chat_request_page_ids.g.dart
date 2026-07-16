@@ -5,16 +5,13 @@ class ChatRequestPageIds {
   const ChatRequestPageIds._();
 
   static const Map<String, String> operationToPageId = <String, String>{
-    'AbortChatUpload': 'chat.abort.chat.upload',
     'AddMembers': 'chat.member.add',
     'BatchGetConversations': 'chat.conversation.batch',
-    'CompleteChatUpload': 'chat.complete.chat.upload',
     'CreateConversation': 'chat.conversation.create',
     'DissolveConversation': 'chat.conversation.dissolve',
     'GetConversation': 'chat.conversation.detail',
     'GetGroupHome': 'chat.get.group.home',
     'GetReceipts': 'chat.message.receipts',
-    'InitChatUpload': 'chat.init.chat.upload',
     'InviteAssistant': 'chat.assistant.invite',
     'ListContactHome': 'chat.list.contact.home',
     'ListContacts': 'chat.contacts.list',
@@ -42,16 +39,13 @@ class ChatRequestPageIds {
     'UpdateGroupAdmins': 'chat.admins.update',
   };
 
-  static const String abortChatUpload = 'chat.abort.chat.upload';
   static const String addMembers = 'chat.member.add';
   static const String batchGetConversations = 'chat.conversation.batch';
-  static const String completeChatUpload = 'chat.complete.chat.upload';
   static const String createConversation = 'chat.conversation.create';
   static const String dissolveConversation = 'chat.conversation.dissolve';
   static const String getConversation = 'chat.conversation.detail';
   static const String getGroupHome = 'chat.get.group.home';
   static const String getReceipts = 'chat.message.receipts';
-  static const String initChatUpload = 'chat.init.chat.upload';
   static const String inviteAssistant = 'chat.assistant.invite';
   static const String listContactHome = 'chat.list.contact.home';
   static const String listContacts = 'chat.contacts.list';

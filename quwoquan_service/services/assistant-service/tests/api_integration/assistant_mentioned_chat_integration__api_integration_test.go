@@ -8,14 +8,13 @@ import (
 	"testing"
 
 	rterr "quwoquan_service/runtime/errors"
-	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/services/assistant-service/internal/application"
 	"quwoquan_service/services/assistant-service/internal/infrastructure/chatclient"
 	"quwoquan_service/services/assistant-service/internal/infrastructure/messaging"
-	"quwoquan_service/services/assistant-service/internal/infrastructure/persistence"
 )
 
 func TestAssistantMentionedConsumerGroundsAndRepliesThroughChatHTTP(t *testing.T) {
+	resetIntegrationState(t)
 	ctx := context.Background()
 	var sentActor string
 	var sentBody map[string]any
@@ -78,18 +77,19 @@ func TestAssistantMentionedConsumerGroundsAndRepliesThroughChatHTTP(t *testing.T
 	}))
 	defer chatHTTP.Close()
 
-	redis := rtredis.NewMemoryClient()
-	service := application.NewAssistantService(
-		persistence.NewMemoryEventStore(),
-		persistence.NewMemoryConsentStore(),
-		redis,
+	service := newIntegrationAssistantService(
 		application.WithChatGroundingClient(chatclient.NewClient(chatHTTP.Client(), chatHTTP.URL)),
 	)
-	consumer := messaging.NewAssistantMentionedConsumer(redis, service, "e2e-worker", nil)
+	consumer := messaging.NewAssistantMentionedConsumer(
+		integrationRedisClient,
+		service,
+		"e2e-worker",
+		nil,
+	)
 	if err := consumer.EnsureGroup(ctx); err != nil {
 		t.Fatalf("EnsureGroup: %v", err)
 	}
-	if _, err := redis.XAdd(ctx, messaging.AssistantMentionedStream, map[string]string{
+	if _, err := integrationRedisClient.XAdd(ctx, messaging.AssistantMentionedStream, map[string]string{
 		"conversationId":    "conv-e2e",
 		"messageId":         "msg-12",
 		"seq":               "12",
@@ -122,7 +122,14 @@ func TestAssistantMentionedConsumerGroundsAndRepliesThroughChatHTTP(t *testing.T
 	if len(clientMsgID) < len("assistant-") || clientMsgID[:len("assistant-")] != "assistant-" {
 		t.Fatalf("clientMsgId=%q, want assistant-*", clientMsgID)
 	}
-	pending, err := redis.XReadGroup(ctx, messaging.AssistantMentionedConsumerGroup, "e2e-worker", map[string]string{messaging.AssistantMentionedStream: "0"}, 10, 0)
+	pending, err := integrationRedisClient.XReadGroup(
+		ctx,
+		messaging.AssistantMentionedConsumerGroup,
+		"e2e-worker",
+		map[string]string{messaging.AssistantMentionedStream: "0"},
+		10,
+		0,
+	)
 	if err != nil {
 		t.Fatalf("read pending: %v", err)
 	}

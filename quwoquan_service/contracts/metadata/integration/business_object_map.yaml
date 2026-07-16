@@ -1,0 +1,185 @@
+bounded_contexts:
+- access_policy:
+    child_objects: aggregate_root_only
+    commands: aggregate_facade_only
+    cross_context: public_contract_only
+    queries: named_reader_slice_only
+  context_id: integration.external_integration
+  name: ExternalIntegration
+  role: supporting
+decision_refs:
+- DDD-OBJ-001
+- CTX-OWNERSHIP-007
+- LEASE-009
+domain: integration
+objects:
+- access:
+    commands: aggregate_facade
+    cross_context: public_contract_only
+    queries: named_reader
+  bounded_context: ExternalIntegration
+  canonical_object: ExternalInteraction
+  event_consumers: []
+  field_roles:
+    append_only_fact: []
+    authoritative_state:
+    - requestId
+    - operation
+    - tenant
+    - env
+    - idempotencyKey
+    - callbackUrl
+    - callbackEvent
+    - payloadRef
+    - payloadDigest
+    - sensitivity
+    - status
+    - expiresAt
+    - createdAt
+    - updatedAt
+    owned_value: []
+    projection: []
+    reference: []
+    transport_only: []
+  identity:
+    fields:
+    - requestId
+    version_source: store_commit
+  invariant_refs:
+  - integration/external_interaction/aggregate.yaml#business_rules
+  lifecycle_refs:
+  - integration/external_interaction/aggregate.yaml#lifecycle
+  member_bounds: {}
+  mutation_entrypoints:
+  - PushDeliveryProviderCallback
+  - SendSmsOtp
+  - SmsOtpProviderCallback
+  - SubmitExternalInteractionRequest
+  - SubmitPushDelivery
+  object_kind: aggregate_root
+  relationships: []
+  source_document: integration/external_interaction/fields.yaml
+  source_entity: ExternalInteractionRequest
+  storage_backend: mongodb
+  storage_role: authoritative
+- access:
+    commands: append_only_sink
+    cross_context: event_only
+    queries: named_reader
+  bounded_context: ExternalIntegration
+  canonical_object: ExternalInteractionAttemptFact
+  event_consumers: []
+  field_roles:
+    append_only_fact:
+    - attemptId
+    - requestId
+    - provider
+    - providerRequestId
+    - maskedRecipient
+    - latencyMs
+    - status
+    - normalizedError
+    - recoveryAction
+    - createdAt
+    authoritative_state: []
+    owned_value: []
+    projection: []
+    reference:
+    - requestId
+    transport_only: []
+  identity:
+    fields:
+    - attemptId
+    version_source: immutable
+  invariant_refs: []
+  lifecycle_refs: []
+  member_bounds: {}
+  mutation_entrypoints: []
+  object_kind: append_only_fact
+  relationships:
+  - access: event
+    cardinality: N:1
+    consistency: eventual
+    kind: event_source
+    name: request
+    on_delete: retain
+    reference_fields:
+    - requestId
+    target_object: integration.ExternalInteraction
+  source_document: integration/external_interaction/fields.yaml
+  source_entity: ExternalInteractionAttempt
+  storage_backend: mongodb
+  storage_role: append_only
+  local_identity_reasons:
+    providerRequestId: immutable correlation or idempotency key scoped to this fact or command; it is not a business-object
+      reference
+- access:
+    commands: append_only_sink
+    cross_context: event_only
+    queries: named_reader
+  bounded_context: ExternalIntegration
+  canonical_object: ExternalInteractionDeadLetterFact
+  event_consumers: []
+  field_roles:
+    append_only_fact:
+    - deadLetterId
+    - requestId
+    - operation
+    - finalError
+    - recoveryAction
+    - createdAt
+    authoritative_state: []
+    owned_value: []
+    projection: []
+    reference:
+    - requestId
+    transport_only: []
+  identity:
+    fields:
+    - deadLetterId
+    version_source: immutable
+  invariant_refs: []
+  lifecycle_refs: []
+  member_bounds: {}
+  mutation_entrypoints: []
+  object_kind: append_only_fact
+  relationships:
+  - access: event
+    cardinality: N:1
+    consistency: eventual
+    kind: event_source
+    name: request
+    on_delete: retain
+    reference_fields:
+    - requestId
+    target_object: integration.ExternalInteraction
+  source_document: integration/external_interaction/fields.yaml
+  source_entity: ExternalInteractionDeadLetter
+  storage_backend: mongodb
+  storage_role: append_only
+- access:
+    commands: none
+    cross_context: public_contract_only
+    queries: external_port
+  bounded_context: ExternalIntegration
+  canonical_object: Location
+  event_consumers: []
+  field_roles:
+    append_only_fact: []
+    authoritative_state: []
+    owned_value: []
+    projection: []
+    reference: []
+    transport_only: []
+  identity:
+    fields:
+    - locationRef
+    version_source: external
+  invariant_refs: []
+  lifecycle_refs: []
+  member_bounds: {}
+  mutation_entrypoints: []
+  object_kind: external_reference
+  relationships: []
+  storage_backend: external
+  storage_role: external

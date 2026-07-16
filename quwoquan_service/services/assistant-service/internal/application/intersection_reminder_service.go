@@ -9,7 +9,6 @@ import (
 
 	rterr "quwoquan_service/runtime/errors"
 	rtobs "quwoquan_service/runtime/observability"
-	"quwoquan_service/services/assistant-service/internal/domain/assistant"
 )
 
 type IntersectionReminderReason struct {
@@ -69,8 +68,8 @@ func (s *AssistantService) TickIntersectionReminders(ctx context.Context, input 
 	if s.intersectionInbox == nil {
 		return IntersectionReminderTickResult{}, rterr.NewUnavailable(rterr.ModuleAssistant, "交集收件箱不可用", "intersection inbox reader is not configured")
 	}
-	if s.appMessages == nil {
-		return IntersectionReminderTickResult{}, rterr.NewUnavailable(rterr.ModuleAssistant, "应用消息通道不可用", "app message store is not configured")
+	if s.notificationMessages == nil {
+		return IntersectionReminderTickResult{}, rterr.NewUnavailable(rterr.ModuleAssistant, "应用消息通道不可用", "notification app message command writer is not configured")
 	}
 	userID := strings.TrimSpace(input.UserID)
 	if userID == "" {
@@ -105,24 +104,26 @@ func (s *AssistantService) TickIntersectionReminders(ctx context.Context, input 
 		if !s.claimIntersectionReminder(reason.ReasonID) {
 			continue
 		}
-		message, err := s.CreateAppMessage(ctx, assistant.CreateAppMessageInput{
-			UserID:      userID,
-			MessageType: "assistant",
-			Source:      "assistant/proactive_intersection",
-			SourceID:    reason.ReasonID,
-			Destination: assistant.AppMessageDestination{Type: "user", ID: userID},
-			Title:       "小趣提醒",
-			Summary:     intersectionReminderSummary(reason),
-			Target: assistant.AppMessageTarget{
+		message, err := s.publishNotificationAppMessage(ctx, NotificationAppMessageCommand{
+			IdempotencyKey: "assistant:intersection-reminder:" + reason.ReasonID,
+			UserID:         userID,
+			MessageType:    "assistant",
+			Source:         "assistant/proactive_intersection",
+			SourceID:       reason.ReasonID,
+			Destination:    NotificationAppMessageDestination{Type: "user", ID: userID},
+			Title:          "小趣提醒",
+			Summary:        intersectionReminderSummary(reason),
+			Target: NotificationAppMessageTarget{
 				TargetType: "route",
 				TargetID:   "myIntersections",
 				RouteID:    "myIntersections",
 				RoutePath:  "/profile/intersections",
-				Query:      map[string]string{"dimension": reason.Dimension},
+				Dimension:  reason.Dimension,
 			},
-			Personalized:    false,
-			MatchedSegments: []string{reason.Dimension},
-			LifecycleStage:  "intersection_new",
+			Provenance: NotificationAppMessageProvenance{
+				MatchedSegments: []string{reason.Dimension},
+				LifecycleStage:  "intersection_new",
+			},
 		})
 		if err != nil {
 			return IntersectionReminderTickResult{}, err

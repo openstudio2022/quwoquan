@@ -63,8 +63,8 @@ def main() -> int:
         errors,
     )
     require(
-        "allowGuestDismissPop: false" in following_block,
-        "关注频道登录门必须 allowGuestDismissPop=false，禁止关闭后 pop 回触发点",
+        "dismissPolicy: LoginDismissPolicy.safeFallback" in following_block,
+        "关注频道登录门必须使用 LoginDismissPolicy.safeFallback，禁止关闭后 pop 回触发点",
         errors,
     )
     require(

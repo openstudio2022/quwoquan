@@ -24,13 +24,13 @@ func IsAnonymousFallbackSubAccountID(subAccountID string) bool {
 // "direct:<actorKey>"）。真实账号 ID 不会以此前缀开头，故键空间天然不相交。
 const DeviceActorKeyPrefix = "devactor_"
 
-// reactionActorKey 解析互动（点赞/分享）去重与计数维度键：
+// ShareActorKey 解析分享去重与计数维度键：
 //   - 真实账号优先用 userID（账号维度）；
 //   - 否则用隐私安全的派生设备标识 deviceActorID（设备维度，命名空间化）；
 //   - 两者都为空时回落到单一匿名常量（无设备标识的极端兜底）。
 //
 // 账号维度与设备维度因键空间不相交而天然独立计数，登录后不并账、不迁移。
-func ReactionActorKey(userID, deviceActorID string) string {
+func ShareActorKey(userID, deviceActorID string) string {
 	if u := strings.TrimSpace(userID); u != "" {
 		return u
 	}

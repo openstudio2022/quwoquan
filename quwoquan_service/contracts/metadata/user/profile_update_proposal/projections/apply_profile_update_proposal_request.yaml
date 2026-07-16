@@ -1,0 +1,7 @@
+version: 1
+read_model: ApplyProfileUpdateProposalRequest
+description: 应用已确认提案的 optimistic concurrency request。
+source_entities: [ProfileUpdateProposal]
+consumers: [app]
+fields:
+  - { name: expectedProposalVersion, type: int }

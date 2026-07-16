@@ -1,0 +1,40 @@
+version: 1
+service:
+  name: tag-service
+  domain: tag
+  owner: taxonomy-platform
+  description: TagTaxonomyRelease 只接受 Data publish Facade 的版本化导入与激活命令。
+  commercial_defaults:
+    status: blocked
+    block_reason: Data publish Facade、Mongo Store/outbox 与投影 checkpoint 尚未完成生产装配
+    gap_id: TAG_TAXONOMY_RELEASE_WIRING
+    target_story: app-cloud-business-object-commercial-closure
+api_routes:
+  - method: POST
+    path: /internal/v1/tag/taxonomy-releases
+    operation: StageTagTaxonomyRelease
+    actor: account
+    application:
+      kind: command
+      facet: TagTaxonomyReleaseCommandFacade
+      method: stage
+      aggregate_owner: TagTaxonomyRelease
+      mutation_target: TagTaxonomyRelease
+      invariant_target: TagTaxonomyRelease
+    request_fields: [releaseId, sourceOwner, canonicalDigest, nodeCount, idempotencyKey]
+    response_entity: TagTaxonomyRelease
+    auth: required
+  - method: POST
+    path: /internal/v1/tag/taxonomy-releases/{releaseId}:activate
+    operation: ActivateTagTaxonomyRelease
+    actor: account
+    application:
+      kind: command
+      facet: TagTaxonomyReleaseCommandFacade
+      method: activate
+      aggregate_owner: TagTaxonomyRelease
+      mutation_target: TagTaxonomyRelease
+      invariant_target: TagTaxonomyRelease
+    request_fields: [expectedVersion, idempotencyKey]
+    response_entity: TagTaxonomyRelease
+    auth: required

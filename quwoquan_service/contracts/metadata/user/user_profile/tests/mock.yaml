@@ -16,11 +16,14 @@ scenarios:
   - name: error_code_mapping
     description: user 域错误码端侧映射
     cases:
-      - http_status: 404, code: USER.USER.not_found
+      - http_status: 404
+        code: USER.USER.not_found
         expected_dart_const: userNotFound
-      - http_status: 409, code: USER.USER.nickname_taken
+      - http_status: 409
+        code: USER.USER.nickname_taken
         expected_dart_const: nicknameTaken
-      - http_status: 429, code: USER.USER.rate_limited
+      - http_status: 429
+        code: USER.USER.rate_limited
         expected_dart_const: rateLimited
 
   - name: privacy_log_sanitize

@@ -9,7 +9,6 @@ from generated.models.request_response import (
     ModelScoreRequest,
     ModelScoreResponse,
 )
-from generated.models.projections import LearningEvent, ModelRegistryEntry, TrainingSample
 
 # Contract alignment with fields.yaml / Go ModelPredictRequest / OpenAPI
 req = ModelScoreRequest(scenario="content_feed", userId="u1", sessionId="s1", candidates=[])

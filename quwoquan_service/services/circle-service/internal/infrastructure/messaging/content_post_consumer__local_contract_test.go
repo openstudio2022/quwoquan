@@ -2,106 +2,96 @@ package messaging
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
+	"strconv"
 	"testing"
+	"time"
+
+	rtredis "quwoquan_service/runtime/redis"
+	placementports "quwoquan_service/services/circle-service/internal/domain/circle/circle_post_placement/ports"
 )
 
-type postCountStoreSpy struct {
-	deltas map[string]int64
+type postProjectionSpy struct {
+	events   []placementports.PostLifecycleEvent
+	fail     bool
+	attempts map[string]int64
 }
 
-func (s *postCountStoreSpy) IncrementPostCount(_ context.Context, id string, delta int64) error {
-	if s.deltas == nil {
-		s.deltas = map[string]int64{}
+func (spy *postProjectionSpy) ApplyPostLifecycle(_ context.Context, event placementports.PostLifecycleEvent) error {
+	if spy.fail {
+		return errors.New("projection unavailable")
 	}
-	s.deltas[id] += delta
+	spy.events = append(spy.events, event)
 	return nil
 }
 
-func TestContentPostConsumerIncrementsOnPublished(t *testing.T) {
-	store := &postCountStoreSpy{}
-	consumer := NewContentPostConsumer(nil, store, nil)
-
-	if err := consumer.ProcessMessage(context.Background(), ContentPostPublishedChannel, envelope("PostPublished", []string{"circle_1", "circle_2"})); err != nil {
-		t.Fatalf("ProcessMessage: %v", err)
+func (spy *postProjectionSpy) RecordPostLifecycleFailure(_ context.Context, streamID, _ string, _ error) (int64, error) {
+	if spy.attempts == nil {
+		spy.attempts = map[string]int64{}
 	}
-	if store.deltas["circle_1"] != 1 || store.deltas["circle_2"] != 1 {
-		t.Fatalf("deltas=%#v", store.deltas)
+	spy.attempts[streamID]++
+	return spy.attempts[streamID], nil
+}
+
+func (spy *postProjectionSpy) ClearPostLifecycleFailure(_ context.Context, streamID string) error {
+	delete(spy.attempts, streamID)
+	return nil
+}
+
+func TestContentPostConsumerProjectsTypedStreamFactAndAcks(t *testing.T) {
+	ctx := context.Background()
+	client := rtredis.NewMemoryClient()
+	spy := &postProjectionSpy{}
+	consumer := NewContentPostConsumer(client, spy, spy, "test", nil)
+	consumer.minIdle = 0
+	if _, err := client.XAdd(ctx, ContentPostLifecycleStream, postLifecycleValues("evt-1", 2)); err != nil {
+		t.Fatal(err)
+	}
+	if count, err := consumer.ProcessOnce(ctx); err != nil || count != 1 {
+		t.Fatalf("ProcessOnce count=%d err=%v", count, err)
+	}
+	if len(spy.events) != 1 || spy.events[0].PostID != "post-1" ||
+		spy.events[0].OwnerPersonaID != "persona-1" || spy.events[0].PostVersion != 2 {
+		t.Fatalf("typed event drift: %#v", spy.events)
+	}
+	claimed, _, err := client.XAutoClaim(ctx, ContentPostLifecycleStream, contentPostConsumerGroup, "other", 0, "0-0", 10)
+	if err != nil || len(claimed) != 0 {
+		t.Fatalf("acked message remained pending: claimed=%d err=%v", len(claimed), err)
 	}
 }
 
-func TestContentPostConsumerDecrementsOnDeleted(t *testing.T) {
-	store := &postCountStoreSpy{}
-	consumer := NewContentPostConsumer(nil, store, nil)
-
-	if err := consumer.ProcessMessage(context.Background(), ContentPostDeletedChannel, envelope("PostDeleted", []string{"circle_1"})); err != nil {
-		t.Fatalf("ProcessMessage: %v", err)
+func TestContentPostConsumerReclaimsAndDeadLettersAfterBoundedRetries(t *testing.T) {
+	ctx := context.Background()
+	client := rtredis.NewMemoryClient()
+	spy := &postProjectionSpy{fail: true}
+	consumer := NewContentPostConsumer(client, spy, spy, "test", nil)
+	consumer.minIdle = 0
+	if _, err := client.XAdd(ctx, ContentPostLifecycleStream, postLifecycleValues("evt-fail", 1)); err != nil {
+		t.Fatal(err)
 	}
-	if store.deltas["circle_1"] != -1 {
-		t.Fatalf("deltas=%#v", store.deltas)
+	for attempt := int64(1); attempt <= contentPostMaxAttempts; attempt++ {
+		_, err := consumer.ProcessOnce(ctx)
+		if attempt < contentPostMaxAttempts && err == nil {
+			t.Fatalf("attempt %d must remain failed and pending", attempt)
+		}
+		if attempt == contentPostMaxAttempts && err != nil {
+			t.Fatalf("dead-letter attempt must complete transport handling: %v", err)
+		}
 	}
-}
-
-func TestContentPostConsumerIgnoresBlankCircleIDs(t *testing.T) {
-	store := &postCountStoreSpy{}
-	consumer := NewContentPostConsumer(nil, store, nil)
-
-	if err := consumer.ProcessMessage(context.Background(), ContentPostPublishedChannel, envelope("PostPublished", []string{"", "  "})); err != nil {
-		t.Fatalf("ProcessMessage: %v", err)
+	if err := client.XGroupCreateMkStream(ctx, ContentPostLifecycleDLQ, "ops", "0"); err != nil {
+		t.Fatal(err)
 	}
-	if len(store.deltas) != 0 {
-		t.Fatalf("blank ids should be ignored: %#v", store.deltas)
-	}
-}
-
-func TestContentPostConsumerAppliesSettingsDelta(t *testing.T) {
-	store := &postCountStoreSpy{}
-	consumer := NewContentPostConsumer(nil, store, nil)
-
-	if err := consumer.ProcessMessage(context.Background(), ContentPostSettingsChannel, settingsEnvelope([]string{"circle_add"}, []string{"circle_remove"})); err != nil {
-		t.Fatalf("ProcessMessage: %v", err)
-	}
-	if store.deltas["circle_add"] != 1 || store.deltas["circle_remove"] != -1 {
-		t.Fatalf("deltas=%#v", store.deltas)
+	dlq, err := client.XReadGroup(ctx, "ops", "test", map[string]string{ContentPostLifecycleDLQ: ">"}, 10, 0)
+	if err != nil || len(dlq) != 1 || dlq[0].Values["eventId"] != "evt-fail" {
+		t.Fatalf("DLQ drift: %#v err=%v", dlq, err)
 	}
 }
 
-func TestContentPostConsumerIgnoresDraftSettingsDelta(t *testing.T) {
-	store := &postCountStoreSpy{}
-	consumer := NewContentPostConsumer(nil, store, nil)
-
-	if err := consumer.ProcessMessage(context.Background(), ContentPostSettingsChannel, settingsEnvelopeWithStatus("draft", []string{"circle_add"}, nil)); err != nil {
-		t.Fatalf("ProcessMessage: %v", err)
+func postLifecycleValues(eventID string, version int64) map[string]string {
+	return map[string]string{
+		"eventId": eventID, "eventType": "PostPublished", "aggregateType": "Post",
+		"aggregateId": "post-1", "aggregateVersion": strconv.FormatInt(version, 10),
+		"payload":    "{\"_id\":\"post-1\",\"authorId\":\"persona-1\",\"status\":\"published\"}",
+		"occurredAt": time.Date(2026, 7, 14, 9, 0, 0, 0, time.UTC).Format(time.RFC3339Nano),
 	}
-	if len(store.deltas) != 0 {
-		t.Fatalf("draft settings should not affect post count: %#v", store.deltas)
-	}
-}
-
-func envelope(eventType string, circleIDs []string) string {
-	data, _ := json.Marshal(map[string]any{
-		"payload": map[string]any{
-			"type": eventType,
-			"data": map[string]any{"status": "published", "circleIds": circleIDs},
-		},
-	})
-	return string(data)
-}
-
-func settingsEnvelope(added []string, removed []string) string {
-	return settingsEnvelopeWithStatus("published", added, removed)
-}
-
-func settingsEnvelopeWithStatus(status string, added []string, removed []string) string {
-	data, _ := json.Marshal(map[string]any{
-		"payload": map[string]any{
-			"type": "PostSettingsUpdated",
-			"data": map[string]any{
-				"status":           status,
-				"addedCircleIds":   added,
-				"removedCircleIds": removed,
-			},
-		},
-	})
-	return string(data)
 }

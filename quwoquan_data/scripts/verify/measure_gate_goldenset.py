@@ -21,8 +21,8 @@ for _path in (DATA_ROOT, SCRIPTS_ROOT):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
-from _common import quality_gates as qg  # noqa: E402
-from _common import rubric_judge as rj  # noqa: E402
+from core import quality_gates as qg  # noqa: E402
+from core import rubric_judge as rj  # noqa: E402
 
 GOLDEN_DIR = DATA_ROOT / "tests" / "support" / "fixtures" / "golden_set"
 INTERCEPT_TARGET = 0.95

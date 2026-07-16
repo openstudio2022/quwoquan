@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schemaVersion", "executionId", "objectRef", "assets"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": "quwoquan_data.homepage_media_dispositions/1"
+    },
+    "executionId": {
+      "type": "string",
+      "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(canary|m1|m2|m3)-[0-9]{3,}$"
+    },
+    "objectRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "assets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["sourceAssetRef", "sourceAssetId", "disposition", "assetId", "reason"],
+        "additionalProperties": false,
+        "properties": {
+          "sourceAssetRef": {
+            "type": "string",
+            "pattern": "^sources/.+/assets/.+"
+          },
+          "sourceAssetId": {
+            "type": "string"
+          },
+          "disposition": {
+            "enum": ["cover", "inline", "related", "policyExcluded", "duplicateAlias"]
+          },
+          "assetId": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "disposition": {
+                  "const": "policyExcluded"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "assetId": {
+                  "const": ""
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

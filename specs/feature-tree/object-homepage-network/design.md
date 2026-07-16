@@ -14,7 +14,7 @@
 | `product-ops-growth/experiment-bucketing-and-rollout` | 灰度与分桶 | `experimentBucket`、白名单、地域、版本进入 rollout 上下文 |
 | `recommendation-platform` | 实时推荐 | 消费对象页行为与关系边，做 relation-aware ranking |
 | `assistant-run-learning` | 小艺主动服务 | 消费 `ObjectPageContext`，回流 accept/dismiss |
-| 数据工程 `publish/tags` | 标签真相源 | `tagRef`、实体归一与关系边作为对象网络输入 |
+| 数据工程 `control_plane/governance/taxonomy` | 标签真相源 | `tagRef`、实体归一与关系边作为对象网络输入；`publish/tags` 仅保存发布对象引用快照 |
 
 ## 核心数据流
 

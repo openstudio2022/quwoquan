@@ -92,18 +92,6 @@ errors:
       zh: "外部交互已进入死信等待处理"
       en: "External interaction entered dead-letter queue"
 
-  - code: INTEGRATION.SYSTEM.pass_through_not_allowed
-    kind: SYSTEM
-    reason: pass_through_not_allowed
-    http_status: 500
-    recovery_action: escalate
-    dart_const: passThroughNotAllowed
-    l10n_key: externalInteractionPassThroughNotAllowed
-    go_const: ErrPassThroughNotAllowed
-    user_message:
-      zh: "正式环境禁止验证码跳过正确性校验"
-      en: "SMS pass-through is not allowed in production"
-
   - code: INTEGRATION.SYSTEM.internal_error
     kind: SYSTEM
     reason: internal_error

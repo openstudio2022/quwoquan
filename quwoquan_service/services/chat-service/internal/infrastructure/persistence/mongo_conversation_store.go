@@ -2,8 +2,10 @@ package persistence
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -11,28 +13,102 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	"quwoquan_service/services/chat-service/internal/application"
+	messagemodel "quwoquan_service/services/chat-service/internal/domain/chat/message/model"
 	model "quwoquan_service/services/chat-service/internal/domain/conversation/model"
 )
 
-// MongoChatStore implements ChatRepository backed by MongoDB.
+// MongoChatStore 以 MongoDB 实现应用层的细粒度存储端口。
 type MongoChatStore struct {
-	db            *mongo.Database
-	conversations *mongo.Collection
-	messages      *mongo.Collection
-	members       *mongo.Collection
-	userStates    *mongo.Collection
-	receipts      *mongo.Collection
+	db                     *mongo.Database
+	conversations          *mongo.Collection
+	messages               *mongo.Collection
+	members                *mongo.Collection
+	userStates             *mongo.Collection
+	messageReceipts        *mongo.Collection
+	messageCommandReceipts *mongo.Collection
+	messageSequences       *mongo.Collection
+	messageOutbox          *mongo.Collection
+	messageOutboxSequences *mongo.Collection
+	messageCheckpoints     *mongo.Collection
 }
+
+var (
+	_ application.TransactionRunner            = (*MongoChatStore)(nil)
+	_ application.ConversationStore            = (*MongoChatStore)(nil)
+	_ application.MessageStore                 = (*MongoChatStore)(nil)
+	_ application.MessageOutboxReader          = (*MongoChatStore)(nil)
+	_ application.MessageOutboxDispatchStore   = (*MongoChatStore)(nil)
+	_ application.MessageOutboxCheckpointStore = (*MongoChatStore)(nil)
+	_ application.ConversationMessageProjector = (*MongoChatStore)(nil)
+	_ application.MemberStore                  = (*MongoChatStore)(nil)
+	_ application.UserStateStore               = (*MongoChatStore)(nil)
+	_ application.ReceiptStore                 = (*MongoChatStore)(nil)
+)
 
 func NewMongoChatStore(db *mongo.Database) *MongoChatStore {
 	return &MongoChatStore{
-		db:            db,
-		conversations: db.Collection("conversations"),
-		messages:      db.Collection("messages"),
-		members:       db.Collection("conversation_members"),
-		userStates:    db.Collection("conversation_user_states"),
-		receipts:      db.Collection("message_receipts"),
+		db:                     db,
+		conversations:          db.Collection("conversations"),
+		messages:               db.Collection("messages"),
+		members:                db.Collection("conversation_memberships"),
+		userStates:             db.Collection("conversation_user_states"),
+		messageReceipts:        db.Collection("message_receipts"),
+		messageCommandReceipts: db.Collection("messages_command_receipts"),
+		messageSequences:       db.Collection("messages_sequences"),
+		messageOutbox:          db.Collection("messages_outbox"),
+		messageOutboxSequences: db.Collection("messages_outbox_sequences"),
+		messageCheckpoints:     db.Collection("messages_projection_checkpoints"),
 	}
+}
+
+func (s *MongoChatStore) EnsureIndexes(ctx context.Context) error {
+	indexSets := []struct {
+		collection *mongo.Collection
+		models     []mongo.IndexModel
+	}{
+		{s.conversations, []mongo.IndexModel{
+			{Keys: bson.D{{Key: "type", Value: 1}, {Key: "updatedAt", Value: -1}}, Options: options.Index().SetName("idx_conv_type_updated")},
+			{Keys: bson.D{{Key: "circleId", Value: 1}}, Options: options.Index().SetName("idx_conv_circle").SetSparse(true)},
+			{Keys: bson.D{{Key: "circleGroupId", Value: 1}}, Options: options.Index().SetName("idx_conv_circle_group").SetSparse(true)},
+			{Keys: bson.D{{Key: "status", Value: 1}}, Options: options.Index().SetName("idx_conv_status")},
+			{Keys: bson.D{{Key: "lastMessageTime", Value: -1}}, Options: options.Index().SetName("idx_conv_last_msg_time")},
+			{Keys: bson.D{{Key: "originRequestId", Value: 1}}, Options: options.Index().SetName("uq_conv_origin_request").SetUnique(true).SetSparse(true)},
+		}},
+		{s.messages, []mongo.IndexModel{
+			{Keys: bson.D{{Key: "conversationId", Value: 1}, {Key: "seq", Value: 1}}, Options: options.Index().SetName("uq_messages_conversation_seq").SetUnique(true)},
+			{Keys: bson.D{{Key: "conversationId", Value: 1}, {Key: "senderId", Value: 1}, {Key: "clientMsgId", Value: 1}}, Options: options.Index().SetName("uq_messages_client_message").SetUnique(true)},
+			{Keys: bson.D{{Key: "conversationId", Value: 1}, {Key: "timestamp", Value: -1}}, Options: options.Index().SetName("idx_messages_conversation_time")},
+			{Keys: bson.D{{Key: "replyToMessageId", Value: 1}}, Options: options.Index().SetName("idx_messages_reply").SetSparse(true)},
+		}},
+		{s.members, []mongo.IndexModel{
+			{Keys: bson.D{{Key: "conversationId", Value: 1}, {Key: "userId", Value: 1}}, Options: options.Index().SetName("uq_conversation_memberships_identity").SetUnique(true)},
+			{Keys: bson.D{{Key: "conversationId", Value: 1}, {Key: "role", Value: 1}, {Key: "joinedAt", Value: 1}}, Options: options.Index().SetName("idx_conversation_memberships_role_joined")},
+			{Keys: bson.D{{Key: "conversationId", Value: 1}, {Key: "displayName", Value: 1}, {Key: "userId", Value: 1}}, Options: options.Index().SetName("idx_conversation_memberships_display_name")},
+		}},
+		{s.userStates, []mongo.IndexModel{
+			{Keys: bson.D{{Key: "userId", Value: 1}, {Key: "conversationId", Value: 1}}, Options: options.Index().SetName("uq_conversation_user_states_identity").SetUnique(true)},
+			{Keys: bson.D{{Key: "userId", Value: 1}, {Key: "pinned", Value: -1}, {Key: "updatedAt", Value: -1}}, Options: options.Index().SetName("idx_conversation_user_states_inbox")},
+		}},
+		{s.messageReceipts, []mongo.IndexModel{
+			{Keys: bson.D{{Key: "messageId", Value: 1}, {Key: "userId", Value: 1}}, Options: options.Index().SetName("uq_message_receipts_identity").SetUnique(true)},
+			{Keys: bson.D{{Key: "conversationId", Value: 1}, {Key: "messageId", Value: 1}}, Options: options.Index().SetName("idx_message_receipts_conversation_message")},
+		}},
+		{s.messageCommandReceipts, []mongo.IndexModel{
+			{Keys: bson.D{{Key: "messageId", Value: 1}, {Key: "createdAt", Value: -1}}, Options: options.Index().SetName("idx_message_command_receipts_message")},
+		}},
+		{s.messageOutbox, []mongo.IndexModel{
+			{Keys: bson.D{{Key: "outboxSequence", Value: 1}}, Options: options.Index().SetName("uq_messages_outbox_sequence").SetUnique(true)},
+			{Keys: bson.D{{Key: "aggregateId", Value: 1}, {Key: "aggregateVersion", Value: 1}, {Key: "eventType", Value: 1}}, Options: options.Index().SetName("uq_messages_outbox_event").SetUnique(true)},
+			{Keys: bson.D{{Key: "status", Value: 1}, {Key: "createdAt", Value: 1}}, Options: options.Index().SetName("idx_messages_outbox_pending")},
+		}},
+	}
+	for _, set := range indexSets {
+		if _, err := set.collection.Indexes().CreateMany(ctx, set.models); err != nil {
+			return fmt.Errorf("ensure %s indexes: %w", set.collection.Name(), err)
+		}
+	}
+	return nil
 }
 
 func (s *MongoChatStore) RunInTransaction(ctx context.Context, fn func(context.Context) error) error {
@@ -149,22 +225,362 @@ func (s *MongoChatStore) ListGroupConversationsNeedingAvatar(ctx context.Context
 
 // ── Message ──────────────────────────────────────────────────────────────────
 
-func (s *MongoChatStore) CreateMessage(ctx context.Context, msg *model.Message) error {
-	_, err := s.messages.InsertOne(ctx, msg)
-	return err
+type messageCommandReceiptDocument struct {
+	ID            string               `bson:"_id"`
+	MessageID     string               `bson:"messageId"`
+	CommandDigest string               `bson:"commandDigest"`
+	Result        messagemodel.Message `bson:"result"`
+	CreatedAt     time.Time            `bson:"createdAt"`
 }
 
-func (s *MongoChatStore) FindMessageByID(ctx context.Context, id string) (*model.Message, error) {
-	var msg model.Message
+type messageOutboxDocument struct {
+	ID               string         `bson:"_id"`
+	OutboxSequence   int64          `bson:"outboxSequence"`
+	AggregateID      string         `bson:"aggregateId"`
+	AggregateVersion int64          `bson:"aggregateVersion"`
+	EventType        string         `bson:"eventType"`
+	ConversationID   string         `bson:"conversationId"`
+	ActorID          string         `bson:"actorId"`
+	Payload          map[string]any `bson:"payload"`
+	Status           string         `bson:"status"`
+	CreatedAt        time.Time      `bson:"createdAt"`
+	DispatchedAt     *time.Time     `bson:"dispatchedAt,omitempty"`
+}
+
+type messageSequenceDocument struct {
+	ID        string    `bson:"_id"`
+	Seq       int64     `bson:"seq"`
+	UpdatedAt time.Time `bson:"updatedAt"`
+}
+
+type messageOutboxSequenceDocument struct {
+	ID  string `bson:"_id"`
+	Seq int64  `bson:"seq"`
+}
+
+type messageProjectionCheckpointDocument struct {
+	ID        string    `bson:"_id"`
+	Sequence  int64     `bson:"sequence"`
+	UpdatedAt time.Time `bson:"updatedAt"`
+}
+
+func (s *MongoChatStore) CommitMessage(
+	ctx context.Context,
+	commit application.MessageCommit,
+) (application.MessageCommitResult, error) {
+	message := commit.Message
+	if strings.TrimSpace(message.ID) == "" ||
+		strings.TrimSpace(message.ConversationID) == "" ||
+		strings.TrimSpace(message.SenderID) == "" ||
+		strings.TrimSpace(message.ClientMessageID) == "" ||
+		strings.TrimSpace(commit.CommandDigest) == "" {
+		return application.MessageCommitResult{}, errors.New("message commit identity and command digest are required")
+	}
+	if message.Version != 1 {
+		return application.MessageCommitResult{}, errors.New("new message aggregate version must be 1")
+	}
+	receiptID := messageReceiptID(message)
+	if replay, ok, err := s.loadMessageCommitReplay(ctx, receiptID, commit.CommandDigest); err != nil || ok {
+		return replay, err
+	}
+
+	var result application.MessageCommitResult
+	err := s.RunInTransaction(ctx, func(txCtx context.Context) error {
+		if replay, ok, loadErr := s.loadMessageCommitReplay(txCtx, receiptID, commit.CommandDigest); loadErr != nil {
+			return loadErr
+		} else if ok {
+			result = replay
+			return nil
+		}
+		var sequence messageSequenceDocument
+		if sequenceErr := s.messageSequences.FindOneAndUpdate(
+			txCtx,
+			bson.M{"_id": message.ConversationID},
+			bson.M{
+				"$inc": bson.M{"seq": 1},
+				"$set": bson.M{"updatedAt": message.Timestamp.UTC()},
+			},
+			options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After),
+		).Decode(&sequence); sequenceErr != nil {
+			return sequenceErr
+		}
+		message.Seq = sequence.Seq
+		events := bindMessageOutboxEvents(message, commit.Events)
+		outboxSequenceStart := int64(0)
+		if len(events) > 0 {
+			var outboxSequence messageOutboxSequenceDocument
+			if sequenceErr := s.messageOutboxSequences.FindOneAndUpdate(
+				txCtx,
+				bson.M{"_id": "Message"},
+				bson.M{"$inc": bson.M{"seq": len(events)}},
+				options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After),
+			).Decode(&outboxSequence); sequenceErr != nil {
+				return sequenceErr
+			}
+			outboxSequenceStart = outboxSequence.Seq - int64(len(events)) + 1
+		}
+		if _, insertErr := s.messages.InsertOne(txCtx, message); insertErr != nil {
+			return insertErr
+		}
+		if _, insertErr := s.messageCommandReceipts.InsertOne(txCtx, messageCommandReceiptDocument{
+			ID:            receiptID,
+			MessageID:     message.ID,
+			CommandDigest: commit.CommandDigest,
+			Result:        message,
+			CreatedAt:     message.Timestamp.UTC(),
+		}); insertErr != nil {
+			return insertErr
+		}
+		for index, event := range events {
+			if strings.TrimSpace(event.EventID) == "" ||
+				strings.TrimSpace(event.EventType) == "" ||
+				event.ConversationID != message.ConversationID ||
+				event.ActorID != message.SenderID {
+				return errors.New("message outbox event does not match aggregate commit")
+			}
+			if _, insertErr := s.messageOutbox.InsertOne(txCtx, messageOutboxDocument{
+				ID:               event.EventID,
+				OutboxSequence:   outboxSequenceStart + int64(index),
+				AggregateID:      message.ID,
+				AggregateVersion: message.Version,
+				EventType:        event.EventType,
+				ConversationID:   event.ConversationID,
+				ActorID:          event.ActorID,
+				Payload:          event.Payload,
+				Status:           "pending",
+				CreatedAt:        message.Timestamp.UTC(),
+			}); insertErr != nil {
+				return insertErr
+			}
+		}
+		result = application.MessageCommitResult{Message: message, Events: events}
+		return nil
+	})
+	if mongo.IsDuplicateKeyError(err) {
+		if replay, ok, loadErr := s.loadMessageCommitReplay(ctx, receiptID, commit.CommandDigest); loadErr != nil || ok {
+			return replay, loadErr
+		}
+	}
+	return result, err
+}
+
+func bindMessageOutboxEvents(
+	message messagemodel.Message,
+	events []application.MessageOutboxEvent,
+) []application.MessageOutboxEvent {
+	bound := make([]application.MessageOutboxEvent, 0, len(events))
+	for _, event := range events {
+		payload := make(map[string]any, len(event.Payload)+3)
+		for key, value := range event.Payload {
+			payload[key] = value
+		}
+		payload["messageId"] = message.ID
+		payload["seq"] = message.Seq
+		payload["timestamp"] = message.Timestamp.UTC()
+		event.Payload = payload
+		event.Status = "pending"
+		bound = append(bound, event)
+	}
+	return bound
+}
+
+func (s *MongoChatStore) MarkMessageOutboxDispatched(
+	ctx context.Context,
+	eventID string,
+	dispatchedAt time.Time,
+) error {
+	result, err := s.messageOutbox.UpdateOne(
+		ctx,
+		bson.M{"_id": strings.TrimSpace(eventID), "status": "pending"},
+		bson.M{"$set": bson.M{"status": "dispatched", "dispatchedAt": dispatchedAt.UTC()}},
+	)
+	if err != nil {
+		return err
+	}
+	if result.MatchedCount == 0 {
+		var existing messageOutboxDocument
+		if err := s.messageOutbox.FindOne(ctx, bson.M{"_id": strings.TrimSpace(eventID), "status": "dispatched"}).Decode(&existing); err == nil {
+			return nil
+		}
+		return fmt.Errorf("message outbox event %s is not pending", eventID)
+	}
+	return nil
+}
+
+func (s *MongoChatStore) ReadMessageOutboxAfter(
+	ctx context.Context,
+	checkpoint string,
+	limit int,
+) ([]application.MessageOutboxEvent, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 1000 {
+		limit = 1000
+	}
+	filter := bson.M{}
+	if strings.TrimSpace(checkpoint) != "" {
+		sequence, err := parseMessageOutboxCheckpoint(checkpoint)
+		if err != nil {
+			return nil, err
+		}
+		filter["outboxSequence"] = bson.M{"$gt": sequence}
+	}
+	cursor, err := s.messageOutbox.Find(
+		ctx,
+		filter,
+		options.Find().
+			SetSort(bson.D{{Key: "outboxSequence", Value: 1}}).
+			SetLimit(int64(limit)),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("read message outbox: %w", err)
+	}
+	defer cursor.Close(ctx)
+
+	events := make([]application.MessageOutboxEvent, 0, limit)
+	for cursor.Next(ctx) {
+		var document messageOutboxDocument
+		if err := cursor.Decode(&document); err != nil {
+			return nil, fmt.Errorf("decode message outbox: %w", err)
+		}
+		events = append(events, messageOutboxEventFromDocument(document))
+	}
+	if err := cursor.Err(); err != nil {
+		return nil, fmt.Errorf("iterate message outbox: %w", err)
+	}
+	return events, nil
+}
+
+func (s *MongoChatStore) LoadMessageOutboxCheckpoint(
+	ctx context.Context,
+	consumer string,
+) (string, error) {
+	consumer = strings.TrimSpace(consumer)
+	if consumer == "" {
+		return "", errors.New("message outbox consumer is required")
+	}
+	var document messageProjectionCheckpointDocument
+	err := s.messageCheckpoints.FindOne(ctx, bson.M{"_id": "message:" + consumer}).Decode(&document)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("load message outbox checkpoint: %w", err)
+	}
+	if document.Sequence <= 0 {
+		return "", nil
+	}
+	return strconv.FormatInt(document.Sequence, 10), nil
+}
+
+func (s *MongoChatStore) SaveMessageOutboxCheckpoint(
+	ctx context.Context,
+	consumer string,
+	checkpoint string,
+) error {
+	consumer = strings.TrimSpace(consumer)
+	if consumer == "" {
+		return errors.New("message outbox consumer is required")
+	}
+	sequence, err := parseMessageOutboxCheckpoint(checkpoint)
+	if err != nil {
+		return err
+	}
+	_, err = s.messageCheckpoints.UpdateOne(
+		ctx,
+		bson.M{"_id": "message:" + consumer},
+		bson.M{
+			"$max": bson.M{"sequence": sequence},
+			"$set": bson.M{"updatedAt": time.Now().UTC()},
+		},
+		options.UpdateOne().SetUpsert(true),
+	)
+	if err != nil {
+		return fmt.Errorf("save message outbox checkpoint: %w", err)
+	}
+	return nil
+}
+
+func parseMessageOutboxCheckpoint(checkpoint string) (int64, error) {
+	sequence, err := strconv.ParseInt(strings.TrimSpace(checkpoint), 10, 64)
+	if err != nil || sequence <= 0 {
+		return 0, errors.New("invalid message outbox checkpoint")
+	}
+	return sequence, nil
+}
+
+func messageOutboxEventFromDocument(document messageOutboxDocument) application.MessageOutboxEvent {
+	return application.MessageOutboxEvent{
+		EventID:        document.ID,
+		EventType:      document.EventType,
+		ConversationID: document.ConversationID,
+		ActorID:        document.ActorID,
+		Payload:        document.Payload,
+		Status:         document.Status,
+		Checkpoint:     strconv.FormatInt(document.OutboxSequence, 10),
+	}
+}
+
+func (s *MongoChatStore) loadMessageCommitReplay(
+	ctx context.Context,
+	receiptID string,
+	commandDigest string,
+) (application.MessageCommitResult, bool, error) {
+	var receipt messageCommandReceiptDocument
+	if err := s.messageCommandReceipts.FindOne(ctx, bson.M{"_id": receiptID}).Decode(&receipt); err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return application.MessageCommitResult{}, false, nil
+		}
+		return application.MessageCommitResult{}, false, err
+	}
+	if receipt.CommandDigest != commandDigest {
+		return application.MessageCommitResult{}, false, messagemodel.ErrMessageIdempotencyConflict
+	}
+	cursor, err := s.messageOutbox.Find(
+		ctx,
+		bson.M{"aggregateId": receipt.MessageID, "status": "pending"},
+		options.Find().SetSort(bson.D{{Key: "createdAt", Value: 1}, {Key: "_id", Value: 1}}),
+	)
+	if err != nil {
+		return application.MessageCommitResult{}, false, err
+	}
+	defer cursor.Close(ctx)
+	events := make([]application.MessageOutboxEvent, 0)
+	for cursor.Next(ctx) {
+		var document messageOutboxDocument
+		if err := cursor.Decode(&document); err != nil {
+			return application.MessageCommitResult{}, false, err
+		}
+		events = append(events, messageOutboxEventFromDocument(document))
+	}
+	if err := cursor.Err(); err != nil {
+		return application.MessageCommitResult{}, false, err
+	}
+	return application.MessageCommitResult{Message: receipt.Result, Events: events, Replayed: true}, true, nil
+}
+
+func messageReceiptID(message messagemodel.Message) string {
+	sum := sha256.Sum256([]byte(
+		message.ConversationID + "\x00" + message.SenderID + "\x00" + message.ClientMessageID,
+	))
+	return fmt.Sprintf("message-receipt:%x", sum[:])
+}
+
+func (s *MongoChatStore) FindMessageByID(ctx context.Context, id string) (*messagemodel.Message, error) {
+	var msg messagemodel.Message
 	err := s.messages.FindOne(ctx, bson.M{"_id": id}).Decode(&msg)
 	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, fmt.Errorf("%w: %s", messagemodel.ErrMessageNotFound, id)
+		}
 		return nil, fmt.Errorf("message not found: %w", err)
 	}
 	return &msg, nil
 }
 
-func (s *MongoChatStore) FindMessageByClientMsgId(ctx context.Context, conversationId, clientMsgId string) (*model.Message, error) {
-	var msg model.Message
+func (s *MongoChatStore) FindMessageByClientMsgID(ctx context.Context, conversationId, clientMsgId string) (*messagemodel.Message, error) {
+	var msg messagemodel.Message
 	err := s.messages.FindOne(ctx, bson.M{
 		"conversationId": conversationId,
 		"clientMsgId":    clientMsgId,
@@ -175,7 +591,7 @@ func (s *MongoChatStore) FindMessageByClientMsgId(ctx context.Context, conversat
 	return &msg, nil
 }
 
-func (s *MongoChatStore) ListMessages(ctx context.Context, conversationId string, limit int, afterSeq, beforeSeq int64) ([]model.Message, error) {
+func (s *MongoChatStore) ListMessages(ctx context.Context, conversationId string, limit int, afterSeq, beforeSeq int64) ([]messagemodel.Message, error) {
 	if limit <= 0 {
 		limit = 20
 	}
@@ -202,7 +618,7 @@ func (s *MongoChatStore) ListMessages(ctx context.Context, conversationId string
 	}
 	defer cur.Close(ctx)
 
-	var msgs []model.Message
+	var msgs []messagemodel.Message
 	if err := cur.All(ctx, &msgs); err != nil {
 		return nil, err
 	}
@@ -222,6 +638,43 @@ func (s *MongoChatStore) SetMessageRecalled(ctx context.Context, id string) erro
 		"$set": bson.M{"status": "recalled", "recalledAt": now},
 	})
 	return err
+}
+
+func (s *MongoChatStore) ProjectCommittedMessage(ctx context.Context, message messagemodel.Message) error {
+	preview := message.PreviewText()
+	result, err := s.conversations.UpdateOne(
+		ctx,
+		bson.M{
+			"_id": message.ConversationID,
+			"$or": bson.A{
+				bson.M{"maxSeq": bson.M{"$exists": false}},
+				bson.M{"maxSeq": bson.M{"$lt": message.Seq}},
+			},
+		},
+		bson.M{
+			"$set": bson.M{
+				"maxSeq":             message.Seq,
+				"lastMessageId":      message.ID,
+				"lastMessagePreview": preview,
+				"lastMessageTime":    message.Timestamp.UTC(),
+				"updatedAt":          message.Timestamp.UTC(),
+			},
+			"$inc": bson.M{"messageCount": 1},
+		},
+	)
+	if err != nil {
+		return err
+	}
+	if result.MatchedCount == 0 {
+		var conversation model.Conversation
+		if err := s.conversations.FindOne(ctx, bson.M{"_id": message.ConversationID}).Decode(&conversation); err != nil {
+			return err
+		}
+		if conversation.MaxSeq < message.Seq {
+			return fmt.Errorf("conversation %s message projection did not advance to seq %d", message.ConversationID, message.Seq)
+		}
+	}
+	return nil
 }
 
 // ── Member ───────────────────────────────────────────────────────────────────
@@ -246,6 +699,9 @@ func (s *MongoChatStore) FindMember(ctx context.Context, conversationId, userId 
 		"userId":         userId,
 	}).Decode(&member)
 	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, fmt.Errorf("%w: conversation=%s persona=%s", model.ErrMemberNotFound, conversationId, userId)
+		}
 		return nil, err
 	}
 	return &member, nil
@@ -284,24 +740,28 @@ func (s *MongoChatStore) UpdateMemberRole(ctx context.Context, conversationId, u
 	return err
 }
 
-func (s *MongoChatStore) ListMembers(ctx context.Context, conversationId string, limit int, cursor, role, sort string) ([]model.ConversationMember, error) {
-	if limit <= 0 {
-		limit = 20
+func (s *MongoChatStore) ListMembers(
+	ctx context.Context,
+	conversationId string,
+	query application.ListMembersQuery,
+) ([]model.ConversationMember, error) {
+	if query.Limit <= 0 {
+		query.Limit = 20
 	}
 
-	sortMode := NormalizeMemberListSort(sort)
+	sortMode := application.NormalizeMemberListSort(string(query.Sort))
 	base := bson.M{"conversationId": conversationId}
-	if role != "" {
-		base["role"] = role
+	if query.Role != "" {
+		base["role"] = query.Role
 	}
 
 	var cursorFilter bson.M
 	var err error
 	switch sortMode {
-	case SortMembersDisplayNameAsc:
-		cursorFilter, err = memberListCursorFilterDisplayName(cursor)
+	case application.MemberListSortDisplayNameAsc:
+		cursorFilter, err = memberListCursorFilterDisplayName(query.Cursor)
 	default:
-		cursorFilter, err = memberListCursorFilterJoined(cursor)
+		cursorFilter, err = memberListCursorFilterJoined(query.Cursor)
 	}
 	if err != nil {
 		return nil, err
@@ -316,7 +776,7 @@ func (s *MongoChatStore) ListMembers(ctx context.Context, conversationId string,
 
 	var sortDoc bson.D
 	switch sortMode {
-	case SortMembersDisplayNameAsc:
+	case application.MemberListSortDisplayNameAsc:
 		sortDoc = bson.D{
 			{Key: "displayName", Value: 1},
 			{Key: "userId", Value: 1},
@@ -330,7 +790,7 @@ func (s *MongoChatStore) ListMembers(ctx context.Context, conversationId string,
 
 	opts := options.Find().
 		SetSort(sortDoc).
-		SetLimit(int64(limit))
+		SetLimit(int64(query.Limit))
 
 	cur, err := s.members.Find(ctx, filter, opts)
 	if err != nil {
@@ -486,19 +946,19 @@ func (s *MongoChatStore) FindDirectConversationBetween(ctx context.Context, memb
 
 // ── Receipts ─────────────────────────────────────────────────────────────────
 
-func (s *MongoChatStore) CreateReceipt(ctx context.Context, receipt *model.MessageReceipt) error {
-	_, err := s.receipts.InsertOne(ctx, receipt)
+func (s *MongoChatStore) CreateReceipt(ctx context.Context, receipt *messagemodel.MessageReceipt) error {
+	_, err := s.messageReceipts.InsertOne(ctx, receipt)
 	return err
 }
 
-func (s *MongoChatStore) ListReceiptsByMessage(ctx context.Context, messageId string) ([]model.MessageReceipt, error) {
-	cur, err := s.receipts.Find(ctx, bson.M{"messageId": messageId})
+func (s *MongoChatStore) ListReceiptsByMessage(ctx context.Context, messageId string) ([]messagemodel.MessageReceipt, error) {
+	cur, err := s.messageReceipts.Find(ctx, bson.M{"messageId": messageId})
 	if err != nil {
 		return nil, err
 	}
 	defer cur.Close(ctx)
 
-	var receipts []model.MessageReceipt
+	var receipts []messagemodel.MessageReceipt
 	if err := cur.All(ctx, &receipts); err != nil {
 		return nil, err
 	}

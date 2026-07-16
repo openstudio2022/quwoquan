@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_action_hint.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_visual.g.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_statement_synthesizer.dart';
@@ -40,6 +41,7 @@ class ObjectIntersectionCard extends StatefulWidget {
     this.onActionHintTap,
     this.onMoreTap,
     this.highlightKind,
+    this.contextObjectTarget,
   });
 
   static const Key cardKey = ValueKey<String>('object-intersection-card');
@@ -65,6 +67,7 @@ class ObjectIntersectionCard extends StatefulWidget {
   final void Function(IntersectionReason reason, IntersectionActionHint hint)?
   onActionHintTap;
   final VoidCallback? onMoreTap;
+  final IntersectionTarget? contextObjectTarget;
 
   /// 旅程高亮（§7.3）：从 post 作者徽标跳入时携带的最强证据组 kind；
   /// 命中时该行高亮并默认展开（即便它在折叠区之外），让旅程无断点。
@@ -87,10 +90,16 @@ class ObjectIntersectionCard extends StatefulWidget {
     onActionHintTap,
     VoidCallback? onMoreTap,
     String? highlightKind,
+    IntersectionTarget? contextObjectTarget,
     Key? key,
   }) {
     final usable = (reasons ?? const <IntersectionReason>[])
-        .map(displayReadyIntersectionReason)
+        .map(
+          (reason) => displayReadyIntersectionReason(
+            reason,
+            contextObjectTarget: contextObjectTarget,
+          ),
+        )
         .whereType<IntersectionReason>()
         .toList(growable: false);
     if (usable.isEmpty) return null;
@@ -108,6 +117,7 @@ class ObjectIntersectionCard extends StatefulWidget {
       onActionHintTap: onActionHintTap,
       onMoreTap: onMoreTap,
       highlightKind: highlightKind,
+      contextObjectTarget: contextObjectTarget,
     );
   }
 
@@ -134,7 +144,12 @@ class _ObjectIntersectionCardState extends State<ObjectIntersectionCard> {
     );
 
     final rows = widget.reasons
-        .map(displayReadyIntersectionReason)
+        .map(
+          (reason) => displayReadyIntersectionReason(
+            reason,
+            contextObjectTarget: widget.contextObjectTarget,
+          ),
+        )
         .whereType<IntersectionReason>()
         .map(_IntersectionRow.new)
         .toList(growable: false);
@@ -194,6 +209,7 @@ class _ObjectIntersectionCardState extends State<ObjectIntersectionCard> {
                   _EvidenceRow(
                     row: visible[i],
                     isPrimary: i == 0,
+                    contextObjectTarget: widget.contextObjectTarget,
                     highlighted:
                         highlight.isNotEmpty &&
                         visible[i].matchesHighlight(highlight),
@@ -332,6 +348,7 @@ class _EvidenceRow extends StatelessWidget {
   const _EvidenceRow({
     required this.row,
     required this.isPrimary,
+    this.contextObjectTarget,
     this.onTap,
     this.onSpanTap,
     this.onVisualTap,
@@ -341,6 +358,7 @@ class _EvidenceRow extends StatelessWidget {
 
   final _IntersectionRow row;
   final bool isPrimary;
+  final IntersectionTarget? contextObjectTarget;
   final VoidCallback? onTap;
   final void Function(IntersectionTextSpan span)? onSpanTap;
   final void Function(IntersectionVisual visual)? onVisualTap;
@@ -351,7 +369,10 @@ class _EvidenceRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final reason = displayReadyIntersectionReason(row.reason);
+    final reason = displayReadyIntersectionReason(
+      row.reason,
+      contextObjectTarget: contextObjectTarget,
+    );
     if (reason == null) {
       return const SizedBox.shrink();
     }
@@ -369,7 +390,7 @@ class _EvidenceRow extends StatelessWidget {
         onTap: onTap,
         spans: reason.primarySpans,
         visuals: reason.sampleVisuals,
-        onSpanTap: onSpanTap,
+        onSpanTap: onSpanTap ?? (onTap == null ? null : (_) => onTap!()),
         onVisualTap: onVisualTap,
         iconKey: reason.iconKey,
         sourceRef: resolvedIntersectionReasonKind(reason),

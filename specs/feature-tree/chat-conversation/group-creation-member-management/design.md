@@ -144,7 +144,7 @@
 ### KD-11：推送合并与拉取
 
 - 对外实时主事件：**`ConversationRosterUpdated`**，合并窗口 **50–100ms**（可配置），窗口内多条变更合并为 **一条** 推送，payload 携带最新 `membersRosterRevision`、`updatedAt`、`aspects`。
-- `MemberJoined`/`MemberLeft` 保留域内/审计；客户端主路径迁移至 `ConversationRosterUpdated`。
+- `ConversationMemberAdded`/`ConversationMemberRemoved` 保留域内/审计；客户端主路径迁移至 `ConversationRosterUpdated`。
 - 拉取：`ListConversationTimestamps` / `GetConversation` 与 `updatedAt` 对齐；revision 变化则定点 `ListMembers` + 必要设置接口。
 
 ### KD-12：建群事务 vs 并发更新
@@ -177,7 +177,7 @@
 - `contracts/metadata/messages/conversation/fields.yaml`
   - `Conversation.membersRosterRevision`
 - `contracts/metadata/messages/conversation/events.yaml`
-  - `ConversationRosterUpdated`（合并推送）；`MemberJoined` 标注为域内/审计向
+  - `ConversationRosterUpdated`（合并推送）；`ConversationMemberAdded` 标注为域内/审计向
 - `contracts/metadata/_shared/types.yaml`
   - `MemberListSort` 枚举
 

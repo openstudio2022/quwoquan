@@ -224,7 +224,7 @@ func TestProjectorIgnoresUnrelatedEvents(t *testing.T) {
 	f := newFakeES()
 	proj := newProjectorWithFakeES(t, f, fakeReader{byID: map[string]model.UserProfile{profile.UserID: profile}})
 
-	for _, et := range []string{"UserFollowed", "UserBlocked", "SomethingElse"} {
+	for _, et := range []string{"PersonaFollowStateChanged", "PersonaBlocked", "SomethingElse"} {
 		if err := proj.PublishUserEvent(context.Background(), et, profile.UserID, profile.UserID, nil); err != nil {
 			t.Fatalf("PublishUserEvent(%s) err=%v", et, err)
 		}

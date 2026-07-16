@@ -1,0 +1,87 @@
+version: 1
+aggregate: CredentialBinding
+
+entities:
+  CredentialBinding:
+    description: 第三方凭证绑定（phone/wechat/alipay/qq/apple/passkey 并行，每种类型各最多 1 个绑定到同一 OwnerAccount；不同类型可同时绑定）
+    cache_excluded: true
+    fields:
+      - name: id
+        type: string
+        constraints: [PK]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: ownerId
+        type: string
+        constraints: [FK_user_profiles_CASCADE, NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+        description: 归属的主控账号 ID
+
+      - name: credentialType
+        type: enum
+        enum_ref: CredentialType
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: "凭证类型：phone / carrier_phone / wechat / alipay / qq / apple / passkey"
+
+      - name: credentialKey
+        type: string
+        constraints: [NOT_NULL]
+        classification: SECRET
+        log_policy: drop
+        api_exposure: drop
+        ops_exposure: drop
+        description: 凭证唯一标识（手机号哈希/微信UnionID/Apple SubjectID/passkey credentialId）
+
+      - name: displayLabel
+        type: string
+        constraints: [NULLABLE]
+        classification: PII
+        log_policy: mask
+        api_exposure: read
+        ops_exposure: mask
+        description: 用户可见的凭证标签（手机号脱敏显示，如 138****8888）
+
+      - name: isActive
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_TRUE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: boundAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: lastUsedAt
+        type: timestamp
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+    unique_constraints:
+      - columns: [credentialType, credentialKey]
+        description: 同一凭证不能绑定两个 OwnerAccount（全局唯一）
+      - columns: [ownerId, credentialType]
+        description: 同一 OwnerAccount 每种凭证最多一个
+
+    enums:
+      CredentialType:
+        values: [phone, carrier_phone, wechat, alipay, qq, apple, passkey, anonymous_device]
+        description: 支持的第三方凭证类型

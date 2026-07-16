@@ -5,10 +5,6 @@ resources:
   # 应用平面
   - ../../../../quwoquan_service/services/seed-box/deploy/kustomize/overlays/prod
   - ../../../../quwoquan_service/services/recommendation-service/deploy/kustomize/overlays/prod
-  # 管理/运营/运维面（独立发布 workload）
-  - ../../../../quwoquan_service/services/product-ops-service/deploy/kustomize/overlays/prod
   # 实时/媒体平面（从第一天即独立 workload）
-  - ../../../../quwoquan_service/services/realtime-gateway/deploy/kustomize/overlays/prod
-  - ../../../../quwoquan_service/services/rtc-service/deploy/kustomize/overlays/prod
   - ../../../../quwoquan_service/services/livekit-sfu/deploy/kustomize/overlays/prod
   - ../../../../quwoquan_service/services/coturn/deploy/kustomize/overlays/prod

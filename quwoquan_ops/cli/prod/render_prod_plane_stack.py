@@ -3,22 +3,32 @@ from __future__ import annotations
 
 import argparse
 import copy
+import hashlib
 import json
 import os
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
+
+ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from quwoquan_ops.cli.lib.output_paths import output_root as resolve_output_root
+from quwoquan_ops.cli.lib.output_paths import service_release_dir
+from quwoquan_ops.cli.lib.output_paths import target_process_dir
+from quwoquan_ops.cli.lib.output_paths import target_local_dir as resolve_target_local_dir
 
 try:
     import yaml
 except ImportError:  # pragma: no cover
     raise SystemExit("FAIL: PyYAML required")
 
-ROOT = Path(__file__).resolve().parents[3]
 ACCESS_MANIFEST = ROOT / "quwoquan_ops/environments/prod_plane_access_isolation.yaml"
 TOPOLOGY_MANIFEST = ROOT / "quwoquan_ops/environments/environment_topology_manifest.yaml"
-STATE_GAMMA_CONFIG_ROOT = ROOT / ".qwq_output" / "env" / "gamma" / "local" / "gamma-local" / "config-root"
-DEFAULT_OUTPUT_ROOT = ROOT / ".qwq_output" / "env" / "prod" / "local" / "prod-plane-stack"
+DEFAULT_OUTPUT_ROOT = target_process_dir("prod-hosted")
 
 CONFIG_PACKAGE_ALIAS = {
     "recommendation-service": "rec-model-service",
@@ -48,6 +58,62 @@ def _load_yaml(path: Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise SystemExit(f"FAIL: {path} must parse as object")
     return data
+
+
+def _sha256(path: Path) -> str:
+    return f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}"
+
+
+def _verified_package_release(
+    package_dir: Path,
+    *,
+    config_version: str,
+) -> Path:
+    report_path = package_dir / "report.json"
+    release_path = package_dir / "releases" / f"{config_version}.yaml"
+    if not report_path.is_file() or not release_path.is_file():
+        raise SystemExit(
+            f"FAIL: package missing report or requested config release: {package_dir}"
+        )
+    try:
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        provenance = report["provenance"]
+        release_files = provenance["releaseFiles"]
+        expected_digest = release_files[release_path.name]
+    except (KeyError, TypeError, json.JSONDecodeError) as exc:
+        raise SystemExit(f"FAIL: invalid package provenance: {report_path}") from exc
+    if expected_digest != _sha256(release_path):
+        raise SystemExit(f"FAIL: package release digest mismatch: {release_path}")
+    release_artifact = provenance.get("releaseArtifact")
+    if not isinstance(release_artifact, dict):
+        raise SystemExit(f"FAIL: package release artifact provenance missing: {report_path}")
+    if release_artifact.get("configVersion") != config_version:
+        raise SystemExit(f"FAIL: package release config version mismatch: {report_path}")
+    manifest_rel = str(release_artifact.get("manifest") or "")
+    manifest_path = Path(manifest_rel)
+    if not manifest_path.is_absolute():
+        manifest_path = ROOT / manifest_path
+    if (
+        not manifest_rel
+        or not manifest_path.is_file()
+        or release_artifact.get("manifestSha256") != _sha256(manifest_path)
+    ):
+        raise SystemExit(f"FAIL: package release artifact manifest mismatch: {report_path}")
+    return release_path
+
+
+def _git_revision() -> str:
+    revision = os.environ.get("GITHUB_SHA", "").strip()
+    if revision:
+        return revision
+    result = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    return result.stdout.strip() if result.returncode == 0 else "unknown"
 
 
 def _plane_spec(plane_name: str) -> dict[str, Any]:
@@ -82,17 +148,19 @@ def _rewrite_volume_with_layout(
     caddyfile_path: str,
     model_cache_root: str,
 ) -> str:
-    if raw == "local-gamma-model-cache:/app/cache":
-        return f"{_compose_bind_source(model_cache_root)}:/app/cache"
-    return (
-        raw.replace("../.qwq_output/env/gamma/local/gamma-local/config-root", _compose_bind_source(config_root))
-        .replace("../.qwq_output/env/gamma/local/gamma-local/media", _compose_bind_source(media_root))
-        .replace(
-            "${LOCAL_GAMMA_LEGAL_STATIC_ROOT:-../.qwq_output/env/gamma/release/legal-static/current/public}",
-            _compose_bind_source(legal_root),
-        )
-        .replace("../.qwq_output/env/gamma/local/gamma-local/Caddyfile", _compose_bind_source(caddyfile_path))
-    )
+    mount_sources = {
+        "/etc/qwq-config": config_root,
+        "/srv/media": media_root,
+        "/var/lib/quwoquan/chat-media": media_root,
+        "/srv/legal": legal_root,
+        "/etc/caddy/Caddyfile": caddyfile_path,
+        "/app/cache": model_cache_root,
+    }
+    for target, source in mount_sources.items():
+        marker = f":{target}"
+        if marker in raw:
+            return f"{_compose_bind_source(source)}{raw[raw.index(marker):]}"
+    return raw
 
 
 def _named_volume_source(raw: str) -> str | None:
@@ -151,6 +219,10 @@ def _rewrite_service(
             environment["REDIS_GENERAL_ADDR"] = f"{EXTERNAL_DATA_HOST}:{EXTERNAL_REDIS_PORT}"
             environment["REDIS_REC_ADDR"] = f"{EXTERNAL_DATA_HOST}:{EXTERNAL_REDIS_PORT}"
         if name == "product-ops-service":
+            environment["POSTGRES_DSN"] = (
+                f"postgres://quwoquan:quwoquan@{EXTERNAL_DATA_HOST}:{EXTERNAL_POSTGRES_PORT}/"
+                "quwoquan?sslmode=disable"
+            )
             environment["MONGO_URI"] = EXTERNAL_MONGO_URI
             environment["PRODUCT_OPS_REDIS_REC_ADDR"] = f"{EXTERNAL_DATA_HOST}:{EXTERNAL_REDIS_PORT}"
             environment["PRODUCT_OPS_REDIS_GENERAL_ADDR"] = f"{EXTERNAL_DATA_HOST}:{EXTERNAL_REDIS_PORT}"
@@ -250,6 +322,7 @@ def _rewrite_env_override(service: str, payload: dict[str, Any]) -> dict[str, An
             "${REDIS_GENERAL_ADDR}",
         )
     elif service == "product-ops-service":
+        _ensure_mapping(updated, "postgres")["dsn"] = "${POSTGRES_DSN}"
         _ensure_mapping(updated, "mongodb")["uri"] = "${MONGO_URI}"
         _set_standalone_redis(
             _ensure_mapping(updated, "redis", "rec"),
@@ -273,11 +346,12 @@ def _write_config_tree(
     config_services: list[str],
     config_version: str,
     output_root: Path,
-) -> None:
+) -> dict[str, Any]:
     config_root = output_root / "runtime" / "config-root"
+    sources: dict[str, Any] = {}
     for service in config_services:
         package_service = CONFIG_PACKAGE_ALIAS.get(service, service)
-        package_dir = ROOT / ".qwq_output" / "env" / "prod" / "release" / "service" / package_service
+        package_dir = service_release_dir("prod", package_service)
         if not package_dir.is_dir():
             raise SystemExit(f"FAIL: missing prod service package for {service}: {package_dir}")
         default_src = package_dir / "default_config.yaml"
@@ -300,41 +374,21 @@ def _write_config_tree(
             ),
             encoding="utf-8",
         )
+        sources[service] = {
+            "package": str(package_dir),
+            "defaultConfigDigest": _sha256(default_src),
+            "environmentConfigDigest": _sha256(env_src),
+        }
 
-        release_candidates = [
-            ROOT / "releases" / "config" / service / f"{config_version}.yaml",
-            ROOT / "releases" / "config" / package_service / f"{config_version}.yaml",
-            STATE_GAMMA_CONFIG_ROOT / "releases" / "config" / service / f"{config_version}.yaml",
-            STATE_GAMMA_CONFIG_ROOT / "releases" / "config" / package_service / f"{config_version}.yaml",
-        ]
+        release_src = _verified_package_release(
+            package_dir,
+            config_version=config_version,
+        )
         release_target = config_root / "releases" / "config" / service / f"{config_version}.yaml"
         release_target.parent.mkdir(parents=True, exist_ok=True)
-        for candidate in release_candidates:
-            if candidate.is_file():
-                shutil.copy2(candidate, release_target)
-                break
-        else:
-            release_target.write_text(
-                yaml.safe_dump(
-                    {
-                        "config": {"version": config_version},
-                        "service": {"name": service},
-                    },
-                    sort_keys=False,
-                    allow_unicode=True,
-                ),
-                encoding="utf-8",
-            )
-
-    shared_dir = config_root / "deploy" / "shared"
-    shared_dir.mkdir(parents=True, exist_ok=True)
-    for rel in (
-        "quwoquan_ops/environments/reliable_task_module_catalog.yaml",
-        "quwoquan_ops/environments/reliable_task_retention_policy.yaml",
-    ):
-        src = ROOT / rel
-        if src.is_file():
-            shutil.copy2(src, shared_dir / src.name)
+        shutil.copy2(release_src, release_target)
+        sources[service]["releaseConfigDigest"] = _sha256(release_src)
+    return sources
 
 
 def _prod_public_edge_ip() -> str:
@@ -399,7 +453,7 @@ prod-api.quwoquan-env.test {
 \thandle @api_chat {
 \t\treverse_proxy chat-service:18081
 \t}
-\t@api_user path /v1/user* /v1/me /v1/me/*
+\t@api_user path /v1/auth* /v1/owner* /v1/user* /v1/me /v1/me/*
 \thandle @api_user {
 \t\treverse_proxy user-service:18082
 \t}
@@ -421,10 +475,19 @@ prod-api.quwoquan-env.test {
 \thandle /v1/control-plane/product/* {
 \t\treverse_proxy product-ops-service:18086
 \t}
+\thandle /legal/manifest.json {
+\t\theader {
+\t\t\tCache-Control "public, max-age=300"
+\t\t\tX-Content-Type-Options "nosniff"
+\t\t}
+\t\troot * /srv/legal
+\t\tfile_server
+\t}
 \thandle /legal/* {
 \t\theader {
 \t\t\tCache-Control "public, max-age=300"
 \t\t\tX-Content-Type-Options "nosniff"
+\t\t\tContent-Type "text/html; charset=utf-8"
 \t\t}
 \t\troot * /srv/legal
 \t\tfile_server
@@ -477,7 +540,7 @@ prod-upload.quwoquan-env.test {
 \thandle @pub_chat {
 \t\treverse_proxy chat-service:18081
 \t}
-\t@pub_user path /v1/user* /v1/me /v1/me/*
+\t@pub_user path /v1/auth* /v1/owner* /v1/user* /v1/me /v1/me/*
 \thandle @pub_user {
 \t\treverse_proxy user-service:18082
 \t}
@@ -499,10 +562,19 @@ prod-upload.quwoquan-env.test {
 \thandle /v1/control-plane/product/* {
 \t\treverse_proxy product-ops-service:18086
 \t}
+\thandle /legal/manifest.json {
+\t\theader {
+\t\t\tCache-Control "public, max-age=300"
+\t\t\tX-Content-Type-Options "nosniff"
+\t\t}
+\t\troot * /srv/legal
+\t\tfile_server
+\t}
 \thandle /legal/* {
 \t\theader {
 \t\t\tCache-Control "public, max-age=300"
 \t\t\tX-Content-Type-Options "nosniff"
+\t\t\tContent-Type "text/html; charset=utf-8"
 \t\t}
 \t\troot * /srv/legal
 \t\tfile_server
@@ -603,7 +675,13 @@ def main() -> int:
     layout = plane.get("rootlessRuntimeLayout") or {}
     config_root = str(layout.get("configRoot") or "runtime/config-root")
     caddyfile_path = str(layout.get("caddyfile") or "runtime/Caddyfile")
-    media_root = str(layout.get("mediaRoot") or "runtime/media")
+    media_state_ref = str(layout.get("mediaStateRef") or "").strip()
+    if not media_state_ref:
+        raise SystemExit("FAIL: rootlessRuntimeLayout.mediaStateRef is required")
+    media_ref_path = Path(media_state_ref)
+    if media_ref_path.is_absolute() or ".." in media_ref_path.parts:
+        raise SystemExit("FAIL: rootlessRuntimeLayout.mediaStateRef must be a safe state-relative path")
+    media_root = str((resolve_target_local_dir("prod-hosted") / media_ref_path).resolve())
     legal_root = str(layout.get("legalStaticRoot") or "runtime/legal-static")
     model_cache_root = str(layout.get("modelCacheRoot") or "runtime/model-cache")
     if Path(config_root).is_absolute():
@@ -619,9 +697,16 @@ def main() -> int:
     if output_root.exists():
         shutil.rmtree(output_root)
     output_root.mkdir(parents=True, exist_ok=True)
-    if not Path(media_root).is_absolute():
-        (output_root / media_root).mkdir(parents=True, exist_ok=True)
-    legal_package_public = ROOT / ".qwq_output" / "env" / "prod" / "release" / "legal-static" / "current" / "public"
+    Path(media_root).mkdir(parents=True, exist_ok=True)
+    legal_package_public = (
+        resolve_output_root()
+        / "env"
+        / "prod"
+        / "release"
+        / "legal-static"
+        / "current"
+        / "public"
+    )
     legal_output_root = output_root / legal_root
     if legal_output_root.exists():
         shutil.rmtree(legal_output_root)
@@ -669,7 +754,7 @@ def main() -> int:
         encoding="utf-8",
     )
 
-    _write_config_tree(
+    config_sources = _write_config_tree(
         config_services=config_services,
         config_version=args.config_version,
         output_root=output_root,
@@ -688,11 +773,14 @@ def main() -> int:
         "configServices": config_services,
         "configVersion": args.config_version,
         "outputDir": str(output_root),
+        "sourceRevision": _git_revision(),
+        "configSources": config_sources,
+        "mediaStateRef": media_state_ref,
         "mediaRoot": media_root,
         "legalStaticRoot": legal_root,
         "legalStaticSource": str(legal_package_public),
     }
-    (output_root / "render_report.json").write_text(
+    (output_root / "provenance.json").write_text(
         json.dumps(report, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )

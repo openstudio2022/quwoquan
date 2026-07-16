@@ -1,0 +1,10 @@
+{
+  "label": "地理",
+  "labelEn": "Geography",
+  "description": "地理维度：行政区与自然地标由 qwq-data taxonomy 生成；分类模块生成骨架",
+  "maxDepth": 5,
+  "pathPolicy": "any-depth",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "expectedSize": 600
+}

@@ -48,13 +48,31 @@ class RealtimeMessageHandler {
     switch (eventType) {
       case 'MessageSent':
         if (conversationId.isEmpty) return;
-        final msg = MessageDto.fromMap({
-          ...payload,
-          'conversationId': conversationId,
-        });
-        _read(chatMessageProvider(conversationId).notifier).addMessage(msg);
-
+        late final MessageDto msg;
+        try {
+          msg = _decodeMessageSentEvent(conversationId, payload);
+        } on FormatException catch (error, stackTrace) {
+          developer.log(
+            'rejected malformed MessageSent event',
+            name: 'RealtimeMessageHandler',
+            error: error,
+            stackTrace: stackTrace,
+          );
+          unawaited(
+            _read(chatMessageProvider(conversationId).notifier).loadMessages(),
+          );
+          return;
+        }
         _updateConversationCacheForNewMessage(conversationId, payload);
+        if (msg.mediaAssetId?.isNotEmpty ?? false) {
+          // MediaAsset delivery fields belong to the named Reader, not the
+          // MessageSent event. Refresh through the typed query before render.
+          unawaited(
+            _read(chatMessageProvider(conversationId).notifier).loadMessages(),
+          );
+          return;
+        }
+        _read(chatMessageProvider(conversationId).notifier).addMessage(msg);
         unawaited(
           _read(
             localChatSearchSyncProvider,
@@ -78,12 +96,11 @@ class RealtimeMessageHandler {
         }
         return;
 
-      case 'ReadReceiptSent':
+      case 'ConversationReadWatermarkAdvanced':
         return;
 
-      case 'MemberJoined':
+      case 'ConversationMemberAdded':
         if (conversationId.isEmpty) return;
-        _insertSystemMessage(conversationId, payload, '加入了讨论');
         _reloadGroupRosterProviders(conversationId);
         return;
 
@@ -117,13 +134,12 @@ class RealtimeMessageHandler {
         }
         return;
 
-      case 'MemberLeft':
+      case 'ConversationMemberRemoved':
         if (conversationId.isEmpty) return;
-        _insertSystemMessage(conversationId, payload, '离开了讨论');
         _reloadGroupRosterProviders(conversationId);
         return;
 
-      case 'ConversationSettingsUpdated':
+      case 'ConversationUserSettingsChanged':
         if (conversationId.isEmpty) return;
         _refreshConversationCache(conversationId);
         return;
@@ -208,30 +224,6 @@ class RealtimeMessageHandler {
     }
   }
 
-  /// 成员变更 → 插入系统消息到对话
-  void _insertSystemMessage(
-    String conversationId,
-    Map<String, dynamic> payload,
-    String action,
-  ) {
-    final userName =
-        payload['userName'] as String? ??
-        payload['displayName'] as String? ??
-        '';
-    final msg = MessageDto(
-      id: 'sys_${DateTime.now().millisecondsSinceEpoch}',
-      conversationId: conversationId,
-      seq: 0,
-      clientMsgId: '',
-      senderId: 'system',
-      type: 'system',
-      content: '$userName$action',
-      status: 'sent',
-      timestamp: DateTime.tryParse(payload['timestamp'] as String? ?? ''),
-    );
-    _read(chatMessageProvider(conversationId).notifier).addMessage(msg);
-  }
-
   /// 成员 / roster 变更 → 刷新成员 provider、group home 与缓存。
   void _reloadGroupRosterProviders(String conversationId) {
     unawaited(
@@ -301,4 +293,137 @@ class RealtimeMessageHandler {
       }
     });
   }
+}
+
+MessageDto _decodeMessageSentEvent(
+  String conversationId,
+  Map<String, dynamic> payload,
+) {
+  const allowed = <String>{
+    'messageId',
+    'conversationId',
+    'seq',
+    'clientMsgId',
+    'senderId',
+    'type',
+    'content',
+    'mediaAssetId',
+    'card',
+    'replyToMessageId',
+    'mentions',
+    'personaContextVersion',
+    'senderDisplayNameSnapshot',
+    'senderAvatarUrlSnapshot',
+    'timestamp',
+  };
+  final unknown = payload.keys
+      .where((key) => !allowed.contains(key))
+      .toList(growable: false);
+  if (unknown.isNotEmpty) {
+    throw FormatException(
+      'MessageSent contains unknown fields: ${unknown.join(',')}',
+    );
+  }
+
+  final messageId = _requiredEventText(payload, 'messageId');
+  final payloadConversationId = _requiredEventText(payload, 'conversationId');
+  if (payloadConversationId != conversationId) {
+    throw const FormatException(
+      'MessageSent.conversationId does not match event envelope',
+    );
+  }
+  final clientMsgId = _requiredEventText(payload, 'clientMsgId');
+  final senderId = _requiredEventText(payload, 'senderId');
+  final type = _requiredEventText(payload, 'type');
+  const allowedTypes = <String>{
+    'text',
+    'audio',
+    'image',
+    'video',
+    'file',
+    'card',
+  };
+  if (!allowedTypes.contains(type)) {
+    throw const FormatException('MessageSent.type is unsupported');
+  }
+  final seq = payload['seq'];
+  if (seq is! int || seq <= 0) {
+    throw const FormatException('MessageSent.seq must be a positive integer');
+  }
+  final timestampText = _requiredEventText(payload, 'timestamp');
+  final timestamp = DateTime.tryParse(timestampText);
+  if (timestamp == null) {
+    throw const FormatException('MessageSent.timestamp must be ISO-8601');
+  }
+  final mentionsRaw = payload['mentions'];
+  if (mentionsRaw != null &&
+      (mentionsRaw is! List || mentionsRaw.any((value) => value is! String))) {
+    throw const FormatException('MessageSent.mentions must be string[]');
+  }
+  final personaContextVersion = payload['personaContextVersion'];
+  if (personaContextVersion != null &&
+      (personaContextVersion is! int || personaContextVersion <= 0)) {
+    throw const FormatException(
+      'MessageSent.personaContextVersion must be a positive integer',
+    );
+  }
+  final mediaAssetId = _optionalEventText(payload, 'mediaAssetId');
+  const mediaTypes = <String>{'audio', 'image', 'video', 'file'};
+  if (mediaTypes.contains(type) != (mediaAssetId != null)) {
+    throw const FormatException(
+      'MessageSent media type and mediaAssetId must match',
+    );
+  }
+  final cardRaw = payload['card'];
+  if (cardRaw != null &&
+      (cardRaw is! Map || cardRaw.keys.any((key) => key is! String))) {
+    throw const FormatException('MessageSent.card must be an object');
+  }
+  if ((type == 'card') != (cardRaw != null)) {
+    throw const FormatException('MessageSent card type and card must match');
+  }
+
+  return MessageDto.fromMap(<String, dynamic>{
+    'id': messageId,
+    'conversationId': conversationId,
+    'seq': seq,
+    'clientMsgId': clientMsgId,
+    'senderId': senderId,
+    'senderDisplayNameSnapshot': ?_optionalEventText(
+      payload,
+      'senderDisplayNameSnapshot',
+    ),
+    'senderAvatarUrlSnapshot': ?_optionalEventText(
+      payload,
+      'senderAvatarUrlSnapshot',
+    ),
+    'type': type,
+    'content': ?_optionalEventText(payload, 'content'),
+    'mediaAssetId': ?mediaAssetId,
+    'card': ?(cardRaw == null ? null : Map<String, dynamic>.from(cardRaw)),
+    'replyToMessageId': ?_optionalEventText(payload, 'replyToMessageId'),
+    'mentions': ?(mentionsRaw == null
+        ? null
+        : List<String>.unmodifiable(List<String>.from(mentionsRaw))),
+    'status': 'sent',
+    'timestamp': timestamp.toIso8601String(),
+  });
+}
+
+String _requiredEventText(Map<String, dynamic> payload, String field) {
+  final value = payload[field];
+  if (value is! String || value.trim().isEmpty) {
+    throw FormatException('MessageSent.$field must be a non-empty string');
+  }
+  return value.trim();
+}
+
+String? _optionalEventText(Map<String, dynamic> payload, String field) {
+  final value = payload[field];
+  if (value == null) return null;
+  if (value is! String) {
+    throw FormatException('MessageSent.$field must be a string');
+  }
+  final normalized = value.trim();
+  return normalized.isEmpty ? null : normalized;
 }

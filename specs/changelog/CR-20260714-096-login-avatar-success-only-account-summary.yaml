@@ -1,0 +1,165 @@
+id: CR-20260714-096-login-avatar-success-only-account-summary
+title: 登录头像成功才展示与账号摘要同源收口
+slug: login-avatar-success-only-account-summary
+revision: 2
+status: in_progress
+
+affected_nodes:
+  - specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/two-state-one-tap-login--commercial-login-entry
+  - specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity
+  - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality
+
+entries:
+  - timestamp: "2026-07-14T22:00:00+08:00"
+    summary: |
+      登录页账号摘要采用“文本稳定、头像渐进增强”：昵称与脱敏手机号不依赖头像，
+      头像只有在可信候选成功下载并解码后才显示；空值、加载中和失败态均不创建
+      头像占位、布局间距或无障碍节点。LoginAccountHint 增加
+      nicknameCustomized，同源决定展示真实昵称或“欢迎回来”；会话刷新、软退出、
+      过期与彻底退出同步冻结账号摘要保留、覆盖和精确头像缓存驱逐语义。
+    reason: |
+      旧返回态以“欢”字或中性轮廓补足头像会制造虚假身份线索，且端侧通过昵称格式
+      猜测系统昵称会与服务端资料真相源漂移。账号识别文本必须稳定，头像仅作为加载
+      成功后的可选增强，失败不得干扰登录主流程。
+    change_type: [ux, contract, privacy, reliability, testing]
+    changed_documents:
+      - path: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/two-state-one-tap-login--commercial-login-entry/spec.md
+        sections: [用户价值, 体验与交互, 数据与契约, 验收标准]
+      - path: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/two-state-one-tap-login--commercial-login-entry/acceptance.yaml
+        sections: [GWT1, GWT2, GWT3]
+      - path: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md
+        sections: [社交登录资料同步]
+      - path: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/acceptance.yaml
+        sections: [GWT4]
+      - path: specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-matrix.md
+        sections: [login_page]
+    impact:
+      replan_required: false
+      redesign_required: true
+      retest_layers: [local_contract, api_integration, user_acceptance]
+      rollout_impact: low
+      breaking_contract: false
+    verification:
+      planned:
+        - cd quwoquan_service && go run ./tools/qwq_contract validate --metadata-dir contracts/metadata --profile commercial
+        - cd quwoquan_app && flutter test test/local_contract/core/auth/auth_session_store__local_contract_test.dart test/local_contract/core/widgets/app_cached_network_image__local_contract_test.dart test/local_contract/ui/user/login_page_widget__local_contract_test.dart
+        - cd quwoquan_service && go test ./services/user-service/tests/api_integration -run 'TestAuth_(SocialLogin_WechatAlipayQqExchangeStableServerIdentity|FirstLogin_UsesCloudDefaultNicknamePattern)$' -count=1
+        - cd quwoquan_app && flutter analyze
+        - make verify-app-login-entry-loop-contract
+        - make verify-app-page-horizontal-quality
+        - cd quwoquan_app && flutter build apk --debug
+        - cd quwoquan_app && flutter build ios --simulator --debug
+        - cd quwoquan_app && flutter build web --debug
+      completed:
+        - command: cd quwoquan_service && go test ./services/user-service/tests/api_integration -run 'TestAuth_(RefreshToken_RotatesAndLogoutRevokes|OneTapLogin_UsesServerResolvedPhone|SocialLogin_WechatAlipayQqExchangeStableServerIdentity|FirstLogin_UsesCloudDefaultNicknamePattern)$' -count=1
+          result: PASS；覆盖手机号、微信/支付宝/QQ、一键登录提示及刷新时昵称标记、头像新增和删除同步
+        - command: cd quwoquan_app && flutter test --update-goldens test/local_contract/ui/user/login_page_widget__local_contract_test.dart
+          result: PASS，52 tests passed；四组返回态视觉基线已更新
+        - command: cd quwoquan_app && flutter test test/local_contract/ui/user/login_page_widget__local_contract_test.dart
+          result: PASS，53 tests passed
+        - command: cd quwoquan_app && flutter test test/local_contract/core/auth/auth_session_store__local_contract_test.dart
+          result: PASS，12 tests passed；含异常旧缓存、刷新覆盖、软退出/过期保留与彻底退出清除
+        - command: cd quwoquan_app && flutter test test/local_contract/core/widgets/app_cached_network_image__local_contract_test.dart --plain-name 'AppCachedNetworkImage avatar reports successful decode once and rejects raw provider URL'
+          result: PASS；成功解码回调每 URL 仅一次，非可信第三方 URL 不创建网络图片
+        - command: cd quwoquan_app && flutter test test/local_contract/core/auth/auth_session_controller__local_contract_test.dart
+          result: PASS，6 tests passed
+        - command: cd quwoquan_app && flutter test test/user_acceptance/journeys/user/commercial_login_recovery_journey__user_acceptance_test.dart
+          result: PASS，2 tests passed；仅为确定性本地 UAT，不替代真实设备生产 UAT
+        - command: cd quwoquan_app && flutter analyze <本次 27 个登录、会话、图片组件及测试文件>
+          result: PASS，No issues found
+        - command: make verify-app-login-entry-loop-contract
+          result: PASS
+        - command: bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh && make verify-test-coverage-map && bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+          result: PASS
+        - command: cd quwoquan_app && flutter build apk --debug
+          result: PASS
+        - command: cd quwoquan_app && flutter build ios --simulator --debug
+          result: PASS
+        - command: cd quwoquan_app && flutter build web --debug
+          result: PASS；Wasm dry run 仍报告 vendor 插件 JS interop 兼容性提示
+        - command: cd quwoquan_service && go run ./tools/qwq_contract generate --metadata-dir contracts/metadata --profile commercial --output /tmp/quwoquan-login-contract-graph.json --go-security-output /tmp/quwoquan-login-operation-security.g.go
+          result: PASS；临时 ContractGraph 精确包含 LoginAccountHint.nicknameCustomized bool + NOT_NULL + DEFAULT_FALSE
+      blocked:
+        - command: cd quwoquan_service && make verify-metadata
+          result: FAIL；assistant/circle/content/entity/recommendation/user OpenAPI 快照已陈旧；为保护脏工作树未覆盖全域生成产物
+        - command: cd quwoquan_service && go run ./tools/codegen_app_metadata <临时 ContractGraph 与临时输出目录>
+          result: FAIL；既有 App ContractGraph lock/schema 与 graph 不受当前生成器支持，未手改 codegen 产物
+        - command: cd quwoquan_app && flutter test test/local_contract/core/widgets/app_cached_network_image__local_contract_test.dart
+          result: FAIL；2 个既有本地媒体 URL 断言仍期待 localhost，当前 runtime 返回 127.0.0.1；新增成功回调用例已单独通过
+        - command: cd quwoquan_app && flutter test <新增精确头像缓存驱逐用例>
+          result: BLOCKED；当前脏树生成 API 元数据缺少多域 operation 常量，测试重新编译阶段失败
+        - command: cd quwoquan_app && flutter test test/local_contract/ui/user/login_page_widget__local_contract_test.dart（最终复跑）
+          result: BLOCKED；此前 53 tests 已通过，但最终复跑时脏工作树中的 assistant/chat/content/entity/rtc/user 生成 API 再次漂移并在编译阶段失败，不以旧缓存结果宣称最终全绿
+        - command: cd quwoquan_app && flutter analyze
+          result: FAIL，578 issues；主要来自 vendor/patrol example 与既有 local HTTPS/generated API 漂移，本次 27 个文件定向 analyze 通过
+        - command: make verify-app-page-horizontal-quality
+          result: FAIL；既有 user.user_profile、tag.tag_node、recommendation.model_score_request object/query slice 元数据缺口
+        - command: cd quwoquan_service && go test ./services/user-service/...
+          result: FAIL；认证相关包通过，api_integration 总包仅被既有 quwoquan_data/publish/creators 路径缺失阻断
+    remaining_blockers:
+      - R-AUTH-001 状态不变；正式 provider 凭据、受控 SDK 与生产真机 UAT 未齐，整体登录商业准入仍为 GATE_BLOCK。
+      - 生产协议包和登录 SLO/告警运行证据仍未齐；本 CR 只收口头像与昵称账号摘要 UX，不构成生产部署授权。
+  - timestamp: "2026-07-14T21:10:38+08:00"
+    summary: |
+      /continue-dev Scene B 复盘后完成登录依赖图收口：AppDataSourceMode、带鉴权刷新与
+      延迟观测的 CloudHttpClient、OpsEvent 和登录 Repository 组合入口从巨型
+      app_providers 聚合图中抽离为唯一轻量 Provider；登录页、图片遥测与全应用继续
+      复用同一实例，不增加 Mock、路由、错误码或契约第二真相源。头像精确缓存驱逐
+      下沉为非 Widget 能力，登录测试不再因无关 Remote 调用的 generated 漂移而编译
+      整个应用。
+    reason: |
+      最终复跑证明登录 widget 原先的编译失败不是头像逻辑，而是登录页和图片遥测
+      间接依赖 app_providers，进而拉入 assistant/chat/content/entity/rtc/user 全域
+      Remote 实现。按能力边界拆分组合根可保持生产 wiring、Mock 隔离、鉴权刷新和
+      遥测不变，同时让登录 local_contract 在真实契约缝隙独立编译。
+    change_type: [architecture, reliability, testing, observability]
+    changed_documents:
+      - path: quwoquan_app/AGENTS.md
+        sections: [登录返回账号摘要稳定规则]
+      - path: specs/changelog/CR-20260714-096-login-avatar-success-only-account-summary.yaml
+        sections: [continue-dev implementation and verification]
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers: [local_contract, api_integration, user_acceptance]
+      rollout_impact: low
+      breaking_contract: false
+    verification:
+      completed:
+        - command: cd quwoquan_service && make codegen-contract-graph && python3 ../quwoquan_ops/cli/cloud_contract_handoff.py accept && make codegen-app
+          result: PASS；Graph 56cc2fb16fad60d19f0edd31ad47ea72fb029a3737b1eb6abc9d23e5c5c77438，App outputs=227，App-exposed=115
+        - command: make verify-app-contract-handoff && make verify-app-generated-manifest && make verify-commercial-contract-generation
+          result: PASS；固定 Graph handoff、clean rebuild manifest 与 commercial typed-ready=27 均通过
+        - command: cd quwoquan_app && dart analyze <15 个登录、头像、会话、Provider、遥测及测试文件>
+          result: PASS；No issues found
+        - command: cd quwoquan_app && flutter test test/local_contract/core/auth/auth_session_store__local_contract_test.dart && flutter test test/local_contract/core/auth/auth_session_controller__local_contract_test.dart
+          result: PASS；12 + 6 tests passed
+        - command: cd quwoquan_app && flutter test test/local_contract/core/media/app_image_cache_controller__local_contract_test.dart
+          result: 初次因用原始 URL 而未命中实际 CDN candidate 键失败；改为按解析候选精确断言后 PASS，1 test passed
+        - command: cd quwoquan_service && go test ./services/user-service/internal/infrastructure/integration -run 'Test(MockExternalAuthProviderDeterministicAndSupported|MockExternalAuthProviderCancellation|SandboxExternalAuthProviderControlledPassThrough|HTTPExternalAuthProviderUnavailableWhenUnconfigured)$' -count=1
+          result: PASS；覆盖 mock/sandbox 与生产配置缺失 fail-closed
+        - command: make verify-app-login-entry-loop-contract
+          result: PASS；关闭回安全态、登录进目标态
+        - command: bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh && make verify-test-coverage-map && make verify-agent-context-contract
+          result: PASS；三层证据、coverage map 与 agent context 契约通过
+      blocked:
+        - command: cd quwoquan_app && flutter test test/local_contract/ui/user/login_page_widget__local_contract_test.dart
+          result: 轻量依赖改造后已越过 Dart 编译；测试运行器因受限沙箱禁止 bind 127.0.0.1:0 而 BLOCKED，不伪报断言通过
+        - command: cd quwoquan_service && go test ./services/user-service/tests/api_integration -run 'TestAuth_...' -count=1
+          result: BLOCKED；沙箱禁止访问 Colima Docker socket 且禁止本地 Redis 绑定 127.0.0.1:0
+        - command: cd quwoquan_service && make verify-metadata
+          result: FAIL；本轮登录 Graph 曾通过，之后无关 content/post/service.yaml 并发移除 circleIds/groupId/nodeId 导致当前 Graph stale；为保护脏树未再次覆盖全域生成物
+        - command: make verify-app-page-horizontal-quality
+          result: FAIL；当前全域业务对象迁移缺失 user.user_profile、tag.tag_node、recommendation.model_score_request 等 object/query slice 引用
+        - command: cd quwoquan_app && dart analyze
+          result: FAIL，675 issues；主要为全域 Remote 调用尚未迁移到当前 generated API 及 vendor lint；本次定向 analyze 通过
+        - command: cd quwoquan_app && flutter build web --debug
+          result: FAIL；assistant/chat/content/entity/rtc/user 旧 Remote API 调用与当前 generated 契约不一致
+        - command: cd quwoquan_app && flutter build ios --simulator --debug
+          result: BLOCKED；Xcode build error 66，未取得可归因于登录代码的编译错误
+        - command: cd quwoquan_app && flutter build apk --debug
+          result: BLOCKED；沙箱禁止写 ~/.gradle wrapper lock
+    remaining_blockers:
+      - 本次头像、昵称、会话摘要与轻量登录依赖边界已实现；widget 断言、真实 Redis api_integration 与三端构建仍需在允许 localhost/Docker/Gradle/Xcode 的 CI 或开发机复跑。
+      - 当前全仓 metadata/generated 迁移仍在进行，仓库总 gate 与页面横向质量 gate 未放行；该问题不在本登录增量中扩域修复。
+      - R-AUTH-001、prod 法务包、正式 provider/短信/一键登录真机 UAT、SLO 仪表盘与告警证据仍未齐，整体登录商业准入保持 GATE_BLOCK。

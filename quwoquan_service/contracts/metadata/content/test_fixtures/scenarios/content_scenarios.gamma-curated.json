@@ -45,14 +45,6 @@
             "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
             "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png"
           ],
-          "circleIds": [
-            "fixture_circle_photo"
-          ],
-          "circleNames": [
-            "契约摄影社"
-          ],
-          "circleId": "fixture_circle_photo",
-          "circleName": "契约摄影社",
           "width": 1280,
           "height": 960,
           "likeCount": 80,
@@ -116,14 +108,6 @@
           "imageUrls": [
             "media/image/s/archived-image/post/fixture_photo_002/v1/cover.png"
           ],
-          "circleIds": [
-            "fixture_circle_photo"
-          ],
-          "circleNames": [
-            "契约摄影社"
-          ],
-          "circleId": "fixture_circle_photo",
-          "circleName": "契约摄影社",
           "width": 1280,
           "height": 720,
           "likeCount": 97,
@@ -187,14 +171,6 @@
             "media/image/s/archived-image/post/fixture_video_001/v1/cover.png",
             "media/image/s/archived-image/post/fixture_video_001/v1/image-2.png"
           ],
-          "circleIds": [
-            "fixture_circle_travel"
-          ],
-          "circleNames": [
-            "契约旅行手账"
-          ],
-          "circleId": "fixture_circle_travel",
-          "circleName": "契约旅行手账",
           "width": 1280,
           "height": 720,
           "likeCount": 131,
@@ -262,14 +238,6 @@
             "media/image/s/archived-image/post/fixture_article_001/v1/cover.png",
             "media/image/s/archived-image/post/fixture_article_001/v1/image-2.png"
           ],
-          "circleIds": [
-            "fixture_circle_tech"
-          ],
-          "circleNames": [
-            "契约科技前沿"
-          ],
-          "circleId": "fixture_circle_tech",
-          "circleName": "契约科技前沿",
           "width": 1280,
           "height": 720,
           "likeCount": 165,
@@ -359,14 +327,6 @@
           "imageUrls": [
             "media/image/s/archived-image/post/fixture_moment_001/v1/cover.png"
           ],
-          "circleIds": [
-            "fixture_circle_life"
-          ],
-          "circleNames": [
-            "契约生活方式"
-          ],
-          "circleId": "fixture_circle_life",
-          "circleName": "契约生活方式",
           "width": 1280,
           "height": 720,
           "likeCount": 199,
@@ -428,14 +388,6 @@
           "imageUrls": [
             "media/image/s/archived-image/post/fixture_post_photography_001/v1/cover.jpg"
           ],
-          "circleIds": [
-            "fixture_circle_photo"
-          ],
-          "circleNames": [
-            "契约摄影社"
-          ],
-          "circleId": "fixture_circle_photo",
-          "circleName": "契约摄影社",
           "width": 1280,
           "height": 720,
           "likeCount": 48,
@@ -497,14 +449,6 @@
           "imageUrls": [
             "media/image/s/archived-image/post/fixture_post_travel_001/v1/cover.jpg"
           ],
-          "circleIds": [
-            "fixture_circle_travel"
-          ],
-          "circleNames": [
-            "契约旅行手账"
-          ],
-          "circleId": "fixture_circle_travel",
-          "circleName": "契约旅行手账",
           "width": 1280,
           "height": 720,
           "likeCount": 48,
@@ -566,14 +510,6 @@
           "imageUrls": [
             "media/image/s/archived-image/post/fixture_post_citywalk_001/v1/cover.jpg"
           ],
-          "circleIds": [
-            "fixture_circle_city"
-          ],
-          "circleNames": [
-            "契约城市漫步"
-          ],
-          "circleId": "fixture_circle_city",
-          "circleName": "契约城市漫步",
           "width": 1280,
           "height": 720,
           "likeCount": 48,
@@ -635,14 +571,6 @@
           "imageUrls": [
             "media/image/s/archived-image/post/fixture_post_lifestyle_001/v1/cover.jpg"
           ],
-          "circleIds": [
-            "fixture_circle_life"
-          ],
-          "circleNames": [
-            "契约生活方式"
-          ],
-          "circleId": "fixture_circle_life",
-          "circleName": "契约生活方式",
           "width": 1280,
           "height": 720,
           "likeCount": 48,
@@ -704,14 +632,6 @@
           "imageUrls": [
             "media/image/s/archived-image/post/fixture_post_outdoor_001/v1/cover.jpg"
           ],
-          "circleIds": [
-            "fixture_circle_outdoor_01"
-          ],
-          "circleNames": [
-            "户外契约户外营地"
-          ],
-          "circleId": "fixture_circle_outdoor_01",
-          "circleName": "户外契约户外营地",
           "width": 1280,
           "height": 720,
           "likeCount": 48,
@@ -773,14 +693,6 @@
           "imageUrls": [
             "media/image/s/archived-image/post/fixture_post_tech_001/v1/cover.jpg"
           ],
-          "circleIds": [
-            "fixture_circle_tech"
-          ],
-          "circleNames": [
-            "契约科技前沿"
-          ],
-          "circleId": "fixture_circle_tech",
-          "circleName": "契约科技前沿",
           "width": 1280,
           "height": 720,
           "likeCount": 48,
@@ -15624,12 +15536,12 @@
               "objectKind": "content",
               "relationObjectId": "fixture_user_lin",
               "strength": 0.86,
-              "primaryText": "联系人林清越等3人赞过和评论过《这条记录》",
+              "primaryText": "联系人林清越等3人赞过和评论过",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_moment_grid_1",
               "intersectionClass": "fact",
               "displayName": "林清越",
-              "connectionSummary": "联系人林清越等3人赞过和评论过《这条记录》",
+              "connectionSummary": "联系人林清越等3人赞过和评论过",
               "rankState": "fresh",
               "primarySpans": [
                 {
@@ -15663,16 +15575,6 @@
                 {
                   "text": "人赞过和评论过",
                   "role": "plain"
-                },
-                {
-                  "text": "《这条记录》",
-                  "role": "object",
-                  "target": {
-                    "objectType": "post",
-                    "objectId": "alpha_moment_grid_1",
-                    "objectKind": "content",
-                    "routeId": "workBrowser"
-                  }
                 }
               ],
               "sampleVisuals": [
@@ -15688,7 +15590,7 @@
                   }
                 }
               ],
-              "displayText": "联系人林清越等3人赞过和评论过《这条记录》",
+              "displayText": "联系人林清越等3人赞过和评论过",
               "actionTargetId": "alpha_moment_grid_1",
               "kind": "alpha_showcase",
               "actorEvidenceTotalCount": 3,
@@ -15704,7 +15606,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_1_actor_1",
                   "sourceRef": "alpha_showcase",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -15729,7 +15631,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_1_actor_2",
                   "sourceRef": "sharedFollowees",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -15754,7 +15656,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_1_actor_3",
                   "sourceRef": "sharedCircle",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -15784,7 +15686,8 @@
                 },
                 "evidenceRank": 5,
                 "snapshotVersion": ""
-              }
+              },
+              "displayBinding": "host_implicit"
             }
           ]
         },
@@ -15832,12 +15735,12 @@
               "objectKind": "content",
               "relationObjectId": "fixture_user_lin",
               "strength": 0.86,
-              "primaryText": "联系人林清越等4人赞过和评论过《这条记录》",
+              "primaryText": "联系人林清越等4人赞过和评论过",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_moment_grid_2",
               "intersectionClass": "fact",
               "displayName": "林清越",
-              "connectionSummary": "联系人林清越等4人赞过和评论过《这条记录》",
+              "connectionSummary": "联系人林清越等4人赞过和评论过",
               "rankState": "fresh",
               "primarySpans": [
                 {
@@ -15871,16 +15774,6 @@
                 {
                   "text": "人赞过和评论过",
                   "role": "plain"
-                },
-                {
-                  "text": "《这条记录》",
-                  "role": "object",
-                  "target": {
-                    "objectType": "post",
-                    "objectId": "alpha_moment_grid_2",
-                    "objectKind": "content",
-                    "routeId": "workBrowser"
-                  }
                 }
               ],
               "sampleVisuals": [
@@ -15896,7 +15789,7 @@
                   }
                 }
               ],
-              "displayText": "联系人林清越等4人赞过和评论过《这条记录》",
+              "displayText": "联系人林清越等4人赞过和评论过",
               "actionTargetId": "alpha_moment_grid_2",
               "kind": "alpha_showcase",
               "actorEvidenceTotalCount": 4,
@@ -15912,7 +15805,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_2_actor_1",
                   "sourceRef": "alpha_showcase",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -15937,7 +15830,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_2_actor_2",
                   "sourceRef": "sharedFollowees",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -15962,7 +15855,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_2_actor_3",
                   "sourceRef": "sharedCircle",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -15987,7 +15880,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_2_actor_4",
                   "sourceRef": "coCommented",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -16017,7 +15910,8 @@
                 },
                 "evidenceRank": 5,
                 "snapshotVersion": ""
-              }
+              },
+              "displayBinding": "host_implicit"
             }
           ]
         },
@@ -16067,12 +15961,12 @@
               "objectKind": "content",
               "relationObjectId": "fixture_user_lin",
               "strength": 0.86,
-              "primaryText": "联系人林清越等5人赞过和评论过《这条记录》",
+              "primaryText": "联系人林清越等5人赞过和评论过",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_moment_grid_3",
               "intersectionClass": "fact",
               "displayName": "林清越",
-              "connectionSummary": "联系人林清越等5人赞过和评论过《这条记录》",
+              "connectionSummary": "联系人林清越等5人赞过和评论过",
               "rankState": "fresh",
               "primarySpans": [
                 {
@@ -16106,16 +16000,6 @@
                 {
                   "text": "人赞过和评论过",
                   "role": "plain"
-                },
-                {
-                  "text": "《这条记录》",
-                  "role": "object",
-                  "target": {
-                    "objectType": "post",
-                    "objectId": "alpha_moment_grid_3",
-                    "objectKind": "content",
-                    "routeId": "workBrowser"
-                  }
                 }
               ],
               "sampleVisuals": [
@@ -16131,7 +16015,7 @@
                   }
                 }
               ],
-              "displayText": "联系人林清越等5人赞过和评论过《这条记录》",
+              "displayText": "联系人林清越等5人赞过和评论过",
               "actionTargetId": "alpha_moment_grid_3",
               "kind": "alpha_showcase",
               "actorEvidenceTotalCount": 5,
@@ -16147,7 +16031,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_3_actor_1",
                   "sourceRef": "alpha_showcase",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -16172,7 +16056,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_3_actor_2",
                   "sourceRef": "sharedFollowees",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -16197,7 +16081,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_3_actor_3",
                   "sourceRef": "sharedCircle",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -16222,7 +16106,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_3_actor_4",
                   "sourceRef": "coCommented",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -16247,7 +16131,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_3_actor_5",
                   "sourceRef": "coSharedContent",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -16277,7 +16161,8 @@
                 },
                 "evidenceRank": 5,
                 "snapshotVersion": ""
-              }
+              },
+              "displayBinding": "host_implicit"
             }
           ]
         },
@@ -16329,12 +16214,12 @@
               "objectKind": "content",
               "relationObjectId": "fixture_user_lin",
               "strength": 0.86,
-              "primaryText": "联系人林清越等6人赞过和评论过《这条记录》",
+              "primaryText": "联系人林清越等6人赞过和评论过",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_moment_grid_4",
               "intersectionClass": "fact",
               "displayName": "林清越",
-              "connectionSummary": "联系人林清越等6人赞过和评论过《这条记录》",
+              "connectionSummary": "联系人林清越等6人赞过和评论过",
               "rankState": "fresh",
               "primarySpans": [
                 {
@@ -16368,16 +16253,6 @@
                 {
                   "text": "人赞过和评论过",
                   "role": "plain"
-                },
-                {
-                  "text": "《这条记录》",
-                  "role": "object",
-                  "target": {
-                    "objectType": "post",
-                    "objectId": "alpha_moment_grid_4",
-                    "objectKind": "content",
-                    "routeId": "workBrowser"
-                  }
                 }
               ],
               "sampleVisuals": [
@@ -16393,7 +16268,7 @@
                   }
                 }
               ],
-              "displayText": "联系人林清越等6人赞过和评论过《这条记录》",
+              "displayText": "联系人林清越等6人赞过和评论过",
               "actionTargetId": "alpha_moment_grid_4",
               "kind": "alpha_showcase",
               "actorEvidenceTotalCount": 6,
@@ -16409,7 +16284,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_4_actor_1",
                   "sourceRef": "alpha_showcase",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -16434,7 +16309,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_4_actor_2",
                   "sourceRef": "sharedFollowees",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -16459,7 +16334,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_4_actor_3",
                   "sourceRef": "sharedCircle",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -16484,7 +16359,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_4_actor_4",
                   "sourceRef": "coCommented",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -16509,7 +16384,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_4_actor_5",
                   "sourceRef": "coSharedContent",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -16534,7 +16409,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_4_actor_6",
                   "sourceRef": "sharedCircle",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -16564,7 +16439,8 @@
                 },
                 "evidenceRank": 5,
                 "snapshotVersion": ""
-              }
+              },
+              "displayBinding": "host_implicit"
             }
           ]
         },
@@ -16618,12 +16494,12 @@
               "objectKind": "content",
               "relationObjectId": "fixture_user_lin",
               "strength": 0.86,
-              "primaryText": "联系人林清越等7人赞过和评论过《这条记录》",
+              "primaryText": "联系人林清越等7人赞过和评论过",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_moment_grid_5",
               "intersectionClass": "fact",
               "displayName": "林清越",
-              "connectionSummary": "联系人林清越等7人赞过和评论过《这条记录》",
+              "connectionSummary": "联系人林清越等7人赞过和评论过",
               "rankState": "fresh",
               "primarySpans": [
                 {
@@ -16657,16 +16533,6 @@
                 {
                   "text": "人赞过和评论过",
                   "role": "plain"
-                },
-                {
-                  "text": "《这条记录》",
-                  "role": "object",
-                  "target": {
-                    "objectType": "post",
-                    "objectId": "alpha_moment_grid_5",
-                    "objectKind": "content",
-                    "routeId": "workBrowser"
-                  }
                 }
               ],
               "sampleVisuals": [
@@ -16682,7 +16548,7 @@
                   }
                 }
               ],
-              "displayText": "联系人林清越等7人赞过和评论过《这条记录》",
+              "displayText": "联系人林清越等7人赞过和评论过",
               "actionTargetId": "alpha_moment_grid_5",
               "kind": "alpha_showcase",
               "actorEvidenceTotalCount": 7,
@@ -16698,7 +16564,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_5_actor_1",
                   "sourceRef": "alpha_showcase",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -16723,7 +16589,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_5_actor_2",
                   "sourceRef": "sharedFollowees",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -16748,7 +16614,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_5_actor_3",
                   "sourceRef": "sharedCircle",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -16773,7 +16639,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_5_actor_4",
                   "sourceRef": "coCommented",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -16798,7 +16664,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_5_actor_5",
                   "sourceRef": "coSharedContent",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -16823,7 +16689,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_5_actor_6",
                   "sourceRef": "sharedCircle",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -16848,7 +16714,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_5_actor_7",
                   "sourceRef": "alumni",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -16878,7 +16744,8 @@
                 },
                 "evidenceRank": 5,
                 "snapshotVersion": ""
-              }
+              },
+              "displayBinding": "host_implicit"
             }
           ]
         },
@@ -16934,12 +16801,12 @@
               "objectKind": "content",
               "relationObjectId": "fixture_user_lin",
               "strength": 0.86,
-              "primaryText": "联系人林清越等8人赞过和评论过《这条记录》",
+              "primaryText": "联系人林清越等8人赞过和评论过",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_moment_grid_6",
               "intersectionClass": "fact",
               "displayName": "林清越",
-              "connectionSummary": "联系人林清越等8人赞过和评论过《这条记录》",
+              "connectionSummary": "联系人林清越等8人赞过和评论过",
               "rankState": "fresh",
               "primarySpans": [
                 {
@@ -16973,16 +16840,6 @@
                 {
                   "text": "人赞过和评论过",
                   "role": "plain"
-                },
-                {
-                  "text": "《这条记录》",
-                  "role": "object",
-                  "target": {
-                    "objectType": "post",
-                    "objectId": "alpha_moment_grid_6",
-                    "objectKind": "content",
-                    "routeId": "workBrowser"
-                  }
                 }
               ],
               "sampleVisuals": [
@@ -16998,7 +16855,7 @@
                   }
                 }
               ],
-              "displayText": "联系人林清越等8人赞过和评论过《这条记录》",
+              "displayText": "联系人林清越等8人赞过和评论过",
               "actionTargetId": "alpha_moment_grid_6",
               "kind": "alpha_showcase",
               "actorEvidenceTotalCount": 8,
@@ -17014,7 +16871,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_6_actor_1",
                   "sourceRef": "alpha_showcase",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -17039,7 +16896,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_6_actor_2",
                   "sourceRef": "sharedFollowees",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -17064,7 +16921,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_6_actor_3",
                   "sourceRef": "sharedCircle",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -17089,7 +16946,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_6_actor_4",
                   "sourceRef": "coCommented",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -17114,7 +16971,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_6_actor_5",
                   "sourceRef": "coSharedContent",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -17139,7 +16996,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_6_actor_6",
                   "sourceRef": "sharedCircle",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -17164,7 +17021,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_6_actor_7",
                   "sourceRef": "alumni",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -17189,7 +17046,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_6_actor_8",
                   "sourceRef": "sameSchool",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -17219,7 +17076,8 @@
                 },
                 "evidenceRank": 5,
                 "snapshotVersion": ""
-              }
+              },
+              "displayBinding": "host_implicit"
             }
           ]
         },
@@ -17277,12 +17135,12 @@
               "objectKind": "content",
               "relationObjectId": "fixture_user_lin",
               "strength": 0.86,
-              "primaryText": "联系人林清越等9人赞过和评论过《这条记录》",
+              "primaryText": "联系人林清越等9人赞过和评论过",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_moment_grid_7",
               "intersectionClass": "fact",
               "displayName": "林清越",
-              "connectionSummary": "联系人林清越等9人赞过和评论过《这条记录》",
+              "connectionSummary": "联系人林清越等9人赞过和评论过",
               "rankState": "fresh",
               "primarySpans": [
                 {
@@ -17316,16 +17174,6 @@
                 {
                   "text": "人赞过和评论过",
                   "role": "plain"
-                },
-                {
-                  "text": "《这条记录》",
-                  "role": "object",
-                  "target": {
-                    "objectType": "post",
-                    "objectId": "alpha_moment_grid_7",
-                    "objectKind": "content",
-                    "routeId": "workBrowser"
-                  }
                 }
               ],
               "sampleVisuals": [
@@ -17341,7 +17189,7 @@
                   }
                 }
               ],
-              "displayText": "联系人林清越等9人赞过和评论过《这条记录》",
+              "displayText": "联系人林清越等9人赞过和评论过",
               "actionTargetId": "alpha_moment_grid_7",
               "kind": "alpha_showcase",
               "actorEvidenceTotalCount": 9,
@@ -17357,7 +17205,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_7_actor_1",
                   "sourceRef": "alpha_showcase",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -17382,7 +17230,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_7_actor_2",
                   "sourceRef": "sharedFollowees",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -17407,7 +17255,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_7_actor_3",
                   "sourceRef": "sharedCircle",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -17432,7 +17280,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_7_actor_4",
                   "sourceRef": "coCommented",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -17457,7 +17305,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_7_actor_5",
                   "sourceRef": "coSharedContent",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -17482,7 +17330,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_7_actor_6",
                   "sourceRef": "sharedCircle",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -17507,7 +17355,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_7_actor_7",
                   "sourceRef": "alumni",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -17532,7 +17380,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_7_actor_8",
                   "sourceRef": "sameSchool",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -17557,7 +17405,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_7_actor_9",
                   "sourceRef": "sameCompany",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -17587,7 +17435,8 @@
                 },
                 "evidenceRank": 5,
                 "snapshotVersion": ""
-              }
+              },
+              "displayBinding": "host_implicit"
             }
           ]
         },
@@ -17647,12 +17496,12 @@
               "objectKind": "content",
               "relationObjectId": "fixture_user_lin",
               "strength": 0.86,
-              "primaryText": "联系人林清越等10人赞过和评论过《这条记录》",
+              "primaryText": "联系人林清越等10人赞过和评论过",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_moment_grid_8",
               "intersectionClass": "fact",
               "displayName": "林清越",
-              "connectionSummary": "联系人林清越等10人赞过和评论过《这条记录》",
+              "connectionSummary": "联系人林清越等10人赞过和评论过",
               "rankState": "fresh",
               "primarySpans": [
                 {
@@ -17686,16 +17535,6 @@
                 {
                   "text": "人赞过和评论过",
                   "role": "plain"
-                },
-                {
-                  "text": "《这条记录》",
-                  "role": "object",
-                  "target": {
-                    "objectType": "post",
-                    "objectId": "alpha_moment_grid_8",
-                    "objectKind": "content",
-                    "routeId": "workBrowser"
-                  }
                 }
               ],
               "sampleVisuals": [
@@ -17711,7 +17550,7 @@
                   }
                 }
               ],
-              "displayText": "联系人林清越等10人赞过和评论过《这条记录》",
+              "displayText": "联系人林清越等10人赞过和评论过",
               "actionTargetId": "alpha_moment_grid_8",
               "kind": "alpha_showcase",
               "actorEvidenceTotalCount": 10,
@@ -17727,7 +17566,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_8_actor_1",
                   "sourceRef": "alpha_showcase",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -17752,7 +17591,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_8_actor_2",
                   "sourceRef": "sharedFollowees",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -17777,7 +17616,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_8_actor_3",
                   "sourceRef": "sharedCircle",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -17802,7 +17641,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_8_actor_4",
                   "sourceRef": "coCommented",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -17827,7 +17666,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_8_actor_5",
                   "sourceRef": "coSharedContent",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -17852,7 +17691,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_8_actor_6",
                   "sourceRef": "sharedCircle",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -17877,7 +17716,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_8_actor_7",
                   "sourceRef": "alumni",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -17902,7 +17741,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_8_actor_8",
                   "sourceRef": "sameSchool",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -17927,7 +17766,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_8_actor_9",
                   "sourceRef": "sameCompany",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -17952,7 +17791,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_8_actor_10",
                   "sourceRef": "followeeViewing",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -17982,7 +17821,8 @@
                 },
                 "evidenceRank": 5,
                 "snapshotVersion": ""
-              }
+              },
+              "displayBinding": "host_implicit"
             }
           ]
         },
@@ -18046,12 +17886,12 @@
               "objectKind": "content",
               "relationObjectId": "fixture_user_lin",
               "strength": 0.86,
-              "primaryText": "联系人林清越等12人赞过和评论过《这条记录》",
+              "primaryText": "联系人林清越等12人赞过和评论过",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_moment_grid_10",
               "intersectionClass": "fact",
               "displayName": "林清越",
-              "connectionSummary": "联系人林清越等12人赞过和评论过《这条记录》",
+              "connectionSummary": "联系人林清越等12人赞过和评论过",
               "rankState": "fresh",
               "primarySpans": [
                 {
@@ -18085,16 +17925,6 @@
                 {
                   "text": "人赞过和评论过",
                   "role": "plain"
-                },
-                {
-                  "text": "《这条记录》",
-                  "role": "object",
-                  "target": {
-                    "objectType": "post",
-                    "objectId": "alpha_moment_grid_10",
-                    "objectKind": "content",
-                    "routeId": "workBrowser"
-                  }
                 }
               ],
               "sampleVisuals": [
@@ -18110,7 +17940,7 @@
                   }
                 }
               ],
-              "displayText": "联系人林清越等12人赞过和评论过《这条记录》",
+              "displayText": "联系人林清越等12人赞过和评论过",
               "actionTargetId": "alpha_moment_grid_10",
               "kind": "alpha_showcase",
               "actorEvidenceTotalCount": 12,
@@ -18126,7 +17956,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_10_actor_1",
                   "sourceRef": "alpha_showcase",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -18151,7 +17981,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_10_actor_2",
                   "sourceRef": "sharedFollowees",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -18176,7 +18006,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_10_actor_3",
                   "sourceRef": "sharedCircle",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -18201,7 +18031,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_10_actor_4",
                   "sourceRef": "coCommented",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -18226,7 +18056,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_10_actor_5",
                   "sourceRef": "coSharedContent",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -18251,7 +18081,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_10_actor_6",
                   "sourceRef": "sharedCircle",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -18276,7 +18106,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_10_actor_7",
                   "sourceRef": "alumni",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -18301,7 +18131,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_10_actor_8",
                   "sourceRef": "sameSchool",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -18326,7 +18156,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_10_actor_9",
                   "sourceRef": "sameCompany",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -18351,7 +18181,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_10_actor_10",
                   "sourceRef": "followeeViewing",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -18376,7 +18206,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_10_actor_11",
                   "sourceRef": "coWishlistedEntity",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -18401,7 +18231,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_moment_grid_10_actor_12",
                   "sourceRef": "sameCohort",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -18431,7 +18261,8 @@
                 },
                 "evidenceRank": 5,
                 "snapshotVersion": ""
-              }
+              },
+              "displayBinding": "host_implicit"
             }
           ]
         },
@@ -18479,12 +18310,12 @@
               "objectKind": "content",
               "relationObjectId": "fixture_homepage_photo_spot_hengshu_studio",
               "strength": 0.86,
-              "primaryText": "你关注的人山川手账等7人赞过和评论过《这条记录》",
+              "primaryText": "你关注的人山川手账等7人赞过和评论过",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_photo_landscape_single",
               "intersectionClass": "fact",
               "displayName": "山川手账",
-              "connectionSummary": "你关注的人山川手账等7人赞过和评论过《这条记录》",
+              "connectionSummary": "你关注的人山川手账等7人赞过和评论过",
               "rankState": "fresh",
               "primarySpans": [
                 {
@@ -18518,16 +18349,6 @@
                 {
                   "text": "人赞过和评论过",
                   "role": "plain"
-                },
-                {
-                  "text": "《这条记录》",
-                  "role": "object",
-                  "target": {
-                    "objectType": "post",
-                    "objectId": "alpha_photo_landscape_single",
-                    "objectKind": "content",
-                    "routeId": "workBrowser"
-                  }
                 }
               ],
               "sampleVisuals": [
@@ -18544,7 +18365,7 @@
                 }
               ],
               "actionTargetId": "alpha_photo_landscape_single",
-              "displayText": "你关注的人山川手账等7人赞过和评论过《这条记录》",
+              "displayText": "你关注的人山川手账等7人赞过和评论过",
               "kind": "alpha_showcase",
               "actorEvidenceTotalCount": 7,
               "actorEvidenceCompleteness": "complete",
@@ -18559,7 +18380,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_photo_landscape_single_actor_1",
                   "sourceRef": "alpha_showcase",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -18584,7 +18405,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_photo_landscape_single_actor_2",
                   "sourceRef": "commonContact",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -18609,7 +18430,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_photo_landscape_single_actor_3",
                   "sourceRef": "sharedFollowees",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -18634,7 +18455,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_photo_landscape_single_actor_4",
                   "sourceRef": "sharedCircle",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -18659,7 +18480,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_photo_landscape_single_actor_5",
                   "sourceRef": "coCommented",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -18684,7 +18505,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_photo_landscape_single_actor_6",
                   "sourceRef": "coSharedContent",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -18709,7 +18530,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_photo_landscape_single_actor_7",
                   "sourceRef": "sharedCircle",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -18739,7 +18560,8 @@
                 },
                 "evidenceRank": 5,
                 "snapshotVersion": ""
-              }
+              },
+              "displayBinding": "host_implicit"
             }
           ]
         },
@@ -18799,12 +18621,12 @@
               "objectKind": "content",
               "relationObjectId": "fixture_homepage_photo_spot_hengshu_studio",
               "strength": 0.86,
-              "primaryText": "你关注的人山川手账等7人赞过和评论过《这条记录》",
+              "primaryText": "你关注的人山川手账等7人赞过和评论过",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_photo_landscape_carousel",
               "intersectionClass": "fact",
               "displayName": "山川手账",
-              "connectionSummary": "你关注的人山川手账等7人赞过和评论过《这条记录》",
+              "connectionSummary": "你关注的人山川手账等7人赞过和评论过",
               "rankState": "fresh",
               "primarySpans": [
                 {
@@ -18838,16 +18660,6 @@
                 {
                   "text": "人赞过和评论过",
                   "role": "plain"
-                },
-                {
-                  "text": "《这条记录》",
-                  "role": "object",
-                  "target": {
-                    "objectType": "post",
-                    "objectId": "alpha_photo_landscape_carousel",
-                    "objectKind": "content",
-                    "routeId": "workBrowser"
-                  }
                 }
               ],
               "sampleVisuals": [
@@ -18864,7 +18676,7 @@
                 }
               ],
               "actionTargetId": "alpha_photo_landscape_carousel",
-              "displayText": "你关注的人山川手账等7人赞过和评论过《这条记录》",
+              "displayText": "你关注的人山川手账等7人赞过和评论过",
               "kind": "alpha_showcase",
               "actorEvidenceTotalCount": 7,
               "actorEvidenceCompleteness": "complete",
@@ -18879,7 +18691,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_photo_landscape_carousel_actor_1",
                   "sourceRef": "alpha_showcase",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -18904,7 +18716,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_photo_landscape_carousel_actor_2",
                   "sourceRef": "commonContact",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -18929,7 +18741,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_photo_landscape_carousel_actor_3",
                   "sourceRef": "sharedFollowees",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -18954,7 +18766,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_photo_landscape_carousel_actor_4",
                   "sourceRef": "sharedCircle",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -18979,7 +18791,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_photo_landscape_carousel_actor_5",
                   "sourceRef": "coCommented",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -19004,7 +18816,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_photo_landscape_carousel_actor_6",
                   "sourceRef": "coSharedContent",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -19029,7 +18841,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_photo_landscape_carousel_actor_7",
                   "sourceRef": "sharedCircle",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -19059,7 +18871,8 @@
                 },
                 "evidenceRank": 5,
                 "snapshotVersion": ""
-              }
+              },
+              "displayBinding": "host_implicit"
             }
           ]
         },
@@ -19107,12 +18920,12 @@
               "objectKind": "content",
               "relationObjectId": "fixture_homepage_photo_spot_hengshu_studio",
               "strength": 0.86,
-              "primaryText": "你关注的人山川手账等7人赞过和评论过《这条记录》",
+              "primaryText": "你关注的人山川手账等7人赞过和评论过",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_photo_portrait_single",
               "intersectionClass": "fact",
               "displayName": "山川手账",
-              "connectionSummary": "你关注的人山川手账等7人赞过和评论过《这条记录》",
+              "connectionSummary": "你关注的人山川手账等7人赞过和评论过",
               "rankState": "fresh",
               "primarySpans": [
                 {
@@ -19146,16 +18959,6 @@
                 {
                   "text": "人赞过和评论过",
                   "role": "plain"
-                },
-                {
-                  "text": "《这条记录》",
-                  "role": "object",
-                  "target": {
-                    "objectType": "post",
-                    "objectId": "alpha_photo_portrait_single",
-                    "objectKind": "content",
-                    "routeId": "workBrowser"
-                  }
                 }
               ],
               "sampleVisuals": [
@@ -19172,7 +18975,7 @@
                 }
               ],
               "actionTargetId": "alpha_photo_portrait_single",
-              "displayText": "你关注的人山川手账等7人赞过和评论过《这条记录》",
+              "displayText": "你关注的人山川手账等7人赞过和评论过",
               "kind": "alpha_showcase",
               "actorEvidenceTotalCount": 7,
               "actorEvidenceCompleteness": "complete",
@@ -19187,7 +18990,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_photo_portrait_single_actor_1",
                   "sourceRef": "alpha_showcase",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -19212,7 +19015,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_photo_portrait_single_actor_2",
                   "sourceRef": "commonContact",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -19237,7 +19040,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_photo_portrait_single_actor_3",
                   "sourceRef": "sharedFollowees",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -19262,7 +19065,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_photo_portrait_single_actor_4",
                   "sourceRef": "sharedCircle",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -19287,7 +19090,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_photo_portrait_single_actor_5",
                   "sourceRef": "coCommented",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -19312,7 +19115,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_photo_portrait_single_actor_6",
                   "sourceRef": "coSharedContent",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -19337,7 +19140,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_photo_portrait_single_actor_7",
                   "sourceRef": "sharedCircle",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -19367,7 +19170,8 @@
                 },
                 "evidenceRank": 5,
                 "snapshotVersion": ""
-              }
+              },
+              "displayBinding": "host_implicit"
             }
           ]
         },
@@ -19423,12 +19227,12 @@
               "objectKind": "content",
               "relationObjectId": "fixture_homepage_photo_spot_hengshu_studio",
               "strength": 0.86,
-              "primaryText": "你关注的人山川手账等7人赞过和评论过《这条记录》",
+              "primaryText": "你关注的人山川手账等7人赞过和评论过",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_photo_portrait_carousel",
               "intersectionClass": "fact",
               "displayName": "山川手账",
-              "connectionSummary": "你关注的人山川手账等7人赞过和评论过《这条记录》",
+              "connectionSummary": "你关注的人山川手账等7人赞过和评论过",
               "rankState": "fresh",
               "primarySpans": [
                 {
@@ -19462,16 +19266,6 @@
                 {
                   "text": "人赞过和评论过",
                   "role": "plain"
-                },
-                {
-                  "text": "《这条记录》",
-                  "role": "object",
-                  "target": {
-                    "objectType": "post",
-                    "objectId": "alpha_photo_portrait_carousel",
-                    "objectKind": "content",
-                    "routeId": "workBrowser"
-                  }
                 }
               ],
               "sampleVisuals": [
@@ -19488,7 +19282,7 @@
                 }
               ],
               "actionTargetId": "alpha_photo_portrait_carousel",
-              "displayText": "你关注的人山川手账等7人赞过和评论过《这条记录》",
+              "displayText": "你关注的人山川手账等7人赞过和评论过",
               "kind": "alpha_showcase",
               "actorEvidenceTotalCount": 7,
               "actorEvidenceCompleteness": "complete",
@@ -19503,7 +19297,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_photo_portrait_carousel_actor_1",
                   "sourceRef": "alpha_showcase",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -19528,7 +19322,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_photo_portrait_carousel_actor_2",
                   "sourceRef": "commonContact",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -19553,7 +19347,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_photo_portrait_carousel_actor_3",
                   "sourceRef": "sharedFollowees",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -19578,7 +19372,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_photo_portrait_carousel_actor_4",
                   "sourceRef": "sharedCircle",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -19603,7 +19397,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_photo_portrait_carousel_actor_5",
                   "sourceRef": "coCommented",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -19628,7 +19422,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_photo_portrait_carousel_actor_6",
                   "sourceRef": "coSharedContent",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -19653,7 +19447,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_photo_portrait_carousel_actor_7",
                   "sourceRef": "sharedCircle",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -19683,7 +19477,8 @@
                 },
                 "evidenceRank": 5,
                 "snapshotVersion": ""
-              }
+              },
+              "displayBinding": "host_implicit"
             }
           ]
         },
@@ -19731,12 +19526,12 @@
               "objectKind": "content",
               "relationObjectId": "fixture_homepage_photo_spot_hengshu_studio",
               "strength": 0.86,
-              "primaryText": "你关注的人山川手账等7人赞过和评论过《这条记录》",
+              "primaryText": "你关注的人山川手账等7人赞过和评论过",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_photo_extreme_ratio_guard",
               "intersectionClass": "fact",
               "displayName": "山川手账",
-              "connectionSummary": "你关注的人山川手账等7人赞过和评论过《这条记录》",
+              "connectionSummary": "你关注的人山川手账等7人赞过和评论过",
               "rankState": "fresh",
               "primarySpans": [
                 {
@@ -19770,16 +19565,6 @@
                 {
                   "text": "人赞过和评论过",
                   "role": "plain"
-                },
-                {
-                  "text": "《这条记录》",
-                  "role": "object",
-                  "target": {
-                    "objectType": "post",
-                    "objectId": "alpha_photo_extreme_ratio_guard",
-                    "objectKind": "content",
-                    "routeId": "workBrowser"
-                  }
                 }
               ],
               "sampleVisuals": [
@@ -19796,7 +19581,7 @@
                 }
               ],
               "actionTargetId": "alpha_photo_extreme_ratio_guard",
-              "displayText": "你关注的人山川手账等7人赞过和评论过《这条记录》",
+              "displayText": "你关注的人山川手账等7人赞过和评论过",
               "kind": "alpha_showcase",
               "actorEvidenceTotalCount": 7,
               "actorEvidenceCompleteness": "complete",
@@ -19811,7 +19596,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_photo_extreme_ratio_guard_actor_1",
                   "sourceRef": "alpha_showcase",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -19836,7 +19621,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_photo_extreme_ratio_guard_actor_2",
                   "sourceRef": "commonContact",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -19861,7 +19646,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_photo_extreme_ratio_guard_actor_3",
                   "sourceRef": "sharedFollowees",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -19886,7 +19671,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_photo_extreme_ratio_guard_actor_4",
                   "sourceRef": "sharedCircle",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -19911,7 +19696,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_photo_extreme_ratio_guard_actor_5",
                   "sourceRef": "coCommented",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -19936,7 +19721,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_photo_extreme_ratio_guard_actor_6",
                   "sourceRef": "coSharedContent",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -19961,7 +19746,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_photo_extreme_ratio_guard_actor_7",
                   "sourceRef": "sharedCircle",
-                  "actionSummaryText": "赞过和评论过《这条记录》",
+                  "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -19991,7 +19776,8 @@
                 },
                 "evidenceRank": 5,
                 "snapshotVersion": ""
-              }
+              },
+              "displayBinding": "host_implicit"
             }
           ]
         },
@@ -20037,12 +19823,12 @@
               "objectKind": "content",
               "relationObjectId": "fixture_user_video_peer",
               "strength": 0.86,
-              "primaryText": "你关注的人影像同路人等5人看过《这条视频》",
+              "primaryText": "你关注的人影像同路人等5人看过",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_video_portrait_playable",
               "intersectionClass": "fact",
               "displayName": "影像同路人",
-              "connectionSummary": "你关注的人影像同路人等5人看过《这条视频》",
+              "connectionSummary": "你关注的人影像同路人等5人看过",
               "rankState": "fresh",
               "primarySpans": [
                 {
@@ -20076,16 +19862,6 @@
                 {
                   "text": "人看过",
                   "role": "plain"
-                },
-                {
-                  "text": "《这条视频》",
-                  "role": "object",
-                  "target": {
-                    "objectType": "post",
-                    "objectId": "alpha_video_portrait_playable",
-                    "objectKind": "content",
-                    "routeId": "workBrowser"
-                  }
                 }
               ],
               "sampleVisuals": [
@@ -20101,7 +19877,7 @@
                   }
                 }
               ],
-              "displayText": "你关注的人影像同路人等5人看过《这条视频》",
+              "displayText": "你关注的人影像同路人等5人看过",
               "actionTargetId": "alpha_video_portrait_playable",
               "kind": "alpha_showcase",
               "actorEvidenceTotalCount": 5,
@@ -20117,7 +19893,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_video_portrait_playable_actor_1",
                   "sourceRef": "alpha_showcase",
-                  "actionSummaryText": "看过《这条视频》",
+                  "actionSummaryText": "看过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -20142,7 +19918,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_video_portrait_playable_actor_2",
                   "sourceRef": "commonContact",
-                  "actionSummaryText": "看过《这条视频》",
+                  "actionSummaryText": "看过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -20167,7 +19943,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_video_portrait_playable_actor_3",
                   "sourceRef": "sharedFollowees",
-                  "actionSummaryText": "看过《这条视频》",
+                  "actionSummaryText": "看过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -20192,7 +19968,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_video_portrait_playable_actor_4",
                   "sourceRef": "sharedCircle",
-                  "actionSummaryText": "看过《这条视频》",
+                  "actionSummaryText": "看过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -20217,7 +19993,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_video_portrait_playable_actor_5",
                   "sourceRef": "coCommented",
-                  "actionSummaryText": "看过《这条视频》",
+                  "actionSummaryText": "看过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -20247,7 +20023,8 @@
                 },
                 "evidenceRank": 5,
                 "snapshotVersion": ""
-              }
+              },
+              "displayBinding": "host_implicit"
             }
           ]
         },
@@ -20293,12 +20070,12 @@
               "objectKind": "content",
               "relationObjectId": "fixture_user_video_peer",
               "strength": 0.86,
-              "primaryText": "你关注的人影像同路人等5人看过《这条视频》",
+              "primaryText": "你关注的人影像同路人等5人看过",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_video_landscape_playable",
               "intersectionClass": "fact",
               "displayName": "影像同路人",
-              "connectionSummary": "你关注的人影像同路人等5人看过《这条视频》",
+              "connectionSummary": "你关注的人影像同路人等5人看过",
               "rankState": "fresh",
               "primarySpans": [
                 {
@@ -20332,16 +20109,6 @@
                 {
                   "text": "人看过",
                   "role": "plain"
-                },
-                {
-                  "text": "《这条视频》",
-                  "role": "object",
-                  "target": {
-                    "objectType": "post",
-                    "objectId": "alpha_video_landscape_playable",
-                    "objectKind": "content",
-                    "routeId": "workBrowser"
-                  }
                 }
               ],
               "sampleVisuals": [
@@ -20357,7 +20124,7 @@
                   }
                 }
               ],
-              "displayText": "你关注的人影像同路人等5人看过《这条视频》",
+              "displayText": "你关注的人影像同路人等5人看过",
               "actionTargetId": "alpha_video_landscape_playable",
               "kind": "alpha_showcase",
               "actorEvidenceTotalCount": 5,
@@ -20373,7 +20140,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_video_landscape_playable_actor_1",
                   "sourceRef": "alpha_showcase",
-                  "actionSummaryText": "看过《这条视频》",
+                  "actionSummaryText": "看过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -20398,7 +20165,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_video_landscape_playable_actor_2",
                   "sourceRef": "commonContact",
-                  "actionSummaryText": "看过《这条视频》",
+                  "actionSummaryText": "看过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -20423,7 +20190,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_video_landscape_playable_actor_3",
                   "sourceRef": "sharedFollowees",
-                  "actionSummaryText": "看过《这条视频》",
+                  "actionSummaryText": "看过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -20448,7 +20215,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_video_landscape_playable_actor_4",
                   "sourceRef": "sharedCircle",
-                  "actionSummaryText": "看过《这条视频》",
+                  "actionSummaryText": "看过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -20473,7 +20240,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_video_landscape_playable_actor_5",
                   "sourceRef": "coCommented",
-                  "actionSummaryText": "看过《这条视频》",
+                  "actionSummaryText": "看过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -20503,7 +20270,8 @@
                 },
                 "evidenceRank": 5,
                 "snapshotVersion": ""
-              }
+              },
+              "displayBinding": "host_implicit"
             }
           ]
         },
@@ -20545,12 +20313,12 @@
               "objectKind": "content",
               "relationObjectId": "article_work",
               "strength": 0.86,
-              "primaryText": "联系人林清越等9人读过《三行内短文》",
+              "primaryText": "联系人林清越等9人读过",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_article_text_short",
               "intersectionClass": "fact",
-              "displayName": "同读者",
-              "connectionSummary": "联系人林清越等9人读过《三行内短文》",
+              "displayName": "林清越",
+              "connectionSummary": "联系人林清越等9人读过",
               "rankState": "fresh",
               "primarySpans": [
                 {
@@ -20584,23 +20352,13 @@
                 {
                   "text": "人读过",
                   "role": "plain"
-                },
-                {
-                  "text": "《三行内短文》",
-                  "role": "object",
-                  "target": {
-                    "objectType": "post",
-                    "objectId": "alpha_article_text_short",
-                    "objectKind": "content",
-                    "routeId": "workBrowser"
-                  }
                 }
               ],
               "sampleVisuals": [
                 {
                   "assetKind": "avatar",
                   "imageUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
-                  "displayName": "同读者",
+                  "displayName": "林清越",
                   "target": {
                     "objectId": "article_work",
                     "objectKind": "tag",
@@ -20608,7 +20366,7 @@
                   }
                 }
               ],
-              "displayText": "联系人林清越等9人读过《三行内短文》",
+              "displayText": "联系人林清越等9人读过",
               "actionTargetId": "alpha_article_text_short",
               "kind": "alpha_showcase",
               "actorEvidenceTotalCount": 9,
@@ -20624,7 +20382,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_text_short_actor_1",
                   "sourceRef": "alpha_showcase",
-                  "actionSummaryText": "读过《三行内短文》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -20649,7 +20407,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_text_short_actor_2",
                   "sourceRef": "sharedFollowees",
-                  "actionSummaryText": "读过《三行内短文》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -20674,7 +20432,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_text_short_actor_3",
                   "sourceRef": "sharedCircle",
-                  "actionSummaryText": "读过《三行内短文》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -20699,7 +20457,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_text_short_actor_4",
                   "sourceRef": "coCommented",
-                  "actionSummaryText": "读过《三行内短文》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -20724,7 +20482,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_text_short_actor_5",
                   "sourceRef": "coSharedContent",
-                  "actionSummaryText": "读过《三行内短文》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -20749,7 +20507,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_text_short_actor_6",
                   "sourceRef": "sharedCircle",
-                  "actionSummaryText": "读过《三行内短文》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -20774,7 +20532,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_text_short_actor_7",
                   "sourceRef": "alumni",
-                  "actionSummaryText": "读过《三行内短文》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -20799,7 +20557,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_text_short_actor_8",
                   "sourceRef": "sameSchool",
-                  "actionSummaryText": "读过《三行内短文》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -20824,7 +20582,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_text_short_actor_9",
                   "sourceRef": "sameCompany",
-                  "actionSummaryText": "读过《三行内短文》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -20854,7 +20612,8 @@
                 },
                 "evidenceRank": 5,
                 "snapshotVersion": ""
-              }
+              },
+              "displayBinding": "host_implicit"
             }
           ],
           "articleMarkdown": "---\ntitle: 三行内短文\nsummary: 这是一段三行内能读完的短文章摘要，首页不展示全文入口。\ntemplate: journal\nfontPreset: clean\n---\n\n# 三行内短文\n\n这是一段三行内能读完的短文章摘要，首页不展示全文入口。\n",
@@ -20908,12 +20667,12 @@
               "objectKind": "content",
               "relationObjectId": "article_work",
               "strength": 0.86,
-              "primaryText": "联系人林清越等9人读过《无图长文摘要》",
+              "primaryText": "联系人林清越等9人读过",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_article_text_long",
               "intersectionClass": "fact",
-              "displayName": "同读者",
-              "connectionSummary": "联系人林清越等9人读过《无图长文摘要》",
+              "displayName": "林清越",
+              "connectionSummary": "联系人林清越等9人读过",
               "rankState": "fresh",
               "primarySpans": [
                 {
@@ -20947,23 +20706,13 @@
                 {
                   "text": "人读过",
                   "role": "plain"
-                },
-                {
-                  "text": "《无图长文摘要》",
-                  "role": "object",
-                  "target": {
-                    "objectType": "post",
-                    "objectId": "alpha_article_text_long",
-                    "objectKind": "content",
-                    "routeId": "workBrowser"
-                  }
                 }
               ],
               "sampleVisuals": [
                 {
                   "assetKind": "avatar",
                   "imageUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
-                  "displayName": "同读者",
+                  "displayName": "林清越",
                   "target": {
                     "objectId": "article_work",
                     "objectKind": "tag",
@@ -20971,7 +20720,7 @@
                   }
                 }
               ],
-              "displayText": "联系人林清越等9人读过《无图长文摘要》",
+              "displayText": "联系人林清越等9人读过",
               "actionTargetId": "alpha_article_text_long",
               "kind": "alpha_showcase",
               "actorEvidenceTotalCount": 9,
@@ -20987,7 +20736,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_text_long_actor_1",
                   "sourceRef": "alpha_showcase",
-                  "actionSummaryText": "读过《无图长文摘要》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -21012,7 +20761,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_text_long_actor_2",
                   "sourceRef": "sharedFollowees",
-                  "actionSummaryText": "读过《无图长文摘要》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -21037,7 +20786,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_text_long_actor_3",
                   "sourceRef": "sharedCircle",
-                  "actionSummaryText": "读过《无图长文摘要》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -21062,7 +20811,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_text_long_actor_4",
                   "sourceRef": "coCommented",
-                  "actionSummaryText": "读过《无图长文摘要》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -21087,7 +20836,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_text_long_actor_5",
                   "sourceRef": "coSharedContent",
-                  "actionSummaryText": "读过《无图长文摘要》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -21112,7 +20861,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_text_long_actor_6",
                   "sourceRef": "sharedCircle",
-                  "actionSummaryText": "读过《无图长文摘要》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -21137,7 +20886,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_text_long_actor_7",
                   "sourceRef": "alumni",
-                  "actionSummaryText": "读过《无图长文摘要》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -21162,7 +20911,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_text_long_actor_8",
                   "sourceRef": "sameSchool",
-                  "actionSummaryText": "读过《无图长文摘要》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -21187,7 +20936,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_text_long_actor_9",
                   "sourceRef": "sameCompany",
-                  "actionSummaryText": "读过《无图长文摘要》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -21217,7 +20966,8 @@
                 },
                 "evidenceRank": 5,
                 "snapshotVersion": ""
-              }
+              },
+              "displayBinding": "host_implicit"
             }
           ],
           "articleMarkdown": "---\ntitle: 无图长文摘要\nsummary: 这是一段刻意写长的无图文章摘要，用来验证首页文章卡在超过三行时才展示全文入口。它继续补充场景、人物和路线，让文本在手机宽度下自然溢出第三行，并且点击整卡或全文入口都进入同一篇文章浏览器。\ntemplate: journal\nfontPreset: clean\n---\n\n# 无图长文摘要\n\n这是一段刻意写长的无图文章摘要，用来验证首页文章卡在超过三行时才展示全文入口。它继续补充场景、人物和路线，让文本在手机宽度下自然溢出第三行，并且点击整卡或全文入口都进入同一篇文章浏览器。\n",
@@ -21275,12 +21025,12 @@
               "objectKind": "content",
               "relationObjectId": "article_work",
               "strength": 0.86,
-              "primaryText": "联系人林清越等9人读过《上文下图长文》",
+              "primaryText": "联系人林清越等9人读过",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_article_top_image",
               "intersectionClass": "fact",
-              "displayName": "同读者",
-              "connectionSummary": "联系人林清越等9人读过《上文下图长文》",
+              "displayName": "林清越",
+              "connectionSummary": "联系人林清越等9人读过",
               "rankState": "fresh",
               "primarySpans": [
                 {
@@ -21314,23 +21064,13 @@
                 {
                   "text": "人读过",
                   "role": "plain"
-                },
-                {
-                  "text": "《上文下图长文》",
-                  "role": "object",
-                  "target": {
-                    "objectType": "post",
-                    "objectId": "alpha_article_top_image",
-                    "objectKind": "content",
-                    "routeId": "workBrowser"
-                  }
                 }
               ],
               "sampleVisuals": [
                 {
                   "assetKind": "avatar",
                   "imageUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
-                  "displayName": "同读者",
+                  "displayName": "林清越",
                   "target": {
                     "objectId": "article_work",
                     "objectKind": "tag",
@@ -21338,7 +21078,7 @@
                   }
                 }
               ],
-              "displayText": "联系人林清越等9人读过《上文下图长文》",
+              "displayText": "联系人林清越等9人读过",
               "actionTargetId": "alpha_article_top_image",
               "kind": "alpha_showcase",
               "actorEvidenceTotalCount": 9,
@@ -21354,7 +21094,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_top_image_actor_1",
                   "sourceRef": "alpha_showcase",
-                  "actionSummaryText": "读过《上文下图长文》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -21379,7 +21119,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_top_image_actor_2",
                   "sourceRef": "sharedFollowees",
-                  "actionSummaryText": "读过《上文下图长文》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -21404,7 +21144,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_top_image_actor_3",
                   "sourceRef": "sharedCircle",
-                  "actionSummaryText": "读过《上文下图长文》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -21429,7 +21169,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_top_image_actor_4",
                   "sourceRef": "coCommented",
-                  "actionSummaryText": "读过《上文下图长文》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -21454,7 +21194,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_top_image_actor_5",
                   "sourceRef": "coSharedContent",
-                  "actionSummaryText": "读过《上文下图长文》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -21479,7 +21219,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_top_image_actor_6",
                   "sourceRef": "sharedCircle",
-                  "actionSummaryText": "读过《上文下图长文》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -21504,7 +21244,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_top_image_actor_7",
                   "sourceRef": "alumni",
-                  "actionSummaryText": "读过《上文下图长文》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -21529,7 +21269,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_top_image_actor_8",
                   "sourceRef": "sameSchool",
-                  "actionSummaryText": "读过《上文下图长文》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -21554,7 +21294,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_top_image_actor_9",
                   "sourceRef": "sameCompany",
-                  "actionSummaryText": "读过《上文下图长文》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -21584,7 +21324,8 @@
                 },
                 "evidenceRank": 5,
                 "snapshotVersion": ""
-              }
+              },
+              "displayBinding": "host_implicit"
             }
           ],
           "articleMarkdown": "---\ntitle: 上文下图长文\nsummary: 有图长文在摘要较长时采用上文下图，让图片承担情绪收束，正文先交代推荐理由和阅读入口。\ntemplate: journal\nfontPreset: clean\n---\n\n# 上文下图长文\n\n有图长文在摘要较长时采用上文下图，让图片承担情绪收束，正文先交代推荐理由和阅读入口。\n\n![上文下图长文](media/image/s/archived-image/post/fixture_post_lifestyle_001/v1/cover.jpg)\n",
@@ -21642,12 +21383,12 @@
               "objectKind": "content",
               "relationObjectId": "article_work",
               "strength": 0.86,
-              "primaryText": "联系人林清越等9人读过《左文右图短文》",
+              "primaryText": "联系人林清越等9人读过",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_article_side_image",
               "intersectionClass": "fact",
-              "displayName": "同读者",
-              "connectionSummary": "联系人林清越等9人读过《左文右图短文》",
+              "displayName": "林清越",
+              "connectionSummary": "联系人林清越等9人读过",
               "rankState": "fresh",
               "primarySpans": [
                 {
@@ -21681,23 +21422,13 @@
                 {
                   "text": "人读过",
                   "role": "plain"
-                },
-                {
-                  "text": "《左文右图短文》",
-                  "role": "object",
-                  "target": {
-                    "objectType": "post",
-                    "objectId": "alpha_article_side_image",
-                    "objectKind": "content",
-                    "routeId": "workBrowser"
-                  }
                 }
               ],
               "sampleVisuals": [
                 {
                   "assetKind": "avatar",
                   "imageUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
-                  "displayName": "同读者",
+                  "displayName": "林清越",
                   "target": {
                     "objectId": "article_work",
                     "objectKind": "tag",
@@ -21705,7 +21436,7 @@
                   }
                 }
               ],
-              "displayText": "联系人林清越等9人读过《左文右图短文》",
+              "displayText": "联系人林清越等9人读过",
               "actionTargetId": "alpha_article_side_image",
               "kind": "alpha_showcase",
               "actorEvidenceTotalCount": 9,
@@ -21721,7 +21452,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_side_image_actor_1",
                   "sourceRef": "alpha_showcase",
-                  "actionSummaryText": "读过《左文右图短文》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -21746,7 +21477,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_side_image_actor_2",
                   "sourceRef": "sharedFollowees",
-                  "actionSummaryText": "读过《左文右图短文》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -21771,7 +21502,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_side_image_actor_3",
                   "sourceRef": "sharedCircle",
-                  "actionSummaryText": "读过《左文右图短文》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -21796,7 +21527,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_side_image_actor_4",
                   "sourceRef": "coCommented",
-                  "actionSummaryText": "读过《左文右图短文》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -21821,7 +21552,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_side_image_actor_5",
                   "sourceRef": "coSharedContent",
-                  "actionSummaryText": "读过《左文右图短文》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -21846,7 +21577,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_side_image_actor_6",
                   "sourceRef": "sharedCircle",
-                  "actionSummaryText": "读过《左文右图短文》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -21871,7 +21602,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_side_image_actor_7",
                   "sourceRef": "alumni",
-                  "actionSummaryText": "读过《左文右图短文》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -21896,7 +21627,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_side_image_actor_8",
                   "sourceRef": "sameSchool",
-                  "actionSummaryText": "读过《左文右图短文》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -21921,7 +21652,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_side_image_actor_9",
                   "sourceRef": "sameCompany",
-                  "actionSummaryText": "读过《左文右图短文》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -21951,7 +21682,8 @@
                 },
                 "evidenceRank": 5,
                 "snapshotVersion": ""
-              }
+              },
+              "displayBinding": "host_implicit"
             }
           ],
           "articleMarkdown": "---\ntitle: 左文右图短文\nsummary: 短图文保持左文右图，快速扫读也能看到封面。\ntemplate: journal\nfontPreset: clean\n---\n\n# 左文右图短文\n\n短图文保持左文右图，快速扫读也能看到封面。\n\n![左文右图短文](media/image/s/archived-image/post/fixture_article_001/v1/cover.png)\n",
@@ -22013,12 +21745,12 @@
               "objectKind": "content",
               "relationObjectId": "article_work",
               "strength": 0.86,
-              "primaryText": "联系人林清越等9人读过《上文下三图长文》",
+              "primaryText": "联系人林清越等9人读过",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_article_top_three_images",
               "intersectionClass": "fact",
-              "displayName": "同读者",
-              "connectionSummary": "联系人林清越等9人读过《上文下三图长文》",
+              "displayName": "林清越",
+              "connectionSummary": "联系人林清越等9人读过",
               "rankState": "fresh",
               "primarySpans": [
                 {
@@ -22052,23 +21784,13 @@
                 {
                   "text": "人读过",
                   "role": "plain"
-                },
-                {
-                  "text": "《上文下三图长文》",
-                  "role": "object",
-                  "target": {
-                    "objectType": "post",
-                    "objectId": "alpha_article_top_three_images",
-                    "objectKind": "content",
-                    "routeId": "workBrowser"
-                  }
                 }
               ],
               "sampleVisuals": [
                 {
                   "assetKind": "avatar",
                   "imageUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
-                  "displayName": "同读者",
+                  "displayName": "林清越",
                   "target": {
                     "objectId": "article_work",
                     "objectKind": "tag",
@@ -22076,7 +21798,7 @@
                   }
                 }
               ],
-              "displayText": "联系人林清越等9人读过《上文下三图长文》",
+              "displayText": "联系人林清越等9人读过",
               "actionTargetId": "alpha_article_top_three_images",
               "kind": "alpha_showcase",
               "actorEvidenceTotalCount": 9,
@@ -22092,7 +21814,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_top_three_images_actor_1",
                   "sourceRef": "alpha_showcase",
-                  "actionSummaryText": "读过《上文下三图长文》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -22117,7 +21839,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_top_three_images_actor_2",
                   "sourceRef": "sharedFollowees",
-                  "actionSummaryText": "读过《上文下三图长文》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -22142,7 +21864,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_top_three_images_actor_3",
                   "sourceRef": "sharedCircle",
-                  "actionSummaryText": "读过《上文下三图长文》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -22167,7 +21889,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_top_three_images_actor_4",
                   "sourceRef": "coCommented",
-                  "actionSummaryText": "读过《上文下三图长文》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -22192,7 +21914,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_top_three_images_actor_5",
                   "sourceRef": "coSharedContent",
-                  "actionSummaryText": "读过《上文下三图长文》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -22217,7 +21939,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_top_three_images_actor_6",
                   "sourceRef": "sharedCircle",
-                  "actionSummaryText": "读过《上文下三图长文》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -22242,7 +21964,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_top_three_images_actor_7",
                   "sourceRef": "alumni",
-                  "actionSummaryText": "读过《上文下三图长文》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -22267,7 +21989,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_top_three_images_actor_8",
                   "sourceRef": "sameSchool",
-                  "actionSummaryText": "读过《上文下三图长文》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -22292,7 +22014,7 @@
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_article_top_three_images_actor_9",
                   "sourceRef": "sameCompany",
-                  "actionSummaryText": "读过《上文下三图长文》",
+                  "actionSummaryText": "读过",
                   "likeCount": 0,
                   "commentCount": 0,
                   "shareCount": 0,
@@ -22322,7 +22044,8 @@
                 },
                 "evidenceRank": 5,
                 "snapshotVersion": ""
-              }
+              },
+              "displayBinding": "host_implicit"
             }
           ],
           "articleMarkdown": "---\ntitle: 上文下三图长文\nsummary: 先用一段正文建立阅读情绪，再连续展示三张图片，让文章卡和阅读器都覆盖上文下三图场景。\ntemplate: journal\nfontPreset: clean\n---\n\n# 上文下三图长文\n\n先用一段正文建立阅读情绪，再连续展示三张图片，让文章卡和阅读器都覆盖上文下三图场景。\n\n![上文下三图长文](media/image/s/archived-image/post/fixture_article_001/v1/cover.png)\n\n![上文下三图长文](media/image/s/archived-image/post/fixture_photo_002/v1/cover.png)\n\n![上文下三图长文](media/image/s/archived-image/post/fixture_photo_001/v1/image-3.png)\n",
@@ -26988,6 +26711,136 @@
           "replyCount": 0
         }
       ]
+    },
+    "profile_share_interaction_core": {
+      "description": "我的主页转发互动双向列表：图片/视频/文本/讨论、失效、未读与真实影响归因。",
+      "profileShareInteractions": [
+        {
+          "interactionId": "share_received_video_001",
+          "activityType": "share",
+          "direction": "received",
+          "ownerSubAccountId": "fixture_user_current",
+          "actorSubAccountId": "fixture_user_traveler",
+          "actorDisplayName": "山海来信",
+          "targetSubAccountId": "fixture_user_current",
+          "targetContentId": "fixture_video_001",
+          "targetKind": "record",
+          "targetAvailability": "active",
+          "previewMediaKind": "video",
+          "previewImageUrl": "media/image/s/archived-image/post/fixture_video_001/v1/cover.png",
+          "shareRecordId": "fixture_share_record_received_001",
+          "shareRecordAvailability": "active",
+          "shareText": "这一段转场很自然。",
+          "impactPrimaryText": "带来 3 次新浏览",
+          "impactDeepLink": "myIntersections",
+          "occurredAt": "2026-07-12T08:10:00Z",
+          "seenAt": null,
+          "readAt": null
+        },
+        {
+          "interactionId": "share_initiated_image_001",
+          "activityType": "share",
+          "direction": "sent",
+          "ownerSubAccountId": "fixture_user_current",
+          "actorSubAccountId": "fixture_user_current",
+          "counterpartSubAccountId": "fixture_user_photo",
+          "counterpartDisplayName": "纸上旅行",
+          "targetSubAccountId": "fixture_user_photo",
+          "targetContentId": "fixture_photo_001",
+          "targetKind": "record",
+          "targetAvailability": "active",
+          "previewMediaKind": "image",
+          "previewImageUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+          "shareText": "读完想再走一次这条路线。",
+          "impactPrimaryText": "",
+          "impactDeepLink": "",
+          "occurredAt": "2026-07-12T08:40:00Z",
+          "seenAt": null,
+          "readAt": null
+        },
+        {
+          "interactionId": "share_received_discussion_001",
+          "activityType": "share",
+          "direction": "received",
+          "ownerSubAccountId": "fixture_user_current",
+          "actorSubAccountId": "fixture_user_friend",
+          "actorDisplayName": "林清越",
+          "targetSubAccountId": "fixture_user_current",
+          "targetContentId": "fixture_discussion_001",
+          "targetKind": "discussion",
+          "targetContentSummary": "黄金后市怎么看？",
+          "targetReplyCount": 128,
+          "targetAvailability": "active",
+          "previewMediaKind": "text",
+          "occurredAt": "2026-07-11T04:20:00Z",
+          "seenAt": "2026-07-11T04:21:00Z",
+          "readAt": null
+        },
+        {
+          "interactionId": "share_received_deleted_001",
+          "activityType": "share",
+          "direction": "received",
+          "ownerSubAccountId": "fixture_user_current",
+          "actorSubAccountId": "fixture_user_friend",
+          "actorDisplayName": "林清越",
+          "targetSubAccountId": "fixture_user_current",
+          "targetContentId": "fixture_deleted_001",
+          "targetKind": "record",
+          "targetAvailability": "deleted",
+          "previewMediaKind": "none",
+          "occurredAt": "2026-07-10T04:20:00Z",
+          "seenAt": null,
+          "readAt": null
+        },
+        {
+          "interactionId": "share_received_private_001",
+          "activityType": "share",
+          "direction": "received",
+          "ownerSubAccountId": "fixture_user_current",
+          "actorSubAccountId": "fixture_user_friend",
+          "actorDisplayName": "林清越",
+          "targetSubAccountId": "fixture_user_current",
+          "targetContentId": "fixture_private_001",
+          "targetKind": "record",
+          "targetAvailability": "private",
+          "previewMediaKind": "none",
+          "occurredAt": "2026-07-09T04:20:00Z",
+          "seenAt": null,
+          "readAt": null
+        },
+        {
+          "interactionId": "share_received_reviewing_001",
+          "activityType": "share",
+          "direction": "received",
+          "ownerSubAccountId": "fixture_user_current",
+          "actorSubAccountId": "fixture_user_friend",
+          "actorDisplayName": "林清越",
+          "targetSubAccountId": "fixture_user_current",
+          "targetContentId": "fixture_reviewing_001",
+          "targetKind": "record",
+          "targetAvailability": "reviewing",
+          "previewMediaKind": "none",
+          "occurredAt": "2026-07-08T04:20:00Z",
+          "seenAt": null,
+          "readAt": null
+        },
+        {
+          "interactionId": "share_received_deactivated_001",
+          "activityType": "share",
+          "direction": "received",
+          "ownerSubAccountId": "fixture_user_current",
+          "actorSubAccountId": "fixture_user_deactivated",
+          "actorDisplayName": "已注销用户",
+          "targetSubAccountId": "fixture_user_current",
+          "targetContentId": "fixture_deactivated_001",
+          "targetKind": "record",
+          "targetAvailability": "author_deactivated",
+          "previewMediaKind": "none",
+          "occurredAt": "2026-07-07T04:20:00Z",
+          "seenAt": null,
+          "readAt": null
+        }
+      ]
     }
   },
   "scenarios": [
@@ -27050,8 +26903,8 @@
       ],
       "uiExpectations": {
         "textFragments": [
-          "你关注的4人也关注了林清越",
-          "23人因你的分享加入了相关圈子"
+          "你关注的人周屿等4人也关注了林清越",
+          "读者林清越等23人加入了「AI 产品圈」"
         ]
       },
       "remoteExpectations": {
@@ -27066,6 +26919,46 @@
         "authorImpactAuthorIds": [
           "fixture_user_current",
           "fixture_user_photographer"
+        ]
+      },
+      "environments": {
+        "alpha": {
+          "enabled": true,
+          "repository": "mock"
+        },
+        "beta": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        },
+        "gamma": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        }
+      }
+    },
+    {
+      "id": "profile_share_interaction_history",
+      "title": "我的主页转发互动双向历史",
+      "type": "profile_share_interaction",
+      "domainId": "content",
+      "seedRefs": [
+        "profile_share_interaction_core"
+      ],
+      "uiExpectations": {
+        "textFragments": [
+          "转发了你的记录",
+          "你转发了",
+          "带来 3 次新浏览",
+          "内容暂不可见"
+        ]
+      },
+      "remoteExpectations": {
+        "interactionIds": [
+          "share_received_video_001",
+          "share_initiated_image_001",
+          "share_received_discussion_001"
         ]
       },
       "environments": {

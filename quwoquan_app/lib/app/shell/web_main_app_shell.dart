@@ -240,7 +240,7 @@ class _WebWelcomeVisualState extends State<_WebWelcomeVisual>
                 builder: (context, child) {
                   return WelcomeFlowerMark(
                     appearance: appearance,
-                    petalProgresses: [
+                    petalBloomAmounts: [
                       for (final controller in _petalControllers)
                         controller.value,
                     ],

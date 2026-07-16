@@ -2,7 +2,7 @@ version: 1
 read_model: RelationshipCapabilityWire
 
 description: |
-  GET .../relationship/capability 响应 wire；字段与 RelationshipCapabilityView（follow_edge）及端侧 DTO 对齐。
+  GET .../relationship/capability 响应 wire；字段与 RelationshipCapabilityView（PersonaRelationship）及端侧 DTO 对齐。
 
 source_entities:
   - UserProfile

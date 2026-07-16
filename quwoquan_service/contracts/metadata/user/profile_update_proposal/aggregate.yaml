@@ -1,0 +1,23 @@
+version: 1
+domain: user
+aggregate_root: ProfileUpdateProposal
+object_kind: aggregate_root
+description: 外部来源或助手生成的 Persona 资料变更提案及确认、应用、拒绝生命周期聚合。
+storage_backend: postgres
+capabilities: [commandable, queryable, idempotent_commands, auditable]
+members: []
+business_rules:
+  - target persona、source 与 proposedChanges 创建后不可变
+  - proposedChanges 必须是允许字段的强类型 change set，不接受动态 Map
+  - 只有 target persona owner 可以确认或拒绝
+  - apply 必须调用 Persona Command Facade，并记录目标 expectedVersion
+  - applied 与 rejected 为终态，重复命令返回同一 receipt
+lifecycle:
+  states: [pending, confirmed, applied, rejected, expired]
+  optimistic_concurrency: version
+  idempotency: command_receipt
+ddd_layer_mapping:
+  domain_model: internal/domain/persona/profile_update_proposal/model
+  ports: internal/domain/persona/profile_update_proposal/ports
+  application: internal/application/persona/profile_update_proposal
+  persistence: internal/infrastructure/persona/profile_update_proposal/persistence

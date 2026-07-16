@@ -32,7 +32,7 @@ gwt_acceptance:
     edge_cases:
     - 无来源 / 无结论句时不展示、不占位。
     contract_refs:
-    - recommendation/rec_model/projections/intersection_reason.yaml
+    - recommendation/model_release/projections/intersection_reason.yaml
     performance_points: []
     tests:
       planned:
@@ -114,9 +114,9 @@ gwt_acceptance:
     edge_cases:
     - 无代表人、无宾语 target、spans join 失败、人数证据不完整、C0 无真实候选时均不展示。
     contract_refs:
-    - recommendation/rec_model/projections/intersection_reason.yaml
-    - recommendation/rec_model/projections/intersection_actor_evidence.yaml
-    - recommendation/rec_model/projections/intersection_target.yaml
+    - recommendation/model_release/projections/intersection_reason.yaml
+    - recommendation/model_release/projections/intersection_actor_evidence.yaml
+    - recommendation/model_release/projections/intersection_target.yaml
     - recommendation/rec_model/intersection_kind_registry.yaml
     performance_points: []
     tests:

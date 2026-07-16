@@ -12,22 +12,34 @@ class SearchApiMetadata {
   ];
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
+    'ClearRecentSearches': '/v1/search/recent',
+    'DeleteRecentSearch': '/v1/search/recent/{entryId}',
+    'ListRecentSearches': '/v1/search/recent',
     'ReportSearchFeedback': '/v1/search/feedback',
     'SearchQuery': '/v1/search',
+    'UpsertRecentSearch': '/v1/search/recent/{entryId}',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
+    'ClearRecentSearches': 'DELETE',
+    'DeleteRecentSearch': 'DELETE',
+    'ListRecentSearches': 'GET',
     'ReportSearchFeedback': 'POST',
     'SearchQuery': 'POST',
+    'UpsertRecentSearch': 'PUT',
   };
 
   /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
   static const Map<String, String> operationToAuthMode = <String, String>{
+    'ClearRecentSearches': 'required',
+    'DeleteRecentSearch': 'required',
+    'ListRecentSearches': 'required',
     'ReportSearchFeedback': 'optional',
     'SearchQuery': 'optional',
+    'UpsertRecentSearch': 'required',
   };
 
-  /// 响应读模型：operation -> 端侧 DTO 类名（service.yaml response_body 真相源，仅 object/page 形态）。
+  /// 已绑定端侧强类型的响应读模型：operation -> Dart 契约类名。
   static const Map<String, String> operationToResponseModel = <String, String>{
   };
 
@@ -35,9 +47,35 @@ class SearchApiMetadata {
   static const Map<String, String> operationToResponseKind = <String, String>{
   };
 
+  static const String clearRecentSearchesOperation = 'ClearRecentSearches';
+  static const String deleteRecentSearchOperation = 'DeleteRecentSearch';
+  static const String listRecentSearchesOperation = 'ListRecentSearches';
   static const String reportSearchFeedbackOperation = 'ReportSearchFeedback';
   static const String searchQueryOperation = 'SearchQuery';
+  static const String upsertRecentSearchOperation = 'UpsertRecentSearch';
 
+  static const String clearRecentSearchesPath = '/v1/search/recent';
+  static const String deleteRecentSearchPathTemplate = '/v1/search/recent/{entryId}';
+  static String deleteRecentSearchPath({required String entryId}) {
+    return _fillPath(deleteRecentSearchPathTemplate, <String, String>{
+      'entryId': entryId,
+    });
+  }
+  static const String listRecentSearchesPath = '/v1/search/recent';
   static const String reportSearchFeedbackPath = '/v1/search/feedback';
   static const String searchQueryPath = '/v1/search';
+  static const String upsertRecentSearchPathTemplate = '/v1/search/recent/{entryId}';
+  static String upsertRecentSearchPath({required String entryId}) {
+    return _fillPath(upsertRecentSearchPathTemplate, <String, String>{
+      'entryId': entryId,
+    });
+  }
+
+  static String _fillPath(String template, Map<String, String> params) {
+    var path = template;
+    params.forEach((key, value) {
+      path = path.replaceAll('{$key}', Uri.encodeComponent(value));
+    });
+    return path;
+  }
 }

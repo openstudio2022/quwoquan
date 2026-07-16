@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "可复用内容运行配方。执行身份与范围由 CLI 注入，不进入 recipe；recipeId 必须等于 families/ 下去 `.recipe.yaml` 后缀的相对路径。",
+  "type": "object",
+  "properties": {
+    "schemaVersion": { "const": "quwoquan.content.recipe" },
+    "recipeId": { "type": "string", "description": "家族包内引用路径，如 content/travel/homepage/h100" },
+    "title": { "type": "string" },
+    "presetRef": { "type": "string", "description": "本配方必须绑定的内容 preset" },
+    "runtimeProfile": { "type": "string", "description": "control_plane/_shared/<id>.runtime.yaml 运行环境 profile" },
+    "selection": {
+      "type": "object",
+      "description": "可复用目标选择策略；省市、实体与 executionId 只由运行参数注入。",
+      "properties": {
+            "name": { "type": "string" },
+            "title": { "type": "string" },
+            "intentLabel": { "type": "string" },
+            "discovery": { "type": "string", "description": "repo 相对 discovery 路径（JSON、主清单目录或市州级主清单 YAML 单文件）" },
+            "region": { "type": "string" },
+            "category": { "type": "string" },
+            "limit": { "type": "integer", "minimum": 1 },
+            "entityArticlesPerTarget": { "type": "integer", "minimum": 0 },
+            "entityHomepagesPerTarget": { "type": "integer", "minimum": 0 },
+            "imageWorksPerTarget": { "type": "integer", "minimum": 0 },
+            "mandatory": { "type": "string", "description": "必保实体逗号分隔；显式空串=空 mandatory（覆盖 select-targets 缺省）" }
+      },
+      "additionalProperties": false
+    },
+    "contract": {
+      "type": "object",
+      "description": "运行前契约门（不满足即 BLOCK，不静默降级）。executionBranch 已废止：分支由 quwoquan_ops/policies/branch_policy.yaml 治理，recipe 不得绑定 Git 分支。",
+      "properties": {
+        "requireActiveStatus": { "type": "boolean" },
+        "targetObjectCount": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "instanceParams": {
+      "type": "object",
+      "description": "通用 family recipe 的实例参数声明：required 列出的 selection 字段必须由 CLI 运行参数注入。",
+      "properties": {
+        "required": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["region", "discovery", "name", "title", "intentLabel", "mandatory", "limit"] }
+        }
+      },
+      "required": ["required"],
+      "additionalProperties": false
+    },
+    "execution": {
+      "type": "object",
+      "properties": {
+        "runtime": { "type": "string", "enum": ["local", "cloud"] },
+        "model": { "type": "string", "minLength": 1 },
+        "modelFamily": { "type": "string", "enum": ["claude", "composer", "gemini", "gpt", "grok"] },
+        "reviewModel": { "type": "string", "minLength": 1 },
+        "reviewModelFamily": { "type": "string", "enum": ["claude", "composer", "gemini", "gpt", "grok"] },
+        "maxAuthorRounds": { "type": "integer", "minimum": 1 },
+        "resumeBudgetSeconds": { "type": "number", "minimum": 0 },
+        "forceCleanWorkspaceAgentState": { "type": "boolean" }
+      },
+      "required": ["runtime", "model", "modelFamily", "reviewModel", "reviewModelFamily"],
+      "additionalProperties": false
+    },
+    "readiness": {
+      "type": "object",
+      "description": "运行后放量验收（execution audit + sdk monitoring + scale readiness）",
+      "properties": {
+        "dailyTarget": { "type": "integer", "minimum": 1 },
+        "target": { "type": "integer", "minimum": 1 },
+        "minPassRate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "mode": { "type": "string" },
+        "failOnNoGo": { "type": "boolean" },
+        "acceptEstimatedTokenLedger": { "type": "boolean", "description": "显式接受 estimated_from_artifacts 账本（本地 bridge 不回传 usage，2026-07-06 裁定）" },
+        "requireReviewed": { "type": "boolean", "description": "要求 execution-readiness 只接受独立审阅闭包的对象" }
+      },
+      "additionalProperties": false
+    },
+    "env": false
+  },
+  "required": ["schemaVersion", "recipeId", "title", "presetRef", "selection", "execution"],
+  "additionalProperties": false
+}

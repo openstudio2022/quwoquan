@@ -1,32 +1,18 @@
-schemaVersion: prefab_user_provenance/1
-description: '预制用户唯一增量真相源声明。新增预制用户必须经 creator_pool 管线产出；
-
-  archive fixture_user_* 只读保留，不得新增引用。
-
-  '
-defaultTrack: creator_pool
-archiveTrackPolicy: read_only_until_t4
-currentUserSlot: creator_pool.currentUserVariant
-tracks:
-  archive:
-    prefabTrack: archive
-    source: shared.avatar-user-pool
+schemaVersion: prefab_user_provenance/2
+description: 预制用户现行真相源。共享场景 fixture 与创作者规模 fixture 按测试用途正交，禁止合并、回退或别名解析。
+fixtureSets:
+  shared_scenarios:
+    source: seed-box.shared_pool
     fixturePath: _shared/test_fixtures/user_pool.json
-    policy: read_only_until_t4
-  creator_pool:
-    prefabTrack: creator_pool
+    purpose: 跨服务场景、端云集成与用户旅程的确定性身份集合
+  creator_scale:
     source: creator_pool.seed/2
     fixturePath: _shared/test_fixtures/user_pool.creator_pool.travel_photo_1k_v1.json
     manifestPath: _shared/test_fixtures/user_pool.manifest.travel_photo_1k_v1.json
-    policy: sole_incremental_source
-archiveAliases:
-  fixture_user_current:
-    resolvesTo: qwq_creator_current_user_variant
-    deprecated: true
-    note: T2+ dual-read alias; resolver maps to currentUserVariant slot
-  user_001:
-    resolvesTo: qwq_creator_current_user_variant
-    deprecated: true
+    purpose: 旅行摄影创作者规模、内容绑定与发布验证
+currentUser:
+  userId: fixture_user_current
+  subAccountId: fixture_sub_current
 batchPolicy:
   canonicalBatchId: travel_photo_1k_v1
   travel_photo_1k_v1:

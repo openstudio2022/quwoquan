@@ -345,19 +345,22 @@ void main() {
       expect(normalized.primarySpans, isEmpty);
     });
 
-    test('已有云侧主句时不补 spans，展示合同另行 fail-closed', () {
+    test('已有云侧主句时不补 spans，并按纯文本降级展示', () {
       final original = reason(
         kind: 'sharedFollowees',
         objectName: '林清越',
         objectId: 'u_lin',
         objectKind: 'person',
         count: 4,
-        primaryText: '4位你关注的人也关注了林清越',
+        primaryText: '林清越也关注胶片摄影',
       );
       final normalized = normalizeDisplayReason(original);
       expect(normalized.primaryText, original.primaryText);
       expect(normalized.primarySpans, isEmpty);
-      expect(displayReadyIntersectionReason(normalized), isNull);
+      expect(
+        displayReadyIntersectionReason(normalized)?.primaryText,
+        original.primaryText,
+      );
     });
   });
 }

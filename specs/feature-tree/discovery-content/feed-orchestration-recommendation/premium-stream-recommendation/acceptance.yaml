@@ -42,7 +42,7 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_service/services/content-service/internal/application/feed/feed_service_negative_fallback__local_contract_test.go
+      - file: quwoquan_service/services/content-service/internal/application/feed/feed_service_read_path__local_contract_test.go
       - file: quwoquan_service/services/product-ops-service/cmd/api/main__local_contract_test.go
       - file: quwoquan_app/test/local_contract/ui/components/content/intersection_reason_chip_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/discovery/home_intersection_multiform_feed_widget__local_contract_test.dart
@@ -86,7 +86,7 @@ gwt_acceptance:
     - 低流量 premium_pool 分桶只用于诊断，不单独作为策略晋级依据。
     contract_refs:
     - specs/feature-tree/discovery-content/feed-orchestration-recommendation/premium-stream-recommendation/spec.md
-    - quwoquan_service/contracts/metadata/recommendation/rec_model/projections/premium_pool_projection.yaml
+    - quwoquan_service/contracts/metadata/recommendation/model_release/projections/premium_pool_projection.yaml
     - quwoquan_service/contracts/metadata/recommendation/rec_model/policy.yaml
     - quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml
     performance_points:

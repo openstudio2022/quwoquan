@@ -1,0 +1,25 @@
+id: CR-20260711-001-output-role-normalization
+title: 输出职责归一化与 Data migration 执行器清零
+date: 2026-07-11
+scope:
+  - quwoquan_ops/cli/lib/output_paths.py
+  - quwoquan_ops/environments/output_state_layout_manifest.yaml
+  - quwoquan_data/scripts/core/paths.py
+  - quwoquan_data/scripts/content/release/environment/**
+  - quwoquan_data/scripts/content/release/canonical/object_transaction.py
+  - quwoquan_data/scripts/migration/**
+summary: |
+  冻结 output/state 三类生命周期契约；退役旧 data release 与本地 runtime 目录、
+  object_store 与 scripts/migration 一次性执行器；统一 env 证据到 runs/data-release、
+  immutable release 到 data/releases、批次运行根到 data/runtime；本地 .qwq_output 按
+  discard_rebuild 迁移并删除历史 migration 证据。
+breaking:
+  - QWQ 默认 RUNTIME_ROOT 已迁移至 data/runtime
+  - RELEASE_ROOT 已迁移至 data/releases
+  - ship 环境证据已迁移至 env/{env}/runs/data-release/...
+  - 删除 qwq-data migration 命令面及 scripts/migration/**
+verification:
+  - python3 quwoquan_ops/gate/verify_output_layout.py
+  - python3 quwoquan_data/scripts/cli.py verify data-layout
+  - quwoquan_data/tests/api_integration/ship/test_release_first_ship__api_integration_test.py
+  - quwoquan_data/tests/local_contract/publish/test_object_transaction__local_contract_test.py

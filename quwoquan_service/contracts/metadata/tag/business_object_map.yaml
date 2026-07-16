@@ -1,0 +1,189 @@
+bounded_contexts:
+- access_policy:
+    child_objects: aggregate_root_only
+    commands: aggregate_facade_only
+    cross_context: public_contract_only
+    queries: named_reader_slice_only
+  context_id: tag.tag
+  name: Tag
+  role: supporting
+decision_refs:
+- DDD-OBJ-001
+- CTX-OWNERSHIP-007
+- CQRS-QUERY-004
+domain: tag
+objects:
+- access:
+    commands: aggregate_facade
+    cross_context: public_contract_only
+    queries: named_reader
+  bounded_context: Tag
+  canonical_object: TagTaxonomyRelease
+  event_consumers: []
+  field_roles:
+    append_only_fact: []
+    authoritative_state:
+    - releaseId
+    - sourceOwner
+    - canonicalDigest
+    - nodeCount
+    - status
+    - importedAt
+    - activatedAt
+    owned_value: []
+    projection: []
+    reference: []
+    transport_only: []
+  identity:
+    fields:
+    - releaseId
+    version_source: store_commit
+  invariant_refs:
+  - tag/taxonomy_release/aggregate.yaml#business_rules
+  lifecycle_refs:
+  - tag/taxonomy_release/aggregate.yaml#lifecycle
+  member_bounds: {}
+  mutation_entrypoints:
+  - ActivateTagTaxonomyRelease
+  - StageTagTaxonomyRelease
+  object_kind: aggregate_root
+  relationships: []
+  source_document: tag/taxonomy_release/fields.yaml
+  source_entity: TagTaxonomyRelease
+  storage_backend: mongodb
+  storage_role: authoritative
+- access:
+    commands: none
+    cross_context: public_contract_only
+    queries: named_reader
+  bounded_context: Tag
+  canonical_object: TagNodeView
+  event_consumers: []
+  field_roles:
+    append_only_fact: []
+    authoritative_state: []
+    owned_value: []
+    projection:
+    - tagRef
+    - group
+    - label
+    - displayLabel
+    - labelEn
+    - aliases
+    - ancestors
+    - parentTagRef
+    - depth
+    - releaseId
+    - lifecycleStatus
+    - createdAt
+    - updatedAt
+    reference:
+    - releaseId
+    transport_only: []
+  identity:
+    fields:
+    - releaseId
+    - tagRef
+    version_source: checkpoint
+  invariant_refs: []
+  lifecycle_refs: []
+  member_bounds: {}
+  mutation_entrypoints: []
+  object_kind: projection
+  relationships:
+  - access: event
+    cardinality: N:1
+    consistency: eventual
+    kind: projection_source
+    name: releaseEvents
+    on_delete: tombstone
+    reference_fields:
+    - releaseId
+    target_object: tag.TagTaxonomyRelease
+  source_document: tag/fields.yaml
+  source_entity: TagNodeView
+  storage_backend: mongodb
+  storage_role: projection
+- access:
+    commands: none
+    cross_context: public_contract_only
+    queries: named_reader
+  bounded_context: Tag
+  canonical_object: ObjectTagIndexView
+  event_consumers: []
+  field_roles:
+    append_only_fact: []
+    authoritative_state: []
+    owned_value: []
+    projection:
+    - objectId
+    - objectType
+    - tagRefs
+    - createdAt
+    - updatedAt
+    reference: []
+    transport_only: []
+  identity:
+    fields:
+    - objectId
+    version_source: checkpoint
+  invariant_refs: []
+  lifecycle_refs: []
+  member_bounds: {}
+  mutation_entrypoints: []
+  object_kind: projection
+  relationships: []
+  source_document: tag/fields.yaml
+  source_entity: ObjectTagIndex
+  storage_backend: mongodb
+  storage_role: projection
+- access:
+    commands: append_only_sink
+    cross_context: event_only
+    queries: none
+  bounded_context: Tag
+  canonical_object: TagFeedback
+  event_consumers: []
+  field_roles:
+    append_only_fact:
+    - id
+    - tagRef
+    - action
+    - context
+    - idempotencyKey
+    - recordedAt
+    - actorKind
+    - actorId
+    authoritative_state: []
+    owned_value: []
+    projection: []
+    reference:
+    - actorKind
+    - actorId
+    transport_only: []
+  identity:
+    fields:
+    - id
+    version_source: immutable
+  invariant_refs: []
+  lifecycle_refs: []
+  member_bounds: {}
+  mutation_entrypoints: []
+  object_kind: append_only_fact
+  relationships:
+  - access: event
+    cardinality: N:1
+    consistency: eventual
+    kind: event_source
+    name: actor
+    on_delete: retain
+    reference_fields:
+    - actorKind
+    - actorId
+    target_objects:
+    - user.Persona
+    - user.DeviceRegistration
+  source_document: tag/tag_feedback/fields.yaml
+  source_entity: TagFeedback
+  storage_backend: mongodb
+  storage_role: append_only

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/gamma_app_uat_case_manifest.schema.json",
+  "title": "Gamma homepage App UAT case manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "environment", "releaseId", "runId", "importerReportRef", "generatedAt", "cases"],
+  "properties": {
+    "schemaVersion": {"const": "quwoquan_data.gamma_app_uat_case_manifest/1"},
+    "environment": {"const": "gamma"},
+    "releaseId": {"type": "string", "minLength": 1},
+    "runId": {"type": "string", "minLength": 1},
+    "importerReportRef": {"type": "string", "pattern": "^env/gamma/runs/data-release/"},
+    "generatedAt": {"type": "string", "minLength": 1},
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["entityRef", "homepageId", "title"],
+        "properties": {
+          "entityRef": {"type": "string", "minLength": 3},
+          "homepageId": {"type": "string", "minLength": 1},
+          "title": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
+}

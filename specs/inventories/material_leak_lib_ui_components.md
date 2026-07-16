@@ -204,7 +204,7 @@
 - `quwoquan_app/lib/ui/assistant/widgets/message/assistant_journey_view_model.dart`
 - `quwoquan_app/lib/ui/assistant/widgets/message/assistant_turn_message_resolver.dart`
 - `quwoquan_app/lib/ui/chat/models/chat_list_item_view_model.dart`
-- `quwoquan_app/lib/ui/chat/pages/chat_detail_page.dart`
+- `quwoquan_app/lib/ui/chat/pages/chat_conversation_page.dart`
 - `quwoquan_app/lib/ui/chat/pages/chat_display_fallbacks.dart`
 - `quwoquan_app/lib/ui/chat/pages/group_admins_page.dart`
 - `quwoquan_app/lib/ui/chat/pages/group_manage_page.dart`

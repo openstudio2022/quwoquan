@@ -80,6 +80,39 @@ export const platformConfigSchema = {
       "ui_editable": true
     },
     {
+      "key": "sys.user.auth.success_detail_sample_ratio",
+      "type": "float",
+      "owner": "user-identity",
+      "default": 0.1,
+      "scope": "environment",
+      "reload": "hot",
+      "rollout": "progressive",
+      "risk_level": "high",
+      "ui_editable": true
+    },
+    {
+      "key": "sys.user.auth.raw_event_retention_days",
+      "type": "int",
+      "owner": "user-identity",
+      "default": 30,
+      "scope": "environment",
+      "reload": "restart",
+      "rollout": "progressive",
+      "risk_level": "high",
+      "ui_editable": true
+    },
+    {
+      "key": "sys.user.auth.aggregate_metric_retention_days",
+      "type": "int",
+      "owner": "user-identity",
+      "default": 180,
+      "scope": "environment",
+      "reload": "restart",
+      "rollout": "progressive",
+      "risk_level": "medium",
+      "ui_editable": true
+    },
+    {
       "key": "sys.content.worker.concurrency",
       "type": "int",
       "owner": "platform-ops",

@@ -23,7 +23,7 @@ surfaces:
       - CreateConversation
       - ListConversations
       - SearchSocialRelations
-      - ListUserCircles
+      - ListPersonaCircles
 
   - id: chatDetail
     owner: chat
@@ -32,6 +32,9 @@ surfaces:
     description: IM 会话详情
     operation_ids:
       - GetConversation
+      - InitMediaUpload
+      - CompleteMediaUpload
+      - AbortMediaUpload
       - ListMessages
       - SendMessage
       - RecallMessage
@@ -118,10 +121,14 @@ surfaces:
     operation_ids:
       - CreateAssistantConversation
       - GetAssistantConversation
-      - CreateAssistantTurn
-      - GetAssistantTurn
-      - StreamAssistantTurn
+      - StartAssistantRun
+      - GetAssistantRun
+      - StreamAssistantRunEvents
       - ListAppMessages
+      - GetAppMessage
+      - AckAppMessage
+      - ReadAppMessage
+      - CreateProfileUpdateProposal
       - GetAppMessageUnreadCount
       - ReportInteractionEvent
       - ReportScorecard
@@ -192,6 +199,8 @@ surfaces:
       - SearchConversations
       - SearchMessages
       - SearchCircles
+      - ListCircleGroups
+      - SearchCircleGroups
       - UpsertRecentSearch
 
   - id: globalSearchNetworkResults
@@ -200,7 +209,12 @@ surfaces:
     path_template: /search/network
     description: 网络结果页（小趣搜 assistant 结果 tab + 圈子频道分类内容结果）
     operation_ids:
+      - CreatePost
+      - GetNearbyLocations
+      - PublishPost
+      - SearchLocations
       - SearchPosts
+      - GetPost
       - SearchCircles
       - SearchXiaoquResults
       - UpsertRecentSearch
@@ -245,6 +259,8 @@ surfaces:
       - GetObjectPageBundle
       - GetEntityImpact
       - GetHomepageDetail
+      - FollowHomepage
+      - UnfollowHomepage
       - GetHomepageShell
       - GetHomepageReviewSummary
       - GetHomepageRelatedGroups
@@ -293,11 +309,35 @@ surfaces:
       - GetCircle
       - GetCircleImpact
       - GetCircleFeed
-      - ListCircleMembers
+      - ListCircleMemberships
       - ListCircleGroups
+      - SearchCircleGroups
+      - GetCircleGroup
+      - CreateCircleGroup
+      - UpdateCircleGroup
+      - ArchiveCircleGroup
+      - ApplyJoinCircleGroup
+      - GetMyCircleGroupMembership
+      - ListCircleGroupMemberships
+      - LeaveCircleGroup
+      - ApproveCircleGroupMember
+      - RejectCircleGroupMember
+      - RemoveCircleGroupMember
+      - UpdateCircleGroupMemberRole
+      - ListCircleFiles
+      - GetCircleFile
+      - CreateCircleFile
+      - UpdateCircleFile
+      - DeleteCircleFile
+      - RequestOriginalImageAccess
+      - InitMediaUpload
+      - CompleteMediaUpload
+      - AbortMediaUpload
       - GetCircleStats
+      - GetMyCircleMembership
       - JoinCircle
       - LeaveCircle
+      - ReportCircleBehavior
 
   - id: myFootprint
     owner: content
@@ -316,11 +356,14 @@ surfaces:
       - GetUserProfile
       - GetSubAccountProfile
       - ListUserWorks
+      - ListUserPosts
       - ListUserLifeItems
       - ListUserLikes
       - GetRelationshipCapability
       - FollowUser
       - UnfollowUser
+      - CreateReport
+      - ListPersonaCircles
 
   - id: profileCareerInterests
     owner: user
@@ -391,3 +434,307 @@ surfaces:
     description: 我的二维码名片（让对方扫码添加为联系人）
     operation_ids:
       - GetProfileQrCard
+
+  # 页面对象契约所需的共享导航面。业务对象与 Query Slice 绑定只在
+  # page_object_contract.yaml 维护；这里仅定义 route/path 一致的 Surface 身份。
+  - id: appShell
+    owner: app
+    route_id: home
+    path_template: /
+    description: App 主导航壳与跨端导航 chrome
+    operation_ids: []
+
+  - id: homeFeed
+    owner: content
+    route_id: home
+    path_template: /
+    description: 首页推荐与关注内容流
+    operation_ids:
+      - CreateReport
+      - LikePost
+      - UnlikePost
+      - GetContentReactionState
+      - ListComments
+      - ListCommentReplies
+      - CreateComment
+      - DeleteComment
+      - ReactToComment
+      - BindMediaAssetsToComment
+      - GetMediaAsset
+      - RequestOriginalImageAccess
+      - InitMediaUpload
+      - CompleteMediaUpload
+      - AbortMediaUpload
+      - CreateOutboundShare
+      - PlacePostInCircle
+      - ListPersonaCircles
+
+  - id: welcome
+    owner: app
+    route_id: welcome
+    path_template: /welcome
+    description: Flutter 唯一启动欢迎页
+    operation_ids: []
+
+  - id: circlesList
+    owner: circle
+    route_id: circles
+    path_template: /circles
+    description: 圈子发现与分类列表入口
+    operation_ids: []
+
+  - id: profileHome
+    owner: user
+    route_id: profile
+    path_template: /profile
+    description: 我的主页根入口
+    operation_ids: []
+
+  - id: interestMatch
+    owner: interest_match
+    route_id: interestMatch
+    path_template: /interest-match
+    description: 找同趣与兴趣配对启动器
+    operation_ids: []
+
+  - id: login
+    owner: user
+    route_id: login
+    path_template: /login
+    description: 商用登录入口
+    operation_ids: []
+
+  - id: legalUserAgreement
+    owner: legal
+    route_id: legalUserAgreement
+    path_template: /legal/user-agreement
+    description: 用户协议静态正文
+    operation_ids: []
+
+  - id: legalPrivacyPolicy
+    owner: legal
+    route_id: legalPrivacyPolicy
+    path_template: /legal/privacy-policy
+    description: 隐私政策静态正文
+    operation_ids: []
+
+  - id: legalPermissions
+    owner: legal
+    route_id: legalPermissions
+    path_template: /legal/permissions
+    description: 权限说明静态正文
+    operation_ids: []
+
+  - id: legalThirdPartySdkList
+    owner: legal
+    route_id: legalThirdPartySdkList
+    path_template: /legal/third-party-sdk-list
+    description: 第三方 SDK 清单静态正文
+    operation_ids: []
+
+  - id: createWorkspace
+    owner: content
+    route_id: create
+    path_template: /create
+    description: 内容创作工作台及其内嵌编辑流程
+    operation_ids:
+      - CreatePost
+      - GetNearbyLocations
+      - PublishPost
+      - SearchLocations
+      - InitMediaUpload
+      - CompleteMediaUpload
+      - AbortMediaUpload
+      - CreateOutboundShare
+      - PlacePostInCircle
+      - ListPersonaCircles
+      - CreateOutboundShare
+      - PlacePostInCircle
+      - GetMediaUploadSession
+      - BindMediaAssetsToPost
+      - SelectAutoVideoCover
+      - SelectManualVideoCover
+
+  - id: imageEditor
+    owner: content
+    route_id: createEditImage
+    path_template: /create/edit-image
+    description: 图片编辑全屏页
+    operation_ids:
+      - GetMediaAsset
+      - SelectAutoVideoCover
+      - SelectManualVideoCover
+
+  - id: workBrowser
+    owner: content
+    route_id: workBrowser
+    path_template: /works/browser/{workId}
+    description: 作品浏览器与深链加载入口
+    operation_ids:
+      - CreateReport
+      - GetPost
+      - LikePost
+      - UnlikePost
+      - GetContentReactionState
+      - ListComments
+      - ListCommentReplies
+      - CreateComment
+      - DeleteComment
+      - PinComment
+      - UnpinComment
+      - ReactToComment
+      - BindMediaAssetsToComment
+      - GetMediaAsset
+      - RequestOriginalImageAccess
+      - InitMediaUpload
+      - CompleteMediaUpload
+      - AbortMediaUpload
+
+  - id: circleStats
+    owner: circle
+    route_id: circleStats
+    path_template: /circle/{id}/stats
+    description: 圈子成员、群聊、粉丝与获赞统计列表
+    operation_ids:
+      - ListCircleMemberships
+      - UpdateCircleMembershipRole
+      - ListCircleGroupMemberships
+      - UpdateCircleGroupMemberRole
+
+  - id: assistantManagement
+    owner: assistant
+    route_id: assistantManagement
+    path_template: /assistant/management
+    description: 私助偏好、隐私与记忆管理
+    operation_ids: []
+
+  - id: assistantSkills
+    owner: assistant
+    route_id: assistantSkills
+    path_template: /assistant/skills
+    description: 私助技能中心
+    operation_ids: []
+
+  - id: personalAssistantChatAlias
+    owner: assistant
+    route_id: chatDetail
+    path_template: /chat/{id}
+    description: assistant 会话 ID 经聊天详情路由进入私助对话
+    operation_ids: []
+
+  - id: settingsHome
+    owner: settings
+    route_id: settings
+    path_template: /settings
+    description: 设置中枢
+    operation_ids: []
+
+  - id: settingsPermissions
+    owner: settings
+    route_id: settingsPermissions
+    path_template: /settings/permissions
+    description: 权限管理说明页
+    operation_ids: []
+
+  - id: settingsDarkMode
+    owner: settings
+    route_id: settingsDarkMode
+    path_template: /settings/dark-mode
+    description: 外观与深色模式设置页
+    operation_ids: []
+
+  - id: settingsAbout
+    owner: settings
+    route_id: settingsAbout
+    path_template: /settings/about
+    description: 关于趣我圈与法律入口
+    operation_ids: []
+
+  - id: profileEdit
+    owner: user
+    route_id: profileEdit
+    path_template: /profile/edit
+    description: 我的资料编辑页
+    operation_ids:
+      - InitMediaUpload
+      - CompleteMediaUpload
+      - AbortMediaUpload
+      - ConfirmProposal
+      - ApplyProposal
+      - RejectProposal
+      - GetProfileUpdateProposal
+      - ListProfileUpdateProposals
+
+  - id: profilePersonas
+    owner: user
+    route_id: profilePersonas
+    path_template: /profile/personas
+    description: 分身管理页
+    operation_ids: []
+
+  - id: profileComments
+    owner: user
+    route_id: profileComments
+    path_template: /profile/comments
+    description: 资料页评论列表
+    operation_ids:
+      - ListCommentsByAuthor
+      - ListCommentsForPostAuthor
+      - DeleteComment
+      - ReactToComment
+
+  - id: profileStats
+    owner: user
+    route_id: profileStats
+    path_template: /profile/stats
+    description: 粉丝、关注与圈子统计列表
+    operation_ids: []
+
+  - id: myIntersections
+    owner: user
+    route_id: myIntersections
+    path_template: /profile/intersections
+    description: 我的交集与影响力收件箱
+    operation_ids: []
+
+  - id: objectIntersections
+    owner: recommendation
+    route_id: objectIntersections
+    path_template: /object/intersections
+    description: 对象全部交集列表
+    operation_ids: []
+
+  - id: rtcOutgoing
+    owner: rtc
+    route_id: rtcOutgoing
+    path_template: /rtc/outgoing/{callId}
+    description: 呼出等待页
+    operation_ids: []
+
+  - id: rtcIncoming
+    owner: rtc
+    route_id: rtcIncoming
+    path_template: /rtc/incoming/{callId}
+    description: 来电接听页
+    operation_ids: []
+
+  - id: rtcVoice
+    owner: rtc
+    route_id: rtcVoice
+    path_template: /rtc/voice/{callId}
+    description: 语音通话页
+    operation_ids: []
+
+  - id: rtcVideo
+    owner: rtc
+    route_id: rtcVideo
+    path_template: /rtc/video/{callId}
+    description: 视频通话页
+    operation_ids: []
+
+  - id: rtcPickParticipants
+    owner: rtc
+    route_id: rtcPickParticipants
+    path_template: /rtc/pick-participants
+    description: 通话参与者选择页
+    operation_ids: []

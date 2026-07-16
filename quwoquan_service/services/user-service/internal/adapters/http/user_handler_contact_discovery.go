@@ -85,9 +85,9 @@ func (h *UserHandler) buildContactDiscoveryResponse(r *http.Request, viewerID st
 
 	wire := make([]map[string]any, 0, len(matches))
 	for _, m := range matches {
-		rel, _ := h.follow.GetRelationship(r.Context(), relationViewerID, m.SubAccountID)
-		isBlocked, _ := h.block.CheckBlocked(r.Context(), relationViewerID, m.SubAccountID)
-		isBlockedBy, _ := h.block.CheckBlocked(r.Context(), m.SubAccountID, relationViewerID)
+		rel, _ := h.relationship.GetRelationship(r.Context(), relationViewerID, m.SubAccountID)
+		isBlocked, _ := h.relationship.CheckBlocked(r.Context(), relationViewerID, m.SubAccountID)
+		isBlockedBy, _ := h.relationship.CheckBlocked(r.Context(), m.SubAccountID, relationViewerID)
 		capability := h.buildRelationshipCapabilityView(r.Context(), relationViewerID, m.SubAccountID, rel, isBlocked, isBlockedBy)
 		if m.SubAccountID != "" {
 			capability["targetSubAccountId"] = m.SubAccountID

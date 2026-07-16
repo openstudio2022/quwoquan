@@ -5,150 +5,253 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	rtredis "quwoquan_service/runtime/redis"
+	placementports "quwoquan_service/services/circle-service/internal/domain/circle/circle_post_placement/ports"
 )
 
 const (
-	ContentPostPublishedChannel = "events.content.PostPublished"
-	ContentPostDeletedChannel   = "events.content.PostDeleted"
-	ContentPostSettingsChannel  = "events.content.PostSettingsUpdated"
+	ContentPostLifecycleStream       = "events.content.post_lifecycle"
+	ContentPostLifecycleDLQ          = "events.content.post_lifecycle.dlq"
+	contentPostConsumerGroup         = "circle-service"
+	contentPostMaxAttempts     int64 = 5
+	contentPostStreamRetention       = 7 * 24 * time.Hour
 )
 
-type CirclePostCountStore interface {
-	IncrementPostCount(ctx context.Context, id string, delta int64) error
-}
-
-// ContentPostConsumer 消费 content-service 帖子生命周期事件，维护圈子读模型统计。
+// ContentPostConsumer maintains Circle's typed external Post reference through
+// Redis Stream consumer-group delivery. Mongo inbox and aggregate version make
+// new delivery, pending reclaim and duplicate XADD converge to one projection.
 type ContentPostConsumer struct {
-	redis  rtredis.Client
-	store  CirclePostCountStore
-	logger *slog.Logger
+	redis       rtredis.Client
+	projection  placementports.PostLifecycleProjection
+	failures    placementports.PostLifecycleFailureStore
+	consumer    string
+	minIdle     time.Duration
+	logger      *slog.Logger
+	mu          sync.RWMutex
+	lastSuccess time.Time
+	lastFailure error
 }
 
-func NewContentPostConsumer(redis rtredis.Client, store CirclePostCountStore, logger *slog.Logger) *ContentPostConsumer {
+func NewContentPostConsumer(
+	redis rtredis.Client,
+	projection placementports.PostLifecycleProjection,
+	failures placementports.PostLifecycleFailureStore,
+	consumer string,
+	logger *slog.Logger,
+) *ContentPostConsumer {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &ContentPostConsumer{redis: redis, store: store, logger: logger}
+	consumer = strings.TrimSpace(consumer)
+	if consumer == "" {
+		consumer = "circle-post-projection"
+	}
+	return &ContentPostConsumer{
+		redis: redis, projection: projection, failures: failures,
+		consumer: consumer, minIdle: 30 * time.Second, logger: logger,
+	}
 }
 
-func (c *ContentPostConsumer) Run(ctx context.Context) {
-	if c == nil || c.redis == nil || c.store == nil {
-		return
+func (consumer *ContentPostConsumer) EnsureGroup(ctx context.Context) error {
+	if consumer == nil || consumer.redis == nil {
+		return fmt.Errorf("Content Post consumer Redis is not configured")
 	}
-	sub, err := c.redis.Subscribe(ctx, ContentPostPublishedChannel, ContentPostDeletedChannel, ContentPostSettingsChannel)
-	if err != nil {
-		c.logger.Error("content post consumer subscribe failed", "err", err)
-		return
-	}
-	defer sub.Close()
+	return consumer.redis.XGroupCreateMkStream(ctx, ContentPostLifecycleStream, contentPostConsumerGroup, "0")
+}
 
+func (consumer *ContentPostConsumer) ProcessOnce(ctx context.Context) (int, error) {
+	if consumer == nil || consumer.redis == nil || consumer.projection == nil || consumer.failures == nil {
+		return 0, fmt.Errorf("Content Post consumer is not fully configured")
+	}
+	if err := consumer.EnsureGroup(ctx); err != nil {
+		consumer.recordFailure(err)
+		return 0, err
+	}
+	claimed, _, err := consumer.redis.XAutoClaim(
+		ctx, ContentPostLifecycleStream, contentPostConsumerGroup,
+		consumer.consumer, consumer.minIdle, "0-0", 50,
+	)
+	if err != nil {
+		consumer.recordFailure(err)
+		return 0, err
+	}
+	newMessages, err := consumer.redis.XReadGroup(ctx, contentPostConsumerGroup, consumer.consumer,
+		map[string]string{ContentPostLifecycleStream: ">"}, 50, 200*time.Millisecond)
+	if err != nil {
+		consumer.recordFailure(err)
+		return 0, err
+	}
+	messages := uniqueStreamMessages(claimed, newMessages)
+	processed := 0
+	var firstErr error
+	for _, message := range messages {
+		if err := consumer.processMessage(ctx, message); err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		processed++
+	}
+	if firstErr != nil {
+		consumer.recordFailure(firstErr)
+		return processed, firstErr
+	}
+	consumer.recordSuccess()
+	return processed, nil
+}
+
+func (consumer *ContentPostConsumer) Run(ctx context.Context, interval time.Duration) {
+	if interval <= 0 {
+		interval = 250 * time.Millisecond
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
 	for {
+		if _, err := consumer.ProcessOnce(ctx); err != nil && ctx.Err() == nil {
+			consumer.logger.ErrorContext(ctx, "Content Post projection consume failed", slog.String("error", err.Error()))
+		}
 		select {
 		case <-ctx.Done():
 			return
-		case msg, ok := <-sub.Channel():
-			if !ok {
-				return
-			}
-			if err := c.ProcessMessage(ctx, msg.Channel, msg.Payload); err != nil {
-				c.logger.Warn("content post event apply failed", "channel", msg.Channel, "err", err)
-			}
+		case <-ticker.C:
 		}
 	}
 }
 
-func (c *ContentPostConsumer) ProcessMessage(ctx context.Context, channel string, payload string) error {
-	if c == nil || c.store == nil {
-		return fmt.Errorf("content post consumer not configured")
+func (consumer *ContentPostConsumer) Healthy(maxStaleness time.Duration) error {
+	if consumer == nil {
+		return fmt.Errorf("Content Post consumer is not configured")
 	}
-	evt, err := decodeContentPostEnvelope(payload)
-	if err != nil {
-		return err
+	if maxStaleness <= 0 {
+		maxStaleness = 10 * time.Second
 	}
-	delta := int64(0)
-	switch strings.TrimSpace(evt.Type) {
-	case "PostPublished":
-		delta = 1
-	case "PostDeleted":
-		if evt.Status != "published" {
-			return nil
-		}
-		delta = -1
-	case "PostSettingsUpdated":
-		if evt.Status != "published" {
-			return nil
-		}
-		for _, circleID := range evt.AddedCircleIDs {
-			if strings.TrimSpace(circleID) == "" {
-				continue
-			}
-			if err := c.store.IncrementPostCount(ctx, strings.TrimSpace(circleID), 1); err != nil {
-				return err
-			}
-		}
-		for _, circleID := range evt.RemovedCircleIDs {
-			if strings.TrimSpace(circleID) == "" {
-				continue
-			}
-			if err := c.store.IncrementPostCount(ctx, strings.TrimSpace(circleID), -1); err != nil {
-				return err
-			}
-		}
-		return nil
-	default:
-		switch channel {
-		case ContentPostPublishedChannel:
-			delta = 1
-		case ContentPostDeletedChannel:
-			delta = -1
-		default:
-			return nil
-		}
+	consumer.mu.RLock()
+	defer consumer.mu.RUnlock()
+	if consumer.lastSuccess.IsZero() {
+		return fmt.Errorf("Content Post consumer has not completed a scan")
 	}
-	for _, circleID := range evt.CircleIDs {
-		if strings.TrimSpace(circleID) == "" {
-			continue
-		}
-		if err := c.store.IncrementPostCount(ctx, strings.TrimSpace(circleID), delta); err != nil {
-			return err
-		}
+	if consumer.lastFailure != nil {
+		return fmt.Errorf("Content Post consumer last failure: %w", consumer.lastFailure)
+	}
+	if time.Since(consumer.lastSuccess) > maxStaleness {
+		return fmt.Errorf("Content Post consumer heartbeat is stale")
 	}
 	return nil
 }
 
-type contentPostEnvelope struct {
-	Payload struct {
-		Type string `json:"type"`
-		Data struct {
-			Status           string   `json:"status"`
-			CircleIDs        []string `json:"circleIds"`
-			AddedCircleIDs   []string `json:"addedCircleIds"`
-			RemovedCircleIDs []string `json:"removedCircleIds"`
-		} `json:"data"`
-	} `json:"payload"`
-}
-
-type contentPostEvent struct {
-	Type             string
-	Status           string
-	CircleIDs        []string
-	AddedCircleIDs   []string
-	RemovedCircleIDs []string
-}
-
-func decodeContentPostEnvelope(raw string) (contentPostEvent, error) {
-	var envelope contentPostEnvelope
-	if err := json.Unmarshal([]byte(raw), &envelope); err != nil {
-		return contentPostEvent{}, err
+func (consumer *ContentPostConsumer) processMessage(ctx context.Context, message rtredis.StreamMessage) error {
+	event, err := decodePostLifecycleMessage(message)
+	if err == nil {
+		err = consumer.projection.ApplyPostLifecycle(ctx, event)
 	}
-	return contentPostEvent{
-		Type:             strings.TrimSpace(envelope.Payload.Type),
-		Status:           strings.TrimSpace(envelope.Payload.Data.Status),
-		CircleIDs:        envelope.Payload.Data.CircleIDs,
-		AddedCircleIDs:   envelope.Payload.Data.AddedCircleIDs,
-		RemovedCircleIDs: envelope.Payload.Data.RemovedCircleIDs,
-	}, nil
+	if err != nil {
+		attempts, recordErr := consumer.failures.RecordPostLifecycleFailure(ctx, message.ID, message.Values["eventId"], err)
+		if recordErr != nil {
+			return fmt.Errorf("record Content Post projection failure: %w", recordErr)
+		}
+		if attempts < contentPostMaxAttempts {
+			return fmt.Errorf("Content Post projection attempt %d/%d: %w", attempts, contentPostMaxAttempts, err)
+		}
+		if _, dlqErr := consumer.redis.XAdd(ctx, ContentPostLifecycleDLQ, postLifecycleDLQValues(message, err, attempts)); dlqErr != nil {
+			return fmt.Errorf("append Content Post projection DLQ: %w", dlqErr)
+		}
+		if expireErr := consumer.redis.Expire(ctx, ContentPostLifecycleDLQ, contentPostStreamRetention); expireErr != nil {
+			return fmt.Errorf("refresh Content Post projection DLQ retention: %w", expireErr)
+		}
+		if ackErr := consumer.redis.XAck(ctx, ContentPostLifecycleStream, contentPostConsumerGroup, message.ID); ackErr != nil {
+			return fmt.Errorf("ack dead-lettered Content Post event: %w", ackErr)
+		}
+		return consumer.failures.ClearPostLifecycleFailure(ctx, message.ID)
+	}
+	if err := consumer.redis.XAck(ctx, ContentPostLifecycleStream, contentPostConsumerGroup, message.ID); err != nil {
+		return fmt.Errorf("ack Content Post lifecycle event: %w", err)
+	}
+	return consumer.failures.ClearPostLifecycleFailure(ctx, message.ID)
+}
+
+func decodePostLifecycleMessage(message rtredis.StreamMessage) (placementports.PostLifecycleEvent, error) {
+	values := message.Values
+	if strings.TrimSpace(values["aggregateType"]) != "Post" {
+		return placementports.PostLifecycleEvent{}, fmt.Errorf("Content lifecycle aggregateType must be Post")
+	}
+	version, err := strconv.ParseInt(strings.TrimSpace(values["aggregateVersion"]), 10, 64)
+	if err != nil || version <= 0 {
+		return placementports.PostLifecycleEvent{}, fmt.Errorf("Content Post lifecycle aggregateVersion is invalid")
+	}
+	occurredAt, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(values["occurredAt"]))
+	if err != nil {
+		return placementports.PostLifecycleEvent{}, fmt.Errorf("Content Post lifecycle occurredAt is invalid")
+	}
+	var payload struct {
+		ID       string `json:"_id"`
+		PostID   string `json:"postId"`
+		AuthorID string `json:"authorId"`
+		Status   string `json:"status"`
+	}
+	if err := json.Unmarshal([]byte(values["payload"]), &payload); err != nil {
+		return placementports.PostLifecycleEvent{}, fmt.Errorf("decode Content Post lifecycle payload: %w", err)
+	}
+	postID := strings.TrimSpace(values["aggregateId"])
+	payloadPostID := strings.TrimSpace(payload.ID)
+	if payloadPostID == "" {
+		payloadPostID = strings.TrimSpace(payload.PostID)
+	}
+	if postID == "" || payloadPostID != "" && payloadPostID != postID {
+		return placementports.PostLifecycleEvent{}, fmt.Errorf("Content Post lifecycle aggregate identity mismatch")
+	}
+	event := placementports.PostLifecycleEvent{
+		EventID: strings.TrimSpace(values["eventId"]), EventType: strings.TrimSpace(values["eventType"]),
+		PostID: postID, PostVersion: version, OwnerPersonaID: strings.TrimSpace(payload.AuthorID),
+		State: strings.TrimSpace(payload.Status), OccurredAt: occurredAt.UTC(),
+	}
+	if event.EventID == "" || event.EventType == "" {
+		return placementports.PostLifecycleEvent{}, fmt.Errorf("Content Post lifecycle event identity is incomplete")
+	}
+	return event, nil
+}
+
+func uniqueStreamMessages(groups ...[]rtredis.StreamMessage) []rtredis.StreamMessage {
+	seen := make(map[string]struct{})
+	result := make([]rtredis.StreamMessage, 0)
+	for _, messages := range groups {
+		for _, message := range messages {
+			if _, exists := seen[message.ID]; exists {
+				continue
+			}
+			seen[message.ID] = struct{}{}
+			result = append(result, message)
+		}
+	}
+	return result
+}
+
+func postLifecycleDLQValues(message rtredis.StreamMessage, cause error, attempts int64) map[string]string {
+	values := map[string]string{
+		"sourceStream": ContentPostLifecycleStream, "streamId": message.ID,
+		"error": cause.Error(), "attempts": strconv.FormatInt(attempts, 10),
+		"deadLetteredAt": time.Now().UTC().Format(time.RFC3339Nano),
+	}
+	for key, value := range message.Values {
+		values[key] = value
+	}
+	return values
+}
+
+func (consumer *ContentPostConsumer) recordSuccess() {
+	consumer.mu.Lock()
+	defer consumer.mu.Unlock()
+	consumer.lastSuccess = time.Now().UTC()
+	consumer.lastFailure = nil
+}
+
+func (consumer *ContentPostConsumer) recordFailure(err error) {
+	consumer.mu.Lock()
+	defer consumer.mu.Unlock()
+	consumer.lastFailure = err
 }

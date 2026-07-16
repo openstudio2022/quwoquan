@@ -1,5 +1,20 @@
+import 'package:fake_async/fake_async.dart';
+import 'package:http/http.dart' as http;
 import 'package:test/test.dart';
+import 'package:quwoquan_app/cloud/runtime/context/actor_queue_partition.dart';
+import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
+
+final class _UnavailableCloudHttpClient extends CloudHttpClient {
+  _UnavailableCloudHttpClient() : super(client: http.Client());
+
+  @override
+  Future<http.Response> postBytes(
+    Uri uri, {
+    required Map<String, String> headers,
+    required List<int> body,
+  }) async => http.Response('', 503);
+}
 
 void main() {
   group('BehaviorRepository — 常规契约', () {
@@ -63,6 +78,36 @@ void main() {
     test('reportEvents 空事件列表不崩溃', () async {
       await repo.reportEvents(events: []);
       expect(repo.recorded, isEmpty);
+    });
+
+    test('Remote dispose 会取消退避计时器并结束在途重试', () {
+      fakeAsync((clock) {
+        final remote = RemoteBehaviorRepository(
+          httpClient: _UnavailableCloudHttpClient(),
+          baseUrl: 'https://api.example.com',
+          queuePartition: ActorQueuePartition(environment: ''),
+        );
+        var completed = false;
+        remote
+            .reportEvents(
+              events: const <BehaviorEvent>[
+                BehaviorEvent(
+                  contentId: 'post_retry',
+                  action: BehaviorAction.impression,
+                ),
+              ],
+            )
+            .then((_) => completed = true);
+
+        clock.flushMicrotasks();
+        expect(clock.pendingTimers, hasLength(1));
+
+        remote.dispose();
+        clock.flushMicrotasks();
+
+        expect(clock.pendingTimers, isEmpty);
+        expect(completed, isTrue);
+      });
     });
   });
 

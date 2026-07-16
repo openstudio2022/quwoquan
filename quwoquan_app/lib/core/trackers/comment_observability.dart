@@ -11,15 +11,11 @@ class CommentMetricNames {
   static const String pollingRefreshMs = 'comment_polling_refresh_ms';
   static const String pinConfirmMs = 'comment_pin_confirm_ms';
 
-  /// 评论计数可解释增量查询（GetCommentCountsDelta）耗时。
-  static const String countsDeltaMs = 'comment_counts_delta_ms';
-
   const CommentMetricNames._();
 }
 
 class CommentEventNames {
   static const String surfaceExpose = 'comment_surface_expose';
-  static const String sortChanged = 'comment_sort_changed';
   static const String replyExpanded = 'comment_reply_expanded';
   static const String replyCollapsed = 'comment_reply_collapsed';
   static const String submitSucceeded = 'comment_submit_succeeded';

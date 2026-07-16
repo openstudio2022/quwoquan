@@ -55,12 +55,14 @@ class PhoneNumberField extends StatefulWidget {
     required this.enabled,
     required this.hasError,
     required this.onChanged,
+    this.onEditingComplete,
   });
 
   final TextEditingController controller;
   final bool enabled;
   final bool hasError;
   final ValueChanged<String> onChanged;
+  final VoidCallback? onEditingComplete;
 
   @override
   State<PhoneNumberField> createState() => _PhoneNumberFieldState();
@@ -127,8 +129,12 @@ class _PhoneNumberFieldState extends State<PhoneNumberField> {
   }
 
   void _handleFocusChanged() {
+    final lostFocus = _focused && !_focusNode.hasFocus;
     if (mounted) {
       setState(() => _focused = _focusNode.hasFocus);
+    }
+    if (lostFocus) {
+      widget.onEditingComplete?.call();
     }
   }
 
@@ -178,6 +184,7 @@ class _PhoneNumberFieldState extends State<PhoneNumberField> {
                 enabled: widget.enabled,
                 focusNode: _focusNode,
                 keyboardType: TextInputType.phone,
+                textInputAction: TextInputAction.done,
                 autofillHints: const <String>[AutofillHints.telephoneNumber],
                 placeholder: UITextConstants.loginPhoneNumberPlaceholder,
                 inputFormatters: <TextInputFormatter>[
@@ -195,6 +202,7 @@ class _PhoneNumberFieldState extends State<PhoneNumberField> {
                   color: AppColors.iosTertiaryLabel(context),
                 ),
                 onChanged: widget.onChanged,
+                onEditingComplete: widget.onEditingComplete,
               ),
             ),
           ],
@@ -448,47 +456,69 @@ class _ResolvingPanel extends StatelessWidget {
   }
 }
 
-class _Avatar extends StatelessWidget {
-  const _Avatar({required this.avatarUrl, required this.displayName});
+class _Avatar extends StatefulWidget {
+  const _Avatar({required this.avatarUrl});
 
   final String avatarUrl;
-  final String displayName;
+
+  @override
+  State<_Avatar> createState() => _AvatarState();
+}
+
+class _AvatarState extends State<_Avatar> {
+  bool _loaded = false;
+
+  @override
+  void didUpdateWidget(covariant _Avatar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.avatarUrl.trim() != widget.avatarUrl.trim()) {
+      _loaded = false;
+    }
+  }
+
+  void _reveal(String loadedUrl) {
+    if (!mounted || widget.avatarUrl.trim() != loadedUrl || _loaded) {
+      return;
+    }
+    setState(() => _loaded = true);
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: AppSpacing.loginAvatarSize,
-      height: AppSpacing.loginAvatarSize,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: AppColors.iosAccent(context).withValues(alpha: 0.16),
-      ),
-      clipBehavior: Clip.antiAlias,
-      alignment: Alignment.center,
-      child: avatarUrl.isEmpty
-          ? Text(
-              displayName.isEmpty
-                  ? UITextConstants.loginDefaultAvatarGlyph
-                  : displayName.characters.first,
-              style: TextStyle(
-                fontSize: AppTypography.iosProfileTitle,
-                fontWeight: AppTypography.bold,
-                color: AppColors.iosAccent(context),
-              ),
-            )
-          : AppAvatarImage(
-              imageUrl: avatarUrl,
-              size: AppSpacing.loginAvatarSize,
-              fit: BoxFit.cover,
-              errorWidget: Text(
-                UITextConstants.loginDefaultAvatarGlyph,
-                style: TextStyle(
-                  fontSize: AppTypography.iosProfileTitle,
-                  fontWeight: AppTypography.bold,
-                  color: AppColors.iosAccent(context),
+    final avatarUrl = widget.avatarUrl.trim();
+    if (avatarUrl.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return AnimatedSize(
+      duration: AppSpacing.loginAvatarRevealDuration,
+      alignment: Alignment.topCenter,
+      curve: Curves.easeOut,
+      child: Offstage(
+        offstage: !_loaded,
+        child: AnimatedOpacity(
+          opacity: _loaded ? 1 : 0,
+          duration: AppSpacing.loginAvatarRevealDuration,
+          curve: Curves.easeOut,
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+            child: Semantics(
+              image: true,
+              label: UITextConstants.loginAccountAvatarSemanticLabel,
+              child: ClipOval(
+                child: AppAvatarImage(
+                  key: ValueKey<String>(avatarUrl),
+                  imageUrl: avatarUrl,
+                  size: AppSpacing.loginAvatarSize,
+                  fit: BoxFit.cover,
+                  placeholder: const SizedBox.shrink(),
+                  errorWidget: const SizedBox.shrink(),
+                  onLoadSucceeded: () => _reveal(avatarUrl),
                 ),
               ),
             ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -546,19 +576,21 @@ class LoginAgreementRow extends StatelessWidget {
   const LoginAgreementRow({
     super.key,
     required this.accepted,
+    required this.showError,
     required this.onToggle,
     required this.onAgreementTap,
     required this.onPrivacyTap,
   });
 
   final bool accepted;
+  final bool showError;
   final VoidCallback onToggle;
   final VoidCallback onAgreementTap;
   final VoidCallback onPrivacyTap;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    final row = Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         CupertinoButton(
@@ -608,6 +640,27 @@ class LoginAgreementRow extends StatelessWidget {
         ),
       ],
     );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        row,
+        if (showError)
+          Padding(
+            padding: const EdgeInsets.only(left: AppSpacing.minInteractiveSize),
+            child: Semantics(
+              liveRegion: true,
+              child: Text(
+                UITextConstants.loginAgreementRequired,
+                key: const ValueKey<String>('loginAgreementError'),
+                style: TextStyle(
+                  fontSize: AppTypography.iosCaption1,
+                  color: AppColors.iosDestructive(context),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
   }
 }
 
@@ -639,65 +692,73 @@ class OtherLoginMethodGrid extends StatelessWidget {
   const OtherLoginMethodGrid({
     super.key,
     required this.onTap,
+    required this.availableMethods,
+    required this.enabled,
     this.mode = OtherLoginMethodMode.phoneOtp,
+    this.excludedMethod = '',
   });
 
   final ValueChanged<String> onTap;
+  final Map<String, NativeAuthCapability> availableMethods;
+  final bool enabled;
   final OtherLoginMethodMode mode;
+  final String excludedMethod;
 
   @override
   Widget build(BuildContext context) {
-    final entries = mode == OtherLoginMethodMode.returning
-        ? const <
-            ({
-              String id,
-              IconData icon,
-              Color background,
-              Color iconColor,
-              double iconSize,
-              String label,
-              String semanticLabel,
-            })
-          >[
-            (
-              id: 'wechat',
-              icon: SimpleIcons.wechat,
-              background: AppColors.loginMethodWechatBrand,
-              iconColor: AppColors.white,
-              iconSize: AppSpacing.loginOtherMethodIconSize,
-              label: UITextConstants.loginMethodWechatFull,
-              semanticLabel: UITextConstants.loginMethodWechatSemanticLabel,
-            ),
-            (
-              id: 'qq',
-              icon: SimpleIcons.qq,
-              background: AppColors.loginMethodQqBrand,
-              iconColor: AppColors.white,
-              iconSize: AppSpacing.loginOtherMethodIconSize,
-              label: UITextConstants.loginMethodQqFull,
-              semanticLabel: UITextConstants.loginMethodQqSemanticLabel,
-            ),
-            (
-              id: 'phone',
-              icon: Icons.phone_iphone,
-              background: AppColors.loginMethodPhoneCircle,
-              iconColor: AppColors.white,
-              iconSize: AppSpacing.loginOtherMethodIconSize,
-              label: UITextConstants.loginMethodPhoneFull,
-              semanticLabel: UITextConstants.loginMethodPhoneSemanticLabel,
-            ),
-          ]
-        : const <
-            ({
-              String id,
-              IconData icon,
-              Color background,
-              Color iconColor,
-              double iconSize,
-              String label,
-              String semanticLabel,
-            })
-          >[
+    final socialEntries =
+        const <
+          ({
+            String id,
+            IconData icon,
+            Color background,
+            Color iconColor,
+            double iconSize,
+            String label,
+            String semanticLabel,
+          })
+        >[
+          (
+            id: 'wechat',
+            icon: SimpleIcons.wechat,
+            background: AppColors.loginMethodWechatBrand,
+            iconColor: AppColors.white,
+            iconSize: AppSpacing.loginOtherMethodIconSize,
+            label: UITextConstants.loginMethodWechat,
+            semanticLabel: UITextConstants.loginMethodWechatSemanticLabel,
+          ),
+          (
+            id: 'qq',
+            icon: SimpleIcons.qq,
+            background: AppColors.loginMethodQqBrand,
+            iconColor: AppColors.white,
+            iconSize: AppSpacing.loginOtherMethodIconSize,
+            label: UITextConstants.loginMethodQq,
+            semanticLabel: UITextConstants.loginMethodQqSemanticLabel,
+          ),
+          (
+            id: 'alipay',
+            icon: SimpleIcons.alipay,
+            background: AppColors.loginMethodAlipayBrand,
+            iconColor: AppColors.white,
+            iconSize: AppSpacing.loginOtherMethodIconSize,
+            label: UITextConstants.loginMethodAlipay,
+            semanticLabel: UITextConstants.loginMethodAlipaySemanticLabel,
+          ),
+        ];
+    final allEntries =
+        <
+          ({
+            String id,
+            IconData icon,
+            Color background,
+            Color iconColor,
+            double iconSize,
+            String label,
+            String semanticLabel,
+          })
+        >[
+          if (mode == OtherLoginMethodMode.returning)
             (
               id: 'phone',
               icon: Icons.phone_iphone,
@@ -707,34 +768,19 @@ class OtherLoginMethodGrid extends StatelessWidget {
               label: UITextConstants.loginMethodPhone,
               semanticLabel: UITextConstants.loginMethodPhoneSemanticLabel,
             ),
-            (
-              id: 'wechat',
-              icon: SimpleIcons.wechat,
-              background: AppColors.loginMethodWechatBrand,
-              iconColor: AppColors.white,
-              iconSize: AppSpacing.loginOtherMethodIconSize,
-              label: UITextConstants.loginMethodWechat,
-              semanticLabel: UITextConstants.loginMethodWechatSemanticLabel,
-            ),
-            (
-              id: 'qq',
-              icon: SimpleIcons.qq,
-              background: AppColors.loginMethodQqBrand,
-              iconColor: AppColors.white,
-              iconSize: AppSpacing.loginOtherMethodIconSize,
-              label: UITextConstants.loginMethodQq,
-              semanticLabel: UITextConstants.loginMethodQqSemanticLabel,
-            ),
-            (
-              id: 'alipay',
-              icon: SimpleIcons.alipay,
-              background: AppColors.loginMethodAlipayBrand,
-              iconColor: AppColors.white,
-              iconSize: AppSpacing.loginOtherMethodIconSize,
-              label: UITextConstants.loginMethodAlipay,
-              semanticLabel: UITextConstants.loginMethodAlipaySemanticLabel,
-            ),
-          ];
+          ...socialEntries,
+        ];
+    final entries = allEntries
+        .where(
+          (entry) =>
+              entry.id != excludedMethod &&
+              (entry.id == 'phone' ||
+                  availableMethods[entry.id]?.isDiscoverable == true),
+        )
+        .toList(growable: false);
+    if (entries.isEmpty) {
+      return const SizedBox.shrink();
+    }
     return Column(
       children: <Widget>[
         Row(
@@ -767,19 +813,18 @@ class OtherLoginMethodGrid extends StatelessWidget {
         Align(
           alignment: Alignment.center,
           child: SizedBox(
-            width: mode == OtherLoginMethodMode.returning
-                ? AppSpacing.loginOtherMethodsThreeColumnWidth
-                : double.infinity,
+            width: double.infinity,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: entries
                   .map((entry) {
                     return Semantics(
                       button: true,
+                      enabled: enabled,
                       label: entry.semanticLabel,
                       child: CupertinoButton(
                         padding: EdgeInsets.zero,
-                        onPressed: () => onTap(entry.id),
+                        onPressed: enabled ? () => onTap(entry.id) : null,
                         child: Column(
                           children: <Widget>[
                             Container(

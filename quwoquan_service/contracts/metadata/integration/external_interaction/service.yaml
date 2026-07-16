@@ -1,5 +1,4 @@
 version: 1
-aggregate: ExternalInteraction
 
 response_list_key: items
 
@@ -7,20 +6,74 @@ service:
   name: integration-service
   domain: integration
   owner: backend-team
+  commercial_defaults:
+    status: blocked
+    block_reason: canonical operation awaits object-centered commercial migration
+    gap_id: INTEGRATION_EXTERNAL_INTERACTION_COMMERCIAL_EVIDENCE
+    target_story: app-cloud-business-object-commercial-closure
   description: 外部可靠交互请求收口，统一短信、推送、一键登录与 webhook 的异步提交、回调和死信查询。
 
 api_routes:
   - method: POST
     path: /v1/integrations/external-requests
     operation: SubmitExternalInteractionRequest
+    actor: none
+    application:
+      kind: command
+      facet: ExternalInteractionCommandFacade
+      method: submitRequest
+      aggregate_owner: ExternalInteraction
+      mutation_target: ExternalInteraction
+      invariant_target: ExternalInteraction
+    authorization:
+      principal: service
+      scopes: [integration.external_interaction.submit]
+      ownership_policy: caller_service_owns_callback_and_idempotency_scope
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - INTEGRATION.USER.invalid_external_request
+      - INTEGRATION.USER.unsupported_operation
+      - INTEGRATION.USER.payload_not_allowed
+      - INTEGRATION.SYSTEM.internal_error
+    privacy:
+      request_classification: SECRET
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: integration_external_interaction_submit
+      trace: true
+      attributes: [outcome, operation, caller_service]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
     description: 提交外部交互异步请求；只表示可靠受理，不表示供应商已成功。
     request_entity: ExternalInteractionRequest
     response_entity: ExternalInteractionAccepted
     success_status: 202
+    security:
+      auth_mode: required
+      principal: service
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: internal
 
   - method: GET
     path: /v1/integrations/external-requests/{requestId}
     operation: GetExternalInteractionRequest
+    actor: none
+    application:
+      kind: query
+      facet: ExternalInteractionQueryFacade
+      method: getRequest
+      reader: ExternalInteractionRequestReader
+      slice: ExternalInteractionRequestSlice
     description: 查询外部交互请求当前状态与归一化结果。
     path_params: [requestId]
     response_entity: ExternalInteractionRequest
@@ -28,6 +81,13 @@ api_routes:
   - method: GET
     path: /v1/integrations/external-requests/{requestId}/attempts
     operation: ListExternalInteractionAttempts
+    actor: none
+    application:
+      kind: query
+      facet: ExternalInteractionQueryFacade
+      method: listAttempts
+      reader: ExternalInteractionAttemptReader
+      slice: ExternalInteractionAttemptListSlice
     description: 查询 provider attempt ledger，用于审计、SLO 与人工补偿定位。
     path_params: [requestId]
     response_entity: ExternalInteractionAttempt
@@ -35,14 +95,85 @@ api_routes:
   - method: GET
     path: /v1/integrations/external-requests/dead-letters
     operation: ListExternalInteractionDeadLetters
+    actor: none
+    application:
+      kind: query
+      facet: ExternalInteractionQueryFacade
+      method: listDeadLetters
+      reader: ExternalInteractionDeadLetterReader
+      slice: ExternalInteractionDeadLetterListSlice
     description: 查询超过重试上限或不可恢复失败的外部交互死信。
     query_params: [operation, status, limit]
     response_entity: ExternalInteractionDeadLetter
 
+  - method: POST
+    path: /v1/integrations/push-deliveries
+    operation: SubmitPushDelivery
+    actor: none
+    application:
+      kind: command
+      facet: ExternalInteractionCommandFacade
+      method: submitPushDelivery
+      aggregate_owner: ExternalInteraction
+      mutation_target: ExternalInteraction
+      invariant_target: ExternalInteraction
+    description: 内部接口，提交 APNs/FCM/厂商推送异步发送请求。
+    request_entity: PushDeliveryRequest
+    response_entity: PushDeliveryAccepted
+    success_status: 202
+
+  - method: POST
+    path: /v1/integrations/push-deliveries:callback
+    operation: PushDeliveryProviderCallback
+    actor: none
+    application:
+      kind: command
+      facet: ExternalInteractionCommandFacade
+      method: recordPushDeliveryProviderCallback
+      aggregate_owner: ExternalInteraction
+      mutation_target: ExternalInteraction
+      invariant_target: ExternalInteraction
+    description: 推送供应商回执回调。
+    request_entity: PushDeliveryCallback
+    response_entity: PushDeliveryCallbackAccepted
+    success_status: 202
+
+  - method: POST
+    path: /v1/integrations/sms-otp:send
+    operation: SendSmsOtp
+    actor: persona_or_device
+    application:
+      kind: command
+      facet: ExternalInteractionCommandFacade
+      method: sendSmsOtp
+      aggregate_owner: ExternalInteraction
+      mutation_target: ExternalInteraction
+      invariant_target: ExternalInteraction
+    description: 内部接口，提交验证码短信发送请求；外部公开入口应使用 /v1/integrations/external-requests。
+    request_entity: SmsOtpSendPayload
+    response_entity: SmsOtpAccepted
+    success_status: 202
+
+  - method: POST
+    path: /v1/integrations/sms-otp:callback
+    operation: SmsOtpProviderCallback
+    actor: none
+    application:
+      kind: command
+      facet: ExternalInteractionCommandFacade
+      method: recordSmsOtpProviderCallback
+      aggregate_owner: ExternalInteraction
+      mutation_target: ExternalInteraction
+      invariant_target: ExternalInteraction
+    description: 供应商短信回执回调，必须验签并归一化为 ExternalInteractionResult。
+    request_entity: SmsOtpProviderCallback
+    response_entity: SmsOtpCallbackAccepted
+    success_status: 202
+
 consumers:
   - name: user-service
-    capabilities: [sms_otp_send, one_tap_phone_resolve]
+    capabilities: [sms_otp_send, sms_otp_delivery_callback, one_tap_phone_resolve]
   - name: notification-service
-    capabilities: [push_delivery_send, webhook_deliver]
+    capabilities: [push_delivery_send, push_delivery_callback, webhook_deliver]
   - name: platform-ops
-    capabilities: [provider_attempt_audit, dead_letter_compensation, pass_through_debt_audit]
+    capabilities: [provider_attempt_audit, dead_letter_compensation]

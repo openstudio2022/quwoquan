@@ -24,6 +24,7 @@ func NewMongoSkillSubscriptionStore(db *mongo.Database) *MongoSkillSubscriptionS
 func (s *MongoSkillSubscriptionStore) EnsureIndexes(ctx context.Context) error {
 	indexes := []mongo.IndexModel{
 		{Keys: bson.D{{Key: "owner.ownerId", Value: 1}, {Key: "status", Value: 1}, {Key: "updatedAt", Value: -1}}, Options: options.Index().SetName("idx_skill_subscriptions_owner_status")},
+		{Keys: bson.D{{Key: "status", Value: 1}, {Key: "updatedAt", Value: -1}}, Options: options.Index().SetName("idx_skill_subscriptions_status_updated")},
 		{Keys: bson.D{{Key: "status", Value: 1}, {Key: "trigger.type", Value: 1}}, Options: options.Index().SetName("idx_skill_subscriptions_trigger")},
 	}
 	if _, err := s.coll.Indexes().CreateMany(ctx, indexes); err != nil {
@@ -37,6 +38,38 @@ func (s *MongoSkillSubscriptionStore) CreateSkillSubscription(ctx context.Contex
 		return assistant.SkillSubscription{}, rterr.NewUnavailable(rterr.ModuleAssistant, "写入订阅失败", err.Error())
 	}
 	return subscription, nil
+}
+
+func (s *MongoSkillSubscriptionStore) UpsertSkillSubscription(ctx context.Context, subscription assistant.SkillSubscription) (assistant.SkillSubscription, error) {
+	var item assistant.SkillSubscription
+	err := s.coll.FindOneAndUpdate(
+		ctx,
+		bson.M{"_id": subscription.SubscriptionID},
+		bson.M{
+			"$set": bson.M{
+				"owner":           subscription.Owner,
+				"createdByUserId": subscription.CreatedByUserID,
+				"skillId":         subscription.SkillID,
+				"domainId":        subscription.DomainID,
+				"tagRefs":         subscription.TagRefs,
+				"status":          subscription.Status,
+				"searchQueryPlan": subscription.SearchQueryPlan,
+				"trigger":         subscription.Trigger,
+				"destination":     subscription.Destination,
+				"updatedAt":       subscription.UpdatedAt,
+			},
+			"$setOnInsert": bson.M{
+				"createdAt": subscription.CreatedAt,
+			},
+		},
+		options.FindOneAndUpdate().
+			SetUpsert(true).
+			SetReturnDocument(options.After),
+	).Decode(&item)
+	if err != nil {
+		return assistant.SkillSubscription{}, rterr.NewUnavailable(rterr.ModuleAssistant, "写入订阅失败", err.Error())
+	}
+	return item, nil
 }
 
 func (s *MongoSkillSubscriptionStore) GetSkillSubscription(ctx context.Context, userID, subscriptionID string) (assistant.SkillSubscription, error) {

@@ -2,20 +2,49 @@ import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/app/navigation/page_access_internal_routes.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/integration/integration_location_errors.g.dart';
+import 'package:quwoquan_app/core/application/content/create_location_coordinator.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
+import 'package:quwoquan_app/core/platform/location/location_gateway.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/app_permission_coordinator.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
-import 'package:quwoquan_app/ui/content/models/publish_settings_models.dart';
-import 'package:quwoquan_app/ui/content/entry/services/publish_settings_services.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
+import 'package:quwoquan_app/ui/content/models/publish_settings_models.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
-/// 发布选点；列表项 [CreateLocationOption] ← 云 [LocationPoiDto]。
+CloudException _locationPermissionFailure() {
+  final code = IntegrationLocationErrorCode.locationPermissionRequired.code;
+  final failure = RuntimeFailure(
+    code: code,
+    origin: RuntimeFailureOrigin.localClient,
+    kind: RuntimeFailureKind.permission,
+    nature: RuntimeFailureNature.requiresPermission,
+    location: const RuntimeFailureLocation(
+      businessObject: 'integration.location',
+      functionModule: 'publish_location_selector',
+    ),
+    context: const RuntimeFailureContext(),
+  );
+  return CloudException(
+    type: CloudErrorType.forbidden,
+    message: code,
+    statusCode: 403,
+    code: code,
+    runtimeFailure: failure,
+  );
+}
+
+/// 发布选点；页面只消费应用协调器，不直接拼装 Cloud 请求。
 class PublishLocationSelectorPage extends StatefulWidget {
-  const PublishLocationSelectorPage({super.key, required this.locationService});
+  const PublishLocationSelectorPage({
+    super.key,
+    required this.locationCoordinator,
+  });
 
-  final CreateLocationService locationService;
+  final CreateLocationCoordinator locationCoordinator;
 
   @override
   State<PublishLocationSelectorPage> createState() =>
@@ -42,18 +71,15 @@ class _PublishLocationSelectorPageState
       _errorSemantic = null;
     });
     try {
-      final perm = await widget.locationService.ensureLocationPermission();
+      final access = await widget.locationCoordinator.ensureLocationAccess();
       if (!mounted) return;
 
-      if (perm.result == LocationPermissionResult.permanentlyDenied) {
+      if (access.permission == LocationPermissionResult.permanentlyDenied) {
         setState(() {
           _loading = false;
           _errorSemantic = UiErrorSemanticResolver.resolve(
             context,
-            error: CloudException(
-              type: CloudErrorType.forbidden,
-              message: context.l10n.locationAppPermissionRequired,
-            ),
+            error: _locationPermissionFailure(),
             category: UiErrorCategory.permissionRequired,
             scope: UiErrorScope.page,
             allowRetry: false,
@@ -62,16 +88,13 @@ class _PublishLocationSelectorPageState
         });
         return;
       }
-      if (perm.result == LocationPermissionResult.needApproval ||
-          perm.position == null) {
+      if (access.permission == LocationPermissionResult.needApproval ||
+          access.position == null) {
         setState(() {
           _loading = false;
           _errorSemantic = UiErrorSemanticResolver.resolve(
             context,
-            error: CloudException(
-              type: CloudErrorType.forbidden,
-              message: context.l10n.locationPermissionRequired,
-            ),
+            error: _locationPermissionFailure(),
             category: UiErrorCategory.permissionRequired,
             scope: UiErrorScope.page,
             allowOpenSettings: false,
@@ -80,16 +103,17 @@ class _PublishLocationSelectorPageState
         return;
       }
 
-      final pos = perm.position!;
-      final items = await widget.locationService.nearby(
-        lat: pos.latitude,
-        lng: pos.longitude,
+      final position = access.position!;
+      final pois = await widget.locationCoordinator.nearby(
+        latitude: position.latitude,
+        longitude: position.longitude,
       );
+      final items = pois.map(CreateLocationOption.from).toList(growable: false);
       if (!mounted) return;
       setState(() {
         _items = items;
-        _lastLat = pos.latitude;
-        _lastLng = pos.longitude;
+        _lastLat = position.latitude;
+        _lastLng = position.longitude;
         _loading = false;
       });
     } on CloudException catch (e) {
@@ -103,16 +127,13 @@ class _PublishLocationSelectorPageState
           scope: UiErrorScope.page,
         );
       });
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _errorSemantic = UiErrorSemanticResolver.resolve(
+        _errorSemantic = runtimeErrorSemantic(
           context,
-          error: CloudException(
-            type: CloudErrorType.unknown,
-            message: context.l10n.locationLoadFailed,
-          ),
+          error: CloudErrorMapper.fromException(error),
           category: UiErrorCategory.pageLoad,
           scope: UiErrorScope.page,
         );
@@ -145,7 +166,7 @@ class _PublishLocationSelectorPageState
                       name: PageAccessInternalRoutes.publishLocationSearch,
                     ),
                     builder: (_) => PublishLocationSearchPage(
-                      locationService: widget.locationService,
+                      locationCoordinator: widget.locationCoordinator,
                       lat: _lastLat,
                       lng: _lastLng,
                     ),
@@ -212,11 +233,7 @@ class _PublishLocationSelectorPageState
         await _loadNearby();
         return;
       case UiErrorActionType.login:
-      case UiErrorActionType.back:
       case UiErrorActionType.dismiss:
-        if (mounted && Navigator.of(context).canPop()) {
-          Navigator.of(context).pop();
-        }
         return;
     }
   }
@@ -240,12 +257,12 @@ class _PublishLocationSelectorPageState
 class PublishLocationSearchPage extends StatefulWidget {
   const PublishLocationSearchPage({
     super.key,
-    required this.locationService,
+    required this.locationCoordinator,
     this.lat,
     this.lng,
   });
 
-  final CreateLocationService locationService;
+  final CreateLocationCoordinator locationCoordinator;
   final double? lat;
   final double? lng;
 
@@ -291,14 +308,14 @@ class _PublishLocationSearchPageState extends State<PublishLocationSearchPage> {
       _errorSemantic = null;
     });
     try {
-      final result = await widget.locationService.search(
+      final result = await widget.locationCoordinator.search(
         q,
-        lat: widget.lat,
-        lng: widget.lng,
+        latitude: widget.lat,
+        longitude: widget.lng,
       );
       if (!mounted) return;
       setState(() {
-        _items = result;
+        _items = result.map(CreateLocationOption.from).toList(growable: false);
         _loading = false;
       });
     } on CloudException catch (e) {
@@ -312,16 +329,13 @@ class _PublishLocationSearchPageState extends State<PublishLocationSearchPage> {
           scope: UiErrorScope.page,
         );
       });
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _errorSemantic = UiErrorSemanticResolver.resolve(
+        _errorSemantic = runtimeErrorSemantic(
           context,
-          error: CloudException(
-            type: CloudErrorType.unknown,
-            message: context.l10n.locationLoadFailed,
-          ),
+          error: CloudErrorMapper.fromException(error),
           category: UiErrorCategory.pageLoad,
           scope: UiErrorScope.page,
         );
@@ -401,7 +415,6 @@ class _PublishLocationSearchPageState extends State<PublishLocationSearchPage> {
         await _performSearch(_controller.text.trim());
         return;
       case UiErrorActionType.dismiss:
-      case UiErrorActionType.back:
       case UiErrorActionType.login:
       case UiErrorActionType.openSettings:
         return;

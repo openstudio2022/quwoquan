@@ -1,16 +1,28 @@
 version: 1
-entity: InviteRecord
 
 service:
   name: user-service
   domain: user
   owner: backend-team
+  commercial_defaults:
+    status: blocked
+    block_reason: canonical operation awaits object-centered commercial migration
+    gap_id: USER_INVITE_RECORD_COMMERCIAL_EVIDENCE
+    target_story: app-cloud-business-object-commercial-closure
   description: 邀请归因——SubAccount 发起邀请，追踪从生成到激活的全链路状态
 
 api_routes:
   - method: POST
     path: /v1/me/invites
     operation: GenerateInvite
+    actor: persona
+    application:
+      kind: command
+      facet: InviteRecordCommandFacade
+      method: generateInvite
+      aggregate_owner: InviteRecord
+      mutation_target: InviteRecord
+      invariant_target: InviteRecord
     description: 生成邀请（幂等，同 subAccountId+channel+inviteePhone 复用已有记录）
     auth_required: true
     request_fields: [channel, inviteePhone]
@@ -20,6 +32,13 @@ api_routes:
   - method: GET
     path: /v1/me/invites
     operation: ListMyInvites
+    actor: persona
+    application:
+      kind: query
+      facet: InviteRecordQueryFacade
+      method: listMyInvites
+      reader: ListMyInvitesReader
+      slice: ListMyInvitesSlice
     description: 查看我发出的邀请列表（按状态筛选）
     auth_required: true
     query_params: [status, cursor, limit]
@@ -29,6 +48,13 @@ api_routes:
   - method: GET
     path: /v1/invites/{linkCode}
     operation: GetInviteByCode
+    actor: persona_or_device
+    application:
+      kind: query
+      facet: InviteRecordQueryFacade
+      method: getInviteByCode
+      reader: GetInviteByCodeReader
+      slice: GetInviteByCodeSlice
     description: 根据邀请码获取邀请信息（注册页使用，无需登录）
     auth_required: false
     response_fields: [inviterDisplayName, inviterAvatarUrl, channel, expireAt, status]
@@ -37,6 +63,14 @@ api_routes:
   - method: POST
     path: /v1/invites/{linkCode}/accept
     operation: AcceptInvite
+    actor: persona
+    application:
+      kind: command
+      facet: InviteRecordCommandFacade
+      method: acceptInvite
+      aggregate_owner: InviteRecord
+      mutation_target: InviteRecord
+      invariant_target: InviteRecord
     description: 接受邀请（注册成功后调用，幂等）
     auth_required: true
     response_fields: [id, status, acceptedAt]

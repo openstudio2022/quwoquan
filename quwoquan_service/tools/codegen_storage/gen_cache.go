@@ -10,7 +10,7 @@ import (
 	"strings"
 	"text/template"
 
-	"quwoquan_service/runtime/codegen"
+	"quwoquan_service/internal/metadata/codegen"
 )
 
 type cacheData struct {
@@ -41,7 +41,7 @@ func generateCache(ctx *genContext, cache RedisCacheDef) error {
 		return nil
 	}
 
-	dir := filepath.Join(ctx.outputDir(), "infrastructure", "cache")
+	dir := filepath.Join(ctx.outputDir(), ctx.source.infrastructurePath("cache"))
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
 	}
@@ -81,7 +81,7 @@ func generateCache(ctx *genContext, cache RedisCacheDef) error {
 		KeyParamName: paramName,
 		TTLSeconds:   cache.TTLSeconds,
 		CacheType:    cacheType,
-		ModelImport:  ctx.modulePath() + "/domain/" + ctx.domainPkg() + "/model",
+		ModelImport:  ctx.source.modelImport(ctx.modulePath()),
 		DomainPkg:    ctx.domainPkg(),
 	}
 

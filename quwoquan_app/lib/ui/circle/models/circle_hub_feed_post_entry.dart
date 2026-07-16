@@ -6,7 +6,7 @@ class CircleHubFeedPostEntry {
   CircleHubFeedPostEntry._(this.raw, this.dto);
 
   /// 圈子流 wire 行（含扩展键）；与 [dto] 同步更新，供 [applyMediaViewerResult] 写回。
-  /// 展示逻辑优先 [dto] / [tryReadPresentation]；长期可评估缩为写回所需窄键或二次 [ContentRepository.getPost]。
+  /// 展示逻辑优先 [dto] / [tryReadPresentation]；长期可评估缩为写回所需窄键或二次 [ContentReadRepository.getPost]。
   Map<String, dynamic> raw;
   PostBaseDto? dto;
 

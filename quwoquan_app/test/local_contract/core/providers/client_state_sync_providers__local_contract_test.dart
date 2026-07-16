@@ -108,19 +108,23 @@ void main() {
 
       var state = container.read(clientStateSyncOutboxProvider);
       expect(
-        state.entryFor(
-          objectType: 'profile',
-          objectId: 'profile-1',
-          intentType: 'follow',
-        )?.confirmedBoolValue,
+        state
+            .entryFor(
+              objectType: 'profile',
+              objectId: 'profile-1',
+              intentType: 'follow',
+            )
+            ?.confirmedBoolValue,
         isTrue,
       );
       expect(
-        state.entryFor(
-          objectType: 'post',
-          objectId: 'post-1',
-          intentType: 'like',
-        )?.confirmedBoolValue,
+        state
+            .entryFor(
+              objectType: 'post',
+              objectId: 'post-1',
+              intentType: 'like',
+            )
+            ?.confirmedBoolValue,
         isTrue,
       );
 
@@ -137,21 +141,6 @@ void main() {
 
       state = container.read(clientStateSyncOutboxProvider);
       expect(state.entries, isEmpty);
-    });
-
-    test('同一 post 的 share 意图也按 latest_wins 合并', () {
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
-
-      final notifier = container.read(clientStateSyncOutboxProvider.notifier);
-
-      notifier.enqueuePostShare(postId: 'post-1', isShared: true);
-      notifier.enqueuePostShare(postId: 'post-1', isShared: false);
-
-      final state = container.read(clientStateSyncOutboxProvider);
-      expect(state.entries.length, 1);
-      expect(state.entries.single.intentType, 'share');
-      expect(state.entries.single.desiredBoolValue, isFalse);
     });
 
     test('hydrate 旧 guard-only 持久化条目时不会误恢复为待同步请求', () async {
@@ -190,41 +179,35 @@ void main() {
   });
 
   group('post interaction counters', () {
-    test('comment/share 使用 confirmed + pending 渲染并在权威回读后收敛', () {
+    test('comment 仅使用 pending 渲染，分享只消费服务端权威计数', () {
       final container = ProviderContainer();
       addTearDown(container.dispose);
 
       final notifier = container.read(postInteractionStateProvider.notifier);
 
       notifier.stageOptimisticComment('post-1', baseCommentCount: 3, delta: 1);
-      notifier.stageOptimisticShare('post-1', baseShareCount: 2);
-
       var state = container.read(postInteractionStateProvider);
       expect(state.commentCountFor('post-1'), 4);
-      expect(state.shareCountFor('post-1'), 3);
-      expect(state.isShared('post-1'), isTrue);
+      expect(state.shareCountFor('post-1', fallback: 2), 2);
 
       notifier.applyConfirmedCounters('post-1', commentCount: 3, shareCount: 2);
 
       state = container.read(postInteractionStateProvider);
       expect(state.commentCountFor('post-1'), 3);
-      expect(state.shareCountFor('post-1'), 2);
+      expect(state.shareCountFor('post-1', fallback: 2), 2);
     });
 
-    test('PostInteractionState round-trip 会保留 confirmed 与 pending 字段', () {
+    test('PostInteractionState round-trip 只持久化权威计数与评论 pending', () {
       const state = PostInteractionState(
-        sharedPostIds: <String>{'post-1'},
         confirmedShareCounts: <String, int>{'post-1': 5},
-        pendingShareDeltas: <String, int>{'post-1': 1},
         confirmedCommentCounts: <String, int>{'post-1': 9},
         pendingCommentDeltas: <String, int>{'post-1': -1},
       );
 
       final restored = PostInteractionState.fromMap(state.toMap());
 
-      expect(restored.shareCountFor('post-1'), 6);
+      expect(restored.shareCountFor('post-1'), 5);
       expect(restored.commentCountFor('post-1'), 8);
-      expect(restored.isShared('post-1'), isTrue);
     });
   });
 }

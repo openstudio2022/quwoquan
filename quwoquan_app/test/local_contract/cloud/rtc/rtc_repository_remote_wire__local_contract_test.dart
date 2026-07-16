@@ -80,12 +80,12 @@ void main() {
         throwsA(
           isA<CloudException>()
               .having(
-                (error) => error.runtimeFailure?.code,
+                (error) => error.runtimeFailure.code,
                 'runtimeFailure.code',
                 'APP.CONTRACT.invalid_response',
               )
               .having(
-                (error) => error.runtimeFailure?.kind,
+                (error) => error.runtimeFailure.kind,
                 'runtimeFailure.kind',
                 RuntimeFailureKind.contract,
               ),

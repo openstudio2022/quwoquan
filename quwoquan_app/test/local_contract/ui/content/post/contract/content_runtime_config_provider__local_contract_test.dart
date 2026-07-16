@@ -3,7 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_app_config_wire.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/core/services/app_content_repository.dart';
+import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
+import '../../../../../support/cloud_services/content_facet_overrides.dart';
 
 class _RuntimeConfigRepository extends MockContentRepository {
   _RuntimeConfigRepository(this._config);
@@ -58,7 +59,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         appDataSourceModeProvider.overrideWith(_SwitchableModeNotifier.new),
-        contentRepositoryProvider.overrideWithValue(
+        ...mockContentFacetOverrides(
           _RuntimeConfigRepository({
             'content': {
               'feature_flags': {
@@ -137,7 +138,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         appDataSourceModeProvider.overrideWith(_SwitchableModeNotifier.new),
-        contentRepositoryProvider.overrideWithValue(repo),
+        ...mockContentFacetOverrides(repo),
       ],
     );
     addTearDown(container.dispose);
@@ -185,7 +186,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         appDataSourceModeProvider.overrideWith(_SwitchableModeNotifier.new),
-        contentRepositoryProvider.overrideWithValue(
+        ...mockContentFacetOverrides(
           _RuntimeConfigRepository({
             'content': {
               'client_state_sync': {
@@ -236,7 +237,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         appDataSourceModeProvider.overrideWith(_SwitchableModeNotifier.new),
-        contentRepositoryProvider.overrideWithValue(
+        ...mockContentFacetOverrides(
           _RuntimeConfigRepository({
             'content': {
               'feature_flags': {

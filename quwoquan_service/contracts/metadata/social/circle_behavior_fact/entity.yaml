@@ -1,0 +1,22 @@
+version: 1
+domain: circle
+entity: CircleBehaviorFact
+object_kind: append_only_fact
+description: 圈子曝光、点击、停留等不可变行为事实；身份与会话归因只来自可信 Runtime Context。
+storage_backend: mongodb
+cache_layer: none
+capabilities: [append_only, idempotent_append, outbox]
+business_rules:
+  - actor 必须是可信 persona 或服务端派生 device actor，业务请求体不得携带 actor 标识
+  - sessionId、requestId 与 occurredAt 必须由 OperationInvocationContext 注入
+  - 同一 actor 与 Idempotency-Key 只能产生一个事实；语义不同的重复键必须冲突
+  - 事实不可更新或删除，投影仅经独立 checkpoint 重放
+lifecycle:
+  states: [recorded]
+  immutable: true
+ddd_layer_mapping:
+  domain_model: internal/domain/circle/circle_behavior_fact/model
+  append_port: internal/domain/circle/circle_behavior_fact/ports
+  application: internal/application/circle/circle_behavior_fact
+  persistence: internal/infrastructure/circle/circle_behavior_fact/persistence
+  adapter_rest: internal/adapters/http

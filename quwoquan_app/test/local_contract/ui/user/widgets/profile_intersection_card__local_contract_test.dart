@@ -4,6 +4,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_card.dart';
+import 'package:quwoquan_app/components/object_page/intersection_statement_row.dart';
 
 /// 交集卡真闭环（V5/S5）契约：
 /// - 无交集（reasons 空 / displayText 全空）→ fromReasons 返回 null，不占位。
@@ -18,7 +19,7 @@ void main() {
       dimension: dimension,
       tagRefs: tagRefs,
       primaryText: primaryText,
-      objectKind: 'topic',
+      objectKind: 'entity',
       actionTargetId: 'homepage_topic_photo',
       primarySpans: primaryText.trim().isEmpty
           ? const <IntersectionTextSpan>[]
@@ -30,7 +31,7 @@ void main() {
                 target: IntersectionTarget(
                   objectType: 'homepage',
                   objectId: 'homepage_topic_photo',
-                  objectKind: 'topic',
+                  objectKind: 'entity',
                   routeId: 'homepageDetail',
                 ),
               ),
@@ -80,7 +81,7 @@ void main() {
 
     expect(find.text('你们都喜欢 摄影'), findsOneWidget);
 
-    await tester.tap(find.text('你们都喜欢 摄影'));
+    await tester.tap(find.byType(IntersectionStatementRow));
     await tester.pump();
 
     expect(tapped, isNotNull);

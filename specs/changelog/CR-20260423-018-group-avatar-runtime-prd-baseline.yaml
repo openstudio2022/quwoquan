@@ -71,7 +71,7 @@ entries:
       rollout_impact: medium
       breaking_contract: false
     notes:
-      - 本次只完成 PRD 基线，不在特性树节点下生成 design.md / plan.yaml，下一步进入 /design。
+      - 本次只完成 PRD 基线，不在特性树节点下生成 design.md / content.execution.planning.yaml，下一步进入 /design。
       - 聊天头像显示、roster revision sync、消息推拉模型作为覆盖矩阵输入复用，不在本次重复发明第二套真相源。
   - timestamp: "2026-04-23T12:45:00+08:00"
     summary: >
@@ -88,13 +88,13 @@ entries:
       - path: specs/feature-tree/runtime/runtime-media/design.md
         sections:
           - all
-      - path: specs/feature-tree/runtime/runtime-media/plan.yaml
+      - path: specs/feature-tree/runtime/runtime-media/content.execution.planning.yaml
         sections:
           - all
       - path: specs/feature-tree/runtime/runtime-media/group-avatar-server-precompose-and-unified-sync-contract/design.md
         sections:
           - all
-      - path: specs/feature-tree/runtime/runtime-media/group-avatar-server-precompose-and-unified-sync-contract/plan.yaml
+      - path: specs/feature-tree/runtime/runtime-media/group-avatar-server-precompose-and-unified-sync-contract/content.execution.planning.yaml
         sections:
           - all
     impact:

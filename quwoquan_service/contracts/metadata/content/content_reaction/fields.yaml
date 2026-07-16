@@ -1,0 +1,86 @@
+version: 1
+entity: ContentReaction
+
+fields:
+  - name: id
+    type: string
+    constraints: [PK]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: version
+    type: int
+    constraints: [NOT_NULL, DEFAULT_1]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: targetKind
+    type: string
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 封闭目标类型，当前只允许 post 或 comment。
+
+  - name: targetId
+    type: string
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: actorDimension
+    type: string
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+
+  - name: actorId
+    type: string
+    constraints: [NOT_NULL]
+    classification: PII
+    log_policy: hash
+    api_exposure: drop
+    ops_exposure: read
+
+  - name: reaction
+    type: string
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+    description: none/like/dislike；post 目标禁止 dislike。
+
+  - name: reactedAt
+    type: timestamp
+    constraints: [NULLABLE]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+
+  - name: createdAt
+    type: timestamp
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: updatedAt
+    type: timestamp
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read

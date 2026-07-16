@@ -8,7 +8,7 @@ on:
       manifest_path:
         description: 仓库内 manifest 相对路径（YAML/JSON）
         required: true
-        default: .qwq_output/runs/gamma/commercial-matrix-chat-avatar/manifest.yaml
+        default: .qwq_output/env/gamma/runs/commercial-matrix-chat-avatar/manifest.yaml
 
 jobs:
   verify:

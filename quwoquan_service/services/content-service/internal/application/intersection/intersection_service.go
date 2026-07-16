@@ -839,10 +839,25 @@ func (s *IntersectionService) ObjectIntersections(ctx context.Context, viewerID,
 	if err != nil {
 		return nil, err
 	}
+	hostTarget := hostTargetForObjectReasons(objectID, objectType, reasons)
 	out := make([]IntersectionReasonView, 0, len(reasons))
 	for _, raw := range reasons {
 		r := hydratePointSummary(raw)
+		r = ApplyDisplayContext(r, DisplayContext{
+			Surface:    DisplaySurfaceObjectPage,
+			HostTarget: hostTarget,
+			Binding:    DisplayBindingHostPlain,
+		})
 		if !s.isFresh(r) {
+			continue
+		}
+		// 对象页使用 host_plain 上下文合同。Explain 因证据不足清空
+		// primaryText 后必须在云侧淘汰，不能把不可展示 reason 下发给 App 再补句。
+		if !ValidateDisplayStatementWithContext(r, DisplayContext{
+			Surface:    DisplaySurfaceObjectPage,
+			HostTarget: hostTarget,
+			Binding:    DisplayBindingHostPlain,
+		}) {
 			continue
 		}
 		// 同一 reason 内的证据点按锚强度排序（事实优先、recommended 殿后）。

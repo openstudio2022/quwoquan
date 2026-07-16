@@ -1,0 +1,57 @@
+version: 1
+aggregate: Experiment
+backend: postgres
+
+tables:
+  experiments:
+    entity: Experiment
+    role: authoritative
+    pk: id
+    columns:
+      - { name: id, type: VARCHAR(64), constraints: [PK] }
+      - { name: key, type: VARCHAR(128), constraints: [NOT_NULL, UNIQUE] }
+      - { name: version, type: BIGINT, constraints: [NOT_NULL] }
+      - { name: status, type: VARCHAR(32), constraints: [NOT_NULL] }
+      - { name: variants, type: JSONB, constraints: [NOT_NULL] }
+      - { name: audience_rule, type: JSONB, constraints: [NOT_NULL] }
+      - { name: allocation_seed, type: VARCHAR(128), constraints: [NOT_NULL] }
+      - { name: starts_at, type: TIMESTAMPTZ, constraints: [NULLABLE] }
+      - { name: ends_at, type: TIMESTAMPTZ, constraints: [NULLABLE] }
+      - { name: created_at, type: TIMESTAMPTZ, constraints: [NOT_NULL] }
+      - { name: updated_at, type: TIMESTAMPTZ, constraints: [NOT_NULL] }
+    indexes:
+      - { name: idx_experiments_status_window, columns: [status, starts_at, ends_at] }
+    optimistic_lock: version
+
+  experiment_idempotency_receipts:
+    entity: Experiment
+    role: authoritative
+    pk: [experiment_id, idempotency_key]
+    description: 与 Experiment 聚合版本和 product_ops_outbox 在同一 PostgreSQL transaction 提交的命令回执。
+    columns:
+      - { name: experiment_id, type: VARCHAR(64), constraints: [PK, NOT_NULL] }
+      - { name: idempotency_key, type: VARCHAR(160), constraints: [PK, NOT_NULL] }
+      - { name: command_digest, type: VARCHAR(64), constraints: [NOT_NULL] }
+      - { name: version, type: BIGINT, constraints: [NOT_NULL] }
+      - { name: created_at, type: TIMESTAMPTZ, constraints: [NOT_NULL], default: NOW() }
+
+  product_ops_outbox:
+    entity: Experiment
+    role: append_only
+    pk: event_id
+    description: Experiment 与 ExperimentAssignmentFact 共享的同库事务 outbox，由租约 dispatcher 重试投递。
+    columns:
+      - { name: event_id, type: VARCHAR(128), constraints: [PK, NOT_NULL] }
+      - { name: event_type, type: VARCHAR(128), constraints: [NOT_NULL] }
+      - { name: aggregate_type, type: VARCHAR(128), constraints: [NOT_NULL] }
+      - { name: aggregate_id, type: VARCHAR(128), constraints: [NOT_NULL] }
+      - { name: payload, type: JSONB, constraints: [NOT_NULL] }
+      - { name: occurred_at, type: TIMESTAMPTZ, constraints: [NOT_NULL] }
+      - { name: dispatched_at, type: TIMESTAMPTZ, constraints: [NULLABLE] }
+      - { name: retry_count, type: INTEGER, constraints: [NOT_NULL], default: 0 }
+      - { name: next_attempt_at, type: TIMESTAMPTZ, constraints: [NOT_NULL], default: NOW() }
+      - { name: last_error, type: TEXT, constraints: [NOT_NULL], default: "" }
+      - { name: lease_owner, type: VARCHAR(160), constraints: [NULLABLE] }
+      - { name: leased_until, type: TIMESTAMPTZ, constraints: [NULLABLE] }
+    indexes:
+      - { name: idx_product_ops_outbox_ready, columns: [dispatched_at, next_attempt_at, occurred_at] }

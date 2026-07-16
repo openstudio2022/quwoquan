@@ -68,4 +68,4 @@ plugins:
 next_steps:
   - Android Play Feature Delivery deferred components for rtc + content_entry bundles
   - Audit GeneratedPluginRegistrant / lazy MethodChannel at first consumer
-  - split-per-abi release APK（已启用 build.gradle.kts splits.abi）
+  - split-per-abi release APK（已启用 content.homepage.gradle.kts splits.abi）

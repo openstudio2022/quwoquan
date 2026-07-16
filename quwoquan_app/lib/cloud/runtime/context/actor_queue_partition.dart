@@ -1,0 +1,43 @@
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
+
+/// 离线队列的主体隔离键。
+///
+/// 原始 account/persona/device 标识不进入 Hive box 名；稳定摘要同时写入 envelope，
+/// 刷盘时必须与当前 partition 完全相等，避免切号后用新 token 重放旧主体事件。
+final class ActorQueuePartition {
+  ActorQueuePartition({
+    required String environment,
+    String accountId = '',
+    String personaId = '',
+    String deviceId = '',
+  }) : _environment = environment.trim(),
+       _accountId = accountId.trim(),
+       _personaId = personaId.trim(),
+       _deviceId = deviceId.trim();
+
+  final String _environment;
+  final String _accountId;
+  final String _personaId;
+  final String _deviceId;
+
+  bool get canPersist =>
+      _environment.isNotEmpty &&
+      (_accountId.isNotEmpty || _personaId.isNotEmpty || _deviceId.isNotEmpty);
+
+  String get key {
+    final canonical = jsonEncode(<String, String>{
+      'environment': _environment,
+      'accountId': _accountId,
+      'personaId': _personaId,
+      'deviceId': _deviceId,
+    });
+    return sha256.convert(utf8.encode(canonical)).toString().substring(0, 24);
+  }
+
+  String boxName(String baseName) => '${baseName}_v3_$key';
+
+  bool acceptsEnvelope(Object? envelopeKey) =>
+      canPersist && envelopeKey is String && envelopeKey == key;
+}

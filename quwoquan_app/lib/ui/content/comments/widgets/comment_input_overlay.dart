@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart' show MaxLengthEnforcement;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/cloud/services/content/content_repository.dart'
-    show CommentDto;
+import 'package:quwoquan_app/app/navigation/page_access_internal_routes.dart';
+import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
+import 'package:quwoquan_app/cloud/runtime/models/comment_remote_config.dart';
+import 'package:quwoquan_app/components/media/picker/image_pick_gateway.dart';
 import 'package:quwoquan_app/components/comment_system/comment_composer_models.dart';
 import 'package:quwoquan_app/components/comment_system/comment_draft_store.dart';
 import 'package:quwoquan_app/components/comment_system/comment_models.dart';
@@ -15,6 +17,7 @@ import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/components/input/unified_emoji_picker.dart';
 import 'package:quwoquan_app/ui/content/comments/providers/comment_provider.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// 评论统一输入浮层。
 ///
@@ -33,9 +36,9 @@ class CommentInputOverlay {
     BuildContext context, {
     required String postId,
     CommentConfig config = const CommentConfig(),
-    CommentDto? replyTo,
+    ContentCommentListItem? replyTo,
     String surfaceMode = 'overlay',
-    List<CommentMentionCandidate> mentionCandidates = _defaultMentions,
+    List<ContentCommentMention>? mentionCandidates,
     FutureOr<void> Function(CommentComposerPayload payload)? onSubmit,
   }) async {
     final result = await showAppBottomModal<bool>(
@@ -45,16 +48,16 @@ class CommentInputOverlay {
         config: config,
         replyTo: replyTo,
         surfaceMode: surfaceMode,
-        mentionCandidates: mentionCandidates,
+        mentionCandidates: mentionCandidates ?? _defaultMentions,
         onSubmit: onSubmit,
       ),
     );
     return result ?? false;
   }
 
-  static const List<CommentMentionCandidate> _defaultMentions =
-      <CommentMentionCandidate>[
-        CommentMentionCandidate(
+  static final List<ContentCommentMention> _defaultMentions =
+      <ContentCommentMention>[
+        ContentCommentMention(
           subjectType: 'assistant',
           subjectId: 'assistant_xiaoqu',
           displayName: UITextConstants.assistantEntryXiaoqu,
@@ -74,9 +77,9 @@ class _CommentInputSheet extends ConsumerStatefulWidget {
 
   final String postId;
   final CommentConfig config;
-  final CommentDto? replyTo;
+  final ContentCommentListItem? replyTo;
   final String surfaceMode;
-  final List<CommentMentionCandidate> mentionCandidates;
+  final List<ContentCommentMention> mentionCandidates;
   final FutureOr<void> Function(CommentComposerPayload payload)? onSubmit;
 
   @override
@@ -86,8 +89,8 @@ class _CommentInputSheet extends ConsumerStatefulWidget {
 class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
-  final List<CommentMentionCandidate> _selectedMentions =
-      <CommentMentionCandidate>[];
+  final List<ContentCommentMention> _selectedMentions =
+      <ContentCommentMention>[];
   final List<String> _attachmentMediaIds = <String>[];
 
   late CommentConfig _effectiveConfig;
@@ -100,9 +103,10 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
   @override
   void initState() {
     super.initState();
-    _effectiveConfig = ref
-        .read(commentRemoteConfigProvider)
-        .toComposerConfig(fallbackConfig: widget.config);
+    _effectiveConfig = _resolveComposerConfig(
+      ref.read(commentRemoteConfigProvider),
+      widget.config,
+    );
     _controller.addListener(_onTextChanged);
     // 输入态曝光：运营漏斗起点（区分回复 vs 顶层评论、来源宿主）。
     ref
@@ -215,7 +219,7 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
     if (replyTo != null) {
       return UITextConstants.commentReplyToTemplate.replaceFirst(
         '%s',
-        replyTo.displayName ?? replyTo.authorId,
+        replyTo.authorDisplayNameSnapshot ?? replyTo.authorId,
       );
     }
     return UITextConstants.commentPlaceholder;
@@ -245,7 +249,9 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
     });
   }
 
-  void _addMention(CommentMentionCandidate candidate) {
+  void _addMention(ContentCommentMention candidate) {
+    final displayName = candidate.displayName?.trim() ?? '';
+    if (displayName.isEmpty) return;
     final exists = _selectedMentions.any(
       (item) => item.subjectId == candidate.subjectId,
     );
@@ -259,7 +265,7 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
             mentionCount: _selectedMentions.length,
           );
     }
-    _insertText('${UITextConstants.commentMention}${candidate.displayName} ');
+    _insertText('${UITextConstants.commentMention}$displayName ');
     if (_showEmojiPanel) {
       setState(() => _showEmojiPanel = false);
     }
@@ -277,19 +283,29 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
       );
       return;
     }
+    final path = await ref
+        .read(imagePickGatewayProvider)
+        .pickImage(
+          context,
+          source: ImagePickSource.photoLibrary,
+          cameraRouteName: PageAccessInternalRoutes.commentMediaPickerCamera,
+          galleryRouteName: PageAccessInternalRoutes.commentMediaPickerGallery,
+        );
+    if (!mounted || path == null || path.trim().isEmpty) return;
     setState(() => _isUploadingAttachment = true);
     try {
-      final repo = ref.read(contentRepositoryProvider);
-      final init = await repo.initMediaUpload(mediaType: 'image');
-      final completed = await repo.completeMediaUpload(
-        sessionId: init.sessionId,
+      final media = ref.read(
+        widget.surfaceMode == 'immersive_split'
+            ? workBrowserContentMediaFacetProvider
+            : homeFeedContentMediaFacetProvider,
       );
-      final mediaId = completed.assetId ?? init.mediaId;
-      if (mediaId == null || mediaId.isEmpty) {
-        throw StateError('comment media upload returned empty mediaId');
-      }
+      final uploaded = await ContentMediaUploadCoordinator(
+        media: media,
+        fileStorage: ref.read(fileStorageGatewayProvider),
+        uploadObject: ref.read(contentMediaObjectUploadProvider),
+      ).uploadLocalPath(localPath: path, mediaType: ContentMediaType.image);
       if (!mounted) return;
-      setState(() => _attachmentMediaIds.add(mediaId));
+      setState(() => _attachmentMediaIds.add(uploaded.assetId));
       _scheduleDraftSave();
       ref
           .read(commentObservabilityProvider)
@@ -327,7 +343,7 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
     return CommentComposerPayload(
       content: _controller.text.trim(),
       attachmentMediaIds: List<String>.unmodifiable(safeAttachments),
-      mentions: List<CommentMentionCandidate>.unmodifiable(_selectedMentions),
+      mentions: List<ContentCommentMention>.unmodifiable(_selectedMentions),
     );
   }
 
@@ -362,9 +378,9 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
               attachmentMediaIds: List<String>.unmodifiable(
                 _attachmentMediaIds,
               ),
-              mentions: _selectedMentions
-                  .map((candidate) => candidate.toWire())
-                  .toList(growable: false),
+              mentions: List<ContentCommentMention>.unmodifiable(
+                _selectedMentions,
+              ),
             ),
           );
       unawaited(requireLogin(ref, context, AuthGateReason.comment));
@@ -383,11 +399,23 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
         .take<SubmitCommentContinuation>();
     if (pending == null) return;
     // 续接帖与本浮层不一致：放回槽位，交由对应宿主续接。
-    if (pending.postId != null && pending.postId != widget.postId) {
+    if ((pending.postId != null && pending.postId != widget.postId) ||
+        pending.replyToCommentId != widget.replyTo?.id) {
       ref.read(authContinuationProvider.notifier).set(pending);
       return;
     }
-    _controller.text = pending.content;
+    setState(() {
+      _controller.text = pending.content;
+      _controller.selection = TextSelection.collapsed(
+        offset: _controller.text.length,
+      );
+      _attachmentMediaIds
+        ..clear()
+        ..addAll(pending.attachmentMediaIds);
+      _selectedMentions
+        ..clear()
+        ..addAll(pending.mentions);
+    });
     unawaited(_performSubmit());
   }
 
@@ -508,7 +536,7 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
                           _ReplyIndicator(
                             isDark: isDark,
                             username:
-                                widget.replyTo!.displayName ??
+                                widget.replyTo!.authorDisplayNameSnapshot ??
                                 widget.replyTo!.authorId,
                             onCancel: _dismiss,
                           ),
@@ -685,6 +713,19 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
     }
     return _RecentEmojiStrip(isDark: isDark, onSelected: _insertText);
   }
+}
+
+CommentConfig _resolveComposerConfig(
+  CommentRemoteConfig remote,
+  CommentConfig fallback,
+) {
+  return CommentConfig(
+    maxLength: remote.maxLength > 0 ? remote.maxLength : fallback.maxLength,
+    maxImageAttachments: remote.maxImageAttachments > 0
+        ? remote.maxImageAttachments
+        : fallback.maxImageAttachments,
+    enabled: remote.enabled && fallback.enabled,
+  );
 }
 
 class _ReplyIndicator extends StatelessWidget {

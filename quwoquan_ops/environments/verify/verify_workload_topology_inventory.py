@@ -6,7 +6,8 @@
   - quwoquan_ops/environments/workload_topology_inventory.yaml (部署形态三态分类)
 
 校验项：
-  1. inventory.workloads 进程名集合 == process_domain_mapping.prod 进程名集合。
+  1. inventory.workloads 业务进程名集合 == process_domain_mapping.prod 进程名集合；
+     external_workloads 只声明 capability，不得伪装为业务 domain/process。
   2. 每个 workload.domains == process_domain_mapping.prod 对应进程 domains。
   3. seed-box 为 modular-monolith-unit；recommendation 独立 [recommendation] 且不并入 seed-box。
   4. split_candidates 的 domain 必须都属于 seed-box domains。
@@ -77,6 +78,8 @@ def main() -> int:
     pdm_domains = {n: set(v.get("domains", [])) for n, v in prod_procs.items()}
 
     workloads = inv.get("workloads", [])
+    external_workloads = inv.get("external_workloads", [])
+    all_deployments = workloads + external_workloads
     inv_names = {w["name"] for w in workloads}
 
     # 1. 进程名集合一致
@@ -151,6 +154,21 @@ def main() -> int:
                     f"{name} wired_to_prod_root=false 但 kustomize_overlay 非 null（应为 planned）"
                 )
 
+    for w in external_workloads:
+        name = w["name"]
+        if w.get("profile") != "external-workload":
+            errors.append(f"{name} external workload 缺 profile=external-workload")
+        if w.get("domains"):
+            errors.append(f"{name} external workload 禁止声明业务 domains")
+        if not w.get("capabilities"):
+            errors.append(f"{name} external workload 必须声明 capabilities")
+        _check_wiring(
+            w,
+            root_cache,
+            allow_init_suffix,
+            allow_container_names,
+        )
+
     # 3. recommendation 不并入 seed-box
     if "recommendation" in seed_domains:
         errors.append("seed-box domains 不得包含 recommendation（必须独立 workload）")
@@ -164,11 +182,11 @@ def main() -> int:
     # 7. 反向：prod root include 的每个 overlay 必须对应 wired=true 的 inventory workload
     wired_overlays = {
         (ROOT / w["kustomize_overlay"]).resolve()
-        for w in workloads
+        for w in all_deployments
         if w.get("wired_to_prod_root") and w.get("kustomize_overlay")
     }
     seen_roots: set[str] = set()
-    for w in workloads:
+    for w in all_deployments:
         for root_rel in w.get("prod_root_kustomizations", []) or []:
             seen_roots.add(root_rel)
     for root_rel in sorted(seen_roots):
@@ -191,8 +209,58 @@ def main() -> int:
         for e in errors:
             print(f"  - {e}", file=sys.stderr)
         return 1
-    print(f"PASS: workload topology inventory（{len(workloads)} workloads，三态一致、标准原语齐全、无 sidecar 反模式）")
+    print(
+        "PASS: workload topology inventory（"
+        f"{len(workloads)} 业务 workloads + {len(external_workloads)} 外部 capabilities，"
+        "三态一致、标准原语齐全、无 sidecar 反模式）"
+    )
     return 0
+
+
+def _check_wiring(
+    w,
+    root_cache,
+    allow_init_suffix,
+    allow_container_names,
+):
+    name = w["name"]
+    wired = bool(w.get("wired_to_prod_root"))
+    overlay = w.get("kustomize_overlay")
+    if not wired:
+        if overlay is not None:
+            errors.append(
+                f"{name} wired_to_prod_root=false 但 kustomize_overlay 非 null（应为 planned）"
+            )
+        return
+    if not overlay:
+        errors.append(f"{name} wired_to_prod_root=true 但缺 kustomize_overlay")
+        return
+    if not (ROOT / overlay).exists():
+        errors.append(f"{name} kustomize_overlay 不存在: {overlay}")
+        return
+    roots = w.get("prod_root_kustomizations", [])
+    if not roots:
+        errors.append(f"{name} wired 但 prod_root_kustomizations 为空")
+    for root_rel in roots:
+        root_kust = ROOT / root_rel / "kustomization.yaml"
+        if not root_kust.exists():
+            errors.append(f"{name} prod root 不存在: {root_rel}")
+            continue
+        root_resources = load_yaml(root_kust).get("resources", []) or []
+        resolved_resources = {(ROOT / root_rel / r).resolve() for r in root_resources}
+        if (ROOT / overlay).resolve() not in resolved_resources:
+            errors.append(f"{name} 未被 {root_rel} root include overlay {overlay}")
+        if root_rel not in root_cache:
+            root_cache[root_rel] = render_root(root_rel)
+        docs = root_cache[root_rel]
+        if docs is not None:
+            _check_rendered_primitives(
+                w,
+                docs,
+                root_rel,
+                allow_init_suffix,
+                allow_container_names,
+            )
 
 
 def _check_rendered_primitives(w, docs, root_rel, allow_init_suffix, allow_container_names):

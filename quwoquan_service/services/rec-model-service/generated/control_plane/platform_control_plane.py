@@ -79,6 +79,7 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
       "object_type": "service_config",
       "operations": [
         {
+          "contract_operation_id": "ops.config_layer.ListServiceConfigs",
           "method": "GET",
           "operation": "ListServiceConfigs",
           "path": "/v1/control-plane/platform/configs",
@@ -88,6 +89,7 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
         },
         {
           "approval_mode": "single",
+          "contract_operation_id": "ops.config_layer.UpdateServiceConfig",
           "danger_level": "high",
           "method": "POST",
           "operation": "UpdateServiceConfig",
@@ -108,6 +110,7 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
       "object_type": "config_layer_value",
       "operations": [
         {
+          "contract_operation_id": "ops.config_layer.ListConfigLayers",
           "method": "GET",
           "operation": "ListConfigLayers",
           "path": "/v1/control-plane/platform/configs/layers",
@@ -116,6 +119,7 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
           ]
         },
         {
+          "contract_operation_id": "ops.config_layer.ResolveEffectiveConfig",
           "method": "GET",
           "operation": "ResolveEffectiveConfig",
           "path": "/v1/control-plane/platform/configs/resolve",

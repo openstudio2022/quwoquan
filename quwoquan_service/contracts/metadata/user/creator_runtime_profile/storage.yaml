@@ -1,0 +1,17 @@
+version: 1
+entity: CreatorRuntimeProfile
+backend: mongodb
+
+collections:
+  creator_runtime_profiles:
+    entity: CreatorRuntimeProfile
+    indexes:
+      - name: idx_creator_runtime_creator_id_unique
+        keys: { creatorId: 1 }
+        unique: true
+      - name: idx_creator_runtime_sub_account
+        keys: { subAccountId: 1, status: 1 }
+      - name: idx_creator_runtime_handle
+        keys: { handle: 1, status: 1 }
+      - name: idx_creator_runtime_managed_status
+        keys: { managedBy: 1, status: 1 }

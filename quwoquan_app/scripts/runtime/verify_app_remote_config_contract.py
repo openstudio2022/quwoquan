@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -52,6 +53,7 @@ REMOTE_FORBIDDEN_TOKENS = {
     "token",
     "keychain",
 }
+DIRECT_APP_CONFIG_CALL = re.compile(r"\.\s*getAppConfig\s*\(")
 
 
 def main() -> int:
@@ -157,7 +159,7 @@ def check_app_config_call_sites() -> list[str]:
         if rel in allowed:
             continue
         text = path.read_text(encoding="utf-8")
-        if "getAppConfig()" in text or ".getAppConfig(" in text:
+        if DIRECT_APP_CONFIG_CALL.search(text):
             errors.append(
                 f"{rel}: direct getAppConfig call is not allowed; use appRemoteConfigProvider/contentRuntimeConfigProvider",
             )

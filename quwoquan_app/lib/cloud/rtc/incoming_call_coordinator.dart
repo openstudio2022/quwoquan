@@ -7,7 +7,8 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/rtc/callkit_service.dart';
 import 'package:quwoquan_app/cloud/rtc/models/rtc_signal_payloads.dart';
 import 'package:quwoquan_app/cloud/rtc/rtc_signaling_client.dart';
-import 'package:quwoquan_app/cloud/runtime/startup_deferred_plugins.dart';
+import 'package:quwoquan_app/core/platform/startup_deferred_plugins.dart';
+import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 
@@ -18,7 +19,11 @@ final callKitServiceProvider = Provider<CallKitService>((ref) {
 });
 
 final rtcSignalingProvider = Provider<RtcSignalingClient>((ref) {
-  final client = RtcSignalingClient();
+  final client = RtcSignalingClient(
+    authTokenProvider: ProviderBackedCloudAuthTokenProvider(
+      () => ref.read(authSessionControllerProvider).accessToken,
+    ),
+  );
   ref.onDispose(() => client.dispose());
   return client;
 });
@@ -44,7 +49,7 @@ class IncomingCallCoordinator {
   String? _pendingCallId;
   String? _pendingCallType;
 
-  void start(String userId) {
+  void start(String _) {
     final channel = resolveIncomingCallChannel(
       ref.read(platformCapabilitiesProvider),
     );
@@ -66,7 +71,7 @@ class IncomingCallCoordinator {
       unawaited(_startCallKitListening(callKit, generation));
     }
 
-    signaling.connect(userId);
+    unawaited(signaling.connect());
 
     _signalSub = signaling.incomingCalls.listen((event) {
       final wrap = event.payload as RtcCallRingingWsPayload;

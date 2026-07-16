@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "entityId": { "type": "string" },
+    "entityName": { "type": "string", "minLength": 1 },
+    "policyRevision": { "const": "encyclopedia-primary-v2" },
+    "dispatchByContentType": {
+      "type": "object",
+      "additionalProperties": { "type": "integer", "minimum": 0 }
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "source_id": { "type": "string" },
+          "platform": { "type": "string" },
+          "sourceKind": { "type": "string" },
+          "sourceTitle": { "type": "string", "minLength": 1 },
+          "url": { "type": "string", "pattern": "^https://" },
+          "canonicalUrl": { "type": "string", "pattern": "^https://" },
+          "extractor": { "type": "string" },
+          "policyRevision": { "type": "string" },
+          "category": { "type": "string" },
+          "sourceRole": { "type": "string" },
+          "researchLane": { "enum": ["homepage", "article", "image", "video"] },
+          "expectedContentType": { "type": "string" },
+          "priority": { "type": "integer" }
+        },
+        "required": ["platform", "url", "researchLane", "expectedContentType", "priority"],
+        "allOf": [
+          {
+            "if": {
+              "properties": { "researchLane": { "const": "homepage" } },
+              "required": ["researchLane"]
+            },
+            "then": {
+              "properties": {
+                "sourceKind": {
+                  "enum": ["wikipedia", "baidu_baike", "sogou_baike", "toutiao_baike"]
+                },
+                "policyRevision": { "const": "encyclopedia-primary-v2" }
+              },
+              "required": [
+                "sourceKind",
+                "sourceTitle",
+                "canonicalUrl",
+                "extractor",
+                "policyRevision"
+              ],
+              "oneOf": [
+                {
+                  "properties": {
+                    "sourceKind": { "const": "wikipedia" },
+                    "extractor": { "const": "wikipedia_api" }
+                  }
+                },
+                {
+                  "properties": {
+                    "sourceKind": { "const": "baidu_baike" },
+                    "extractor": { "const": "baidu_baike_html" }
+                  }
+                },
+                {
+                  "properties": {
+                    "sourceKind": { "const": "sogou_baike" },
+                    "extractor": { "const": "sogou_baike_html" }
+                  }
+                },
+                {
+                  "properties": {
+                    "sourceKind": { "const": "toutiao_baike" },
+                    "extractor": { "const": "toutiao_baike_html" }
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "minItems": 1
+    },
+    "homepageMediaCollections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "sourceCollectionId",
+          "collectionPageUrl",
+          "license",
+          "termsUrl",
+          "authorizationProof",
+          "mediaEvidenceMode",
+          "images"
+        ],
+        "properties": {
+          "sourceCollectionId": { "type": "string", "minLength": 1 },
+          "collectionPageUrl": { "type": "string", "pattern": "^https://" },
+          "license": { "type": "string", "minLength": 1 },
+          "termsUrl": { "type": "string", "pattern": "^https://" },
+          "authorizationProof": { "type": "string", "pattern": "^https://" },
+          "mediaEvidenceMode": { "const": "independent_rights_cleared" },
+          "images": { "type": "array", "minItems": 1, "items": { "type": "object" } }
+        }
+      }
+    }
+  },
+  "required": ["entityId", "entityName", "policyRevision", "sources"]
+}

@@ -52,7 +52,7 @@ func (m *MongoEntityTagIndex) UpsertEntityTags(ctx context.Context, entityID str
 // Collections:
 //   - circle_members: { circleId, userId }
 //   - circle_tag_aggregates: { circleId, tags: map[string]float64 }
-//   - follow_edges: { followerId, followeeId }
+//   - persona_follow_projection: { sourcePersonaId, targetPersonaId, following }
 //   - rm_recommend_feature: user feature store (for friend interest intersection)
 type MongoSocialGraphProvider struct {
 	db *mongo.Database
@@ -125,8 +125,8 @@ func (m *MongoSocialGraphProvider) GetUserCircleIDs(ctx context.Context, userID 
 }
 
 func (m *MongoSocialGraphProvider) GetFriendInterestIntersection(ctx context.Context, userID string) (map[string]float64, error) {
-	followColl := m.db.Collection("follow_edges")
-	cursor, err := followColl.Find(ctx, bson.M{"followerId": userID},
+	relationshipColl := m.db.Collection("persona_follow_projection")
+	cursor, err := relationshipColl.Find(ctx, bson.M{"sourcePersonaId": userID, "following": true},
 		options.Find().SetLimit(50))
 	if err != nil {
 		return nil, nil
@@ -136,10 +136,10 @@ func (m *MongoSocialGraphProvider) GetFriendInterestIntersection(ctx context.Con
 	var followeeIDs []string
 	for cursor.Next(ctx) {
 		var doc struct {
-			FolloweeID string `bson:"followeeId"`
+			TargetPersonaID string `bson:"targetPersonaId"`
 		}
-		if err := cursor.Decode(&doc); err == nil && doc.FolloweeID != "" {
-			followeeIDs = append(followeeIDs, doc.FolloweeID)
+		if err := cursor.Decode(&doc); err == nil && doc.TargetPersonaID != "" {
+			followeeIDs = append(followeeIDs, doc.TargetPersonaID)
 		}
 	}
 	if len(followeeIDs) == 0 {
@@ -177,8 +177,8 @@ func (m *MongoSocialGraphProvider) GetFriendInterestIntersection(ctx context.Con
 }
 
 func (m *MongoSocialGraphProvider) GetFriendInteractedContent(ctx context.Context, userID string, limit int) ([]string, error) {
-	followColl := m.db.Collection("follow_edges")
-	cursor, err := followColl.Find(ctx, bson.M{"followerId": userID},
+	relationshipColl := m.db.Collection("persona_follow_projection")
+	cursor, err := relationshipColl.Find(ctx, bson.M{"sourcePersonaId": userID, "following": true},
 		options.Find().SetLimit(30))
 	if err != nil {
 		return nil, nil
@@ -188,10 +188,10 @@ func (m *MongoSocialGraphProvider) GetFriendInteractedContent(ctx context.Contex
 	var followeeIDs []string
 	for cursor.Next(ctx) {
 		var doc struct {
-			FolloweeID string `bson:"followeeId"`
+			TargetPersonaID string `bson:"targetPersonaId"`
 		}
-		if err := cursor.Decode(&doc); err == nil && doc.FolloweeID != "" {
-			followeeIDs = append(followeeIDs, doc.FolloweeID)
+		if err := cursor.Decode(&doc); err == nil && doc.TargetPersonaID != "" {
+			followeeIDs = append(followeeIDs, doc.TargetPersonaID)
 		}
 	}
 	if len(followeeIDs) == 0 {

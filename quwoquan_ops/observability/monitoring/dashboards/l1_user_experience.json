@@ -60,6 +60,59 @@
             "legendFormat": "深度互动"
           }
         ]
+      },
+      {
+        "title": "启动 Shell 首帧 P50/P95",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+        "description": "startup_welcome_sequence shellFirstPaintMs；正常目标 3s",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(ops_event_metrics_bucket{event_name=\"startup_welcome_sequence\",metric=\"shellFirstPaintMs\"}[10m])) by (le, platform))",
+            "legendFormat": "P50 {{ platform }}"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(ops_event_metrics_bucket{event_name=\"startup_welcome_sequence\",metric=\"shellFirstPaintMs\"}[10m])) by (le, platform))",
+            "legendFormat": "P95 {{ platform }}"
+          }
+        ]
+      },
+      {
+        "title": "欢迎退出/移除 P95 与 6s 硬门",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(ops_event_metrics_bucket{event_name=\"startup_welcome_sequence\",metric=\"welcomeExitMs\"}[10m])) by (le, platform))",
+            "legendFormat": "退出 P95 {{ platform }}"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(ops_event_metrics_bucket{event_name=\"startup_welcome_sequence\",metric=\"overlayRemovedMs\"}[10m])) by (le, platform))",
+            "legendFormat": "移除 P95 {{ platform }}"
+          }
+        ]
+      },
+      {
+        "title": "启动重放与降级比例",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+        "targets": [
+          {
+            "expr": "sum(rate(ops_events_total{event_name=\"startup_welcome_sequence\",phase=\"finished\"}[10m])) by (replay_count, exit_reason, platform)",
+            "legendFormat": "{{ platform }} replay={{ replay_count }} {{ exit_reason }}"
+          }
+        ]
+      },
+      {
+        "title": "欢迎动效 Build/Raster P95",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(ops_event_metrics_bucket{event_name=\"startup_welcome_sequence\",metric=~\"buildFrameP95Ms|rasterFrameP95Ms\"}[10m])) by (le, metric, platform))",
+            "legendFormat": "{{ platform }} {{ metric }}"
+          }
+        ]
       }
     ]
   }

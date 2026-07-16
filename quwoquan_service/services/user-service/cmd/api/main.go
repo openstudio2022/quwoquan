@@ -14,24 +14,34 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"gopkg.in/yaml.v3"
 
+	operationsecurity "quwoquan_service/generated/operationsecurity"
+	rtmongo "quwoquan_service/internal/platform/mongodb"
+	platformredis "quwoquan_service/internal/platform/redis"
 	rtauth "quwoquan_service/runtime/auth"
+	runtimeconfig "quwoquan_service/runtime/config"
 	rtgov "quwoquan_service/runtime/governance"
 	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
 	rtmetrics "quwoquan_service/runtime/metrics"
-	rtmongo "quwoquan_service/runtime/mongodb"
 	robs "quwoquan_service/runtime/observability"
 	rtotel "quwoquan_service/runtime/otel"
+	"quwoquan_service/runtime/otpseal"
 
 	rtredis "quwoquan_service/runtime/redis"
 	runtimesync "quwoquan_service/runtime/sync"
 	httpadapter "quwoquan_service/services/user-service/internal/adapters/http"
 	"quwoquan_service/services/user-service/internal/adapters/mq"
 	"quwoquan_service/services/user-service/internal/application"
+	personaapp "quwoquan_service/services/user-service/internal/application/persona/persona"
+	proposalapp "quwoquan_service/services/user-service/internal/application/persona/profile_update_proposal"
+	relationshipapp "quwoquan_service/services/user-service/internal/application/relationship/persona_relationship"
 	"quwoquan_service/services/user-service/internal/infrastructure/cache"
 	userintegration "quwoquan_service/services/user-service/internal/infrastructure/integration"
 	"quwoquan_service/services/user-service/internal/infrastructure/persistence"
+	personapersistence "quwoquan_service/services/user-service/internal/infrastructure/persona/persona/persistence"
+	proposalpersistence "quwoquan_service/services/user-service/internal/infrastructure/persona/profile_update_proposal/persistence"
 	"quwoquan_service/services/user-service/internal/infrastructure/projection"
+	relationshippersistence "quwoquan_service/services/user-service/internal/infrastructure/relationship/persona_relationship/persistence"
 	"quwoquan_service/services/user-service/internal/infrastructure/searchindex"
 	"quwoquan_service/services/user-service/internal/infrastructure/tagindex"
 )
@@ -80,40 +90,26 @@ type config struct {
 	} `yaml:"redis"`
 	Integration struct {
 		ExternalInteractionBaseURL string `yaml:"external_interaction_base_url"`
-		SmsOTP                     struct {
-			PassThroughEnabled   bool                `yaml:"pass_through_enabled"`
-			PassThroughDebtID    string              `yaml:"pass_through_debt_id"`
-			PassThroughOwner     string              `yaml:"pass_through_owner"`
-			PassThroughExpiresAt string              `yaml:"pass_through_expires_at"`
-			DebugRevealEnabled   bool                `yaml:"debug_reveal_enabled"`
-			SandboxAllowlist     sandboxAllowlistCfg `yaml:"sandbox_allowlist"`
-		} `yaml:"sms_otp"`
-		Social struct {
-			SandboxAllowlist sandboxAllowlistCfg         `yaml:"sandbox_allowlist"`
-			Providers        map[string]providerOAuthCfg `yaml:"providers"`
+		Social                     struct {
+			Providers map[string]providerOAuthCfg `yaml:"providers"`
 		} `yaml:"social"`
 		OneTap struct {
-			Resolver         string              `yaml:"resolver"`
-			SandboxAllowlist sandboxAllowlistCfg `yaml:"sandbox_allowlist"`
-			SandboxPhones    map[string]string   `yaml:"sandbox_phones"`
+			Resolver string `yaml:"resolver"`
 		} `yaml:"one_tap"`
+		OTP struct {
+			Mode string `yaml:"mode"`
+		} `yaml:"otp"`
 	} `yaml:"integration"`
 }
 
-type sandboxAllowlistCfg struct {
-	Enabled   bool     `yaml:"enabled"`
-	Phones    []string `yaml:"phones"`
-	Tokens    []string `yaml:"tokens"`
-	DebtID    string   `yaml:"debt_id"`
-	Owner     string   `yaml:"owner"`
-	ExpiresAt string   `yaml:"expires_at"`
-}
-
 type providerOAuthCfg struct {
-	AppID       string `yaml:"app_id"`
-	AppSecret   string `yaml:"app_secret"`
-	TokenURL    string `yaml:"token_url"`
-	UserInfoURL string `yaml:"user_info_url"`
+	AppID                string `yaml:"app_id"`
+	AppSecret            string `yaml:"app_secret"`
+	AppPrivateKeyPEM     string `yaml:"app_private_key_pem"`
+	PlatformPublicKeyPEM string `yaml:"platform_public_key_pem"`
+	MerchantPID          string `yaml:"merchant_pid"`
+	TokenURL             string `yaml:"token_url"`
+	UserInfoURL          string `yaml:"user_info_url"`
 }
 
 func main() {
@@ -203,7 +199,7 @@ func main() {
 	profileStore := persistence.NewPgProfileStore(pgPool)
 	personaStore := persistence.NewPgPersonaStore(pgPool).WithMongoDatabase(mongoDB)
 	settingStore := persistence.NewPgSettingStore(pgPool)
-	blockStore := persistence.NewPgBlockStore(pgPool)
+	relationshipStore := relationshippersistence.NewPgPersonaRelationshipStore(pgPool)
 	greetingStore := persistence.NewPgGreetingStore(pgPool)
 	workStore := persistence.NewPgWorkStore(pgPool)
 	lifeItemStore := persistence.NewPgLifeItemStore(pgPool)
@@ -215,13 +211,13 @@ func main() {
 	profileQrTokenStore := persistence.NewPgProfileQrTokenStore(pgPool)
 	contactDiscoveryStore := persistence.NewPgContactDiscoveryStore(pgPool)
 	inviteStore := persistence.NewPgInviteStore(pgPool)
-
-	var followStore *persistence.MongoFollowStore
-	if mongoDB != nil {
-		followStore = persistence.NewMongoFollowStore(mongoDB)
-		if err := followStore.EnsureIndexes(ctx); err != nil {
-			log.Printf("WARN: follow_edges index creation: %v", err)
-		}
+	personaProfileProposalStore, err := personapersistence.NewProfileProposalPostgresStore(pgPool)
+	if err != nil {
+		log.Fatalf("Persona profile proposal Store init failed: %v", err)
+	}
+	profileProposalStore, err := proposalpersistence.NewPostgresStore(pgPool)
+	if err != nil {
+		log.Fatalf("ProfileUpdateProposal Store init failed: %v", err)
 	}
 
 	// 5b. Search index (ES) — write side of user.search_index_worker. Disabled
@@ -242,10 +238,10 @@ func main() {
 	// 6. Caches
 	profileCache := cache.NewProfileCache(redisClient)
 	settingCache := cache.NewSettingCache(redisClient)
-	blockCache := cache.NewBlockCache(redisClient)
 	// The domain MQ publisher stays the primary; when ES is enabled the search
 	// projector is composed onto the fan-out tail (best-effort, never blocks).
-	var userEventPublisher application.UserEventPublisher = mq.NewEventPublisher(redisClient)
+	relationshipEventPublisher := mq.NewEventPublisher(redisClient)
+	var userEventPublisher application.UserEventPublisher = relationshipEventPublisher
 	if searchBuilt.Projector != nil {
 		userEventPublisher = searchindex.ComposePublisher(userEventPublisher, searchBuilt.Projector)
 	}
@@ -269,89 +265,139 @@ func main() {
 		personaStore,
 		settingStore,
 		profileCache,
-		settingCache,
 		userEventPublisher,
 		userSyncService,
-		application.WithProfileQrTokenRepository(profileQrTokenStore),
+		application.WithProfileQrTokenStore(profileQrTokenStore),
 		application.WithRegionTagResolver(regionTagResolver),
 		application.WithProfileTagValidator(profileTagValidator),
 	)
 	searchService := application.NewSearchService(profileStore, personaStore, redisClient)
-	followService := application.NewFollowService(
-		followStore,
+	relationshipService := relationshipapp.NewPersonaRelationshipService(
+		relationshipStore,
 		profileStore,
 		personaStore,
 		profileCache,
-		blockStore,
-		userEventPublisher,
+		greetingStore,
 	)
-	chatServiceBaseURL := getenvOrDefault("CHAT_SERVICE_BASE_URL", "")
-	var conversationGateway application.ConversationGateway = application.NoopConversationGateway()
-	if chatServiceBaseURL != "" {
-		conversationGateway = userintegration.NewChatServiceClient(chatServiceBaseURL, nil)
+	relationshipOutboxRelay := relationshipapp.NewOutboxRelay(relationshipStore, relationshipEventPublisher)
+	go func() {
+		if err := relationshipOutboxRelay.Run(ctx, time.Second); err != nil && ctx.Err() == nil {
+			log.Printf("ERROR: persona relationship outbox relay stopped: %v", err)
+		}
+	}()
+	chatServiceBaseURL := strings.TrimSpace(getenvOrDefault("CHAT_SERVICE_BASE_URL", ""))
+	if chatServiceBaseURL == "" {
+		log.Fatal("user-service startup failed: CHAT_SERVICE_BASE_URL is required")
 	}
+	conversationGateway := userintegration.NewChatServiceClient(chatServiceBaseURL, nil)
 	greetingService := application.NewGreetingService(
 		greetingStore,
-		followStore,
-		blockStore,
+		relationshipService,
 		conversationGateway,
 		userEventPublisher,
 	)
-	blockService := application.NewBlockService(blockStore, followStore, blockCache, userEventPublisher, greetingStore)
-	personaService := application.NewPersonaService(personaStore, pgPool, profileCache)
-	workService := application.NewWorkService(workStore)
+	personaService := application.NewPersonaService(personaStore, personaStore, profileCache)
+	var creatorRuntimeStore *persistence.CreatorRuntimeProfileReader
+	if mongoDB != nil {
+		creatorRuntimeStore = persistence.NewCreatorRuntimeProfileReader(mongoDB)
+	}
+	workOptions := make([]application.WorkServiceOption, 0, 1)
+	subAccountOptions := make([]application.SubAccountServiceOption, 0, 1)
+	if creatorRuntimeStore != nil {
+		workOptions = append(workOptions, application.WithCreatorRuntimeWorks(creatorRuntimeStore))
+		subAccountOptions = append(
+			subAccountOptions,
+			application.WithCreatorRuntimeProfiles(creatorRuntimeStore),
+		)
+	}
+	workService := application.NewWorkService(workStore, workOptions...)
 	lifeItemService := application.NewLifeItemService(lifeItemStore)
 	settingService := application.NewSettingService(settingStore, settingCache)
 	otpCodeCache := cache.NewOtpCodeCache(redisClient)
 	otpChallengeStore := persistence.NewPgOtpChallengeStore(pgPool)
-	externalInteractionBaseURL := getenvOrDefault("INTEGRATION_EXTERNAL_INTERACTION_BASE_URL", cfg.Integration.ExternalInteractionBaseURL)
-	externalInteractionClient, err := userintegration.NewExternalInteractionClient(externalInteractionBaseURL, appEnv, nil)
-	if err != nil {
-		log.Fatalf("external interaction client init failed: %v", err)
-	}
-	passThroughConfig, err := smsOtpPassThroughConfig(cfg, isProdRuntimeEnv())
-	if err != nil {
-		log.Fatalf("sms otp pass-through config invalid: %v", err)
-	}
-	otpSandboxAllowlist, err := smsOtpSandboxAllowlist(cfg, isProdRuntimeEnv())
-	if err != nil {
-		log.Fatalf("sms otp sandbox allowlist invalid: %v", err)
-	}
-	socialProviderClient, err := socialAuthProviderClient(cfg, appEnv, isProdRuntimeEnv())
+	socialProviderClient, err := socialAuthProviderClient(cfg)
 	if err != nil {
 		log.Fatalf("social auth provider client init failed: %v", err)
 	}
-	oneTapResolverImpl, err := oneTapResolver(cfg, appEnv)
+	oneTapResolverImpl, err := oneTapResolver(cfg)
 	if err != nil {
 		log.Fatalf("one tap resolver init failed: %v", err)
 	}
-	accessTokenSecret := []byte(getenvOrDefault("AUTH_JWT_SECRET", "dev-user-service-access-secret"))
-	accessSigner := rtauth.NewHS256Signer(accessTokenSecret, 30*time.Minute)
-	accessVerifier := rtauth.NewHS256Verifier(accessTokenSecret)
+	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(
+		runtimeconfig.EnvRuntimeConfigProvider{},
+	)
+	if err != nil {
+		log.Fatalf("access token config invalid: %v", err)
+	}
+	accessSigner, err := rtauth.NewHS256Signer(accessTokenConfig)
+	if err != nil {
+		log.Fatalf("access token signer invalid: %v", err)
+	}
+	accessVerifier, err := rtauth.NewHS256Verifier(accessTokenConfig)
+	if err != nil {
+		log.Fatalf("access token verifier invalid: %v", err)
+	}
+	otpCodeSealer, err := otpseal.LoadFromEnvironment()
+	if err != nil {
+		log.Fatalf("otp code reference sealer invalid: %v", err)
+	}
+	otpMode := configuredOTPMode(appEnv, cfg.Integration.OTP.Mode)
+	otpCodeGenerator, err := otpCodeGeneratorForMode(appEnv, otpMode)
+	if err != nil {
+		log.Fatalf("otp mode invalid: %v", err)
+	}
+	externalInteractionBaseURL := getenvOrDefault("INTEGRATION_EXTERNAL_INTERACTION_BASE_URL", cfg.Integration.ExternalInteractionBaseURL)
+	externalInteractionClient, err := otpExternalInteractionClientForEnvironment(
+		appEnv,
+		otpMode,
+		externalInteractionBaseURL,
+		accessSigner,
+	)
+	if err != nil {
+		log.Fatalf("external interaction client init failed: %v", err)
+	}
 	authService := application.NewAuthService(
 		profileStore,
 		personaStore,
 		credentialStore,
 		anonymousDeviceBindingStore,
-		profileCache,
 		shardDirectory,
-		application.WithUserAuthRepository(userAuthStore),
-		application.WithUserDeviceRepository(userDeviceStore),
-		application.WithConsentRepository(consentRecordStore),
+		application.WithAccountSessionStore(userAuthStore),
+		application.WithDeviceRegistrationStore(userDeviceStore),
+		application.WithConsentRecordStore(consentRecordStore),
 		application.WithOtpCodeStore(otpCodeCache),
 		application.WithOtpChallengeStore(otpChallengeStore),
+		application.WithOTPCodeSealer(otpCodeSealer),
+		application.WithOTPCodeGenerator(otpCodeGenerator),
 		application.WithExternalInteractionClient(externalInteractionClient),
-		application.WithSmsOtpPassThroughConfig(passThroughConfig),
-		application.WithSmsOtpSandboxAllowlist(otpSandboxAllowlist),
-		application.WithOtpDebugReveal(smsOtpDebugRevealEnabled(cfg, isProdRuntimeEnv())),
 		application.WithExternalAuthProviderClient(socialProviderClient),
 		application.WithOneTapPhoneResolver(oneTapResolverImpl),
 		application.WithAccessTokenSigner(accessSigner),
 		application.WithDefaultNicknamePrefix(getenvOrDefault("USER_DEFAULT_NICKNAME_PREFIX", "新同学")),
 	)
-	subAccountService := application.NewSubAccountService(personaStore, profileStore, profileCache)
+	subAccountService := application.NewSubAccountService(
+		personaStore,
+		personaStore,
+		personaStore,
+		profileStore,
+		profileCache,
+		subAccountOptions...,
+	)
 	contactDiscoveryService := application.NewContactDiscoveryService(contactDiscoveryStore)
-	inviteService := application.NewInviteService(inviteStore, personaStore)
+	inviteService := application.NewInviteService(inviteStore, inviteStore)
+	personaProfileProposalFacade, err := personaapp.NewProfileProposalFacade(personaProfileProposalStore)
+	if err != nil {
+		log.Fatalf("Persona profile proposal Facade init failed: %v", err)
+	}
+	profileProposalFacade, err := proposalapp.NewFacade(
+		profileProposalStore,
+		profileProposalStore,
+		personaProfileProposalFacade,
+		personaProfileProposalStore,
+	)
+	if err != nil {
+		log.Fatalf("ProfileUpdateProposal Facade init failed: %v", err)
+	}
 
 	healthChecker := rthealth.NewChecker()
 	healthChecker.Register("postgres", func(hctx context.Context) error {
@@ -375,21 +421,43 @@ func main() {
 		interestReader = projection.NewMongoInterestProfileReader(mongoDB)
 	}
 	interestProfileService := application.NewInterestProfileService(interestReader)
-	handler := httpadapter.NewUserHandler(
-		profileService, searchService, followService, blockService, greetingService,
+	userHandler, err := httpadapter.NewUserHandler(
+		profileService, searchService, relationshipService, greetingService,
 		personaService, workService, lifeItemService, settingService,
 		authService, subAccountService, contactDiscoveryService, inviteService,
 		interestProfileService,
-	).Routes()
-
-	// 统一鉴权中间件：Bearer JWT 本地验签，验签通过后用 token principal 覆盖
-	// X-Client-User-Id，杜绝裸头伪造；非法 token 清除裸身份头。仅作用于业务路由。
-	authedHandler := rtauth.Middleware(accessVerifier)(handler)
+		profileProposalFacade,
+	)
+	if err != nil {
+		log.Fatalf("user-service HTTP composition failed: %v", err)
+	}
+	handler := userHandler.Routes()
 
 	outerMux := http.NewServeMux()
 	outerMux.HandleFunc("/healthz", healthChecker.Handler())
 	outerMux.Handle("/metrics", rtmetrics.Handler())
-	outerMux.Handle("/", authedHandler)
+	outerMux.Handle(
+		httpadapter.LoginAnonymousPath,
+		rtauth.RequireGeneratedOperationAuthorizationForRoute(
+			operationsecurity.ForDomain("user"),
+			http.MethodPost,
+			httpadapter.LoginAnonymousPath,
+		)(handler),
+	)
+	outerMux.Handle(
+		httpadapter.PullUserSyncPath,
+		rtauth.RequireGeneratedOperationAuthorizationForRoute(
+			operationsecurity.ForDomain("user"),
+			http.MethodPost,
+			httpadapter.PullUserSyncPath,
+		)(handler),
+	)
+	outerMux.Handle(
+		"/",
+		rtauth.EnforceGeneratedOperationAuthorization(
+			operationsecurity.ForDomain("user"),
+		)(handler),
+	)
 
 	// 8.1 Observability middleware
 	instanceID, _ := os.Hostname()
@@ -426,8 +494,11 @@ func main() {
 	rateLimiter := rtgov.NewRateLimiter(1000)
 	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(corsHandler)
 	server := &http.Server{
-		Addr:              addr,
-		Handler:           rateLimited,
+		Addr: addr,
+		// Authentication must run before observability builds ActorContext.
+		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
+			AccessTokenVerifier: accessVerifier,
+		})(rateLimited),
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
@@ -462,131 +533,111 @@ func isValidAppEnv(env string) bool {
 	}
 }
 
-// isProdRuntimeEnv 仅在 APP_ENV=prod 时为 true；非生产允许 SendOtp 返回调试码。
-func isProdRuntimeEnv() bool {
-	return getenvOrDefault("APP_ENV", "alpha") == "prod"
+type externalAuthProviderMode string
+
+const (
+	externalAuthProviderModeRequired      externalAuthProviderMode = "required"
+	externalAuthProviderModeAnonymousOnly externalAuthProviderMode = "anonymous_only"
+)
+
+func configuredExternalAuthProviderMode() (externalAuthProviderMode, error) {
+	value := strings.ToLower(strings.TrimSpace(os.Getenv("USER_AUTH_EXTERNAL_PROVIDER_MODE")))
+	if value == "" {
+		return externalAuthProviderModeRequired, nil
+	}
+	mode := externalAuthProviderMode(value)
+	switch mode {
+	case externalAuthProviderModeRequired, externalAuthProviderModeAnonymousOnly:
+		return mode, nil
+	default:
+		return "", fmt.Errorf("USER_AUTH_EXTERNAL_PROVIDER_MODE must be required or anonymous_only")
+	}
 }
 
-func smsOtpPassThroughConfig(cfg config, isProduction bool) (application.SmsOtpPassThroughConfig, error) {
-	enabled := cfg.Integration.SmsOTP.PassThroughEnabled
-	if raw := strings.TrimSpace(os.Getenv("SMS_OTP_PASS_THROUGH_ENABLED")); raw != "" {
-		enabled = strings.EqualFold(raw, "true") || raw == "1"
-	}
-	mode := application.SmsOtpPassThroughDisabled
-	if enabled {
-		mode = application.SmsOtpPassThroughEnabled
-	}
-	expiresRaw := strings.TrimSpace(getenvOrDefault("SMS_OTP_PASS_THROUGH_EXPIRES_AT", cfg.Integration.SmsOTP.PassThroughExpiresAt))
-	var expiresAt time.Time
-	if expiresRaw != "" {
-		parsed, err := time.Parse("2006-01-02", expiresRaw)
-		if err != nil {
-			return application.SmsOtpPassThroughConfig{}, err
-		}
-		expiresAt = parsed.UTC()
-	}
-	config := application.SmsOtpPassThroughConfig{
-		Mode:      mode,
-		DebtID:    getenvOrDefault("SMS_OTP_PASS_THROUGH_DEBT_ID", cfg.Integration.SmsOTP.PassThroughDebtID),
-		Owner:     getenvOrDefault("SMS_OTP_PASS_THROUGH_OWNER", cfg.Integration.SmsOTP.PassThroughOwner),
-		ExpiresAt: expiresAt,
-	}
-	return config, config.Validate(isProduction)
-}
-
-// buildSandboxAllowlist 从配置构造受控放通白名单（gamma 用）；生产强制为空（由 Validate 拦截）。
-func buildSandboxAllowlist(raw sandboxAllowlistCfg) (application.SandboxAllowlist, error) {
-	list := application.SandboxAllowlist{
-		Enabled: raw.Enabled,
-		Phones:  raw.Phones,
-		Tokens:  raw.Tokens,
-		DebtID:  strings.TrimSpace(raw.DebtID),
-		Owner:   strings.TrimSpace(raw.Owner),
-	}
-	if expires := strings.TrimSpace(raw.ExpiresAt); expires != "" {
-		parsed, err := time.Parse("2006-01-02", expires)
-		if err != nil {
-			return application.SandboxAllowlist{}, err
-		}
-		list.ExpiresAt = parsed.UTC()
-	}
-	return list, nil
-}
-
-func smsOtpSandboxAllowlist(cfg config, isProduction bool) (application.SandboxAllowlist, error) {
-	list, err := buildSandboxAllowlist(cfg.Integration.SmsOTP.SandboxAllowlist)
+// socialAuthProviderClient 只装配真实 OAuth provider。默认和所有已部署环境必须
+// 注入完整凭据；只有 local-gamma 明确声明 anonymous_only 时，才保留匿名设备
+// 登录并让第三方登录以结构化 unavailable 返回，绝不伪造外部身份。
+func socialAuthProviderClient(cfg config) (application.ExternalAuthProviderClient, error) {
+	mode, err := configuredExternalAuthProviderMode()
 	if err != nil {
-		return application.SandboxAllowlist{}, err
+		return nil, err
 	}
-	return list, list.Validate(isProduction)
-}
-
-func socialSandboxAllowlist(cfg config, isProduction bool) (application.SandboxAllowlist, error) {
-	list, err := buildSandboxAllowlist(cfg.Integration.Social.SandboxAllowlist)
-	if err != nil {
-		return application.SandboxAllowlist{}, err
-	}
-	return list, list.Validate(isProduction)
-}
-
-// socialAuthProviderClient 按环境选择社交票据置换实现：
-//   - alpha/beta：mock（离线确定性身份，发布安全）；
-//   - gamma：sandbox 包装（命中 allowlist 返回沙箱身份，其余委托真实 HTTP）；
-//   - prod：真实 HTTP（微信标准流程；支付宝/QQ 待配置 app 凭证）。
-func socialAuthProviderClient(cfg config, appEnv string, isProduction bool) (application.ExternalAuthProviderClient, error) {
 	providerConfigs := make(map[string]userintegration.ProviderOAuthConfig, len(cfg.Integration.Social.Providers))
 	for name, p := range cfg.Integration.Social.Providers {
 		providerConfigs[name] = userintegration.ProviderOAuthConfig{
-			AppID:       strings.TrimSpace(p.AppID),
-			AppSecret:   strings.TrimSpace(p.AppSecret),
-			TokenURL:    strings.TrimSpace(p.TokenURL),
-			UserInfoURL: strings.TrimSpace(p.UserInfoURL),
+			AppID:                strings.TrimSpace(p.AppID),
+			AppSecret:            strings.TrimSpace(p.AppSecret),
+			AppPrivateKeyPEM:     strings.TrimSpace(p.AppPrivateKeyPEM),
+			PlatformPublicKeyPEM: strings.TrimSpace(p.PlatformPublicKeyPEM),
+			MerchantPID:          strings.TrimSpace(p.MerchantPID),
+			TokenURL:             strings.TrimSpace(p.TokenURL),
+			UserInfoURL:          strings.TrimSpace(p.UserInfoURL),
 		}
+	}
+	// 商用凭据只从部署密钥系统注入；YAML 仅允许承载非敏感 endpoint。
+	injectSocialOAuthEnv := func(provider string, envPrefix string) {
+		current := providerConfigs[provider]
+		if value := strings.TrimSpace(os.Getenv(envPrefix + "_APP_ID")); value != "" {
+			current.AppID = value
+		}
+		if value := strings.TrimSpace(os.Getenv(envPrefix + "_APP_SECRET")); value != "" {
+			current.AppSecret = value
+		}
+		if value := strings.TrimSpace(os.Getenv(envPrefix + "_APP_PRIVATE_KEY_PEM")); value != "" {
+			current.AppPrivateKeyPEM = value
+		}
+		if value := strings.TrimSpace(os.Getenv(envPrefix + "_PLATFORM_PUBLIC_KEY_PEM")); value != "" {
+			current.PlatformPublicKeyPEM = value
+		}
+		if value := strings.TrimSpace(os.Getenv(envPrefix + "_MERCHANT_PID")); value != "" {
+			current.MerchantPID = value
+		}
+		providerConfigs[provider] = current
+	}
+	if mode == externalAuthProviderModeRequired {
+		injectSocialOAuthEnv(application.SocialProviderWechat, "WECHAT_OAUTH")
+		injectSocialOAuthEnv(application.SocialProviderAlipay, "ALIPAY_OAUTH")
+		injectSocialOAuthEnv(application.SocialProviderQq, "QQ_OAUTH")
 	}
 	httpClient := userintegration.NewHTTPExternalAuthProviderClient(providerConfigs, nil)
-	switch appEnv {
-	case "alpha", "beta":
-		return userintegration.NewMockExternalAuthProviderClient(), nil
-	case "gamma":
-		allow, err := socialSandboxAllowlist(cfg, isProduction)
-		if err != nil {
-			return nil, err
-		}
-		return userintegration.NewSandboxExternalAuthProviderClient(allow, httpClient), nil
-	default:
+	if mode == externalAuthProviderModeAnonymousOnly {
 		return httpClient, nil
 	}
+	for _, provider := range []string{
+		application.SocialProviderWechat,
+		application.SocialProviderAlipay,
+		application.SocialProviderQq,
+	} {
+		if !httpClient.Supports(provider) {
+			return nil, fmt.Errorf("social OAuth provider %s is not configured", provider)
+		}
+	}
+	return httpClient, nil
 }
 
-// oneTapResolver 按环境注入一键置换：alpha/beta 用 dev 解码；gamma 用沙箱静态号段；prod 待真实运营商接入前返回不可用。
-func oneTapResolver(cfg config, appEnv string) (application.OneTapPhoneResolver, error) {
-	switch appEnv {
-	case "alpha", "beta":
-		return application.TokenEncodedOneTapPhoneResolver{}, nil
-	case "gamma":
-		phones := map[string]string{}
-		for token, phone := range cfg.Integration.OneTap.SandboxPhones {
-			phones[strings.TrimSpace(token)] = strings.TrimSpace(phone)
-		}
-		if len(phones) == 0 {
-			return application.UnavailableOneTapPhoneResolver{}, nil
-		}
-		return application.StaticOneTapPhoneResolver(phones), nil
-	default:
-		// prod：真实运营商 resolver 待接入；在此之前不暴露 dev 解码后门。
+// oneTapResolver 默认只装配真实阿里云号码认证。local-gamma 的匿名 UAT
+// 显式关闭外部号码认证，调用时仍返回结构化 carrier unavailable。
+func oneTapResolver(cfg config) (application.OneTapPhoneResolver, error) {
+	mode, err := configuredExternalAuthProviderMode()
+	if err != nil {
+		return nil, err
+	}
+	if mode == externalAuthProviderModeAnonymousOnly {
 		return application.UnavailableOneTapPhoneResolver{}, nil
 	}
-}
-
-func smsOtpDebugRevealEnabled(cfg config, isProduction bool) bool {
-	if isProduction {
-		return false
+	if !strings.EqualFold(strings.TrimSpace(cfg.Integration.OneTap.Resolver), "aliyun") {
+		return nil, fmt.Errorf("one-tap resolver must be aliyun")
 	}
-	enabled := cfg.Integration.SmsOTP.DebugRevealEnabled
-	if raw := strings.TrimSpace(os.Getenv("SMS_OTP_DEBUG_REVEAL_ENABLED")); raw != "" {
-		enabled = strings.EqualFold(raw, "true") || raw == "1"
+	accessKeyID := strings.TrimSpace(os.Getenv("ALIYUN_DYPNS_ACCESS_KEY_ID"))
+	accessKeySecret := strings.TrimSpace(os.Getenv("ALIYUN_DYPNS_ACCESS_KEY_SECRET"))
+	if accessKeyID == "" || accessKeySecret == "" {
+		return nil, fmt.Errorf("ALIYUN_DYPNS_ACCESS_KEY_ID and ALIYUN_DYPNS_ACCESS_KEY_SECRET are required")
 	}
-	return enabled
+	return userintegration.NewAliyunOneTapPhoneResolver(
+		accessKeyID,
+		accessKeySecret,
+		strings.TrimSpace(os.Getenv("ALIYUN_DYPNS_ENDPOINT")),
+	)
 }
 
 func requiresConfigVersion(env string) bool {
@@ -715,7 +766,7 @@ func buildRedisRouter(cfg config) *rtredis.Router {
 		PoolSize:     rt.Pool.Size,
 		MinIdleConns: rt.Pool.MinIdle,
 	}
-	return rtredis.MustNewRouter(rtredis.RouterConfig{
+	return platformredis.MustNewRouter(rtredis.RouterConfig{
 		Scenes: map[string]rtredis.SceneConfig{
 			"general":  generalScene,
 			"realtime": realtimeScene,

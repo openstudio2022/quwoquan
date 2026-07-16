@@ -1,14 +1,10 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_category_tab_config_dto.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_category_tab_defaults.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_category_tabs_loader.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
@@ -30,33 +26,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 ///
 /// 与 page widget 测试互补：本文件验证「跨页旅程 + 归因链 + 降级/错误态闭环」，
 /// 不重复各页内部细分渲染断言。
-Map<String, CircleCategoryTabConfigDto> _categoryTabsFixture() {
-  final candidates = <File>[
-    File(
-      '${Directory.current.path}/../quwoquan_service/contracts/metadata/social/circle/ui_category_tabs.yaml',
-    ),
-    File(
-      '${Directory.current.path}/quwoquan_service/contracts/metadata/social/circle/ui_category_tabs.yaml',
-    ),
-  ];
-  for (final f in candidates) {
-    if (f.existsSync()) {
-      return CircleCategoryTabsLoader.parseFromYamlString(f.readAsStringSync());
-    }
-  }
-  return Map<String, CircleCategoryTabConfigDto>.from(
-    CircleCategoryTabDefaults.remoteStyleFallback,
-  );
-}
-
-class _CategoryFixtureRepo extends MockCircleRepository {
-  @override
-  Future<Map<String, CircleCategoryTabConfigDto>>
-  getCircleCategoryConfig() async {
-    return _categoryTabsFixture();
-  }
-}
-
 GoRouter _buildRouter({
   SearchLaunchContext launchContext = const SearchLaunchContext(
     entrySurfaceId: '/search',
@@ -113,7 +82,7 @@ Widget _buildApp({
         assistantRepository ?? _FakeAssistantRepository(),
       ),
       chatRepositoryProvider.overrideWithValue(MockChatRepository()),
-      circleRepositoryProvider.overrideWithValue(_CategoryFixtureRepo()),
+      circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
       if (behaviorRepository != null)
         behaviorRepositoryProvider.overrideWithValue(behaviorRepository),
     ],
@@ -136,7 +105,7 @@ Widget _buildResultsPage({
         assistantRepository ?? _FakeAssistantRepository(),
       ),
       chatRepositoryProvider.overrideWithValue(MockChatRepository()),
-      circleRepositoryProvider.overrideWithValue(_CategoryFixtureRepo()),
+      circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
     ],
     child: MaterialApp(
       home: SearchNetworkResultsPage(launchContext: launchContext),

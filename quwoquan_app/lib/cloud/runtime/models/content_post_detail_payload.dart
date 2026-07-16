@@ -1,6 +1,6 @@
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 
-/// [ContentRepository.getPost] 的强类型封装：已解析的 [PostBaseDto] + 扩展 wire 的
+/// [ContentReadRepository.getPost] 的强类型封装：已解析的 [PostBaseDto] + 扩展 wire 的
 /// [ContentPostDetailWireDto]；服务端原始 JSON 保留于 [_canonicalWire] 仅用于合并诊断。
 ///
 /// UI 应优先使用 [post]、[detailWire] 与 [readPresentation]；文章详情/沉浸器请使用
@@ -25,18 +25,10 @@ class ContentPostDetailPayload {
 
   final Map<String, dynamic> _canonicalWire;
 
-  /// 与详情页/沉浸式 [projectArticleDetailView] 兼容的 wire：由 [detailWire] + [post]
-  /// 具名字段合并，嵌套 `circleSummaries` 经 DTO `.toMap()`。文章正文真相源为
-  /// `articleMarkdown`（已在 `_canonicalWire` 中），不再回写旧 articleBlocks /
-  /// articlePages / cards 竞争内容源。
-  Map<String, dynamic> get mergedArticleWireMap {
-    final out = Map<String, dynamic>.from(_canonicalWire);
-    final d = detailWire;
-    out['circleSummaries'] = d.circleSummaries
-        .map((c) => c.toMap())
-        .toList(growable: false);
-    return out;
-  }
+  /// 详情页/沉浸式文章 wire。Post 详情不承载 CirclePostPlacement；文章正文真相源为
+  /// `articleMarkdown`，不回写历史 blocks/pages/cards 竞争内容源。
+  Map<String, dynamic> get mergedArticleWireMap =>
+      Map<String, dynamic>.from(_canonicalWire);
 
   /// 只读投影（字段来自 metadata [PostReadPresentation] + 文章扩展 wire 键）。
   PostReadPresentation get readPresentation =>

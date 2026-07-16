@@ -39,7 +39,7 @@ class CircleActionBar extends StatelessWidget {
         : UITextConstants.joinCircle;
     final isManager = role == CircleRole.owner || role == CircleRole.admin;
     final isMemberLike =
-        isManager || role == CircleRole.member || joinStatus == 'joined';
+        joinStatus == 'joined' && (isManager || role == CircleRole.member);
     final isPending = joinStatus == 'pending';
 
     ObjectAction neutralAction({
@@ -59,16 +59,16 @@ class CircleActionBar extends StatelessWidget {
     }
 
     final ObjectAction primary;
-    if (isMemberLike) {
-      primary = neutralAction(
-        label: UITextConstants.joinedCircle,
-        icon: CupertinoIcons.check_mark_circled,
-        onPressed: null,
-      );
-    } else if (isPending) {
+    if (isPending) {
       primary = neutralAction(
         label: UITextConstants.joinPending,
         icon: CupertinoIcons.time,
+        onPressed: null,
+      );
+    } else if (isMemberLike) {
+      primary = neutralAction(
+        label: UITextConstants.joinedCircle,
+        icon: CupertinoIcons.check_mark_circled,
         onPressed: null,
       );
     } else {

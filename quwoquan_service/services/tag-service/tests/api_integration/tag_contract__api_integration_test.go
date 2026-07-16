@@ -384,17 +384,6 @@ func TestInvertedFilterByType(t *testing.T) {
 	}
 }
 
-// 保留契约端点显式 501（不留静默 404）。feedback 为写操作，待领域决策，仍保留 501。
-func TestReservedEndpointsReturn501(t *testing.T) {
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/tag/feedback",
-		bytes.NewBufferString(`{"tagRef":"Topic/旅行","action":"click"}`))
-	testHandler.ServeHTTP(rec, req)
-	if rec.Code != http.StatusNotImplemented {
-		t.Fatalf("expected 501 for reserved feedback endpoint, got %d", rec.Code)
-	}
-}
-
 // T3：search 全文搜索，命中首发子集并带 score。
 func TestSearchTags(t *testing.T) {
 	seedLaunchSubset(t)

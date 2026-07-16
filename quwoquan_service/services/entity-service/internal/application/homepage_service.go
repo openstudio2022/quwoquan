@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"go.opentelemetry.io/otel/attribute"
+	rterr "quwoquan_service/runtime/errors"
 	rtimpact "quwoquan_service/runtime/impact"
 	rtobs "quwoquan_service/runtime/observability"
 	rtsearch "quwoquan_service/runtime/search"
+	entitygenerated "quwoquan_service/services/entity-service/internal/generated"
 	"sort"
 	"strings"
 	"sync"
@@ -15,33 +17,18 @@ import (
 	"time"
 )
 
-const (
-	codeHomepageNotFound     = "ENTITY.USER.homepage_not_found"
-	codeClaimMaterialMissing = "ENTITY.USER.claim_material_missing"
-	codeAlreadyClaimed       = "ENTITY.USER.already_claimed"
-	codeHomepageOffline      = "ENTITY.USER.homepage_offline"
-	codeInvalidHomepageType  = "ENTITY.USER.invalid_homepage_type"
-	codePermissionDenied     = "ENTITY.USER.permission_denied"
-	codeInternalError        = "ENTITY.SYSTEM.internal_error"
-)
-
-type AppError struct {
-	StatusCode   int    `json:"-"`
-	Code         string `json:"code"`
-	UserMessage  string `json:"userMessage"`
-	DebugMessage string `json:"debugMessage,omitempty"`
-}
-
-func (e *AppError) Error() string {
-	if e == nil {
-		return ""
-	}
-	return e.Code + ": " + e.DebugMessage
-}
-
 type GeoPoint struct {
 	Latitude  float64 `json:"latitude"`
 	Longitude float64 `json:"longitude"`
+}
+type HomepageSource struct {
+	SourceKind     string `json:"sourceKind"`
+	SourceURL      string `json:"sourceUrl"`
+	Title          string `json:"title"`
+	FetchedAt      string `json:"fetchedAt"`
+	SnapshotHash   string `json:"snapshotHash"`
+	PolicyRevision string `json:"policyRevision"`
+	SourceUseMode  string `json:"sourceUseMode"`
 }
 type Homepage struct {
 	ID                 string           `json:"_id"`
@@ -52,6 +39,9 @@ type Homepage struct {
 	ObjectPageTemplate string           `json:"objectPageTemplate"`
 	Status             string           `json:"status"`
 	SourceType         string           `json:"sourceType"`
+	SourceOwner        string           `json:"-" bson:"sourceOwner,omitempty"`
+	SourceEntityRef    string           `json:"-" bson:"sourceEntityRef,omitempty"`
+	SourceReleaseID    string           `json:"-" bson:"sourceReleaseId,omitempty"`
 	ClaimStatus        string           `json:"claimStatus"`
 	CategoryTags       []string         `json:"categoryTags,omitempty"`
 	CoverURL           string           `json:"coverUrl,omitempty"`
@@ -75,6 +65,8 @@ type Homepage struct {
 	// contracts/metadata/entity/homepage/projections/*.yaml。
 	IntroductionMarkdown string                      `json:"introductionMarkdown,omitempty"`
 	IntroductionAssets   []HomepageIntroductionAsset `json:"introductionAssets,omitempty"`
+	PrimarySource        *HomepageSource             `json:"primarySource,omitempty"`
+	SourceURLs           []string                    `json:"sourceUrls,omitempty"`
 	CreatedAt            time.Time                   `json:"createdAt"`
 	UpdatedAt            time.Time                   `json:"updatedAt"`
 	PublishedAt          *time.Time                  `json:"publishedAt,omitempty"`
@@ -133,9 +125,9 @@ type HomepageRelatedGroupSummaryView struct {
 }
 
 type HomepageImpactSummaryView struct {
-	HomepageID string           `json:"homepageId"`
-	Total      int              `json:"total"`
-	Items      []map[string]any `json:"items"`
+	HomepageID string               `json:"homepageId"`
+	Total      int64                `json:"total"`
+	Items      []rtimpact.Statement `json:"items"`
 }
 
 type HomepageClaimRequest struct {
@@ -425,7 +417,7 @@ func (s *HomepageService) PublishHomepageCandidate(ctx context.Context, homepage
 	defer s.mu.Unlock()
 	homepage, ok := s.resolveHomepageLocked(homepageID)
 	if !ok {
-		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
+		err = newAppError(entitygenerated.ErrHomepageNotFound, "homepage not found")
 		return nil, err
 	}
 	now := time.Now().UTC()
@@ -466,7 +458,11 @@ func (s *HomepageService) GetHomepageForViewer(
 	defer s.mu.RUnlock()
 	homepage, ok := s.resolveHomepageLocked(homepageID)
 	if !ok {
-		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
+		err = newAppError(entitygenerated.ErrHomepageNotFound, "homepage not found")
+		return nil, err
+	}
+	if homepage.Status == "offline" {
+		err = newAppError(entitygenerated.ErrHomepageOffline, "homepage offline")
 		return nil, err
 	}
 	out := cloneHomepage(homepage)
@@ -487,18 +483,18 @@ func (s *HomepageService) FollowHomepage(
 
 	viewerID = strings.TrimSpace(viewerID)
 	if viewerID == "" {
-		err = newAppError(403, codePermissionDenied, "请先登录后再关注", "missing viewer id")
+		err = newAppError(entitygenerated.ErrPermissionDenied, "missing viewer id")
 		return nil, err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	homepage, ok := s.resolveHomepageLocked(homepageID)
 	if !ok {
-		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
+		err = newAppError(entitygenerated.ErrHomepageNotFound, "homepage not found")
 		return nil, err
 	}
 	if homepage.Status == "offline" {
-		err = newAppError(410, codeHomepageOffline, "主页已下线，仅保留记录信息", "homepage offline")
+		err = newAppError(entitygenerated.ErrHomepageOffline, "homepage offline")
 		return nil, err
 	}
 	if s.followers[homepage.ID] == nil {
@@ -525,14 +521,14 @@ func (s *HomepageService) UnfollowHomepage(
 
 	viewerID = strings.TrimSpace(viewerID)
 	if viewerID == "" {
-		err = newAppError(403, codePermissionDenied, "请先登录后再取消关注", "missing viewer id")
+		err = newAppError(entitygenerated.ErrPermissionDenied, "missing viewer id")
 		return nil, err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	homepage, ok := s.resolveHomepageLocked(homepageID)
 	if !ok {
-		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
+		err = newAppError(entitygenerated.ErrHomepageNotFound, "homepage not found")
 		return nil, err
 	}
 	if followers := s.followers[homepage.ID]; followers != nil {
@@ -666,19 +662,19 @@ func (s *HomepageService) CreateHomepageClaimRequest(
 	defer s.mu.Unlock()
 	homepage, ok := s.resolveHomepageLocked(homepageID)
 	if !ok {
-		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
+		err = newAppError(entitygenerated.ErrHomepageNotFound, "homepage not found")
 		return nil, err
 	}
 	if homepage.Status == "offline" {
-		err = newAppError(410, codeHomepageOffline, "主页已下线，仅保留记录信息", "homepage offline")
+		err = newAppError(entitygenerated.ErrHomepageOffline, "homepage offline")
 		return nil, err
 	}
 	if strings.TrimSpace(input.ClaimTier) == "" || strings.TrimSpace(input.ContactPhone) == "" {
-		err = newAppError(400, codeClaimMaterialMissing, "认领材料不完整，请补充后重试", "claim tier or contact phone missing")
+		err = newAppError(entitygenerated.ErrClaimMaterialMissing, "claim tier or contact phone missing")
 		return nil, err
 	}
 	if homepage.ClaimStatus == "claimed" {
-		err = newAppError(409, codeAlreadyClaimed, "该主页已被认领", "homepage already claimed")
+		err = newAppError(entitygenerated.ErrAlreadyClaimed, "homepage already claimed")
 		return nil, err
 	}
 	now := time.Now().UTC()
@@ -721,12 +717,12 @@ func (s *HomepageService) ReviewHomepageClaimRequest(
 	defer s.mu.Unlock()
 	resolvedHomepage, ok := s.resolveHomepageLocked(homepageID)
 	if !ok {
-		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
+		err = newAppError(entitygenerated.ErrHomepageNotFound, "homepage not found")
 		return nil, err
 	}
 	request, ok := s.claimRequests[claimRequestID]
 	if !ok || request.HomepageID != resolvedHomepage.ID {
-		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "claim request not found")
+		err = newAppError(entitygenerated.ErrHomepageNotFound, "claim request not found")
 		return nil, err
 	}
 	homepage := resolvedHomepage
@@ -742,7 +738,7 @@ func (s *HomepageService) ReviewHomepageClaimRequest(
 		request.Status = "rejected"
 		homepage.ClaimStatus = "rejected"
 	default:
-		err = newAppError(400, codePermissionDenied, "当前无权限执行此操作", "unsupported claim review status")
+		err = newAppError(entitygenerated.ErrInvalidArgument, "unsupported claim review status")
 		return nil, err
 	}
 	request.ReviewNote = strings.TrimSpace(input.ReviewNote)
@@ -776,11 +772,11 @@ func (s *HomepageService) UpdateClaimedHomepageBasics(
 	defer s.mu.Unlock()
 	homepage, ok := s.resolveHomepageLocked(homepageID)
 	if !ok {
-		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
+		err = newAppError(entitygenerated.ErrHomepageNotFound, "homepage not found")
 		return nil, err
 	}
 	if homepage.ClaimStatus != "claimed" {
-		err = newAppError(403, codePermissionDenied, "当前无权限执行此操作", "homepage is not claimed yet")
+		err = newAppError(entitygenerated.ErrPermissionDenied, "homepage is not claimed yet")
 		return nil, err
 	}
 	if strings.TrimSpace(input.Title) != "" {
@@ -827,7 +823,7 @@ func (s *HomepageService) CreateHomepageStatusReport(
 	defer s.mu.Unlock()
 	homepage, ok := s.resolveHomepageLocked(homepageID)
 	if !ok {
-		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
+		err = newAppError(entitygenerated.ErrHomepageNotFound, "homepage not found")
 		return nil, err
 	}
 	report := &HomepageStatusReport{
@@ -871,12 +867,12 @@ func (s *HomepageService) ReviewHomepageStatusReport(
 	defer s.mu.Unlock()
 	resolvedHomepage, ok := s.resolveHomepageLocked(homepageID)
 	if !ok {
-		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
+		err = newAppError(entitygenerated.ErrHomepageNotFound, "homepage not found")
 		return nil, err
 	}
 	report, ok := s.statusReports[reportID]
 	if !ok || report.HomepageID != resolvedHomepage.ID {
-		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "status report not found")
+		err = newAppError(entitygenerated.ErrHomepageNotFound, "status report not found")
 		return nil, err
 	}
 	homepage := resolvedHomepage
@@ -889,7 +885,7 @@ func (s *HomepageService) ReviewHomepageStatusReport(
 	case "dismissed":
 		report.Status = "dismissed"
 	default:
-		err = newAppError(400, codePermissionDenied, "当前无权限执行此操作", "unsupported status report review status")
+		err = newAppError(entitygenerated.ErrInvalidArgument, "unsupported status report review status")
 		return nil, err
 	}
 	report.ReviewNote = strings.TrimSpace(input.ReviewNote)
@@ -984,11 +980,15 @@ func (s *HomepageService) seed() {
 		RatingCount:        328,
 		RelatedGroups: []map[string]any{
 			{
-				"circleId":            "fixture_circle_photo",
-				"name":                "契约摄影社",
-				"memberCount":         128,
-				"linkedHomepageId":    "homepage_sight_west_lake",
-				"linkedHomepageTitle": "西湖景区",
+				"circleId":                 "fixture_circle_photo",
+				"name":                     "契约摄影社",
+				"memberCount":              128,
+				"linkedHomepageId":         "homepage_sight_west_lake",
+				"linkedHomepageTitle":      "西湖景区",
+				"ownerUserId":              "fixture_user_owner",
+				"ownerDisplayNameSnapshot": "契约摄影社主理人",
+				"ownerAvatarUrlSnapshot":   "",
+				"evidenceSnapshotId":       "circle:fixture_circle_photo:members:v1",
 			},
 		},
 		CreatedAt:   now.Add(-10 * 24 * time.Hour),
@@ -1175,17 +1175,6 @@ func applyDefaultShellData(homepage *Homepage) {
 	if homepage == nil {
 		return
 	}
-	if homepage.ID == "homepage_sight_west_lake" {
-		homepage.RelatedGroups = []map[string]any{
-			{
-				"circleId":            "fixture_circle_photo",
-				"name":                "契约摄影社",
-				"memberCount":         128,
-				"linkedHomepageId":    homepage.ID,
-				"linkedHomepageTitle": homepage.Title,
-			},
-		}
-	}
 	reviewSummaryNeedsSeed := homepage.ReviewSummary == nil
 	if !reviewSummaryNeedsSeed {
 		if mapSliceFromAny(homepage.ReviewSummary["dimensionScores"]) == nil {
@@ -1271,7 +1260,7 @@ func applyDefaultShellData(homepage *Homepage) {
 
 func validateHomepageInput(input HomepageInput) error {
 	if strings.TrimSpace(input.Title) == "" {
-		return newAppError(400, codeClaimMaterialMissing, "主页标题不能为空", "homepage title is empty")
+		return newAppError(entitygenerated.ErrInvalidArgument, "homepage title is empty")
 	}
 	switch normalize(input.HomepageType) {
 	// 闭集与 contracts/metadata/_shared/types.yaml HomepageType 枚举同源；
@@ -1281,7 +1270,7 @@ func validateHomepageInput(input HomepageInput) error {
 		"check_in_spot", "natural_landscape", "park", "hot_spring", "theme_park":
 		return nil
 	default:
-		return newAppError(400, codeInvalidHomepageType, "不支持的主页类型", "unsupported homepage type")
+		return newAppError(entitygenerated.ErrInvalidHomepageType, "unsupported homepage type")
 	}
 }
 
@@ -1347,61 +1336,16 @@ func buildObjectPageBundle(
 }
 
 func buildHomepageImpactSummary(homepage *Homepage) *HomepageImpactSummaryView {
-	applyDefaultShellData(homepage)
-	target := homepageImpactTarget(homepage)
-	items := make([]map[string]any, 0, 3)
-
-	relatedMembers := 0
+	items := make([]rtimpact.Statement, 0, len(homepage.RelatedGroups))
 	for _, group := range homepage.RelatedGroups {
-		if n, ok := anyInt(group["memberCount"]); ok && n > 0 {
-			relatedMembers += n
+		if item, complete := buildHomepageRelatedCircleImpact(group); complete {
+			items = append(items, item)
 		}
-	}
-	if relatedMembers == 0 && homepage.FollowerCount > 0 {
-		relatedMembers = homepage.FollowerCount
-	}
-	if relatedMembers > 0 {
-		items = append(items, buildHomepageImpactItem(
-			homepage,
-			target,
-			rtimpact.HelpRelationship,
-			"establish_connection",
-			"relationship",
-			"homepage_related_groups",
-			relatedMembers,
-			"相关圈子里的真实成员在这里继续认识彼此、建立连接。",
-		))
-	}
-	if homepage.RatingCount > 0 {
-		items = append(items, buildHomepageImpactItem(
-			homepage,
-			target,
-			rtimpact.HelpCommunity,
-			"start_discussion",
-			"content",
-			"homepage_reviews",
-			homepage.RatingCount,
-			"评分、记录与问答会继续沉淀围绕这个对象的真实讨论。",
-		))
-	}
-	if homepage.FollowerCount > 0 {
-		items = append(items, buildHomepageImpactItem(
-			homepage,
-			target,
-			rtimpact.HelpSpread,
-			"active_participation",
-			"relationship",
-			"homepage_followers",
-			homepage.FollowerCount,
-			"持续关注这个对象的人会把内容和关系继续扩散出去。",
-		))
 	}
 
-	total := 0
+	total := int64(0)
 	for _, item := range items {
-		if n, ok := item["count"].(int); ok {
-			total += n
-		}
+		total += item.Count
 	}
 	return &HomepageImpactSummaryView{
 		HomepageID: homepage.ID,
@@ -1410,76 +1354,40 @@ func buildHomepageImpactSummary(homepage *Homepage) *HomepageImpactSummaryView {
 	}
 }
 
-func buildHomepageImpactItem(
-	homepage *Homepage,
-	target map[string]any,
-	helpType string,
-	action string,
-	dimension string,
-	source string,
-	count int,
-	subtitle string,
-) map[string]any {
-	primaryText := rtimpact.PrimaryText(helpType, action, int64(count), rtimpact.ActorTA)
-	summaryAction := rtimpact.DefaultSummaryAction
-	if actionHint, ok := rtimpact.SummaryActionByHelpType[helpType]; ok {
-		summaryAction = actionHint
-	}
-	iconKey := rtimpact.DefaultIconKey
-	if key, ok := rtimpact.IconKeyByHelpType[helpType]; ok && strings.TrimSpace(key) != "" {
-		iconKey = key
-	}
-	item := map[string]any{
-		"helpType":              helpType,
-		"action":                action,
-		"intersectionDimension": dimension,
-		"tagRef":                "",
-		"source":                source,
-		"count":                 count,
-		"primaryText":           primaryText,
-		"subtitleText":          subtitle,
-		"impactId":              homepage.ID + "_" + source,
-		"primarySpans": []map[string]any{
-			{"text": primaryText, "role": "plain"},
+func buildHomepageRelatedCircleImpact(group map[string]any) (rtimpact.Statement, bool) {
+	circleID := impactString(group, "circleId")
+	circleName := impactString(group, "name")
+	ownerID := impactString(group, "ownerUserId")
+	ownerName := impactString(group, "ownerDisplayNameSnapshot")
+	snapshotID := impactString(group, "evidenceSnapshotId")
+	count, _ := anyInt(group["memberCount"])
+	return rtimpact.BuildStatement(rtimpact.StatementEvidence{
+		HelpType:              rtimpact.HelpCommunity,
+		Action:                "join_circle",
+		IntersectionDimension: "relationship",
+		Source:                "homepage_related_groups",
+		Count:                 int64(count),
+		SubtitleText:          "关联圈子成员事实来自同一读模型快照。",
+		ImpactID:              circleID + "_homepage_members",
+		EvidenceSnapshotID:    snapshotID,
+		RepresentativeActor: rtimpact.RepresentativeActor{
+			ActorID:         ownerID,
+			DisplayName:     ownerName,
+			AvatarURL:       impactString(group, "ownerAvatarUrlSnapshot"),
+			RelationLabel:   "圈子主理人",
+			PrivacyState:    "visible",
+			Target:          &rtimpact.Target{ObjectType: "user", ObjectID: ownerID, ObjectKind: "person", RouteID: "profile"},
+			EvidenceRank:    1,
+			SnapshotVersion: snapshotID,
 		},
-		"sampleVisuals": []map[string]any{},
-		"actionHints": []map[string]any{
-			{
-				"actionKey":          summaryAction.Key,
-				"label":              summaryAction.Label,
-				"target":             target,
-				"isPrimary":          true,
-				"priority":           1,
-				"actionTier":         "light",
-				"requiredGates":      []string{},
-				"targetAvailability": "available",
-				"dispatch":           "navigate",
-			},
-		},
-		"countTarget":        target,
-		"evidenceSnapshotId": homepage.ID + "_" + source + "_summary",
-		"countObjectKind":    "person",
-		"iconKey":            iconKey,
-	}
-	if strings.TrimSpace(homepage.CoverURL) != "" {
-		item["sampleVisuals"] = []map[string]any{
-			{
-				"assetKind":   "image",
-				"imageUrl":    homepage.CoverURL,
-				"displayName": homepage.Title,
-				"target":      target,
-			},
-		}
-	}
-	return item
+		ObjectName:   circleName,
+		ObjectTarget: rtimpact.Target{ObjectType: "circle", ObjectID: circleID, ObjectKind: "circle", RouteID: "circleDetail"},
+	})
 }
 
-func homepageImpactTarget(homepage *Homepage) map[string]any {
-	return map[string]any{
-		"objectId":   homepage.ID,
-		"objectKind": homepageImpactObjectKind(homepage.HomepageType),
-		"routeId":    "homepageDetail",
-	}
+func impactString(values map[string]any, key string) string {
+	value, _ := values[key].(string)
+	return strings.TrimSpace(value)
 }
 
 func homepageImpactObjectKind(homepageType string) string {
@@ -1553,7 +1461,7 @@ func intersectionDimensionLabel(homepage *Homepage) (dimension string, shortLabe
 // 保鲜期：identity/location 取较长保鲜（30 天），interest 取较短（7 天）。
 // strength 由标签命中数与关系边数推导，避免硬编码单一分值。
 func defaultIntersectionReasons(homepage *Homepage, edges []map[string]any) []map[string]any {
-	dimension, _, evidenceLabel := intersectionDimensionLabel(homepage)
+	dimension, _, _ := intersectionDimensionLabel(homepage)
 	tagShared := len(homepage.CategoryTags)
 	tagStrength := intersectionStrengthFromCount(tagShared, 6)
 	freshTTL := 7 * 24 * time.Hour
@@ -1561,49 +1469,78 @@ func defaultIntersectionReasons(homepage *Homepage, edges []map[string]any) []ma
 		freshTTL = 30 * 24 * time.Hour
 	}
 	now := time.Now().UTC()
+	target := homepageIntersectionTarget(homepage)
+	objectText := strings.TrimSpace(homepage.Title)
+	primaryText := "推荐你了解" + objectText
 	reasons := []map[string]any{
 		{
-			"intersectionId":    homepage.ID + "_" + dimension,
-			"intersectionClass": "fact",
-			"dimension":         dimension,
-			"tagRefs":           cloneStrings(homepage.CategoryTags),
-			"relationKind":      "mutual",
-			"relationObjectId":  homepage.ID,
-			"displayName":       homepage.Title,
-			"avatarUrl":         homepage.CoverURL,
-			"totalPointCount":   tagShared,
-			"strength":          tagStrength,
-			"primaryText":       evidenceLabel,
-			"confidenceLabel":   "",
-			"actionType":        "view_object",
-			"actionTargetId":    homepage.ID,
-			"source":            "tagRef",
-			"freshAt":           now.Format(time.RFC3339),
-			"expiresAt":         now.Add(freshTTL).Format(time.RFC3339),
+			"intersectionId":      homepage.ID + "_" + dimension,
+			"intersectionClass":   "affinity",
+			"dimension":           dimension,
+			"tagRefs":             cloneStrings(homepage.CategoryTags),
+			"relationKind":        "",
+			"relationObjectId":    homepage.ID,
+			"objectKind":          homepageImpactObjectKind(homepage.HomepageType),
+			"displayName":         homepage.Title,
+			"avatarUrl":           homepage.CoverURL,
+			"totalPointCount":     tagShared,
+			"strength":            tagStrength,
+			"primaryText":         primaryText,
+			"primarySpans":        []map[string]any{{"text": "推荐你了解", "role": "plain"}, {"text": objectText, "role": "object", "target": target}},
+			"representativeActor": nil,
+			"actorEvidence":       []map[string]any{},
+			"confidenceLabel":     "推荐了解",
+			"actionType":          "view_object",
+			"actionTargetId":      homepage.ID,
+			"source":              "tagRef",
+			"freshAt":             now.Format(time.RFC3339),
+			"expiresAt":           now.Add(freshTTL).Format(time.RFC3339),
 		},
 	}
 	if relObj := relationObjectID(edges); strings.TrimSpace(relObj) != "" {
+		circleTarget := map[string]any{
+			"objectType": "circle",
+			"objectId":   relObj,
+			"objectKind": "circle",
+			"routeId":    "circleDetail",
+		}
 		reasons = append(reasons, map[string]any{
 			"intersectionId":    homepage.ID + "_relationship",
-			"intersectionClass": "fact",
+			"intersectionClass": "affinity",
 			"dimension":         "relationship",
 			"tagRefs":           cloneStrings(homepage.CategoryTags),
-			"relationKind":      "mutual",
+			"relationKind":      "",
 			"relationObjectId":  relObj,
-			"displayName":       "相关圈子里有你的连接",
+			"objectKind":        "circle",
+			"displayName":       "圈子动态",
 			"avatarUrl":         "",
 			"totalPointCount":   len(edges),
 			"strength":          intersectionStrengthFromCount(len(edges), 4),
-			"primaryText":       "这里有你可能想加入的相关圈子",
-			"confidenceLabel":   "",
-			"actionType":        "join",
-			"actionTargetId":    relObj,
-			"source":            "followEdge",
-			"freshAt":           now.Format(time.RFC3339),
-			"expiresAt":         now.Add(7 * 24 * time.Hour).Format(time.RFC3339),
+			"primaryText":       "推荐你查看圈子动态",
+			"primarySpans": []map[string]any{
+				{"text": "推荐你查看", "role": "plain"},
+				{"text": "圈子动态", "role": "object", "target": circleTarget},
+			},
+			"representativeActor": nil,
+			"actorEvidence":       []map[string]any{},
+			"confidenceLabel":     "推荐查看",
+			"actionType":          "join",
+			"actionTargetId":      relObj,
+			"source":              "followEdge",
+			"freshAt":             now.Format(time.RFC3339),
+			"expiresAt":           now.Add(7 * 24 * time.Hour).Format(time.RFC3339),
 		})
 	}
 	return reasons
+}
+
+func homepageIntersectionTarget(homepage *Homepage) map[string]any {
+	return map[string]any{
+		"objectType": "homepage",
+		"objectId":   homepage.ID,
+		"objectKind": homepageImpactObjectKind(homepage.HomepageType),
+		"routeId":    "homepageDetail",
+	}
 }
 
 func intersectionStrengthFromCount(count int, saturate int) float64 {
@@ -1696,12 +1633,26 @@ func nonEmpty(value, fallback string) string {
 	return fallback
 }
 
-func newAppError(status int, code, userMessage, debugMessage string) *AppError {
-	return &AppError{
-		StatusCode:   status,
-		Code:         code,
-		UserMessage:  userMessage,
-		DebugMessage: debugMessage,
+func newAppError(code error, debugMessage string) *rterr.AppError {
+	switch code {
+	case entitygenerated.ErrInvalidArgument:
+		return entitygenerated.AppErrorFromInvalidArgument(debugMessage)
+	case entitygenerated.ErrHomepageNotFound:
+		return entitygenerated.AppErrorFromHomepageNotFound(debugMessage)
+	case entitygenerated.ErrClaimMaterialMissing:
+		return entitygenerated.AppErrorFromClaimMaterialMissing(debugMessage)
+	case entitygenerated.ErrAlreadyClaimed:
+		return entitygenerated.AppErrorFromAlreadyClaimed(debugMessage)
+	case entitygenerated.ErrHomepageOffline:
+		return entitygenerated.AppErrorFromHomepageOffline(debugMessage)
+	case entitygenerated.ErrInvalidHomepageType:
+		return entitygenerated.AppErrorFromInvalidHomepageType(debugMessage)
+	case entitygenerated.ErrPermissionDenied:
+		return entitygenerated.AppErrorFromPermissionDenied(debugMessage)
+	case entitygenerated.ErrInternalError:
+		return entitygenerated.AppErrorFromInternalError(debugMessage)
+	default:
+		return entitygenerated.AppErrorFromInternalError(fmt.Sprintf("unknown entity homepage error %v: %s", code, debugMessage))
 	}
 }
 
@@ -1734,10 +1685,13 @@ func (s *HomepageService) ReloadHomepageState(ctx context.Context) (ReloadHomepa
 		return ReloadHomepageStateResult{}, err
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	result := ReloadHomepageStateResult{
 		HomepagesBefore: len(s.homepages),
 		SnapshotSize:    len(snapshot.Homepages),
+	}
+	previous := make(map[string]Homepage, len(s.homepages))
+	for id, homepage := range s.homepages {
+		previous[id] = cloneHomepage(homepage)
 	}
 	current := atomic.LoadUint64(&s.sequence)
 	s.applySnapshot(snapshot)
@@ -1745,7 +1699,46 @@ func (s *HomepageService) ReloadHomepageState(ctx context.Context) (ReloadHomepa
 		atomic.StoreUint64(&s.sequence, current)
 	}
 	result.HomepagesAfter = len(s.homepages)
+	emits := make([]ProjectorEvent, 0, len(snapshot.Homepages))
+	for _, snapshotHomepage := range snapshot.Homepages {
+		homepage := s.homepages[snapshotHomepage.ID]
+		if homepage == nil {
+			continue
+		}
+		before, existed := previous[homepage.ID]
+		if existed && homepageProjectionEqual(before, *homepage) {
+			continue
+		}
+		out := cloneHomepage(homepage)
+		eventType := ProjectorEventHomepageUpserted
+		if !HomepageSearchEligible(out) {
+			eventType = ProjectorEventHomepageRemoved
+		}
+		emits = append(emits, ProjectorEvent{Type: eventType, HomepageID: out.ID, Homepage: &out})
+	}
+	s.mu.Unlock()
+	for _, event := range emits {
+		s.emitSearchIndex(ctx, event)
+	}
 	return result, nil
+}
+
+func homepageProjectionEqual(left Homepage, right Homepage) bool {
+	return left.ID == right.ID &&
+		left.Title == right.Title &&
+		left.Subtitle == right.Subtitle &&
+		left.HomepageType == right.HomepageType &&
+		left.CanonicalEntityID == right.CanonicalEntityID &&
+		left.Status == right.Status &&
+		left.SourceType == right.SourceType &&
+		left.SourceOwner == right.SourceOwner &&
+		left.SourceEntityRef == right.SourceEntityRef &&
+		left.SourceReleaseID == right.SourceReleaseID &&
+		left.CoverURL == right.CoverURL &&
+		left.City == right.City &&
+		left.UpdatedAt.Equal(right.UpdatedAt) &&
+		((left.OfflineAt == nil && right.OfflineAt == nil) ||
+			(left.OfflineAt != nil && right.OfflineAt != nil && left.OfflineAt.Equal(*right.OfflineAt)))
 }
 
 func (s *HomepageService) applySnapshot(snapshot *HomepageStateSnapshot) {
@@ -1840,7 +1833,7 @@ func (s *HomepageService) persistLocked(ctx context.Context) error {
 		return nil
 	}
 	if err := s.store.Save(ctx, s.snapshotLocked()); err != nil {
-		return newAppError(500, codeInternalError, "主页数据暂时不可保存，请稍后重试", err.Error())
+		return newAppError(entitygenerated.ErrInternalError, err.Error())
 	}
 	return nil
 }

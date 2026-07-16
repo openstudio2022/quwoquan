@@ -1,11 +1,16 @@
 package api_integration
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	feedapp "quwoquan_service/services/content-service/internal/application/feed"
+	postports "quwoquan_service/services/content-service/internal/domain/post/ports"
+	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
 )
 
 func TestContractFixtureSeed_ContentAlphaReadsViaHandler(t *testing.T) {
@@ -13,6 +18,23 @@ func TestContractFixtureSeed_ContentAlphaReadsViaHandler(t *testing.T) {
 	evidence := seedContentContractFixture(t, "content_discovery_core", "comment_thread_core")
 	if evidence.InsertedCount < 4 {
 		t.Fatalf("expected at least 4 seeded content records, got %d", evidence.InsertedCount)
+	}
+	reader := persistence.NewMongoPostQueryReader(mongoDB.Collection("posts"))
+	if _, err := reader.ListPublishedFeedPosts(
+		context.Background(),
+		postports.NewPostFeedReadRequest("", "", "", 100),
+	); err != nil {
+		t.Fatalf("typed feed reader must decode canonical contract fixtures: %v", err)
+	}
+	if _, err := testFeedService.ListFeed(
+		context.Background(),
+		feedapp.ListFeedRequest{
+			UserID:    "fixture_contract_reader",
+			SessionID: "fixture_contract_reader_session",
+			Limit:     100,
+		},
+	); err != nil {
+		t.Fatalf("feed application must consume canonical contract fixtures: %v", err)
 	}
 
 	feedReq := httptest.NewRequest(http.MethodGet, "/v1/content/feed?limit=100", nil)

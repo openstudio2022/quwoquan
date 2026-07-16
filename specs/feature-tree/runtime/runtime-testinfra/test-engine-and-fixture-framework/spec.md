@@ -7,7 +7,8 @@
 
 ## 实现要点
 - **Engine 抽象**：定义 TestEngine 接口（Start/Stop/Conn/Migrate/Cleanup），各引擎实现此接口。
-- **Fixture 设计**：按 entity 从 EntityRegistry 获取 fields，生成默认值（符合 constraints），支持覆盖。
+- **Fixture 设计**：从构建期生成的 ContractGraph fixture descriptor 获取字段与约束，
+  生成默认值并支持显式覆盖；测试运行期不读取 metadata。
 - **Spy 设计**：包装 EventPublisher，记录 Publish 调用，提供查询和断言方法。
 
 ## 约束

@@ -34,7 +34,7 @@ entries:
       - app-ui
       - tests
     changed_documents:
-      - path: docs/recommendation-commercial-maturity-plan.md
+      - path: docs/recommendation-commercial-maturity-content.execution.planning.md
         sections:
           - 结论
       - path: specs/feature-tree/discovery-content/feed-orchestration-recommendation/spec.md

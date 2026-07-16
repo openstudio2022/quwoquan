@@ -389,7 +389,7 @@ sla_policy:
 - `ops.reco.read`
 - `ops.reco.write`
 - `ops.experiment.write`
-- `ops.audit.read`
+- `ops.verify.audit.read`
 
 ### 危险动作模型
 

@@ -1,24 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/chat/models/send_message_response.dart';
-import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// 聊天消息发送旅程：输入 → 发送 → 消息出现在列表
 ///
-/// ChatDetailPage 依赖较重（file_picker、image_picker、record 等 native
+/// ChatConversationPage 依赖较重（file_picker、image_picker、record 等 native
 /// 插件），因此旅程测试通过自建简化 Widget 验证 ChatRepository 的消息发送 → 列表
 /// 更新这一核心交互链路，确保 Provider 注入、异步刷新、错误态 UI 展示的完整性。
 void main() {
   group('旅程正常路径', () {
     testWidgets('输入 → 发送 → 消息出现在列表', (tester) async {
-      final mock = _TrackingSendChatRepository();
+      final writer = _TrackingMessageWriter();
       await tester.pumpWidget(
-        ProviderScope(
-          overrides: [chatRepositoryProvider.overrideWithValue(mock)],
-          child: MaterialApp(home: _MessageSendTestPage(repo: mock)),
-        ),
+        MaterialApp(home: _MessageSendTestPage(writer: writer)),
       );
       await tester.pumpAndSettle();
 
@@ -33,16 +27,13 @@ void main() {
 
       // 消息出现在列表中
       expect(find.text('旅程测试消息'), findsWidgets);
-      expect(mock.sendCallCount, 1);
+      expect(writer.sendCallCount, 1);
     });
 
     testWidgets('发送后输入框清空', (tester) async {
-      final mock = _TrackingSendChatRepository();
+      final writer = _TrackingMessageWriter();
       await tester.pumpWidget(
-        ProviderScope(
-          overrides: [chatRepositoryProvider.overrideWithValue(mock)],
-          child: MaterialApp(home: _MessageSendTestPage(repo: mock)),
-        ),
+        MaterialApp(home: _MessageSendTestPage(writer: writer)),
       );
       await tester.pumpAndSettle();
 
@@ -58,12 +49,9 @@ void main() {
 
   group('旅程错误路径', () {
     testWidgets('发送失败显示错误提示', (tester) async {
-      final mock = _ErrorSendChatRepository();
+      final writer = _ErrorMessageWriter();
       await tester.pumpWidget(
-        ProviderScope(
-          overrides: [chatRepositoryProvider.overrideWithValue(mock)],
-          child: MaterialApp(home: _MessageSendTestPage(repo: mock)),
-        ),
+        MaterialApp(home: _MessageSendTestPage(writer: writer)),
       );
       await tester.pumpAndSettle();
 
@@ -76,12 +64,9 @@ void main() {
     });
 
     testWidgets('发送失败后可重试', (tester) async {
-      final mock = _ErrorSendChatRepository();
+      final writer = _ErrorMessageWriter();
       await tester.pumpWidget(
-        ProviderScope(
-          overrides: [chatRepositoryProvider.overrideWithValue(mock)],
-          child: MaterialApp(home: _MessageSendTestPage(repo: mock)),
-        ),
+        MaterialApp(home: _MessageSendTestPage(writer: writer)),
       );
       await tester.pumpAndSettle();
 
@@ -97,12 +82,9 @@ void main() {
 
   group('旅程边界/幂等', () {
     testWidgets('连续发送 3 条消息均可见', (tester) async {
-      final mock = _TrackingSendChatRepository();
+      final writer = _TrackingMessageWriter();
       await tester.pumpWidget(
-        ProviderScope(
-          overrides: [chatRepositoryProvider.overrideWithValue(mock)],
-          child: MaterialApp(home: _MessageSendTestPage(repo: mock)),
-        ),
+        MaterialApp(home: _MessageSendTestPage(writer: writer)),
       );
       await tester.pumpAndSettle();
 
@@ -115,16 +97,13 @@ void main() {
       expect(find.text('消息一'), findsOneWidget);
       expect(find.text('消息二'), findsOneWidget);
       expect(find.text('消息三'), findsOneWidget);
-      expect(mock.sendCallCount, 3);
+      expect(writer.sendCallCount, 3);
     });
 
     testWidgets('空内容不发送', (tester) async {
-      final mock = _TrackingSendChatRepository();
+      final writer = _TrackingMessageWriter();
       await tester.pumpWidget(
-        ProviderScope(
-          overrides: [chatRepositoryProvider.overrideWithValue(mock)],
-          child: MaterialApp(home: _MessageSendTestPage(repo: mock)),
-        ),
+        MaterialApp(home: _MessageSendTestPage(writer: writer)),
       );
       await tester.pumpAndSettle();
 
@@ -132,7 +111,7 @@ void main() {
       await tester.tap(find.byIcon(Icons.send));
       await tester.pumpAndSettle();
 
-      expect(mock.sendCallCount, 0);
+      expect(writer.sendCallCount, 0);
     });
   });
 }
@@ -142,9 +121,9 @@ void main() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 class _MessageSendTestPage extends StatefulWidget {
-  const _MessageSendTestPage({required this.repo});
+  const _MessageSendTestPage({required this.writer});
 
-  final ChatRepository repo;
+  final ChatMessageCommandWriter writer;
 
   @override
   State<_MessageSendTestPage> createState() => _MessageSendTestPageState();
@@ -159,11 +138,13 @@ class _MessageSendTestPageState extends State<_MessageSendTestPage> {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
     try {
-      await widget.repo.sendMessage(
-        conversationId: 'conv_test',
-        type: 'text',
-        content: text,
-        clientMsgId: 'test-${DateTime.now().millisecondsSinceEpoch}',
+      await widget.writer.sendMessage(
+        ChatSendMessageCommand(
+          conversationId: 'conv_test',
+          type: 'text',
+          content: text,
+          clientMsgId: 'test-${DateTime.now().millisecondsSinceEpoch}',
+        ),
       );
       setState(() {
         _sentMessages.add(text);
@@ -214,60 +195,27 @@ class _MessageSendTestPageState extends State<_MessageSendTestPage> {
 // Mock 变体
 // ═══════════════════════════════════════════════════════════════════════════════
 
-class _TrackingSendChatRepository extends MockChatRepository {
+class _TrackingMessageWriter implements ChatMessageCommandWriter {
   int sendCallCount = 0;
 
   @override
-  Future<SendMessageResponse> sendMessage({
-    required String conversationId,
-    required String type,
-    required String content,
-    String? mediaUrl,
-    Map<String, dynamic>? media,
-    Map<String, dynamic>? cardPayload,
-    String? replyToMessageId,
-    List<String>? mentions,
-    String? senderSubAccountId,
-    String? personaContextVersion,
-    String? senderDisplayNameSnapshot,
-    String? senderAvatarUrlSnapshot,
-    required String clientMsgId,
-  }) async {
+  Future<ChatSendMessageResult> sendMessage(
+    ChatSendMessageCommand command,
+  ) async {
     sendCallCount++;
-    return super.sendMessage(
-      conversationId: conversationId,
-      type: type,
-      content: content,
-      mediaUrl: mediaUrl,
-      media: media,
-      replyToMessageId: replyToMessageId,
-      mentions: mentions,
-      senderSubAccountId: senderSubAccountId,
-      personaContextVersion: personaContextVersion,
-      senderDisplayNameSnapshot: senderDisplayNameSnapshot,
-      senderAvatarUrlSnapshot: senderAvatarUrlSnapshot,
-      clientMsgId: clientMsgId,
+    return ChatSendMessageResult(
+      messageId: 'message-${command.clientMsgId}',
+      seq: sendCallCount,
+      timestamp: DateTime.utc(2026, 7, 15),
     );
   }
 }
 
-class _ErrorSendChatRepository extends MockChatRepository {
+class _ErrorMessageWriter implements ChatMessageCommandWriter {
   @override
-  Future<SendMessageResponse> sendMessage({
-    required String conversationId,
-    required String type,
-    required String content,
-    String? mediaUrl,
-    Map<String, dynamic>? media,
-    Map<String, dynamic>? cardPayload,
-    String? replyToMessageId,
-    List<String>? mentions,
-    String? senderSubAccountId,
-    String? personaContextVersion,
-    String? senderDisplayNameSnapshot,
-    String? senderAvatarUrlSnapshot,
-    required String clientMsgId,
-  }) async {
+  Future<ChatSendMessageResult> sendMessage(
+    ChatSendMessageCommand command,
+  ) async {
     throw Exception('发送失败：网络异常');
   }
 }

@@ -1,0 +1,12 @@
+version: 1
+aggregate: HomepageClaimRequest
+backend: mongodb
+
+collections:
+  homepage_claim_requests:
+    entity: HomepageClaimRequest
+    role: authoritative
+    indexes:
+      - { name: idx_claim_requests_homepage_status, keys: { homepageId: 1, status: 1, createdAt: -1 } }
+      - { name: idx_claim_requests_requester, keys: { requesterPersonaId: 1, createdAt: -1 } }
+      - { name: idx_claim_requests_pending_unique, keys: { homepageId: 1, requesterPersonaId: 1, status: 1 }, unique: true }

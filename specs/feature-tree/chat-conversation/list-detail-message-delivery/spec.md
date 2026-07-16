@@ -69,7 +69,7 @@
 ### 2.4 ChatInbox 读模型升级
 
 - 改为 per-user 投影（当前是全局投影，不正确）
-- source_events 新增 `MemberJoined`、`MemberLeft`、`ConversationSettingsUpdated`
+- source_events 新增 `ConversationMemberAdded`、`ConversationMemberRemoved`、`ConversationUserSettingsChanged`
 - 新增 `lastSeq` 字段用于 gap 检测
 
 ## 3. API 变更（概要）

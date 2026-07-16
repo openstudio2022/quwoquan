@@ -6,7 +6,7 @@ status: implemented
 
 affected_nodes:
   - specs/feature-tree/discovery-content/content-type-framework/markdown-article-kernel
-  - quwoquan_data/scripts/governance/creator_pool/content_bind.py
+  - quwoquan_data/scripts/governance/creators/pool/content_bind.py
   - quwoquan_service/contracts/metadata/content/test_fixtures/scenarios/content_scenarios.json
 
 entries:
@@ -16,7 +16,7 @@ entries:
       seedSets.creator_authored_core.posts[0]，batch-100 E2E 创作者文章）此前仅含薄 body、缺
       articleMarkdown 与 articleRenderProfile，致 make verify-markdown-article-no-article-document 红。
       按 markdown-article-kernel「长文唯一持久化真相源为 Markdown」与单一真相原则，修法落在生成器
-      quwoquan_data/scripts/governance/creator_pool/content_bind.py（而非手改 JSON 制造漂移）：为 article
+      quwoquan_data/scripts/governance/creators/pool/content_bind.py（而非手改 JSON 制造漂移）：为 article
       载体补 _stub_article_markdown（QWQ Rich Markdown v1，含 front matter 桌面）+ _stub_article_render_profile
       （dict，contentVertical=travel），且不再产出 articleDocument；经 qwq-data materialize 重生
       content_scenarios.json。新增生成器合约测试防回退。
@@ -33,7 +33,7 @@ entries:
       - fix
       - test
     changed_documents:
-      - path: quwoquan_data/scripts/governance/creator_pool/content_bind.py
+      - path: quwoquan_data/scripts/governance/creators/pool/content_bind.py
         sections:
           - "新增 _stub_article_markdown（QWQ Rich Markdown v1 + front matter）与 _stub_article_render_profile（dict）"
           - "_content_document 为 article 载体注入 articleMarkdown + articleRenderProfile，移除 articleDocument 产出"

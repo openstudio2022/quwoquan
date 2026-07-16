@@ -5,9 +5,15 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	contractcodegen "quwoquan_service/internal/metadata/codegen"
+	"quwoquan_service/internal/metadata/graph"
+	"quwoquan_service/internal/metadata/load"
+	"quwoquan_service/internal/metadata/validate"
 )
 
 func TestCodegenOpsPortalMetadataGeneratesExpectedFiles(t *testing.T) {
+	useFixtureContractSource(t)
 	metadataDir := t.TempDir()
 	portalDir := t.TempDir()
 
@@ -269,6 +275,27 @@ events:
 	if !strings.Contains(string(onboardingContent), `"content"`) || !strings.Contains(string(onboardingContent), `"template_role": "template_seed"`) {
 		t.Fatalf("onboarding output missing expected content: %s", string(onboardingContent))
 	}
+}
+
+func useFixtureContractSource(t *testing.T) {
+	t.Helper()
+	previous := compileContractSource
+	compileContractSource = func(
+		metadataDir string,
+		_ validate.Profile,
+	) (*contractcodegen.Source, error) {
+		catalog, err := load.Load(metadataDir)
+		if err != nil {
+			return nil, err
+		}
+		return contractcodegen.NewSourceFromGraph(
+			metadataDir,
+			graph.Build(catalog),
+		), nil
+	}
+	t.Cleanup(func() {
+		compileContractSource = previous
+	})
 }
 
 func writePortalFixture(t *testing.T, path, content string) {

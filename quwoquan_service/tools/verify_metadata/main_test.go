@@ -5,6 +5,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	contractcodegen "quwoquan_service/internal/metadata/codegen"
+	"quwoquan_service/internal/metadata/graph"
+	"quwoquan_service/internal/metadata/load"
 )
 
 func TestControlPlaneMetadataRejectsInvalidApprovalMode(t *testing.T) {
@@ -14,11 +18,23 @@ func TestControlPlaneMetadataRejectsInvalidApprovalMode(t *testing.T) {
 		productConfigRollout: "experiment",
 	})
 
-	v := &validator{metadataDir: metadataDir}
+	v := newFixtureValidator(t, metadataDir)
 	v.run()
 
 	if !containsError(v.errors, "approval_mode") {
 		t.Fatalf("expected approval_mode validation error, got: %v", v.errors)
+	}
+}
+
+func TestRequiredFilesRespectBusinessObjectStorageRole(t *testing.T) {
+	if got := requiredFilesForObjectKind("owned_entity"); len(got) != 0 {
+		t.Fatalf("owned entity must not require public packet files: %v", got)
+	}
+	if got := requiredFilesForObjectKind("append_only_fact"); strings.Join(got, ",") != "fields.yaml,storage.yaml,service.yaml" {
+		t.Fatalf("append-only fact required files = %v", got)
+	}
+	if got := requiredFilesForObjectKind("aggregate_root"); strings.Join(got, ",") != "fields.yaml,events.yaml,storage.yaml,service.yaml" {
+		t.Fatalf("aggregate root required files = %v", got)
 	}
 }
 
@@ -30,7 +46,7 @@ func TestControlPlaneMetadataRejectsDuplicateRoutePath(t *testing.T) {
 		duplicateRoutePath:   true,
 	})
 
-	v := &validator{metadataDir: metadataDir}
+	v := newFixtureValidator(t, metadataDir)
 	v.run()
 
 	if !containsError(v.errors, "route_path") {
@@ -45,7 +61,7 @@ func TestControlPlaneMetadataRejectsInvalidConfigScopeAndRollout(t *testing.T) {
 		productConfigRollout: "gray",
 	})
 
-	v := &validator{metadataDir: metadataDir}
+	v := newFixtureValidator(t, metadataDir)
 	v.run()
 
 	if !containsError(v.errors, "scope") || !containsError(v.errors, "rollout") {
@@ -76,7 +92,7 @@ scope_patterns: []
 deployment_profiles: []
 `)+"\n")
 
-	v := &validator{metadataDir: root}
+	v := newFixtureValidator(t, root)
 	v.run()
 
 	if !containsError(v.errors, "planes cannot be empty") || !containsError(v.errors, "http_methods cannot be empty") {
@@ -124,7 +140,7 @@ replication:
 blocking_gaps: []
 `)+"\n")
 
-	v := &validator{metadataDir: root}
+	v := newFixtureValidator(t, root)
 	v.run()
 
 	if !containsError(v.errors, "acceptance_status") {
@@ -283,7 +299,7 @@ replication:
 blocking_gaps: []
 `)+"\n")
 
-	v := &validator{metadataDir: root}
+	v := newFixtureValidator(t, root)
 	v.run()
 
 	if !containsError(v.errors, "minimum_test_ready requires non-empty t2 evidence") {
@@ -443,7 +459,7 @@ replication:
 blocking_gaps: []
 `)+"\n")
 
-	v := &validator{metadataDir: root}
+	v := newFixtureValidator(t, root)
 	v.run()
 
 	if !containsError(v.errors, "integration_pass requires blocking_gaps to be empty") {
@@ -659,6 +675,21 @@ func containsError(errs []string, want string) bool {
 	return false
 }
 
+func newFixtureValidator(t *testing.T, metadataDir string) *validator {
+	t.Helper()
+	catalog, err := load.Load(metadataDir)
+	if err != nil {
+		t.Fatalf("load metadata fixture: %v", err)
+	}
+	return &validator{
+		metadataDir: metadataDir,
+		source: contractcodegen.NewSourceFromGraph(
+			metadataDir,
+			graph.Build(catalog),
+		),
+	}
+}
+
 func createDomainOnboardingFixture(t *testing.T) string {
 	t.Helper()
 
@@ -710,32 +741,56 @@ minimum_package:
     plane_aware: quwoquan_ops/environments/process_domain_plane_mapping.yaml
 `)+"\n")
 
-	mustWriteFixtureFile(t, filepath.Join(metadataRoot, "content", "post", "aggregate.yaml"), "aggregate_root: Post\n")
+	mustWriteFixtureObject(t, metadataRoot, "content", "post", "Post")
 	mustWriteFixtureFile(t, filepath.Join(metadataRoot, "content", "post", "fields.yaml"), "entities:\n  Post:\n    fields: []\n")
 	mustWriteFixtureFile(t, filepath.Join(metadataRoot, "content", "post", "events.yaml"), "events: []\n")
 	mustWriteFixtureFile(t, filepath.Join(metadataRoot, "content", "post", "storage.yaml"), "collections: {}\n")
-	mustWriteFixtureFile(t, filepath.Join(metadataRoot, "content", "post", "service.yaml"), "routes: []\n")
-	mustWriteFixtureFile(t, filepath.Join(metadataRoot, "chat", "thread", "aggregate.yaml"), "aggregate_root: Thread\n")
+	mustWriteFixtureObject(t, metadataRoot, "chat", "thread", "Thread")
 	mustWriteFixtureFile(t, filepath.Join(metadataRoot, "chat", "thread", "fields.yaml"), "entities:\n  Thread:\n    fields: []\n")
 	mustWriteFixtureFile(t, filepath.Join(metadataRoot, "chat", "thread", "events.yaml"), "events: []\n")
 	mustWriteFixtureFile(t, filepath.Join(metadataRoot, "chat", "thread", "storage.yaml"), "collections: {}\n")
-	mustWriteFixtureFile(t, filepath.Join(metadataRoot, "chat", "thread", "service.yaml"), "routes: []\n")
-	mustWriteFixtureFile(t, filepath.Join(metadataRoot, "circle", "group", "aggregate.yaml"), "aggregate_root: Group\n")
+	mustWriteFixtureObject(t, metadataRoot, "circle", "group", "Group")
 	mustWriteFixtureFile(t, filepath.Join(metadataRoot, "circle", "group", "fields.yaml"), "entities:\n  Group:\n    fields: []\n")
 	mustWriteFixtureFile(t, filepath.Join(metadataRoot, "circle", "group", "events.yaml"), "events: []\n")
 	mustWriteFixtureFile(t, filepath.Join(metadataRoot, "circle", "group", "storage.yaml"), "collections: {}\n")
-	mustWriteFixtureFile(t, filepath.Join(metadataRoot, "circle", "group", "service.yaml"), "routes: []\n")
-	mustWriteFixtureFile(t, filepath.Join(metadataRoot, "user", "profile", "aggregate.yaml"), "aggregate_root: Profile\n")
+	mustWriteFixtureObject(t, metadataRoot, "user", "profile", "Profile")
 	mustWriteFixtureFile(t, filepath.Join(metadataRoot, "user", "profile", "fields.yaml"), "entities:\n  Profile:\n    fields: []\n")
 	mustWriteFixtureFile(t, filepath.Join(metadataRoot, "user", "profile", "events.yaml"), "events: []\n")
 	mustWriteFixtureFile(t, filepath.Join(metadataRoot, "user", "profile", "storage.yaml"), "collections: {}\n")
-	mustWriteFixtureFile(t, filepath.Join(metadataRoot, "user", "profile", "service.yaml"), "routes: []\n")
 	mustWriteFixtureFile(t, filepath.Join(repoRoot, "services", "content-service", "tests", "post_comment_contract_test.go"), "package tests\n")
 	mustWriteFixtureFile(t, filepath.Join(repoRoot, "services", "chat-service", "tests", "thread_contract_test.go"), "package tests\n")
 	mustWriteFixtureFile(t, filepath.Join(repoRoot, "services", "circle-service", "tests", "group_contract_test.go"), "package tests\n")
 	mustWriteFixtureFile(t, filepath.Join(repoRoot, "services", "user-service", "tests", "profile_contract_test.go"), "package tests\n")
 
 	return metadataRoot
+}
+
+func mustWriteFixtureObject(
+	t *testing.T,
+	metadataRoot string,
+	domain string,
+	objectDir string,
+	aggregateRoot string,
+) {
+	t.Helper()
+	baseDir := filepath.Join(metadataRoot, domain, objectDir)
+	mustWriteFixtureFile(t, filepath.Join(baseDir, "aggregate.yaml"), strings.TrimSpace(`
+version: 1
+domain: `+domain+`
+aggregate_root: `+aggregateRoot+`
+object_kind: aggregate_root
+description: test aggregate
+storage_backend: mongodb
+members: []
+`)+"\n")
+	mustWriteFixtureFile(t, filepath.Join(baseDir, "service.yaml"), strings.TrimSpace(`
+version: 1
+aggregate: `+aggregateRoot+`
+service:
+  name: `+domain+`-service
+  domain: `+domain+`
+api_routes: []
+`)+"\n")
 }
 
 func copyDir(t *testing.T, src, dst string) {

@@ -17,8 +17,8 @@ entries:
       消除全部独立工作区，确立「今后只有 dev1.0」单一主线原则。
       P0 主树固化：session0 合并后累积在 dev1.0 working tree 的 1733 改动（5 工作线：
       specs 去版本化标准化 / 内容命名收敛 CR-022 / ops 环境拓扑+数据生产 / user auth /
-      pageflip 增量）固化为 5 个主题 commit；约 927 个产物（.qwq_output/env/repo/runs/env-packages 164 +
-      quwoquan_data/release 763）按口径排除不污染主线。
+      pageflip 增量）固化为 5 个主题 commit；约 927 个产物（已迁移 canonical run evidence 与静态发布候选）
+      按口径排除不污染主线。
       S1 V3 整合：session3 对象页壳层统一(ObjectPageShell) + tag-service 真打 + 交集卡
       merge 进 dev1.0，content 取 dev1.0 B 内容收敛基线、shell 取 session3 V3 重构。
       S2 V2 收口：dev1.0 B(CR-022 Block 0) 已吸收内容多形态核心(ContentSurfaceView/

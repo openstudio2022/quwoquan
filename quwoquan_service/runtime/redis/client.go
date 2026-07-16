@@ -53,6 +53,7 @@ type Client interface {
 	XAdd(ctx context.Context, stream string, values map[string]string) (string, error)
 	XReadGroup(ctx context.Context, group string, consumer string, streams map[string]string, count int64, block time.Duration) ([]StreamMessage, error)
 	XAck(ctx context.Context, stream string, group string, ids ...string) error
+	XAutoClaim(ctx context.Context, stream string, group string, consumer string, minIdle time.Duration, start string, count int64) ([]StreamMessage, string, error)
 
 	// ── Pipeline ────────────────────────────────────────────
 	Pipeline(ctx context.Context) Pipeliner
@@ -97,6 +98,7 @@ type StringResult struct {
 
 func NewStringResult(val string, err error) *StringResult { return &StringResult{val: val, err: err} }
 func (r *StringResult) Result() (string, error)           { return r.val, r.err }
+func (r *StringResult) SetResult(val string, err error)   { r.val, r.err = val, err }
 
 // MapResult holds a deferred map result from a pipeline.
 type MapResult struct {
@@ -108,6 +110,9 @@ func NewMapResult(val map[string]string, err error) *MapResult {
 	return &MapResult{val: val, err: err}
 }
 func (r *MapResult) Result() (map[string]string, error) { return r.val, r.err }
+func (r *MapResult) SetResult(val map[string]string, err error) {
+	r.val, r.err = val, err
+}
 
 // SliceResult holds a deferred slice result from a pipeline.
 type SliceResult struct {
@@ -117,6 +122,7 @@ type SliceResult struct {
 
 func NewSliceResult(val []string, err error) *SliceResult { return &SliceResult{val: val, err: err} }
 func (r *SliceResult) Result() ([]string, error)          { return r.val, r.err }
+func (r *SliceResult) SetResult(val []string, err error)  { r.val, r.err = val, err }
 
 // ErrKeyNotFound is returned when a key does not exist.
 // Callers should check errors.Is(err, ErrKeyNotFound).

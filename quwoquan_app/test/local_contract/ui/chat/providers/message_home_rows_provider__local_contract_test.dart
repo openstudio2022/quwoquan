@@ -6,7 +6,7 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/providers/message_home_rows_provider.dart';
 
 void main() {
-  group('messageHomeRowsProvider', () {
+  group('messageHomeRowsStateProvider', () {
     test('透传 filter 并映射 conversation 行', () async {
       final repo = _FakeChatRepository();
       final container = ProviderContainer(
@@ -14,9 +14,10 @@ void main() {
       );
       addTearDown(container.dispose);
 
-      final rows = await container.read(
-        messageHomeRowsProvider('group').future,
+      final state = await container.read(
+        messageHomeRowsStateProvider('group').future,
       );
+      final rows = state.items;
 
       expect(repo.requestedFilters, <String>['group']);
       expect(rows, hasLength(1));
@@ -32,9 +33,10 @@ void main() {
       );
       addTearDown(container.dispose);
 
-      final rows = await container.read(
-        messageHomeRowsProvider('notification').future,
+      final state = await container.read(
+        messageHomeRowsStateProvider('notification').future,
       );
+      final rows = state.items;
 
       expect(repo.requestedFilters, <String>['notification']);
       expect(rows.single.id, 'notification:app_msg_01');
@@ -49,14 +51,10 @@ void main() {
       );
       addTearDown(container.dispose);
 
-      final count = container.read(messageHomeUnreadBadgeCountProvider);
-      expect(count, isNull);
-
       final resolved = await container.read(
-        messageHomeRowsProvider('unread').future,
+        messageHomeRowsStateProvider('unread').future,
       );
-      expect(totalUnreadMessages(resolved), 2);
-      expect(container.read(messageHomeUnreadBadgeCountProvider), 2);
+      expect(totalUnreadMessages(resolved.items), 2);
     });
 
     test('会话已读刷新会失效所有 MessageHome filter', () async {
@@ -67,31 +65,30 @@ void main() {
       addTearDown(container.dispose);
 
       for (final filter in messageHomeFilters) {
-        await container.read(messageHomeRowsProvider(filter).future);
+        await container.read(messageHomeRowsStateProvider(filter).future);
       }
       expect(repo.requestedFilters, messageHomeFilters);
 
       repo.markConversationRead('conv_group_01');
       for (final filter in messageHomeFilters) {
         container.invalidate(messageHomeRowsStateProvider(filter));
-        container.invalidate(messageHomeRowsProvider(filter));
       }
       for (final filter in messageHomeFilters) {
-        await container.read(messageHomeRowsProvider(filter).future);
+        await container.read(messageHomeRowsStateProvider(filter).future);
       }
 
       expect(repo.requestedFilters, <String>[
         ...messageHomeFilters,
         ...messageHomeFilters,
       ]);
-      final allRows = await container.read(
-        messageHomeRowsProvider('all').future,
+      final allState = await container.read(
+        messageHomeRowsStateProvider('all').future,
       );
-      final directRows = await container.read(
-        messageHomeRowsProvider('direct').future,
+      final directState = await container.read(
+        messageHomeRowsStateProvider('direct').future,
       );
-      expect(allRows.single.unreadCount, 0);
-      expect(directRows.single.unreadCount, 0);
+      expect(allState.items.single.unreadCount, 0);
+      expect(directState.items.single.unreadCount, 0);
     });
 
     test('远端失败时用本机最近聊天兜底并标记 copyKey', () async {
@@ -101,7 +98,7 @@ void main() {
       );
       addTearDown(container.dispose);
 
-      await container.read(messageHomeRowsProvider('all').future);
+      await container.read(messageHomeRowsStateProvider('all').future);
       repo.failRequests = true;
       container.invalidate(messageHomeRowsStateProvider('all'));
 

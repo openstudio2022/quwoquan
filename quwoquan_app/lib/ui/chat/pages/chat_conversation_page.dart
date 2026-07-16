@@ -25,6 +25,7 @@ import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/app_permission_coordinator.dart';
 import 'package:quwoquan_app/core/services/microphone_permission_guard.dart';
+import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_notifier.dart';
@@ -34,6 +35,7 @@ import 'package:quwoquan_app/ui/chat/providers/message_home_rows_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/voice_offline_queue.dart';
 import 'package:quwoquan_app/ui/chat/providers/voice_player_manager.dart';
 import 'package:quwoquan_app/ui/chat/providers/voice_send_provider.dart';
+import 'package:quwoquan_app/ui/chat/models/chat_message_media_view_data.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/chat_message_bubble.dart';
 import 'package:quwoquan_app/ui/chat/widgets/voice/voice_recorder.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
@@ -165,7 +167,9 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage>
       return;
     }
     _realtimeAttached = true;
-    scheduleMicrotask(() => notifier.onEnterChatDetail(widget.conversationId));
+    scheduleMicrotask(
+      () => notifier.onEnterConversation(widget.conversationId),
+    );
   }
 
   void _detachRealtime() {
@@ -177,7 +181,7 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage>
     if (notifier == null) {
       return;
     }
-    scheduleMicrotask(notifier.onLeaveChatDetail);
+    scheduleMicrotask(notifier.onLeaveConversation);
   }
 
   @override
@@ -299,8 +303,9 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage>
     if (!_isGroupChat) {
       return _conversationDto?.memberCount ?? 0;
     }
-    final roster =
-        ref.read(conversationMembersProvider(widget.conversationId)).members;
+    final roster = ref
+        .read(conversationMembersProvider(widget.conversationId))
+        .members;
     if (roster.isNotEmpty) {
       return roster.length;
     }
@@ -560,7 +565,6 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage>
       return;
     }
     final category = _attachmentCategory(item);
-    final ownerId = ref.read(currentUserIdProvider).trim();
     final uploadManager = ref.read(mediaUploadManagerProvider);
     final queued = await uploadManager.enqueue(
       UploadTask(
@@ -568,17 +572,14 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage>
         category: category,
         contentType: _attachmentContentType(item),
         fileSize: await file.length(),
-        ownerId: ownerId.isNotEmpty ? ownerId : 'current_user',
-        fileName: item.name,
-        completionMetadata: <String, dynamic>{
-          'fileName': item.name,
-          'kind': category.name,
-        },
       ),
     );
     final uploaded = await _awaitUploadCompletion(uploadManager, queued);
     final cdnUrl = uploaded.cdnUrl?.trim() ?? '';
-    if (uploaded.status == UploadStatus.failed || cdnUrl.isEmpty) {
+    final assetId = uploaded.assetId?.trim() ?? '';
+    if (uploaded.status == UploadStatus.failed ||
+        cdnUrl.isEmpty ||
+        assetId.isEmpty) {
       await _showAttachmentFailure(
         title: UITextConstants.chatAttachmentUploadFailed,
         message: '附件上传未完成，请稍后再试。',
@@ -586,24 +587,21 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage>
       return;
     }
     final messageType = _attachmentMessageType(item);
-    final mediaPayload = <String, dynamic>{
-      'url': cdnUrl,
-      'fileName': item.name,
-      'mimeType': _attachmentContentType(item),
-      'fileSizeBytes': uploaded.fileSize,
-    };
-    if (messageType == 'image') {
-      mediaPayload['thumbnailUrl'] = cdnUrl;
-    }
-    if (messageType == 'video') {
-      mediaPayload['thumbnailUrl'] = cdnUrl;
-      mediaPayload['durationMs'] = 0;
-    }
+    final media = ChatMessageMediaViewData(
+      assetId: assetId,
+      deliveryUrl: cdnUrl,
+      mediaType: messageType,
+      fileName: item.name,
+      contentType: _attachmentContentType(item),
+      fileSizeBytes: uploaded.fileSize,
+      thumbnailUrl: messageType == 'image' || messageType == 'video'
+          ? cdnUrl
+          : null,
+    );
     final sent = await notifier.sendMessage(
       messageType,
       messageType == 'image' ? '' : item.name,
-      mediaUrl: cdnUrl,
-      media: mediaPayload,
+      media: media,
     );
     if (!sent) {
       await _showAttachmentFailure(
@@ -1234,6 +1232,8 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage>
                   CustomizableChatInputBar(
                     controller: _inputController,
                     focusNode: _inputFocusNode,
+                    textFieldKey: TestKeys.chatInputTextField,
+                    sendButtonKey: TestKeys.chatInputSendButton,
                     maxTextLength: 5000,
                     maxVisibleLines: 5,
                     onPickImages: _pickChatImages,

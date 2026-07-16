@@ -5,7 +5,7 @@ R-ID02 框架级 response_body 一致性门禁。
 校验链路（单一真相源 = contracts/metadata/**/service.yaml 的 api_routes[].response_body）：
   1. operation 的 response_body_kind ∈ {object, page, ack}；
   2. kind ∈ {object, page} 时 response_body 必填，且必须指向某 projection 的 read_model
-     （或 client_projection.dart_class）；该 projection 的生成 DTO 文件必须存在且定义对应 class；
+     （或 client_projection.dart_class）；若该 projection 绑定 App Dart 类型，类型文件必须存在且定义对应 class；
   3. kind == ack 时禁止声明 response_body；
   4. 生成产物 *_api_metadata.g.dart 的 operationToResponseModel / operationToResponseKind
      必须与 metadata 完全一致（无缺失、无多余、无错配）——防止「声明了没人消费」的死字段。
@@ -33,24 +33,30 @@ APP_LIB_DIR = ROOT / "quwoquan_app" / "lib"
 VALID_KINDS = {"object", "page", "ack"}
 
 
-def collect_projection_index() -> dict[str, tuple[str, str]]:
-    """read_model / dart_class -> (dart_class, output_path)。"""
-    index: dict[str, tuple[str, str]] = {}
+def collect_projection_index() -> dict[str, tuple[str, str, str]]:
+    """read_model / dart_class -> (dart_class, generated_path, external_path)。"""
+    index: dict[str, tuple[str, str, str]] = {}
     for path in sorted(METADATA_DIR.rglob("projections/*.yaml")):
         data = yaml.safe_load(path.read_text(encoding="utf-8"))
         if not isinstance(data, dict):
             continue
         cp = data.get("client_projection")
-        if not isinstance(cp, dict):
+        read_model = str(data.get("read_model") or "").strip()
+        if not read_model:
             continue
-        dart_class = str(cp.get("dart_class") or "").strip()
-        output_path = str(cp.get("output_path") or "").strip()
+        dart_class = ""
+        output_path = ""
+        external_path = ""
+        if isinstance(cp, dict):
+            dart_class = str(cp.get("dart_class") or "").strip()
+            output_path = str(cp.get("output_path") or "").strip()
+            external_path = str(cp.get("external_dart_path") or "").strip()
+        index[read_model] = (dart_class, output_path, external_path)
         if not dart_class:
             continue
-        read_model = str(data.get("read_model") or "").strip()
         if read_model:
-            index[read_model] = (dart_class, output_path)
-        index[dart_class] = (dart_class, output_path)
+            index[read_model] = (dart_class, output_path, external_path)
+        index[dart_class] = (dart_class, output_path, external_path)
     return index
 
 
@@ -133,7 +139,7 @@ def main() -> int:
                     errors.append(f"{domain}.{op}: kind=ack must not appear in operationToResponseModel")
                 continue
 
-            # object | page：必须指向存在 projection + 生成 DTO + dart 映射一致
+            # object | page：必须指向存在 projection；仅显式绑定 App 类型的投影进入 Dart 映射。
             if not body:
                 errors.append(f"{domain}.{op}: kind={kind} requires response_body read model reference ({src})")
                 continue
@@ -141,25 +147,42 @@ def main() -> int:
             if resolved is None:
                 errors.append(f"{domain}.{op}: response_body {body!r} is not a known projection read_model/dart_class")
                 continue
-            dart_class, output_path = resolved
+            dart_class, output_path, external_path = resolved
+            if not dart_class:
+                if op in dart_model:
+                    errors.append(
+                        f"{domain}.{op}: operationToResponseModel must not expose unbound projection {body!r}"
+                    )
+                continue
             if dart_model.get(op) != dart_class:
                 errors.append(
                     f"{domain}.{op}: operationToResponseModel metadata->{dart_class!r} "
                     f"dart={dart_model.get(op)!r}"
                 )
-            if output_path:
-                dto_file = APP_LIB_DIR / output_path
+            if output_path or external_path:
+                dto_file = ROOT / external_path if external_path else APP_LIB_DIR / output_path
                 if not dto_file.is_file():
-                    errors.append(f"{domain}.{op}: generated DTO file missing: {output_path}")
+                    source = external_path or output_path
+                    errors.append(f"{domain}.{op}: Dart contract file missing: {source}")
                 elif not re.search(rf"\bclass {re.escape(dart_class)}\b", dto_file.read_text(encoding="utf-8")):
-                    errors.append(f"{domain}.{op}: generated DTO {output_path} does not define class {dart_class}")
+                    source = external_path or output_path
+                    errors.append(f"{domain}.{op}: Dart contract {source} does not define class {dart_class}")
 
-        # 反向：dart 映射里出现的 op 必须在 metadata 中有对应声明（无孤儿/手改残留）
+        # 反向：dart 映射只允许来自显式 App 类型绑定的 metadata operation（无孤儿/手改残留）。
         for op in sorted(set(dart_model) | set(dart_kind)):
             if op not in ops:
                 errors.append(
                     f"{domain}.{op}: present in {dart_path.name} response maps but not declared "
                     f"in metadata service.yaml (stale codegen or hand-edit?)"
+                )
+                continue
+            if op not in dart_model:
+                continue
+            body = ops[op]["body"]
+            resolved = projection_index.get(body)
+            if resolved is None or not resolved[0]:
+                errors.append(
+                    f"{domain}.{op}: response map exposes {body!r} without an explicit App Dart type binding"
                 )
 
     if errors:

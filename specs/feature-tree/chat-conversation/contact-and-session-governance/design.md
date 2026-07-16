@@ -180,7 +180,7 @@ conversationCapabilityProvider(conversationId)
 composerUiProvider(conversationId)
 ```
 
-`ChatDetailPage` 不自行推导关注或拉黑状态。
+`ChatConversationPage` 不自行推导关注或拉黑状态。
 
 ## Metadata-first 落地顺序
 

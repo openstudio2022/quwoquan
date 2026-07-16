@@ -25,12 +25,12 @@ METADATA = ROOT / "quwoquan_service" / "contracts" / "metadata"
 SHARED = METADATA / "_shared" / "test_fixtures"
 MEDIA_ROOT = SHARED / "media"
 USER_POOL_PATH = SHARED / "user_pool.json"
-USER_POOL_MANIFEST_PATH = SHARED / "user_pool.manifest.travel_photo_1k_v1.json"
+CREATOR_POOL_PATH = SHARED / "user_pool.creator_pool.travel_photo_1k_v1.json"
 SOURCE_CATALOG_PATH = SHARED / "source_catalog.json"
 COMPOSITION_RULES_PATH = SHARED / "composition_rules.json"
 CREATOR_POOL_SEED = SHARED / "creator_pool" / "creator_travel_photo_1k_v1.seed.json"
 CREATOR_POOL_CANONICAL_REFS = ["creator_travel_photo_1k_v1", "creator_travel_photo_1k_v1_core"]
-PROFILE_PRESET_MANIFEST = ROOT / "quwoquan_data" / "publish" / "user_media" / "profile_presets" / "manifest.json"
+PROFILE_PRESET_MANIFEST = MEDIA_ROOT / "profile_presets.manifest.json"
 USER_SCENARIOS = METADATA / "user" / "test_fixtures" / "scenarios" / "user_scenarios.json"
 CONTENT_SCENARIOS = METADATA / "content" / "test_fixtures" / "scenarios" / "content_scenarios.json"
 CIRCLE_SCENARIOS = METADATA / "social" / "circle" / "test_fixtures" / "scenarios" / "circle_scenarios.json"
@@ -45,7 +45,12 @@ GROUP_RENDER_PACKAGE = "./tools/render_group_avatar"
 GAMMA_CURATED_EXPECTATIONS = {
     "content": {
         "fixturePath": "content/test_fixtures/scenarios/content_scenarios.gamma-curated.json",
-        "refs": ["content_discovery_core", "intersection_core", "home_showcase_core"],
+        "refs": [
+            "content_discovery_core",
+            "intersection_core",
+            "home_showcase_core",
+            "profile_share_interaction_core",
+        ],
     },
     "circle": {
         "fixturePath": "social/circle/test_fixtures/scenarios/circle_scenarios.gamma-curated.json",
@@ -181,15 +186,15 @@ def _circle_summary_overlay() -> dict[str, dict[str, Any]]:
         if not circle_id:
             continue
         owner_user_id = str(circle.get("ownerId") or "").strip()
-        member_user_ids: list[str] = []
+        member_persona_ids: list[str] = []
         for member in members_by_circle.get(circle_id) or []:
             if not isinstance(member, dict):
                 continue
-            user_id = str(member.get("userId") or "").strip()
-            if user_id:
-                member_user_ids.append(user_id)
-        if owner_user_id and owner_user_id not in member_user_ids:
-            member_user_ids.insert(0, owner_user_id)
+            persona_id = str(member.get("personaId") or "").strip()
+            if persona_id:
+                member_persona_ids.append(persona_id)
+        if owner_user_id and owner_user_id not in member_persona_ids:
+            member_persona_ids.insert(0, owner_user_id)
         primary_theme = str(circle.get("primaryTheme") or "").strip()
         secondary_themes = [str(value) for value in (circle.get("secondaryThemes") or []) if str(value).strip()]
         theme_tags = [str(value) for value in (circle.get("themeTags") or []) if str(value).strip()]
@@ -203,7 +208,10 @@ def _circle_summary_overlay() -> dict[str, dict[str, Any]]:
             "primaryTheme": primary_theme,
             "secondaryThemes": secondary_themes,
             "themeTags": theme_tags,
-            "memberUserIds": member_user_ids,
+            # user_pool is a cross-surface fixture projection whose field name is
+            # historical, but its source of truth is the CircleMembership
+            # persona identity. Never read the retired membership.userId field.
+            "memberUserIds": member_persona_ids,
         }
     return overlay
 
@@ -243,22 +251,11 @@ def _circle_media_overlay() -> dict[str, dict[str, Any]]:
 
 
 def load_effective_user_pool() -> dict[str, Any]:
-    pool = load_json(USER_POOL_PATH)
-    if not USER_POOL_MANIFEST_PATH.is_file():
-        return pool
-    manifest = load_json(USER_POOL_MANIFEST_PATH)
-    merge_rules = manifest.get("mergeRules") if isinstance(manifest.get("mergeRules"), dict) else {}
-    creator_rel = str(merge_rules.get("creatorPoolPath") or "").strip()
-    archive_rel = str(merge_rules.get("archivePath") or "").strip()
-    archive_path = METADATA / archive_rel if archive_rel else USER_POOL_PATH
-    creator_path = METADATA / creator_rel if creator_rel else None
-    archive_pool = load_json(archive_path) if archive_path.is_file() else pool
-    if creator_path is None or not creator_path.is_file():
-        return archive_pool
-    creator_pool = load_json(creator_path)
-    merged_pool = dict(archive_pool)
+    shared_pool = load_json(USER_POOL_PATH)
+    creator_pool = load_json(CREATOR_POOL_PATH)
+    combined_pool = dict(shared_pool)
     merged_users = _merge_users_by_id(
-        list(archive_pool.get("users") or []),
+        list(shared_pool.get("users") or []),
         list(creator_pool.get("users") or []),
     )
     profile_overlay = _profile_avatar_overlay()
@@ -277,8 +274,8 @@ def load_effective_user_pool() -> dict[str, Any]:
             user["circleThemeRefs"] = list(theme_tags)
         if not isinstance(user.get("groupPersonaMix"), list):
             user["groupPersonaMix"] = []
-    merged_pool["users"] = merged_users
-    circles_by_id = circle_map(archive_pool)
+    combined_pool["users"] = merged_users
+    circles_by_id = circle_map(shared_pool)
     for item in creator_pool.get("circles") or []:
         if not isinstance(item, dict):
             continue
@@ -287,19 +284,19 @@ def load_effective_user_pool() -> dict[str, Any]:
             circles_by_id[circle_id] = item
     for circle_id, summary in _circle_summary_overlay().items():
         circles_by_id.setdefault(circle_id, summary)
-    merged_pool["circles"] = list(circles_by_id.values())
-    circle_media = dict(archive_pool.get("circleMedia") or {})
+    combined_pool["circles"] = list(circles_by_id.values())
+    circle_media = dict(shared_pool.get("circleMedia") or {})
     for circle_id, bundle in (creator_pool.get("circleMedia") or {}).items():
         circle_media[str(circle_id)] = bundle
     for circle_id, bundle in _circle_media_overlay().items():
         circle_media.setdefault(circle_id, bundle)
-    merged_pool["circleMedia"] = circle_media
-    stats = dict(archive_pool.get("statistics") or {})
-    stats["archiveUserCount"] = len(list(archive_pool.get("users") or []))
+    combined_pool["circleMedia"] = circle_media
+    stats = dict(shared_pool.get("statistics") or {})
+    stats["sharedScenarioUserCount"] = len(list(shared_pool.get("users") or []))
     stats["creatorPoolUserCount"] = len(list(creator_pool.get("users") or []))
-    stats["mergedUserCount"] = len(merged_pool["users"])
-    merged_pool["statistics"] = stats
-    return merged_pool
+    stats["combinedFixtureUserCount"] = len(combined_pool["users"])
+    combined_pool["statistics"] = stats
+    return combined_pool
 
 
 def assert_pool_user(errors: list[str], users: dict[str, dict[str, Any]], context: str, user_id: object) -> dict[str, Any] | None:
@@ -625,12 +622,33 @@ def verify_circle_fixture(
             fail(errors, f"circle {circle_id}.themeTags must match user_pool.circles")
     for members in seed.get("members", {}).values():
         for member in members:
-            user = assert_pool_user(errors, users, "circle member", member.get("userId"))
+            persona_id = member.get("personaId")
+            if "userId" in member:
+                fail(errors, f"circle member {persona_id!r} must not expose retired userId")
+            user = assert_pool_user(errors, users, "circle member persona", persona_id)
             if user and member.get("avatarUrl") != resolved_user_media_key(user, "avatarObjectKey"):
-                fail(errors, f"circle member {member.get('userId')} avatarUrl must equal user_pool avatar")
+                fail(errors, f"circle member {persona_id} avatarUrl must equal user_pool avatar")
     for files in seed.get("files", {}).values():
         for item in files:
-            assert_media_ref(errors, f"circle file {item.get('_id')}.objectKey", item.get("objectKey"))
+            file_id = item.get("_id")
+            for retired_field in ("objectKey", "storageUrl", "uploadUrl"):
+                if retired_field in item:
+                    fail(errors, f"circle file {file_id}.{retired_field} must not cross the Media boundary")
+            uploader_persona_id = str(item.get("uploaderPersonaId") or "").strip()
+            assert_pool_user(
+                errors,
+                users,
+                f"circle file {file_id}.uploaderPersonaId",
+                uploader_persona_id,
+            )
+            asset_id = str(item.get("assetId") or "").strip()
+            file_type = str(item.get("fileType") or "").strip()
+            if file_type == "file" and not asset_id:
+                fail(errors, f"circle file {file_id}.assetId is required for file")
+            if file_type == "folder" and asset_id:
+                fail(errors, f"circle file {file_id}.assetId must be empty for folder")
+            if file_type not in {"file", "folder"}:
+                fail(errors, f"circle file {file_id}.fileType must be file or folder, got {file_type!r}")
 
 
 def direct_target_user(conversation_id: str, current_user_id: str, members: dict[str, list[dict[str, Any]]]) -> str:

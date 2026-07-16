@@ -1,0 +1,75 @@
+version: 1
+aggregate: DeviceRegistration
+
+entities:
+  UserDevice:
+    description: 设备绑定与推送 token
+    fields:
+      - name: id
+        type: string
+        constraints: [PK]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: userId
+        type: string
+        constraints: [FK_user_profiles_CASCADE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: deviceId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: write
+        ops_exposure: read
+
+      - name: platform
+        type: enum
+        enum_ref: Platform
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: write
+        ops_exposure: read
+
+      - name: pushToken
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: write
+        ops_exposure: drop
+
+      - name: appVersion
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: write
+        ops_exposure: read
+
+      - name: lastActiveAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+      - name: createdAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+    unique_constraints:
+      - columns: [userId, deviceId]
+        description: 同用户同设备不重复注册

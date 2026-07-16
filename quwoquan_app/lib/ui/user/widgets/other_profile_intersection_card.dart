@@ -1,12 +1,13 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
-import 'package:quwoquan_app/components/object_page/object_intersection_preview_card.dart';
+import 'package:quwoquan_app/components/object_page/object_intersection_provider.dart';
+import 'package:quwoquan_app/components/object_page/object_intersection_section.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
 
 /// TA 主页「我与TA的交集」预览卡。
 ///
-/// 视觉与我的主页交集入口同源：委托共享 [ObjectIntersectionPreviewCard]（objectType=user）。
+/// 视觉与我的主页交集入口同源：直接消费 [ObjectIntersectionSection]（objectType=user）。
 /// 无交集时不再整块消失，而是展示克制空态，避免主页 IA 断层。
 class OtherProfileIntersectionCard extends ConsumerWidget {
   const OtherProfileIntersectionCard({super.key, required this.userId});
@@ -22,13 +23,21 @@ class OtherProfileIntersectionCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return ObjectIntersectionPreviewCard(
-      objectId: userId,
-      objectType: 'user',
+    final query = ObjectIntersectionQuery(
+      objectAId: ref.watch(currentUserIdProvider),
+      objectAType: 'user',
+      objectBId: userId,
+      objectBType: 'user',
+    );
+    if (!query.isResolvable) {
+      return const SizedBox.shrink();
+    }
+    return ObjectIntersectionSection(
+      key: cardKey,
+      query: query,
       title: UITextConstants.profileWhyRecommendTitle,
+      isDark: CupertinoTheme.of(context).brightness == Brightness.dark,
       emptyText: UITextConstants.profileIntersectionEmptyOther,
-      referralSource: ReferralSource.authorProfile,
-      cardKey: cardKey,
       emptyKey: emptyKey,
     );
   }

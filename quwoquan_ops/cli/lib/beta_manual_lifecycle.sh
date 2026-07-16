@@ -11,10 +11,15 @@ BETA_MANUAL_STATE_DIR="${BETA_MANUAL_STATE_DIR:-${BETA_MANUAL_LOG_DIR}/state}"
 BETA_MANUAL_STOP_TIMEOUT_SECONDS="${BETA_MANUAL_STOP_TIMEOUT_SECONDS:-15}"
 BETA_MANUAL_KILL_EXISTING="${BETA_MANUAL_KILL_EXISTING:-0}"
 BETA_MANUAL_OWNER_ID="${BETA_MANUAL_OWNER_ID:-}"
+BETA_MANUAL_RUNTIME_LOG_PROCESS="${BETA_MANUAL_RUNTIME_LOG_PROCESS:-}"
 
 beta_manual_init() {
   if [[ -z "$BETA_MANUAL_LOG_DIR" ]]; then
     echo "BETA_MANUAL_LOG_DIR is required" >&2
+    exit 2
+  fi
+  if [[ -z "$BETA_MANUAL_RUNTIME_LOG_PROCESS" || ! -f "$BETA_MANUAL_RUNTIME_LOG_PROCESS" ]]; then
+    echo "BETA_MANUAL_RUNTIME_LOG_PROCESS is required" >&2
     exit 2
   fi
   BETA_MANUAL_STATE_DIR="${BETA_MANUAL_STATE_DIR:-${BETA_MANUAL_LOG_DIR}/state}"
@@ -68,7 +73,7 @@ beta_manual_start_process() {
   process_file="$(beta_manual_process_file "$name")"
   rm -f "$process_file"
 
-  python3 - "$process_file" "$log_file" "$cwd" "$@" <<'PY' &
+  python3 - "$process_file" "$log_file" "$cwd" "$BETA_MANUAL_RUNTIME_LOG_PROCESS" "$name" "$@" <<'PY' &
 import os
 import shlex
 import signal
@@ -80,11 +85,12 @@ from pathlib import Path
 process_file = Path(sys.argv[1])
 log_file = Path(sys.argv[2])
 cwd = sys.argv[3]
-argv = sys.argv[4:]
+log_wrapper = sys.argv[4]
+event = sys.argv[5]
+argv = sys.argv[6:]
 
 log_file.parent.mkdir(parents=True, exist_ok=True)
 process_file.parent.mkdir(parents=True, exist_ok=True)
-log = log_file.open("wb", buffering=0)
 child: subprocess.Popen[bytes] | None = None
 stopping = False
 
@@ -141,22 +147,15 @@ signal.signal(signal.SIGTERM, handle_signal)
 signal.signal(signal.SIGINT, handle_signal)
 signal.signal(signal.SIGHUP, handle_signal)
 
-try:
-    child = subprocess.Popen(
-        argv,
-        cwd=cwd,
-        stdout=log,
-        stderr=subprocess.STDOUT,
-        start_new_session=True,
-    )
-    write_record()
-    exit_code = child.wait()
-    raise SystemExit(exit_code)
-finally:
-    try:
-        log.close()
-    finally:
-        pass
+child = subprocess.Popen(
+    [sys.executable, log_wrapper, "--log-file", str(log_file), "--event", event, "--", *argv],
+    cwd=cwd,
+    stdout=subprocess.DEVNULL,
+    stderr=subprocess.DEVNULL,
+    start_new_session=True,
+)
+write_record()
+raise SystemExit(child.wait())
 PY
   BETA_MANUAL_LAST_WRAPPER_PID="$!"
 

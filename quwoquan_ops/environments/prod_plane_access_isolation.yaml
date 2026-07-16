@@ -69,10 +69,7 @@ planes:
     governedWorkloads:
       - seed-box
       - recommendation-service
-      - entity-service
-      - tag-service
       - product-ops-service
-      - assistant-service
     rootlessComposeTemplate: quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml
     rootlessGovernedComposeServices:
       - rec-model-service
@@ -99,14 +96,14 @@ planes:
       envFile: stack.env
       configRoot: runtime/config-root
       caddyfile: runtime/Caddyfile
-      mediaRoot: /opt/quwoquan/gamma/.qwq_output/env/gamma/local/gamma-local/media
+      mediaStateRef: process/volumes/media
       modelCacheRoot: runtime/model-cache
     appliesToStages: [gray-initial, carry-on, full]
     summary: >
       当前 prod-hosted 首波 rootless 接管按 onebox split-services 真实运行面落地：
       governed compose services = rec-model/content/chat/user/assistant/product-ops/tag/entity，
       support compose services = gamma-proxy；数据面继续复用现有 host 上的 19400/19410/19420 服务，不在 service plane 内复制一套空 DB。
-      媒体面复用现有 host `/opt/quwoquan/gamma/.qwq_output/env/gamma/local/gamma-local/media`，避免切换到空 runtime/media。
+      媒体面只消费 prod-hosted 自有持久卷；禁止复用 gamma-local 输出或把可清理 runtime 目录当作媒体真相源。
 
   - plane: data
     account: prod-data-svc

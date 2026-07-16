@@ -54,7 +54,7 @@ python3 quwoquan_app/scripts/runtime/verify_module_package_mapping.py
 python3 quwoquan_service/scripts/recommendation/verify_reliable_task_catalog.py
 python3 quwoquan_service/scripts/recommendation/verify_reliable_task_retention_policy.py
 
-SERVICE_YAML="$ROOT/quwoquan_service/contracts/metadata/recommendation/rec_model/service.yaml"
+SERVICE_YAML="$ROOT/quwoquan_service/contracts/metadata/recommendation/model_release/service.yaml"
 GO_CLIENT="$ROOT/quwoquan_service/services/content-service/internal/infrastructure/recommendation/http_model_client.go"
 PY_API="$ROOT/quwoquan_service/services/rec-model-service/api/score.py"
 
@@ -62,21 +62,47 @@ PY_API="$ROOT/quwoquan_service/services/rec-model-service/api/score.py"
 [[ -f "$GO_CLIENT" ]] || { echo "[verify] FAIL: missing $GO_CLIENT" >&2; exit 1; }
 [[ -f "$PY_API" ]] || { echo "[verify] FAIL: missing $PY_API" >&2; exit 1; }
 
-for kw in "domain: recommendation" "path: /v1/score" "path: /health"; do
-  if ! grep -n "$kw" "$SERVICE_YAML" >/dev/null 2>&1; then
-    echo "[verify] FAIL: service contract missing keyword '$kw'" >&2
+ruby -ryaml -e '
+  def fail(msg)
+    STDERR.puts("[verify] FAIL: #{msg}")
+    exit 1
+  end
+
+  metadata = YAML.load_file(ARGV.fetch(0)) || {}
+  service = metadata["service"] || {}
+  fail("recommendation service domain drifted") unless service["domain"] == "recommendation"
+  routes = metadata["api_routes"] || []
+  expected = {
+    "ScoreRecommendationCandidates" => "/internal/v1/recommendation/model-releases:score",
+    "BatchScoreRecommendationCandidates" => "/internal/v1/recommendation/model-releases:batch-score",
+  }
+  expected.each do |operation, path|
+    route = routes.find { |candidate| candidate["operation"] == operation }
+    fail("missing #{operation}") unless route
+    fail("#{operation} path drifted") unless route["path"] == path
+    fail("#{operation} must require service principal") unless route.dig("security", "principal") == "service"
+    scopes = route.dig("authorization", "scopes") || []
+    fail("#{operation} missing recommendation.model.score") unless scopes.include?("recommendation.model.score")
+  end
+' "$SERVICE_YAML"
+
+for kw in 'recommendation.model_release.ScoreRecommendationCandidates' 'operationsecurity.ForDomain("recommendation")' 'Authorization'; do
+  if ! grep -F -n "$kw" "$GO_CLIENT" >/dev/null 2>&1; then
+    echo "[verify] FAIL: content-service generated scoring client missing '$kw'" >&2
     exit 1
   fi
 done
 
-if ! grep -n "/v1/score" "$GO_CLIENT" >/dev/null 2>&1; then
-  echo "[verify] FAIL: content-service recommendation client route drifted from /v1/score" >&2
-  exit 1
-fi
+for kw in 'SCORE_RECOMMENDATION_CANDIDATES_PATH' 'BATCH_SCORE_RECOMMENDATION_CANDIDATES_PATH' 'ServiceTokenVerifier'; do
+  if ! grep -F -n "$kw" "$PY_API" >/dev/null 2>&1; then
+    echo "[verify] FAIL: recommendation-service generated scoring route missing '$kw'" >&2
+    exit 1
+  fi
+done
 
-for kw in '@router.post("/v1/score"' '@router.get("/health"'; do
-  if ! grep -n "$kw" "$PY_API" >/dev/null 2>&1; then
-    echo "[verify] FAIL: recommendation-service API route drifted: missing $kw" >&2
+for retired in '/v1/score' '/v1/model/reload' '/v1/model/status'; do
+  if grep -F -n "$retired" "$PY_API" >/dev/null 2>&1; then
+    echo "[verify] FAIL: recommendation-service retains retired route '$retired'" >&2
     exit 1
   fi
 done

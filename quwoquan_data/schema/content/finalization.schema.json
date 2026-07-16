@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "5.review finalization",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "stage",
+    "executionId",
+    "executionBinding",
+    "draftRef",
+    "finalRef",
+    "draftSha256",
+    "finalSha256",
+    "normalizationActions"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "quwoquan_data.finalization/1" },
+    "stage": { "const": "5.review" },
+    "executionId": { "type": "string", "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(canary|m1|m2|m3)-[0-9]{3,}$" },
+    "executionBinding": { "enum": ["frozen", "standalone"] },
+    "draftRef": { "type": "string", "minLength": 1 },
+    "finalRef": { "type": "string", "minLength": 1 },
+    "draftSha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "finalSha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "normalizationActions": { "type": "array", "items": { "type": "string" } }
+  }
+}

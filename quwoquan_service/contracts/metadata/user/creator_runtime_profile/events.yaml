@@ -1,0 +1,5 @@
+version: 1
+entity: CreatorRuntimeProfile
+
+# immutable release 同步是受控 reconcile，不发布业务领域事件。
+events: []

@@ -97,6 +97,11 @@ class _AuthenticatedAuthSessionStore implements AuthSessionStore {
   }) async {}
 
   @override
+  Future<void> saveRefreshedAccountHint(
+    Map<String, dynamic>? accountHint,
+  ) async {}
+
+  @override
   Future<void> updateActiveSubAccount(String subAccountId) async {}
 
   @override

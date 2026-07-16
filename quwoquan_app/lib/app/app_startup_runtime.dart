@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:developer' as developer;
 
 import 'package:flutter/widgets.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
@@ -6,6 +8,7 @@ import 'package:quwoquan_app/assistant/observability/logging/app_exception_telem
 import 'package:quwoquan_app/core/emoji/emoji_analytics.dart';
 import 'package:quwoquan_app/core/emoji/emoji_repository.dart';
 import 'package:quwoquan_app/core/platform/startup_native_bridge.dart';
+import 'package:quwoquan_app/core/platform/startup_process_clock.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 typedef ProviderReader = Object? Function(dynamic provider);
@@ -20,16 +23,21 @@ final class AppStartupRuntime {
   bool _bootstrapStarted = false;
   bool _postFirstFrameWarmupScheduled = false;
   bool _homeReadyReported = false;
+  bool _nativeSegmentsHydrated = false;
 
   int? _runAppMs;
   int? _firstFrameMs;
   int? _welcomeShownMs;
   int? _welcomeWindowInitMs;
   int? _welcomeCompletedMs;
+  int? _shellFirstPaintMs;
   int? _homeFeedWarmMs;
   int? _homeReadyMs;
   int? _androidActivityOnCreateMs;
   int? _androidFlutterEngineConfiguredMs;
+  int? _nativeElapsedSinceProcessStartMs;
+  int? _dartElapsedAtNativeHydrationMs;
+  String _deadlineOrigin = 'fallbackDart';
 
   static const StartupTimingsNativeBridge _nativeTimingsBridge =
       MethodChannelStartupTimingsNativeBridge();
@@ -40,6 +48,12 @@ final class AppStartupRuntime {
     }
     _bootstrapStarted = true;
     _stopwatch.start();
+    final platformElapsed = readPlatformStartupElapsedMs();
+    if (platformElapsed != null) {
+      _nativeElapsedSinceProcessStartMs = platformElapsed;
+      _dartElapsedAtNativeHydrationMs = _elapsedMs;
+      _deadlineOrigin = readPlatformStartupDeadlineOrigin() ?? 'fallbackDart';
+    }
   }
 
   void markRunAppCalled() {
@@ -55,9 +69,10 @@ final class AppStartupRuntime {
   }
 
   Future<void> hydrateNativeProcessSegments() async {
-    if (_androidFlutterEngineConfiguredMs != null) {
+    if (_nativeSegmentsHydrated) {
       return;
     }
+    _nativeSegmentsHydrated = true;
     final segments = await _nativeTimingsBridge.readProcessSegments();
     if (segments == null) {
       return;
@@ -65,7 +80,27 @@ final class AppStartupRuntime {
     _androidActivityOnCreateMs = segments.androidActivityOnCreateMs;
     _androidFlutterEngineConfiguredMs =
         segments.androidFlutterEngineConfiguredMs;
+    _nativeElapsedSinceProcessStartMs = segments.elapsedSinceProcessStartMs;
+    _dartElapsedAtNativeHydrationMs = _elapsedMs;
+    _deadlineOrigin = segments.deadlineOrigin?.trim().isNotEmpty ?? false
+        ? segments.deadlineOrigin!.trim()
+        : 'fallbackDart';
   }
+
+  Duration get elapsedSinceProcessStart {
+    final nativeElapsed = _nativeElapsedSinceProcessStartMs;
+    final dartHydrationElapsed = _dartElapsedAtNativeHydrationMs;
+    if (nativeElapsed != null && dartHydrationElapsed != null) {
+      final sinceHydration = (_elapsedMs - dartHydrationElapsed).clamp(
+        0,
+        1 << 30,
+      );
+      return Duration(milliseconds: nativeElapsed + sinceHydration);
+    }
+    return Duration(milliseconds: _elapsedMs);
+  }
+
+  String get deadlineOrigin => _deadlineOrigin;
 
   void markWelcomeWindowInitStarted() {
     _welcomeWindowInitMs ??= _elapsedMs;
@@ -73,6 +108,10 @@ final class AppStartupRuntime {
 
   void markWelcomeCompleted() {
     _welcomeCompletedMs ??= _elapsedMs;
+  }
+
+  void markShellFirstPainted() {
+    _shellFirstPaintMs ??= elapsedSinceProcessStart.inMilliseconds;
   }
 
   void markHomeFeedWarm() {
@@ -113,6 +152,21 @@ final class AppStartupRuntime {
     String eventName = 'app_startup_phase',
     Map<String, dynamic> properties = const <String, dynamic>{},
   }) {
+    final eventProperties = <String, dynamic>{
+      ..._snapshotProperties(phase: phase),
+      ...properties,
+    };
+    developer.log(
+      <String>[
+        eventName,
+        for (final entry in eventProperties.entries)
+          '${entry.key}=${entry.value}',
+      ].join(' '),
+      name: 'QWQStartup',
+    );
+    recordPlatformStartupEvent(
+      jsonEncode(<String, dynamic>{'eventName': eventName, ...eventProperties}),
+    );
     try {
       final analytics = read(analyticsProvider) as AnalyticsService;
       unawaited(
@@ -120,10 +174,7 @@ final class AppStartupRuntime {
           AnalyticsEvent(
             eventType: 'app_startup',
             eventName: eventName,
-            properties: <String, dynamic>{
-              ..._snapshotProperties(phase: phase),
-              ...properties,
-            },
+            properties: eventProperties,
           ),
         ),
       );
@@ -176,10 +227,13 @@ final class AppStartupRuntime {
         'welcomeWindowInitMs': _welcomeWindowInitMs,
       if (_welcomeCompletedMs != null)
         'welcomeCompletedMs': _welcomeCompletedMs,
+      if (_shellFirstPaintMs != null) 'shellFirstPaintMs': _shellFirstPaintMs,
       if (_androidActivityOnCreateMs != null)
         'androidActivityOnCreateMs': _androidActivityOnCreateMs,
       if (_androidFlutterEngineConfiguredMs != null)
         'androidFlutterEngineConfiguredMs': _androidFlutterEngineConfiguredMs,
+      'deadlineOrigin': _deadlineOrigin,
+      'elapsedSinceProcessStartMs': elapsedSinceProcessStart.inMilliseconds,
       if (_homeFeedWarmMs != null) 'homeFeedWarmMs': _homeFeedWarmMs,
       if (_homeReadyMs != null) 'homeReadyMs': _homeReadyMs,
       'elapsedMs': _elapsedMs,

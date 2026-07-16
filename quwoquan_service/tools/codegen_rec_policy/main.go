@@ -16,7 +16,8 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"gopkg.in/yaml.v3"
+	contractcodegen "quwoquan_service/internal/metadata/codegen"
+	"quwoquan_service/internal/metadata/validate"
 )
 
 func main() {
@@ -25,14 +26,16 @@ func main() {
 	flag.StringVar(&outDir, "out-dir", "runtime/recpolicy", "Go output directory (recpolicy package)")
 	flag.Parse()
 
-	src := filepath.Join(metadataDir, "recommendation", "rec_model", "policy.yaml")
-	raw, err := os.ReadFile(src)
+	source, err := contractcodegen.NewSource(metadataDir, validate.ProfileBaseline)
+	must(err)
+	const sourcePath = "recommendation/rec_model/policy.yaml"
+	raw, err := source.Content(sourcePath)
 	must(err)
 
 	var meta struct {
 		PolicyVersion string `yaml:"policyVersion"`
 	}
-	must(yaml.Unmarshal(raw, &meta))
+	must(source.Decode(sourcePath, &meta))
 	if meta.PolicyVersion == "" {
 		fail("policy.yaml missing policyVersion")
 	}

@@ -7,7 +7,7 @@ import (
 	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
 )
 
-func TestNormalizePostObjectAnchorsPrefersCanonicalAndDropsRetiredRefs(t *testing.T) {
+func TestNormalizePostObjectAnchorsKeepsOnlyExplicitRegisteredReferences(t *testing.T) {
 	post := &postmodel.Post{
 		PrimaryHomepageId:   "homepage_sight_west_lake",
 		PrimaryHomepageType: "sight",
@@ -23,8 +23,7 @@ func TestNormalizePostObjectAnchorsPrefersCanonicalAndDropsRetiredRefs(t *testin
 		"primaryHomepageId":   "homepage_sight_west_lake",
 		"primaryHomepageType": "sight",
 		"primaryHomepageSnapshot": map[string]any{
-			"title":             "西湖景区",
-			"canonicalEntityId": "entity:sight:west_lake",
+			"title": "西湖景区",
 		},
 		"entityRefs": []any{
 			"sight/homepage_sight_west_lake",
@@ -34,20 +33,19 @@ func TestNormalizePostObjectAnchorsPrefersCanonicalAndDropsRetiredRefs(t *testin
 		},
 	})
 
-	if got, want := post.CanonicalEntityId, "entity:sight:west_lake"; got != want {
-		t.Fatalf("CanonicalEntityId = %q, want %q", got, want)
-	}
 	wantRefs := []string{"entity:sight:west_lake"}
 	if !reflect.DeepEqual(post.EntityRefs, wantRefs) {
 		t.Fatalf("EntityRefs = %#v, want %#v", post.EntityRefs, wantRefs)
 	}
 }
 
-func TestCanonicalEntityIDFromHomepageInfersFromHomepageID(t *testing.T) {
-	if got, want := canonicalEntityIDFromHomepage("homepage_sight_west_lake", ""), "entity:sight:west_lake"; got != want {
-		t.Fatalf("canonicalEntityIDFromHomepage inferred %q, want %q", got, want)
-	}
-	if got := canonicalEntityIDFromHomepage("homepage_unknown_demo", ""); got != "" {
-		t.Fatalf("canonicalEntityIDFromHomepage should stay empty for unknown type, got %q", got)
+func TestNormalizePostObjectAnchorsDoesNotInferCrossContextReferences(t *testing.T) {
+	post := &postmodel.Post{}
+	normalizePostObjectAnchors(post, map[string]any{
+		"primaryHomepageId":   "homepage_sight_west_lake",
+		"primaryHomepageType": "sight",
+	})
+	if len(post.EntityRefs) != 0 {
+		t.Fatalf("cross-context references must be explicit, got %#v", post.EntityRefs)
 	}
 }

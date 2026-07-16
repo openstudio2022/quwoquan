@@ -5,19 +5,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/app/app_startup_runtime.dart';
 import 'package:quwoquan_app/app/navigation/app_router_module.dart';
 import 'package:quwoquan_app/app/startup_screen_util_scope.dart';
-import 'package:quwoquan_app/cloud/runtime/startup_deferred_plugins.dart';
+import 'package:quwoquan_app/core/platform/startup_deferred_plugins.dart';
 import 'package:quwoquan_app/ui/welcome/pages/welcome_screen.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('startup_ttid local_contract', () {
-    test(
-      'welcome screen defers animation controllers until after first frame',
-      () {
-        expect(const WelcomeScreen(onFinish: _noop).runtimeType, WelcomeScreen);
-      },
-    );
+    test('welcome screen is available without eager router construction', () {
+      expect(const WelcomeScreen(onFinish: _noop).runtimeType, WelcomeScreen);
+    });
 
     test('app router library is not loaded before explicit ensure', () {
       expect(isAppRouterLibraryLoaded, isFalse);
@@ -29,6 +26,8 @@ void main() {
       );
       expect(props, containsPair('phase', 'contract_probe'));
       expect(props.keys, contains('elapsedMs'));
+      expect(props.keys, contains('elapsedSinceProcessStartMs'));
+      expect(props.keys, contains('deadlineOrigin'));
     });
 
     test(

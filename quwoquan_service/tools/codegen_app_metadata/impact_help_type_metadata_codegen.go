@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -18,10 +17,11 @@ import (
 // + helpType/iconKey closed sets from impact_help_type_registry.yaml.
 func writeImpactHelpTypeMetadata(appDir, metadataDir string) error {
 	contractPath := filepath.Join(metadataDir, "recommendation", "rec_model", "impact_help_type_registry.yaml")
-	if _, err := os.Stat(contractPath); err != nil {
+	raw, err := readMetadataDocument(contractPath)
+	if err != nil {
 		return fmt.Errorf("impact help type registry: %w", err)
 	}
-	registry, err := recimpactmeta.Read(contractPath)
+	registry, err := recimpactmeta.Parse(raw)
 	if err != nil {
 		return fmt.Errorf("read impact help type registry: %w", err)
 	}

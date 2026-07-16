@@ -36,7 +36,7 @@ domain_acceptance:
       - file: quwoquan_app/test/local_contract/ui/user/author_impact_card__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/circle/widgets/circle_shell_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
-      - file: quwoquan_data/tests/local_contract/produce/test_homepage_introduction_seed__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/post/test_homepage_introduction_seed__behavior__functional__local_contract_test.py
       - file: quwoquan_service/services/entity-service/tests/api_integration/homepage_handler__api_integration_test.go
       - file: quwoquan_app/test/user_acceptance/pages/user/user_profile/user_profile_page__user_acceptance_test.dart
       - file: quwoquan_app/test/user_acceptance/pages/circle/circle_detail/circle_detail_page__user_acceptance_test.dart

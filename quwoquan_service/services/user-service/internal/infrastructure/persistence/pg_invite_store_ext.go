@@ -7,13 +7,16 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"quwoquan_service/services/user-service/internal/domain/user/model"
-	"quwoquan_service/services/user-service/internal/domain/user/repository"
+	repository "quwoquan_service/services/user-service/internal/domain/user/ports"
 )
 
 // PgInviteStore extends pgInviteStoreBase with domain-specific queries.
 type PgInviteStore struct{ pgInviteStoreBase }
 
-var _ repository.InviteRepository = (*PgInviteStore)(nil)
+var (
+	_ repository.InviteReader = (*PgInviteStore)(nil)
+	_ repository.InviteWriter = (*PgInviteStore)(nil)
+)
 
 func NewPgInviteStore(pool *pgxpool.Pool) *PgInviteStore {
 	return &PgInviteStore{pgInviteStoreBase{pool: pool}}

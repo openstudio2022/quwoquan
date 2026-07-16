@@ -7,41 +7,339 @@ node:
   parent_domain_service: user-identity-profile-relationship
   parent_business_capability: profile-homepage-redesign
 scope:
-  summary: owner subaccount homepage unification 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: 我的主页互动转发双向列表与 owner/sub-account 隔离验收。
+  in_scope:
+  - 互动二级控制行
+  - type=share received/initiated 列表
+  - cursor 分页、双方向缓存、seen/read、impact、隐私与观测
+  out_of_scope:
+  - 主页头部与一级 Tab
+  - 点赞、评论、浏览列表实现
+  - 独立转发页面与公开转发资产
 gwt_acceptance:
   GWT1:
-    title: owner subaccount homepage unification GWT
+    title: 互动导航保持两层且只改转发
     given:
-    - 前置条件明确。
+    - 当前用户进入我的主页互动 Tab。
     when:
-    - 用户或系统动作发生。
+    - 二级控制行完成渲染并选择转发。
     then:
-    - 可观察结果符合预期。
+    - 一级保持记录/互动/足迹。
+    - 二级为点赞/评论/转发/浏览和收到的/我发起的。
+    - 页面不存在全部、互动明细、第三行导航或独立转发页。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
+    - 点赞、评论、浏览哨兵测试证明其列表和点击行为未变。
+    edge_cases:
+    - compact 宽度下类型筛选可横滑且方向选择器不重叠。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/user/user_profile/ui_config.yaml
+    performance_points:
+    - 缓存方向切换下一帧显示。
     tests:
       planned: []
-      recorded: []
-    status: pending
+      recorded:
+      - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_share_interaction__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/journeys/user/my_profile_journey__user_acceptance_test.dart
+    status: implemented
     test_evidence:
       primary:
       - layer: local_contract
-        suite: contract
+        suite: profile_share_widget_contract
         cases:
-        - local_contract.user_identity_profile_relationship.profile_homepage_redesign.owner_subaccount_homepage_unification.contract
+        - local_contract.user.profile.interaction.share.navigation
         envs: &id001
         - local
-      - layer: local_contract
-        suite: gwt1_local_contract
-        cases:
-        - local_contract.user_identity_profile_relationship.profile_homepage_redesign.owner_subaccount_homepage_unification.gwt1_local_contract
-        envs: *id001
+        test_object: widget
+        quality_facet: experience
       supporting: []
+    notes: []
+  GWT2:
+    title: 收到与我发起文案和行结构正确
+    given:
+    - received 与 initiated 均存在记录、讨论、附言和无附言 fixture。
+    when:
+    - 用户分别查看两个方向。
+    then:
+    - received 显示“用户名 转发了你的记录/讨论”。
+    - initiated 显示“你转发了 用户名 的记录/讨论”。
+    - 附言最多两行，每次转发独立成行。
+    done_when:
+    - 行高、头像、角标、预览、间距、字号、分割线和 44pt 热区符合 token 契约。
+    edge_cases:
+    - 超长昵称、附言和标题省略但不挤压预览。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/user/user_profile/projections/profile_interaction_activity_wire.yaml
+    performance_points: []
+    tests:
+      planned: []
+      recorded:
+      - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_share_interaction__local_contract_test.dart
+    status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: profile_share_row_contract
+        cases:
+        - local_contract.user.profile.interaction.share.row_semantics
+        envs: *id001
+        test_object: widget
+        quality_facet: functional
+      supporting: []
+    notes: []
+  GWT3:
+    title: 预览与失效降级完整
+    given:
+    - 图片、视频、文本、讨论和四种 availability fixture 已加载。
+    when:
+    - 转发行或媒体加载失败被渲染。
+    then:
+    - 图片使用 aspectFill，视频只显示封面和播放图标，文本和讨论最多两行。
+    - deleted/private/reviewing/author_deactivated 显示明确文本，不显示空白灰图或加载失败大块。
+    done_when:
+    - 所有目标仍保留时间、转发关系和可进入的用户身份。
+    edge_cases:
+    - 图片请求失败后降级为文本预览。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/content/post/fields.yaml
+    performance_points: []
+    tests:
+      planned: []
+      recorded:
+      - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_share_interaction__local_contract_test.dart
+    status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: profile_share_preview_contract
+        cases:
+        - local_contract.user.profile.interaction.share.preview
+        envs: *id001
+        test_object: widget
+        quality_facet: reliability
+      supporting: []
+    notes: []
+  GWT4:
+    title: received 未读和真实影响归因
+    given:
+    - received 行具有 unread、可选 impact 文案与可选 evidence destination。
+    when:
+    - 行可见超过 50% 持续 1 秒，或用户打开详情/影响明细。
+    then:
+    - 逐条上报 impression 与 seen，打开详情逐条 read。
+    - 只有服务端完整返回 impactPrimaryText 才展示，且必须同时有 impactDeepLink 才可点击。
+    - initiated 不显示未读、已读或影响数据。
+    done_when:
+    - 切换到 received 不会批量标记全部已读。
+    edge_cases:
+    - 快速滚过、未满 1 秒和重复曝光不提交 seen。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/content/post/service.yaml
+    performance_points:
+    - seen/read mutation 幂等。
+    tests:
+      planned: []
+      recorded:
+      - file: quwoquan_service/services/content-service/internal/application/post/profile_share_interaction__local_contract_test.go
+      - file: quwoquan_service/services/content-service/internal/adapters/http/profile_share_interaction__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/api_integration/profile_share_interaction__api_integration_test.go
+    status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: profile_share_read_state_contract
+        cases:
+        - local_contract.user.profile.interaction.share.read_state
+        envs: *id001
+        test_object: provider
+        quality_facet: observability
+      supporting:
+      - layer: api_integration
+        suite: profile_share_api
+        cases:
+        - api_integration.content.profile_share.read_state
+        envs: &id002
+        - beta
+        - gamma
+        test_object: api_operation
+        quality_facet: contract
+    notes: []
+  GWT5:
+    title: 双方向缓存分页和竞态安全
+    given:
+    - received 与 initiated 各有超过 20 条稳定排序事件。
+    when:
+    - 用户切换方向、滚动、预加载、下拉刷新并快速来回切换。
+    then:
+    - 两个方向分别保存 items/cursor/scrollOffset/loading/lastFetchedAt/error。
+    - 缓存 5 分钟内立即显示，过期后台刷新，旧 generation 不覆盖当前结果。
+    - 距尾 5 条预加载，刷新只作用当前方向。
+    done_when:
+    - cursor 全序无重复遗漏，底部状态完整。
+    edge_cases:
+    - 同一时间戳使用 interactionId 稳定打破平局。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/content/post/service.yaml
+    performance_points:
+    - 20 条 API p95 不高于 500ms。
+    - App 首批数据 p95 不高于 1.5s。
+    tests:
+      planned: []
+      recorded:
+      - file: quwoquan_app/test/local_contract/ui/user/providers/share_interaction_provider__local_contract_test.dart
+      - file: quwoquan_service/services/content-service/internal/application/post/profile_share_interaction__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/api_integration/profile_share_interaction__api_integration_test.go
+    status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: profile_share_state_contract
+        cases:
+        - local_contract.user.profile.interaction.share.cache_pagination
+        envs: *id001
+        test_object: provider
+        quality_facet: performance
+      supporting:
+      - layer: api_integration
+        suite: profile_share_api
+        cases:
+        - api_integration.content.profile_share.cursor
+        envs: *id002
+        test_object: api_operation
+        quality_facet: data_consistency
+    notes: []
+  GWT6:
+    title: 点击解析优先级一致
+    given:
+    - shareRecord、原目标和失效目标三类 fixture 已准备。
+    when:
+    - 用户点击整行、预览、头像、昵称或影响结果。
+    then:
+    - 行和预览统一按可用 shareRecord、可用原目标、失效不跳转解析。
+    - 头像和昵称按方向进入 actor 或 counterpart 主页。
+    - 影响结果只进入 metadata 枚举的传播来源明细。
+    done_when:
+    - 不存在同一行两条不同内容跳转路径。
+    edge_cases:
+    - deep link 落地再次校验当前账号权限。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/_shared/ui_surfaces.yaml
+    performance_points: []
+    tests:
+      planned: []
+      recorded:
+      - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_share_interaction__local_contract_test.dart
+    status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: profile_share_navigation_contract
+        cases:
+        - local_contract.user.profile.interaction.share.navigation_priority
+        envs: *id001
+        test_object: route
+        quality_facet: security
+      supporting: []
+    notes: []
+  GWT7:
+    title: 私有列表与子账号隔离
+    given:
+    - 当前账号具有多个 sub-account，另有他人主页和拉黑关系 fixture。
+    when:
+    - 用户访问他人主页、切换 sub-account 或直接调用/deep link 到转发互动。
+    then:
+    - 他人主页不展示 share 筛选且不发请求。
+    - 服务端只允许 owner 的 active sub-account 读取，越权返回结构化 401/403。
+    - 分身切换立即清空旧缓存，拉黑与匿名身份按服务端投影处理。
+    done_when:
+    - 我发起的转发不进入公开主页、搜索索引、交集或影响数字。
+    edge_cases:
+    - 旧请求在身份切换后完成也不能写入新身份状态。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/content/post/errors.yaml
+    performance_points:
+    - 越权读取为 0。
+    tests:
+      planned: []
+      recorded:
+      - file: quwoquan_app/test/local_contract/ui/user/providers/share_interaction_provider__local_contract_test.dart
+      - file: quwoquan_service/services/content-service/internal/adapters/http/profile_share_interaction__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/api_integration/profile_share_interaction__api_integration_test.go
+    status: implemented
+    test_evidence:
+      primary:
+      - layer: api_integration
+        suite: profile_share_security
+        cases:
+        - api_integration.content.profile_share.owner_isolation
+        envs: *id002
+        test_object: api_operation
+        quality_facet: security
+      supporting:
+      - layer: user_acceptance
+        suite: profile_share_journey
+        cases:
+        - user_acceptance.user.profile.interaction.share.identity_switch
+        envs:
+        - gamma_local
+        test_object: page
+        quality_facet: experience
+      - layer: local_contract
+        suite: profile_share_identity_cache_contract
+        cases:
+        - local_contract.user.profile.interaction.share.identity_switch
+        envs: *id001
+        test_object: provider
+        quality_facet: security
+    notes: []
+  GWT8:
+    title: 转发列表观测闭环
+    given:
+    - 用户进入转发、切方向、曝光、点击、刷新和分页。
+    when:
+    - 对应动作发生。
+    then:
+    - 上报规格定义的 8 个 share interaction 事件。
+    - 公共参数包含 subAccountId/direction/interactionId/targetKind/targetId/shareRecordId/source。
+    - 列表浏览事件不复用执行转发行为事件。
+    done_when:
+    - 指标可按方向、目标类型、缓存命中、失败码和环境聚合。
+    edge_cases:
+    - 观测属性不包含 PII、附言原文或任意 deep link。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/content/post/behaviors.yaml
+    performance_points:
+    - 埋点不得阻塞列表交互。
+    tests:
+      planned: []
+      recorded:
+      - file: quwoquan_app/test/local_contract/core/trackers/share_interaction_observability__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/journeys/user/my_profile_journey__user_acceptance_test.dart
+    status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: profile_share_observability_contract
+        cases:
+        - local_contract.user.profile.interaction.share.observability
+        envs: *id001
+        test_object: observability
+        quality_facet: observability
+      supporting:
+      - layer: user_acceptance
+        suite: profile_share_journey
+        cases:
+        - user_acceptance.user.profile.interaction.share.full_journey
+        envs:
+        - gamma_local
+        test_object: page
+        quality_facet: experience
+      - layer: api_integration
+        suite: profile_share_observability_api
+        cases:
+        - api_integration.content.profile_share.contract
+        envs: *id002
+        test_object: api_operation
+        quality_facet: observability
     notes: []
 execution:
   local_gate:

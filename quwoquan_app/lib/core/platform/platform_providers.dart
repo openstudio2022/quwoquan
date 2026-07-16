@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/core/platform/file_storage_gateway.dart';
 import 'package:quwoquan_app/core/platform/native_bridge.dart';
 import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
@@ -18,6 +17,14 @@ final platformTargetProvider = Provider<AppPlatform>(
 /// contract across platforms.
 final platformCapabilitiesProvider = Provider<PlatformCapabilities>(
   (ref) => platformCapabilitiesFor(ref.watch(platformTargetProvider)),
+);
+
+/// Stable observability label assembled inside the platform boundary.
+///
+/// UI and business code may attach this label to telemetry, but must not branch
+/// on the target platform itself.
+final platformTelemetryNameProvider = Provider<String>(
+  (ref) => platformWireName(ref.watch(platformTargetProvider)),
 );
 
 /// Local file/path access behind the anti-corruption boundary.
@@ -45,17 +52,11 @@ final assistantLocalContextBridgeProvider =
 
 /// Native auth bridge for provider-backed social/system credential entrypoints.
 ///
-/// Environment-injected (mirrors the server's mock/sandbox/real split):
-///   - alpha/beta/gamma: [SandboxNativeAuthBridge] returns release-safe sandbox
-///     tickets (no vendor SDK / no network), so social login is end-to-end
-///     testable without production credentials;
-///   - prod: real [MethodChannelNativeAuthBridge] on mobile; web/ohos/desktop
-///     degrade to the structured "unavailable" bridge.
+/// Production composition never branches to fixtures by environment. Mobile
+/// platforms use the real method-channel adapter; unsupported platforms return
+/// a structured unavailable capability. Alpha fixtures are injected only by
+/// the physically separate alpha runner.
 final nativeAuthBridgeProvider = Provider<NativeAuthBridge>((ref) {
-  final env = CloudRuntimeConfig.appRuntimeEnv;
-  if (env == 'alpha' || env == 'beta' || env == 'gamma') {
-    return SandboxNativeAuthBridge();
-  }
   final platform = ref.watch(platformTargetProvider);
   switch (platform) {
     case AppPlatform.android:

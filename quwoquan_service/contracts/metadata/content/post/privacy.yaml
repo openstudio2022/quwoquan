@@ -69,10 +69,6 @@ data_lifecycle:
   user_deletion_hook: true               # 用户注销时触发
 
   deletion_cascade:
-    - entity: ContentReaction
-      strategy: hard_delete
-      description: 互动状态随帖子硬删除
-
     - entity: Comment
       strategy: hard_delete
       description: 评论随帖子硬删除

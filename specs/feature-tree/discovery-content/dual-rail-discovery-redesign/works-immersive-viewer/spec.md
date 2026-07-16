@@ -36,6 +36,14 @@
 - 边缘 15px 保护区不响应水平拖拽（iOS 系统返回手势保护）。
 - 垂直 PageView 与水平子 PageView 手势竞争按角度判定：< 45° 偏水平交给子 Widget，>= 45° 触发垂直换作品。
 
+## 文章基线与图片适配边界（不可协商）
+
+- `components/pageflip/**` 与 `ui/content/article_reader/pageflip/**` 是已经验收的文章翻页基线。本 Story 不抽取新 DeckHost、painter、partition 或通用纹理类型，也不得为了图片适配改写文章既有 `Stack`、BACK replacement、诊断或同步 `completeAnimation` 时序。
+- 图片通过 `MediaPageFlipBook` 复用同一 `StPageFlipController` scene、`StPageFlipRenderFrame`、手势 `fold(localPosition)`、release policy、动画帧取样和正背面角度规则；媒体适配层只负责图片材质、缓存与加载事务，不新增 pageflip 几何。
+- 文章既有 BACK 允许由当前静态页、上一页正面 replacement、当前页 bottom clip 与上一页 moving sheet 合成；这些是同一物理翻页的材质区域，不得被复制成额外 moving sheet。文章和图片在任意帧都只能出现一个 moving leaf、一条 seam/fold 与一条 free edge。
+- 图片 moving sheet 每帧只绘制一张完整页面 front 或 back 材质。禁止两个纹理子页重叠、对子纹理使用 `FractionallySizedBox` 压缩、重复完整纹理起点，或以黑色/舞台底色填补本应由背面材质覆盖的区域。
+- release 完成时，媒体适配层必须与文章一样强制应用 animation plan 最后一帧，再同步 `completeAnimation` 和 page index；动态 bottom 与目标静态页须同源。图片加载状态继续冻结到落平后的首个静态帧，随后才应用排队状态。
+
 ## 顶部系统层
 
 - 只允许「返回」与「更多」。
@@ -53,8 +61,11 @@
 - 全屏沉浸图片书展示，层级：图片书页 → 点状页态 → 标题 → 配文 → 工具栏。
 - 左右滑动使用与文章同源的 `components/pageflip` 几何能力，经 `components/media/shared/pageflip/MediaPageFlipBook` 承载；媒体宿主按全屏横向位移判定 next/prev，并把手势转换为 pageflip 输入，禁止回退为 rubber-band `PageView` 主体验。
 - 图片书展示层位于 `components/media/image/book/`，只接收图片 URL 列表、页码回调和边界 overflow 回调；禁止依赖 discovery/content DTO、Riverpod provider、GoRouter 或 `ui/**`。
-- 图片材质必须先 rasterize 成固定书页逻辑尺寸：横图、竖图、极端比例图只改变 `BoxFit.cover` 裁剪，不改变翻页几何；每页必须输出 front/back 双面 surface，back 为镜像、暗淡、带纸张背面 wash 的纹理；active 翻页只允许 success 或 failure 双面材质参与，加载中只作为静态等待态，不得以 loading 模糊材质冒充背面、底页或下一页正面。
-- 图片书三面绑定固定：前翻为 `recto=current.front / verso=next.back / bottom=next.front`，后翻为 `recto=prev.front / verso=prev.back / bottom=current.front`；禁止用同一 front snapshot 代替 back。
+- 图片材质必须先 rasterize 成固定书页逻辑尺寸：横图、竖图、极端比例图只改变同一个 `coverSourceRect`，不改变翻页几何；每个已解码页面输出 front/back 双面 surface，back 为镜像、暗淡、带纸张背面 wash 的纹理。`pending/failed` 不生成图片或失败图标纹理，active 翻页统一使用无图标、无文字、无 spinner 的中性纸面。
+- 图片书三面绑定固定：前翻为 `recto=current.front / verso=current.back / bottom=next.front`，后翻为 `recto=prev.front / verso=prev.back / bottom=current.front`；前翻移动的是当前页纸张，禁止把 `next.back` 贴到 moving sheet。
+- 图片不得维护媒体专用几何、face-frame 分区或 moving-sheet painter；`MediaPageFlipBook` 只消费既有 `StPageFlipRenderFrame` 的 area、anchor、angle 与 shadow。active moving sheet 保持唯一 `Positioned + Transform + ClipPath`，内部每帧只选择一张完整 `RawImage` front/back 材质，不得对子纹理二次布局、压缩或重复采样。
+- 手势方向锁定时冻结 current、moving sheet、bottom 三面材质；事务中的异步 ready/failure 只进入待应用状态。目标页未 ready 时允许翻到中性纸面，commit/cancel 完全落平后才应用新状态；成功图片以 `160ms easeOut` 淡入，Reduce Motion 下最长 `120ms`，不得在动态折页或落页首帧瞬间换图。
+- 静态页与翻页纹理消费同一已解码 `ui.Image` 和同一 `coverSourceRect`。加载超过 `300ms` 才可显示低对比 loading overlay；终态失败只在落平后的静态页显示失败说明与重试，所有 loading/failure overlay 均不得进入翻页纹理。底部可读性渐变和 hairline 由图片书固定 overlay 统一绘制，不烘焙到单页材质。
 - 点状指示器（`● ● ○ ● ●`）位于图片内容下方、标题上方；最多 6 个点，超出时以首尾淡化表达「还有更多」；必须明确表达当前位置。
 - 单图作品不显示指示器。
 
@@ -72,7 +83,7 @@
 - 更多菜单内提供「阅读设置」，支持 `系统适配 / 深色纸 / 冷灰纸 / 暖黑纸 / 墨绿纸 / 深棕纸`，用户选择实时生效。
 - 页码只显示 `1 / 6`，作为页面内容尾部元素（正文之后、作者工具栏之前），chevron `‹ ›` 可点切页。
 - 禁止：章节指示器、页码嵌入正文或标题、顶部页码。
-- 翻页机制复用 `ArticleReaderFlipHost` / 降级 pager（受 pageflip 军规保护，不造第二套翻页几何）；正面、背面、底页、阴影必须共用同一纸张 palette。
+- 翻页机制保持文章既有 pageflip 宿主与降级 pager（受 pageflip 军规保护，不造第二套翻页几何）；正面、背面、底页、阴影必须共用同一纸张 palette。本 Story 对文章宿主和 `components/pageflip/**` 维持基线零差异。
 - 文章阅读宿主继续留在 `ui/content/article_reader/pageflip/`，负责文章分页 texture capture、diagnostics 与文章 page surface；图片书不得依赖 `ArticleReaderFlipHost`。
 
 ## 底部工具栏（三类媒体统一深色锚点，含白底文章）

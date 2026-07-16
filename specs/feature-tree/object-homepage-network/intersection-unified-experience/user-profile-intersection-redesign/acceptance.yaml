@@ -143,7 +143,7 @@ gwt_acceptance:
     done_when:
     - 红点聚合进「查看更多」；主标题固定为「我的交集」，时间窗口不写死为“今日”。
     contract_refs:
-    - recommendation/rec_model/projections/intersection_reason.yaml
+    - recommendation/model_release/projections/intersection_reason.yaml
     performance_points:
     - 我的交集/打动入口读取一次聚合 summary，折叠态最多渲染 3 行维度简报。
     tests:
@@ -191,7 +191,7 @@ gwt_acceptance:
     edge_cases:
     - archived/expired 结论句不渲染于主列表（端侧单源过滤，非云侧二次裁剪）。
     contract_refs:
-    - recommendation/rec_model/projections/intersection_reason.yaml
+    - recommendation/model_release/projections/intersection_reason.yaml
     performance_points:
     - 显隐过滤端侧单源一次性过滤，列表路径 mock/remote 共用同一函数，无第二真相源。
     tests:

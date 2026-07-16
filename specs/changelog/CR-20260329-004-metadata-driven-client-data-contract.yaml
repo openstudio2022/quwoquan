@@ -12,7 +12,7 @@ artifacts:
   - specs/feature-tree/runtime/runtime-client-foundation/metadata-driven-client-data-contract/spec.md
   - specs/feature-tree/runtime/runtime-client-foundation/metadata-driven-client-data-contract/design.md
   - specs/feature-tree/runtime/runtime-client-foundation/metadata-driven-client-data-contract/acceptance.yaml
-  - specs/feature-tree/runtime/runtime-client-foundation/metadata-driven-client-data-contract/plan.yaml
+  - specs/feature-tree/runtime/runtime-client-foundation/metadata-driven-client-data-contract/content.execution.planning.yaml
   - specs/feature-tree/runtime/runtime-client-foundation/metadata-driven-client-data-contract/explore-baseline-readiness-20260329.md
   - specs/gates/metadata_driven_ui_gap_inventory.yaml
   - specs/feature-tree/tree_index.yaml

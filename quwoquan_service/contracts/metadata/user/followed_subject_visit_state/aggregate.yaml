@@ -1,0 +1,30 @@
+version: 1
+domain: user
+aggregate_root: FollowedSubjectVisitState
+object_kind: aggregate_root
+
+description: |
+  当前 viewer 对单个关注对象的私有访问水位。该对象独立承载 viewer × subject
+  的幂等更新，不把无界访问状态塞入 UserProfile，也不允许 FollowingSubject
+  projection 成为 command owner。
+
+storage_backend: mongodb
+
+capabilities:
+  - mutable
+  - queryable
+
+business_rules:
+  - personaId + subjectType + subjectId 唯一
+  - lastVisitedAt 只能单调推进，重复 clientRequestId 返回同一 receipt
+
+lifecycle:
+  states: [active]
+  optimistic_concurrency: store_commit
+  idempotency: command_receipt
+
+ddd_layer_mapping:
+  domain_model: internal/domain/relationship/followed_subject_visit_state/model
+  repository: internal/domain/relationship/followed_subject_visit_state/ports
+  repository_implementation: internal/infrastructure/persistence
+  application: internal/application/relationship/followed_subject_visit_state

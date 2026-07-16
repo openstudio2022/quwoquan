@@ -16,9 +16,8 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quwoquan_ops.cli.lib.common import run
 from quwoquan_ops.cli.lib.environment_topology import get_target, load_environment_topology
-from quwoquan_ops.cli.lib.output_paths import env_runs_root, target_local_dir
+from quwoquan_ops.cli.lib.output_paths import certificate_export_dir, deployment_work_root
 from quwoquan_ops.cli.lib.port_manifest import load_port_manifest, profile_ports
 
 
@@ -49,12 +48,91 @@ DEV_UP_ENV_DESCRIPTIONS = {
 ANDROID_LOCAL_LOOPBACK_SUFFIX = ".localhost"
 ANDROID_LOCAL_DEBUG_CA_ENV = "QWQ_ANDROID_LOCAL_ENV_CA_PATH"
 ANDROID_LOCAL_DEBUG_CA_REQUIRED_ENV = "QWQ_ANDROID_LOCAL_ENV_CA_REQUIRED"
-ANDROID_LOCAL_DEBUG_CA_PATHS = {
-    "alpha-local": target_local_dir("alpha-local") / "tls" / "ca" / "root.crt",
-    "beta-local": target_local_dir("beta-local") / "caddy" / "data" / "caddy" / "pki" / "authorities" / "local" / "root.crt",
-    "gamma-local": target_local_dir("gamma-local") / "caddy" / "data" / "caddy" / "pki" / "authorities" / "local" / "root.crt",
-    "prod-sim": target_local_dir("prod-sim") / "caddy" / "data" / "caddy" / "pki" / "authorities" / "local" / "root.crt",
-}
+ANDROID_LOCAL_DEBUG_CA_TARGETS = frozenset(
+    {"alpha-local", "beta-local", "gamma-local", "prod-sim"}
+)
+
+
+def _configured_root(env_name: str, default_name: str) -> Path:
+    configured = os.environ.get(env_name, "").strip()
+    path = Path(configured).expanduser() if configured else ROOT / default_name
+    if not path.is_absolute():
+        path = ROOT / path
+    return path
+
+
+def output_root() -> Path:
+    return _configured_root("QWQ_OUTPUT_ROOT", ".qwq_output")
+
+
+def env_output_root(env_name: str) -> Path:
+    return output_root() / "env" / runtime_env_for_dev_env(env_name)
+
+
+def deployment_render_root(target_name: str) -> Path:
+    """Rendered deployment input is ephemeral and must not enter .qwq_output."""
+    return deployment_work_root(target_name) / "rendered"
+
+
+def env_cache_target_root(env_name: str, target_name: str) -> Path:
+    return env_output_root(env_name) / "local" / target_name / "cache"
+
+
+def observability_run_root(env_name: str) -> Path:
+    configured = os.environ.get("QWQ_OBSERVABILITY_RUN_ROOT", "").strip()
+    if configured:
+        path = Path(configured).expanduser()
+        return path if path.is_absolute() else ROOT / path
+    from quwoquan_ops.cli.lib.local_run import resolve_local_run
+
+    runtime_env = runtime_env_for_dev_env(env_name)
+    target = {
+        "alpha": "alpha-local",
+        "beta": "beta-local",
+        "gamma": "gamma-local",
+        "prod": "prod-sim",
+    }[runtime_env]
+    return resolve_local_run(
+        env=runtime_env,
+        target=target,
+        action="status",
+        root=output_root(),
+    ).observability_root
+
+
+def observability_runtime_logs_root(env_name: str) -> Path:
+    return observability_run_root(env_name) / "logs" / "service"
+
+
+def run_root(env_name: str) -> Path:
+    configured = os.environ.get("QWQ_RUN_ROOT", "").strip()
+    if configured:
+        path = Path(configured).expanduser()
+        return path if path.is_absolute() else ROOT / path
+    from quwoquan_ops.cli.lib.local_run import resolve_local_run
+
+    runtime_env = runtime_env_for_dev_env(env_name)
+    target = {
+        "alpha": "alpha-local",
+        "beta": "beta-local",
+        "gamma": "gamma-local",
+        "prod": "prod-sim",
+    }[runtime_env]
+    return resolve_local_run(
+        env=runtime_env,
+        target=target,
+        action="status",
+        root=output_root(),
+    ).run_root
+
+
+def target_local_root(target_name: str) -> Path:
+    env_name = runtime_env_for_dev_env(target_name.split("-", 1)[0])
+    return env_output_root(env_name) / "local" / target_name
+
+
+def target_process_root(env_name: str, target_name: str) -> Path:
+    return env_output_root(env_name) / "local" / target_name / "process"
 
 
 def summarize_output(output: str, *, max_lines: int = 80) -> str:
@@ -439,7 +517,9 @@ def launch_app(
         topology=manifest,
         rollout_mode=rollout_mode,
     )
-    launch_log = log_path or (env_runs_root(runtime_env_for_dev_env(env_name)) / "app-launch.log")
+    launch_log = log_path or (
+        observability_runtime_logs_root(env_name) / f"{env_name}-app-launch.log"
+    )
     launch_log.parent.mkdir(parents=True, exist_ok=True)
     log_handle = launch_log.open("a", encoding="utf-8")
     try:
@@ -515,11 +595,11 @@ def local_target_ports(
 
 
 def local_target_android_debug_ca_cert(target_name: str) -> Path:
-    cert_path = ANDROID_LOCAL_DEBUG_CA_PATHS.get(target_name)
-    if cert_path is None:
+    if target_name not in ANDROID_LOCAL_DEBUG_CA_TARGETS:
         raise RuntimeError(
             f"GATE_BLOCK: local Android debug CA path is undefined for target {target_name}"
         )
+    cert_path = certificate_export_dir(target_name) / "root.crt"
     if not cert_path.is_file():
         raise RuntimeError(
             f"GATE_BLOCK: local Android debug CA certificate missing for {target_name}: {cert_path}"

@@ -1,0 +1,27 @@
+version: 1
+aggregate: ProfileUpdateProposal
+events:
+  - name: ProfileUpdateProposalCreated
+    producer: user-service
+    consumers: [projection-workers]
+    channel: transactional_outbox
+    payload_entity: ProfileUpdateProposal
+    payload_fields: [id, personaId, source, proposedChanges, status, version, createdAt]
+  - name: ProfileUpdateProposalConfirmed
+    producer: user-service
+    consumers: [projection-workers]
+    channel: transactional_outbox
+    payload_entity: ProfileUpdateProposal
+    payload_fields: [id, personaId, status, version, reviewedBy, targetPersonaExpectedVersion]
+  - name: ProfileUpdateProposalApplied
+    producer: user-service
+    consumers: [projection-workers]
+    channel: transactional_outbox
+    payload_entity: ProfileUpdateProposal
+    payload_fields: [id, personaId, status, version, resolvedAt]
+  - name: ProfileUpdateProposalRejected
+    producer: user-service
+    consumers: [projection-workers]
+    channel: transactional_outbox
+    payload_entity: ProfileUpdateProposal
+    payload_fields: [id, personaId, status, version, reviewedBy, resolvedAt]

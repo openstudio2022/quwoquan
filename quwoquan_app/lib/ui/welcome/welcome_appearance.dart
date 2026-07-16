@@ -77,6 +77,26 @@ class WelcomeAppearance {
     stops: const [0.0, 0.44, 1.0],
   );
 
+  /// 花瓣上层花蕊柔光；只使用品牌蓝与白，保证小尺寸图标仍可辨认。
+  RadialGradient get stamenHaloGradient => RadialGradient(
+    colors: [
+      AppColors.white.withValues(alpha: isDark ? 0.82 : 0.88),
+      AppColors.welcomeTitleGradientMid.withValues(alpha: isDark ? 0.44 : 0.38),
+      AppColors.transparent,
+    ],
+    stops: const [0.0, 0.45, 1.0],
+  );
+
+  RadialGradient get stamenCoreGradient => RadialGradient(
+    colors: [
+      AppColors.white,
+      Color.alphaBlend(
+        AppColors.welcomeTitleGradientMid.withValues(alpha: 0.28),
+        AppColors.white,
+      ),
+    ],
+  );
+
   /// ShaderMask 子树占位色（实际由 shader 着色）
   Color get shaderMaskChildBase => AppColors.white;
 

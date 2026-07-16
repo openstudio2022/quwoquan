@@ -1,15 +1,94 @@
-# 本地 Cursor SDK 校准档 runtime profile（Phase 5 并发提参；省级批 recipe 引用）。
-# 与保守档 cursor_local（MAX_WORKERS=1）并存：本档把 managed local 并发提到 4，
-# 配合 fanout_runner 的错峰冷启（COLD_START_MAX_WORKERS）与 per-worker warm bridge。
-# M1 校准批实测安全上限后按证据回写本文件（目标区间 4-8；证据落
-# QWQ_OUTPUT_ROOT/data/local/runtime/** 校准报告）。
-schemaVersion: quwoquan.task.runtime_profile
+# 本地 Cursor SDK 唯一运行策略。规模与目标属于 rollout contract，不进入本文件。
 profileId: cursor_local_calibrated
-env:
-  QWQ_MANAGED_LOCAL_CURSOR_MAX_WORKERS: "4"
-  QWQ_MANAGED_AGENT_TIMEOUT_SECONDS: "1200"
-  QWQ_ORCHESTRATE_AGENT_TIMEOUT_SECONDS: "1200"
-  QWQ_CURSOR_WARM_ATTEMPTS: "6"
-  # 冷启错峰：并发提参后同刻冷启上限保持 3，相邻 bridge 冷启间隔 8s。
-  QWQ_FANOUT_COLD_START_MAX_WORKERS: "3"
-  QWQ_FANOUT_WORKER_STAGGER_SECONDS: "8.0"
+policy:
+  cursor:
+    model: composer
+    runtime: local
+  workers:
+    author: 2
+    reviewer: 2
+    research: 4
+    download: 8
+    codexCli: 1
+  budgets:
+    startupTimeoutSeconds: 240
+    preflightNetworkTimeoutSeconds: 5
+    agentTimeoutSeconds: 1200
+    authRetryLimit: 12
+    authRetryDelaySeconds: 300
+    noProgressRoundLimit: 6
+    researchWaveSize: 8
+    researchMaxWavesPerRun: 0
+    coldStartMaxWorkers: 2
+    workerStaggerSeconds: 8.0
+    managedFutureGraceSeconds: 15
+    schedulerStaleSeconds: 900
+    downloadFetchRetryLimit: 1
+    bridgeLaunchCooldownSeconds: 2.0
+    bridgeReadyDelaySeconds: 1.5
+    reactRewindLimit: 2
+    preflightStartupAttempts: 3
+    preflightRetryDelaySeconds: 3.0
+    cursorWarmAttempts: 6
+    cursorBridgeMaxRetries: 3
+    managedCheckpointRefLimit: 0
+    cursorBridgeHandshakeTimeoutSeconds: 60
+    pageImageFetchMaxAttempts: 5
+    pageImageFetchRetryBackoffSeconds: 1.0
+    pageImageDownloadTimeoutSeconds: 45
+    downloadTextTimeoutSeconds: 20
+    downloadBytesTimeoutSeconds: 8
+    stageNoProgressTimeoutSeconds: 900
+    researchWaveBudgetSeconds: 1800
+    networkBreakerThreshold: 6
+    localProcessProbeTimeoutSeconds: 2
+    processTerminationTimeoutSeconds: 5
+    agentFuturePollTimeoutSeconds: 10
+    apiRequestTimeoutSeconds: 30
+    entityReloadTimeoutSeconds: 30
+    directFetchTimeoutSeconds: 15
+    sourceFetchTimeoutSeconds: 20
+    sourceFetchMaxRetries: 4
+    ocrTimeoutSeconds: 8
+    mediawikiFallbackRetries: 2
+    mediawikiWikitextMaxRetries: 2
+    queueLeaseTtlSeconds: 1800
+    queueHeartbeatSeconds: 60
+    queueMaxAttempts: 2
+    queueMaxStartupFailures: 3
+    queueMaxWallClockSeconds: 1200
+    queueBackoffBaseSeconds: 30
+    queueBackoffCapSeconds: 600
+    queueStuckThreshold: 3
+    startupProbeSuiteAttempts: 20
+    cursorTrue5xxRateLimit: 0.10
+    cursorStartupTimeoutRateLimit: 0.50
+    coverageWikiRetryLimit: 3
+    coverageWikiRetryBackoffSeconds: 5.0
+    coverageWikiInterRequestDelaySeconds: 0.3
+    coverageOverpassRetryLimit: 3
+    coverageOverpassRetryBackoffSeconds: 8.0
+    coverageOverpassInterRequestDelaySeconds: 3.0
+    coverageOverpassQueryTimeoutSeconds: 45
+  coverageDiscovery:
+    saturationThreshold: 0.05
+    saturationRounds: 2
+    maxPagesPerCell: 20
+    maxCandidatesPerCitySource: 1000
+    maxNewPerCell: 200
+    requestBudget: 20000
+    maxTotalCandidates: 0
+    requiredEmptyPages: 2
+    requestTimeoutSeconds: 90
+    rateLimitPerSecond: 0.5
+    wikiCategoryDepth: 4
+    retryBackoffMultiplier: 2.0
+    overpassResultLimit: 200
+  network:
+    curlRetries: 1
+    curlRetryDelaySeconds: 1
+    providerTimeoutSeconds:
+      mediawiki: 20
+      qunar: 20
+      openverse: 25
+      overpass: 90

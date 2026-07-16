@@ -3,6 +3,7 @@ import {
   fallbackRuntimeErrorResponse,
   isRuntimeErrorResponse,
 } from "../runtime/errors/runtimeError.js";
+import { productControlPlane } from "../../generated/control-plane/productControlPlane.generated.js";
 
 export interface ExperimentItem {
   id: string;
@@ -31,16 +32,13 @@ export interface ReleaseItem {
 
 export interface ReportItem {
   id: string;
-  reporterId: string;
+  version: number;
   targetType: string;
   targetId: string;
   reason: string;
-  description?: string;
   status: string;
-  reviewerId?: string;
-  resolution?: string;
   createdAt: string;
-  resolvedAt?: string;
+  updatedAt: string;
 }
 
 export interface ServiceCatalogItem {
@@ -726,6 +724,23 @@ function withQuery(
   return encoded ? `${path}?${encoded}` : path;
 }
 
+function productControlPlaneOperationPath(operation: string): string {
+  for (const objectType of productControlPlane.object_types) {
+    const matched = objectType.operations.find(
+      (candidate) => candidate.operation === operation,
+    );
+    if (matched) {
+      return matched.path;
+    }
+  }
+  throw new RuntimeError(
+    fallbackRuntimeErrorResponse({
+      code: "OPS.CONTRACT.invalid_response",
+      cause: `generated product control-plane operation is missing: ${operation}`,
+    }),
+  );
+}
+
 export async function fetchExperiments(): Promise<ExperimentItem[]> {
   const payload = await fetchJSON<{ items: ExperimentItem[] }>(
     envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
@@ -769,7 +784,7 @@ export async function fetchReleases(): Promise<ReleaseItem[]> {
 export async function fetchReports(): Promise<ReportItem[]> {
   const payload = await fetchJSON<{ items: ReportItem[] }>(
     envBaseUrl('VITE_CONTENT_SERVICE_BASE_URL'),
-    '/v1/content/reports?limit=10',
+    withQuery(productControlPlaneOperationPath('ListReports'), { limit: 10 }),
   );
   return payload.items;
 }

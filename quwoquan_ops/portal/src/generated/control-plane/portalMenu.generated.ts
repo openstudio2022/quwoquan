@@ -245,6 +245,7 @@ export const portalMenu = {
       "permission_scope": "ops.case.read",
       "object_types": [
         "moderation_case",
+        "report_queue",
         "appeal_case",
         "recovery_case"
       ]
@@ -375,20 +376,6 @@ export const portalMenu = {
       "object_types": [
         "assistant_comment",
         "correction_case"
-      ]
-    },
-    {
-      "menu_id": "campus-bootstrap",
-      "parent_menu_id": "product-ops",
-      "label": "校园冷启动",
-      "domain": "product-ops",
-      "route_path": "/product/campus-bootstrap",
-      "icon": "school",
-      "order": 38,
-      "permission_scope": "ops.product.bootstrap.read",
-      "object_types": [
-        "campus_homepage",
-        "bootstrap_seed"
       ]
     },
     {

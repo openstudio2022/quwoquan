@@ -54,7 +54,7 @@ func newServer(t *testing.T, cfg searchbackend.ESConfig, fallback rtsearch.Recal
 	// nil TermHeatProvider => base ranking + empty relatedTerms; the AB bucket is
 	// still assigned so the envelope carries experimentBucket.
 	decorator := application.NewRankingDecorator(nil, application.NewExperiments(application.ExperimentConfig{}), 0, nil)
-	return httpadapter.NewHandler(svc, decorator).Routes()
+	return httpadapter.NewHandler(svc, decorator, nil).Routes()
 }
 
 func postSearch(t *testing.T, handler http.Handler, body string) (*httptest.ResponseRecorder, map[string]any) {

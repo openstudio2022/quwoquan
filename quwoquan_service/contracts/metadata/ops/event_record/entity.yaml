@@ -1,10 +1,10 @@
 version: 1
 domain: ops
 entity: EventRecord
-is_aggregate: false
+object_kind: append_only_fact
 
 description: |
-  统一事件明细。承载 page access、perf、analytics façade、behavior/learning 桥接后的统一事实源，
+  统一只追加事件明细。承载 page access、perf、analytics façade、behavior/learning 桥接后的统一事实源，
   用于运营看板、实验复盘、学习反馈回放与冷/热分层分析。
 
 storage_backend: mongodb

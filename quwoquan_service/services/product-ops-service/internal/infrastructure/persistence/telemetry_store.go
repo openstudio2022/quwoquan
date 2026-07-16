@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -36,11 +35,18 @@ func (s *MongoTelemetryStore) EnsureIndexes(ctx context.Context) error {
 		{Keys: bson.D{{Key: "targetType", Value: 1}, {Key: "targetKey", Value: 1}, {Key: "occurredAt", Value: -1}}, Options: options.Index().SetName("idx_event_target_time").SetSparse(true)},
 		{Keys: bson.D{{Key: "entityType", Value: 1}, {Key: "entityId", Value: 1}, {Key: "occurredAt", Value: -1}}, Options: options.Index().SetName("idx_event_entity_time").SetSparse(true)},
 		{Keys: bson.D{{Key: "experimentBucket", Value: 1}, {Key: "occurredAt", Value: -1}}, Options: options.Index().SetName("idx_event_experiment_time").SetSparse(true)},
+		{Keys: bson.D{{Key: "sessionId", Value: 1}, {Key: "occurredAt", Value: -1}}, Options: options.Index().SetName("idx_event_session_time").SetSparse(true)},
+		{Keys: bson.D{{Key: "expiresAt", Value: 1}}, Options: options.Index().SetName("ttl_event_expires_at").SetExpireAfterSeconds(0)},
+		// 旧文档没有 expiresAt；保留 occurredAt TTL 作为迁移期兜底。新登录事件由
+		// expiresAt 在 30 天删除，其余新事件仍按 90 天删除。
+		{Keys: bson.D{{Key: "occurredAt", Value: 1}}, Options: options.Index().SetName("ttl_event_occurred_at").SetExpireAfterSeconds(90 * 24 * 60 * 60)},
 	}
 	visitIndexes := []mongo.IndexModel{
-		{Keys: bson.D{{Key: "userId", Value: 1}, {Key: "targetType", Value: 1}, {Key: "targetKey", Value: 1}}, Options: options.Index().SetName("idx_visit_user_target").SetUnique(true)},
-		{Keys: bson.D{{Key: "targetType", Value: 1}, {Key: "targetKey", Value: 1}, {Key: "lastSeenAt", Value: -1}}, Options: options.Index().SetName("idx_visit_target")},
-		{Keys: bson.D{{Key: "sessionId", Value: 1}, {Key: "lastSeenAt", Value: -1}}, Options: options.Index().SetName("idx_visit_session").SetSparse(true)},
+		{Keys: bson.D{{Key: "userId", Value: 1}, {Key: "targetType", Value: 1}, {Key: "targetKey", Value: 1}}, Options: options.Index().SetName("uq_visit_user_target").SetUnique(true)},
+		{Keys: bson.D{{Key: "userId", Value: 1}, {Key: "targetType", Value: 1}, {Key: "targetKey", Value: 1}, {Key: "timestamp", Value: -1}}, Options: options.Index().SetName("idx_visit_user_target")},
+		{Keys: bson.D{{Key: "targetType", Value: 1}, {Key: "targetKey", Value: 1}, {Key: "timestamp", Value: -1}}, Options: options.Index().SetName("idx_visit_target")},
+		{Keys: bson.D{{Key: "sessionId", Value: 1}, {Key: "timestamp", Value: -1}}, Options: options.Index().SetName("idx_visit_session").SetSparse(true)},
+		{Keys: bson.D{{Key: "timestamp", Value: 1}}, Options: options.Index().SetName("ttl_visit_timestamp").SetExpireAfterSeconds(180 * 24 * 60 * 60)},
 	}
 	if _, err := s.eventColl.Indexes().CreateMany(ctx, eventIndexes); err != nil {
 		return fmt.Errorf("create event indexes: %w", err)
@@ -52,14 +58,14 @@ func (s *MongoTelemetryStore) EnsureIndexes(ctx context.Context) error {
 }
 
 func (s *MongoTelemetryStore) RecordVisit(ctx context.Context, input application.VisitInput) (application.VisitRecord, error) {
-	now := nowRFC3339()
+	now := time.Now().UTC()
 	filter := bson.D{
 		{Key: "userId", Value: input.UserID},
 		{Key: "targetType", Value: input.TargetType},
 		{Key: "targetKey", Value: input.TargetKey},
 	}
 	setDoc := bson.D{
-		{Key: "lastSeenAt", Value: now},
+		{Key: "lastSeenAt", Value: formatEventTimestamp(now)},
 		{Key: "timestamp", Value: now},
 	}
 	if trimmed := strings.TrimSpace(input.SessionID); trimmed != "" {
@@ -123,8 +129,11 @@ func (s *MongoTelemetryStore) ReportEventBatch(ctx context.Context, events []app
 	ack := application.EventBatchAck{}
 	inserted := make([]application.EventDrilldownItem, 0, len(events))
 	for _, raw := range events {
-		item := normalizeEvent(raw)
-		_, err := s.eventColl.InsertOne(ctx, item)
+		record, item, err := newMongoEventRecord(raw)
+		if err != nil {
+			return application.EventBatchAck{}, nil, fmt.Errorf("normalize event %q: %w", strings.TrimSpace(raw.EventID), err)
+		}
+		_, err = s.eventColl.InsertOne(ctx, record)
 		if err != nil {
 			if mongo.IsDuplicateKeyError(err) {
 				ack.DuplicateCount++
@@ -139,11 +148,46 @@ func (s *MongoTelemetryStore) ReportEventBatch(ctx context.Context, events []app
 }
 
 func (s *MongoTelemetryStore) GetEventSummary(ctx context.Context, query application.EventSummaryQuery) (application.EventSummary, error) {
-	items, err := s.findEvents(ctx, buildEventFilter(query), 0)
+	filter := buildEventFilter(query)
+	facets := bson.D{
+		{Key: "overall", Value: mongo.Pipeline{
+			bson.D{{Key: "$group", Value: bson.D{
+				{Key: "_id", Value: nil},
+				{Key: "totalCount", Value: bson.D{{Key: "$sum", Value: 1}}},
+				{Key: "latestOccurredAt", Value: bson.D{{Key: "$max", Value: "$occurredAt"}}},
+			}}},
+		}},
+	}
+	for _, dimension := range eventSummaryDimensions {
+		facets = append(facets, bson.E{Key: dimension, Value: dimensionCountPipeline(dimension)})
+	}
+	cursor, err := s.eventColl.Aggregate(ctx, mongo.Pipeline{
+		bson.D{{Key: "$match", Value: filter}},
+		bson.D{{Key: "$facet", Value: facets}},
+	})
 	if err != nil {
+		return application.EventSummary{}, fmt.Errorf("aggregate event summary: %w", err)
+	}
+	defer cursor.Close(ctx)
+	out := application.EventSummary{
+		EventType:         strings.TrimSpace(query.EventType),
+		EventName:         strings.TrimSpace(query.EventName),
+		DimensionCounters: map[string]map[string]int{},
+	}
+	if !cursor.Next(ctx) {
+		if err := cursor.Err(); err != nil {
+			return application.EventSummary{}, fmt.Errorf("iterate event summary: %w", err)
+		}
+		return out, nil
+	}
+	var result bson.M
+	if err := cursor.Decode(&result); err != nil {
+		return application.EventSummary{}, fmt.Errorf("decode event summary: %w", err)
+	}
+	if err := decodeEventSummaryResult(result, &out); err != nil {
 		return application.EventSummary{}, err
 	}
-	return summarizeEvents(items, query.EventType, query.EventName), nil
+	return out, nil
 }
 
 func (s *MongoTelemetryStore) GetEventDrilldown(ctx context.Context, query application.EventDrilldownQuery) (application.EventDrilldown, error) {
@@ -151,12 +195,17 @@ func (s *MongoTelemetryStore) GetEventDrilldown(ctx context.Context, query appli
 	if limit <= 0 {
 		limit = 50
 	}
-	items, err := s.findEvents(ctx, buildEventFilter(query), int64(limit))
+	filter := buildEventFilter(query)
+	totalCount, err := s.eventColl.CountDocuments(ctx, filter)
+	if err != nil {
+		return application.EventDrilldown{}, fmt.Errorf("count event drilldown: %w", err)
+	}
+	items, err := s.findEvents(ctx, filter, int64(limit))
 	if err != nil {
 		return application.EventDrilldown{}, err
 	}
 	return application.EventDrilldown{
-		TotalCount: int64(len(items)),
+		TotalCount: totalCount,
 		Items:      items,
 	}, nil
 }
@@ -173,11 +222,11 @@ func (s *MongoTelemetryStore) findEvents(ctx context.Context, filter bson.D, lim
 	defer cursor.Close(ctx)
 	items := make([]application.EventDrilldownItem, 0)
 	for cursor.Next(ctx) {
-		var item application.EventDrilldownItem
-		if err := cursor.Decode(&item); err != nil {
+		var record mongoEventRecord
+		if err := cursor.Decode(&record); err != nil {
 			return nil, fmt.Errorf("decode event: %w", err)
 		}
-		items = append(items, item)
+		items = append(items, record.toApplication())
 	}
 	if err := cursor.Err(); err != nil {
 		return nil, fmt.Errorf("iterate events: %w", err)
@@ -185,105 +234,95 @@ func (s *MongoTelemetryStore) findEvents(ctx context.Context, filter bson.D, lim
 	return items, nil
 }
 
-type MemoryTelemetryStore struct {
-	mu     sync.RWMutex
-	events map[string]application.EventDrilldownItem
-	visits map[string]application.VisitRecord
+var eventSummaryDimensions = []string{
+	"pageName",
+	"surfaceId",
+	"routeId",
+	"experimentBucket",
+	"targetKey",
+	"entityId",
+	"errorCode",
+	"nature",
+	"appRuntimeEnv",
+	"source",
+	"eventName",
 }
 
-func NewMemoryTelemetryStore() *MemoryTelemetryStore {
-	return &MemoryTelemetryStore{
-		events: map[string]application.EventDrilldownItem{},
-		visits: map[string]application.VisitRecord{},
+func dimensionCountPipeline(field string) mongo.Pipeline {
+	return mongo.Pipeline{
+		bson.D{{Key: "$match", Value: bson.D{
+			{Key: field, Value: bson.D{
+				{Key: "$type", Value: "string"},
+				{Key: "$ne", Value: ""},
+			}},
+		}}},
+		bson.D{{Key: "$group", Value: bson.D{
+			{Key: "_id", Value: "$" + field},
+			{Key: "count", Value: bson.D{{Key: "$sum", Value: 1}}},
+		}}},
 	}
 }
 
-func (s *MemoryTelemetryStore) RecordVisit(_ context.Context, input application.VisitInput) (application.VisitRecord, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	key := visitKey(input.UserID, input.TargetType, input.TargetKey)
-	record := s.visits[key]
-	record.UserID = input.UserID
-	record.TargetType = input.TargetType
-	record.TargetKey = input.TargetKey
-	record.VisitCount++
-	record.LastSeenAt = nowRFC3339()
-	record.SessionID = strings.TrimSpace(input.SessionID)
-	record.Source = strings.TrimSpace(input.Source)
-	s.visits[key] = record
-	return record, nil
-}
-
-func (s *MemoryTelemetryStore) GetVisitStats(_ context.Context, query application.VisitStatsQuery) (application.VisitStats, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	out := application.VisitStats{Items: []application.VisitRecord{}}
-	for _, item := range s.visits {
-		if query.TargetType != "" && item.TargetType != query.TargetType {
-			continue
-		}
-		if query.TargetKey != "" && item.TargetKey != query.TargetKey {
-			continue
-		}
-		out.TotalVisits += item.VisitCount
-		out.Items = append(out.Items, item)
+func decodeEventSummaryResult(result bson.M, out *application.EventSummary) error {
+	overallRows, err := decodeSummaryRows(result["overall"])
+	if err != nil {
+		return fmt.Errorf("decode event summary overall: %w", err)
 	}
-	sort.Slice(out.Items, func(i, j int) bool {
-		if out.Items[i].VisitCount == out.Items[j].VisitCount {
-			return out.Items[i].TargetKey < out.Items[j].TargetKey
+	if len(overallRows) > 0 {
+		if count, ok := numericInt64(overallRows[0]["totalCount"]); ok {
+			out.TotalCount = count
 		}
-		return out.Items[i].VisitCount > out.Items[j].VisitCount
-	})
-	return out, nil
-}
-
-func (s *MemoryTelemetryStore) ReportEventBatch(_ context.Context, events []application.EventRecordInput) (application.EventBatchAck, []application.EventDrilldownItem, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	ack := application.EventBatchAck{}
-	inserted := make([]application.EventDrilldownItem, 0, len(events))
-	for _, raw := range events {
-		item := normalizeEvent(raw)
-		if _, exists := s.events[item.EventID]; exists {
-			ack.DuplicateCount++
-			continue
-		}
-		s.events[item.EventID] = item
-		ack.AcceptedCount++
-		inserted = append(inserted, item)
-	}
-	return ack, inserted, nil
-}
-
-func (s *MemoryTelemetryStore) GetEventSummary(_ context.Context, query application.EventSummaryQuery) (application.EventSummary, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	items := s.matchEventsLocked(buildEventFilter(query))
-	return summarizeEvents(items, query.EventType, query.EventName), nil
-}
-
-func (s *MemoryTelemetryStore) GetEventDrilldown(_ context.Context, query application.EventDrilldownQuery) (application.EventDrilldown, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	items := s.matchEventsLocked(buildEventFilter(query))
-	sort.Slice(items, func(i, j int) bool { return items[i].OccurredAt > items[j].OccurredAt })
-	if query.Limit > 0 && len(items) > query.Limit {
-		items = items[:query.Limit]
-	}
-	return application.EventDrilldown{
-		TotalCount: int64(len(items)),
-		Items:      items,
-	}, nil
-}
-
-func (s *MemoryTelemetryStore) matchEventsLocked(filter bson.D) []application.EventDrilldownItem {
-	items := make([]application.EventDrilldownItem, 0, len(s.events))
-	for _, item := range s.events {
-		if matchesEventFilter(item, filter) {
-			items = append(items, item)
+		if latest, ok := overallRows[0]["latestOccurredAt"].(bson.DateTime); ok {
+			out.LatestOccurredAt = formatEventTimestamp(latest.Time())
+		} else if latest, ok := overallRows[0]["latestOccurredAt"].(time.Time); ok {
+			out.LatestOccurredAt = formatEventTimestamp(latest)
 		}
 	}
-	return items
+	for _, dimension := range eventSummaryDimensions {
+		rows, decodeErr := decodeSummaryRows(result[dimension])
+		if decodeErr != nil {
+			return fmt.Errorf("decode event summary dimension %s: %w", dimension, decodeErr)
+		}
+		for _, row := range rows {
+			value, _ := row["_id"].(string)
+			count, ok := numericInt64(row["count"])
+			if strings.TrimSpace(value) == "" || !ok {
+				continue
+			}
+			if _, exists := out.DimensionCounters[dimension]; !exists {
+				out.DimensionCounters[dimension] = map[string]int{}
+			}
+			out.DimensionCounters[dimension][value] = int(count)
+		}
+	}
+	return nil
+}
+
+func decodeSummaryRows(value any) ([]bson.M, error) {
+	raw, err := bson.Marshal(bson.M{"rows": value})
+	if err != nil {
+		return nil, err
+	}
+	var wrapper struct {
+		Rows []bson.M `bson:"rows"`
+	}
+	if err := bson.Unmarshal(raw, &wrapper); err != nil {
+		return nil, err
+	}
+	return wrapper.Rows, nil
+}
+
+func numericInt64(value any) (int64, bool) {
+	switch typed := value.(type) {
+	case int:
+		return int64(typed), true
+	case int32:
+		return int64(typed), true
+	case int64:
+		return typed, true
+	default:
+		return 0, false
+	}
 }
 
 func normalizeEvent(raw application.EventRecordInput) application.EventDrilldownItem {
@@ -337,32 +376,6 @@ func normalizeEvent(raw application.EventRecordInput) application.EventDrilldown
 	}
 }
 
-func summarizeEvents(items []application.EventDrilldownItem, eventType, eventName string) application.EventSummary {
-	out := application.EventSummary{
-		EventType:         strings.TrimSpace(eventType),
-		EventName:         strings.TrimSpace(eventName),
-		DimensionCounters: map[string]map[string]int{},
-	}
-	for _, item := range items {
-		out.TotalCount++
-		if out.LatestOccurredAt == "" || item.OccurredAt > out.LatestOccurredAt {
-			out.LatestOccurredAt = item.OccurredAt
-		}
-		addDimension(out.DimensionCounters, "pageName", item.PageName)
-		addDimension(out.DimensionCounters, "surfaceId", item.SurfaceID)
-		addDimension(out.DimensionCounters, "routeId", item.RouteID)
-		addDimension(out.DimensionCounters, "experimentBucket", item.ExperimentBucket)
-		addDimension(out.DimensionCounters, "targetKey", item.TargetKey)
-		addDimension(out.DimensionCounters, "entityId", item.EntityID)
-		addDimension(out.DimensionCounters, "errorCode", item.ErrorCode)
-		addDimension(out.DimensionCounters, "nature", item.Nature)
-		addDimension(out.DimensionCounters, "appRuntimeEnv", item.AppRuntimeEnv)
-		addDimension(out.DimensionCounters, "source", item.Source)
-		addDimension(out.DimensionCounters, "eventName", item.EventName)
-	}
-	return out
-}
-
 func buildEventFilter(query interface{}) bson.D {
 	filter := bson.D{}
 	appendString := func(key, value string) {
@@ -404,109 +417,14 @@ func buildEventFilter(query interface{}) bson.D {
 func appendTimeRange(filter *bson.D, from, to time.Time) {
 	rangeDoc := bson.D{}
 	if !from.IsZero() {
-		rangeDoc = append(rangeDoc, bson.E{Key: "$gte", Value: from.Format(time.RFC3339Nano)})
+		rangeDoc = append(rangeDoc, bson.E{Key: "$gte", Value: from.UTC()})
 	}
 	if !to.IsZero() {
-		rangeDoc = append(rangeDoc, bson.E{Key: "$lte", Value: to.Format(time.RFC3339Nano)})
+		rangeDoc = append(rangeDoc, bson.E{Key: "$lte", Value: to.UTC()})
 	}
 	if len(rangeDoc) > 0 {
 		*filter = append(*filter, bson.E{Key: "occurredAt", Value: rangeDoc})
 	}
-}
-
-func matchesEventFilter(item application.EventDrilldownItem, filter bson.D) bool {
-	for _, clause := range filter {
-		switch clause.Key {
-		case "eventType":
-			if item.EventType != clause.Value {
-				return false
-			}
-		case "eventName":
-			if item.EventName != clause.Value {
-				return false
-			}
-		case "pageName":
-			if item.PageName != clause.Value {
-				return false
-			}
-		case "surfaceId":
-			if item.SurfaceID != clause.Value {
-				return false
-			}
-		case "routeId":
-			if item.RouteID != clause.Value {
-				return false
-			}
-		case "targetType":
-			if item.TargetType != clause.Value {
-				return false
-			}
-		case "targetKey":
-			if item.TargetKey != clause.Value {
-				return false
-			}
-		case "entityType":
-			if item.EntityType != clause.Value {
-				return false
-			}
-		case "entityId":
-			if item.EntityID != clause.Value {
-				return false
-			}
-		case "experimentBucket":
-			if item.ExperimentBucket != clause.Value {
-				return false
-			}
-		case "source":
-			if item.Source != clause.Value {
-				return false
-			}
-		case "occurredAt":
-			rangeDoc, ok := clause.Value.(bson.D)
-			if !ok {
-				continue
-			}
-			if !withinTimeRange(item.OccurredAt, rangeDoc) {
-				return false
-			}
-		}
-	}
-	return true
-}
-
-func withinTimeRange(raw string, rangeDoc bson.D) bool {
-	parsed, err := time.Parse(time.RFC3339Nano, raw)
-	if err != nil {
-		return false
-	}
-	for _, clause := range rangeDoc {
-		want, err := time.Parse(time.RFC3339Nano, fmt.Sprint(clause.Value))
-		if err != nil {
-			return false
-		}
-		switch clause.Key {
-		case "$gte":
-			if parsed.Before(want) {
-				return false
-			}
-		case "$lte":
-			if parsed.After(want) {
-				return false
-			}
-		}
-	}
-	return true
-}
-
-func addDimension(dimensions map[string]map[string]int, name, value string) {
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
-		return
-	}
-	if _, ok := dimensions[name]; !ok {
-		dimensions[name] = map[string]int{}
-	}
-	dimensions[name][trimmed]++
 }
 
 func firstNonEmpty(values ...string) string {
@@ -529,10 +447,8 @@ func cloneMap(input map[string]any) map[string]any {
 	return out
 }
 
-func visitKey(userID, targetType, targetKey string) string {
-	return strings.Join([]string{userID, targetType, targetKey}, "|")
-}
-
 func nowRFC3339() string {
 	return time.Now().UTC().Format(time.RFC3339Nano)
 }
+
+var _ application.TelemetryStore = (*MongoTelemetryStore)(nil)

@@ -17,6 +17,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   String? _pickedCoverSource;
   bool _loading = true;
   bool _isSaving = false;
+  List<ProfileUpdateProposalView> _profileProposals =
+      const <ProfileUpdateProposalView>[];
+  Object? _profileProposalLoadError;
 
   @override
   void initState() {
@@ -41,6 +44,17 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
       final snapshot = await ref
           .read(userProfileRepositoryProvider)
           .getProfileEditSnapshot();
+      ProfileUpdateProposalSlice? proposalSlice;
+      Object? proposalError;
+      try {
+        proposalSlice = await ref
+            .read(profileEditProposalQueryReaderProvider)
+            .list(
+              ProfileUpdateProposalListQuery(personaId: snapshot.subAccountId),
+            );
+      } catch (error) {
+        proposalError = error;
+      }
       if (!mounted) {
         return;
       }
@@ -55,6 +69,16 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
         _signature = _limitSignature(snapshot.bio);
         _occupationTagRef = snapshot.occupationTagRef;
         _interestTagRefs = snapshot.interestTagRefs;
+        _profileProposals =
+            proposalSlice?.items
+                .where(
+                  (proposal) =>
+                      proposal.status == ProfileUpdateProposalStatus.pending ||
+                      proposal.status == ProfileUpdateProposalStatus.confirmed,
+                )
+                .toList(growable: false) ??
+            const <ProfileUpdateProposalView>[];
+        _profileProposalLoadError = proposalError;
         _loading = false;
       });
     } catch (_) {
@@ -414,6 +438,44 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     }
   }
 
+  Future<void> _reloadProfileProposals() async {
+    final personaId = _initial?.subAccountId.trim() ?? '';
+    if (personaId.isEmpty) return;
+    try {
+      final proposals = await ref
+          .read(profileEditProposalQueryReaderProvider)
+          .list(ProfileUpdateProposalListQuery(personaId: personaId));
+      if (!mounted) return;
+      setState(() {
+        _profileProposals = proposals.items
+            .where(
+              (proposal) =>
+                  proposal.status == ProfileUpdateProposalStatus.pending ||
+                  proposal.status == ProfileUpdateProposalStatus.confirmed,
+            )
+            .toList(growable: false);
+        _profileProposalLoadError = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _profileProposalLoadError = error);
+    }
+  }
+
+  Future<void> _reviewProfileProposal(
+    ProfileUpdateProposalView proposal,
+  ) async {
+    if (_isDirty) return;
+    final changed = await showAppBottomModal<bool>(
+      context: context,
+      builder: (_) => ProfileUpdateProposalReviewSheet(proposal: proposal),
+    );
+    if (changed == true && mounted) {
+      setState(() => _loading = true);
+      await _loadSnapshot();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkProvider);
@@ -471,6 +533,51 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                       AppSpacing.interGroupLg,
                 ),
                 children: <Widget>[
+                  if (_profileProposalLoadError != null ||
+                      _profileProposals.isNotEmpty)
+                    ProfileIosGroupedSection(
+                      showDividers: true,
+                      children: <Widget>[
+                        if (_profileProposalLoadError != null)
+                          ProfileIosGroupedCell(
+                            key: const ValueKey<String>(
+                              'edit-profile-proposal-retry',
+                            ),
+                            title: UITextConstants.editProfileProposalTitle,
+                            trailing: Text(
+                              UITextConstants.editProfileProposalLoadFailed,
+                              style: TextStyle(
+                                fontSize: AppTypography.iosSubheadline,
+                                color: AppColors.iosDestructive(context),
+                              ),
+                            ),
+                            onTap: () => unawaited(_reloadProfileProposals()),
+                          ),
+                        for (final proposal in _profileProposals)
+                          ProfileIosGroupedCell(
+                            key: ValueKey<String>(
+                              'edit-profile-proposal-${proposal.id}',
+                            ),
+                            title: UITextConstants.editProfileProposalTitle,
+                            trailing: Text(
+                              proposal.status ==
+                                      ProfileUpdateProposalStatus.pending
+                                  ? UITextConstants.editProfileProposalPending
+                                  : UITextConstants
+                                        .editProfileProposalConfirmed,
+                              style: TextStyle(
+                                fontSize: AppTypography.iosSubheadline,
+                                color: AppColors.iosAccent(context),
+                              ),
+                            ),
+                            onTap: _isDirty
+                                ? null
+                                : () => unawaited(
+                                    _reviewProfileProposal(proposal),
+                                  ),
+                          ),
+                      ],
+                    ),
                   ProfileIosGroupedSection(
                     showDividers: true,
                     children: <Widget>[_buildCoverRow(), _buildAvatarRow()],

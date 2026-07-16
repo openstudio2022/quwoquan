@@ -18,6 +18,7 @@ import {
   fetchProductL1L4Metrics,
   fetchProductTriageSummary,
   fetchProductProjectionSummary,
+  fetchReports,
   rollbackPlatformRelease,
   fetchServiceCatalog,
 } from '../../../.test-dist/shared/api/controlPlane.js';
@@ -25,6 +26,7 @@ import {
 const originalFetch = globalThis.fetch;
 const originalPlatformBaseUrl = process.env.VITE_PLATFORM_OPS_BASE_URL;
 const originalProductBaseUrl = process.env.VITE_PRODUCT_OPS_BASE_URL;
+const originalContentServiceBaseUrl = process.env.VITE_CONTENT_SERVICE_BASE_URL;
 
 function stubFetch(payload) {
   const calls = [];
@@ -58,6 +60,7 @@ function restoreEnvAndFetch() {
   globalThis.fetch = originalFetch;
   process.env.VITE_PLATFORM_OPS_BASE_URL = originalPlatformBaseUrl;
   process.env.VITE_PRODUCT_OPS_BASE_URL = originalProductBaseUrl;
+  process.env.VITE_CONTENT_SERVICE_BASE_URL = originalContentServiceBaseUrl;
 }
 
 test('requests platform service catalog from configured base url', async () => {
@@ -70,6 +73,30 @@ test('requests platform service catalog from configured base url', async () => {
 
   assert.equal(calls[0], 'http://platform.test/v1/control-plane/platform/catalog/services');
   assert.equal(items[0].service, 'content-service');
+  restoreEnvAndFetch();
+});
+
+test('requests report queue through generated control-plane metadata', async () => {
+  process.env.VITE_CONTENT_SERVICE_BASE_URL = 'http://content.test';
+  const calls = stubFetch({
+    items: [{
+      id: 'rpt-1',
+      version: 1,
+      targetType: 'post',
+      targetId: 'post-1',
+      reason: 'spam',
+      status: 'pending',
+      createdAt: '2026-07-13T00:00:00Z',
+      updatedAt: '2026-07-13T00:00:00Z',
+    }],
+    total: 1,
+  });
+
+  const items = await fetchReports();
+
+  assert.equal(calls[0], 'http://content.test/v1/content/reports?limit=10');
+  assert.equal(items[0].id, 'rpt-1');
+  assert.equal(items[0].version, 1);
   restoreEnvAndFetch();
 });
 

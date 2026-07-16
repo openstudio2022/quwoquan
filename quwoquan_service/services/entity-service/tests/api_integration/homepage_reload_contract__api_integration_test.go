@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"sync"
 	"testing"
 
@@ -99,4 +100,118 @@ func TestReloadHomepageStateWithoutStoreFails(t *testing.T) {
 	if resp.StatusCode == http.StatusOK {
 		t.Fatalf("expected non-200 when state store is not configured")
 	}
+}
+
+func TestReloadHomepageStateAppliesDataSyncRollbackAndReplay(t *testing.T) {
+	ctx := context.Background()
+	store := &memoryStateStore{}
+	runtimeService := application.NewHomepageServiceWithStore(ctx, store)
+	server := httptest.NewServer(httpadapter.NewHandler(runtimeService).Routes())
+	defer server.Close()
+
+	// 独立主页没有 qwq_data provenance；data release 的 sync 绝不能将其下线。
+	independent := requestJSON(t, server.Client(), http.MethodPost, server.URL+"/v1/homepages/candidates", map[string]any{
+		"title":        "运营独立主页",
+		"homepageType": "sight",
+		"city":         "杭州",
+	}, http.StatusCreated)
+	independentID := stringField(t, independent, "_id")
+
+	// importer 是独立进程视角：它从同一个运行库加载快照、写 desired state，在线服务
+	// 只能在 reload 后看到变化。
+	importerService := application.NewHomepageServiceWithStore(ctx, store)
+	input := importedHomepageInput("地点/景区/回滚验证景点", "回滚验证景点")
+	releaseOne, err := importerService.ReconcileImportedHomepages(ctx, application.HomepageImportRequest{
+		Mode:            application.HomepageImportModeSync,
+		SourceOwner:     "qwq_data",
+		SourceReleaseID: "20260715--travel-homepage-coverage--cn-zhejiang-sichuan--canary-005",
+		Inputs:          []application.ImportedHomepageInput{input},
+	})
+	if err != nil {
+		t.Fatalf("apply data release: %v", err)
+	}
+	dataHomepageID := releaseOne.EntityRefToHomepageID[input.EntityRef]
+	if dataHomepageID == "" {
+		t.Fatalf("data release did not report homepage identity: %+v", releaseOne)
+	}
+	requestJSON(t, server.Client(), http.MethodPost, server.URL+"/v1/homepages:reload", nil, http.StatusOK)
+	requestJSON(t, server.Client(), http.MethodGet, server.URL+"/v1/homepages/"+dataHomepageID, nil, http.StatusOK)
+	if !searchContainsHomepage(t, server, input.Title, dataHomepageID) {
+		t.Fatalf("published data homepage must appear in search after reload")
+	}
+
+	baseline, err := importerService.ReconcileImportedHomepages(ctx, application.HomepageImportRequest{
+		Mode:            application.HomepageImportModeSync,
+		SourceOwner:     "qwq_data",
+		SourceReleaseID: "20260715--travel-homepage-coverage--cn-zhejiang-sichuan--baseline-001",
+		Inputs:          []application.ImportedHomepageInput{},
+	})
+	if err != nil {
+		t.Fatalf("apply empty baseline: %v", err)
+	}
+	if len(baseline.Offlined) != 1 || baseline.Offlined[0] != dataHomepageID {
+		t.Fatalf("baseline must offline only the prior data-owned homepage: %+v", baseline)
+	}
+	requestJSON(t, server.Client(), http.MethodPost, server.URL+"/v1/homepages:reload", nil, http.StatusOK)
+	offline := requestJSON(t, server.Client(), http.MethodGet, server.URL+"/v1/homepages/"+dataHomepageID, nil, http.StatusGone)
+	if got := stringField(t, offline, "code"); got != "ENTITY.USER.homepage_offline" {
+		t.Fatalf("offline homepage code = %q", got)
+	}
+	if searchContainsHomepage(t, server, input.Title, dataHomepageID) {
+		t.Fatalf("offline data homepage must be removed from search after reload")
+	}
+	requestJSON(t, server.Client(), http.MethodGet, server.URL+"/v1/homepages/"+independentID, nil, http.StatusOK)
+
+	replay, err := importerService.ReconcileImportedHomepages(ctx, application.HomepageImportRequest{
+		Mode:            application.HomepageImportModeSync,
+		SourceOwner:     "qwq_data",
+		SourceReleaseID: "20260715--travel-homepage-coverage--cn-zhejiang-sichuan--canary-005",
+		Inputs:          []application.ImportedHomepageInput{input},
+	})
+	if err != nil {
+		t.Fatalf("replay data release: %v", err)
+	}
+	if got := replay.EntityRefToHomepageID[input.EntityRef]; got != dataHomepageID {
+		t.Fatalf("replay must retain homepage identity: got %q want %q", got, dataHomepageID)
+	}
+	requestJSON(t, server.Client(), http.MethodPost, server.URL+"/v1/homepages:reload", nil, http.StatusOK)
+	requestJSON(t, server.Client(), http.MethodGet, server.URL+"/v1/homepages/"+dataHomepageID, nil, http.StatusOK)
+	if !searchContainsHomepage(t, server, input.Title, dataHomepageID) {
+		t.Fatalf("replayed data homepage must return to search after reload")
+	}
+}
+
+func importedHomepageInput(entityRef string, title string) application.ImportedHomepageInput {
+	return application.ImportedHomepageInput{
+		EntityRef:    entityRef,
+		Title:        title,
+		HomepageType: "sight",
+		City:         "杭州",
+	}
+}
+
+func searchContainsHomepage(t *testing.T, server *httptest.Server, query string, homepageID string) bool {
+	t.Helper()
+	payload := requestJSON(
+		t,
+		server.Client(),
+		http.MethodGet,
+		server.URL+"/v1/homepages/search?query="+url.QueryEscape(query),
+		nil,
+		http.StatusOK,
+	)
+	items, ok := payload["items"].([]any)
+	if !ok {
+		t.Fatalf("search items has unexpected shape: %#v", payload["items"])
+	}
+	for _, raw := range items {
+		item, ok := raw.(map[string]any)
+		if !ok {
+			t.Fatalf("search item has unexpected shape: %#v", raw)
+		}
+		if item["homepageId"] == homepageID {
+			return true
+		}
+	}
+	return false
 }

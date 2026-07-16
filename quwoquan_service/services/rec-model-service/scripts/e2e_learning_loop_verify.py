@@ -6,7 +6,7 @@ Steps verified:
 1. Behavior events exist in rec_learning_events (with scenario field)
 2. Training samples exist in rec_training_samples
 3. A model version exists in rec_model_registry
-4. rec-model-service can score a request
+4. recommendation-service can score a request through the ModelRelease Reader
 5. rec_learning_events contain both impression and engagement types
 6. Seed data bootstrap produces expected collections
 7. Model registry has valid metrics (non-zero)
@@ -33,6 +33,23 @@ except ImportError:
     sys.exit(1)
 
 SCRIPT_DIR = Path(__file__).resolve().parent
+SERVICE_ROOT = SCRIPT_DIR.parent
+if str(SERVICE_ROOT) not in sys.path:
+    sys.path.insert(0, str(SERVICE_ROOT))
+
+from generated.api.operations import SCORE_RECOMMENDATION_CANDIDATES_PATH
+
+
+def _scoring_headers() -> dict[str, str]:
+    authorization = os.environ.get("REC_MODEL_SERVICE_AUTHORIZATION", "").strip()
+    if not authorization.startswith("Bearer "):
+        raise RuntimeError(
+            "REC_MODEL_SERVICE_AUTHORIZATION must contain a short-lived Bearer service token"
+        )
+    return {
+        "Authorization": authorization,
+        "Content-Type": "application/json",
+    }
 
 
 def _dry_run_db_name(db_name: str) -> str:
@@ -125,7 +142,7 @@ def check_model_service(rec_model_url: str) -> tuple[bool, str]:
 
 def check_score_endpoint(rec_model_url: str) -> tuple[bool, str]:
     try:
-        url = f"{rec_model_url}/v1/score"
+        url = f"{rec_model_url}{SCORE_RECOMMENDATION_CANDIDATES_PATH}"
         body = json.dumps({
             "scenario": "content_feed",
             "sessionId": "e2e_verify_sess",
@@ -134,7 +151,7 @@ def check_score_endpoint(rec_model_url: str) -> tuple[bool, str]:
             "userFeatures": {},
             "context": {},
         }).encode()
-        req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
+        req = urllib.request.Request(url, data=body, headers=_scoring_headers())
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read())
         scores = data.get("scores", [])
@@ -143,43 +160,6 @@ def check_score_endpoint(rec_model_url: str) -> tuple[bool, str]:
         return True, f"score endpoint returned {len(scores)} scores"
     except Exception as e:
         return False, f"score endpoint failed: {e}"
-
-
-def check_model_reload_endpoint(rec_model_url: str) -> tuple[bool, str]:
-    try:
-        url = f"{rec_model_url}/v1/model/reload"
-        req = urllib.request.Request(
-            url,
-            data=b"{}",
-            headers={"Content-Type": "application/json"},
-        )
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            data = json.loads(resp.read())
-        if data.get("status") != "reloaded":
-            return False, f"reload endpoint returned: {data}"
-        versions = data.get("versions") or {}
-        if not versions:
-            return False, "reload endpoint returned no versions"
-        return True, f"reload endpoint ok: versions={versions}"
-    except Exception as e:
-        return False, f"reload endpoint failed: {e}"
-
-
-def check_model_status_endpoint(rec_model_url: str) -> tuple[bool, str]:
-    try:
-        url = f"{rec_model_url}/v1/model/status"
-        req = urllib.request.Request(url)
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            data = json.loads(resp.read())
-        versions = data.get("versions") or {}
-        last_reload = data.get("last_reload")
-        if not versions:
-            return False, f"status endpoint returned no versions: {data}"
-        if not last_reload:
-            return False, f"status endpoint missing last_reload: {data}"
-        return True, f"status endpoint ok: versions={versions}, last_reload={last_reload}"
-    except Exception as e:
-        return False, f"status endpoint failed: {e}"
 
 
 def check_seed_train_loop(db, scenario: str) -> tuple[bool, str]:
@@ -200,9 +180,9 @@ def check_seed_train_loop(db, scenario: str) -> tuple[bool, str]:
 
 
 def check_model_score_loop(rec_model_url: str) -> tuple[bool, str]:
-    """Verify /v1/score returns model-based (non-rule) scores."""
+    """Verify the ModelRelease Reader returns model-based (non-rule) scores."""
     try:
-        url = f"{rec_model_url}/v1/score"
+        url = f"{rec_model_url}{SCORE_RECOMMENDATION_CANDIDATES_PATH}"
         body = json.dumps({
             "scenario": "content_feed",
             "sessionId": "e2e_model_verify_sess",
@@ -214,7 +194,7 @@ def check_model_score_loop(rec_model_url: str) -> tuple[bool, str]:
             "userFeatures": {},
             "context": {},
         }).encode()
-        req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
+        req = urllib.request.Request(url, data=body, headers=_scoring_headers())
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read())
         scores = data.get("scores", [])
@@ -297,8 +277,6 @@ def main():
         checks.extend([
             ("Model Service Health", lambda: check_model_service(args.rec_model)),
             ("Score Endpoint", lambda: check_score_endpoint(args.rec_model)),
-            ("Model Reload Endpoint", lambda: check_model_reload_endpoint(args.rec_model)),
-            ("Model Status Endpoint", lambda: check_model_status_endpoint(args.rec_model)),
             ("Model→Score Loop", lambda: check_model_score_loop(args.rec_model)),
         ])
 

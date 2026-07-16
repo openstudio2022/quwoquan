@@ -1,0 +1,644 @@
+version: 2
+node:
+  id: app-cloud-business-object-commercial-closure
+  level: L3_story
+  path: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure
+  title: App Cloud business object commercial closure
+  parent_domain_service: runtime
+  parent_business_capability: system-architecture-and-engineering-guide
+
+scope:
+  summary: 以业务对象 typed contract、服务端可信身份、Runtime 唯一执行链、production/alpha 物理隔离和十条真实 Remote Scenario 完成 App Cloud 商用闭环。
+  journey_scenarios:
+    - identity-entry-persona-continuation
+    - content-feed-open-detail
+    - global-search-query-and-filter
+    - global-route-edge-pop-contract
+    - message-direct-and-greeting-upgrade
+    - circle-entity-group-handoff
+    - assistant-context-grounded-answering
+    - outbound-object-share-distribution
+    - intersection-action-deepening-on-object
+    - profile-share-interaction-history
+  out_of_scope:
+    - 通用 CRUD、事件溯源、分布式事务或通用 Saga
+    - 推荐、内容生产和 edge-media 内部算法
+
+gwt_acceptance:
+  GWT0:
+    title: DDD/CQRS 批量迁移前架构硬门
+    given:
+      - 每个 ContractGraph domain 的唯一 Registry 已登记稳定 context、aggregate root、owned child、projection/fact/session/external reference、访问策略、字段引用和关系。
+      - DDD-OBJ-001 至 CHILD-ACCESS-012 已在 L2 design 冻结。
+    when:
+      - ContractGraph commercial validator 编译 canonical object 与 operation binding。
+    then:
+      - separate_aggregate 及任何等价别名在 loader/schema 层直接失败。
+      - 未登记 domain/object/relationship、聚合根嵌套、跨上下文直达子对象、command 跨 canonical object、owned entity 独立 Store、projection command、fact update/delete 和未分类字段全部失败。
+      - query 必须绑定 named Reader 与 typed Slice；append-only command 必须绑定 append_sink，且不得伪装为 aggregate_owner。
+      - readiness evidence 只声明 exact-path 证据，文件 SHA256 与阶段由 Graph 派生；缺 UAT/四环境不得 commercial-ready。
+    done_when:
+      - Account/Persona/Relationship、Content/Media/TrustSafety、Circle、Chat、Assistant、Notification、Search、Tag、Recommendation、Ops、RTC/Realtime/Integration 的对象与强/最终一致性有唯一裁决。
+      - 跨上下文写只经目标 Command Facade，读只经 named Reader/Slice；owned entity/value object 只经 aggregate root。
+      - 架构反设计 local contract 全绿，批量迁移只能消减 commercial profile 失败项。
+    quality_facets: [contract, data_consistency]
+    test_object: metadata
+    slo_refs: []
+    observability_refs:
+      - contract_graph_validation_failure_total
+    security_refs:
+      - docs/outstanding_risks_backlog.md#R-CLOUD04
+    edge_cases:
+      - separate_aggregate 被 loader 当作兼容别名
+      - 同一 fields.yaml 字段未分类或被重复分类
+      - command 在 Post packet 内声称由 MediaAsset 或 Report 拥有
+      - append-only fact 声明 PATCH/DELETE
+      - aggregate members 嵌入另一个 aggregate root
+      - 跨上下文 relationship 直接指向 owned entity 或其存储
+    platform_variants:
+      iOS:
+        - 与其他平台消费相同 canonical object contract。
+      Android:
+        - 与其他平台消费相同 canonical object contract。
+      Web:
+        - 与其他平台消费相同 canonical object contract。
+      OHOS:
+        - 与其他平台消费相同 canonical object contract。
+    contract_refs:
+      - specs/feature-tree/runtime/system-architecture-and-engineering-guide/design.md#dddcqrs-批量迁移前决策
+      - quwoquan_service/contracts/metadata
+      - quwoquan_service/contracts/metadata/_schemas/business_object_map.schema.json
+    performance_points: []
+    test_evidence:
+      primary:
+        - layer: local_contract
+          suite: ddd_cqrs_contract_graph
+          cases:
+            - local_contract.runtime.system_architecture_and_engineering_guide.app_cloud_business_object_commercial_closure.ddd_cqrs_baseline
+          envs: [local]
+          test_object: metadata
+          quality_facet: contract
+      supporting: []
+    tests:
+      planned: []
+      recorded:
+        - file: quwoquan_ops/tests/local_contract/test_business_object_design_freeze__local_contract_test.py
+        - file: quwoquan_service/internal/metadata/graph/contract_graph__compile_validate__contract__local_contract_test.go
+        - file: quwoquan_service/internal/metadata/graph/ddd_cqrs_guardrails__contract__local_contract_test.go
+        - file: quwoquan_service/internal/metadata/graph/object_readiness__contract__local_contract_test.go
+        - file: quwoquan_service/internal/metadata/openapi/openapi__contract__local_contract_test.go
+        - file: quwoquan_service/runtime/controlplane/store__contract__local_contract_test.go
+        - file: quwoquan_service/services/product-ops-service/cmd/api/main__local_contract_test.go
+        - file: quwoquan_service/services/content-service/internal/domain/report/model/report__local_contract_test.go
+        - file: quwoquan_service/services/content-service/internal/application/report/report_service__local_contract_test.go
+        - file: quwoquan_service/services/user-service/internal/domain/persona/profile_update_proposal/model/profile_update_proposal__local_contract_test.go
+        - file: quwoquan_service/services/user-service/internal/application/persona/profile_update_proposal/facade__local_contract_test.go
+    status: partial
+
+  GWT1:
+    title: App 只消费业务对象类型化 ContractGraph
+    given:
+      - 业务对象 metadata 已声明 canonical object、command owner、query Reader/Slice 和 security/reliability policy。
+    when:
+      - compiler 生成 Go execution descriptor、Dart operation-specific client、OpenAPI 与 coverage。
+    then:
+      - 所有输出绑定同一 source/compiler/Graph hash。
+      - App 业务代码不传 operationId、path 或动态 Map，也不从旧 Repository 推断对象边界。
+      - 缺 owner、Reader/Slice、security 或 decoder binding 时生成失败。
+    done_when:
+      - ContractGraph validate/generate/check 可在 clean checkout 幂等重生。
+      - canonical object 与 App-exposed operation coverage 均为 100%。
+    quality_facets: [functional, contract, data_consistency]
+    test_object: metadata
+    slo_refs:
+      - specs/feature-tree/runtime/system-architecture-and-engineering-guide/acceptance.yaml#SIT5
+    observability_refs:
+      - contract_graph_source_hash
+      - contract_graph_compiler_hash
+      - contract_graph_output_hash
+    security_refs:
+      - docs/outstanding_risks_backlog.md#R-CLOUD04
+    edge_cases:
+      - metadata operation 指向其他 canonical object 的 command owner
+      - query 缺 Reader 或 Slice
+      - generated manifest 有缺失或孤儿文件
+    platform_variants:
+      iOS:
+        - 与其他平台消费相同 pure Dart contract。
+      Android:
+        - 与其他平台消费相同 pure Dart contract。
+      Web:
+        - 平台能力缺失通过 capability profile 结构化降级。
+      OHOS:
+        - 平台能力缺失通过 capability profile 结构化降级。
+    contract_refs:
+      - quwoquan_service/contracts/metadata
+      - quwoquan_service/contracts/metadata/_schemas/contract_graph.schema.json
+      - specs/feature-tree/runtime/system-architecture-and-engineering-guide/design.md
+    performance_points:
+      - compiler 和 generated clean rebuild 保持在 required CI 预算内。
+    test_evidence:
+      primary:
+        - layer: local_contract
+          suite: app_cloud_business_object_contract
+          cases:
+            - local_contract.runtime.system_architecture_and_engineering_guide.app_cloud_business_object_commercial_closure.contract_graph
+          envs: [local]
+          test_object: metadata
+          quality_facet: contract
+      supporting: []
+    tests:
+      planned: []
+      recorded:
+        - file: quwoquan_service/tools/qwq_contract/main__contract__local_contract_test.go
+        - file: quwoquan_service/internal/metadata/load/source_documents__contract__local_contract_test.go
+        - file: quwoquan_service/internal/metadata/validate/openapi__contract__local_contract_test.go
+        - file: quwoquan_app/test/local_contract/cloud/generated_operation_client__contract__local_contract_test.dart
+        - file: quwoquan_app/test/local_contract/cloud/circle/circle_file_facets__local_contract_test.dart
+        - file: quwoquan_app/test/local_contract/cloud/remote/content/post/post_lifecycle_remote__local_contract_test.dart
+        - file: quwoquan_app/test/local_contract/ui/content/entry/contract/publish_payload_contract__local_contract_test.dart
+        - file: quwoquan_app/test/local_contract/ui/content/entry/publish_identity_confirmation_widget__local_contract_test.dart
+        - file: quwoquan_app/packages/quwoquan_cloud_mock/test/local_contract/content/alpha_post_lifecycle_writer__local_contract_test.dart
+        - file: quwoquan_app/test/local_contract/cloud/runtime/generated_cloud_operation_executor__local_contract_test.dart
+        - file: quwoquan_service/services/notification-service/tests/local_contract/notification_delivery_ops_facades__local_contract_test.go
+        - file: quwoquan_app/test/local_contract/cloud/user/profile_update_proposal_facets__local_contract_test.dart
+        - file: quwoquan_app/test/local_contract/ui/user/profile_update_proposal_review_sheet__local_contract_test.dart
+    status: partial
+
+  GWT2:
+    title: 服务端从可信 principal 执行 operation 与对象授权
+    given:
+      - route descriptor 携带 auth、actor、principal、scope 和 ownership/member policy。
+    when:
+      - 请求经 Gateway 或直连 Service 访问 required operation。
+    then:
+      - 服务端清除客户端身份头并从已验证 JWT/device ticket 重建 ActorContext。
+      - 缺失或非法 credential 返回结构化 401，权限不满足返回 403，对象防枚举可返回 404。
+      - application 对 owner/member/participant/admin 再校验，失败不产生 DB、OSS、MQ 或 LiveKit 副作用。
+    done_when:
+      - required operation 服务端 guard 覆盖率为 100%。
+      - RTC/Realtime、Chat/Content Media、Assistant consent、Behavior/Ops 的跨 actor 负例全绿。
+      - production 缺 JWT key/issuer/audience 时启动失败且不存在默认 secret。
+    quality_facets: [security, reliability, observability]
+    test_object: api_operation
+    slo_refs:
+      - specs/feature-tree/runtime/system-architecture-and-engineering-guide/acceptance.yaml#SIT7
+    observability_refs:
+      - auth_denied_total
+      - actor_mismatch_total
+      - object_access_denied_total
+    security_refs:
+      - docs/outstanding_risks_backlog.md#R-CLOUD01
+      - docs/outstanding_risks_backlog.md#R-CLOUD02
+      - docs/outstanding_risks_backlog.md#R-CLOUD03
+    edge_cases:
+      - 伪造 X-Client 身份头
+      - 错误 issuer/audience/scope/token version
+      - 用户 B 访问用户 A 的媒体、会话、consent 或 call
+      - RTC/Realtime ticket 过期或重放
+    platform_variants:
+      iOS:
+        - 认证语义与其他平台一致。
+      Android:
+        - 认证语义与其他平台一致。
+      Web:
+        - Web credential 不得弱化服务端授权。
+      OHOS:
+        - OHOS credential 不得弱化服务端授权。
+    contract_refs:
+      - quwoquan_service/runtime/auth
+      - quwoquan_service/contracts/metadata
+      - quwoquan_ops/environments/workload_topology_inventory.yaml
+    performance_points:
+      - auth/authorization middleware 时延纳入 API P95/P99。
+    test_evidence:
+      primary:
+        - layer: api_integration
+          suite: app_cloud_server_security
+          cases:
+            - api_integration.runtime.system_architecture_and_engineering_guide.app_cloud_business_object_commercial_closure.auth_bola
+          envs: [gamma]
+          test_object: api_operation
+          quality_facet: security
+      supporting:
+        - layer: local_contract
+          suite: generated_security_descriptor
+          cases:
+            - local_contract.runtime.system_architecture_and_engineering_guide.app_cloud_business_object_commercial_closure.security_descriptor
+          envs: [local]
+          test_object: metadata
+          quality_facet: contract
+    tests:
+      planned:
+        - command: make -C quwoquan_service verify-contract-graph-commercial
+      recorded:
+        - file: quwoquan_service/runtime/auth/config__security__local_contract_test.go
+        - file: quwoquan_service/runtime/auth/middleware__security__local_contract_test.go
+        - file: quwoquan_service/runtime/auth/operation_guard__security__local_contract_test.go
+        - file: quwoquan_service/services/content-service/internal/adapters/http/sensitive_operation_guard__security__local_contract_test.go
+        - file: quwoquan_service/services/content-service/tests/api_integration/media_asset_reference__api_integration_test.go
+        - file: quwoquan_service/services/content-service/tests/api_integration/media_commercial_operations__api_integration_test.go
+        - file: quwoquan_service/services/circle-service/tests/api_integration/circle_file_contract__api_integration_test.go
+        - file: quwoquan_service/services/assistant-service/internal/adapters/http/handler__local_contract_test.go
+        - file: quwoquan_service/services/chat-service/tests/api_integration/group_creation_relationship_gate__api_integration_test.go
+        - file: quwoquan_service/services/chat-service/tests/api_integration/group_lifecycle_contract__api_integration_test.go
+        - file: quwoquan_service/services/user-service/tests/api_integration/auth_contract__api_integration_test.go
+        - file: quwoquan_service/services/user-service/tests/api_integration/credential_contract__api_integration_test.go
+        - file: quwoquan_service/services/user-service/tests/api_integration/active_persona_context_contract__api_integration_test.go
+        - file: quwoquan_service/services/user-service/internal/adapters/http/profile_update_proposal_handler__local_contract_test.go
+        - file: quwoquan_service/services/user-service/tests/api_integration/profile_update_proposal_store__api_integration_test.go
+        - file: quwoquan_app/test/local_contract/cloud/assistant/assistant_consent_fail_closed__security__local_contract_test.dart
+        - file: quwoquan_app/test/local_contract/cloud/runtime/actor_queue_partition__security__local_contract_test.dart
+    status: partial
+
+  GWT3:
+    title: production Remote 与 alpha Mock 物理隔离
+    given:
+      - pure Dart contracts、独立 mock package、alpha runner 和 production composition root 已建立。
+    when:
+      - 分别解析 production 与 alpha 依赖图并构建 release 产物。
+    then:
+      - production 只装配 Remote adapter，AOT/SBOM 不可达 Mock、fixture、Noop 或 alpha URL。
+      - mock package 只依赖 contracts/fixture，不依赖 App、Flutter、Riverpod 或 production Provider。
+      - 同一 fixture 行为规范验证 alpha adapter 与 Remote stub。
+    done_when:
+      - App 内 Mock 顶层类、fixture runtime loader、空 Remote 和 fallback 数量为 0。
+      - prod/alpha dependency resolution、kernel/AOT/SBOM 与 production wiring 门禁全绿。
+    quality_facets: [security, contract]
+    test_object: package_contract
+    slo_refs: []
+    observability_refs:
+      - production_dependency_graph_digest
+      - release_sbom_digest
+    security_refs:
+      - docs/outstanding_risks_backlog.md#R-CLOUD05
+    edge_cases:
+      - transitive dependency 把 mock package 拉入 production
+      - Remote 异常后返回 fixture 或空集合
+      - release define 缺失时回落 alpha
+    platform_variants:
+      iOS:
+        - release AOT/SBOM 证明 production purity。
+      Android:
+        - release AOT/SBOM 证明 production purity。
+      Web:
+        - release bundle 证明 production purity。
+      OHOS:
+        - HAP/SBOM 证明 production purity。
+    contract_refs:
+      - specs/gates/mock_data_cloud_integration_policy.md
+      - specs/gates/mock_migration_checklist.md
+      - specs/gates/prod_bootstrap_repository_inventory.md
+    performance_points: []
+    test_evidence:
+      primary:
+        - layer: local_contract
+          suite: production_dependency_purity
+          cases:
+            - local_contract.runtime.system_architecture_and_engineering_guide.app_cloud_business_object_commercial_closure.production_purity
+          envs: [local]
+          test_object: package_contract
+          quality_facet: security
+      supporting: []
+    tests:
+      planned:
+        - command: python3 quwoquan_app/scripts/runtime/verify_cloud_package_boundaries.py
+        - command: make -C quwoquan_service verify-production-wiring-purity
+      recorded:
+        - file: quwoquan_ops/tests/local_contract/test_cloud_commercial_directory_governance__contract__local_contract_test.py
+        - file: quwoquan_ops/tests/local_contract/test_cloud_package_boundaries__contract__local_contract_test.py
+        - file: quwoquan_ops/tests/local_contract/test_production_wiring_purity__local_contract_test.py
+        - file: quwoquan_app/packages/quwoquan_cloud_mock/test/local_contract/circle/alpha_file_facets__local_contract_test.dart
+    status: partial
+
+  GWT4:
+    title: Runtime 对 deadline cancellation retry error telemetry 语义唯一
+    given:
+      - operation contract 声明 timeout、retry、idempotency、recovery、privacy 与 telemetry。
+    when:
+      - 请求经历超时、取消、401 refresh、429/5xx、坏响应或弱网。
+    then:
+      - executor 按剩余预算执行，取消可终止请求和 backoff。
+      - command 仅在声明幂等且有 key 时重放，attempt/retry reason 反映真实执行。
+      - 所有失败映射为 RuntimeFailure，UI 不把系统失败伪装为空态。
+      - telemetry 不记录 token、PII、实例 URL 或 presigned query。
+    done_when:
+      - Cloud 只有一条 context/config/transport/error/telemetry 执行链。
+      - Runtime import DAG、generated-client-only、RuntimeFailure 零旁路门禁全绿。
+    quality_facets: [reliability, performance, observability, security]
+    test_object: application_service
+    slo_refs:
+      - specs/feature-tree/runtime/runtime-sli/acceptance.yaml
+    observability_refs:
+      - cloud_operation_duration_seconds
+      - cloud_operation_attempt_total
+      - cloud_operation_failure_total
+    security_refs:
+      - docs/outstanding_risks_backlog.md#R-CLOUD06
+    edge_cases:
+      - deadline 在 retry backoff 中到期
+      - 取消发生在 token refresh 或流式上传中
+      - POST 收到 401 但没有幂等 key
+      - telemetry sink 自身失败
+    platform_variants:
+      iOS:
+        - 取消和网络恢复消费统一 runtime contract。
+      Android:
+        - 取消和网络恢复消费统一 runtime contract。
+      Web:
+        - 不支持的本地能力走结构化降级。
+      OHOS:
+        - 不支持的本地能力走结构化降级。
+    contract_refs:
+      - quwoquan_app/packages/quwoquan_cloud_contracts
+      - quwoquan_app/lib/cloud/runtime
+      - quwoquan_service/contracts/metadata
+    performance_points:
+      - operation timeout 不得超过剩余 deadline budget。
+    test_evidence:
+      primary:
+        - layer: local_contract
+          suite: cloud_runtime_execution
+          cases:
+            - local_contract.runtime.system_architecture_and_engineering_guide.app_cloud_business_object_commercial_closure.runtime_semantics
+          envs: [local]
+          test_object: application_service
+          quality_facet: reliability
+      supporting:
+        - layer: api_integration
+          suite: cloud_runtime_remote
+          cases:
+            - api_integration.runtime.system_architecture_and_engineering_guide.app_cloud_business_object_commercial_closure.runtime_remote
+          envs: [gamma]
+          test_object: api_operation
+          quality_facet: reliability
+    tests:
+      planned:
+        - command: python3 quwoquan_app/scripts/runtime/verify_cloud_package_boundaries.py
+      recorded:
+        - file: quwoquan_app/test/local_contract/cloud/runtime/generated_cloud_operation_executor__local_contract_test.dart
+        - file: quwoquan_app/test/local_contract/cloud/runtime/cloud_http_client_refresh__local_contract_test.dart
+        - file: quwoquan_app/test/local_contract/cloud/runtime/retry_http_client__local_contract_test.dart
+        - file: quwoquan_app/test/local_contract/cloud/runtime/errors/cloud_error_mapper_runtime_failure__local_contract_test.dart
+        - file: quwoquan_app/test/local_contract/cloud/media/content_media_object_uploader__local_contract_test.dart
+        - file: quwoquan_service/services/content-service/tests/api_integration/media_object_storage__api_integration_test.go
+        - file: quwoquan_service/services/chat-service/tests/api_integration/group_avatar_async_contract__api_integration_test.go
+        - file: quwoquan_service/services/chat-service/internal/application/message_outbox_relay__local_contract_test.go
+        - file: quwoquan_service/services/chat-service/tests/api_integration/message_crud_contract__api_integration_test.go
+    status: partial
+
+  GWT5:
+    title: 十条真实 Remote Scenario 完成商业准出
+    given:
+      - 全部 App-exposed operation 已完成 typed adapter、真实服务与真实存储切换。
+      - alpha、beta、gamma、prod 使用各自合法数据源和 production composition。
+    when:
+      - 同一 commit 与 Graph hash 执行十条 AppRoot Scenario、跨平台构建、SLO 灰度和故障回滚。
+    then:
+      - 每条 Scenario 都验证权限、错误恢复、幂等、副作用、projection 收敛和行为/运营回流。
+      - Web/OHOS 缺失能力按 capability profile 一致降级。
+      - prod rollout 只在实时 SLO 达标后推进，故障注入可在目标 RTO 内回滚。
+    done_when:
+      - local_contract、api_integration、user_acceptance 均有真实 CaseResult。
+      - retired/Mock/fixture/empty Remote/reverse import/dynamic skip/path-UAT 全部为 0。
+      - production AOT/SBOM、Web release、OHOS HAP、SLO、灰度和回滚证据绑定同一候选版本。
+    quality_facets: [functional, experience, security, reliability, performance, observability]
+    test_object: workflow
+    slo_refs:
+      - specs/feature-tree/acceptance.yaml#UAT_BUSINESS_OBJECT_COMMERCIALIZATION
+    observability_refs:
+      - journey_success_rate
+      - api_latency_p95
+      - projection_freshness_seconds
+      - rollback_recovery_seconds
+    security_refs:
+      - docs/outstanding_risks_backlog.md#R-CLOUD01
+      - docs/outstanding_risks_backlog.md#R-CLOUD09
+    edge_cases:
+      - 弱网、撤权、切号、服务重启和 projection 延迟
+      - Web/OHOS capability 不可用
+      - gray 阶段指标恶化
+    platform_variants:
+      iOS:
+        - 真实设备主旅程通过。
+      Android:
+        - 真实设备主旅程通过。
+      Web:
+        - release build 与公开能力旅程通过。
+      OHOS:
+        - HAP 与 capability 降级旅程通过。
+    contract_refs:
+      - specs/feature-tree/acceptance.yaml#UAT_BUSINESS_OBJECT_COMMERCIALIZATION
+      - specs/feature-tree/journey_scenario_registry.yaml
+      - quwoquan_ops/environments/gamma_validation_suites.json
+    performance_points:
+      - Journey 首屏、主动作、API P95/P99、queue lag 与 projection freshness 达到各能力 SLO。
+    test_evidence:
+      primary:
+        - layer: user_acceptance
+          suite: business_object_commercial_journeys
+          cases:
+            - user_acceptance.runtime.system_architecture_and_engineering_guide.app_cloud_business_object_commercial_closure.ten_scenarios
+            - user_acceptance.page.appShell.load_success
+            - user_acceptance.page.appShell.empty_permission_error
+            - user_acceptance.page.appShell.primary_cta
+            - user_acceptance.page.appShell.trace_context
+            - user_acceptance.page.circlesList.load_success
+            - user_acceptance.page.circlesList.empty_permission_error
+            - user_acceptance.page.circlesList.primary_cta
+            - user_acceptance.page.circlesList.trace_context
+            - user_acceptance.page.circleStats.load_success
+            - user_acceptance.page.circleStats.empty_permission_error
+            - user_acceptance.page.circleStats.primary_cta
+            - user_acceptance.page.circleStats.trace_context
+            - user_acceptance.page.assistantManagement.load_success
+            - user_acceptance.page.assistantManagement.empty_permission_error
+            - user_acceptance.page.assistantManagement.primary_cta
+            - user_acceptance.page.assistantManagement.trace_context
+            - user_acceptance.page.assistantSkills.load_success
+            - user_acceptance.page.assistantSkills.empty_permission_error
+            - user_acceptance.page.assistantSkills.primary_cta
+            - user_acceptance.page.assistantSkills.trace_context
+            - user_acceptance.page.homeFeed.load_success
+            - user_acceptance.page.homeFeed.empty_permission_error
+            - user_acceptance.page.homeFeed.primary_cta
+            - user_acceptance.page.homeFeed.trace_context
+            - user_acceptance.page.welcome.load_success
+            - user_acceptance.page.welcome.empty_permission_error
+            - user_acceptance.page.welcome.primary_cta
+            - user_acceptance.page.welcome.trace_context
+            - user_acceptance.page.profileHome.load_success
+            - user_acceptance.page.profileHome.empty_permission_error
+            - user_acceptance.page.profileHome.primary_cta
+            - user_acceptance.page.profileHome.trace_context
+            - user_acceptance.page.interestMatch.load_success
+            - user_acceptance.page.interestMatch.empty_permission_error
+            - user_acceptance.page.interestMatch.primary_cta
+            - user_acceptance.page.interestMatch.trace_context
+            - user_acceptance.page.login.load_success
+            - user_acceptance.page.login.empty_permission_error
+            - user_acceptance.page.login.primary_cta
+            - user_acceptance.page.login.trace_context
+            - user_acceptance.page.legalUserAgreement.load_success
+            - user_acceptance.page.legalUserAgreement.empty_permission_error
+            - user_acceptance.page.legalUserAgreement.primary_cta
+            - user_acceptance.page.legalUserAgreement.trace_context
+            - user_acceptance.page.legalPrivacyPolicy.load_success
+            - user_acceptance.page.legalPrivacyPolicy.empty_permission_error
+            - user_acceptance.page.legalPrivacyPolicy.primary_cta
+            - user_acceptance.page.legalPrivacyPolicy.trace_context
+            - user_acceptance.page.legalPermissions.load_success
+            - user_acceptance.page.legalPermissions.empty_permission_error
+            - user_acceptance.page.legalPermissions.primary_cta
+            - user_acceptance.page.legalPermissions.trace_context
+            - user_acceptance.page.legalThirdPartySdkList.load_success
+            - user_acceptance.page.legalThirdPartySdkList.empty_permission_error
+            - user_acceptance.page.legalThirdPartySdkList.primary_cta
+            - user_acceptance.page.legalThirdPartySdkList.trace_context
+            - user_acceptance.page.createWorkspace.load_success
+            - user_acceptance.page.createWorkspace.empty_permission_error
+            - user_acceptance.page.createWorkspace.primary_cta
+            - user_acceptance.page.createWorkspace.trace_context
+            - user_acceptance.page.imageEditor.load_success
+            - user_acceptance.page.imageEditor.empty_permission_error
+            - user_acceptance.page.imageEditor.primary_cta
+            - user_acceptance.page.imageEditor.trace_context
+            - user_acceptance.page.workBrowser.load_success
+            - user_acceptance.page.workBrowser.empty_permission_error
+            - user_acceptance.page.workBrowser.primary_cta
+            - user_acceptance.page.workBrowser.trace_context
+            - user_acceptance.page.personalAssistantChatAlias.load_success
+            - user_acceptance.page.personalAssistantChatAlias.empty_permission_error
+            - user_acceptance.page.personalAssistantChatAlias.primary_cta
+            - user_acceptance.page.personalAssistantChatAlias.trace_context
+            - user_acceptance.page.settingsHome.load_success
+            - user_acceptance.page.settingsHome.empty_permission_error
+            - user_acceptance.page.settingsHome.primary_cta
+            - user_acceptance.page.settingsHome.trace_context
+            - user_acceptance.page.settingsPermissions.load_success
+            - user_acceptance.page.settingsPermissions.empty_permission_error
+            - user_acceptance.page.settingsPermissions.primary_cta
+            - user_acceptance.page.settingsPermissions.trace_context
+            - user_acceptance.page.settingsDarkMode.load_success
+            - user_acceptance.page.settingsDarkMode.empty_permission_error
+            - user_acceptance.page.settingsDarkMode.primary_cta
+            - user_acceptance.page.settingsDarkMode.trace_context
+            - user_acceptance.page.settingsAbout.load_success
+            - user_acceptance.page.settingsAbout.empty_permission_error
+            - user_acceptance.page.settingsAbout.primary_cta
+            - user_acceptance.page.settingsAbout.trace_context
+            - user_acceptance.page.profileEdit.load_success
+            - user_acceptance.page.profileEdit.empty_permission_error
+            - user_acceptance.page.profileEdit.primary_cta
+            - user_acceptance.page.profileEdit.trace_context
+            - user_acceptance.page.profilePersonas.load_success
+            - user_acceptance.page.profilePersonas.empty_permission_error
+            - user_acceptance.page.profilePersonas.primary_cta
+            - user_acceptance.page.profilePersonas.trace_context
+            - user_acceptance.page.profileComments.load_success
+            - user_acceptance.page.profileComments.empty_permission_error
+            - user_acceptance.page.profileComments.primary_cta
+            - user_acceptance.page.profileComments.trace_context
+            - user_acceptance.page.profileStats.load_success
+            - user_acceptance.page.profileStats.empty_permission_error
+            - user_acceptance.page.profileStats.primary_cta
+            - user_acceptance.page.profileStats.trace_context
+            - user_acceptance.page.myIntersections.load_success
+            - user_acceptance.page.myIntersections.empty_permission_error
+            - user_acceptance.page.myIntersections.primary_cta
+            - user_acceptance.page.myIntersections.trace_context
+            - user_acceptance.page.objectIntersections.load_success
+            - user_acceptance.page.objectIntersections.empty_permission_error
+            - user_acceptance.page.objectIntersections.primary_cta
+            - user_acceptance.page.objectIntersections.trace_context
+            - user_acceptance.page.rtcOutgoing.load_success
+            - user_acceptance.page.rtcOutgoing.empty_permission_error
+            - user_acceptance.page.rtcOutgoing.primary_cta
+            - user_acceptance.page.rtcOutgoing.trace_context
+            - user_acceptance.page.rtcIncoming.load_success
+            - user_acceptance.page.rtcIncoming.empty_permission_error
+            - user_acceptance.page.rtcIncoming.primary_cta
+            - user_acceptance.page.rtcIncoming.trace_context
+            - user_acceptance.page.rtcVoice.load_success
+            - user_acceptance.page.rtcVoice.empty_permission_error
+            - user_acceptance.page.rtcVoice.primary_cta
+            - user_acceptance.page.rtcVoice.trace_context
+            - user_acceptance.page.rtcVideo.load_success
+            - user_acceptance.page.rtcVideo.empty_permission_error
+            - user_acceptance.page.rtcVideo.primary_cta
+            - user_acceptance.page.rtcVideo.trace_context
+            - user_acceptance.page.rtcPickParticipants.load_success
+            - user_acceptance.page.rtcPickParticipants.empty_permission_error
+            - user_acceptance.page.rtcPickParticipants.primary_cta
+            - user_acceptance.page.rtcPickParticipants.trace_context
+          envs: [gamma_local]
+          test_object: workflow
+          quality_facet: experience
+      supporting:
+        - layer: api_integration
+          suite: app_cloud_operation_store_event
+          cases:
+            - api_integration.runtime.system_architecture_and_engineering_guide.app_cloud_business_object_commercial_closure.operation_store_event
+          envs: [beta, gamma]
+          test_object: api_operation
+          quality_facet: reliability
+    tests:
+      planned:
+        - command: make gate
+      recorded:
+        - file: quwoquan_service/services/notification-service/tests/api_integration/app_message_lifecycle__api_integration_test.go
+        - file: quwoquan_service/services/notification-service/tests/api_integration/notification_delivery_mongo_integration__reliability__api_integration_test.go
+        - file: quwoquan_app/test/user_acceptance/journeys/discovery/post/discovery_post_interaction_journey__user_acceptance_test.dart
+        - file: quwoquan_app/test/local_contract/ui/circle/widgets/section_widgets__local_contract_test.dart
+    status: pending
+
+contract_acceptance:
+  CONTRACT1:
+    title: L3 Story 与 AppRoot 十条 Scenario 双向可追踪
+    metadata_refs:
+      - specs/feature-tree/journey_scenario_registry.yaml
+      - specs/feature-tree/acceptance.yaml#UAT_BUSINESS_OBJECT_COMMERCIALIZATION
+      - specs/feature-tree/runtime/system-architecture-and-engineering-guide/acceptance.yaml#SIT7
+      - specs/changelog/CR-20260713-088-app-cloud-commercial-directory-governance.yaml
+    done_when:
+      - L2 SIT7 与 CR-088 引用本 Story。
+      - UAT 的十个 scenario_refs 均在 registry 中引用本 Story。
+      - tree_index 注册本 Story，且 Story 只含 spec.md 与 acceptance.yaml。
+    quality_facets: [contract]
+    test_object: metadata
+    slo_refs: []
+    observability_refs:
+      - feature_traceability_coverage
+    security_refs: []
+    test_evidence:
+      primary:
+        - layer: local_contract
+          suite: app_cloud_story_traceability
+          cases:
+            - local_contract.runtime.system_architecture_and_engineering_guide.app_cloud_business_object_commercial_closure.traceability
+          envs: [local]
+          test_object: metadata
+          quality_facet: contract
+      supporting: []
+    tests:
+      planned:
+        - command: bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+        - command: bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
+      recorded:
+        - file: quwoquan_ops/tests/local_contract/test_app_cloud_story_traceability__contract__local_contract_test.py
+    status: implemented
+
+execution:
+  local_gate:
+    - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+    - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
+    - python3 quwoquan_ops/gate/verify_cloud_commercial_directory_governance.py
+    - python3 quwoquan_ops/cli/cloud_contract_handoff.py verify
+    - cd quwoquan_service && go test ./services/user-service/internal/domain/persona/profile_update_proposal/model ./services/user-service/internal/application/persona/profile_update_proposal ./services/user-service/internal/adapters/http -count=1
+    - cd quwoquan_app && flutter test test/local_contract/cloud/user/profile_update_proposal_facets__local_contract_test.dart test/local_contract/ui/user/profile_update_proposal_review_sheet__local_contract_test.dart
+  api_integration:
+    - cd quwoquan_service && go test ./services/user-service/tests/api_integration -run TestProfileUpdateProposal -count=1
+  full_gate:
+    - make gate
+    - python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --tier all
+    - make gate-full

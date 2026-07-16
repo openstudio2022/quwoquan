@@ -73,14 +73,20 @@ class _HomepageMaintenancePageState
         !_isSubmitting &&
         (_detail?.claimStatus ?? '') == 'claimed';
     if (_pageErrorSemantic != null && !_isLoading) {
-      return AppPageErrorState(
-        semantic: _pageErrorSemantic!,
-        onAction: (action) async {
-          if (action.type == UiErrorActionType.retry ||
-              action.type == UiErrorActionType.resubmit) {
-            await _load();
-          }
-        },
+      return IosSelectionPageScaffold(
+        title: '维护主页',
+        onBack: _handleCloseRequest,
+        leadingStyle: IosSelectionHeaderLeadingStyle.close,
+        backgroundColor: SettingsSemanticConstants.pageBackground(isDark),
+        body: AppPageErrorState(
+          semantic: _pageErrorSemantic!,
+          onAction: (action) async {
+            if (action.type == UiErrorActionType.retry ||
+                action.type == UiErrorActionType.resubmit) {
+              await _load();
+            }
+          },
+        ),
       );
     }
     return IosSelectionPageScaffold(

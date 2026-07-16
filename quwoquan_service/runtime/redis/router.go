@@ -17,9 +17,11 @@ type Router struct {
 	defaultScene string
 }
 
+type ClientFactory func(SceneConfig) (Client, error)
+
 // MustNewRouter creates a Router from config; panics on error.
 func MustNewRouter(cfg RouterConfig) *Router {
-	r, err := NewRouter(cfg)
+	r, err := NewRouterWithFactory(cfg, memoryClientFactory)
 	if err != nil {
 		panic(fmt.Sprintf("redis.MustNewRouter: %v", err))
 	}
@@ -28,13 +30,20 @@ func MustNewRouter(cfg RouterConfig) *Router {
 
 // NewRouter creates a Router from config.
 func NewRouter(cfg RouterConfig) (*Router, error) {
+	return NewRouterWithFactory(cfg, memoryClientFactory)
+}
+
+func NewRouterWithFactory(cfg RouterConfig, factory ClientFactory) (*Router, error) {
 	if len(cfg.Scenes) == 0 {
 		return nil, fmt.Errorf("redis: at least one scene must be configured")
+	}
+	if factory == nil {
+		return nil, fmt.Errorf("redis: client factory is required")
 	}
 
 	scenes := make(map[string]Client, len(cfg.Scenes))
 	for name, scfg := range cfg.Scenes {
-		client, err := newSceneClient(scfg)
+		client, err := factory(scfg)
 		if err != nil {
 			return nil, fmt.Errorf("redis: scene %q: %w", name, err)
 		}
@@ -67,6 +76,18 @@ func NewRouter(cfg RouterConfig) (*Router, error) {
 		prefixRoutes: routes,
 		defaultScene: def,
 	}, nil
+}
+
+func memoryClientFactory(cfg SceneConfig) (Client, error) {
+	switch cfg.Mode {
+	case "", "memory":
+		return NewMemoryClient(), nil
+	default:
+		return nil, fmt.Errorf(
+			"redis: mode %q requires internal/platform/redis composition",
+			cfg.Mode,
+		)
+	}
 }
 
 // Scene returns the Client for a named scene.

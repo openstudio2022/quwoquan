@@ -59,7 +59,9 @@ sit_acceptance:
         - user_acceptance.runtime.runtime_test_pyramid.sit1.journey_binding
         envs:
         - gamma_local
-        - prod_gray_initial
+        - prod
+        rollout_stages:
+        - gray_initial
       - layer: local_contract
         suite: runtime_test_pyramid_local_contract_chain
         cases:
@@ -85,7 +87,9 @@ sit_acceptance:
         cases:
         - api_integration.runtime.runtime_test_pyramid.sit1.release_readiness_guard
         envs:
-        - prod_gray_initial
+        - prod
+        rollout_stages:
+        - gray_initial
     notes:
     - 2026-06-22 收口：specs/gates/test_directory_inventory.yaml 升级到 version 2，App 377
       / Service 183 / Data 101 / quwoquan_ops 9 个 legacy suite 全部 bridged，pending=0。

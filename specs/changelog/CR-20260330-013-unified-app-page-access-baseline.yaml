@@ -16,7 +16,7 @@ artifacts:
   - specs/feature-tree/runtime/runtime-client-foundation/unified-app-page-access/spec.md
   - specs/feature-tree/runtime/runtime-client-foundation/unified-app-page-access/design.md
   - specs/feature-tree/runtime/runtime-client-foundation/unified-app-page-access/acceptance.yaml
-  - specs/feature-tree/runtime/runtime-client-foundation/unified-app-page-access/plan.yaml
+  - specs/feature-tree/runtime/runtime-client-foundation/unified-app-page-access/content.execution.planning.yaml
   - specs/feature-tree/runtime/runtime-client-foundation/unified-app-page-access/coverage-surfaces.md
   - quwoquan_service/contracts/metadata/_shared/app_routes.yaml
   - specs/feature-tree/tree_index.yaml

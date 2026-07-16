@@ -24,7 +24,7 @@ evidence:
   t1:
     - quwoquan_data/.venv/bin/python -m pytest quwoquan_data/tests/local_contract/annotate/test_annotate_publish_filter__local_contract_test.py -q
     - quwoquan_data/.venv/bin/python -m pytest quwoquan_data/tests/local_contract/verify/test_scale_readiness__local_contract_test.py -q
-    - quwoquan_data/.venv/bin/python -m py_compile quwoquan_data/scripts/_common/publish_filter.py quwoquan_data/scripts/publish/handler.py quwoquan_data/scripts/publish/assemble.py quwoquan_data/scripts/publish/gate.py quwoquan_data/scripts/_common/release_integrity.py quwoquan_data/scripts/task/run.py quwoquan_data/scripts/verify/scale_readiness.py quwoquan_data/scripts/task/trial_review.py
+    - quwoquan_data/.venv/bin/python -m py_compile quwoquan_data/scripts/core/publish_filter.py quwoquan_data/scripts/content/release/canonical/handler.py quwoquan_data/scripts/content/release/canonical/assemble.py quwoquan_data/scripts/content/release/canonical/gate.py quwoquan_data/scripts/core/release_integrity.py quwoquan_data/scripts/task/run.py quwoquan_data/scripts/verify/scale_readiness.py quwoquan_data/scripts/task/trial_review.py
   t2:
     - quwoquan_data/.venv/bin/python -m pytest quwoquan_data/tests/workflow/test_task_run_pipeline.py::test_publish_stage_materializes_task_inputs_and_release quwoquan_data/tests/workflow/test_task_run_pipeline.py::test_publish_stage_allows_site_supply_dynamic_posts_without_entity_homepages quwoquan_data/tests/workflow/test_task_run_pipeline.py::test_publish_stage_allows_partial_posts_without_entity_homepages_for_entity_batch -q
     - quwoquan_data/.venv/bin/python -m pytest quwoquan_data/tests/local_contract/task/test_trial_review__local_contract_test.py -q

@@ -5,10 +5,10 @@ units:
   - id: travel.china.scenic_spots
     label: 中国景区与自然/人文景点
     entityType: 地点/景区
-    # WP2 回填：主清单（discovery_seed/2）已枚举 四川省+浙江省 全部 32 市州、1093 地点；
+    # 当前主清单（discovery_seed/2）已枚举四川省+浙江省全部 32 市州、2899 地点；
     # 其余 32 省目录骨架已建（coverage/中国/{省}/ 空目录 = 未枚举，无第二状态真相源），
     # expectedCount = 当前主清单已枚举规模，全国放量枚举推进时随 vertical master-list-stats 回填。
-    expectedCount: 1093
+    expectedCount: 2899
     source: verticals/travel/coverage/中国
     requiredSourceCategories: [encyclopedia, official, travelogue, map_geo]
     requiredAngles: [攻略, 体验, 避雷, 盘点]
@@ -24,8 +24,8 @@ units:
   - id: travel.sichuan.pilot
     label: 四川旅行试点
     entityType: 地点/景区
-    # WP2 回填：21 市州文件全齐、区县全覆盖，共 678 地点（vertical master-list-stats --provinces 四川省）。
-    expectedCount: 678
+    # 21 市州文件全齐、183 区县、共 1977 地点（vertical master-list-stats --provinces 四川省）。
+    expectedCount: 1977
     source: verticals/travel/coverage/中国/四川省
     requiredSourceCategories: [encyclopedia, official, travelogue]
     requiredAngles: [攻略, 体验]
@@ -33,8 +33,8 @@ units:
   - id: travel.zhejiang.pilot
     label: 浙江旅行试点
     entityType: 地点/景区
-    # WP2 回填：11 市文件全齐、区县全覆盖，共 415 地点（vertical master-list-stats --provinces 浙江省）。
-    expectedCount: 415
+    # 11 市文件全齐、90 区县、共 922 地点（vertical master-list-stats --provinces 浙江省）。
+    expectedCount: 922
     source: verticals/travel/coverage/中国/浙江省
     requiredSourceCategories: [encyclopedia, official, travelogue]
     requiredAngles: [攻略, 体验]

@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"time"
 
+	"quwoquan_service/runtime/operation"
+
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 )
@@ -80,6 +82,9 @@ func (rt *LoggedRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 	}
 	if req.Header.Get("X-Client-Page-Id") == "" && meta.PageID != "" {
 		req.Header.Set("X-Client-Page-Id", meta.PageID)
+	}
+	if current, exists := operation.FromContext(req.Context()); exists {
+		applyOperationContextHeaders(req.Header, current)
 	}
 
 	// Inject W3C traceparent for distributed trace propagation.

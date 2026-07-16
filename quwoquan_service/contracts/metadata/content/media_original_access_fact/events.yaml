@@ -1,0 +1,10 @@
+version: 1
+entity: MediaOriginalAccessFact
+
+events:
+  - name: MediaOriginalAccessGranted
+    description: 原始媒体短期访问授权已经签发并留下不可变审计事实。
+    producer: content-service
+    consumers: [content-audit, trust-safety]
+    channel: transactional_outbox
+    payload_fields: [auditId, assetId, viewerId, purpose, grantedAt, expiresAt]

@@ -1,11 +1,11 @@
 {
-    "name": "quwoquan_app",
-    "short_name": "quwoquan_app",
+    "name": "趣我圈",
+    "short_name": "趣我圈",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#0A84FF",
+    "theme_color": "#0A84FF",
+    "description": "遇见同趣，绽放热爱",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

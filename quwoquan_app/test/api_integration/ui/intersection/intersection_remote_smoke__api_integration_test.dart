@@ -4,6 +4,7 @@ import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_statement_synthesizer.dart';
@@ -19,8 +20,15 @@ const _viewerId = String.fromEnvironment(
 );
 const _personObjectId = 'sys_travel_9003_sub_01';
 
-IntersectionReason _expectDisplayReady(IntersectionReason reason, String label) {
-  final displayReason = displayReadyIntersectionReason(reason);
+IntersectionReason _expectDisplayReady(
+  IntersectionReason reason,
+  String label, {
+  IntersectionTarget? contextObjectTarget,
+}) {
+  final displayReason = displayReadyIntersectionReason(
+    reason,
+    contextObjectTarget: contextObjectTarget,
+  );
   expect(displayReason, isNotNull, reason: label);
   expect(displayReason!.primaryText, reason.primaryText, reason: label);
   expect(
@@ -46,10 +54,7 @@ void main() {
 
       final summary = await repo.getMyIntersectionSummary();
       expect(summary.totalCount, greaterThan(0));
-      expect(
-        summary.dimensions,
-        isNotEmpty,
-      );
+      expect(summary.dimensions, isNotEmpty);
       expect(
         summary.dimensions.every((item) => item.dimension.trim().isNotEmpty),
         isTrue,
@@ -74,10 +79,7 @@ void main() {
           .map(displayReadyIntersectionReason)
           .whereType<IntersectionReason>()
           .toList(growable: false);
-      expect(
-        renderableInbox,
-        isNotEmpty,
-      );
+      expect(renderableInbox, isNotEmpty);
       expect(
         renderableInbox.any((reason) => reason.intersectionPoints.isNotEmpty),
         isTrue,
@@ -95,20 +97,37 @@ void main() {
         objectId: _personObjectId,
         objectType: 'user',
       );
+      final objectContext = IntersectionTarget(
+        objectType: 'user',
+        objectId: _personObjectId,
+        objectKind: 'person',
+        routeId: 'userProfile',
+      );
       expect(objectReasons, isNotEmpty);
       expect(objectReasons.first.actionTargetId, _personObjectId);
-      _expectDisplayReady(objectReasons.first, 'objectReasons.first');
+      _expectDisplayReady(
+        objectReasons.first,
+        'objectReasons.first',
+        contextObjectTarget: objectContext,
+      );
       final wishlistReason = objectReasons.firstWhere(
         (reason) => reason.kind == 'coWishlistedEntity',
       );
-      _expectDisplayReady(wishlistReason, 'coWishlistedEntity');
+      _expectDisplayReady(
+        wishlistReason,
+        'coWishlistedEntity',
+        contextObjectTarget: objectContext,
+      );
       expect(
         wishlistReason.intersectionPoints.map((point) => point.sourceRef),
         contains('coWishlistedEntity'),
       );
       expect(wishlistReason.actionHints.first.actionKey, 'start_companion');
       expect(wishlistReason.actionHints.first.dispatch, 'companion');
-      expect(wishlistReason.actionHints.first.target?.objectId, wishlistReason.actionTargetId);
+      expect(
+        wishlistReason.actionHints.first.target?.objectId,
+        wishlistReason.actionTargetId,
+      );
     },
   );
 

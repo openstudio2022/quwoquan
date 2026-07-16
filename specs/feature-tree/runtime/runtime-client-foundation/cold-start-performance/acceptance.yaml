@@ -1,4 +1,4 @@
-version: 2
+version: 4
 node:
   id: cold-start-performance
   level: L3_story
@@ -7,74 +7,199 @@ node:
   parent_domain_service: runtime
   parent_business_capability: runtime-client-foundation
 scope:
-  summary: 冷启动 TTID 测量、分段观测、Phase1/Phase3 减重与 ratchet 门禁。
+  summary: Flutter 唯一逐瓣绽放动效、3 秒正常目标、6 秒硬退出、原生同源静态终态与全链路观测。
   in_scope:
-  - TTID 探针多轮 P50/P95 与 QWQStartup 全分段解析
-  - Welcome 首帧静态化与 ScreenUtilInit 后移
-  - app_router deferred import 与 Android 懒插件注册
-  - startup_ttid ratchet 与 acceptance 契约测试
+  - Android/iOS 自适应背景与同源透明品牌簇，Web 最早 bootstrap 计时
+  - 单控制器全开到逆序聚拢再顺时针逐瓣绽放、最多两次重放与单行提示
+  - process start 到 welcome exit 的 6 秒硬门与 0.65 压缩下限
+  - deferred Router 并行预加载、安全 Shell、120ms 欢迎终帧淡出与 overlay terminal fallback
+  - startup_welcome_sequence、帧耗时、重放/降级/deadline 告警
   out_of_scope:
-  - 欢迎动效缩短（阻塞于 TTID SLA）
-  - native 镜像欢迎页回归
+  - native 动态欢迎、overlay、提示或动画进度 handoff
+  - 等待首页、聊天、资料等业务数据后才进入 Shell
+  - api_integration（启动状态机没有端云 API 合同）
 gwt_acceptance:
   GWT1:
-    title: 欢迎首帧与 init gate 不回退
+    title: 原生静态终态与 Flutter 第一帧连续
     given:
-    - 应用冷启动进入 Flutter WelcomeScreen
+    - 应用从 Android、iOS 或 Web 冷启动
     when:
-    - 首帧绘制与 welcomeShown 打点
+    - 原生启动资源切换到 Flutter WelcomeScreen 第一帧
     then:
-    - 无 native 镜像欢迎；auth restore 不早于 markWelcomeShown
+    - 原生只有自适应背景与同源透明品牌簇，不存在第二套动态欢迎
+    - iOS 背景使用可拉伸三段渐变纹理，不使用固定 393x852 全屏快照
+    - Android 12+ 系统 splash 至少显示同源静态花瓣 icon，不得退化成纯蓝空屏
+    - Flutter 第一帧 bloomAmount=1，保持 90ms 后开始逆序聚拢
+    - bloomAmount=1 不应用动态变换，不出现尺寸或位置跳变
+    - 花苞视觉因子为 0.561024，花瓣宽高比相对 52:94 偏差不超过 0.5%
+    - 聚拢顺序严格为 7→0，绽放顺序严格为 0→7
+    - 开放 50% 时最大与最小花瓣视觉因子差至少 0.20
+    - 聚拢时每片花瓣质心半径单调减小，绽放时单调增加
+    - 不存在 rotateX/Y、透视、单轴伸缩、spring 或 overshoot
     done_when:
-    - local_contract 绿
+    - native launch、几何/波次合同与新 Golden 通过，并有 Android/iPhone profile/release 完整录像证据
     tests:
       planned:
-      - file: quwoquan_app/test/local_contract/app/app_startup_welcome__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/app/startup_native_launch_screen__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/app/startup_auth_restore_gate__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/app/startup_ttid__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/welcome/welcome_screen__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/welcome/welcome_motion_golden__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/app/startup_welcome_motion_probe__local_contract_test.py
+      recorded:
+      - file: quwoquan_app/test/local_contract/app/startup_native_launch_screen__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/welcome/welcome_screen__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/welcome/welcome_motion_golden__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/app/startup_welcome_motion_probe__local_contract_test.py
+    status: partial
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: startup_native_flutter_handoff
+        cases:
+        - local_contract.runtime.runtime_client_foundation.cold_start_performance.handoff
+        envs: [local]
+  GWT2:
+    title: 正常一轮退出与最多两次重放
+    given:
+    - Flutter WelcomeScreen 第一帧稳定
+    when:
+    - readiness 在首轮前或首轮任意阶段到达，或者持续未 ready
+    then:
+    - readiness 只在 openSettle 全开边界生效
+    - 首轮 ready 时约 1480ms 后进入 Shell，不等待 6 秒
+    - 未 ready 时才显示单行提示，最多 replay 2 后进入降级 Shell
+    - onFinish 在所有竞争条件下恰好调用一次
+    done_when:
+    - fake clock 状态机 local_contract 通过
+    tests:
+      planned:
+      - file: quwoquan_app/test/local_contract/ui/welcome/welcome_screen__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/app/app_startup_welcome__local_contract_test.dart
+      recorded:
+      - file: quwoquan_app/test/local_contract/ui/welcome/welcome_screen__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/app/app_startup_welcome__local_contract_test.dart
+    status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: startup_welcome_state_machine
+        cases:
+        - local_contract.runtime.runtime_client_foundation.cold_start_performance.motion
+        envs: [local]
+  GWT3:
+    title: 6 秒硬退出与安全 Shell
+    given:
+    - 首帧偏晚、预算不足、永久不 ready、reduced motion 或后台恢复
+    when:
+    - 剩余预算和 deadline 与动画阶段竞争
+    then:
+    - 足够 0.65 周期时同比压缩单瓣时长与 stagger，但仍完整聚拢再绽放
+    - 不足时保持全开短停并进入降级 Shell
+    - Router 构建失败显示可操作安全 Shell，不回到欢迎页
+    - 任一可控场景 welcomeExitMs 不超过 6000
+    - Shell 首帧后欢迎层在 120ms 内移除，overlayRemovedMs 不超过 6000
+    done_when:
+    - deadline、lifecycle、fallback local_contract 通过
+    tests:
+      planned:
+      - file: quwoquan_app/test/local_contract/ui/welcome/welcome_screen__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/app/startup_deferred_router__local_contract_test.dart
       recorded:
-      - file: quwoquan_app/test/local_contract/app/app_startup_welcome__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/app/startup_native_launch_screen__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/app/startup_auth_restore_gate__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/app/startup_ttid__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/welcome/welcome_screen__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/app/startup_deferred_router__local_contract_test.dart
     status: implemented
     test_evidence:
       primary:
       - layer: local_contract
-        suite: startup_ttid_contract
+        suite: startup_deadline_and_safe_shell
         cases:
-        - local_contract.runtime.runtime_client_foundation.cold_start_performance.contract
-        envs:
-        - local
-  GWT2:
-    title: release TTID SLA（真机 user_acceptance）
+        - local_contract.runtime.runtime_client_foundation.cold_start_performance.deadline
+        envs: [local]
+  GWT4:
+    title: 启动阶段可观测且可告警
     given:
-    - release 包中端 Android 真机或 iPhone 真机
+    - 欢迎页进入任一 phase、replay、degraded 或 deadline
     when:
-    - 连续冷启动 ≥5 次
+    - startup_welcome_sequence 上报
     then:
-    - TTID P50 ≤ 1000ms，P95 ≤ 2000ms
+    - 包含 motionSpecVersion=petal_bloom_v2、cycle、预算、readiness、提示、压缩、帧 P95、exitReason 与 deadlineOrigin
+    - Shell 首帧记录 shellFirstPaintMs
+    - 欢迎层实际移除记录 overlayRemovedMs
+    - replay、降级、欢迎退出/遮罩移除超 6 秒与连续慢帧可配置告警
     done_when:
-    - verify_startup_first_frame.py SLA 模式绿且 baseline JSON 更新
+    - 埋点字段合同与 startup probe 通过
+    tests:
+      planned:
+      - file: quwoquan_app/test/local_contract/app/startup_native_launch_screen__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/app/startup_ttid__local_contract_test.dart
+      - file: quwoquan_ops/tests/local_contract/test_startup_welcome_observability__local_contract_test.py
+      - file: quwoquan_app/test/local_contract/app/startup_probe_parser__local_contract_test.py
+      recorded:
+      - file: quwoquan_app/test/local_contract/app/startup_native_launch_screen__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/app/startup_ttid__local_contract_test.dart
+      - file: quwoquan_ops/tests/local_contract/test_startup_welcome_observability__local_contract_test.py
+      - file: quwoquan_app/test/local_contract/app/startup_probe_parser__local_contract_test.py
+    status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: startup_observability_contract
+        cases:
+        - local_contract.runtime.runtime_client_foundation.cold_start_performance.observability
+        envs: [local]
+  GWT5:
+    title: Android、iPhone 与 Web 商用启动时长 UAT
+    given:
+    - Android 与 iPhone profile/release 真机，以及 Web profile/release
+    when:
+    - 各执行至少 20 次冷启动或硬刷新，并注入 2s、3s、4.5s、5.5s、永久不 ready
+    then:
+    - TTID P50 不超过 1s、P95 不超过 2s
+    - 正常 shellFirstPaint 目标不超过 3s
+    - welcomeExit 超 6 秒比例为 0
+    - overlayRemovedMs 缺失或超 6 秒比例为 0
+    - 自动采集并验证原生静态帧、Flutter 首帧、花苞峰值、逐瓣绽放、最终全开、Shell 首帧顺序
+    - 动效探针逐帧分割八种花瓣颜色并校验定向包围盒宽高比、质心半径、顺序和帧间位移
+    - 动效 raster P95 不超过 16.7ms，连续两帧超过 32ms 必须告警
+    done_when:
+    - Android/iPhone 真机与 Web 各 20 次证据入库；模拟器不得替代真机
     tests:
       planned:
       - file: quwoquan_app/scripts/device/verify_startup_first_frame.py
       - file: quwoquan_app/scripts/device/verify_startup_ttid_baseline.py
-      recorded: []
+      - file: quwoquan_app/scripts/device/verify_startup_web.py
+      - file: quwoquan_app/scripts/device/verify_welcome_motion_frames.py
+      recorded:
+      - file: quwoquan_app/test/user_acceptance/quality/performance/startup_web_3s_6s_report__user_acceptance_test.dart
     status: partial
     test_evidence:
       primary:
       - layer: user_acceptance
-        suite: startup_ttid_probe
+        suite: startup_3s_6s_release_probe
         cases:
-        - user_acceptance.runtime.runtime_client_foundation.cold_start_performance.ttid_sla
-        envs:
-        - gamma_local
+        - user_acceptance.runtime.runtime_client_foundation.cold_start_performance.release_sla
+        envs: [gamma_local]
+      evidence:
+      - platform: web
+        motion_spec_version: petal_bloom_v2
+        runs: 20
+        result: passed
+        ttid_p50_ms: 557
+        ttid_p95_ms: 709
+        shell_first_paint_p50_ms: 2197
+        shell_first_paint_p95_ms: 2409
+        overlay_removed_p50_ms: 2318
+        overlay_removed_p95_ms: 2531
+        welcome_exit_over_6000_count: 0
+        overlay_removed_over_6000_count: 0
+        replay_count: 0
+        artifact: .qwq_output/env/alpha/runs/startup_first_frame/web_probe/20260715T205250/startup_web_report.json
+      pending:
+      - Android petal_bloom_v2 profile/release 真机 20 次冷启动与完整录像
+      - iPhone petal_bloom_v2 profile/release 真机 20 次冷启动与完整录像
+      - 旧 petal hinge 版本时长报告不得作为当前视觉规格验收证据
 execution:
   local_gate:
   - make verify-app-startup-ttid
+  - make verify-app-page-horizontal-quality
   full_gate:
   - make gate

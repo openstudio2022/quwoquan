@@ -18,7 +18,6 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 func writeHTTPError(w http.ResponseWriter, r *http.Request, err error) {
 	opts := rterr.HTTPWriteOptionsFromRequest(r)
-	opts.IncludeDebug = true
 	rterr.WriteHTTPError(w, err, opts)
 }
 

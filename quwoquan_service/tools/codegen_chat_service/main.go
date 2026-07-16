@@ -1,12 +1,13 @@
 // Command codegen_chat_service generates chat-service HTTP route plumbing from
-// contracts/metadata/messages/conversation/service.yaml.
+// object-owned messages/*/service.yaml contracts declared in its manifest.
 //
 // It emits internal/adapters/http/generated_routes.go: a method+template route
 // table plus a catch-all dispatcher that forwards each (non-manual) operation to
 // the conventionally named ChatHandler.handle<Operation>(w, r). Operations listed
 // under manual_operations in the codegen manifest are excluded (they are either
 // registered explicitly in ChatHandler.Routes()/media/internal handlers, or are
-// declared in service.yaml but not yet implemented).
+// declared in service.yaml but not yet implemented). Duplicate operation or
+// method/path ownership is a generator error rather than a last-wins rule.
 package main
 
 import (
@@ -19,6 +20,9 @@ import (
 	"text/template"
 
 	"gopkg.in/yaml.v3"
+
+	contractcodegen "quwoquan_service/internal/metadata/codegen"
+	"quwoquan_service/internal/metadata/validate"
 )
 
 func main() {
@@ -34,11 +38,9 @@ func main() {
 	if err != nil {
 		exitErr(fmt.Errorf("load manifest %s: %w", manifestPath, err))
 	}
-
-	serviceYAMLPath := filepath.Join(metadataDir, manifest.ServiceYAML)
-	svc, err := loadServiceYAML(serviceYAMLPath)
+	source, err := contractcodegen.NewSource(metadataDir, validate.ProfileBaseline)
 	if err != nil {
-		exitErr(fmt.Errorf("load service.yaml %s: %w", serviceYAMLPath, err))
+		exitErr(fmt.Errorf("compile ContractGraph: %w", err))
 	}
 
 	manual := map[string]bool{}
@@ -46,27 +48,14 @@ func main() {
 		manual[op] = true
 	}
 
-	var routes []routeData
-	seen := map[string]bool{}
-	for _, r := range svc.APIRoutes {
-		if r.Operation == "" || manual[r.Operation] {
-			continue
-		}
-		if seen[r.Operation] {
-			continue
-		}
-		seen[r.Operation] = true
-		routes = append(routes, routeData{
-			Method:    r.Method,
-			Template:  r.Path,
-			Operation: r.Operation,
-		})
+	routes, err := collectRoutes(source, manifest.ServiceYAMLs, manual)
+	if err != nil {
+		exitErr(err)
 	}
 
-	relServiceYAML := filepath.ToSlash(manifest.ServiceYAML)
 	rendered, err := render(routeFileData{
-		ServiceYAMLRel: relServiceYAML,
-		Routes:         routes,
+		ServiceYAMLsRel: manifest.ServiceYAMLs,
+		Routes:          routes,
 	})
 	if err != nil {
 		exitErr(fmt.Errorf("render generated_routes.go: %w", err))
@@ -77,11 +66,32 @@ func main() {
 		exitErr(fmt.Errorf("write %s: %w", outPath, err))
 	}
 	fmt.Printf("generated chat-service routes (%d operations) at %s\n", len(routes), outPath)
+
+	errorsFile, err := loadErrorsYAML(source, manifest.ErrorsYAML)
+	if err != nil {
+		exitErr(fmt.Errorf("load errors.yaml %s: %w", manifest.ErrorsYAML, err))
+	}
+	errorsRendered := contractcodegen.RenderGoErrorsFile(errorsFile, contractcodegen.GoErrorsFileOptions{
+		Generator:    "tools/codegen_chat_service",
+		SourcePath:   filepath.ToSlash(manifest.ErrorsYAML),
+		CommentLines: []string{"Chat error sentinels and helpers. user_message from errors.yaml user_message.zh."},
+	})
+	formattedErrors, err := format.Source([]byte(errorsRendered))
+	if err != nil {
+		exitErr(fmt.Errorf("gofmt generated errors: %w", err))
+	}
+	errorsOutPath := filepath.Join(outputDir, filepath.FromSlash(manifest.ErrorsOutput))
+	if err := os.WriteFile(errorsOutPath, formattedErrors, 0o644); err != nil {
+		exitErr(fmt.Errorf("write %s: %w", errorsOutPath, err))
+	}
+	fmt.Printf("generated chat-service errors (%d codes) at %s\n", len(errorsFile.Errors), errorsOutPath)
 }
 
 type manifestYAML struct {
-	ServiceYAML      string   `yaml:"service_yaml"`
+	ServiceYAMLs     []string `yaml:"service_yamls"`
 	RoutesOutput     string   `yaml:"routes_output"`
+	ErrorsYAML       string   `yaml:"errors_yaml"`
+	ErrorsOutput     string   `yaml:"errors_output"`
 	ManualOperations []string `yaml:"manual_operations"`
 }
 
@@ -94,13 +104,35 @@ func loadManifest(path string) (manifestYAML, error) {
 	if err := yaml.Unmarshal(raw, &m); err != nil {
 		return m, err
 	}
-	if m.ServiceYAML == "" {
-		return m, fmt.Errorf("manifest missing service_yaml")
+	if len(m.ServiceYAMLs) == 0 {
+		return m, fmt.Errorf("manifest missing service_yamls")
+	}
+	for _, serviceYAML := range m.ServiceYAMLs {
+		if serviceYAML == "" {
+			return m, fmt.Errorf("manifest service_yamls contains an empty path")
+		}
 	}
 	if m.RoutesOutput == "" {
 		return m, fmt.Errorf("manifest missing routes_output")
 	}
+	if m.ErrorsYAML == "" {
+		return m, fmt.Errorf("manifest missing errors_yaml")
+	}
+	if m.ErrorsOutput == "" {
+		return m, fmt.Errorf("manifest missing errors_output")
+	}
 	return m, nil
+}
+
+func loadErrorsYAML(
+	source *contractcodegen.Source,
+	path string,
+) (*contractcodegen.ErrorsFile, error) {
+	var file contractcodegen.ErrorsFile
+	if err := source.Decode(path, &file); err != nil {
+		return nil, err
+	}
+	return &file, nil
 }
 
 type serviceYAML struct {
@@ -113,16 +145,51 @@ type serviceRouteYAML struct {
 	Operation string `yaml:"operation"`
 }
 
-func loadServiceYAML(path string) (serviceYAML, error) {
+func loadServiceYAML(
+	source *contractcodegen.Source,
+	path string,
+) (serviceYAML, error) {
 	var s serviceYAML
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return s, err
-	}
-	if err := yaml.Unmarshal(raw, &s); err != nil {
+	if err := source.Decode(path, &s); err != nil {
 		return s, err
 	}
 	return s, nil
+}
+
+func collectRoutes(
+	source *contractcodegen.Source,
+	serviceYAMLs []string,
+	manual map[string]bool,
+) ([]routeData, error) {
+	routes := make([]routeData, 0)
+	operationOwners := make(map[string]string)
+	pathOwners := make(map[string]string)
+	for _, serviceYAML := range serviceYAMLs {
+		svc, err := loadServiceYAML(source, serviceYAML)
+		if err != nil {
+			return nil, fmt.Errorf("load service.yaml %s: %w", serviceYAML, err)
+		}
+		for _, route := range svc.APIRoutes {
+			if route.Operation == "" || manual[route.Operation] {
+				continue
+			}
+			if owner, exists := operationOwners[route.Operation]; exists {
+				return nil, fmt.Errorf("duplicate chat operation %q in %s and %s", route.Operation, owner, serviceYAML)
+			}
+			pathKey := route.Method + " " + route.Path
+			if owner, exists := pathOwners[pathKey]; exists {
+				return nil, fmt.Errorf("duplicate chat route %q in %s and %s", pathKey, owner, serviceYAML)
+			}
+			operationOwners[route.Operation] = serviceYAML
+			pathOwners[pathKey] = serviceYAML
+			routes = append(routes, routeData{
+				Method:    route.Method,
+				Template:  route.Path,
+				Operation: route.Operation,
+			})
+		}
+	}
+	return routes, nil
 }
 
 type routeData struct {
@@ -132,11 +199,15 @@ type routeData struct {
 }
 
 type routeFileData struct {
-	ServiceYAMLRel string
-	Routes         []routeData
+	ServiceYAMLsRel []string
+	Routes          []routeData
 }
 
-const routeTemplate = `// Code generated by tools/codegen_chat_service from contracts/metadata/{{.ServiceYAMLRel}}. DO NOT EDIT.
+const routeTemplate = `// Code generated by tools/codegen_chat_service from:
+{{- range .ServiceYAMLsRel}}
+//   - contracts/metadata/{{.}}
+{{- end}}
+// DO NOT EDIT.
 package http
 
 import (

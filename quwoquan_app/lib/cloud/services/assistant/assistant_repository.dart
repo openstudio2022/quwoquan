@@ -1,10 +1,12 @@
 import 'dart:convert';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_api_metadata.g.dart';
@@ -15,9 +17,8 @@ import 'package:quwoquan_app/assistant/generated/contracts/assistant_stream_even
 import 'package:quwoquan_app/assistant/generated/contracts/assistant_turn_envelope.g.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/skill_subscription.g.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/tool_use.g.dart';
-import 'package:quwoquan_app/core/models/app_content_prototype_models.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
-import 'package:quwoquan_app/cloud/services/app_content/app_content_prototype_codec.dart';
+import 'package:quwoquan_app/cloud/services/assistant/mock/assistant_prototype_fixture.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 export 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart'
@@ -96,7 +97,8 @@ class AssistantSkillConsent {
                   kPersonalContentAccessSkillId)
               .toString()
               .trim(),
-      granted: json['granted'] == true || revokedAt.isEmpty,
+      // 服务端必须显式确认 granted=true；字段缺失、false 或已有撤回时间均失败关闭。
+      granted: json['granted'] == true && revokedAt.isEmpty,
       updatedAt:
           DateTime.tryParse(
             (json['updatedAt'] ?? json['updated_at'] ?? json['grantedAt'] ?? '')
@@ -285,7 +287,8 @@ abstract class AssistantRepository
 
 class MockAssistantRepository implements AssistantRepository {
   MockAssistantRepository({AssistantConsentStore? store})
-    : _store = store ?? const AssistantConsentStore();
+    : _store =
+          store ?? AssistantConsentStore(actorScope: 'alpha_mock_assistant');
 
   final AssistantConsentStore _store;
   final List<SkillSubscriptionWire> _subscriptions = <SkillSubscriptionWire>[];
@@ -416,7 +419,7 @@ class MockAssistantRepository implements AssistantRepository {
     int limit = _kAssistantListPageDefaultLimit,
     String? status,
   }) async {
-    final raw = AppContentPrototypeBundle.instance.assistantTasksData;
+    final raw = AssistantPrototypeFixture.instance.tasks;
     Iterable<AssistantPrototypeTaskRow> rows = raw;
     if (status != null && status.trim().isNotEmpty) {
       rows = raw.where((row) => row.status == status.trim());
@@ -444,7 +447,7 @@ class MockAssistantRepository implements AssistantRepository {
   Future<List<AssistantUserMemoryView>> listAssistantMemories({
     int limit = _kAssistantListPageDefaultLimit,
   }) async {
-    return AppContentPrototypeBundle.instance.assistantMemoryData
+    return AssistantPrototypeFixture.instance.memories
         .map(
           (row) => AssistantUserMemoryView(
             memoryId: row.memoryKey,
@@ -503,17 +506,14 @@ class MockAssistantRepository implements AssistantRepository {
         iconHint: 'sparkles',
       ),
     ];
-    final prototypeSkills = AppContentPrototypeBundle
-        .instance
-        .assistantSkillsData
-        .map(
-          (row) => AssistantSkillCatalogItemView(
-            skillId: row.skillId,
-            displayName: row.name,
-            description: row.description,
-            requiresConsent: false,
-          ),
-        );
+    final prototypeSkills = AssistantPrototypeFixture.instance.skills.map(
+      (row) => AssistantSkillCatalogItemView(
+        skillId: row.skillId,
+        displayName: row.name,
+        description: row.description,
+        requiresConsent: false,
+      ),
+    );
     return <AssistantSkillCatalogItemView>[
       ...p0Skills,
       ...prototypeSkills,
@@ -631,7 +631,7 @@ class MockAssistantRepository implements AssistantRepository {
   }
 
   @override
-  Future<AssistantTurnEnvelopeWire> createAssistantTurn({
+  Future<AssistantTurnEnvelopeWire> startAssistantRun({
     required String conversationId,
     required String text,
     String turnType = 'user',
@@ -652,11 +652,11 @@ class MockAssistantRepository implements AssistantRepository {
   }
 
   @override
-  Future<AssistantTurnEnvelopeWire> getAssistantTurn({
-    required String turnId,
+  Future<AssistantTurnEnvelopeWire> getAssistantRun({
+    required String runId,
   }) async {
     return AssistantTurnEnvelopeWire(
-      turnId: turnId,
+      turnId: runId,
       conversationId: 'acv_mock_personal_assistant',
       traceId: 'trace_mock_personal_assistant',
       createdAt: DateTime.now().toUtc().toIso8601String(),
@@ -664,13 +664,13 @@ class MockAssistantRepository implements AssistantRepository {
   }
 
   @override
-  Stream<AssistantStreamEventWire> streamAssistantTurn({
-    required String turnId,
+  Stream<AssistantStreamEventWire> watchAssistantRunEvents({
+    required String runId,
   }) async* {
     final createdAt = DateTime.now().toUtc().toIso8601String();
     final toolUse = ToolUseWire(
       toolUseId: 'tu_mock_personal_assistant',
-      turnId: turnId,
+      turnId: runId,
       toolName: 'web_search',
       input: const <String, dynamic>{'query': '找私助 mock stream'},
       status: 'requested',
@@ -678,7 +678,7 @@ class MockAssistantRepository implements AssistantRepository {
     );
     final completedToolUse = ToolUseWire(
       toolUseId: toolUse.toolUseId,
-      turnId: turnId,
+      turnId: runId,
       toolName: toolUse.toolName,
       input: toolUse.input,
       status: 'completed',
@@ -691,36 +691,36 @@ class MockAssistantRepository implements AssistantRepository {
       completedAt: createdAt,
     );
     yield AssistantStreamEventWire(
-      eventId: '$turnId:assistant.turn.started',
+      eventId: '$runId:assistant.turn.started',
       conversationId: 'acv_mock_personal_assistant',
-      turnId: turnId,
+      turnId: runId,
       seq: 1,
       eventType: 'turn_started',
       payload: const <String, dynamic>{'status': 'running'},
       createdAt: createdAt,
     );
     yield AssistantStreamEventWire(
-      eventId: '$turnId:assistant.tool.requested',
+      eventId: '$runId:assistant.tool.requested',
       conversationId: 'acv_mock_personal_assistant',
-      turnId: turnId,
+      turnId: runId,
       seq: 2,
       eventType: 'tool_use_requested',
       payload: <String, dynamic>{'toolUse': toolUse.toJson()},
       createdAt: createdAt,
     );
     yield AssistantStreamEventWire(
-      eventId: '$turnId:assistant.tool.completed',
+      eventId: '$runId:assistant.tool.completed',
       conversationId: 'acv_mock_personal_assistant',
-      turnId: turnId,
+      turnId: runId,
       seq: 3,
       eventType: 'tool_result_received',
       payload: <String, dynamic>{'toolUse': completedToolUse.toJson()},
       createdAt: createdAt,
     );
     yield AssistantStreamEventWire(
-      eventId: '$turnId:assistant.answer.final',
+      eventId: '$runId:assistant.answer.final',
       conversationId: 'acv_mock_personal_assistant',
-      turnId: turnId,
+      turnId: runId,
       seq: 4,
       eventType: 'final_answer',
       payload: const <String, dynamic>{'text': '找私助 mock stream 已接通。'},
@@ -733,8 +733,9 @@ class RemoteAssistantRepository implements AssistantRepository {
   RemoteAssistantRepository({
     CloudHttpClient? httpClient,
     AssistantConsentStore? store,
+    required String consentActorScope,
   }) : _httpClient = httpClient ?? CloudHttpClient(),
-       _store = store ?? const AssistantConsentStore();
+       _store = store ?? AssistantConsentStore(actorScope: consentActorScope);
 
   final CloudHttpClient _httpClient;
   final AssistantConsentStore _store;
@@ -954,43 +955,34 @@ class RemoteAssistantRepository implements AssistantRepository {
 
   @override
   Future<List<AssistantSkillConsent>> listConsents() async {
-    final local = await _store.load();
-    try {
-      final uri = _assistantUri(AssistantApiMetadata.listConsentsPath);
-      final response = await _httpClient.get(
-        uri,
-        headers: _headersForSettings(
-          operationId: AssistantApiMetadata.listConsentsOperation,
-          clientPageId: AssistantRequestPageIds.listConsents,
-        ),
-      );
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        return local;
-      }
-      final decoded = jsonDecode(response.body);
-      final object = decoded is List
-          ? <String, dynamic>{'items': decoded}
-          : CloudResponseDecoder.asObject(
-              decoded,
-              context: _settingsContext(
-                operationId: AssistantApiMetadata.listConsentsOperation,
-              ),
-            );
-      final rawItems =
-          (object['items'] as List?)
-              ?.whereType<Map>()
-              .map((item) => item.cast<String, dynamic>())
-              .toList(growable: false) ??
-          const <Map<String, dynamic>>[];
-      final consents = rawItems
-          .map(AssistantSkillConsent.fromJson)
-          .where((item) => item.skillId.isNotEmpty)
-          .toList(growable: false);
-      await _store.save(consents);
-      return consents;
-    } catch (_) {
-      return local;
-    }
+    final uri = _assistantUri(AssistantApiMetadata.listConsentsPath);
+    final decoded = await _httpClient.getJson(
+      uri,
+      headers: _headersForSettings(
+        operationId: AssistantApiMetadata.listConsentsOperation,
+        clientPageId: AssistantRequestPageIds.listConsents,
+      ),
+    );
+    final object = decoded is List
+        ? <String, dynamic>{'items': decoded}
+        : CloudResponseDecoder.asObject(
+            decoded,
+            context: _settingsContext(
+              operationId: AssistantApiMetadata.listConsentsOperation,
+            ),
+          );
+    final rawItems =
+        (object['items'] as List?)
+            ?.whereType<Map>()
+            .map((item) => item.cast<String, dynamic>())
+            .toList(growable: false) ??
+        const <Map<String, dynamic>>[];
+    final consents = rawItems
+        .map(AssistantSkillConsent.fromJson)
+        .where((item) => item.skillId.isNotEmpty)
+        .toList(growable: false);
+    await _store.save(consents);
+    return consents;
   }
 
   @override
@@ -998,61 +990,50 @@ class RemoteAssistantRepository implements AssistantRepository {
     required String skillId,
     String grantedScope = kPersonalContentAccessSkillId,
   }) async {
-    final fallback = AssistantSkillConsent(
-      skillId: skillId,
-      grantedScope: grantedScope,
-      granted: true,
-      updatedAt: DateTime.now(),
+    final path = AssistantApiMetadata.grantSkillConsentPath(skillId: skillId);
+    final uri = _assistantUri(path);
+    final decoded = await _httpClient.postJson(
+      uri,
+      headers: _headersForSettings(
+        operationId: AssistantApiMetadata.grantSkillConsentOperation,
+        clientPageId: AssistantRequestPageIds.grantSkillConsent,
+      ),
+      body: <String, dynamic>{'grantedScope': grantedScope},
     );
     try {
-      final uri = _assistantUri(
-        AssistantApiMetadata.grantSkillConsentPath(skillId: skillId),
+      final object = CloudResponseDecoder.asObject(
+        decoded,
+        context: _settingsContext(
+          operationId: AssistantApiMetadata.grantSkillConsentOperation,
+        ),
       );
-      final response = await _httpClient.post(
-        uri,
-        headers: <String, String>{
-          ..._headersForSettings(
-            operationId: AssistantApiMetadata.grantSkillConsentOperation,
-            clientPageId: AssistantRequestPageIds.grantSkillConsent,
-          ),
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode(<String, dynamic>{'grantedScope': grantedScope}),
-      );
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final consent = _decodeConsentResponse(
-          response.body,
-          fallback: fallback,
-          context: _settingsContext(
-            operationId: AssistantApiMetadata.grantSkillConsentOperation,
-          ),
+      final payload =
+          (object['consent'] as Map?)?.cast<String, dynamic>() ?? object;
+      final consent = AssistantSkillConsent.fromJson(payload);
+      if (consent.skillId != skillId || !consent.granted) {
+        throw const FormatException(
+          'assistant consent grant response is not authoritative',
         );
-        await _store.upsert(consent);
-        return consent;
       }
-    } catch (_) {
-      // Fall back to local persistence when assistant-service is unavailable.
+      await _store.upsert(consent);
+      return consent;
+    } catch (error) {
+      throw CloudErrorMapper.fromException(error, requestPath: path);
     }
-    await _store.upsert(fallback);
-    return fallback;
   }
 
   @override
   Future<void> revokeSkillConsent({required String skillId}) async {
-    try {
-      final uri = _assistantUri(
-        AssistantApiMetadata.revokeSkillConsentPath(skillId: skillId),
-      );
-      await _httpClient.delete(
-        uri,
-        headers: _headersForSettings(
-          operationId: AssistantApiMetadata.revokeSkillConsentOperation,
-          clientPageId: AssistantRequestPageIds.revokeSkillConsent,
-        ),
-      );
-    } catch (_) {
-      // Local revoke still applies when assistant-service is unavailable.
-    }
+    final uri = _assistantUri(
+      AssistantApiMetadata.revokeSkillConsentPath(skillId: skillId),
+    );
+    await _httpClient.deleteJson(
+      uri,
+      headers: _headersForSettings(
+        operationId: AssistantApiMetadata.revokeSkillConsentOperation,
+        clientPageId: AssistantRequestPageIds.revokeSkillConsent,
+      ),
+    );
     await _store.revoke(skillId);
   }
 
@@ -1567,7 +1548,7 @@ class RemoteAssistantRepository implements AssistantRepository {
   }
 
   @override
-  Future<AssistantTurnEnvelopeWire> createAssistantTurn({
+  Future<AssistantTurnEnvelopeWire> startAssistantRun({
     required String conversationId,
     required String text,
     String turnType = 'user',
@@ -1575,20 +1556,20 @@ class RemoteAssistantRepository implements AssistantRepository {
     String domainId = '',
   }) async {
     final uri = _assistantUri(
-      AssistantApiMetadata.createAssistantTurnPath(
+      AssistantApiMetadata.startAssistantRunPath(
         conversationId: conversationId,
       ),
     );
     _debugAssistantRepository(
-      'POST $uri operation=${AssistantApiMetadata.createAssistantTurnOperation} '
+      'POST $uri operation=${AssistantApiMetadata.startAssistantRunOperation} '
       'conversationId=$conversationId text="${_assistantDebugSnippet(text)}"',
     );
     final response = await _httpClient.post(
       uri,
       headers: <String, String>{
         ..._headersForPersonalAssistantDialog(
-          operationId: AssistantApiMetadata.createAssistantTurnOperation,
-          clientPageId: AssistantRequestPageIds.createAssistantTurn,
+          operationId: AssistantApiMetadata.startAssistantRunOperation,
+          clientPageId: AssistantRequestPageIds.startAssistantRun,
         ),
         'Content-Type': 'application/json',
       },
@@ -1601,12 +1582,12 @@ class RemoteAssistantRepository implements AssistantRepository {
       }),
     );
     _debugAssistantRepository(
-      'response status=${response.statusCode} operation=${AssistantApiMetadata.createAssistantTurnOperation}',
+      'response status=${response.statusCode} operation=${AssistantApiMetadata.startAssistantRunOperation}',
     );
     final turn = AssistantTurnEnvelopeWire.fromJson(
       _decodeAssistantObject(
         response,
-        operationId: AssistantApiMetadata.createAssistantTurnOperation,
+        operationId: AssistantApiMetadata.startAssistantRunOperation,
       ),
     );
     _debugAssistantRepository(
@@ -1616,46 +1597,44 @@ class RemoteAssistantRepository implements AssistantRepository {
   }
 
   @override
-  Future<AssistantTurnEnvelopeWire> getAssistantTurn({
-    required String turnId,
+  Future<AssistantTurnEnvelopeWire> getAssistantRun({
+    required String runId,
   }) async {
     final response = await _httpClient.get(
-      _assistantUri(AssistantApiMetadata.getAssistantTurnPath(turnId: turnId)),
+      _assistantUri(AssistantApiMetadata.getAssistantRunPath(runId: runId)),
       headers: _headersForPersonalAssistantDialog(
-        operationId: AssistantApiMetadata.getAssistantTurnOperation,
-        clientPageId: AssistantRequestPageIds.getAssistantTurn,
+        operationId: AssistantApiMetadata.getAssistantRunOperation,
+        clientPageId: AssistantRequestPageIds.getAssistantRun,
       ),
     );
     return AssistantTurnEnvelopeWire.fromJson(
       _decodeAssistantObject(
         response,
-        operationId: AssistantApiMetadata.getAssistantTurnOperation,
+        operationId: AssistantApiMetadata.getAssistantRunOperation,
       ),
     );
   }
 
   @override
-  Stream<AssistantStreamEventWire> streamAssistantTurn({
-    required String turnId,
+  Stream<AssistantStreamEventWire> watchAssistantRunEvents({
+    required String runId,
   }) async* {
     final uri = _assistantUri(
-      AssistantApiMetadata.streamAssistantTurnPath(turnId: turnId),
+      AssistantApiMetadata.streamAssistantRunEventsPath(runId: runId),
     );
     _debugAssistantRepository(
-      'POST $uri operation=${AssistantApiMetadata.streamAssistantTurnOperation} turnId=$turnId',
+      'GET $uri operation=${AssistantApiMetadata.streamAssistantRunEventsOperation} runId=$runId',
     );
-    final request = http.Request('POST', uri)
+    final request = http.Request('GET', uri)
       ..headers.addAll(<String, String>{
         ..._headersForPersonalAssistantDialog(
-          operationId: AssistantApiMetadata.streamAssistantTurnOperation,
-          clientPageId: AssistantRequestPageIds.streamAssistantTurn,
+          operationId: AssistantApiMetadata.streamAssistantRunEventsOperation,
+          clientPageId: AssistantRequestPageIds.streamAssistantRunEvents,
         ),
-        'Content-Type': 'application/json',
-      })
-      ..body = '{}';
+      });
     final response = await _httpClient.send(request);
     _debugAssistantRepository(
-      'stream response status=${response.statusCode} turnId=$turnId',
+      'stream response status=${response.statusCode} runId=$runId',
     );
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw StateError('Assistant stream failed: ${response.statusCode}');
@@ -1670,7 +1649,7 @@ class RemoteAssistantRepository implements AssistantRepository {
         final event = _decodeAssistantStreamFrame(frame);
         if (event != null) {
           _debugAssistantRepository(
-            'sse event type=${event.eventType} seq=${event.seq} turnId=$turnId '
+            'sse event type=${event.eventType} seq=${event.seq} runId=$runId '
             'skill=${event.payload['skillId'] ?? ''} tool=${_assistantToolNameFromPayload(event.payload)}',
           );
           yield event;
@@ -1702,22 +1681,6 @@ class RemoteAssistantRepository implements AssistantRepository {
       decoded,
       context: _personalAssistantDialogContext(operationId: operationId),
     );
-  }
-
-  AssistantSkillConsent _decodeConsentResponse(
-    String body, {
-    required AssistantSkillConsent fallback,
-    required String context,
-  }) {
-    if (body.trim().isEmpty) {
-      return fallback;
-    }
-    final decoded = jsonDecode(body);
-    final object = CloudResponseDecoder.asObject(decoded, context: context);
-    final payload =
-        (object['consent'] as Map?)?.cast<String, dynamic>() ?? object;
-    final consent = AssistantSkillConsent.fromJson(payload);
-    return consent.skillId.isEmpty ? fallback : consent;
   }
 }
 
@@ -1793,9 +1756,17 @@ String _assistantToolNameFromPayload(Map<String, dynamic> payload) {
 }
 
 class AssistantConsentStore {
-  const AssistantConsentStore();
+  AssistantConsentStore({required String actorScope})
+    : _actorScope = actorScope.trim().isEmpty
+          ? 'unauthenticated'
+          : actorScope.trim();
 
-  static const String _key = 'assistant_skill_consents_v1';
+  final String _actorScope;
+
+  String get _key {
+    final digest = sha256.convert(utf8.encode(_actorScope)).toString();
+    return 'assistant_skill_consents_v2:${digest.substring(0, 24)}';
+  }
 
   Future<List<AssistantSkillConsent>> load() async {
     final prefs = await SharedPreferences.getInstance();

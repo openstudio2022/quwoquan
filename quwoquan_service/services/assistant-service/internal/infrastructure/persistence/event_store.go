@@ -3,7 +3,6 @@ package persistence
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -28,6 +27,7 @@ func NewMongoEventStore(db *mongo.Database) *MongoEventStore {
 func (s *MongoEventStore) EnsureIndexes(ctx context.Context) error {
 	interactionIndexes := []mongo.IndexModel{
 		{Keys: bson.D{{Key: "runId", Value: 1}, {Key: "createdAt", Value: -1}}, Options: options.Index().SetName("idx_ie_run")},
+		{Keys: bson.D{{Key: "userId", Value: 1}, {Key: "createdAt", Value: -1}}, Options: options.Index().SetName("idx_ie_user_created")},
 		{Keys: bson.D{{Key: "userId", Value: 1}, {Key: "eventType", Value: 1}, {Key: "createdAt", Value: -1}}, Options: options.Index().SetName("idx_ie_user_type")},
 		{Keys: bson.D{{Key: "feedbackType", Value: 1}, {Key: "createdAt", Value: -1}}, Options: options.Index().SetName("idx_ie_feedback").SetSparse(true)},
 		{Keys: bson.D{{Key: "traceId", Value: 1}}, Options: options.Index().SetName("idx_ie_trace").SetSparse(true)},
@@ -38,10 +38,13 @@ func (s *MongoEventStore) EnsureIndexes(ctx context.Context) error {
 	scoreIndexes := []mongo.IndexModel{
 		{Keys: bson.D{{Key: "runId", Value: 1}, {Key: "createdAt", Value: -1}}, Options: options.Index().SetName("idx_score_run")},
 		{Keys: bson.D{{Key: "eventId", Value: 1}, {Key: "createdAt", Value: -1}}, Options: options.Index().SetName("idx_score_event")},
+		{Keys: bson.D{{Key: "userId", Value: 1}, {Key: "createdAt", Value: -1}}, Options: options.Index().SetName("idx_score_user_created")},
 		{Keys: bson.D{{Key: "userId", Value: 1}, {Key: "metricId", Value: 1}, {Key: "createdAt", Value: -1}}, Options: options.Index().SetName("idx_score_user_metric")},
 	}
-	_, err := s.scorecards.Indexes().CreateMany(ctx, scoreIndexes)
-	return err
+	if _, err := s.scorecards.Indexes().CreateMany(ctx, scoreIndexes); err != nil {
+		return fmt.Errorf("create scorecard indexes: %w", err)
+	}
+	return nil
 }
 
 func (s *MongoEventStore) InsertInteractionEvent(ctx context.Context, event assistant.InteractionEvent) error {
@@ -154,5 +157,3 @@ func (s *MemoryEventStore) ListLatestScorecards(_ context.Context, userID string
 }
 
 func (s *MemoryEventStore) EnsureIndexes(_ context.Context) error { return nil }
-
-var _ = time.Now

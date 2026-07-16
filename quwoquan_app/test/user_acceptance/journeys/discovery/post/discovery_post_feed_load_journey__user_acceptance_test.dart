@@ -3,7 +3,7 @@
 /// 守护：用户打开发现页 → DiscoveryFeedMapNotifier 调用 MockContentRepository
 ///       → feed 状态正确填充 → Widget 树重建
 ///
-/// Mock Wall：ContentRepository 接口（MockContentRepository 不发 HTTP）
+/// Mock Wall：Content facets（MockContentRepository 不发 HTTP）
 ///
 /// 规则：L1c Journey 测试必须使用 testWidgets()；禁止在 journeys/ 目录下
 ///       使用 test() + 仅操作 ProviderContainer 的形式。
@@ -15,9 +15,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
+import '../../../../support/cloud_services/content_facet_overrides.dart';
 
 // ── 测试辅助 ─────────────────────────────────────────────────────────────────
 
@@ -29,7 +29,7 @@ Widget _scopedApp({
   Widget home = const SizedBox.shrink(),
 }) {
   return ProviderScope(
-    overrides: [contentRepositoryProvider.overrideWithValue(mock)],
+    overrides: [...mockContentFacetOverrides(mock)],
     child: ScreenUtilInit(
       designSize: const Size(390, 844),
       builder: (context, _) => MaterialApp(home: home),
@@ -157,34 +157,33 @@ void main() {
       expect(feed.error, isNull);
     });
 
-    testWidgets(
-      '旅程 A3：feed 首刷不自造 feedRequestId，采纳服务端下发并透传 sessionId',
-      (tester) async {
-        final repo = _RecordingContentRepository();
-        await tester.pumpWidget(_scopedApp(mock: repo));
+    testWidgets('旅程 A3：feed 首刷不自造 feedRequestId，采纳服务端下发并透传 sessionId', (
+      tester,
+    ) async {
+      final repo = _RecordingContentRepository();
+      await tester.pumpWidget(_scopedApp(mock: repo));
 
-        final container = ProviderScope.containerOf(
-          tester.element(find.byType(MaterialApp)),
-        );
-        final feedSession = container.read(feedSessionProvider.notifier);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(MaterialApp)),
+      );
+      final feedSession = container.read(feedSessionProvider.notifier);
 
-        await container.read(discoveryFeedMapProvider.notifier).load('photo');
-        await tester.pump();
+      await container.read(discoveryFeedMapProvider.notifier).load('photo');
+      await tester.pump();
 
-        expect(repo.lastCategory, 'photo');
-        expect(repo.lastIdentity, 'work');
-        expect(repo.lastType, 'image');
-        expect(repo.lastSessionId, feedSession.sessionId);
-        // 首刷：App 不再客户端自造 feedRequestId 塞 query（服务端权威生成）。
-        expect(repo.lastFeedRequestId, isNull);
-        // feed 状态承载服务端下发的归因 id，且被 feedSession 采纳供后续行为事件复用。
-        final feed = container.read(discoveryFeedMapProvider)['photo']?.value;
-        expect(feed, isNotNull);
-        expect(feed!.feedRequestId, isNotNull);
-        expect(feed.feedRequestId, isNotEmpty);
-        expect(feedSession.currentFeedRequestId, feed.feedRequestId);
-      },
-    );
+      expect(repo.lastCategory, 'photo');
+      expect(repo.lastIdentity, 'work');
+      expect(repo.lastType, 'image');
+      expect(repo.lastSessionId, feedSession.sessionId);
+      // 首刷：App 不再客户端自造 feedRequestId 塞 query（服务端权威生成）。
+      expect(repo.lastFeedRequestId, isNull);
+      // feed 状态承载服务端下发的归因 id，且被 feedSession 采纳供后续行为事件复用。
+      final feed = container.read(discoveryFeedMapProvider)['photo']?.value;
+      expect(feed, isNotNull);
+      expect(feed!.feedRequestId, isNotNull);
+      expect(feed.feedRequestId, isNotEmpty);
+      expect(feedSession.currentFeedRequestId, feed.feedRequestId);
+    });
   });
 
   // ──────────────────────────────────────────────────────────────────
@@ -195,7 +194,7 @@ void main() {
       final failRepo = _ErrorContentRepository('NETWORK_TIMEOUT');
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [contentRepositoryProvider.overrideWithValue(failRepo)],
+          overrides: [...mockContentFacetOverrides(failRepo)],
           child: const MaterialApp(home: SizedBox.shrink()),
         ),
       );
@@ -209,11 +208,7 @@ void main() {
 
       final feed = container.read(discoveryFeedMapProvider)['photo']?.value;
       expect(feed, isNotNull);
-      expect(
-        feed!.error,
-        '操作失败，请稍后重试',
-        reason: '错误消息应传播到 feed state',
-      );
+      expect(feed!.error, '操作失败，请稍后重试', reason: '错误消息应传播到 feed state');
       expect(feed.items, isEmpty);
     });
 
@@ -221,7 +216,7 @@ void main() {
       final failRepo = _ErrorContentRepository('SERVER_500');
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [contentRepositoryProvider.overrideWithValue(failRepo)],
+          overrides: [...mockContentFacetOverrides(failRepo)],
           child: const MaterialApp(home: SizedBox.shrink()),
         ),
       );

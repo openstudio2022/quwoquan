@@ -23,8 +23,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _common.paths import PUBLISH_ROOT, NOW_ISO
-from publish_ops.build_publish_lookup_indexes import build_publish_lookup_indexes
+from core.paths import PUBLISH_ROOT, NOW_ISO
+from content.release.canonical.build_lookup_indexes import build_publish_lookup_indexes
 
 ENTITIES_ROOT = PUBLISH_ROOT / "entities" / "地点" / "住宿"
 POSTS_ROOT = PUBLISH_ROOT / "posts" / "article"
@@ -444,7 +444,7 @@ def gen_post(p: dict):
 
 ---
 
-（正文占位：实际内容由 Agent 根据 SOP 模板生成，本文件为结构验证用数据。）
+（正文占位：实际内容由 Agent 根据内容模板生成，本文件为结构验证用数据。）
 
 封面图：asset://images/posts/{p["title"]}/cover.jpg
 """

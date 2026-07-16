@@ -5,7 +5,8 @@ import (
 	"reflect"
 	"testing"
 
-	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
+	"quwoquan_service/services/content-service/internal/application/commandmeta"
+	"quwoquan_service/services/content-service/internal/testsupport"
 )
 
 // R-CS06：发布侧 semanticMentions 端云契约。
@@ -13,8 +14,8 @@ import (
 // entityRefs/tagRefs；pending_review / rejected 行不进入 refs；published 行若
 // targetRef 非法则整单拒绝（不静默丢弃）。
 func TestCreatePostProjectsPublishedSemanticMentions(t *testing.T) {
-	store := persistence.NewPostStore(nil)
-	service := NewPostService(store)
+	store := testsupport.NewPostStore(nil)
+	service := NewPostService(BindDataPorts(store))
 
 	payload := map[string]any{
 		"contentType": "micro",
@@ -49,7 +50,13 @@ func TestCreatePostProjectsPublishedSemanticMentions(t *testing.T) {
 		},
 	}
 
-	post, err := service.CreatePost(context.Background(), payload)
+	post, err := service.CreatePost(
+		commandmeta.WithIdempotencyKey(
+			context.Background(),
+			"semantic-mention-create",
+		),
+		payload,
+	)
 	if err != nil {
 		t.Fatalf("CreatePost returned error: %v", err)
 	}
@@ -75,8 +82,8 @@ func TestCreatePostProjectsPublishedSemanticMentions(t *testing.T) {
 }
 
 func TestCreatePostRejectsPublishedMentionWithInvalidTargetRef(t *testing.T) {
-	store := persistence.NewPostStore(nil)
-	service := NewPostService(store)
+	store := testsupport.NewPostStore(nil)
+	service := NewPostService(BindDataPorts(store))
 
 	payload := map[string]any{
 		"contentType": "micro",
@@ -94,7 +101,13 @@ func TestCreatePostRejectsPublishedMentionWithInvalidTargetRef(t *testing.T) {
 		},
 	}
 
-	if _, err := service.CreatePost(context.Background(), payload); err == nil {
+	if _, err := service.CreatePost(
+		commandmeta.WithIdempotencyKey(
+			context.Background(),
+			"semantic-mention-invalid-target",
+		),
+		payload,
+	); err == nil {
 		t.Fatal("CreatePost should reject published mention with invalid targetRef")
 	}
 }
@@ -102,8 +115,8 @@ func TestCreatePostRejectsPublishedMentionWithInvalidTargetRef(t *testing.T) {
 // 顶层 entityRefs/tagRefs 是只读投影：客户端若与 semanticMentions 投影不一致，
 // 服务端必须拒绝，杜绝绕过 mention 直接写 refs 的旁路。
 func TestCreatePostRejectsClientSuppliedRefsDivergingFromMentions(t *testing.T) {
-	store := persistence.NewPostStore(nil)
-	service := NewPostService(store)
+	store := testsupport.NewPostStore(nil)
+	service := NewPostService(BindDataPorts(store))
 
 	payload := map[string]any{
 		"contentType": "micro",
@@ -121,7 +134,27 @@ func TestCreatePostRejectsClientSuppliedRefsDivergingFromMentions(t *testing.T) 
 		},
 	}
 
-	if _, err := service.CreatePost(context.Background(), payload); err == nil {
+	if _, err := service.CreatePost(
+		commandmeta.WithIdempotencyKey(
+			context.Background(),
+			"semantic-mention-diverging-refs",
+		),
+		payload,
+	); err == nil {
 		t.Fatal("CreatePost should reject entityRefs diverging from published mentions projection")
+	}
+}
+
+func TestCreatePostRequiresTransportIdempotencyContext(t *testing.T) {
+	store := testsupport.NewPostStore(nil)
+	service := NewPostService(BindDataPorts(store))
+
+	_, err := service.CreatePost(context.Background(), map[string]any{
+		"contentType": "micro",
+		"authorId":    "author_sichuan",
+		"body":        "没有幂等键不能写入内容聚合",
+	})
+	if err == nil {
+		t.Fatal("CreatePost must reject a command without transport idempotency")
 	}
 }

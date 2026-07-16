@@ -8,8 +8,124 @@ import (
 	"testing"
 	"time"
 
+	rtauth "quwoquan_service/runtime/auth"
+	runtimeconfig "quwoquan_service/runtime/config"
 	rtgov "quwoquan_service/runtime/governance"
 )
+
+func TestAccessTokenConfigFailsClosed(t *testing.T) {
+	for _, key := range []string{
+		"AUTH_JWT_SECRET",
+		"AUTH_JWT_ISSUER",
+		"AUTH_JWT_AUDIENCE",
+		"AUTH_JWT_TOKEN_VERSION",
+	} {
+		t.Setenv(key, "")
+	}
+	if _, err := rtauth.LoadAccessTokenConfig(
+		runtimeconfig.EnvRuntimeConfigProvider{},
+	); err == nil {
+		t.Fatal("missing access token config must fail")
+	}
+
+	t.Setenv("AUTH_JWT_SECRET", "short")
+	t.Setenv("AUTH_JWT_ISSUER", "https://auth.quwoquan.test")
+	t.Setenv("AUTH_JWT_AUDIENCE", "quwoquan-api")
+	t.Setenv("AUTH_JWT_TOKEN_VERSION", "1")
+	if _, err := rtauth.LoadAccessTokenConfig(
+		runtimeconfig.EnvRuntimeConfigProvider{},
+	); err == nil {
+		t.Fatal("weak access token config must fail")
+	}
+
+	const secret = "0123456789abcdef0123456789abcdef"
+	t.Setenv("AUTH_JWT_SECRET", secret)
+	got, err := rtauth.LoadAccessTokenConfig(
+		runtimeconfig.EnvRuntimeConfigProvider{},
+	)
+	if err != nil {
+		t.Fatalf("valid access token config rejected: %v", err)
+	}
+	if string(got.Secret) != secret ||
+		got.Issuer != "https://auth.quwoquan.test" ||
+		got.Audience != "quwoquan-api" ||
+		got.TokenVersion != 1 {
+		t.Fatalf("unexpected access token config: %+v", got)
+	}
+}
+
+func TestRuntimeDependenciesRejectMissingOrMemoryStorage(t *testing.T) {
+	valid := config{}
+	valid.MongoDB.URI = "mongodb://mongo:27017"
+	valid.MongoDB.Database = "quwoquan_assistant"
+	valid.Postgres.DSN = "postgres://assistant:secret@postgres:5432/quwoquan"
+	valid.NotificationService.BaseURL = "http://notification-service:18087"
+	valid.Redis.General.Mode = "standalone"
+	valid.Redis.General.Addr = "redis:6379"
+	valid.Redis.Rec.Mode = "cluster"
+	valid.Redis.Rec.Addrs = []string{"redis-a:6379", "redis-b:6379"}
+
+	if err := validateRuntimeDependenciesConfig(valid); err != nil {
+		t.Fatalf("valid dependency config rejected: %v", err)
+	}
+
+	tests := []struct {
+		name      string
+		mutate    func(*config)
+		wantToken string
+	}{
+		{
+			name:      "mongodb uri",
+			mutate:    func(cfg *config) { cfg.MongoDB.URI = "" },
+			wantToken: "mongodb.uri",
+		},
+		{
+			name:      "mongodb database",
+			mutate:    func(cfg *config) { cfg.MongoDB.Database = "" },
+			wantToken: "mongodb.database",
+		},
+		{
+			name:      "postgres dsn",
+			mutate:    func(cfg *config) { cfg.Postgres.DSN = "" },
+			wantToken: "postgres.dsn",
+		},
+		{
+			name:      "notification service",
+			mutate:    func(cfg *config) { cfg.NotificationService.BaseURL = "" },
+			wantToken: "notification_service.base_url",
+		},
+		{
+			name:      "general redis memory",
+			mutate:    func(cfg *config) { cfg.Redis.General.Mode = "memory" },
+			wantToken: "redis.general.mode",
+		},
+		{
+			name:      "general redis address",
+			mutate:    func(cfg *config) { cfg.Redis.General.Addr = "" },
+			wantToken: "redis.general.addr",
+		},
+		{
+			name:      "rec redis cluster addresses",
+			mutate:    func(cfg *config) { cfg.Redis.Rec.Addrs = nil },
+			wantToken: "redis.rec.addrs",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := valid
+			cfg.Redis.Rec.Addrs = append([]string(nil), valid.Redis.Rec.Addrs...)
+			tt.mutate(&cfg)
+			err := validateRuntimeDependenciesConfig(cfg)
+			if err == nil {
+				t.Fatal("invalid dependency config should fail")
+			}
+			if !strings.Contains(err.Error(), tt.wantToken) {
+				t.Fatalf("error=%q, want token %q", err, tt.wantToken)
+			}
+		})
+	}
+}
 
 func TestAlphaRuntimeIdentityAndConfigLoadsSameNamedOverlay(t *testing.T) {
 	t.Setenv("SERVICE_NAME", "assistant-service")

@@ -77,7 +77,8 @@ description: 基础设施 · 使用规范自检（埋点管线/存储/缓存/消
 
 #### 存储无关（切换能力）
 - `runtime/media/MediaStore` 接口是否足以切换底层 OSS（S3/OSS/MinIO/R2）
-- `runtime/repository/Repository[T]` 的 Mongo→PG 切换能力验证
+- 对象专属 `AggregateStore` / `Reader` port 的 Mongo→PG adapter
+  conformance 与切换能力验证；禁止恢复通用 `Repository[T]`
 - 切换时的数据迁移方案是否存在
 
 #### 生命周期

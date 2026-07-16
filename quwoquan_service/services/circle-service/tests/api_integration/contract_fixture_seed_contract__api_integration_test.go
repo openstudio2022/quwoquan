@@ -30,22 +30,22 @@ func TestContractFixtureSeed_CircleAlphaReadsViaHandler(t *testing.T) {
 		t.Fatalf("unexpected circle detail: %+v", detailBody)
 	}
 
-	groupRec := doRequest(t, http.MethodGet, "/v1/circles/fixture_circle_photo/groups?limit=20", nil)
+	groupRec := executeGroupQuery(t, "/v1/circles/fixture_circle_photo/groups?limit=20", "fixture_user_owner", "ListCircleGroups")
 	if groupRec.Code != http.StatusOK {
 		t.Fatalf("circle groups expected 200, got %d: %s", groupRec.Code, groupRec.Body.String())
 	}
 	groupBody := decodeBody(t, groupRec)
 	assertItemsContainID(t, groupBody["items"], "fixture_group_photo_public")
 
-	memberRec := doRequest(t, http.MethodGet, "/v1/circles/fixture_circle_photo/members?limit=20", nil)
+	memberRec := doRequest(t, http.MethodGet, "/v1/circles/fixture_circle_photo/memberships?limit=20", nil)
 	if memberRec.Code != http.StatusOK {
 		t.Fatalf("circle members expected 200, got %d: %s", memberRec.Code, memberRec.Body.String())
 	}
 	memberBody := decodeBody(t, memberRec)
-	assertItemsContainUserID(t, memberBody["items"], "fixture_user_owner")
-	assertItemsContainUserID(t, memberBody["items"], "fixture_user_photo")
+	assertItemsContainPersonaID(t, memberBody["items"], "fixture_user_owner")
+	assertItemsContainPersonaID(t, memberBody["items"], "fixture_user_photo")
 
-	fileRec := doRequest(t, http.MethodGet, "/v1/circles/fixture_circle_photo/files?limit=20", nil)
+	fileRec := executeFileQuery(t, "/v1/circles/fixture_circle_photo/files?groupId=fixture_group_photo_public&limit=20", "fixture_user_owner", "ListCircleFiles")
 	if fileRec.Code != http.StatusOK {
 		t.Fatalf("circle files expected 200, got %d: %s", fileRec.Code, fileRec.Body.String())
 	}
@@ -64,14 +64,14 @@ func assertItemsContainID(t *testing.T, raw any, id string) {
 		if !ok {
 			continue
 		}
-		if obj["id"] == id || obj["_id"] == id || obj["circleId"] == id || obj["groupId"] == id {
+		if obj["id"] == id || obj["_id"] == id || obj["fileId"] == id || obj["circleId"] == id || obj["groupId"] == id {
 			return
 		}
 	}
 	t.Fatalf("items did not contain id %s: %+v", id, items)
 }
 
-func assertItemsContainUserID(t *testing.T, raw any, userID string) {
+func assertItemsContainPersonaID(t *testing.T, raw any, personaID string) {
 	t.Helper()
 	items, ok := raw.([]any)
 	if !ok {
@@ -79,9 +79,9 @@ func assertItemsContainUserID(t *testing.T, raw any, userID string) {
 	}
 	for _, item := range items {
 		obj, ok := item.(map[string]any)
-		if ok && obj["userId"] == userID {
+		if ok && obj["personaId"] == personaID {
 			return
 		}
 	}
-	t.Fatalf("items did not contain user %s: %+v", userID, items)
+	t.Fatalf("items did not contain Persona %s: %+v", personaID, items)
 }

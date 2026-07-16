@@ -28,11 +28,11 @@
 
 ## 约束
 
-- 标签真相源为数据工程 `publish/tags`，不得恢复扁平枚举。
+- 标签真相源为数据工程 `control_plane/governance/taxonomy`；`publish/tags` 仅保存发布对象实际引用的 consumer snapshot，不得恢复扁平枚举或复制整棵 taxonomy。
 - 实体归一产物必须能映射到运行时 `canonicalEntityId`。
 - seed manifest 必须区分 alpha、beta、gamma、prod 数据策略。
 - 新增数据发布物必须有 local_contract 校验脚本或 contract fixture。
-- 输出目录规范（真相源 `quwoquan_data/docs/pipeline_directory_layout_spec.md` §0.5 + `_common/paths.py`）：
+- 输出目录规范（真相源 `quwoquan_data/README.md` + `core/paths.py`）：
   仓内只保留输入契约（task.yaml/defaults/schema/templates）与发布主线 `publish/**`；
   runtime/artifacts/release 等运行期输出统一落仓外 `QWQ_OUTPUT_ROOT`（默认 `<repo>/.qwq_output/`）。
 - 批次三轴唯一：每个 e2e/operations 批次只允许一个 `contentType`（homepage/article/image/video）

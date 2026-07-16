@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
+import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';
 
@@ -140,7 +140,7 @@ class DiscoveryFeedMapNotifier
     if (!force && currentValue != null && currentValue.items.isNotEmpty) {
       return;
     }
-    final repo = ref.read(contentRepositoryProvider);
+    final repo = ref.read(contentReadRepositoryProvider);
     final query = _resolveQuery(channelId);
     final feedSession = ref.read(feedSessionProvider.notifier);
     final sessionId = feedSession.sessionId;
@@ -273,7 +273,7 @@ class DiscoveryFeedMapNotifier
       itemCountBefore: value.items.length,
     );
     try {
-      final repo = ref.read(contentRepositoryProvider);
+      final repo = ref.read(contentReadRepositoryProvider);
       final query = _resolveQuery(channelId);
       final feedSession = ref.read(feedSessionProvider.notifier);
       final sessionId = feedSession.sessionId;

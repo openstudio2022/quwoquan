@@ -1,0 +1,116 @@
+version: 1
+entity: Comment
+domain: CONTENT
+
+errors:
+  - code: CONTENT.USER.comment_not_found
+    kind: USER
+    reason: comment_not_found
+    http_status: 404
+    recovery_action: surface
+    dart_const: commentNotFound
+    go_const: ErrCommentNotFound
+    user_message:
+      zh: "评论不存在或已删除"
+      en: "Comment not found or deleted"
+
+  - code: CONTENT.USER.comment_forbidden_delete
+    kind: USER
+    reason: comment_forbidden_delete
+    http_status: 403
+    recovery_action: surface
+    dart_const: commentForbiddenDelete
+    go_const: ErrCommentForbiddenDelete
+    user_message:
+      zh: "无权删除此评论"
+      en: "Not allowed to delete this comment"
+
+  - code: CONTENT.USER.comment_pin_forbidden
+    kind: USER
+    reason: comment_pin_forbidden
+    http_status: 403
+    recovery_action: surface
+    dart_const: commentPinForbidden
+    go_const: ErrCommentPinForbidden
+    user_message:
+      zh: "仅内容作者可置顶评论"
+      en: "Only the referenced post author can pin a comment"
+
+  - code: CONTENT.USER.comment_pin_invalid_target
+    kind: USER
+    reason: comment_pin_invalid_target
+    http_status: 409
+    recovery_action: surface
+    dart_const: commentPinInvalidTarget
+    go_const: ErrCommentPinInvalidTarget
+    user_message:
+      zh: "只能置顶一级评论"
+      en: "Only a top-level comment can be pinned"
+
+  - code: CONTENT.USER.comment_parent_invalid
+    kind: USER
+    reason: comment_parent_invalid
+    http_status: 409
+    recovery_action: refresh
+    dart_const: commentParentInvalid
+    go_const: ErrCommentParentInvalid
+    user_message:
+      zh: "回复目标已变更或不属于当前内容"
+      en: "The reply target changed or belongs to another post"
+
+  - code: CONTENT.USER.comment_too_long
+    kind: USER
+    reason: comment_too_long
+    http_status: 400
+    recovery_action: surface
+    dart_const: commentTooLong
+    go_const: ErrCommentTooLong
+    user_message:
+      zh: "评论超出字数限制"
+      en: "Comment exceeds the length limit"
+
+  - code: CONTENT.USER.version_conflict
+    kind: USER
+    reason: version_conflict
+    http_status: 409
+    recovery_action: refresh
+    dart_const: versionConflict
+    go_const: ErrVersionConflict
+    user_message:
+      zh: "评论已更新，请刷新后重试"
+      en: "Comment changed, refresh and retry"
+
+  - code: CONTENT.USER.idempotency_conflict
+    kind: USER
+    reason: idempotency_conflict
+    http_status: 409
+    recovery_action: refresh
+    dart_const: idempotencyConflict
+    go_const: ErrIdempotencyConflict
+    user_message:
+      zh: "重复请求与原操作不一致，请刷新后重试"
+      en: "The repeated request differs from the original operation"
+
+  - code: CONTENT.SYSTEM.storage_write_failed
+    kind: SYSTEM
+    reason: storage_write_failed
+    http_status: 500
+    recovery_action: retry
+    recovery_after_seconds: 5
+    dart_const: storageWriteFailed
+    go_const: ErrStorageWriteFailed
+    user_message:
+      zh: "评论操作失败，请稍后重试"
+      en: "Comment operation failed, please retry"
+
+  - code: CONTENT.SYSTEM.storage_read_failed
+    kind: SYSTEM
+    reason: storage_read_failed
+    http_status: 500
+    recovery_action: retry
+    recovery_after_seconds: 5
+    dart_const: storageReadFailed
+    go_const: ErrStorageReadFailed
+    user_message:
+      zh: "评论读取失败，请稍后重试"
+      en: "Unable to read comments, please retry"

@@ -5,13 +5,11 @@ class HomepageIntroductionTimelineItem {
   final String dateLabel;
   final String text;
   final String? assetUrl;
-  final String? sourceRef;
 
   HomepageIntroductionTimelineItem({
     this.dateLabel = '',
     this.text = '',
     this.assetUrl,
-    this.sourceRef,
   });
 
   factory HomepageIntroductionTimelineItem.fromMap(Map<String, dynamic> m) {
@@ -19,7 +17,6 @@ class HomepageIntroductionTimelineItem {
       dateLabel: m['dateLabel']?.toString() ?? m['date']?.toString() ?? '',
       text: m['text']?.toString() ?? m['body']?.toString() ?? '',
       assetUrl: m['assetUrl']?.toString() ?? m['imageUrl']?.toString() ?? null,
-      sourceRef: m['sourceRef']?.toString() ?? null,
     );
   }
 
@@ -28,7 +25,6 @@ class HomepageIntroductionTimelineItem {
       'dateLabel': dateLabel,
       'text': text,
       'assetUrl': assetUrl,
-      'sourceRef': sourceRef,
     };
   }
 
@@ -36,14 +32,11 @@ class HomepageIntroductionTimelineItem {
     String? dateLabel,
     String? text,
     String? assetUrl,
-    String? sourceRef,
   }) {
     return HomepageIntroductionTimelineItem(
       dateLabel: dateLabel ?? this.dateLabel,
       text: text ?? this.text,
       assetUrl: assetUrl ?? this.assetUrl,
-      sourceRef: sourceRef ?? this.sourceRef,
     );
   }
 }
-

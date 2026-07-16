@@ -13,17 +13,7 @@ func newServerMux(service *productService, healthChecker *health.Checker) *http.
 	mux.HandleFunc("/healthz", healthChecker.Handler())
 	mux.Handle("/metrics", rtmetrics.Handler())
 	mux.HandleFunc("/v1/ops/experiments/", func(w http.ResponseWriter, r *http.Request) {
-		path := strings.TrimPrefix(r.URL.Path, "/v1/ops/experiments/")
-		switch {
-		case strings.HasSuffix(path, "/bucket") && r.Method == http.MethodGet:
-			service.handleGetBucket(w, r)
-		case strings.HasSuffix(path, "/assign") && r.Method == http.MethodPost:
-			service.handleAssignBucket(w, r)
-		case strings.HasSuffix(path, "/stats") && r.Method == http.MethodGet:
-			service.handleGetStats(w, r)
-		default:
-			writeRuntimeNotFound(w, r)
-		}
+		service.experimentHTTP.ServeHTTP(w, r)
 	})
 	mux.HandleFunc("/v1/ops/visits", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -61,19 +51,10 @@ func newServerMux(service *productService, healthChecker *health.Checker) *http.
 		service.handleGetEventDrilldown(w, r)
 	})
 	mux.HandleFunc("/v1/control-plane/product/experiments", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeRuntimeError(w, r, http.StatusMethodNotAllowed, "请求处理失败", "only GET")
-			return
-		}
-		service.handleListExperiments(w, r)
+		service.experimentHTTP.ServeHTTP(w, r)
 	})
 	mux.HandleFunc("/v1/control-plane/product/experiments/", func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, ":rollout"):
-			service.handleRollout(w, r)
-		default:
-			writeRuntimeNotFound(w, r)
-		}
+		service.experimentHTTP.ServeHTTP(w, r)
 	})
 	mux.HandleFunc("/v1/control-plane/product/moderation/cases", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {

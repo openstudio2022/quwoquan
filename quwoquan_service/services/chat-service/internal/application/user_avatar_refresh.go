@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	model "quwoquan_service/services/chat-service/internal/domain/conversation/model"
-	"quwoquan_service/services/chat-service/internal/infrastructure/persistence"
 )
 
 const userAvatarRefreshBatchSize = 200
@@ -19,7 +18,7 @@ type UserAvatarUpdatedPayload struct {
 
 func HandleUserAvatarUpdated(
 	ctx context.Context,
-	repo persistence.ChatRepository,
+	storage ChatStoragePorts,
 	publisher EventPublisher,
 	media GroupAvatarAssetizer,
 	syncPublisher UserSyncPublisher,
@@ -27,14 +26,14 @@ func HandleUserAvatarUpdated(
 	payload UserAvatarUpdatedPayload,
 ) error {
 	userID := strings.TrimSpace(payload.UserID)
-	if userID == "" || repo == nil {
+	if userID == "" || storage.UserStates == nil {
 		return nil
 	}
 
 	cursor := ""
 	seen := map[string]struct{}{}
 	for {
-		states, err := repo.ListUserStates(ctx, userID, userAvatarRefreshBatchSize, cursor)
+		states, err := storage.UserStates.ListUserStates(ctx, userID, userAvatarRefreshBatchSize, cursor)
 		if err != nil {
 			return err
 		}
@@ -52,7 +51,7 @@ func HandleUserAvatarUpdated(
 			seen[conversationID] = struct{}{}
 			if err := refreshUserAvatarInConversation(
 				ctx,
-				repo,
+				storage,
 				publisher,
 				media,
 				syncPublisher,
@@ -76,7 +75,7 @@ func HandleUserAvatarUpdated(
 
 func refreshUserAvatarInConversation(
 	ctx context.Context,
-	repo persistence.ChatRepository,
+	storage ChatStoragePorts,
 	publisher EventPublisher,
 	media GroupAvatarAssetizer,
 	syncPublisher UserSyncPublisher,
@@ -84,7 +83,7 @@ func refreshUserAvatarInConversation(
 	conversationID string,
 	payload UserAvatarUpdatedPayload,
 ) error {
-	conv, err := repo.FindConversationByID(ctx, conversationID)
+	conv, err := storage.Conversations.FindConversationByID(ctx, conversationID)
 	if err != nil || conv == nil {
 		return nil
 	}
@@ -92,13 +91,13 @@ func refreshUserAvatarInConversation(
 		return nil
 	}
 
-	members, err := repo.ListMembers(
+	members, err := storage.Members.ListMembers(
 		ctx,
 		conversationID,
-		16,
-		"",
-		"",
-		persistence.SortMembersJoinedAsc,
+		ListMembersQuery{
+			Limit: 16,
+			Sort:  MemberListSortJoinedAsc,
+		},
 	)
 	if err != nil {
 		return err
@@ -109,8 +108,8 @@ func refreshUserAvatarInConversation(
 	}
 
 	if scheduler != nil {
-		return repo.RunInTransaction(ctx, func(txCtx context.Context) error {
-			if err := repo.UpdateMemberAvatarSnapshot(
+		return storage.Transactions.RunInTransaction(ctx, func(txCtx context.Context) error {
+			if err := storage.Members.UpdateMemberAvatarSnapshot(
 				txCtx,
 				conversationID,
 				payload.UserID,
@@ -127,7 +126,7 @@ func refreshUserAvatarInConversation(
 			})
 		})
 	}
-	if err := repo.UpdateMemberAvatarSnapshot(
+	if err := storage.Members.UpdateMemberAvatarSnapshot(
 		ctx,
 		conversationID,
 		payload.UserID,
@@ -137,7 +136,7 @@ func refreshUserAvatarInConversation(
 	); err != nil {
 		return err
 	}
-	return RecomputeGroupAvatar(ctx, repo, publisher, media, syncPublisher, nil, conversationID, payload.UserID)
+	return RecomputeGroupAvatar(ctx, storage, publisher, media, syncPublisher, nil, conversationID, payload.UserID)
 }
 
 func topNineContainsUser(members []model.ConversationMember, userID string) bool {

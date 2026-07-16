@@ -10,7 +10,6 @@ import (
 
 	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/services/chat-service/internal/application"
-	"quwoquan_service/services/chat-service/internal/infrastructure/persistence"
 )
 
 const userProfileEventChannel = "event:user-profile"
@@ -25,7 +24,7 @@ type userDomainEvent struct {
 
 type UserAvatarUpdateConsumer struct {
 	client        rtredis.Client
-	repo          persistence.ChatRepository
+	storage       application.ChatStoragePorts
 	publisher     application.EventPublisher
 	media         application.GroupAvatarAssetizer
 	syncPublisher application.UserSyncPublisher
@@ -35,7 +34,7 @@ type UserAvatarUpdateConsumer struct {
 
 func NewUserAvatarUpdateConsumer(
 	client rtredis.Client,
-	repo persistence.ChatRepository,
+	storage application.ChatStoragePorts,
 	publisher application.EventPublisher,
 	media application.GroupAvatarAssetizer,
 	syncPublisher application.UserSyncPublisher,
@@ -47,7 +46,7 @@ func NewUserAvatarUpdateConsumer(
 	}
 	return &UserAvatarUpdateConsumer{
 		client:        client,
-		repo:          repo,
+		storage:       storage,
 		publisher:     publisher,
 		media:         media,
 		syncPublisher: syncPublisher,
@@ -57,7 +56,7 @@ func NewUserAvatarUpdateConsumer(
 }
 
 func (c *UserAvatarUpdateConsumer) Start(ctx context.Context) error {
-	if c == nil || c.client == nil || c.repo == nil {
+	if c == nil || c.client == nil || c.storage.UserStates == nil {
 		return nil
 	}
 	sub, err := c.client.Subscribe(ctx, userProfileEventChannel)
@@ -103,7 +102,7 @@ func (c *UserAvatarUpdateConsumer) handleMessage(ctx context.Context, payload st
 	}
 	if err := application.HandleUserAvatarUpdated(
 		ctx,
-		c.repo,
+		c.storage,
 		c.publisher,
 		c.media,
 		c.syncPublisher,

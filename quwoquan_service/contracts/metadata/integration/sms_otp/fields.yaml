@@ -3,9 +3,7 @@ aggregate: SmsOtp
 
 enums:
   SmsOtpDeliveryStatus:
-    values: [queued, sent_unconfirmed, delivered, failed, pass_through]
-  SmsOtpPassThroughMode:
-    values: [disabled, enabled]
+    values: [queued, sent_unconfirmed, delivered, failed]
 
 entities:
   SmsOtpSendPayload:
@@ -46,6 +44,10 @@ entities:
         log_policy: redact
         api_exposure: none
         ops_exposure: none
+        description: >-
+          AES-256-GCM 密封的短时 OTP dispatch 引用，密文内包含收件号码与验证码；
+          AAD 绑定 requestId/challengeId/expiresAt。仅 integration-service 在供应商
+          调用前于内存中解封，禁止进入日志、指标、attempt ledger 或公开响应。
       - name: templateId
         type: string
         constraints: [NOT_NULL]
@@ -153,39 +155,6 @@ entities:
         ops_exposure: read
       - name: accepted
         type: bool
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-  SmsOtpPassThroughDebt:
-    description: 非生产验证码跳过正确性校验临时债务，prod 必须 gate block。
-    fields:
-      - name: passThroughMode
-        type: enum
-        enum_ref: SmsOtpPassThroughMode
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: debtId
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: owner
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: expiresAt
-        type: date
         constraints: [NOT_NULL]
         classification: PUBLIC
         log_policy: allow

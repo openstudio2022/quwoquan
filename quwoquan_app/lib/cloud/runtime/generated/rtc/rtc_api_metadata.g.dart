@@ -22,9 +22,9 @@ class RtcApiMetadata {
     'LeaveCall': '/v1/rtc/calls/{callId}/leave',
     'ListCalls': '/v1/rtc/calls',
     'RejectCall': '/v1/rtc/calls/{callId}/reject',
-    'StartRecording': '/v1/rtc/calls/{callId}/recording/start',
+    'StartCallRecording': '/v1/rtc/calls/{callId}/recordings',
     'StartScreenShare': '/v1/rtc/calls/{callId}/screen-share/start',
-    'StopRecording': '/v1/rtc/calls/{callId}/recording/stop',
+    'StopCallRecording': '/v1/rtc/call-recordings/{recordingId}:stop',
     'StopScreenShare': '/v1/rtc/calls/{callId}/screen-share/stop',
     'ToggleCamera': '/v1/rtc/calls/{callId}/camera',
     'ToggleMute': '/v1/rtc/calls/{callId}/mute',
@@ -41,9 +41,9 @@ class RtcApiMetadata {
     'LeaveCall': 'POST',
     'ListCalls': 'GET',
     'RejectCall': 'POST',
-    'StartRecording': 'POST',
+    'StartCallRecording': 'POST',
     'StartScreenShare': 'POST',
-    'StopRecording': 'POST',
+    'StopCallRecording': 'POST',
     'StopScreenShare': 'POST',
     'ToggleCamera': 'POST',
     'ToggleMute': 'POST',
@@ -61,15 +61,15 @@ class RtcApiMetadata {
     'LeaveCall': 'required',
     'ListCalls': 'required',
     'RejectCall': 'required',
-    'StartRecording': 'required',
+    'StartCallRecording': 'required',
     'StartScreenShare': 'required',
-    'StopRecording': 'required',
+    'StopCallRecording': 'required',
     'StopScreenShare': 'required',
     'ToggleCamera': 'required',
     'ToggleMute': 'required',
   };
 
-  /// 响应读模型：operation -> 端侧 DTO 类名（service.yaml response_body 真相源，仅 object/page 形态）。
+  /// 已绑定端侧强类型的响应读模型：operation -> Dart 契约类名。
   static const Map<String, String> operationToResponseModel = <String, String>{
   };
 
@@ -87,9 +87,9 @@ class RtcApiMetadata {
   static const String leaveCallOperation = 'LeaveCall';
   static const String listCallsOperation = 'ListCalls';
   static const String rejectCallOperation = 'RejectCall';
-  static const String startRecordingOperation = 'StartRecording';
+  static const String startCallRecordingOperation = 'StartCallRecording';
   static const String startScreenShareOperation = 'StartScreenShare';
-  static const String stopRecordingOperation = 'StopRecording';
+  static const String stopCallRecordingOperation = 'StopCallRecording';
   static const String stopScreenShareOperation = 'StopScreenShare';
   static const String toggleCameraOperation = 'ToggleCamera';
   static const String toggleMuteOperation = 'ToggleMute';
@@ -144,9 +144,9 @@ class RtcApiMetadata {
       'callId': callId,
     });
   }
-  static const String startRecordingPathTemplate = '/v1/rtc/calls/{callId}/recording/start';
-  static String startRecordingPath({required String callId}) {
-    return _fillPath(startRecordingPathTemplate, <String, String>{
+  static const String startCallRecordingPathTemplate = '/v1/rtc/calls/{callId}/recordings';
+  static String startCallRecordingPath({required String callId}) {
+    return _fillPath(startCallRecordingPathTemplate, <String, String>{
       'callId': callId,
     });
   }
@@ -156,10 +156,10 @@ class RtcApiMetadata {
       'callId': callId,
     });
   }
-  static const String stopRecordingPathTemplate = '/v1/rtc/calls/{callId}/recording/stop';
-  static String stopRecordingPath({required String callId}) {
-    return _fillPath(stopRecordingPathTemplate, <String, String>{
-      'callId': callId,
+  static const String stopCallRecordingPathTemplate = '/v1/rtc/call-recordings/{recordingId}:stop';
+  static String stopCallRecordingPath({required String recordingId}) {
+    return _fillPath(stopCallRecordingPathTemplate, <String, String>{
+      'recordingId': recordingId,
     });
   }
   static const String stopScreenSharePathTemplate = '/v1/rtc/calls/{callId}/screen-share/stop';

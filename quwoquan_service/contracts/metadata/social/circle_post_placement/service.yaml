@@ -1,0 +1,119 @@
+version: 1
+service:
+  name: circle-service
+  domain: circle
+  owner: backend-team
+  description: CirclePostPlacement 对象专属 Command Facade。
+  commercial_defaults:
+    status: blocked
+    block_reason: Mongo Store/outbox 与 generated transport 尚未完成生产装配
+    gap_id: CIRCLE_POST_PLACEMENT_WIRING
+    target_story: app-cloud-business-object-commercial-closure
+
+api_routes:
+  - method: POST
+    path: /v1/circles/{circleId}/post-placements
+    operation: PlacePostInCircle
+    actor: persona
+    application:
+      kind: command
+      facet: CirclePostPlacementCommandFacade
+      method: place
+      aggregate_owner: CirclePostPlacement
+      mutation_target: CirclePostPlacement
+      invariant_target: CirclePostPlacement
+    request_entity: PlacePostInCircleRequest
+    response_entity: CirclePostPlacementCommandResult
+    auth: required
+    authorization:
+      principal: persona
+      ownership_policy: post_owner_or_circle_moderator
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    request_fields: [postId, groupId]
+    response_fields: [placementId, version, state, idempotentReplay]
+    error_codes: [CIRCLE.USER.invalid_argument, CIRCLE.USER.permission_denied, CIRCLE.USER.placement_already_exists, CIRCLE.USER.placement_idempotency_conflict, CIRCLE.SYSTEM.placement_storage_write_failed]
+    privacy: { request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only }
+    telemetry: { metric: circle_post_placement_place, trace: true, attributes: [outcome, actor_role] }
+    slo: { latency_p95_ms: 600, availability_percent: 99.9 }
+    client_contract:
+      dart_import: ../circle/post_placement_contracts.dart
+      request_type: PlaceCirclePostCommand
+      response_type: CirclePostPlacementCommandResult
+      request_encoder: encodePlaceCirclePostCommand
+      response_decoder: decodeCirclePostPlacementCommandResult
+
+  - method: DELETE
+    path: /v1/circles/{circleId}/post-placements/{placementId}
+    operation: RemovePostFromCircle
+    actor: persona
+    application:
+      kind: command
+      facet: CirclePostPlacementCommandFacade
+      method: remove
+      aggregate_owner: CirclePostPlacement
+      mutation_target: CirclePostPlacement
+      invariant_target: CirclePostPlacement
+    response_entity: CirclePostPlacementCommandResult
+    auth: required
+    authorization:
+      principal: persona
+      ownership_policy: post_owner_or_circle_moderator
+    reliability: { timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required }
+    error_codes: [CIRCLE.USER.placement_not_found, CIRCLE.USER.permission_denied, CIRCLE.USER.placement_version_conflict, CIRCLE.USER.placement_idempotency_conflict, CIRCLE.SYSTEM.placement_storage_write_failed]
+    privacy: { request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only }
+    telemetry: { metric: circle_post_placement_remove, trace: true, attributes: [outcome, actor_role] }
+    slo: { latency_p95_ms: 600, availability_percent: 99.9 }
+    description: expectedVersion 必须通过 If-Match header 提交；幂等键只来自 OperationInvocationContext。
+
+  - method: PATCH
+    path: /v1/circles/{circleId}/post-placements/{placementId}/pin
+    operation: PinCirclePost
+    actor: persona
+    application:
+      kind: command
+      facet: CirclePostPlacementCommandFacade
+      method: setPinned
+      aggregate_owner: CirclePostPlacement
+      mutation_target: CirclePostPlacement
+      invariant_target: CirclePostPlacement
+    request_entity: UpdateCirclePostPlacementRequest
+    response_entity: CirclePostPlacementCommandResult
+    auth: required
+    authorization:
+      principal: persona
+      ownership_policy: circle_moderator
+    reliability: { timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required }
+    request_fields: [enabled, expectedVersion]
+    error_codes: [CIRCLE.USER.placement_not_found, CIRCLE.USER.permission_denied, CIRCLE.USER.placement_version_conflict, CIRCLE.USER.placement_idempotency_conflict, CIRCLE.SYSTEM.placement_storage_write_failed]
+    privacy: { request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only }
+    telemetry: { metric: circle_post_placement_pin, trace: true, attributes: [outcome] }
+    slo: { latency_p95_ms: 600, availability_percent: 99.9 }
+
+  - method: PATCH
+    path: /v1/circles/{circleId}/post-placements/{placementId}/feature
+    operation: FeatureCirclePost
+    actor: persona
+    application:
+      kind: command
+      facet: CirclePostPlacementCommandFacade
+      method: setFeatured
+      aggregate_owner: CirclePostPlacement
+      mutation_target: CirclePostPlacement
+      invariant_target: CirclePostPlacement
+    request_entity: UpdateCirclePostPlacementRequest
+    response_entity: CirclePostPlacementCommandResult
+    auth: required
+    authorization:
+      principal: persona
+      ownership_policy: circle_moderator
+    reliability: { timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required }
+    request_fields: [enabled, expectedVersion]
+    error_codes: [CIRCLE.USER.placement_not_found, CIRCLE.USER.permission_denied, CIRCLE.USER.placement_version_conflict, CIRCLE.USER.placement_idempotency_conflict, CIRCLE.SYSTEM.placement_storage_write_failed]
+    privacy: { request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only }
+    telemetry: { metric: circle_post_placement_feature, trace: true, attributes: [outcome] }
+    slo: { latency_p95_ms: 600, availability_percent: 99.9 }

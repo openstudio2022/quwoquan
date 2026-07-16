@@ -7,11 +7,13 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
+import 'package:quwoquan_app/cloud/runtime/context/actor_queue_partition.dart';
+import 'package:quwoquan_app/infrastructure/local/actor_queue/actor_queue_storage.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/ops_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/ops_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
-import 'package:quwoquan_app/core/services/hive_runtime.dart';
 
 const String kOpsEventQueueBoxName = 'ops_event_queue';
 
@@ -328,6 +330,8 @@ abstract class OpsEventRepository {
 
   Future<void> flushPending();
 
+  Future<void> clearPendingForLogout();
+
   Future<OpsEventSummary> getEventSummary({
     String eventType = '',
     String eventName = '',
@@ -464,6 +468,11 @@ class MockOpsEventRepository implements OpsEventRepository {
   Future<void> flushPending() async {}
 
   @override
+  Future<void> clearPendingForLogout() async {
+    recorded.clear();
+  }
+
+  @override
   Future<OpsEventBatchAck> reportEventBatch({
     required List<OpsEventRecordInput> events,
   }) async {
@@ -507,13 +516,29 @@ class MockOpsEventRepository implements OpsEventRepository {
 class RemoteOpsEventRepository
     with WidgetsBindingObserver
     implements OpsEventRepository {
-  RemoteOpsEventRepository({
-    CloudHttpClient? httpClient,
+  factory RemoteOpsEventRepository({
+    required CloudHttpClient httpClient,
     String? baseUrl,
     String? queueBoxName,
-  }) : _httpClient = httpClient ?? CloudHttpClient(),
-       _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim(),
-       _queueBoxName = queueBoxName ?? kOpsEventQueueBoxName {
+    required ActorQueuePartition queuePartition,
+    ActorQueueStorage? queueStorage,
+  }) {
+    return RemoteOpsEventRepository._(
+      httpClient,
+      queuePartition,
+      queueStorage ?? ActorQueueStorage(),
+      (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim(),
+      queueBoxName ?? kOpsEventQueueBoxName,
+    );
+  }
+
+  RemoteOpsEventRepository._(
+    this._httpClient,
+    this._queuePartition,
+    this._queueStorage,
+    this._baseUrl,
+    this._queueBoxName,
+  ) {
     _bindLifecycle();
     _scheduleFlush(delay: const Duration(seconds: 15));
   }
@@ -521,6 +546,8 @@ class RemoteOpsEventRepository
   final CloudHttpClient _httpClient;
   final String _baseUrl;
   final String _queueBoxName;
+  final ActorQueuePartition _queuePartition;
+  final ActorQueueStorage _queueStorage;
   Timer? _flushTimer;
   bool _isFlushing = false;
 
@@ -571,7 +598,14 @@ class RemoteOpsEventRepository
   }
 
   Future<Box<String>?> _ensureBox() async {
-    return HiveRuntime.openStringBoxOrNull(_queueBoxName);
+    return _queueStorage.open(_queuePartition, _queueBoxName);
+  }
+
+  @override
+  Future<void> clearPendingForLogout() async {
+    _flushTimer?.cancel();
+    _flushTimer = null;
+    await _queueStorage.purge(_queuePartition, _queueBoxName);
   }
 
   @override
@@ -595,7 +629,19 @@ class RemoteOpsEventRepository
           continue;
         }
         try {
-          final parsed = (jsonDecode(raw) as List)
+          final envelope = jsonDecode(raw);
+          if (envelope is! Map ||
+              !_queuePartition.acceptsEnvelope(envelope['actorPartitionKey'])) {
+            await _queueStorage.moveToDlq(
+              partition: _queuePartition,
+              queueName: _queueBoxName,
+              sourceKey: key,
+              rawEnvelope: raw,
+              reason: 'actor_partition_mismatch',
+            );
+            continue;
+          }
+          final parsed = ((envelope['events'] as List?) ?? const <dynamic>[])
               .whereType<Map>()
               .map(
                 (item) =>
@@ -605,9 +651,30 @@ class RemoteOpsEventRepository
           await _postBatch(parsed);
           await box.delete(key);
           consecutiveFailures = 0;
-        } catch (e) {
+        } on FormatException catch (error) {
+          await _queueStorage.moveToDlq(
+            partition: _queuePartition,
+            queueName: _queueBoxName,
+            sourceKey: key,
+            rawEnvelope: raw,
+            reason: 'poison_${error.message}',
+          );
+        } on CloudException catch (error) {
+          if (!_shouldRetry(error)) {
+            await _queueStorage.moveToDlq(
+              partition: _queuePartition,
+              queueName: _queueBoxName,
+              sourceKey: key,
+              rawEnvelope: raw,
+              reason: 'non_retryable_${error.statusCode ?? 0}',
+            );
+            continue;
+          }
+          consecutiveFailures++;
+          if (consecutiveFailures >= 3) break;
+        } catch (_) {
           developer.log(
-            'OpsEventRepository.flushPending failed key=$key: $e',
+            'OpsEventRepository actor-scoped flush failed key=$key',
             name: 'ops',
           );
           consecutiveFailures++;
@@ -712,9 +779,9 @@ class RemoteOpsEventRepository
       final ack = await _postBatch(events);
       _scheduleFlush(delay: const Duration(seconds: 3));
       return ack;
-    } catch (e) {
+    } catch (_) {
       developer.log(
-        'ops reportEventBatch failed, enqueuing: $e',
+        'ops reportEventBatch failed; enqueuing actor-scoped batch',
         name: 'OpsEventRepository',
       );
       await _enqueue(events);
@@ -746,7 +813,10 @@ class RemoteOpsEventRepository
     final now = DateTime.now().microsecondsSinceEpoch.toString();
     await box.put(
       now,
-      jsonEncode(events.map((event) => event.toJson()).toList(growable: false)),
+      jsonEncode(<String, dynamic>{
+        'actorPartitionKey': _queuePartition.key,
+        'events': events.map((event) => event.toJson()).toList(growable: false),
+      }),
     );
     const maxBacklog = 200;
     if (box.length > maxBacklog) {
@@ -754,7 +824,20 @@ class RemoteOpsEventRepository
         ..sort();
       final overflow = box.length - maxBacklog;
       for (var i = 0; i < overflow; i++) {
-        await box.delete(keys[i]);
+        final overflowKey = keys[i];
+        final raw = box.get(overflowKey);
+        if (raw == null) {
+          await box.delete(overflowKey);
+          continue;
+        }
+        await _queueStorage.moveToDlq(
+          partition: _queuePartition,
+          queueName: _queueBoxName,
+          sourceKey: overflowKey,
+          rawEnvelope: raw,
+          reason: 'queue_capacity_exceeded',
+          kind: ActorQueueSignalKind.overflowMoved,
+        );
       }
     }
   }
@@ -788,6 +871,11 @@ class RemoteOpsEventRepository
       if (source.trim().isNotEmpty) 'source': source.trim(),
       if (limit != null && limit > 0) 'limit': '$limit',
     };
+  }
+
+  bool _shouldRetry(CloudException error) {
+    final statusCode = error.statusCode ?? 0;
+    return statusCode == 0 || statusCode == 429 || statusCode >= 500;
   }
 }
 

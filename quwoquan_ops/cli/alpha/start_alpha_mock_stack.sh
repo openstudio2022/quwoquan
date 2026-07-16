@@ -2,16 +2,22 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-STATE_DIR="$ROOT_DIR/.qwq_output/env/alpha/local/alpha-local"
+QWQ_OUTPUT_ROOT="${QWQ_OUTPUT_ROOT:-$ROOT_DIR/.qwq_output}"
+QWQ_DEPLOY_WORK_ROOT="${QWQ_DEPLOY_WORK_ROOT:-${XDG_CACHE_HOME:-$HOME/.cache}/quwoquan/deploy}"
+ACTION="${1:-up}"
+eval "$(python3 "$ROOT_DIR/quwoquan_ops/cli/lib/local_run.py" \
+  --env alpha --target alpha-local --action "$ACTION" --output-root "$QWQ_OUTPUT_ROOT")"
+STATE_DIR="$QWQ_OUTPUT_ROOT/env/alpha/local/alpha-local/process"
+RUNTIME_LOG_DIR="$QWQ_OBSERVABILITY_RUN_ROOT/logs/service"
+PKI_STATE_DIR="$QWQ_DEPLOY_WORK_ROOT/alpha-local/certificates"
 MEDIA_DIR="$ROOT_DIR/quwoquan_service/contracts/metadata/_shared/test_fixtures/media"
-LEGAL_STATIC_ROOT="$ROOT_DIR/.qwq_output/env/alpha/release/legal-static/current/public"
+LEGAL_STATIC_ROOT="$QWQ_OUTPUT_ROOT/env/alpha/release/legal-static/current/public"
 
 eval "$(python3 "$ROOT_DIR/quwoquan_ops/cli/print_local_port_profile.py" --profile alpha-local --format shell-defaults)"
 
-ACTION="${1:-up}"
 PUBLIC_HOST_SETUP_MODE="${QWQ_ALPHA_LOCAL_PUBLIC_HOST_SETUP:-require}"
 MACOS_KEYCHAIN_TRUST_MODE="${QWQ_ALPHA_LOCAL_MACOS_KEYCHAIN_TRUST:-auto}"
-MACOS_KEYCHAIN_TRUST_MARKER="$STATE_DIR/macos_login_keychain_trust.sha256"
+MACOS_KEYCHAIN_TRUST_MARKER="$PKI_STATE_DIR/macos_login_keychain_trust.sha256"
 PUBLIC_API_HOST="alpha-api.quwoquan-env.test"
 PUBLIC_PRODUCT_OPS_HOST="alpha-product-ops.quwoquan-env.test"
 PUBLIC_MEDIA_HOSTS=(
@@ -47,44 +53,46 @@ MEDIA_ORIGIN_BASE_URL="http://127.0.0.1:${MEDIA_ORIGIN_PORT}"
 INTERNAL_API_BASE_URL="http://127.0.0.1:${CONTENT_PORT}"
 INTERNAL_PRODUCT_OPS_BASE_URL="http://127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}"
 INTERNAL_MEDIA_BASE_URL="http://127.0.0.1:${MEDIA_PROCESSOR_PORT}"
-# Local debug CA is generated runtime state. TLS profile/topology lives in
-# quwoquan_ops/environments; generated cert material stays under .qwq_output.
-TLS_CA_DIR="$STATE_DIR/tls/ca"
+# TLS profile/topology lives in quwoquan_ops/environments; generated key
+# material is durable PKI state and never belongs to rebuildable output.
+TLS_CA_DIR="$PKI_STATE_DIR/tls/ca"
 TLS_ROOT_KEY="$TLS_CA_DIR/root.key"
 TLS_ROOT_CERT="$TLS_CA_DIR/root.crt"
-TLS_DIR="$STATE_DIR/tls"
+TLS_DIR="$PKI_STATE_DIR/tls"
 TLS_OPENSSL_CONFIG="$TLS_DIR/alpha-local-openssl.cnf"
 TLS_LEAF_KEY="$TLS_DIR/alpha-local.key"
 TLS_LEAF_CSR="$TLS_DIR/alpha-local.csr"
 TLS_LEAF_CERT="$TLS_DIR/alpha-local.crt"
 
-mkdir -p "$STATE_DIR"
+mkdir -p "$STATE_DIR" "$RUNTIME_LOG_DIR" "$PKI_STATE_DIR"
 
 start_bg() {
   local name="$1"
   shift
-  python3 - "$STATE_DIR/${name}.pid" "$STATE_DIR/${name}.pgid" "$STATE_DIR/${name}.log" "$@" <<'PY'
+  python3 - "$STATE_DIR/${name}.pid" "$STATE_DIR/${name}.pgid" \
+    "$ROOT_DIR/quwoquan_ops/cli/lib/runtime_log_process.py" \
+    "$RUNTIME_LOG_DIR/${name}/local/runtime.log" "$name" "$@" <<'PY'
 import os
 import subprocess
 import sys
+
 from pathlib import Path
 
 pid_path = Path(sys.argv[1])
 pgid_path = Path(sys.argv[2])
-log_path = Path(sys.argv[3])
-argv = sys.argv[4:]
-
-log_path.parent.mkdir(parents=True, exist_ok=True)
-with log_path.open("wb", buffering=0) as log:
-    proc = subprocess.Popen(
-        argv,
-        stdout=log,
-        stderr=subprocess.STDOUT,
-        stdin=subprocess.DEVNULL,
-        start_new_session=True,
-    )
-    pid_path.write_text(f"{proc.pid}\n", encoding="utf-8")
-    pgid_path.write_text(f"{os.getpgid(proc.pid)}\n", encoding="utf-8")
+wrapper = sys.argv[3]
+log_path = sys.argv[4]
+event = sys.argv[5]
+argv = sys.argv[6:]
+proc = subprocess.Popen(
+    [sys.executable, wrapper, "--log-file", log_path, "--event", event, "--", *argv],
+    stdout=subprocess.DEVNULL,
+    stderr=subprocess.DEVNULL,
+    stdin=subprocess.DEVNULL,
+    start_new_session=True,
+)
+pid_path.write_text(f"{proc.pid}\n", encoding="utf-8")
+pgid_path.write_text(f"{os.getpgid(proc.pid)}\n", encoding="utf-8")
 PY
 }
 

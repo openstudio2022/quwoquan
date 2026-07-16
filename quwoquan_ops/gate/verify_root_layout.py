@@ -50,8 +50,7 @@ FORBIDDEN_TOP_LEVEL_FILES = frozenset(
         "runtime_scale10_ids.txt",
     }
 )
-ALLOWED_RUNTIME_ROOT = ".qwq_output"
-ALLOWED_OUTPUT_TOP_LEVEL = frozenset({"env", "data"})
+ALLOWED_RUNTIME_ROOTS = (".qwq_output",)
 FORBIDDEN_NESTED_DIRS = frozenset(
     {
         "docs/personal-assistant",
@@ -95,11 +94,17 @@ def root_layout_issues(root: Path = ROOT) -> list[str]:
     for name in sorted(FORBIDDEN_TOP_LEVEL):
         path = root / name
         if path.exists():
-            issues.append(f"{_rel(path)}: forbidden top-level directory; move ownership to domain roots or {ALLOWED_RUNTIME_ROOT}/")
+            issues.append(
+                f"{_rel(path)}: forbidden top-level directory; move ownership to "
+                f"domain roots or one of {ALLOWED_RUNTIME_ROOTS}"
+            )
     for name in sorted(FORBIDDEN_TOP_LEVEL_FILES):
         path = root / name
         if path.exists():
-            issues.append(f"{_rel(path)}: forbidden top-level file; move ownership to a domain root or {ALLOWED_RUNTIME_ROOT}/")
+            issues.append(
+                f"{_rel(path)}: forbidden top-level file; move ownership to a "
+                f"domain root or one of {ALLOWED_RUNTIME_ROOTS}"
+            )
     for source_root in ("quwoquan_app", "quwoquan_service", "quwoquan_data", "quwoquan_ops"):
         path = root / source_root / "artifacts"
         if path.exists():
@@ -116,14 +121,9 @@ def root_layout_issues(root: Path = ROOT) -> list[str]:
         path = root / rel
         if path.exists():
             issues.append(f"{_rel(path)}: Portal generated output must not live in source tree")
-    output_root = root / ALLOWED_RUNTIME_ROOT
-    if output_root.is_dir():
-        for entry in sorted(p for p in output_root.iterdir() if p.is_dir()):
-            if entry.name not in ALLOWED_OUTPUT_TOP_LEVEL:
-                issues.append(
-                    f"{_rel(entry)}: forbidden .qwq_output top-level directory; use env/ or data/"
-                )
-        issues.extend(output_layout_issues(output_root))
+    if (root / ".qwq_state").exists():
+        issues.append(".qwq_state: retired; use .qwq_output/env/<env>/local/<target>")
+    issues.extend(output_layout_issues(root / ".qwq_output"))
     return issues
 
 

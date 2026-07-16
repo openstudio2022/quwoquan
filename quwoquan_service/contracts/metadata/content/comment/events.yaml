@@ -1,0 +1,33 @@
+version: 1
+entity: Comment
+
+events:
+  - name: CommentCreated
+    description: 独立 Comment 聚合创建完成；Post.commentCount 投影只可由此事实异步递增或重建。
+    producer: content-service
+    consumers: [content-post-projection, notification-service, recommendation-engine, assistant-service]
+    channel: outbox
+    payload_fields: [commentId, version, postId, authorId, replyToCommentId, replyToUserId, parentCommentId, createdAt]
+    recommend_impact: engagement_signal
+
+  - name: CommentDeleted
+    description: 独立 Comment 聚合软删完成；Post.commentCount 投影只可由此事实异步递减或重建。
+    producer: content-service
+    consumers: [content-post-projection, notification-service, recommendation-engine, assistant-service]
+    channel: outbox
+    payload_fields: [commentId, version, postId, authorId, parentCommentId, deletedAt]
+    recommend_impact: engagement_signal
+
+  - name: CommentPinChanged
+    description: Post 作者变更一级 Comment 的置顶状态；不改变 Post 聚合。
+    producer: content-service
+    consumers: [content-comment-page-projector, notification-service]
+    channel: outbox
+    payload_fields: [commentId, version, postId, operatorId, isPinned, pinnedAt]
+
+  - name: CommentAttachmentsBound
+    description: Comment 作者绑定已验证的附件引用。
+    producer: content-service
+    consumers: [content-comment-page-projector, moderation-service]
+    channel: outbox
+    payload_fields: [commentId, version, postId, authorId, attachmentMediaIds]

@@ -88,20 +88,25 @@ func TestIntersectionService_ListFiltersAndPaginates(t *testing.T) {
 }
 
 func TestIntersectionService_ObjectIntersectionsRanksByAnchorStrength(t *testing.T) {
+	freshAt := time.Now().UTC().Add(-time.Hour).Format(time.RFC3339)
+	reason := contractDisplayReadyReason(
+		"ix_object_u_lin",
+		"sharedFollowees",
+		"relationship",
+		"u_lin",
+		"person",
+		"林清越",
+		0.9,
+		freshAt,
+	)
+	reason.RelationObjectID = "u_lin"
+	reason.IntersectionPoints = []intersectionapp.IntersectionPointView{
+		{PointID: "p_content", PointClass: "fact", Dimension: "content", SourceRef: "coCommented", Label: "共同讨论过", DisplayText: "共同讨论过", Count: 3, Visibility: "public"},
+		{PointID: "p_affinity", PointClass: "recommended", Dimension: "interest", SourceRef: "affinity", Label: "可能合得来", DisplayText: "可能合得来", Visibility: "public"},
+		{PointID: "p_friend", PointClass: "fact", Dimension: "relationship", SourceRef: "sharedFollowees", Label: "共同关注的人", DisplayText: "共同关注的人", Count: 4, Visibility: "public"},
+	}
 	source := operationIntersectionSource{
-		object: []intersectionapp.IntersectionReasonView{
-			{
-				IntersectionID:   "ix_object_u_lin",
-				Dimension:        "relationship",
-				ActionTargetID:   "u_lin",
-				RelationObjectID: "u_lin",
-				IntersectionPoints: []intersectionapp.IntersectionPointView{
-					{PointID: "p_content", PointClass: "fact", Dimension: "content", SourceRef: "coCommented", Label: "共同讨论过", DisplayText: "共同讨论过", Count: 3},
-					{PointID: "p_affinity", PointClass: "recommended", Dimension: "interest", SourceRef: "affinity", Label: "可能合得来", DisplayText: "可能合得来"},
-					{PointID: "p_friend", PointClass: "fact", Dimension: "relationship", SourceRef: "sharedFollowees", Label: "共同关注的人", DisplayText: "共同关注的人", Count: 4},
-				},
-			},
-		},
+		object: []intersectionapp.IntersectionReasonView{reason},
 	}
 	svc := intersectionapp.NewIntersectionService(newContractRouter(t), intersectionapp.WithIntersectionSource(source))
 

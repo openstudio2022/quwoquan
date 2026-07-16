@@ -10,11 +10,16 @@ config:
   min_image_version: "0.0.1"
   max_image_version: "9.9.9"
 
-# MongoDB — empty uri falls back to in-memory PostStore (local dev)
+# MongoDB/PostgreSQL are mandatory production-composition data ports. Alpha
+# fixtures run from the separate mock runner; this service never falls back to
+# an in-memory aggregate store.
 mongo:
   uri: ""
   database: "quwoquan_content"
   collection: "posts"
+
+postgres:
+  report_dsn: ""
 
 # Redis scenes (defaults)
 redis:
@@ -37,6 +42,19 @@ redis:
     addrs: []
     password: ""
     db: 1
+    tls: false
+    pool:
+      size: 0
+      min_idle: 0
+      read_timeout_ms: 200
+      write_timeout_ms: 200
+      dial_timeout_ms: 500
+  realtime:
+    mode: standalone
+    addr: ""
+    addrs: []
+    password: ""
+    db: 2
     tls: false
     pool:
       size: 0

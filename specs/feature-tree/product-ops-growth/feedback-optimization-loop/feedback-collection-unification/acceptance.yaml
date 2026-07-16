@@ -37,7 +37,7 @@ gwt_acceptance:
     contract_refs:
     - contracts/metadata/recommendation/rec_model/segments.yaml
     - contracts/metadata/recommendation/rec_model/events.yaml
-    - contracts/metadata/recommendation/rec_model/projections/recommend_feature.yaml
+    - contracts/metadata/recommendation/model_release/projections/recommend_feature.yaml
     - contracts/metadata/user/user_profile/projections/user_profile_view.yaml
     performance_points:
     - 人群匹配为纯函数（无 IO），可在派生路径内同步完成。

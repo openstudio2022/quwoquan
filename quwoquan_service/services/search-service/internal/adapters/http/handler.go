@@ -13,7 +13,6 @@ import (
 	rterrors "quwoquan_service/runtime/errors"
 	rtsearch "quwoquan_service/runtime/search"
 	"quwoquan_service/services/search-service/internal/application"
-	"quwoquan_service/services/search-service/internal/infrastructure/searchmetrics"
 )
 
 const moduleSearch = rterrors.Module("SEARCH")
@@ -31,13 +30,16 @@ const maxRequestBodyBytes = 64 << 10 // 64 KiB
 type Handler struct {
 	svc       *application.SearchService
 	decorator *application.RankingDecorator
+	observer  application.SearchRequestObserver
 }
 
-// NewHandler constructs the HTTP adapter. decorator must be non-nil; pass a
-// decorator with a nil TermHeatProvider for wirings without the heat read model
-// (relatedTerms empty, base ranking, AB bucket still assigned).
-func NewHandler(svc *application.SearchService, decorator *application.RankingDecorator) *Handler {
-	return &Handler{svc: svc, decorator: decorator}
+// NewHandler 构造 HTTP 适配器；observer 可为空。
+func NewHandler(
+	svc *application.SearchService,
+	decorator *application.RankingDecorator,
+	observer application.SearchRequestObserver,
+) *Handler {
+	return &Handler{svc: svc, decorator: decorator, observer: observer}
 }
 
 // Routes registers the canonical search routes (method-scoped patterns).
@@ -113,7 +115,7 @@ func (h *Handler) handleSearch(w http.ResponseWriter, r *http.Request) {
 	resp, err := h.svc.Search(r.Context(), in, viewer)
 	elapsed := time.Since(start).Seconds()
 	if err != nil {
-		searchmetrics.ObserveSearch(searchmetrics.SearchObservation{
+		h.observeSearch(application.SearchObservation{
 			Mode: body.Mode, Bucket: application.BucketControl, Seconds: elapsed, Err: true,
 		})
 		writeErr(w, requestID, rterrors.NewUnavailable(moduleSearch, "搜索暂时不可用，请稍后再试。", "retrieve: "+err.Error()))
@@ -124,7 +126,7 @@ func (h *Handler) handleSearch(w http.ResponseWriter, r *http.Request) {
 	resp.Hits = ranked.Hits
 
 	termHeatApplied := ranked.ExperimentBucket == application.BucketTermHeat && len(ranked.RelatedTerms) > 0
-	searchmetrics.ObserveSearch(searchmetrics.SearchObservation{
+	h.observeSearch(application.SearchObservation{
 		Mode:            body.Mode,
 		Bucket:          ranked.ExperimentBucket,
 		Seconds:         elapsed,
@@ -183,8 +185,16 @@ func (h *Handler) handleFeedback(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, requestID, rterrors.NewUnavailable(moduleSearch, "反馈暂时无法记录。", "record feedback: "+err.Error()))
 		return
 	}
-	searchmetrics.ObserveFeedback(ev.EventType)
+	if h.observer != nil {
+		h.observer.ObserveFeedback(ev.EventType)
+	}
 	writeJSON(w, http.StatusAccepted, map[string]any{"accepted": true, "requestId": requestID})
+}
+
+func (h *Handler) observeSearch(observation application.SearchObservation) {
+	if h.observer != nil {
+		h.observer.ObserveSearch(observation)
+	}
 }
 
 // subjectKeyFor returns the STABLE AB bucketing key: the logged-in viewer id

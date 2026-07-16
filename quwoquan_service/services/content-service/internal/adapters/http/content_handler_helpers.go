@@ -2,11 +2,56 @@ package http
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 
+	rtauth "quwoquan_service/runtime/auth"
 	rterr "quwoquan_service/runtime/errors"
+	contentgenerated "quwoquan_service/services/content-service/internal/generated"
 )
+
+func requireJSONEOF(decoder *json.Decoder) error {
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		return rterr.NewInvalidArgument(
+			rterr.ModuleContent,
+			"请求体必须只包含一个 JSON 对象",
+			"request contains trailing JSON values",
+		)
+	}
+	return nil
+}
+
+func decodeRequiredJSONBody(r *http.Request, target any) error {
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error())
+	}
+	return requireJSONEOF(decoder)
+}
+
+func requiredCommentPersona(r *http.Request) (string, error) {
+	principal, ok := rtauth.PrincipalFromContext(r.Context())
+	if !ok || strings.TrimSpace(principal.Actor.PersonaID) == "" {
+		return "", contentgenerated.AppErrorFromUnauthorized(
+			"Comment operation requires verified persona principal",
+		)
+	}
+	return strings.TrimSpace(principal.Actor.PersonaID), nil
+}
+
+func optionalCommentPersona(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	principal, ok := rtauth.PrincipalFromContext(r.Context())
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(principal.Actor.PersonaID)
+}
 
 // HTTP 请求解析 / 响应写出小工具，自 content_handler.go 拆出
 // （同 http 包，R03 行数预算，行为不变）。
@@ -37,36 +82,49 @@ func resolveSessionID(r *http.Request) string {
 	return strings.TrimSpace(r.Header.Get("X-Client-Session-Id"))
 }
 
-// resolveUserID extracts userId from query param → X-Client-User-Id header.
+// resolveUserID always prefers the verified principal. Query/header values are
+// accepted only by isolated transport tests; a client must never be able to
+// select another account once authentication has completed.
 func resolveUserID(r *http.Request) string {
+	if r != nil {
+		if principal, ok := rtauth.PrincipalFromContext(r.Context()); ok {
+			return strings.TrimSpace(principal.Actor.AccountID)
+		}
+	}
 	if v := strings.TrimSpace(r.URL.Query().Get("userId")); v != "" {
 		return v
 	}
 	return strings.TrimSpace(r.Header.Get("X-Client-User-Id"))
 }
 
-// resolveDeviceActorID extracts the privacy-safe derived device actor id from
-// query param deviceActorId → X-Client-Device-Actor-Id header. Used for guest
-// device-dimension like/share counting (separate from account dimension).
+// resolvePersonaID returns the verified public business actor. Account IDs must
+// never be persisted as Post author IDs because persona is the aggregate owner
+// declared by the CreatePost operation contract. Header fallbacks exist only
+// for unguarded local transport tests.
+func resolvePersonaID(r *http.Request) string {
+	if r != nil {
+		if principal, ok := rtauth.PrincipalFromContext(r.Context()); ok {
+			return strings.TrimSpace(principal.Actor.PersonaID)
+		}
+	}
+	if v := strings.TrimSpace(r.Header.Get("X-Client-Sub-Account-Id")); v != "" {
+		return v
+	}
+	return strings.TrimSpace(r.Header.Get("X-Client-User-Id"))
+}
+
+// resolveDeviceActorID always prefers the verified device principal. Query and
+// header values remain only for isolated transport tests without auth middleware.
 func resolveDeviceActorID(r *http.Request) string {
+	if r != nil {
+		if principal, ok := rtauth.PrincipalFromContext(r.Context()); ok {
+			return strings.TrimSpace(principal.Actor.DeviceActorID)
+		}
+	}
 	if v := strings.TrimSpace(r.URL.Query().Get("deviceActorId")); v != "" {
 		return v
 	}
 	return strings.TrimSpace(r.Header.Get("X-Client-Device-Actor-Id"))
-}
-
-func resolveViewerCircleIDs(r *http.Request) []string {
-	if v := strings.TrimSpace(r.URL.Query().Get("viewerCircleIds")); v != "" {
-		return splitCSV(v)
-	}
-	return splitCSV(r.Header.Get("X-Client-Circle-Ids"))
-}
-
-func resolveViewerUserID(r *http.Request) string {
-	if v := strings.TrimSpace(r.URL.Query().Get("viewerId")); v != "" {
-		return v
-	}
-	return strings.TrimSpace(r.Header.Get("X-Client-User-Id"))
 }
 
 // resolveBlockedUserIDs extracts blocked author IDs from:

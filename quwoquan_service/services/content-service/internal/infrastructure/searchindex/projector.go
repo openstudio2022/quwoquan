@@ -12,6 +12,7 @@ package searchindex
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"strings"
 
@@ -23,20 +24,20 @@ import (
 )
 
 // PostReader reads posts back so a lifecycle event (which carries only an
-// aggregate id + a thin payload) can be reconciled against the full post. The
-// content store (persistence.PostRepository) satisfies it.
+// aggregate id + a thin payload) can be reconciled against the full post.
 type PostReader interface {
 	FindByID(ctx context.Context, id string) (*postmodel.Post, bool)
-	ListAll(ctx context.Context) []postmodel.Post
+	ListAll(ctx context.Context) ([]postmodel.Post, error)
 }
 
 // Projector applies post lifecycle events to the unified ES index. It implements
 // ports.Projector so it can be composed into the in-process projector
 // fan-out alongside the discovery/recommend projectors.
 //
-// Indexing failures are recorded structurally (logged with event/post context)
-// but never propagate: the search index is a derived read store, so a transient
-// ES outage must not block or fail the primary post write path.
+// Indexing failures are recorded structurally and returned to the dedicated
+// outbox consumer. The aggregate transaction has already committed, so an ES
+// outage never fails the primary write; returning the error prevents that
+// consumer checkpoint from advancing and preserves replay.
 type Projector struct {
 	indexer *es.Indexer
 	reader  PostReader
@@ -72,8 +73,8 @@ func NewProjector(indexer *es.Indexer, reader PostReader, opts ...Option) *Proje
 // changing events reconcile the post against its current eligibility (upsert when
 // searchable, delete otherwise); deletions remove the doc. Counter-only events
 // (reactions, behavior batches) do not change the searchable surface and are
-// ignored. It always returns nil so a failing index write cannot break the
-// projector fan-out or the primary write path.
+// ignored. Each projector owns an independent outbox checkpoint, so a failing
+// index write must propagate to its relay rather than being acknowledged.
 func (p *Projector) Project(ctx context.Context, event ports.ProjectorEvent) error {
 	if p == nil || p.indexer == nil {
 		return nil
@@ -84,9 +85,9 @@ func (p *Projector) Project(ctx context.Context, event ports.ProjectorEvent) err
 	}
 	switch event.Type {
 	case "PostDeleted":
-		p.delete(ctx, postID, event.Type)
+		return p.delete(ctx, postID, event.Type)
 	case "PostCreated", "PostPublished", "PostUpdated", "PostSettingsUpdated", "PostPromotedToWork":
-		p.reconcile(ctx, postID, event.Type)
+		return p.reconcile(ctx, postID, event.Type)
 	default:
 		// Counter-only / unrelated events: nothing searchable changed.
 	}
@@ -97,31 +98,33 @@ func (p *Projector) Project(ctx context.Context, event ports.ProjectorEvent) err
 // (e.g. unpublished, turned private, or vanished). Keeping the index aligned with
 // the same eligibility the native source uses avoids a second discoverability
 // truth source.
-func (p *Projector) reconcile(ctx context.Context, postID, eventType string) {
+func (p *Projector) reconcile(ctx context.Context, postID, eventType string) error {
 	post, ok := p.reader.FindByID(ctx, postID)
 	if !ok || post == nil {
 		// Post is gone from the store: ensure it is not left in the index.
-		p.delete(ctx, postID, eventType)
-		return
+		return p.delete(ctx, postID, eventType)
 	}
 	if !searchEligible(post) {
-		p.delete(ctx, postID, eventType)
-		return
+		return p.delete(ctx, postID, eventType)
 	}
 	doc := searchprojection.ProjectPostToSearchDocument(*post)
 	if err := p.indexer.Apply(ctx, es.ChangeEvent{Op: es.OpUpsert, Doc: doc}); err != nil {
 		p.logger.Warn("search index upsert failed",
 			"event", eventType, "postId", postID, "err", err)
+		return fmt.Errorf("search index upsert %s: %w", postID, err)
 	}
+	return nil
 }
 
 // delete removes the post's doc from the index. Replayed deletes are idempotent.
-func (p *Projector) delete(ctx context.Context, postID, eventType string) {
+func (p *Projector) delete(ctx context.Context, postID, eventType string) error {
 	doc := rtsearch.Document{ObjectType: rtsearch.ObjectTypeContentPost, ObjectID: postID}
 	if err := p.indexer.Apply(ctx, es.ChangeEvent{Op: es.OpDelete, Doc: doc}); err != nil {
 		p.logger.Warn("search index delete failed",
 			"event", eventType, "postId", postID, "err", err)
+		return fmt.Errorf("search index delete %s: %w", postID, err)
 	}
+	return nil
 }
 
 // searchEligible mirrors the store's ListPublished filter (published + public):

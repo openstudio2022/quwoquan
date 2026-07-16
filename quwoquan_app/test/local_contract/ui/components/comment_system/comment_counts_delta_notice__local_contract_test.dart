@@ -10,9 +10,10 @@ import 'package:quwoquan_app/ui/content/comments/widgets/comment_detail_surface.
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
+import '../../../../support/cloud_services/test_content_comment_facet.dart';
 
-class _EntryCountRepository extends MockContentRepository {
-  _EntryCountRepository({required this.postId, required this.totalCount}) {
+class _EntryCountFacet extends TestContentCommentFacet {
+  _EntryCountFacet({required this.postId, required this.totalCount}) {
     _seedComments(totalCount);
   }
 
@@ -25,13 +26,13 @@ class _EntryCountRepository extends MockContentRepository {
   }
 
   void _seedComments(int count) {
-    commentsStub = List<CommentDto>.generate(
+    items = List<ContentCommentListItem>.generate(
       count,
-      (index) => CommentDto(
+      (index) => testCommentItem(
         id: 'comment_$index',
         postId: postId,
         authorId: 'user_$index',
-        displayName: '用户$index',
+        authorDisplayNameSnapshot: '用户$index',
         content: '评论 $index',
         createdAt: DateTime.utc(2026, 6, 1).add(Duration(minutes: index)),
       ),
@@ -40,28 +41,27 @@ class _EntryCountRepository extends MockContentRepository {
   }
 
   @override
-  Future<CommentPage> listComments({
+  Future<ContentCommentPageSlice> listComments({
     required String postId,
     String? cursor,
-    String sort = 'recommended',
     int limit = 20,
   }) async {
-    return CommentPage(
-      items: commentsStub.take(3).toList(growable: false),
+    return ContentCommentPageSlice(
+      items: items.take(3).toList(growable: false),
       nextCursor: null,
-      totalCount: totalCount,
+      total: totalCount,
     );
   }
 }
 
 Widget _app(
-  _EntryCountRepository repo, {
+  _EntryCountFacet comments, {
   required String postId,
   int? entryObservedCommentCount,
 }) {
   return ProviderScope(
     overrides: [
-      contentRepositoryProvider.overrideWithValue(repo),
+      workBrowserContentCommentFacetProvider.overrideWithValue(comments),
       analyticsProvider.overrideWithValue(AnalyticsService.forTesting()),
       commentRemoteConfigProvider.overrideWithValue(
         const CommentRemoteConfig(),
@@ -91,7 +91,7 @@ Future<void> _settle(WidgetTester tester, {int frames = 10}) async {
 void main() {
   testWidgets('打开前 10 条、首刷 12 条时只展示一次性新增说明', (tester) async {
     const postId = 'entry-count-created';
-    final repo = _EntryCountRepository(postId: postId, totalCount: 12);
+    final repo = _EntryCountFacet(postId: postId, totalCount: 12);
 
     await tester.pumpWidget(
       _app(repo, postId: postId, entryObservedCommentCount: 10),
@@ -106,7 +106,7 @@ void main() {
 
   testWidgets('打开前 10 条、首刷 8 条时只展示一次性删除说明', (tester) async {
     const postId = 'entry-count-deleted';
-    final repo = _EntryCountRepository(postId: postId, totalCount: 8);
+    final repo = _EntryCountFacet(postId: postId, totalCount: 8);
 
     await tester.pumpWidget(
       _app(repo, postId: postId, entryObservedCommentCount: 10),
@@ -121,7 +121,7 @@ void main() {
 
   testWidgets('详情停留期间不再出现页内轮询提示', (tester) async {
     const postId = 'entry-count-static-session';
-    final repo = _EntryCountRepository(postId: postId, totalCount: 10);
+    final repo = _EntryCountFacet(postId: postId, totalCount: 10);
 
     await tester.pumpWidget(
       _app(repo, postId: postId, entryObservedCommentCount: 10),

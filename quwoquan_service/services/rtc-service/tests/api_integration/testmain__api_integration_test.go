@@ -7,27 +7,29 @@ import (
 	"os"
 	"testing"
 
-	"github.com/alicebob/miniredis/v2"
 	mongomod "github.com/testcontainers/testcontainers-go/modules/mongodb"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	mongoopts "go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	platformredis "quwoquan_service/internal/platform/redis"
+	"quwoquan_service/internal/platform/testinfra"
 	rtredis "quwoquan_service/runtime/redis"
 	rtchttp "quwoquan_service/services/rtc-service/internal/adapters/http"
 	"quwoquan_service/services/rtc-service/internal/adapters/mq"
 	"quwoquan_service/services/rtc-service/internal/application"
 	callsession "quwoquan_service/services/rtc-service/internal/domain/call_session"
 	rtccache "quwoquan_service/services/rtc-service/internal/infrastructure/cache"
+	"quwoquan_service/services/rtc-service/internal/infrastructure/livekit"
 	"quwoquan_service/services/rtc-service/internal/infrastructure/persistence"
 )
 
 var (
-	testHandler http.Handler
-	mongoDB     *mongo.Database
-	mongoClient *mongo.Client
-	mr          *miniredis.Miniredis
-	redisRouter *rtredis.Router
+	testHandler      http.Handler
+	mongoDB          *mongo.Database
+	mongoClient      *mongo.Client
+	integrationRedis *testinfra.RealRedis
+	redisRouter      *rtredis.Router
 )
 
 var collections = []string{
@@ -46,16 +48,19 @@ func TestMain(m *testing.M) {
 	ctx := context.Background()
 
 	var err error
-	mr, err = miniredis.Run()
+	integrationRedis, err = testinfra.StartRealRedis(ctx)
 	if err != nil {
-		panic("failed to start miniredis: " + err.Error())
+		panic("rtc-service api_integration requires real Redis: " + err.Error())
+	}
+	if err := integrationRedis.FlushDBs(ctx, 0, 1, 2); err != nil {
+		panic("flush rtc-service integration Redis: " + err.Error())
 	}
 
-	redisRouter = rtredis.MustNewRouter(rtredis.RouterConfig{
+	redisRouter = platformredis.MustNewRouter(rtredis.RouterConfig{
 		Scenes: map[string]rtredis.SceneConfig{
-			"general":  {Mode: "standalone", Addr: mr.Addr()},
-			"realtime": {Mode: "standalone", Addr: mr.Addr()},
-			"rec":      {Mode: "standalone", Addr: mr.Addr()},
+			"general":  {Mode: "standalone", Addr: integrationRedis.Addr, Password: integrationRedis.Password, DB: 0, TLS: integrationRedis.TLS},
+			"realtime": {Mode: "standalone", Addr: integrationRedis.Addr, Password: integrationRedis.Password, DB: 1, TLS: integrationRedis.TLS},
+			"rec":      {Mode: "standalone", Addr: integrationRedis.Addr, Password: integrationRedis.Password, DB: 2, TLS: integrationRedis.TLS},
 		},
 		PrefixRoutes: rtredis.DefaultRouterConfig().PrefixRoutes,
 		DefaultScene: "general",
@@ -67,14 +72,10 @@ func TestMain(m *testing.M) {
 	if mongoURI == "" {
 		container, runErr := tryRunMongoContainer(ctx)
 		if runErr != nil {
-			if os.Getenv("CI") == "true" || os.Getenv("GITHUB_ACTIONS") == "true" {
-				panic("CI: failed to start mongo testcontainer: " + runErr.Error())
-			}
-			fmt.Fprintf(os.Stderr,
-				"\n[L2] WARN: Docker unavailable, skipping rtc-service L2 tests.\n"+
-					"  Set TEST_MONGO_URI=mongodb://localhost:27017 to run without Docker.\n"+
-					"  Error: %v\n\n", runErr)
-			os.Exit(0)
+			panic(
+				"rtc-service api_integration requires a real MongoDB; " +
+					"set TEST_MONGO_URI or start Docker: " + runErr.Error(),
+			)
 		}
 		mongoContainer = container
 		uri, connErr := container.ConnectionString(ctx)
@@ -84,7 +85,11 @@ func TestMain(m *testing.M) {
 		mongoURI = uri
 	}
 
-	mongoClient, err = mongo.Connect(mongoopts.Client().ApplyURI(mongoURI))
+	mongoClientOptions := mongoopts.Client().ApplyURI(mongoURI)
+	if mongoContainer != nil {
+		mongoClientOptions.SetDirect(true)
+	}
+	mongoClient, err = mongo.Connect(mongoClientOptions)
 	if err != nil {
 		panic("failed to connect to mongo: " + err.Error())
 	}
@@ -94,15 +99,16 @@ func TestMain(m *testing.M) {
 	callCache := rtccache.NewCallStateCache(redisRouter.Scene("general"))
 	eventPublisher := mq.NewEventPublisher(redisRouter.Scene("realtime"))
 	domainSvc := callsession.NewCallSessionService()
-	tokenSvc := application.NewTokenService("testkey", "testsecret")
+	tokenIssuer := livekit.NewParticipantTokenIssuer("testkey", "testsecret")
 	orchestrator := application.NewCallOrchestrator(
 		callStore,
 		callCache,
 		domainSvc,
 		nil,
-		tokenSvc,
+		tokenIssuer,
 		eventPublisher,
 		application.AllowRelationshipGateForTest(),
+		nil,
 	)
 
 	testHandler = rtchttp.NewCallHandler(orchestrator, nil).Routes()
@@ -114,7 +120,7 @@ func TestMain(m *testing.M) {
 		_ = mongoContainer.Terminate(ctx)
 	}
 	_ = redisRouter.Close()
-	mr.Close()
+	_ = integrationRedis.Close(ctx)
 	os.Exit(code)
 }
 
@@ -124,7 +130,7 @@ func tryRunMongoContainer(ctx context.Context) (c *mongomod.MongoDBContainer, er
 			err = fmt.Errorf("testcontainers panic (Docker unavailable?): %v", r)
 		}
 	}()
-	c, err = mongomod.Run(ctx, "mongo:7-jammy")
+	c, err = mongomod.Run(ctx, "mongo:7-jammy", mongomod.WithReplicaSet("rs0"))
 	return
 }
 
@@ -137,5 +143,7 @@ func cleanAll(t *testing.T) {
 	for _, name := range collections {
 		_, _ = mongoDB.Collection(name).DeleteMany(ctx, bson.M{})
 	}
-	mr.FlushAll()
+	if err := integrationRedis.FlushDBs(ctx, 0, 1, 2); err != nil {
+		t.Fatalf("flush rtc integration Redis: %v", err)
+	}
 }

@@ -1,7 +1,7 @@
 version: 1
 domain: user
 entity: FollowingSubject
-is_aggregate: false
+object_kind: projection
 description: |
   当前身份关注对象的统一读模型。它聚合用户关注、圈子加入/关注、地点和事物主页关注，
   供首页关注频道顶部“关注动态”横向列表消费。该模型不替代各对象域的关系写入，

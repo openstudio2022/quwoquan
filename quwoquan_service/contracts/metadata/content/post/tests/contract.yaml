@@ -79,103 +79,6 @@ scenarios:
       - response.code == "CONTENT.USER.invalid_content_type"
       - http_status == 400
 
-  # ── 互动计数场景 ──────────────────────────────────────────────────
-  - name: react_with_counter_strategy
-    operation: LikePost
-    go_func: TestReactWithCounterStrategy
-    command: LikePost
-    seed: [fixture.NewPost()]
-    assertions:
-      - db.content_reactions.FindOne({postId, userId}) → liked=true (upsert verified)
-      - miniredis.Get('counter:{postId}:like') → '1' (INCR verified)
-      - eventSpy.AssertPublished("ContentReacted", {postId, userId, liked: true})
-      - miniredis.Exists('cache:post:{postId}') → false (invalidated)
-
-  - name: react_idempotent
-    operation: LikePost
-    go_func: TestReactIdempotent
-    command: LikePost x2 on same post
-    seed: [fixture.NewPost()]
-    assertions:
-      - db.content_reactions.CountDocuments({postId, userId}) → exactly 1
-      - miniredis.Get('counter:{postId}:like') → '1' (not double counted)
-
-  - name: unlike_decrements_counter
-    operation: UnlikePost
-    go_func: TestUnlikeDecrementsCounter
-    command: LikePost then UnlikePost
-    seed: [fixture.NewPost()]
-    setup:
-      - LikePost to establish baseline
-    assertions:
-      - db.content_reactions.FindOne → liked=false
-      - miniredis.Get('counter:{postId}:like') → '0' (or not exist)
-      - eventSpy.AssertPublished("ContentReacted", {liked: false})
-
-  # ── 评论场景 ──────────────────────────────────────────────────────
-  - name: comment_with_notification
-    operation: CreateComment
-    go_func: TestCommentWithNotification
-    command: CreateComment
-    seed: [fixture.NewPost()]
-    assertions:
-      - db.comments.FindOne({_id: result.id}) → document with correct postId + authorId
-      - db.posts.FindOne({_id: postId}).commentCount → incremented by 1
-      - eventSpy.AssertPublished("CommentCreated", {postId, authorId, content})
-
-  - name: comment_list_pagination
-    operation: ListComments
-    go_func: TestCommentListPagination
-    command: ListComments with cursor pagination
-    seed: [fixture.NewPost(), fixture.NewComments(count=25)]
-    assertions:
-      - first page: len(comments) == 20 (default limit)
-      - cursor present in response
-      - second page using cursor: len(comments) == 5
-      - no overlap between pages
-
-  - name: comment_list_recommended_latest_most_liked
-    operation: ListComments
-    go_func: TestCommentListRecommendedLatestMostLiked
-    command: ListComments(sort=recommended/latest/most_liked)
-    seed: [fixture.NewPost(), fixture.NewComments(withMixedScore=true)]
-    assertions:
-      - recommended order uses recommendedScore/freshness stable tie-breaker
-      - latest order uses createdAt DESC
-      - most_liked order uses likeCount DESC then createdAt DESC
-      - hidden/deleted comments are excluded
-
-  - name: comment_reply_preview_and_expand_contract
-    operation: ListCommentReplies
-    go_func: TestCommentReplyPreviewAndExpandContract
-    command: ListComments then ListCommentReplies
-    seed: [fixture.NewPost(), fixture.NewCommentWithReplies(count=21)]
-    assertions:
-      - ListComments first parent includes replyPreview length == reply_preview_count
-      - replyNextCursor is present when replyCount exceeds preview count
-      - ListCommentReplies returns at most reply_expand_page_size replies
-      - second replies page has no overlap
-
-  - name: create_comment_with_attachment_and_mentions
-    operation: CreateComment
-    go_func: TestCreateCommentWithAttachmentAndMentions
-    command: CreateComment(attachmentMediaIds, mentions)
-    seed: [fixture.NewPost(), fixture.NewReadyCommentAttachment(), fixture.NewMentionTargets()]
-    assertions:
-      - db.comments.FindOne stores attachmentMediaIds and mentions
-      - response.attachments contains ready media snapshot
-      - assistantMentioned == true when mentions contains assistant subject
-
-  - name: react_to_comment_three_state_contract
-    operation: ReactToComment
-    go_func: TestReactToCommentThreeStateContract
-    command: ReactToComment(like -> dislike -> none)
-    seed: [fixture.NewPost(), fixture.NewComment()]
-    assertions:
-      - like sets viewerReaction=like and increments likeCount only once
-      - dislike clears like, sets viewerReaction=dislike, increments dislikeCount
-      - none clears both counters for the viewer
-      - eventSpy.AssertPublished("CommentReacted")
 
   # ── Feed 场景 ─────────────────────────────────────────────────────
   - name: get_feed_by_type
@@ -303,6 +206,10 @@ scenarios:
     go_func: TestListProfileInteractionActivitiesSentContract
     status: pending
     command: ListProfileInteractionActivitiesSent
+  - name: update_profile_interaction_state_contract
+    operation: UpdateProfileInteractionState
+    go_func: TestProfileShareInteractionDurableHTTPContract
+    command: UpdateProfileInteractionState(read, idempotent)
   - name: publish_post_contract
     operation: PublishPost
     go_func: TestPublishPostContract
@@ -311,64 +218,10 @@ scenarios:
     operation: DeletePost
     go_func: TestDeletePostContract
     command: DeletePost
-  - name: update_post_circles_contract
-    operation: UpdatePostCircles
-    go_func: TestUpdatePostCirclesContract
-    status: pending
-    command: UpdatePostCircles
-  - name: delete_comment_contract
-    operation: DeleteComment
-    go_func: TestDeleteComment
-    command: DeleteComment
-  - name: get_reaction_state_contract
-    operation: GetReactionState
-    go_func: TestGetReactionStateContract
-    status: pending
-    command: GetReactionState
   - name: get_counters_contract
     operation: GetCounters
     go_func: TestGetCounters
     command: GetCounters
-  - name: repost_to_circle_contract
-    operation: RepostToCircle
-    go_func: TestRepostToCircleContract
-    status: pending
-    command: RepostToCircle
-  - name: quote_to_circle_contract
-    operation: QuoteToCircle
-    go_func: TestQuoteToCircleContract
-    status: pending
-    command: QuoteToCircle
-  - name: init_media_upload_contract
-    operation: InitMediaUpload
-    go_func: TestInitMediaUploadContract
-    status: pending
-    command: InitMediaUpload
-  - name: complete_media_upload_contract
-    operation: CompleteMediaUpload
-    go_func: TestCompleteMediaUploadContract
-    status: pending
-    command: CompleteMediaUpload
-  - name: abort_media_upload_contract
-    operation: AbortMediaUpload
-    go_func: TestAbortMediaUploadContract
-    status: pending
-    command: AbortMediaUpload
-  - name: get_media_asset_contract
-    operation: GetMediaAsset
-    go_func: TestGetMediaAssetContract
-    status: pending
-    command: GetMediaAsset
-  - name: select_auto_video_cover_contract
-    operation: SelectAutoVideoCover
-    go_func: TestSelectAutoVideoCoverContract
-    status: pending
-    command: SelectAutoVideoCover
-  - name: select_manual_video_cover_contract
-    operation: SelectManualVideoCover
-    go_func: TestSelectManualVideoCoverContract
-    status: pending
-    command: SelectManualVideoCover
   - name: generate_article_summary_contract
     operation: GenerateArticleSummary
     go_func: TestGenerateArticleSummaryContract
@@ -390,7 +243,7 @@ scenarios:
   - name: promote_post_preserves_threads_contract
     operation: PromotePostToWork
     go_func: TestPromotePostKeepsCountersAndCommentThread
-    command: PromotePostToWork(retain postId/comments/reactions)
+    command: PromotePostToWork(retain postId/comments; ContentReaction remains linked by stable postId)
   - name: list_user_posts_contract
     operation: ListUserPosts
     go_func: TestListUserPosts
@@ -399,47 +252,36 @@ scenarios:
     operation: ListUserPosts
     go_func: TestListUserPostsByIdentity
     command: ListUserPosts(identity=work,type=article)
-  - name: circle_visible_view_access_contract
+  - name: post_visibility_closed_set_contract
     operation: GetPost
-    go_func: TestCircleVisiblePostAllowsCircleMemberViewer
-    command: GetPost/ListUserPosts(circle_visible member access)
+    go_func: TestPostDetailAllowsOnlyPublicOrOwnerVisibility
+    command: GetPost(public/private only; retired circle visibility fails closed)
+  - name: private_post_non_disclosure_contract
+    operation: GetPost
+    go_func: TestPrivatePostBlocksNonAuthorViewer
+    command: GetPost(private post as non-owner)
+    assertions:
+      - response.code == "CONTENT.USER.post_not_found"
+      - http_status == 404
   - name: assistant_access_revoked_after_settings_change
     operation: UpdatePostSettings
     go_func: TestAssistantAccessRevokedAfterSettingsChange
     command: UpdatePostSettings(assistantUsePolicy=exclude or visibility=private)
-  - name: react_to_comment_contract
-    operation: ReactToComment
-    go_func: TestReactToCommentContract
-    command: ReactToComment(like/dislike/none)
-  - name: list_comment_replies_contract
-    operation: ListCommentReplies
-    go_func: TestCommentRepliesAttachmentsAndMentionsContract
-    command: ListCommentReplies(reply pagination)
-  - name: bind_media_assets_to_comment_contract
-    operation: BindMediaAssetsToComment
-    go_func: TestCommentRepliesAttachmentsAndMentionsContract
-    command: BindMediaAssetsToComment/CreateComment(attachmentMediaIds)
-  - name: list_comments_by_author_contract
-    operation: ListCommentsByAuthor
-    go_func: TestListCommentsByAuthor
-    command: ListCommentsByAuthor
-  - name: list_comments_for_post_author_contract
-    operation: ListCommentsForPostAuthor
-    go_func: TestListCommentsForPostAuthorContract
-    status: pending
-    command: ListCommentsForPostAuthor
+    assertions:
+      - revoked non-owner GetPost returns 404 CONTENT.USER.post_not_found
+      - private object existence is not disclosed as a 403 authorization result
+  - name: post_projection_rebuild_replays_durable_outbox
+    operation: PublishPost
+    go_func: TestPostProjectionRebuildReplaysDurableOutbox
+    command: replay PostCreated/PostPublished from a fresh projection checkpoint
+    assertions:
+      - deleting rm_discovery_feed does not mutate the Post aggregate
+      - a fresh consumer replays durable outbox facts and rebuilds the projection
+      - the saved checkpoint prevents duplicate replay
   - name: get_app_config_contract
     operation: GetAppConfig
-    go_func: TestGetAppConfig
+    go_func: TestGetAppConfigUsesGenericCanaryMatrixPayload
     command: GetAppConfig
-  - name: pin_comment_contract
-    operation: PinComment
-    go_func: TestCommentPinContractApiIntegration
-    command: PinComment
-  - name: unpin_comment_contract
-    operation: UnpinComment
-    go_func: TestCommentPinContractApiIntegration
-    command: UnpinComment
   - name: get_author_impact_contract
     operation: GetAuthorImpact
     go_func: TestGetAuthorImpactReturnsBehaviorAggregation
@@ -448,18 +290,6 @@ scenarios:
     operation: ListAuthorImpactEvidence
     go_func: TestAuthorImpactEvidenceDrilldownIsContentAnchoredAndPrivacySafe
     command: ListAuthorImpactEvidence
-  - name: share_post_contract
-    operation: SharePost
-    go_func: TestShareCountersStayAuthoritativeAndIdempotent
-    command: SharePost
-  - name: unshare_post_contract
-    operation: UnsharePost
-    go_func: TestCommentCountersStayConsistentAcrossReadModels
-    command: UnsharePost
-  - name: get_comment_counts_delta_contract
-    operation: GetCommentCountsDelta
-    go_func: TestCommentCountsDelta_ExplainableHalfOpenWindow
-    command: GetCommentCountsDelta
   - name: get_my_footprint_contract
     operation: GetMyFootprint
     go_func: TestGetMyFootprintContract

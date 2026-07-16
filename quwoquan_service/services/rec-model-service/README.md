@@ -1,6 +1,7 @@
 # recommendation-service
 
-Recommendation model inference service. POST /v1/score (multi-scenario), GET /health.
+Recommendation model inference service. Scoring is exposed only through the generated
+ModelRelease named Reader contract; `/health` is the infrastructure liveness endpoint.
 
 ## Run locally
 
@@ -20,6 +21,9 @@ PYTHONPATH=. pytest tests/ -v
 - `APP_ENV` must be one of `dev` / `integration` / `prod`.
 - `SERVICE_NAME` when provided must be `recommendation-service`.
 - For `integration` / `prod`, `CONFIG_VERSION` / `IMAGE_VERSION` / `CONFIG_ROOT` are required.
+- `AUTH_JWT_SECRET` / `AUTH_JWT_ISSUER` / `AUTH_JWT_AUDIENCE` /
+  `AUTH_JWT_TOKEN_VERSION` are required; scoring accepts only short-lived service tokens
+  with scope `recommendation.model.score`.
 - Contract mismatch causes startup to fail immediately (fail-fast).
 - Optional model envs (future): `REC_MODEL_CONTENT_FEED_PATH`, `REC_MODEL_CIRCLE_DISCOVERY_PATH`, `REC_MODEL_FRIEND_SUGGESTION_PATH`.
 - **content-service** integration: set `rec_model_service.url` (e.g. `http://localhost:18090` or `http://rec-model-service:8000` in same docker network), `rec_model_service.timeout_ms`, `rec_model_service.enabled: true`.
@@ -30,5 +34,5 @@ From `quwoquan_service`: `docker compose up -d rec-model-service`. Service liste
 
 ## Contract
 
-- `contracts/metadata/rec_model_service/`, `contracts/metadata/recommendation/rec_model/service.yaml`
+- `contracts/metadata/recommendation/model_release/{fields,service,errors}.yaml`
 - Codegen: `make codegen-rec-model-python` (from quwoquan_service root)

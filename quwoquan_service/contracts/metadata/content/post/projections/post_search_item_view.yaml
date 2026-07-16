@@ -1,0 +1,9 @@
+version: 1
+read_model: PostSearchItemView
+description: |
+  SearchPosts 分页结果的单项读模型。分页 envelope 由 Runtime 根据
+  response_body_kind=page 生成，端侧解码为 ContentPostSearchResultSlice。
+consumers: [app]
+client_projection:
+  dart_class: PostSearchItemView
+  external_dart_path: quwoquan_app/lib/cloud/runtime/generated/content/post_search_item_view_dto.g.dart

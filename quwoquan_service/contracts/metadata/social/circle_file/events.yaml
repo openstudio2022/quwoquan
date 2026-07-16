@@ -1,0 +1,21 @@
+version: 1
+aggregate: CircleFile
+events:
+  - name: CircleFileCreated
+    producer: circle-service
+    consumers: [projection-workers]
+    channel: outbox
+    payload_entity: CircleFile
+    payload_fields: [_id, version, circleId, groupId, fileType, assetId, uploaderPersonaId, status, updatedAt]
+  - name: CircleFileUpdated
+    producer: circle-service
+    consumers: [projection-workers]
+    channel: outbox
+    payload_entity: CircleFile
+    payload_fields: [_id, version, circleId, groupId, parentFolderId, name, status, updatedAt]
+  - name: CircleFileDeleted
+    producer: circle-service
+    consumers: [projection-workers]
+    channel: outbox
+    payload_entity: CircleFile
+    payload_fields: [_id, version, circleId, groupId, assetId, status, updatedAt]

@@ -16,10 +16,16 @@ from quwoquan_ops.cli import legal_static
 from quwoquan_ops.cli.lib.dev_up import (
     ANDROID_LOCAL_DEBUG_CA_REQUIRED_ENV,
     app_target_for_env,
+    deployment_render_root,
+    env_cache_target_root,
+    observability_runtime_logs_root,
     pick_dev_up_env,
     resolve_app_endpoint_overrides,
+    run_root,
     runtime_env_for_dev_env,
+    target_process_root,
 )
+from quwoquan_ops.cli.lib.output_paths import certificate_export_dir
 from quwoquan_ops.cli.lib.environment_topology import load_environment_topology
 from quwoquan_ops.cli.lib.local_media_origin import LocalMediaOriginHandler
 from quwoquan_ops.cli.lib.mock_public_plane import MockPublicPlaneHandler
@@ -185,6 +191,71 @@ class DevUpTest(unittest.TestCase):
 
     def test_prod_sim_maps_to_prod_runtime_env(self) -> None:
         self.assertEqual(runtime_env_for_dev_env("prod-sim"), "prod")
+
+    def test_local_runtime_roots_are_split_by_ownership(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            output_root = Path(tmp_dir) / "output"
+            deploy_root = Path(tmp_dir) / "deploy"
+            observability_root = Path(tmp_dir) / "obs-run"
+            explicit_run_root = Path(tmp_dir) / "run"
+            with mock.patch.dict(
+                "os.environ",
+                {
+                    "QWQ_OUTPUT_ROOT": str(output_root),
+                    "QWQ_DEPLOY_WORK_ROOT": str(deploy_root),
+                    "QWQ_OBSERVABILITY_RUN_ROOT": str(observability_root),
+                    "QWQ_RUN_ROOT": str(explicit_run_root),
+                },
+                clear=False,
+            ):
+                self.assertEqual(
+                    deployment_render_root("gamma-local"),
+                    deploy_root / "gamma-local/rendered",
+                )
+                self.assertEqual(
+                    env_cache_target_root("gamma", "gamma-local"),
+                    output_root / "env/gamma/local/gamma-local/cache",
+                )
+                self.assertEqual(
+                    observability_runtime_logs_root("gamma"),
+                    observability_root / "logs/service",
+                )
+                self.assertEqual(run_root("gamma"), explicit_run_root)
+                self.assertEqual(
+                    target_process_root("gamma", "gamma-local"),
+                    output_root / "env/gamma/local/gamma-local/process",
+                )
+                self.assertEqual(
+                    certificate_export_dir("gamma-local"),
+                    deploy_root / "gamma-local/certificates",
+                )
+
+    def test_local_runtime_roots_use_immutable_run_defaults(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            output_root = Path(tmp_dir) / "output"
+            with mock.patch.dict(
+                "os.environ",
+                {
+                    "QWQ_OUTPUT_ROOT": str(output_root),
+                },
+                clear=False,
+            ):
+                with mock.patch.dict(
+                    "os.environ",
+                    {
+                        "QWQ_OBSERVABILITY_RUN_ROOT": "",
+                        "QWQ_RUN_ROOT": "",
+                    },
+                    clear=False,
+                ):
+                    self.assertEqual(
+                        observability_runtime_logs_root("beta"),
+                        output_root / "env/beta/observability/local-beta-local/logs/service",
+                    )
+                    self.assertEqual(
+                        run_root("beta"),
+                        output_root / "env/beta/runs/local-beta-local",
+                    )
 
     def test_prod_dev_up_uses_canonical_legal_base_url(self) -> None:
         topology = load_environment_topology()
@@ -486,6 +557,24 @@ class DevUpTest(unittest.TestCase):
         self.assertIn("localEnvDebugRootCertificate", main_activity)
         self.assertIn("local_env_debug_root", main_activity)
 
+    def test_image_cache_managers_use_default_security_context(self) -> None:
+        image_cache_controller = (
+            ROOT
+            / "quwoquan_app/lib/core/media/app_image_cache_controller.dart"
+        ).read_text(encoding="utf-8")
+        trusted_http_file_service = (
+            ROOT
+            / "quwoquan_app/lib/core/platform/trusted_http_file_service_io.dart"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "createTrustedHttpFileService", image_cache_controller
+        )
+        self.assertIn("IOClient", trusted_http_file_service)
+        self.assertIn(
+            "HttpClient(context: SecurityContext.defaultContext)",
+            trusted_http_file_service,
+        )
+
     def test_alpha_local_clears_repo_owned_stale_reserved_port_listeners(self) -> None:
         alpha_script = (
             ROOT / "quwoquan_ops/cli/alpha/start_alpha_mock_stack.sh"
@@ -497,7 +586,7 @@ class DevUpTest(unittest.TestCase):
         self.assertIn("quwoquan_ops/cli/lib/mock_public_plane.py", alpha_script)
         self.assertIn("quwoquan_ops/cli/lib/tls_reverse_proxy.py", alpha_script)
 
-    def test_gamma_local_mirror_persists_caddy_state_on_host(self) -> None:
+    def test_gamma_local_mirror_keeps_deployment_material_out_of_output(self) -> None:
         gamma_script = (
             ROOT / "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"
         ).read_text(encoding="utf-8")
@@ -505,25 +594,120 @@ class DevUpTest(unittest.TestCase):
             ROOT / "quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml"
         ).read_text(encoding="utf-8")
         self.assertIn(
-            'LOCAL_GAMMA_CADDY_DATA_ROOT="${LOCAL_GAMMA_CADDY_DATA_ROOT:-${LOCAL_GAMMA_LOCAL_ROOT}/caddy/data}"',
+            'LOCAL_GAMMA_DEPLOY_RENDER_ROOT="${QWQ_DEPLOY_WORK_ROOT}/gamma-local/rendered"',
             gamma_script,
         )
         self.assertIn(
-            'LOCAL_GAMMA_CADDY_CONFIG_ROOT="${LOCAL_GAMMA_CADDY_CONFIG_ROOT:-${LOCAL_GAMMA_LOCAL_ROOT}/caddy/config}"',
+            'LOCAL_GAMMA_CADDY_DATA_VOLUME="${LOCAL_GAMMA_CADDY_DATA_VOLUME:-local-gamma-caddy-data}"',
             gamma_script,
         )
-        self.assertIn('-v "${LOCAL_GAMMA_CADDY_DATA_ROOT}:/data" \\', gamma_script)
-        self.assertIn('-v "${LOCAL_GAMMA_CADDY_CONFIG_ROOT}:/config" \\', gamma_script)
         self.assertIn(
-            '${LOCAL_GAMMA_CADDY_DATA_ROOT:-../../../.qwq_output/env/gamma/local/gamma-local/caddy/data}:/data',
+            '/data/caddy/pki/authorities/local/root.crt',
+            gamma_script,
+        )
+        self.assertIn(
+            'LOCAL_GAMMA_CONFIG_ROOT="${LOCAL_GAMMA_DEPLOY_RENDER_ROOT}/config-root"',
+            gamma_script,
+        )
+        self.assertIn(
+            'LOCAL_GAMMA_PROCESS_ROOT="${QWQ_OUTPUT_ROOT}/env/gamma/local/gamma-local/process"',
+            gamma_script,
+        )
+        self.assertIn('-v "${LOCAL_GAMMA_CADDY_DATA_VOLUME}:/data" \\', gamma_script)
+        self.assertIn('-v "${LOCAL_GAMMA_CADDY_CONFIG_VOLUME}:/config" \\', gamma_script)
+        self.assertIn(
+            '${LOCAL_GAMMA_CADDY_DATA_VOLUME:-local-gamma-caddy-data}:/data',
             gamma_compose,
         )
         self.assertIn(
-            '${LOCAL_GAMMA_CADDY_CONFIG_ROOT:-../../../.qwq_output/env/gamma/local/gamma-local/caddy/config}:/config',
+            '${LOCAL_GAMMA_CADDY_CONFIG_VOLUME:-local-gamma-caddy-config}:/config',
             gamma_compose,
         )
-        self.assertNotIn("local-gamma-caddy/data:/data", gamma_compose)
-        self.assertNotIn("local-gamma-caddy/config:/config", gamma_compose)
+        self.assertNotIn(".qwq_output/env/gamma/runtime", gamma_compose)
+        self.assertNotIn(".qwq_output/env/gamma/local/gamma-local/pki", gamma_compose)
+        self.assertIn("local-gamma-caddy-data:", gamma_compose)
+        self.assertIn("local-gamma-caddy-config:", gamma_compose)
+
+    def test_gamma_notification_composition_is_explicit_and_health_gated(self) -> None:
+        gamma_script = (
+            ROOT / "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"
+        ).read_text(encoding="utf-8")
+        gamma_compose = (
+            ROOT / "quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            'export LOCAL_GAMMA_NOTIFICATION_SERVICE_IMAGE=', gamma_script
+        )
+        self.assertIn(
+            "copy_service_package_config notification-service notification-service",
+            gamma_script,
+        )
+        self.assertIn("  notification-service\n)", gamma_script)
+        self.assertIn(
+            'local notification_port="${LOCAL_GAMMA_NOTIFICATION_PORT:-19320}"',
+            gamma_script,
+        )
+        self.assertIn(
+            "-e ASSISTANT_NOTIFICATION_BASE_URL=http://notification-service:18087 \\",
+            gamma_script,
+        )
+        self.assertIn("  notification-service:\n", gamma_compose)
+        self.assertIn(
+            'LOCAL_GAMMA_NOTIFICATION_PORT:-19320}:18087', gamma_compose
+        )
+        self.assertIn(
+            "ASSISTANT_NOTIFICATION_BASE_URL: \"http://notification-service:18087\"",
+            gamma_compose,
+        )
+
+    def test_gamma_local_search_backfill_blocks_incomplete_read_model(self) -> None:
+        gamma_script = (
+            ROOT / "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("--request-timeout \"$LOCAL_GAMMA_SEARCH_BACKFILL_REQUEST_TIMEOUT\"", gamma_script)
+        self.assertIn(
+            "gamma startup is blocked because /v1/search would be incomplete",
+            gamma_script,
+        )
+        self.assertNotIn("WARN: skip search backfill", gamma_script)
+        self.assertNotIn("WARN: search backfill failed", gamma_script)
+        self.assertIn("_id: profilePost", gamma_script)
+        self.assertIn("_id: sharedPost", gamma_script)
+
+    def test_local_launchers_use_canonical_output_roots_without_retired_fallbacks(self) -> None:
+        beta_stack = (
+            ROOT / "quwoquan_ops/cli/beta/start_beta_stack.sh"
+        ).read_text(encoding="utf-8")
+        beta_start = (
+            ROOT / "quwoquan_app/scripts/device/start_app_beta_manual.sh"
+        ).read_text(encoding="utf-8")
+        beta_stop = (
+            ROOT / "quwoquan_app/scripts/device/stop_app_beta_manual.sh"
+        ).read_text(encoding="utf-8")
+        gamma_start = (
+            ROOT / "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"
+        ).read_text(encoding="utf-8")
+        prod_sim = (
+            ROOT / "quwoquan_ops/cli/prod_sim/start_prod_sim_stack.sh"
+        ).read_text(encoding="utf-8")
+        combined = "\n".join((beta_stack, beta_start, beta_stop, gamma_start, prod_sim))
+
+        for script in (beta_stack, beta_start, beta_stop, gamma_start, prod_sim):
+            self.assertIn('QWQ_OUTPUT_ROOT="${QWQ_OUTPUT_ROOT:-$ROOT', script)
+            self.assertIn('QWQ_OUTPUT_ROOT="${QWQ_OUTPUT_ROOT:-$ROOT', script)
+        self.assertNotIn(".env.beta.local", beta_stack)
+        self.assertNotIn(".qwq_output/env/beta/local/beta-local", combined)
+        self.assertNotIn(".qwq_output/env/gamma/local/gamma-local", combined)
+        self.assertNotIn(".qwq_output/env/prod/local/prod-sim", combined)
+        self.assertIn('LOG_DIR="${QWQ_OBSERVABILITY_RUN_ROOT}/logs/service"', beta_start)
+        self.assertIn('REPORT="${QWQ_RUN_ROOT}/app-beta-manual-report.json"', beta_start)
+        self.assertIn('BETA_MANUAL_STATE_DIR="${QWQ_OUTPUT_ROOT}/env/beta/local/beta-local/process"', beta_start)
+        self.assertIn('--rotate-ca', beta_stop)
+        self.assertIn('volume rm -f "$TLS_PROXY_DATA_VOLUME" "$TLS_PROXY_CONFIG_VOLUME"', beta_stop)
+        self.assertNotIn('rm -rf "$LOG_DIR"', beta_stop)
+        self.assertIn('find "$LOG_DIR" -mindepth 1 -maxdepth 1 -delete', beta_stop)
 
     def test_alpha_mock_public_plane_ops_event_endpoints(self) -> None:
         handler = MockPublicPlaneHandler.__new__(MockPublicPlaneHandler)
@@ -618,6 +802,37 @@ class DevUpTest(unittest.TestCase):
                 MockPublicPlaneHandler.legal_static_root = previous[
                     "legal_static_root"
                 ]
+
+    def test_alpha_mock_public_plane_default_legal_root_uses_output_layout(self) -> None:
+        previous_root = MockPublicPlaneHandler.legal_static_root
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            output_root = Path(tmp_dir)
+            payload = legal_static.build_package("alpha", output_root=output_root)
+            package_root = Path(payload["packageDir"]).parent
+            handler = MockPublicPlaneHandler.__new__(MockPublicPlaneHandler)
+            handler.runtime_env = "alpha"
+            MockPublicPlaneHandler.legal_static_root = ""
+            try:
+                with mock.patch(
+                    "quwoquan_ops.cli.lib.mock_public_plane.legal_static_release_dir",
+                    return_value=package_root,
+                ):
+                    self.assertEqual(
+                        handler._legal_root(),
+                        (package_root / "current" / "public").resolve(),
+                    )
+                    self.assertEqual(
+                        handler._resolve_legal_static_path("/legal/user-agreement"),
+                        (
+                            package_root
+                            / "current"
+                            / "public"
+                            / "legal"
+                            / "user-agreement"
+                        ).resolve(),
+                    )
+            finally:
+                MockPublicPlaneHandler.legal_static_root = previous_root
 
     def test_beta_gateway_notification_fixture_family(self) -> None:
         handler = AssistantBetaGateway.__new__(AssistantBetaGateway)

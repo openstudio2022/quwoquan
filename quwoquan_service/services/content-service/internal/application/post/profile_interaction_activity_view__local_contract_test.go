@@ -5,13 +5,19 @@ import (
 	"testing"
 	"time"
 
+	"quwoquan_service/services/content-service/internal/application/commandmeta"
+	commentapp "quwoquan_service/services/content-service/internal/application/comment"
+	reactionapp "quwoquan_service/services/content-service/internal/application/reaction"
+	postdomain "quwoquan_service/services/content-service/internal/domain/post"
 	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
-	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
+	reactiondomain "quwoquan_service/services/content-service/internal/domain/reaction"
+	"quwoquan_service/services/content-service/internal/testsupport"
+	commenttestsupport "quwoquan_service/services/content-service/internal/testsupport/comment"
 )
 
-func newProfileInteractionTestService() *PostService {
+func newProfileInteractionTestServices() (*PostService, *commentapp.CommentService, *reactionapp.Service) {
 	now := time.Date(2026, 6, 18, 8, 0, 0, 0, time.UTC)
-	store := persistence.NewPostStore([]postmodel.Post{
+	store := testsupport.NewPostStore([]postmodel.Post{
 		{
 			ID:                        "post_owner_image",
 			AuthorId:                  "profile_owner",
@@ -42,36 +48,123 @@ func newProfileInteractionTestService() *PostService {
 			PublishedAt:               now,
 		},
 	})
-	return NewPostService(
-		store,
-		WithCommentStore(persistence.NewMemoryCommentStore()),
-		WithCommentReactionStore(persistence.NewMemoryCommentReactionStore()),
+	commentStore := commenttestsupport.NewStore()
+	commentStore.SeedPost("post_owner_image", "profile_owner")
+	commentStore.SeedPost("post_target_video", "target_author")
+	reactionStore := testsupport.NewReactionStore()
+	shareProjection := testsupport.NewShareInteractionStore()
+	commentService := commentapp.NewCommentService(commentapp.BindDataPorts(
+		commentStore,
+		commentStore,
+		reactionStore,
+	))
+	postService := NewPostService(
+		BindDataPorts(store),
+		WithCommentReaders(commentStore),
+		WithProfileReactionActivityReader(reactionStore),
+		WithProfileCommentReactionValueReader(reactionStore),
+		WithShareInteractionStore(shareProjection),
 	)
+	return postService, commentService, reactionapp.NewService(reactionapp.BindDataPorts(reactionStore, reactionStore))
+}
+
+func createProfileComment(
+	t *testing.T,
+	service *commentapp.CommentService,
+	postID string,
+	actorID string,
+	content string,
+	replyToCommentID string,
+) commentapp.CommentCommandResult {
+	t.Helper()
+	ctx := commandmeta.WithIdempotencyKey(
+		context.Background(),
+		"profile-comment:"+postID+":"+actorID+":"+content,
+	)
+	result, err := service.CreateComment(ctx, commentapp.CreateCommentCommand{
+		PostID:           postID,
+		ActorID:          actorID,
+		Content:          content,
+		ReplyToCommentID: replyToCommentID,
+	})
+	if err != nil {
+		t.Fatalf("create comment on %s by %s: %v", postID, actorID, err)
+	}
+	return result
+}
+
+func likeProfileReaction(
+	t *testing.T,
+	service *reactionapp.Service,
+	postID string,
+	actorID string,
+) {
+	t.Helper()
+	actor, err := reactiondomain.NewActor(reactiondomain.ActorDimensionPersona, actorID)
+	if err != nil {
+		t.Fatalf("create reaction actor %s: %v", actorID, err)
+	}
+	ctx := commandmeta.WithIdempotencyKey(
+		context.Background(),
+		"profile-reaction:"+postID+":"+actorID,
+	)
+	if _, err := service.LikePost(ctx, reactionapp.LikePostCommand{PostID: postID, Actor: actor}); err != nil {
+		t.Fatalf("like %s by %s: %v", postID, actorID, err)
+	}
+}
+
+func TestListProfileInteractionActivitiesExcludesDeviceReactions(t *testing.T) {
+	ctx := context.Background()
+	svc, _, reactions := newProfileInteractionTestServices()
+	device, err := reactiondomain.NewActor(reactiondomain.ActorDimensionDevice, "device-private")
+	if err != nil {
+		t.Fatalf("create device reaction actor: %v", err)
+	}
+	commandContext := commandmeta.WithIdempotencyKey(ctx, "device-profile-reaction")
+	if _, err := reactions.LikePost(commandContext, reactionapp.LikePostCommand{
+		PostID: "post_owner_image",
+		Actor:  device,
+	}); err != nil {
+		t.Fatalf("like with device actor: %v", err)
+	}
+
+	items, _, _, err := svc.ListProfileInteractionActivities(
+		ctx,
+		"profile_owner",
+		"profile_owner",
+		"received",
+		"",
+		20,
+	)
+	if err != nil {
+		t.Fatalf("list received profile interactions: %v", err)
+	}
+	if len(items) != 0 {
+		t.Fatalf("device reaction must not enter public profile activity: %#v", items)
+	}
 }
 
 func TestListProfileInteractionActivitiesProjectsReceivedContractFields(t *testing.T) {
 	ctx := context.Background()
-	svc := newProfileInteractionTestService()
+	svc, comments, reactions := newProfileInteractionTestServices()
 
-	if _, _, err := svc.LikePost(ctx, "post_owner_image", "actor_like", ""); err != nil {
-		t.Fatalf("like owner post: %v", err)
+	likeProfileReaction(t, reactions, "post_owner_image", "actor_like")
+	if err := svc.shareInteractionStore.Save(ctx, postdomain.ShareInteractionOccurrence{
+		InteractionID: "outbound-share-1", ActorSubAccountID: "actor_share",
+		TargetSubAccountID: "profile_owner", TargetContentID: "post_owner_image",
+		TargetContentType: "image", TargetKind: "record", TargetAvailability: "active",
+		OccurredAt: time.Date(2026, 6, 18, 9, 0, 0, 0, time.UTC),
+	}); err != nil {
+		t.Fatalf("seed outbound share projection: %v", err)
 	}
-	if _, _, _, err := svc.SharePost(ctx, "post_owner_image", "actor_share", ""); err != nil {
-		t.Fatalf("share owner post: %v", err)
-	}
-	if _, _, err := svc.AddComment(
-		ctx,
+	createProfileComment(
+		t,
+		comments,
 		"post_owner_image",
 		"actor_comment",
 		"构图很稳",
 		"",
-		"actor_comment",
-		"",
-		nil,
-		nil,
-	); err != nil {
-		t.Fatalf("comment owner post: %v", err)
-	}
+	)
 
 	items, _, _, err := svc.ListProfileInteractionActivities(ctx, "profile_owner", "profile_owner", "received", "", 20)
 	if err != nil {
@@ -121,39 +214,28 @@ func TestListProfileInteractionActivitiesProjectsReceivedContractFields(t *testi
 
 func TestListProfileInteractionActivitiesWiresCommentIdentity(t *testing.T) {
 	ctx := context.Background()
-	svc := newProfileInteractionTestService()
+	svc, comments, _ := newProfileInteractionTestServices()
 
-	top, _, err := svc.AddComment(
-		ctx,
+	top := createProfileComment(
+		t,
+		comments,
 		"post_owner_image",
 		"actor_comment",
 		"构图很稳",
 		"",
-		"actor_comment",
-		"",
-		nil,
-		nil,
 	)
-	if err != nil {
-		t.Fatalf("add top-level comment: %v", err)
-	}
-	topID, _ := top["_id"].(string)
+	topID := top.ID
 	if topID == "" {
-		t.Fatalf("top-level comment missing _id: %#v", top)
+		t.Fatalf("top-level comment missing id: %#v", top)
 	}
-	if _, _, err := svc.AddComment(
-		ctx,
+	createProfileComment(
+		t,
+		comments,
 		"post_owner_image",
 		"actor_reply",
 		"同感",
 		topID,
-		"actor_reply",
-		"",
-		nil,
-		nil,
-	); err != nil {
-		t.Fatalf("add reply comment: %v", err)
-	}
+	)
 
 	items, _, _, err := svc.ListProfileInteractionActivities(ctx, "profile_owner", "profile_owner", "received", "", 20)
 	if err != nil {
@@ -183,11 +265,9 @@ func TestListProfileInteractionActivitiesWiresCommentIdentity(t *testing.T) {
 
 func TestListProfileInteractionActivitiesProjectsSentContractFields(t *testing.T) {
 	ctx := context.Background()
-	svc := newProfileInteractionTestService()
+	svc, _, reactions := newProfileInteractionTestServices()
 
-	if _, _, err := svc.LikePost(ctx, "post_target_video", "profile_owner", ""); err != nil {
-		t.Fatalf("like target post: %v", err)
-	}
+	likeProfileReaction(t, reactions, "post_target_video", "profile_owner")
 
 	items, _, _, err := svc.ListProfileInteractionActivities(ctx, "profile_owner", "profile_owner", "sent", "", 20)
 	if err != nil {
@@ -215,13 +295,11 @@ func TestListProfileInteractionActivitiesProjectsSentContractFields(t *testing.T
 // activityId tiebreak 路径），证明已替换旧的“内存排序 + 硬上限 50 静默丢尾”。
 func TestListProfileInteractionActivitiesKeysetCursorPaginates(t *testing.T) {
 	ctx := context.Background()
-	svc := newProfileInteractionTestService()
+	svc, _, reactions := newProfileInteractionTestServices()
 
 	actors := []string{"actor_a", "actor_b", "actor_c", "actor_d", "actor_e"}
 	for _, a := range actors {
-		if _, _, err := svc.LikePost(ctx, "post_owner_image", a, ""); err != nil {
-			t.Fatalf("like by %s: %v", a, err)
-		}
+		likeProfileReaction(t, reactions, "post_owner_image", a)
 	}
 
 	seen := map[string]bool{}

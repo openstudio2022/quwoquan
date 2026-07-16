@@ -6,12 +6,10 @@ import 'package:quwoquan_app/components/media/shared/pageflip/media_page_flip_bo
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 
-enum ImageBookPageSurfaceStatus { loading, success, failure }
-
 /// 将图片书的任意输入统一 rasterize 成固定书页尺寸。
 ///
-/// 翻页几何只消费 page surface，不消费图片自然尺寸；加载失败也必须提供
-/// 同尺寸失败页，避免 curl renderer 采样到空纹理或黑底。
+/// 翻页几何只消费固定尺寸的 page surface，不消费图片自然尺寸；
+/// pending/failed 统一 rasterize 为无状态图标的中性纸面。
 class ImageBookPageSurfaceFactory {
   const ImageBookPageSurfaceFactory();
 
@@ -46,65 +44,24 @@ class ImageBookPageSurfaceFactory {
     return MediaPageFlipTexturePair(front: front, back: back);
   }
 
-  Future<MediaPageFlipTexturePair> buildLoadingTexture({
+  Future<MediaPageFlipTexturePair> buildNeutralTexture({
     required Size pageSize,
     required double pixelRatio,
   }) async {
     final front = await _rasterize(
       pageSize: pageSize,
       pixelRatio: pixelRatio,
-      semanticSurfaceKind: 'image_book.loading.front',
+      semanticSurfaceKind: 'image_book.neutral.front',
       paint: (canvas, logicalRect) {
-        _paintPlaceholder(
-          canvas,
-          logicalRect,
-          status: ImageBookPageSurfaceStatus.loading,
-        );
+        _paintNeutralPaper(canvas, logicalRect, isBackFace: false);
       },
     );
     final back = await _rasterize(
       pageSize: pageSize,
       pixelRatio: pixelRatio,
-      semanticSurfaceKind: 'image_book.loading.back',
+      semanticSurfaceKind: 'image_book.neutral.back',
       paint: (canvas, logicalRect) {
-        _paintPlaceholder(
-          canvas,
-          logicalRect,
-          status: ImageBookPageSurfaceStatus.loading,
-          isBackFace: true,
-        );
-      },
-    );
-    return MediaPageFlipTexturePair(front: front, back: back);
-  }
-
-  Future<MediaPageFlipTexturePair> buildFailureTexture({
-    required Size pageSize,
-    required double pixelRatio,
-  }) async {
-    final front = await _rasterize(
-      pageSize: pageSize,
-      pixelRatio: pixelRatio,
-      semanticSurfaceKind: 'image_book.failure.front',
-      paint: (canvas, logicalRect) {
-        _paintPlaceholder(
-          canvas,
-          logicalRect,
-          status: ImageBookPageSurfaceStatus.failure,
-        );
-      },
-    );
-    final back = await _rasterize(
-      pageSize: pageSize,
-      pixelRatio: pixelRatio,
-      semanticSurfaceKind: 'image_book.failure.back',
-      paint: (canvas, logicalRect) {
-        _paintPlaceholder(
-          canvas,
-          logicalRect,
-          status: ImageBookPageSurfaceStatus.failure,
-          isBackFace: true,
-        );
+        _paintNeutralPaper(canvas, logicalRect, isBackFace: true);
       },
     );
     return MediaPageFlipTexturePair(front: front, back: back);
@@ -156,16 +113,18 @@ class ImageBookPageSurfaceFactory {
     );
   }
 
-  void _paintPlaceholder(
+  void _paintNeutralPaper(
     ui.Canvas canvas,
     Rect logicalRect, {
-    required ImageBookPageSurfaceStatus status,
-    bool isBackFace = false,
+    required bool isBackFace,
   }) {
-    final base = status == ImageBookPageSurfaceStatus.failure
-        ? AppColors.imageBookFailurePlaceholderBackdrop
-        : AppColors.imageBookPlaceholderBackdrop;
-    canvas.drawRect(logicalRect, ui.Paint()..color = base);
+    canvas.drawRect(
+      logicalRect,
+      ui.Paint()
+        ..color = isBackFace
+            ? AppColors.imageBookBackFaceWash
+            : AppColors.imageBookPlaceholderBackdrop,
+    );
     canvas.drawRect(
       logicalRect,
       ui.Paint()
@@ -173,81 +132,13 @@ class ImageBookPageSurfaceFactory {
           logicalRect.topLeft,
           logicalRect.bottomRight,
           <Color>[
-            AppColors.white.withValues(alpha: 0.09),
+            AppColors.white.withValues(alpha: isBackFace ? 0.025 : 0.04),
             AppColors.transparent,
-            AppColors.black.withValues(alpha: 0.18),
+            AppColors.black.withValues(alpha: isBackFace ? 0.07 : 0.035),
           ],
-          const <double>[0.0, 0.48, 1.0],
+          const <double>[0.0, 0.55, 1.0],
         ),
     );
-    if (isBackFace) {
-      _paintBackFaceWash(canvas, logicalRect);
-    }
-
-    final iconSize = math.min(logicalRect.width, logicalRect.height) * 0.18;
-    if (iconSize <= 0) {
-      return;
-    }
-    final center = logicalRect.center;
-    final iconRect = Rect.fromCenter(
-      center: center,
-      width: iconSize,
-      height: iconSize * 0.72,
-    );
-    final strokePaint = ui.Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = math.max(AppSpacing.one, iconSize * 0.035)
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round
-      ..color = AppColors.white.withValues(
-        alpha: status == ImageBookPageSurfaceStatus.failure ? 0.34 : 0.22,
-      );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        iconRect,
-        const Radius.circular(AppSpacing.radiusTen),
-      ),
-      strokePaint,
-    );
-    canvas.drawCircle(
-      Offset(
-        iconRect.left + iconRect.width * 0.26,
-        iconRect.top + iconRect.height * 0.3,
-      ),
-      iconSize * 0.055,
-      ui.Paint()..color = strokePaint.color,
-    );
-    final mountainPath = Path()
-      ..moveTo(
-        iconRect.left + iconRect.width * 0.16,
-        iconRect.bottom - iconRect.height * 0.18,
-      )
-      ..lineTo(
-        iconRect.left + iconRect.width * 0.42,
-        iconRect.top + iconRect.height * 0.56,
-      )
-      ..lineTo(
-        iconRect.left + iconRect.width * 0.58,
-        iconRect.top + iconRect.height * 0.72,
-      )
-      ..lineTo(
-        iconRect.left + iconRect.width * 0.76,
-        iconRect.top + iconRect.height * 0.44,
-      )
-      ..lineTo(
-        iconRect.right - iconRect.width * 0.12,
-        iconRect.bottom - iconRect.height * 0.18,
-      );
-    canvas.drawPath(mountainPath, strokePaint);
-    if (status == ImageBookPageSurfaceStatus.failure) {
-      canvas.drawLine(
-        iconRect.topRight +
-            Offset(iconRect.width * 0.1, -iconRect.height * 0.12),
-        iconRect.bottomLeft -
-            Offset(iconRect.width * 0.1, -iconRect.height * 0.12),
-        strokePaint,
-      );
-    }
   }
 
   void _paintMirroredBackImage(

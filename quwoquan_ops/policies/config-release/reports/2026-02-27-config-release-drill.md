@@ -46,7 +46,7 @@ quwoquan_ops/cli/prod/config_release_apply_stage.sh \
 - Stage state updated successfully.
 - SLO gate returned `continue` for healthy metrics.
 - Rollback command proved idempotent when target version already active.
-- Audit logs created under `.qwq_output/env/repo/local/release-state/content-service.audit.log`.
+- Audit logs: 已迁移 canonical run evidence.
 
 ## Conclusion
 

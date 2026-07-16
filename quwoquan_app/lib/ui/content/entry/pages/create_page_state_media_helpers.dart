@@ -42,37 +42,55 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
     ref.read(createEditorProvider.notifier).setSettings(confirmedSettings);
     _setMountedState(() => _isPublishing = true);
     try {
-      final repository = ref.read(contentRepositoryProvider);
+      final media = ref.read(createContentMediaFacetProvider);
+      final postLifecycle = ref.read(
+        createContentPostLifecycleCommandWriterProvider,
+      );
       final preparedPayload = await buildCreatePostPayloadWithRemoteImageMedia(
-        repository: repository,
+        media: media,
         fileStorageGateway: ref.read(fileStorageGatewayProvider),
         state: publishState,
+        uploadObject: ref.read(contentMediaObjectUploadProvider),
       );
-      final payload = await attachActivePersonaToCreatePayload(
+      final createCommand = await attachActivePersonaToCreateCommand(
         ref,
         preparedPayload.payload,
       );
-      final created = await repositoryCreatePost(repository, payload);
-      final postId = created.id;
+      final created = await postLifecycle.createPost(createCommand);
+      final postId = created.post.postId;
       if (postId.isEmpty) {
         throw StateError('missing post id');
       }
       if (preparedPayload.mediaAssetIds.isNotEmpty) {
-        await repository.bindMediaAssetsToPost(
-          postId: postId,
-          assetIds: preparedPayload.mediaAssetIds,
+        await media.bindPostMediaAssets(
+          BindContentPostMediaAssetsCommand(
+            postId: postId,
+            assetIds: preparedPayload.mediaAssetIds,
+          ),
         );
       }
-      await repositoryPublishPostWithSettings(
-        repository,
-        postId: postId,
-        settings: confirmedSettings,
+      await postLifecycle.publishPost(
+        publishContentPostCommandFromSettings(
+          postId: postId,
+          settings: confirmedSettings,
+        ),
       );
+      if (confirmedSettings.isPublic &&
+          confirmedSettings.circleIds.isNotEmpty) {
+        final placements = ref.read(
+          createWorkspaceCirclePostPlacementWriterProvider,
+        );
+        for (final circleId in confirmedSettings.circleIds.toSet()) {
+          await placements.placePost(
+            PlaceCirclePostCommand(circleId: circleId, postId: postId),
+          );
+        }
+      }
       await _clearCurrentDraft();
       await reportCreateEditorSurfaceEvent(
         ref,
         'create_publish_success',
-        createEditorSurfaceExtrasPublishSuccess(payload),
+        createEditorSurfaceExtrasPublishSuccess(preparedPayload.payload),
       );
       if (!mounted) {
         return;

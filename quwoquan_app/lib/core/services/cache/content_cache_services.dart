@@ -519,6 +519,7 @@ String contentUserPostsQueryKey({
   required String userId,
   String? identity,
   String? type,
+  String? visibility,
   String? cursor,
   required int limit,
 }) {
@@ -527,6 +528,7 @@ String contentUserPostsQueryKey({
     'userId=${userId.trim()}',
     'identity=${(identity ?? '').trim()}',
     'type=${(type ?? '').trim()}',
+    'visibility=${(visibility ?? '').trim()}',
     'cursor=${(cursor ?? '').trim()}',
     'limit=$limit',
   ];

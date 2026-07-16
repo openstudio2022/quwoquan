@@ -712,6 +712,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
         contextObjectTarget: entry.dto == null
             ? null
             : IntersectionTarget(
+                objectType: 'post',
                 objectId: entry.dto!.id,
                 objectKind: 'content',
                 routeId: 'workBrowser',

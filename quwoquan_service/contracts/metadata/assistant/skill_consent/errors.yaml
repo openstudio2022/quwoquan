@@ -1,0 +1,19 @@
+version: 1
+domain: ASSISTANT
+aggregate: SkillConsent
+
+description: |
+  SkillConsent 聚合的可信身份与 owner 授权错误。
+
+errors:
+  - code: ASSISTANT.USER.unauthorized
+    kind: USER
+    reason: unauthorized
+    http_status: 401
+    recovery_action: surface
+    dart_const: unauthorized
+    go_const: ErrUnauthorized
+    l10n_key: assistant.error.unauthorized
+    user_message:
+      zh: "请先登录"
+      en: "Please sign in first"

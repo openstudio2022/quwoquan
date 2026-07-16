@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/integration/location_poi_dto.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// L1a 契约测试：LocationPoiDto — 覆盖 integration/location/projections/location_poi.yaml
 ///

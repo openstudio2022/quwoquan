@@ -329,3 +329,153 @@ entries:
         - "cd quwoquan_app && flutter test --no-pub test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart --plain-name '视频书视频可铺入状态栏' 单跑失败：期望 canvas top 贴近 0，实际 20；不经过本轮图片 pageflip/motion 路径。"
     notes:
       - "本次不改云 API、metadata route、推荐策略、数据生产链路或文章 BACK 几何主线。"
+  - timestamp: "2026-07-15T00:00:00+08:00"
+    summary: |
+      纠正图片书 active sheet 的错误材质与加载契约：前翻 moving sheet 改为当前页
+      `current.front/current.back`，底页保持 `next.front`；删除同层两个 `FractionallySizedBox`
+      对完整纹理进行重叠压缩的实现，改由单一 Canvas 消费 pageflip face frame。纹理 API 显式
+      区分 `pending/ready/failed`，未就绪和失败在活动翻页中只使用无图标中性纸面。
+    reason: |
+      真实截图证明 2026-07-06 的“同层 recto/verso”实现虽然通过既有 18 个 local_contract，
+      仍会因两个子页宽度总和为页面宽度的 1.18..1.22 而稳定产生重叠平面；同时前翻误绑
+      `next.back`，缓存未同步命中又被固化成带默认图标的 failure texture，导致拖动时第二平面
+      和落页换图。GWT3 因缺少像素、UV 与晚到图片证据退回 `pending_evidence`。
+    change_type:
+      - bugfix
+      - product
+      - architecture
+      - test
+      - governance
+    changed_documents:
+      - path: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md
+        sections:
+          - "单纸面材质分区、显式纹理状态、异步冻结与落平淡入"
+      - path: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/acceptance.yaml
+        sections:
+          - "GWT3 退回 pending_evidence，并新增单 Canvas、UV、晚到图片和 user_acceptance 条款"
+      - path: quwoquan_app/lib/components/pageflip/render_frame.dart
+        sections:
+          - "新增 StPageFlipSheetFaceFrame 单一材质分区结果"
+      - path: quwoquan_app/lib/components/media/shared/pageflip/media_page_flip_texture.dart
+        sections:
+          - "新增 pending/ready/failed 显式纹理结果，只有 ready 携带 front/back pair"
+      - path: quwoquan_app/lib/components/media/shared/pageflip/media_page_flip_sheet_painter.dart
+        sections:
+          - "单 Canvas 按 page-local rect 绘制互补正反面并保持连续 UV"
+      - path: quwoquan_app/lib/components/media/shared/pageflip/media_page_flip_book.dart
+        sections:
+          - "正确三面绑定、单 Canvas moving sheet 与冻结材质事务"
+      - path: quwoquan_app/lib/components/media/image/book/image_book_canvas.dart
+        sections:
+          - "每页唯一解码状态、共享 cover 裁剪、静态状态 overlay 与落平淡入"
+      - path: quwoquan_app/lib/ui/discovery/widgets/works_immersive_viewer.dart
+        sections:
+          - "在 UI 归属层把纯媒体加载事件写入既有 PageLifecycleObservability"
+      - path: quwoquan_app/test/user_acceptance/journeys/discovery/post/works_image_book_pageflip_journey__user_acceptance_test.dart
+        sections:
+          - "390x844、430x932、iPad 三档视口连续前后翻 10 次单纸面旅程"
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - user_acceptance
+      rollout_impact: medium
+      breaking_contract: false
+    test_evidence:
+      recorded:
+        - "cd quwoquan_app && flutter test --no-pub test/local_contract/ui/components/pageflip/sheet_face_frame__local_contract_test.dart test/local_contract/ui/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart test/local_contract/ui/components/media/image/book/image_book_canvas_widget__local_contract_test.dart（23 过）"
+        - "cd quwoquan_app && flutter test --no-pub test/user_acceptance/journeys/discovery/post/works_image_book_pageflip_journey__user_acceptance_test.dart（3 过；三视口共 30 次完整翻页）"
+        - "cd quwoquan_app && flutter test --no-pub test/local_contract/ui/discovery/widgets/works_immersive_viewer_widget__local_contract_test.dart --name <图片书本轮相关用例>（5 过）"
+        - "cd quwoquan_app && flutter test --no-pub test/local_contract/ui/content/article_reader（3 过）"
+        - "cd quwoquan_app && flutter analyze --no-fatal-infos <touched dart files>（No issues found）"
+        - "python3 quwoquan_app/scripts/content/verify_pageflip_backward_mainline.py（OK）"
+        - "make verify-app-pageflip-back-mainline（71 过）"
+        - "python3 quwoquan_app/scripts/content/verify_content_ui_directory_boundaries.py（passed）"
+        - "make verify-app-page-horizontal-quality（OK）"
+        - "make verify-test-coverage-map（OK）"
+        - "make verify-agent-context-contract（OK）"
+        - "bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh（OK）"
+        - "bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh（OK）"
+      failed_unrelated:
+        - "python3 quwoquan_app/scripts/runtime/verify_file_line_budget.py：search_network_results_page_state.dart 1007 > 1000；intersection_hydration.go 1511 > allowlist 1361。本轮 media_page_flip_book.dart 已收敛为 1934 <= 1935。"
+        - "WorksImmersiveViewer 全文件回归 50 过 / 5 失败：4 个交集句 fixture/定位用例与 1 个 Android 左边缘返回 finder 用例；图片翻书静态契约及 4 个图片横滑主旅程单跑均通过。"
+    notes:
+      - "不改 release 时长、手势仲裁、文章 BACK 几何、云 API、metadata、推荐或数据工程。"
+      - "acceptance standard 首跑因把本地 framebuffer 旅程登记为 user_acceptance env=local 而失败；已移除正式 evidence 声明、保留本地旅程记录，并复跑通过。"
+      - "真实设备 60fps 录屏尚未落盘，GWT3 保持 pending_evidence，不以本地 framebuffer 旅程冒充设备证据。"
+  - timestamp: "2026-07-16T00:00:00+08:00"
+    summary: |
+      撤销导致文章和图片黑屏的共享合成重构，精确恢复并冻结 `components/pageflip/**`、
+      `ui/content/article_reader/pageflip/**`、BACK 规则及既有测试。图片只在
+      `MediaPageFlipBook` 与 `ImageBookCanvas` 媒体适配层对齐文章：复用相同 controller scene、
+      `fold(localPosition)`、release policy、动画帧取样、BACK replacement 层序和同步
+      terminal-frame 提交，不再推动共享引擎或文章改造。
+    reason: |
+      上轮新增 DeckHost/painter/partition 后，结构测试虽然全绿，真实用户验收却出现当前页正面
+      黑屏、原本正确的文章翻页回归和落页再次跳变，说明把文章既有 BACK replacement 误判为
+      旁路并抽取新共享主线破坏了已验收行为。本轮以恢复后的文章实现为不可修改基线；图片双平面
+      的根因只在媒体适配层修复：两个 `FractionallySizedBox` 重叠缩放完整纹理、forward 误绑
+      `next.back`、BACK 未复刻文章 replacement/bottom 层序，以及异步图片在落平前替换材质。
+    change_type:
+      - bugfix
+      - product
+      - test
+      - governance
+    changed_documents:
+      - path: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md
+        sections:
+          - "文章冻结基线、图片媒体适配边界与同步 terminal-frame 提交"
+      - path: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/acceptance.yaml
+        sections:
+          - "GWT3 恢复文章基线、图片单完整材质、加载冻结与真实设备证据"
+      - path: quwoquan_app/lib/components/media/shared/pageflip/media_page_flip_book.dart
+        sections:
+          - "forward 正确三面绑定、BACK 文章层序、单完整 RawImage、直接 fold 采样、最后一帧同步提交与纹理事务回调"
+      - path: quwoquan_app/lib/components/media/image/book/image_book_page_surface.dart
+        sections:
+          - "ready 双面图片材质与 pending/failed 无图标中性双面纸张"
+      - path: quwoquan_app/lib/components/media/image/book/image_book_canvas.dart
+        sections:
+          - "每页唯一 ui.Image 状态、共享 cover 裁剪、事务冻结、首个静态帧保持与落平后淡入"
+      - path: quwoquan_app/test/local_contract/ui/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart
+        sections:
+          - "三面绑定、BACK replacement、单完整 RawImage 与 Reduce Motion"
+      - path: quwoquan_app/test/local_contract/ui/components/media/image/book/image_book_canvas_widget__local_contract_test.dart
+        sections:
+          - "中性材质、背面亮度、加载/失败/重试、拖动中 ready 冻结与首个静态帧"
+      - path: quwoquan_app/test/user_acceptance/journeys/discovery/post/works_image_book_pageflip_journey__user_acceptance_test.dart
+        sections:
+          - "390x844、430x932、iPad 三档视口各连续前后翻 10 次"
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - user_acceptance
+      rollout_impact: medium
+      breaking_contract: false
+    test_evidence:
+      recorded:
+        - "git diff --exit-code c7fdf2f9a -- quwoquan_app/lib/components/pageflip quwoquan_app/lib/ui/content/article_reader/pageflip（零差异）；相对 HEAD 的共享/文章源码、BACK 规则及既有测试也为零差异"
+        - "python3 quwoquan_app/scripts/content/verify_pageflip_backward_mainline.py（OK）"
+        - "make verify-app-pageflip-back-mainline（恢复后首跑因 test/support/pageflip/src/widget/pageflip_widget.dart 遗留已删除共享类型而失败；恢复该支撑文件后复跑 71 过）"
+        - "cd quwoquan_app && flutter analyze --no-fatal-infos lib/components/media/shared/pageflip/media_page_flip_book.dart lib/components/media/image/book/image_book_canvas.dart lib/components/media/image/book/image_book_page_surface.dart（No issues found）"
+        - "cd quwoquan_app && flutter test --no-pub test/local_contract/ui/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart（15 过，含前/后翻 framebuffer 近黑像素占比 <= 0.1%）"
+        - "cd quwoquan_app && flutter test --no-pub test/local_contract/ui/components/media/image/book/image_book_canvas_widget__local_contract_test.dart（9 过，含等值 URL List 重建不释放已解码图片）"
+        - "cd quwoquan_app && flutter test --no-pub test/user_acceptance/journeys/discovery/post/works_image_book_pageflip_journey__user_acceptance_test.dart（3 过；本地 framebuffer 三视口各连续前后翻 10 次）"
+        - "cd quwoquan_app && flutter test --no-pub test/local_contract/ui/discovery/widgets/works_immersive_viewer_widget__local_contract_test.dart（55 过）"
+        - "release policy 6 过；gesture intent 9 过；appearance/Reduce Motion 9 过；behavior tracker 27 过；article reader architecture 3 过"
+        - "verify_content_ui_directory_boundaries.py、verify-app-page-horizontal-quality、verify-test-coverage-map、acceptance、feature-tree、agent-context gates（OK）"
+      pending:
+        - "真实 iOS/Android 设备 60fps 前翻、回翻、取消、快速释放和弱网晚到图片录屏"
+        - "390x844、430x932、iPad 三档逐帧黑屏、边线与终态像素人工验收"
+    notes:
+      - "GWT3 继续保持 pending_evidence / GATE_BLOCK；本地 local_contract 通过不替代真实设备 user_acceptance。"
+      - "上轮共享重构的本地门禁通过但真实用户验收黑屏，作为失败记录保留；本轮没有以结构测试覆盖该事实。"
+      - "framebuffer 像素测试首次直接调用 toImage 导致 fake-async 未完成；改用 tester.runAsync 后复跑通过，失败与修复均保留。"
+      - "文章架构测试首跑发现一个恢复遗漏：测试仍调用已删除的 resolveStPageFlipTextureBinding；恢复为 HEAD 的 resolveArticlePageTextureBinding 后 3 项通过，并纳入文章测试冻结证据。"
+      - "图片 URL 列表改为内容比较；父级以新 List 实例传入相同 URL 时不再释放 ui.Image、退回中性页并二次加载。"
+      - "共享 pageflip、文章宿主、BACK 规则与既有测试恢复后冻结；图片修复只触达媒体适配层。"
+      - "默认图片仍使用原生翻书；普通页态更新只用于 Reduce Motion。"
+      - "不改云 API、metadata、推荐、数据生产链路或文章分页内容。"

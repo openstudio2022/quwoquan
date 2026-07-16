@@ -3,21 +3,38 @@ from __future__ import annotations
 
 import argparse
 
-from governance.review_candidates import main as review_candidates_main
-from governance.state_machine import STATUSES
+from governance.creators.candidates.review import main as review_candidates_main
+from governance.creators.candidates.state import STATUSES
 
 
 def handle_governance(args: argparse.Namespace) -> None:
     cmd = getattr(args, "governance_command", None)
-    if cmd == "creator-pool":
-        from governance.creator_pool.handler import handle_creator_pool
+    if cmd == "creators":
+        from content.templates.creator import validate_creators
+        from content.templates.registry import TemplateRegistry
 
-        handle_creator_pool(args)
+        registry = TemplateRegistry.load()
+        if args.creators_command == "list":
+            for creator_id in sorted(registry.creators):
+                print(creator_id)
+            return
+        issues = validate_creators(registry)
+        if issues:
+            print("[governance creators] FAIL")
+            for issue in issues:
+                print(f"  - {issue}")
+            raise SystemExit(1)
+        print(f"[governance creators] OK profiles={len(registry.creators)}")
         return
-    if cmd == "user-pool":
-        from governance.user_pool.handler import handle_user_pool
+    if cmd == "taxonomy":
+        from governance.taxonomy.handler import handle_taxonomy
 
-        handle_user_pool(args)
+        handle_taxonomy(args)
+        return
+    if cmd == "coverage":
+        from governance.coverage.handler import handle_coverage_command
+
+        handle_coverage_command(args)
         return
     if cmd == "review-candidates":
         argv: list[str] = []
@@ -37,11 +54,15 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     p = subparsers.add_parser("governance", help="Data governance candidate operations")
     sub = p.add_subparsers(dest="governance_command")
 
-    from governance.creator_pool.handler import register_creator_pool_parser
-    from governance.user_pool.handler import register_user_pool_parser
+    from governance.coverage.handler import register_coverage_parser
+    from governance.taxonomy.handler import register_taxonomy_parser
 
-    register_creator_pool_parser(sub)
-    register_user_pool_parser(sub)
+    creators = sub.add_parser("creators", help="Validate or list repository-owned creator profiles")
+    creators_sub = creators.add_subparsers(dest="creators_command", required=True)
+    creators_sub.add_parser("validate")
+    creators_sub.add_parser("list")
+    register_taxonomy_parser(sub)
+    register_coverage_parser(sub)
 
     review = sub.add_parser("review-candidates", help="Apply or list isolated governance candidate reviews")
     review.add_argument("--root")

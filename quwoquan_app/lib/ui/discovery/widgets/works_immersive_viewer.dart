@@ -9,8 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/cloud/runtime/contract_fixture_runtime_loader.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart'
+import 'package:quwoquan_app/core/errors/runtime_error_display.dart'
     as runtime_error_display;
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/work_browser_item_dto.g.dart';
@@ -48,8 +47,9 @@ import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
-    show BehaviorAction, ReferralSource;
+    show ReferralSource;
 import 'package:quwoquan_app/core/auth/auth_gate.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart'
     show authSessionControllerProvider;
@@ -61,6 +61,7 @@ import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/core/trackers/content_engagement_tracker.dart'
     show ContentType;
 import 'package:quwoquan_app/core/trackers/feed_performance_observability.dart';
+import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/components/media/video/player/video_player_widget.dart';
@@ -88,16 +89,19 @@ import 'package:quwoquan_app/ui/discovery/models/home_feed_video_autoplay_policy
 part 'works_immersive_viewer_controls.dart';
 part 'works_immersive_viewer_canvas.dart';
 part 'works_immersive_viewer_engagement_actions.dart';
+
 const double _worksImmersiveVerticalCommitFraction = 0.20;
 double _worksContentIntersectionLineHeight(BuildContext context) {
   return AppTypography.xxs * AppSpacing.textLineHeightFootnote;
 }
+
 double _worksContentIntersectionBottomClearance(BuildContext context) {
   return ImmersiveEngagementBar.overlayClearance(
     context,
     gap: AppSpacing.intraGroupXs,
   );
 }
+
 double _worksContentOverlayBottomClearance(
   BuildContext context, {
   required bool includeIntersection,
@@ -111,6 +115,7 @@ double _worksContentOverlayBottomClearance(
       _worksContentIntersectionLineHeight(context) +
       gap;
 }
+
 class _WorksImmersiveVerticalPagePhysics extends PageScrollPhysics {
   const _WorksImmersiveVerticalPagePhysics({
     required this.currentPage,
@@ -234,7 +239,6 @@ class WorksImmersiveViewer extends ConsumerStatefulWidget {
     this.initialImageIndex = 0,
     this.source = 'featured',
     this.rawPostsById = const <String, MediaViewerPostWireRow>{},
-    this.defaultCircleId,
     this.initialInteractionSnapshot = const MediaViewerInteractionSnapshot(),
     this.initialCommentContext = const MediaViewerCommentContext(),
     this.onDismissed,
@@ -264,7 +268,6 @@ class WorksImmersiveViewer extends ConsumerStatefulWidget {
   final int initialImageIndex;
   final String source;
   final Map<String, MediaViewerPostWireRow> rawPostsById;
-  final String? defaultCircleId;
   final MediaViewerInteractionSnapshot initialInteractionSnapshot;
   final MediaViewerCommentContext initialCommentContext;
   final ValueChanged<MediaViewerResult>? onDismissed;
@@ -673,7 +676,9 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         return;
       }
       try {
-        await ref.read(contentRepositoryProvider).deletePost(postId: post.id);
+        await ref
+            .read(contentWriteRepositoryProvider)
+            .deletePost(postId: post.id);
         ref.read(discoveryFeedMapProvider.notifier).removePostLocally(post.id);
         if (context.mounted) {
           AppToast.show(context, UITextConstants.contentDeleteSuccess);
@@ -848,37 +853,38 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
               );
         },
         onReport: () {
-          runWhenLoggedIn(ref, context, AuthGateReason.report, () {
-            ref
-                .read(behaviorRepositoryProvider)
-                .reportSingle(
-                  contentId: post.id,
-                  action: BehaviorAction.report,
-                  contentType: post.type,
-                  authorId: post.authorId,
-                  referralSource: ReferralSource.organicFeed,
-                  feedRequestId: ref
-                      .read(feedSessionProvider.notifier)
-                      .currentFeedRequestId,
-                  channelId: _immersiveChannelId(),
-                  rankingVersion: ref
-                      .read(feedSessionProvider.notifier)
-                      .currentRankingVersion,
-                  reasonVersion: ref
-                      .read(feedSessionProvider.notifier)
-                      .currentReasonVersion,
-                  recallPath: post.recallPath,
-                  contentVertical: post.contentVertical,
-                  supplySource: post.supplySource,
+          runWhenLoggedIn(
+            ref,
+            context,
+            AuthGateReason.report,
+            () async {
+              try {
+                await ref
+                    .read(workBrowserContentReportCommandWriterProvider)
+                    .createReport(
+                      CreateContentReportCommand(
+                        targetId: post.id,
+                        targetType: ContentReportTargetType.post,
+                        reason: ContentReportReason.other,
+                      ),
+                    );
+                if (!context.mounted) return;
+                AppToast.show(context, UITextConstants.commentReportSubmitted);
+              } catch (error) {
+                if (!context.mounted) return;
+                await AppActionErrorFeedback.show(
+                  context,
+                  semantic: runtime_error_display.runtimeErrorSemantic(
+                    context,
+                    error: error,
+                    category: UiErrorCategory.submit,
+                    scope: UiErrorScope.global,
+                  ),
                 );
-            ref
-                .read(reportRepositoryProvider)
-                .createReport(
-                  targetId: post.id,
-                  targetType: 'post',
-                  reason: 'inappropriate',
-                );
-          });
+              }
+            },
+            dismissPolicy: LoginDismissPolicy.safeFallback,
+          );
         },
         showDeleteAction: canDelete,
         onDelete: canDelete ? () => _deleteCurrentPost(context, post) : null,
@@ -1293,7 +1299,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     final external = widget.rawPostsById[postId];
     if (external != null) return external.toObjectMap();
     final wire = ref
-        .read(contentRepositoryProvider)
+        .read(contentReadRepositoryProvider)
         .discoveryPresentationWireForPost(postId);
     if (wire == null) return null;
     return Map<String, Object?>.from(wire.toWireMap());
@@ -1365,71 +1371,6 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     return _bodyForPost(post);
   }
 
-  List<_PostCircleTarget> _circlesForPost(PostBaseDto post) {
-    final raw = _effectiveRawPostById(post.id);
-    if (raw == null) {
-      if (widget.defaultCircleId != null &&
-          widget.defaultCircleId!.isNotEmpty) {
-        return <_PostCircleTarget>[
-          _PostCircleTarget(id: widget.defaultCircleId!, name: '圈子'),
-        ];
-      }
-      return const <_PostCircleTarget>[];
-    }
-
-    final summaries = raw[ContentPostImmersiveWireKeys.circleSummaries];
-    if (summaries is List) {
-      final resolved = summaries
-          .whereType<Map>()
-          .map(
-            (item) => _PostCircleTarget(
-              id: item['id']?.toString() ?? '',
-              name: item['name']?.toString() ?? '',
-            ),
-          )
-          .where((item) => item.id.isNotEmpty && item.name.isNotEmpty)
-          .toList(growable: false);
-      if (resolved.isNotEmpty) return resolved;
-    }
-
-    final circleIds =
-        (raw[ContentPostImmersiveWireKeys.circleIds] as List?)
-            ?.map((item) => item.toString())
-            .where((item) => item.isNotEmpty)
-            .toList(growable: false) ??
-        const <String>[];
-    final circleNames =
-        (raw[ContentPostImmersiveWireKeys.circleNames] as List?)
-            ?.map((item) => item.toString())
-            .where((item) => item.isNotEmpty)
-            .toList(growable: false) ??
-        const <String>[];
-    if (circleIds.isNotEmpty) {
-      return List<_PostCircleTarget>.generate(circleIds.length, (index) {
-        final name = index < circleNames.length
-            ? circleNames[index]
-            : circleIds[index];
-        return _PostCircleTarget(id: circleIds[index], name: name);
-      });
-    }
-
-    final circleId =
-        raw[ContentPostImmersiveWireKeys.circleId]?.toString() ??
-        widget.defaultCircleId ??
-        '';
-    final circleName =
-        raw[ContentPostImmersiveWireKeys.circleName]?.toString() ?? '';
-    if (circleId.isNotEmpty) {
-      return <_PostCircleTarget>[
-        _PostCircleTarget(
-          id: circleId,
-          name: circleName.isNotEmpty ? circleName : '圈子$circleId',
-        ),
-      ];
-    }
-    return const <_PostCircleTarget>[];
-  }
-
   _WorksTopChromeTheme _topChromeThemeForPost(
     BuildContext context,
     PostBaseDto? post,
@@ -1478,7 +1419,10 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     return value.toString();
   }
 
-  void _handleArticleInlineMentionTap(ArticleInlineSpan span) {
+  void _handleArticleInlineMentionTap(
+    PostBaseDto post,
+    ArticleInlineSpan span,
+  ) {
     final targetType = span.targetType?.trim();
     final targetId = span.targetId?.trim() ?? '';
     if (targetId.isEmpty) return;
@@ -1488,14 +1432,17 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
       context.push(AppRoutePaths.globalSearchNetworkResults(query: tagRef));
       return;
     }
-    if (targetType != 'homepage' && targetType != 'entity') return;
-    final homepageId = _homepageIdForArticleEntity(
-      targetId,
-      allowDirectHomepageId: targetType == 'homepage',
-    );
-    if (homepageId == null || homepageId.isEmpty) {
+    if (targetType == 'homepage') {
+      context.push(AppRoutePaths.homepageDetail(id: targetId));
       return;
     }
+    if (targetType != 'entity') return;
+    final homepageId = _workItemFor(post).entityMentions
+        .where((mention) => mention.subjectId.trim() == targetId)
+        .map((mention) => mention.homepageId.trim())
+        .where((id) => id.isNotEmpty)
+        .firstOrNull;
+    if (homepageId == null) return;
     context.push(AppRoutePaths.homepageDetail(id: homepageId));
   }
 
@@ -1504,37 +1451,6 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     return normalized.startsWith('tag:')
         ? normalized.substring('tag:'.length)
         : normalized;
-  }
-
-  String? _homepageIdForArticleEntity(
-    String targetId, {
-    required bool allowDirectHomepageId,
-  }) {
-    final normalized = targetId.trim();
-    final seed = ContractFixtureRuntimeLoader.entitySeedSet();
-    final homepages = seed?['homepages'];
-    if (homepages is List) {
-      for (final raw in homepages) {
-        if (raw is! Map) continue;
-        final item = raw.cast<String, dynamic>();
-        final candidates = <String>{
-          item['canonicalEntityId']?.toString().trim() ?? '',
-          item['homepageId']?.toString().trim() ?? '',
-          item['id']?.toString().trim() ?? '',
-          item['title']?.toString().trim() ?? '',
-        }..removeWhere((item) => item.isEmpty);
-        if (candidates.contains(normalized)) {
-          final homepageId = item['homepageId']?.toString() ?? '';
-          if (homepageId.isNotEmpty) {
-            return homepageId;
-          }
-        }
-      }
-    }
-    if (allowDirectHomepageId && !normalized.startsWith('entity:')) {
-      return normalized;
-    }
-    return null;
   }
 
   bool _showsCaptionOverlay(PostBaseDto post) {
@@ -1566,6 +1482,9 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   ImmersiveViewerStageLayoutSpec _engagementLayoutSpecForPost(
     PostBaseDto post,
   ) {
+    if (_isArticleLikePost(post)) {
+      return ImmersiveViewerStageLayoutSpec.articleStage;
+    }
     if (_isTextOnlyMomentPost(post)) {
       return ImmersiveViewerStageLayoutSpec.textStage;
     }
@@ -1614,10 +1533,43 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
 
   // ── 交集（推荐解释层）────────────────────────────────────────
 
+  IntersectionTarget _postIntersectionContextTarget(PostBaseDto post) {
+    return IntersectionTarget(
+      objectType: 'post',
+      objectId: post.id,
+      objectKind: 'content',
+      routeId: 'workBrowser',
+    );
+  }
+
+  bool _sameIntersectionTarget(
+    IntersectionTarget? left,
+    IntersectionTarget? right,
+  ) {
+    if (left == null || right == null) {
+      return false;
+    }
+    final leftId = left.objectId.trim();
+    final rightId = right.objectId.trim();
+    if (leftId.isEmpty || rightId.isEmpty || leftId != rightId) {
+      return false;
+    }
+    final leftType = left.objectType.trim();
+    final rightType = right.objectType.trim();
+    if (leftType.isNotEmpty && rightType.isNotEmpty && leftType != rightType) {
+      return false;
+    }
+    return true;
+  }
+
   IntersectionReason? _primaryIntersectionReasonFor(PostBaseDto post) {
     final reasons = post.intersectionReasons ?? const <IntersectionReason>[];
+    final contextTarget = _postIntersectionContextTarget(post);
     for (final reason in reasons) {
-      final displayReason = displayReadyIntersectionReason(reason);
+      final displayReason = displayReadyIntersectionReason(
+        reason,
+        contextObjectTarget: contextTarget,
+      );
       if (displayReason != null) {
         return displayReason;
       }
@@ -1633,6 +1585,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
       context: context,
       builder: (sheetContext) => _WorksIntersectionDetailSheet(
         reasons: reasons,
+        contextObjectTarget: _postIntersectionContextTarget(post),
         onAskAssistant: () {
           unawaited(
             dismissAppModalAndRun(
@@ -1733,12 +1686,17 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         );
       },
     );
-    if (navigator.open(
-      context,
-      IntersectionTargetNavigator.targetForReason(reason),
-      sourceRef: reason.source,
-      attribution: _intersectionNavAttribution(reason),
-    )) {
+    final reasonTarget = IntersectionTargetNavigator.targetForReason(reason);
+    if (!_sameIntersectionTarget(
+          reasonTarget,
+          _postIntersectionContextTarget(post),
+        ) &&
+        navigator.open(
+          context,
+          reasonTarget,
+          sourceRef: reason.source,
+          attribution: _intersectionNavAttribution(reason),
+        )) {
       return;
     }
     for (final visual in reason.sampleVisuals) {
@@ -1756,6 +1714,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         navigator.open(
           context,
           IntersectionTarget(
+            objectType: 'dimension',
             objectId: dimension,
             objectKind: 'tag',
             routeId: 'myIntersections',
@@ -1965,7 +1924,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     final startedAt = DateTime.now();
     try {
       final detail = await ref
-          .read(contentRepositoryProvider)
+          .read(workBrowserContentPostDetailReaderProvider)
           .getPost(postId: post.id);
       applyConfirmedInteractionPost(ref, detail.post);
       if (!mounted) {
@@ -2279,7 +2238,6 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
               fallback: commentSplitPost.shareCount,
             ),
             isLiked: interaction.isLiked(splitPostId),
-            isShared: interaction.isShared(splitPostId),
             onLikeTap: () => _onLike(commentSplitPost),
             onShareTap: () => _sharePost(
               context,
@@ -2581,7 +2539,8 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                   bottom: _worksContentIntersectionBottomClearance(context),
                   child: ImmersiveViewerLayout.alignToRail(
                     context: context,
-                    layoutSpec: currentLayoutSpec,
+                    layoutSpec: currentEngagementLayoutSpec,
+                    includeBottomSafeSideInset: true,
                     child: SizedBox(
                       key: const ValueKey<String>(
                         'works-caption-intersection-reason',
@@ -2594,6 +2553,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                             ? currentPost.normalizedTitle.trim()
                             : currentPost.normalizedBody.trim(),
                         contextObjectTarget: IntersectionTarget(
+                          objectType: 'post',
                           objectId: currentPost.id,
                           objectKind: 'content',
                           routeId: 'workBrowser',
@@ -2773,6 +2733,19 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         onImageChanged: (index) =>
             setState(() => _photoInnerIndex[post.id] = index),
         onPageflipMotion: (event) => _trackImagePageflipMotion(post, event),
+        onMediaLoad: (event) {
+          ref
+              .read(pageLifecycleObservabilityProvider)
+              .recordMediaLoad(
+                mediaType: 'image',
+                result: event.result,
+                pageName: 'works_image_book',
+                copyKey: event.result == 'failure' ? 'imageLoadFailed' : null,
+                error: event.error,
+                durationMs: event.durationMs,
+                candidatesTried: event.candidatesTried,
+              );
+        },
         onOverflowPrevious: null,
         onOverflowNext: null,
       );
@@ -2827,7 +2800,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         onPageFlipCommitted: (event) =>
             _trackArticlePageFlipCommit(post, event),
         onPageCurlAborted: (event) => _trackArticlePageCurlAbort(post, event),
-        onEntityTap: _handleArticleInlineMentionTap,
+        onEntityTap: (span) => _handleArticleInlineMentionTap(post, span),
         gestureIntentController: _gestureIntentController,
         onOverflowPrevious: null,
         onOverflowNext: null,

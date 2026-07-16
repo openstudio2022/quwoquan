@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_action_hint.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_visual.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
@@ -28,6 +29,7 @@ class ObjectIntersectionSection extends ConsumerWidget {
     required this.title,
     required this.isDark,
     this.emptyText,
+    this.emptyKey,
     this.bottomPadding = 0,
     this.onReasonTap,
   });
@@ -38,6 +40,7 @@ class ObjectIntersectionSection extends ConsumerWidget {
   final String title;
   final bool isDark;
   final String? emptyText;
+  final Key? emptyKey;
   final double bottomPadding;
   final void Function(IntersectionReason reason)? onReasonTap;
 
@@ -46,13 +49,21 @@ class ObjectIntersectionSection extends ConsumerWidget {
     if (!query.isResolvable) {
       return const SizedBox.shrink();
     }
+    final displayConfig = ref.watch(intersectionDisplayConfigProvider);
+    final intent = ref.watch(intersectionHighlightIntentProvider);
     final async = ref.watch(objectSharedReasonsProvider(query));
 
     final Widget body = async.when(
       loading: () => ObjectIntersectionCardSkeleton(isDark: isDark),
       // error 时收起：交集是增强位，不以错误噪声打断对象页主体验。
       error: (_, _) => const SizedBox.shrink(),
-      data: (reasons) => _buildCard(context, ref, reasons),
+      data: (reasons) => _buildCard(
+        context,
+        ref,
+        reasons,
+        inlineExpandCount: displayConfig.inlineExpandCount,
+        intent: intent,
+      ),
     );
     if (body is SizedBox) return body;
     return Padding(
@@ -65,9 +76,10 @@ class ObjectIntersectionSection extends ConsumerWidget {
   Widget _buildCard(
     BuildContext context,
     WidgetRef ref,
-    List<IntersectionReason> reasons,
-  ) {
-    final intent = ref.watch(intersectionHighlightIntentProvider);
+    List<IntersectionReason> reasons, {
+    required int inlineExpandCount,
+    required IntersectionHighlightIntent? intent,
+  }) {
     final highlightKind = (intent != null && intent.objectId == query.objectBId)
         ? intent.kind
         : null;
@@ -80,13 +92,13 @@ class ObjectIntersectionSection extends ConsumerWidget {
         }
       });
     }
+    final contextObjectTarget = _contextObjectTarget;
     final card = ObjectIntersectionCard.fromReasons(
       title: title,
       reasons: reasons,
       isDark: isDark,
-      inlineExpandCount: ref
-          .watch(intersectionDisplayConfigProvider)
-          .inlineExpandCount,
+      contextObjectTarget: contextObjectTarget,
+      inlineExpandCount: inlineExpandCount,
       moreLabel: DiscoveryFeedText.intersectionViewAll,
       highlightKind: highlightKind,
       onMoreTap: () => context.push(
@@ -140,13 +152,85 @@ class ObjectIntersectionSection extends ConsumerWidget {
     return card ?? _buildEmptyActionZone(context);
   }
 
+  IntersectionTarget get _contextObjectTarget {
+    final objectType = _normalizedObjectType(query.objectBType);
+    return IntersectionTarget(
+      objectType: objectType,
+      objectId: query.objectBId,
+      objectKind: _objectKindForObjectType(objectType),
+      routeId: _routeIdForObjectType(objectType),
+    );
+  }
+
+  static String _normalizedObjectType(String raw) {
+    switch (raw.trim()) {
+      case 'user':
+        return 'user';
+      case 'circle':
+        return 'circle';
+      case 'entity':
+      case 'homepage':
+        return 'homepage';
+      default:
+        return raw.trim();
+    }
+  }
+
+  static String _objectKindForObjectType(String objectType) {
+    switch (objectType) {
+      case 'user':
+        return 'person';
+      case 'circle':
+        return 'circle';
+      case 'homepage':
+        return 'place';
+      default:
+        return '';
+    }
+  }
+
+  static String _routeIdForObjectType(String objectType) {
+    switch (objectType) {
+      case 'user':
+        return 'userProfile';
+      case 'circle':
+        return 'circleDetail';
+      case 'homepage':
+        return 'homepageDetail';
+      default:
+        return '';
+    }
+  }
+
+  static bool _sameIntersectionTarget(
+    IntersectionTarget? left,
+    IntersectionTarget? right,
+  ) {
+    if (left == null || right == null) {
+      return false;
+    }
+    final leftId = left.objectId.trim();
+    final rightId = right.objectId.trim();
+    if (leftId.isEmpty || rightId.isEmpty || leftId != rightId) {
+      return false;
+    }
+    final leftType = left.objectType.trim();
+    final rightType = right.objectType.trim();
+    if (leftType.isNotEmpty && rightType.isNotEmpty && leftType != rightType) {
+      return false;
+    }
+    return true;
+  }
+
   /// 无交集事实时仍保留行动区占位，引导用户用真实互动生成可解释交集。
   Widget _buildEmptyActionZone(BuildContext context) {
     final message = emptyText?.trim().isNotEmpty == true
         ? emptyText!.trim()
         : UITextConstants.objectIntersectionsEmpty;
     return Container(
-      key: const ValueKey<String>('object-intersection-empty-action-zone'),
+      key:
+          emptyKey ??
+          const ValueKey<String>('object-intersection-empty-action-zone'),
       width: double.infinity,
       padding: EdgeInsets.all(AppSpacing.containerSm),
       decoration: BoxDecoration(
@@ -193,9 +277,13 @@ class ObjectIntersectionSection extends ConsumerWidget {
   void _openReasonTarget(BuildContext context, IntersectionReason reason) {
     // 统一导航器：reason 归一 target → codegen 路由下钻；
     // actionTargetId 缺省 / 不可路由时 open 返回 false 静默不跳（优雅降级）。
+    final target = IntersectionTargetNavigator.targetForReason(reason);
+    if (_sameIntersectionTarget(target, _contextObjectTarget)) {
+      return;
+    }
     const IntersectionTargetNavigator().open(
       context,
-      IntersectionTargetNavigator.targetForReason(reason),
+      target,
       sourceRef: reason.source,
       attribution: _attributionFor(reason),
     );

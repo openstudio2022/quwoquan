@@ -1,13 +1,27 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/contact_home_row_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
+import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/links/app_public_content_links.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
+import 'package:quwoquan_app/ui/content/share/content_circle_share_picker_route.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_actions.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_sheet.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_template.dart';
+import 'package:quwoquan_app/ui/share/forward_external_share_service.dart';
+import 'package:quwoquan_app/ui/share/forward_share_models.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 class _FakeShareActionHandler implements ContentShareActionHandler {
   final List<String> executed = <String>[];
@@ -54,7 +68,6 @@ void main() {
       ),
       enableIdentityTemplate: true,
       visibility: 'public',
-      circleNames: const ['晨拍圈'],
     );
 
     await tester.pumpWidget(
@@ -72,8 +85,16 @@ void main() {
     expect(find.text(UITextConstants.shareTemplateMomentTitle), findsOneWidget);
     expect(find.text(UITextConstants.copyLink), findsOneWidget);
     expect(find.text(UITextConstants.shareActionSavePoster), findsOneWidget);
-    expect(find.text(UITextConstants.shareActionSystemShare), findsOneWidget);
-    expect(find.textContaining('晨拍圈'), findsOneWidget);
+    expect(find.text(UITextConstants.shareInternalTitle), findsOneWidget);
+    expect(find.text(UITextConstants.shareTargetCircle), findsOneWidget);
+    expect(find.text(UITextConstants.shareTargetGroup), findsOneWidget);
+    expect(find.text(UITextConstants.shareTargetMessage), findsOneWidget);
+    expect(find.text(UITextConstants.shareExternalTitle), findsOneWidget);
+    expect(find.text(UITextConstants.shareActionMore), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('content-share-close-button')),
+      findsOneWidget,
+    );
     expect(find.textContaining('2026-03-12'), findsOneWidget);
   });
 
@@ -124,6 +145,39 @@ void main() {
 
     expect(handler.executed, equals(<String>['copy_link']));
     expect(completed, equals(<String>['copy_link']));
+  });
+
+  testWidgets('最近聊天加载失败只降级对应分区并保留全部分享入口', (tester) async {
+    var retryCount = 0;
+    final recentRecipients = Completer<List<AppForwardRecipient>>();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ContentShareSheet(
+            template: _publicTemplate('share_recent_error'),
+            recentRecipients: recentRecipients.future,
+            onRecentRecipientsRetry: () => retryCount += 1,
+          ),
+        ),
+      ),
+    );
+    recentRecipients.completeError(
+      StateError('recent conversations unavailable'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(UITextConstants.sectionLoadFailedTitleDefault),
+      findsOneWidget,
+    );
+    expect(find.text(UITextConstants.shareTargetCircle), findsOneWidget);
+    expect(find.text(UITextConstants.shareTargetGroup), findsOneWidget);
+    expect(find.text(UITextConstants.shareTargetMessage), findsOneWidget);
+    expect(find.text(UITextConstants.shareExternalTitle), findsOneWidget);
+
+    await tester.tap(find.text(UITextConstants.tryAgain));
+    await tester.pump();
+    expect(retryCount, 1);
   });
 
   testWidgets('默认复制链接动作会写入剪贴板', (tester) async {
@@ -199,7 +253,7 @@ void main() {
     await tester.pump();
   });
 
-  testWidgets('作品圈内可见分享生成受控链接并保留标签', (tester) async {
+  testWidgets('作品公开分享生成标准链接并保留标签', (tester) async {
     final template = ContentShareTemplateBuilder.build(
       surfaceView: ContentSurfaceViewMapper.fromDto(
         ArticlePostDto(
@@ -229,7 +283,7 @@ void main() {
         },
       ),
       enableIdentityTemplate: true,
-      visibility: 'circle-visible',
+      visibility: 'public',
     );
 
     await tester.pumpWidget(
@@ -239,7 +293,7 @@ void main() {
     );
 
     expect(template.profileId, 'work');
-    expect(template.deeplink, 'quwoquan://content/post/work_1?scope=circle');
+    expect(template.deeplink, 'quwoquan://content/post/work_1');
     expect(
       template.landingUrl,
       startsWith(AppPublicContentLinks.postWebUrl('work_1')),
@@ -247,7 +301,7 @@ void main() {
     expect(find.text(UITextConstants.shareTemplateWorkTitle), findsOneWidget);
     expect(
       find.text(UITextConstants.shareCircleVisibilityNotice),
-      findsOneWidget,
+      findsNothing,
     );
     expect(find.textContaining('#攻略 #夜景'), findsOneWidget);
   });
@@ -338,4 +392,431 @@ void main() {
     expect(find.text(UITextConstants.copyLink), findsOneWidget);
     expect(find.text(UITextConstants.shareActionSavePoster), findsOneWidget);
   });
+
+  testWidgets('内容分享面板的群聊入口只展示群会话', (tester) async {
+    final chat = _ContentShareChatRepository();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          chatRepositoryProvider.overrideWithValue(chat),
+          authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
+        ],
+        child: MaterialApp(
+          home: Builder(
+            builder: (context) => ElevatedButton(
+              onPressed: () => ContentShareSheet.show(
+                context,
+                template: _publicTemplate('share_group_picker'),
+              ),
+              child: const Text('open-connected-share'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('open-connected-share'));
+    await tester.pumpAndSettle();
+    expect(find.text(UITextConstants.shareInternalTitle), findsOneWidget);
+    expect(find.text('最近私信'), findsOneWidget);
+    expect(find.text('最近群聊'), findsOneWidget);
+
+    await tester.tap(find.text(UITextConstants.shareTargetGroup));
+    await tester.pumpAndSettle();
+
+    expect(find.text(UITextConstants.shareSelectGroupTitle), findsOneWidget);
+    expect(find.text('最近群聊'), findsOneWidget);
+    expect(find.text('最近私信'), findsNothing);
+  });
+
+  testWidgets('内容分享面板的微信入口复用定向分享服务', (tester) async {
+    final chat = _ContentShareChatRepository();
+    final external = _RecordingExternalShareService();
+    final outboundShares = _RecordingOutboundShareWriter();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          chatRepositoryProvider.overrideWithValue(chat),
+          forwardExternalShareServiceProvider.overrideWithValue(external),
+        ],
+        child: MaterialApp(
+          home: Builder(
+            builder: (context) => ElevatedButton(
+              onPressed: () => ContentShareSheet.show(
+                context,
+                template: _publicTemplate('share_wechat'),
+                outboundShareWriter: outboundShares,
+              ),
+              child: const Text('open-wechat-share'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('open-wechat-share'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.text(UITextConstants.forwardActionWechatFriend),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(UITextConstants.forwardActionWechatFriend));
+    await tester.pump();
+
+    expect(external.targets, <ForwardExternalShareTarget>[
+      ForwardExternalShareTarget.wechatFriend,
+    ]);
+    expect(outboundShares.lastCommand, isNull);
+    await tester.pump(const Duration(seconds: 4));
+  });
+
+  testWidgets('仅微信 completed 回执追加 OutboundShareFact', (tester) async {
+    final chat = _ContentShareChatRepository();
+    final external = _RecordingExternalShareService(
+      delivery: ForwardExternalShareDelivery.wechatCompleted,
+      requestId: 'wechat-provider-receipt-1',
+    );
+    final outboundShares = _RecordingOutboundShareWriter();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          chatRepositoryProvider.overrideWithValue(chat),
+          forwardExternalShareServiceProvider.overrideWithValue(external),
+        ],
+        child: MaterialApp(
+          home: Builder(
+            builder: (context) => ElevatedButton(
+              onPressed: () => ContentShareSheet.show(
+                context,
+                template: _publicTemplate('share_wechat_completed'),
+                outboundShareWriter: outboundShares,
+              ),
+              child: const Text('open-completed-share'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('open-completed-share'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.text(UITextConstants.forwardActionWechatFriend),
+    );
+    await tester.tap(find.text(UITextConstants.forwardActionWechatFriend));
+    await tester.pump();
+
+    expect(outboundShares.lastCommand?.postId, 'share_wechat_completed');
+    expect(outboundShares.lastCommand?.channel, 'wechat_friend');
+    expect(outboundShares.lastCommand?.destinationKind, 'external_app');
+    expect(outboundShares.lastCommand?.destination, 'wechatFriend');
+    expect(
+      outboundShares.lastCommand?.providerReceiptId,
+      'wechat-provider-receipt-1',
+    );
+    expect(outboundShares.lastCommand?.referralId, isNotEmpty);
+    await tester.pump(const Duration(seconds: 4));
+  });
+
+  testWidgets('外部分享异常保留面板上下文并提供动作级重试', (tester) async {
+    final chat = _ContentShareChatRepository();
+    final external = _ThrowingExternalShareService();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          chatRepositoryProvider.overrideWithValue(chat),
+          forwardExternalShareServiceProvider.overrideWithValue(external),
+        ],
+        child: MaterialApp(
+          home: Builder(
+            builder: (context) => ElevatedButton(
+              onPressed: () => ContentShareSheet.show(
+                context,
+                template: _publicTemplate('share_external_error'),
+              ),
+              child: const Text('open-failing-share'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('open-failing-share'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.text(UITextConstants.forwardActionWechatFriend),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(UITextConstants.forwardActionWechatFriend));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(find.text(UITextConstants.submitNotCompleted), findsOneWidget);
+    expect(find.text(UITextConstants.tryAgain), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('content-share-panel')),
+      findsOneWidget,
+    );
+    expect(external.callCount, 1);
+  });
+
+  testWidgets('选择圈子后调用强类型 PlaceCirclePost 命令', (tester) async {
+    final circle = CircleDto(
+      id: 'circle_share_target',
+      name: '摄影同好圈',
+      description: '分享影像与摄影经验',
+      ownerId: 'owner_share',
+      createdAt: DateTime.utc(2026, 7, 14),
+      updatedAt: DateTime.utc(2026, 7, 14),
+    );
+    final membershipQuery = _CircleMembershipQuery(<CircleDto>[circle]);
+    final placementWriter = _RecordingCirclePostPlacementWriter();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          resolvedOwnerUserIdProvider.overrideWithValue('owner_share'),
+          activePersonaContextProvider.overrideWith(
+            (ref) async => ActivePersonaContextViewData.fallback(
+              subAccountId: 'persona_share',
+              ownerUserId: 'owner_share',
+              displayName: '分享测试分身',
+              avatarUrl: '',
+              personaContextVersion: 'ctx_share',
+            ),
+          ),
+        ],
+        child: MaterialApp(
+          home: Builder(
+            builder: (context) => ElevatedButton(
+              onPressed: () => Navigator.of(context).push<bool>(
+                MaterialPageRoute<bool>(
+                  builder: (_) => ContentCircleSharePickerRoute(
+                    postId: 'post_share_target',
+                    placementWriter: placementWriter,
+                    membershipQuery: membershipQuery,
+                  ),
+                ),
+              ),
+              child: const Text('open-circle-picker'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('open-circle-picker'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('摄影同好圈'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text(UITextConstants.shareCircleConfirmTitle('摄影同好圈')),
+      findsOneWidget,
+    );
+    await tester.tap(find.text(UITextConstants.confirm));
+    await tester.pumpAndSettle();
+
+    expect(placementWriter.lastCommand?.postId, 'post_share_target');
+    expect(placementWriter.lastCommand?.circleId, 'circle_share_target');
+    await tester.pump(const Duration(seconds: 4));
+  });
+}
+
+ContentShareTemplate _publicTemplate(String postId) {
+  return ContentShareTemplateBuilder.build(
+    surfaceView: ContentSurfaceViewMapper.fromDto(
+      MicroPostDto(
+        id: postId,
+        type: 'micro',
+        identity: 'moment',
+        assistantUsePolicy: 'inherit',
+        authorId: 'share_author',
+        displayName: '分享作者',
+        avatarUrl: '',
+        authorRoleLabel: '',
+        authorIdentityTags: const <String>[],
+        authorVerified: false,
+        body: '值得分享的内容',
+        imageUrls: const <String>[],
+        likeCount: 0,
+        commentCount: 0,
+        shareCount: 0,
+        createdAt: DateTime.utc(2026, 7, 14),
+      ),
+    ),
+    enableIdentityTemplate: true,
+  );
+}
+
+final class _CircleMembershipQuery implements CircleMembershipQuery {
+  const _CircleMembershipQuery(this.circles);
+
+  final List<CircleDto> circles;
+
+  @override
+  Future<CircleMembershipSlice> getMyMembership(
+    MyCircleMembershipQuery query,
+  ) => throw UnimplementedError();
+
+  @override
+  Future<CircleMembershipPageSlice> listMemberships(
+    CircleMembershipListQuery query,
+  ) async => const CircleMembershipPageSlice(items: <CircleMembershipSlice>[]);
+
+  @override
+  Future<PersonaCirclePageSlice> listPersonaCircles(
+    PersonaCircleListQuery query,
+  ) async => PersonaCirclePageSlice(
+    items: circles
+        .take(query.limit)
+        .map(
+          (circle) => PersonaCircleSummary(
+            circleId: circle.id,
+            name: circle.name,
+            description: circle.description ?? '',
+            coverUrl: circle.coverUrl ?? '',
+            iconUrl: circle.iconUrl ?? '',
+            ownerPersonaId: circle.ownerId,
+            ownerDisplayNameSnapshot: '',
+            category: circle.category ?? '',
+            subCategory: circle.subCategory ?? '',
+            tags: circle.tags,
+            memberCount: circle.memberCount,
+            postCount: circle.postCount,
+            weeklyActiveCount: circle.weeklyActiveCount,
+            state: circle.status,
+            visibility: circle.visibility,
+            joinPolicy: circle.joinPolicy,
+            kind: circle.kind,
+            displaySubjectType: circle.displaySubjectType,
+            followEnabled: circle.followEnabled,
+            defaultPublicGroupId: circle.defaultPublicGroupId ?? '',
+            linkedHomepageId: '',
+            linkedHomepageType: '',
+            linkedHomepageTitle: '',
+            createdAt: circle.createdAt,
+            updatedAt: circle.updatedAt,
+          ),
+        )
+        .toList(growable: false),
+  );
+}
+
+class _ContentShareChatRepository extends MockChatRepository {
+  @override
+  Future<List<ChatInboxDto>> listConversations({
+    String? cursor,
+    int limit = 500,
+  }) async {
+    return <ChatInboxDto>[
+      ChatInboxDto(
+        id: 'direct_share',
+        type: 'direct',
+        title: '最近私信',
+        lastMessageTime: DateTime.utc(2026, 7, 14, 10),
+      ),
+      ChatInboxDto(
+        id: 'group_share',
+        type: 'group',
+        title: '最近群聊',
+        lastMessageTime: DateTime.utc(2026, 7, 14, 11),
+      ),
+    ];
+  }
+
+  @override
+  Future<List<ContactHomeRowDto>> listContactHome({
+    String filter = 'all',
+    String? cursor,
+    int limit = 500,
+  }) async {
+    return const <ContactHomeRowDto>[];
+  }
+}
+
+class _RecordingExternalShareService implements ForwardExternalShareService {
+  _RecordingExternalShareService({
+    this.delivery = ForwardExternalShareDelivery.wechatAccepted,
+    this.requestId = '',
+  });
+
+  final ForwardExternalShareDelivery delivery;
+  final String requestId;
+  final List<ForwardExternalShareTarget> targets =
+      <ForwardExternalShareTarget>[];
+
+  @override
+  Future<ForwardExternalShareResult> share({
+    required AppForwardPayload payload,
+    required ForwardExternalShareTarget target,
+  }) async {
+    targets.add(target);
+    return ForwardExternalShareResult(
+      target: target,
+      delivery: delivery,
+      requestId: requestId,
+    );
+  }
+}
+
+class _ThrowingExternalShareService implements ForwardExternalShareService {
+  int callCount = 0;
+
+  @override
+  Future<ForwardExternalShareResult> share({
+    required AppForwardPayload payload,
+    required ForwardExternalShareTarget target,
+  }) async {
+    callCount += 1;
+    throw StateError('external share unavailable');
+  }
+}
+
+class _RecordingCirclePostPlacementWriter
+    implements CirclePostPlacementCommandWriter {
+  PlaceCirclePostCommand? lastCommand;
+
+  @override
+  Future<CirclePostPlacementCommandResult> placePost(
+    PlaceCirclePostCommand command,
+  ) async {
+    lastCommand = command;
+    return const CirclePostPlacementCommandResult(
+      placementId: 'placement-share-target',
+      version: 1,
+      state: 'active',
+      idempotentReplay: false,
+    );
+  }
+}
+
+class _RecordingOutboundShareWriter
+    implements ContentOutboundShareAppendWriter {
+  CreateContentOutboundShareCommand? lastCommand;
+
+  @override
+  Future<ContentOutboundShareFactResult> appendOutboundShare(
+    CreateContentOutboundShareCommand command,
+  ) async {
+    lastCommand = command;
+    return ContentOutboundShareFactResult(
+      eventId: 'outbound-share-event-1',
+      postId: command.postId,
+      channel: command.channel,
+      referralId: command.referralId,
+      occurredAt: command.clientConfirmedAt,
+      replayed: false,
+    );
+  }
+}
+
+class _AuthenticatedSession extends AuthSessionController {
+  @override
+  AuthSessionState build() {
+    return const AuthSessionState(
+      status: AuthSessionStatus.authenticated,
+      accessToken: 'share-test-token',
+      activeSubAccountId: 'share_persona',
+      ownerId: 'share_owner',
+    );
+  }
 }

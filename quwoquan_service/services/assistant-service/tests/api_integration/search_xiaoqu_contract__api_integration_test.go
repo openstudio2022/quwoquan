@@ -7,24 +7,18 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	rtredis "quwoquan_service/runtime/redis"
 	assistanthttp "quwoquan_service/services/assistant-service/internal/adapters/http"
-	"quwoquan_service/services/assistant-service/internal/application"
-	"quwoquan_service/services/assistant-service/internal/infrastructure/persistence"
 )
 
 func TestSearchXiaoquContractApiIntegration(t *testing.T) {
-	service := application.NewAssistantService(
-		persistence.NewMemoryEventStore(),
-		persistence.NewMemoryConsentStore(),
-		rtredis.NewMemoryClient(),
-	)
+	resetIntegrationState(t)
+	service := newIntegrationAssistantService()
 	handler := assistanthttp.NewHandler(service).Routes()
 
 	payload, err := json.Marshal(map[string]any{
-		"userQuery":       "四川露营攻略",
-		"searchIntensity": "balanced",
-		"sourceSurfaceId": "assistant_dialog",
+		"userQuery":        "四川露营攻略",
+		"searchIntensity":  "balanced",
+		"sourceSurfaceId":  "assistant_dialog",
 		"fromGlobalSearch": true,
 	})
 	if err != nil {

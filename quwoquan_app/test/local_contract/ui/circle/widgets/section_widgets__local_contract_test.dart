@@ -6,12 +6,15 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/article_post_dto.g.
 import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/models/circle_detail_payload.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
+import 'package:quwoquan_app/components/post/post_preview_list_tile.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_state_provider.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_creations.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_chat.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_storage.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_interaction.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 Widget _wrap(
   Widget child, {
@@ -22,6 +25,10 @@ Widget _wrap(
     circleRepositoryProvider.overrideWithValue(
       repository ?? MockCircleRepository(),
     ),
+    circleDetailFileCommandWriterProvider.overrideWithValue(
+      _CircleFileFixture(),
+    ),
+    circleDetailFileQueryProvider.overrideWithValue(_CircleFileFixture()),
   ],
   child: MaterialApp.router(
     builder: (context, childWidget) {
@@ -69,9 +76,7 @@ void main() {
       expect(find.byType(SectionCreations), findsOneWidget);
       // 二级过滤改回横向胶囊条：全部子页签直接平铺可见（默认「全部」选中）。
       expect(
-        find.byKey(
-          const ValueKey<String>('circle-creations-filter-bar'),
-        ),
+        find.byKey(const ValueKey<String>('circle-creations-filter-bar')),
         findsOneWidget,
       );
       expect(
@@ -156,6 +161,7 @@ void main() {
     });
 
     testWidgets('owner 模式可切换列表视图', (tester) async {
+      final repository = _ArticleFixtureCircleRepository();
       await tester.pumpWidget(
         _wrap(
           const SizedBox(
@@ -166,6 +172,7 @@ void main() {
               role: CircleRole.owner,
             ),
           ),
+          repository: repository,
         ),
       );
       await tester.pumpAndSettle();
@@ -173,7 +180,7 @@ void main() {
       await tester.tap(find.byTooltip('列表视图'));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('赞 '), findsWidgets);
+      expect(find.byType(PostPreviewListTile), findsWidgets);
     });
 
     testWidgets('窄屏大字号下网格卡片不溢出', (tester) async {
@@ -246,10 +253,7 @@ void main() {
         ),
         findsOneWidget,
       );
-      await tester.drag(
-        find.byType(Scrollable).first,
-        const Offset(0, -320),
-      );
+      await tester.drag(find.byType(Scrollable).first, const Offset(0, -320));
       await tester.pumpAndSettle();
       expect(
         find.byKey(
@@ -301,8 +305,9 @@ void main() {
           ),
         ),
       );
-      await tester.pump();
+      await tester.pumpAndSettle();
       expect(find.byType(SectionStorage), findsOneWidget);
+      expect(find.text('真实契约文件.pdf'), findsOneWidget);
     });
 
     testWidgets('空数据安全渲染', (tester) async {
@@ -316,8 +321,9 @@ void main() {
           ),
         ),
       );
-      await tester.pump();
+      await tester.pumpAndSettle();
       expect(find.byType(SectionStorage), findsOneWidget);
+      expect(find.text(UITextConstants.noData), findsOneWidget);
     });
   });
 
@@ -340,6 +346,52 @@ void main() {
       expect(find.byType(SectionInteraction), findsOneWidget);
     });
   });
+}
+
+final class _CircleFileFixture
+    implements CircleFileCommandWriter, CircleFileQueryReader {
+  @override
+  Future<CircleFileCommandResult> create(CreateCircleFileCommand command) =>
+      throw UnimplementedError();
+
+  @override
+  Future<CircleFileCommandResult> delete(DeleteCircleFileCommand command) =>
+      throw UnimplementedError();
+
+  @override
+  Future<CircleFileSlice> get(CircleFileQuery query) =>
+      throw UnimplementedError();
+
+  @override
+  Future<CircleFilePageSlice> list(CircleFileListQuery query) async {
+    if (query.circleId == 'empty') {
+      return const CircleFilePageSlice(items: <CircleFileSlice>[]);
+    }
+    return CircleFilePageSlice(
+      items: <CircleFileSlice>[
+        CircleFileSlice(
+          fileId: 'file-1',
+          version: 1,
+          circleId: query.circleId,
+          groupId: null,
+          parentFolderId: query.parentFolderId,
+          name: '真实契约文件.pdf',
+          fileType: CircleFileType.file,
+          assetId: 'asset-1',
+          mimeType: 'application/pdf',
+          sizeBytes: 1024,
+          uploaderPersonaId: 'persona-1',
+          status: CircleFileStatus.active,
+          createdAt: DateTime.utc(2026, 7, 14),
+          updatedAt: DateTime.utc(2026, 7, 14),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Future<CircleFileCommandResult> update(UpdateCircleFileCommand command) =>
+      throw UnimplementedError();
 }
 
 class _ArticleFixtureCircleRepository extends MockCircleRepository {

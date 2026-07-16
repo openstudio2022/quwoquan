@@ -28,7 +28,7 @@ scenarios:
     patrol_flow: test/user_acceptance/patrol/discovery/feed_load__user_acceptance_test.dart
     actors:
       app: lib/ui/discovery/pages/discovery_page.dart
-      gateway: /v1/orch/discovery/feed
+      gateway: /v1/content/feed
       service: content-service GET /v1/content/feed
       storage: MongoDB rm_discovery_feed collection
     steps:
@@ -40,7 +40,7 @@ scenarios:
       - app renders waterfall grid
     assertions:
       - response_items match photo_post.yaml projection schema
-      - all items: aspectRatio computed correctly from width/height
+      - "all items: aspectRatio computed correctly from width/height"
       - app renders cards within 300ms of response
       - no hardcoded contentType strings in request path
       - ContentUIConfig.discoveryTabs[0].contentType used for request
@@ -55,20 +55,22 @@ scenarios:
     actors:
       app: post card like button
       service: content-service POST /v1/content/posts/{postId}/like
-      storage: MongoDB content_reactions + Redis counter
+      storage: MongoDB content_reaction_aggregates + command receipt + outbox + Post.likeCount projection
     steps:
       - user taps like button
       - app optimistically increments like count (ContentUIConfig.interaction_config.like.optimistic_update=true)
       - app calls POST /v1/content/posts/{postId}/like
-      - service upserts ContentReaction + INCR Redis counter
-      - service returns updated likeCount
-      - app reconciles optimistic state with server response
+      - service commits ContentReaction + receipt + outbox in one Mongo transaction
+      - durable projection relay recomputes Post.likeCount from active relationships
+      - service returns typed reactionId/version/liked/changed/replayed result
+      - app reconciles optimistic state through the authoritative counter projection
     assertions:
       - likeCount incremented by 1 in UI within 50ms (optimistic)
-      - server likeCount matches after response received
-      - second like tap: idempotent, no double increment
-      - on 429 response: UI shows ContentErrorMessages.zh[rateLimited]
-      - on 429 response: optimistic update rolled back
+      - Post.likeCount converges after the durable projection checkpoint advances
+      - "second like tap: idempotent, no double increment"
+      - duplicate idempotency key writes no second outbox fact
+      - "on 429 response: UI shows ContentErrorMessages.zh[rateLimited]"
+      - "on 429 response: optimistic update rolled back"
 
   - name: behavior_batch_report_reaches_service
     description: 行为事件批量上报从端侧到达服务
@@ -93,7 +95,7 @@ scenarios:
     test_type: api_contract
     # 协议层/语义层由 L3 api_contract 覆盖；UI 渲染层（empty_state）由对应 ui_journey 覆盖
     steps:
-      - service returns { code: "CONTENT.USER.post_not_found", userMessage: "..." }
+      - 'service returns { code: "CONTENT.USER.post_not_found", userMessage: "..." }'
       - app receives 404 response
     assertions:
       - CloudErrorMapper maps to ContentErrorCode.postNotFound
@@ -137,10 +139,10 @@ scenarios:
     steps:
       - user uploads media
       - user immediately tries to publish before media is ready
-      - service returns { code: "CONTENT.USER.media_not_ready" }
+      - 'service returns { code: "CONTENT.USER.media_not_ready" }'
     assertions:
       - UI shows ContentErrorMessages.zh[mediaNotReady] == "媒体文件正在处理中，请稍后发布"
-      - recovery_action: retry → UI shows retry option
+      - "recovery_action: retry → UI shows retry option"
 
   - name: comment_on_post_journey
     description: 评论内容旅程：发表评论 → 评论数更新 → 行为信号到达推荐服务
@@ -163,4 +165,4 @@ scenarios:
       - commentCount in post header incremented by 1
       - event CommentCreated published with correct payload
       - behavior signal NOT in batch queue (dedicated route)
-      - on CONTENT.USER.rate_limited: error toast shown + input re-enabled
+      - "on CONTENT.USER.rate_limited: error toast shown + input re-enabled"

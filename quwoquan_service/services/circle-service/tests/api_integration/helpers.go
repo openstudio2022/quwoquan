@@ -85,3 +85,26 @@ func createTestCircle(t *testing.T, name string) string {
 	data := body["data"].(map[string]any)
 	return data["_id"].(string)
 }
+
+func toInt64(value any) int64 {
+	switch number := value.(type) {
+	case int64:
+		return number
+	case int32:
+		return int64(number)
+	case float64:
+		return int64(number)
+	default:
+		return 0
+	}
+}
+
+// generatedTestOperationSemantics keeps the hand-written integration harness
+// aligned with the generated descriptor contract. Production descriptors never
+// infer semantics from HTTP methods; they carry the metadata-owned values.
+func generatedTestOperationSemantics(method, aggregateTarget string) (string, string, string) {
+	if method == http.MethodGet {
+		return "query", "", ""
+	}
+	return "command", aggregateTarget, aggregateTarget
+}

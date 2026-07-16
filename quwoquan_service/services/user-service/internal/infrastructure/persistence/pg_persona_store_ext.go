@@ -2,13 +2,15 @@ package persistence
 
 import (
 	"context"
+	"errors"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	"quwoquan_service/services/user-service/internal/domain/user/model"
-	"quwoquan_service/services/user-service/internal/domain/user/repository"
+	repository "quwoquan_service/services/user-service/internal/domain/user/ports"
 	usertelemetry "quwoquan_service/services/user-service/internal/domain/user/telemetry"
 )
 
@@ -18,7 +20,12 @@ type PgPersonaStore struct {
 	mongoDB *mongo.Database
 }
 
-var _ repository.PersonaRepository = (*PgPersonaStore)(nil)
+var (
+	_ repository.PersonaReader          = (*PgPersonaStore)(nil)
+	_ repository.PersonaWriter          = (*PgPersonaStore)(nil)
+	_ repository.PersonaHistoryReader   = (*PgPersonaStore)(nil)
+	_ repository.PersonaActivationStore = (*PgPersonaStore)(nil)
+)
 
 const personaNullableSafeCols = `user_id, display_name, COALESCE(user_handle, ''), COALESCE(phone, ''), COALESCE(email, ''), COALESCE(avatar_url, ''), avatar_version, COALESCE(background_url, ''), COALESCE(caller_ringtone_id, ''), COALESCE(theme_mode_override, ''), COALESCE(font_size_preset_override, ''), appearance_override_updated_at, is_primary, is_private, is_active, COALESCE(status, 'active'), retired_at, COALESCE(sub_account_id, ''), COALESCE(isolation_level, ''), COALESCE(purpose_hint, ''), COALESCE(inherits_profile_from_owner, false), COALESCE(array_to_string(overridden_profile_fields, ','), ''), last_profile_sync_at, COALESCE(last_profile_sync_source, ''), last_activated_at, invite_count, created_at, updated_at`
 
@@ -32,8 +39,9 @@ func (s *PgPersonaStore) WithMongoDatabase(db *mongo.Database) *PgPersonaStore {
 }
 
 func (s *PgPersonaStore) FindByID(ctx context.Context, id string) (*model.Persona, error) {
-	return scanPersona(s.pool.QueryRow(ctx,
+	persona, err := scanPersona(s.pool.QueryRow(ctx,
 		`SELECT `+personaNullableSafeCols+` FROM personas WHERE sub_account_id = $1`, id))
+	return persona, mapPersonaPersistenceError(err)
 }
 
 // FindByUserID delegates to the generated ListByUserID (FK-based list).
@@ -41,7 +49,7 @@ func (s *PgPersonaStore) FindByUserID(ctx context.Context, userID string) ([]mod
 	rows, err := s.pool.Query(ctx,
 		`SELECT `+personaNullableSafeCols+` FROM personas WHERE user_id = $1 ORDER BY created_at DESC`, userID)
 	if err != nil {
-		return nil, err
+		return nil, mapPersonaPersistenceError(err)
 	}
 	defer rows.Close()
 
@@ -78,44 +86,76 @@ func (s *PgPersonaStore) FindByUserID(ctx context.Context, userID string) ([]mod
 			&e.CreatedAt,
 			&e.UpdatedAt,
 		); err != nil {
-			return nil, err
+			return nil, mapPersonaPersistenceError(err)
 		}
 		result = append(result, e)
 	}
-	return result, rows.Err()
+	return result, mapPersonaPersistenceError(rows.Err())
+}
+
+func (s *PgPersonaStore) Create(ctx context.Context, persona *model.Persona) error {
+	return mapPersonaPersistenceError(s.pgPersonaStoreBase.Create(ctx, persona))
 }
 
 // Update delegates to the generated full-column update.
 func (s *PgPersonaStore) Update(ctx context.Context, p *model.Persona) error {
-	return s.pgPersonaStoreBase.Update(ctx, p)
+	return mapPersonaPersistenceError(s.pgPersonaStoreBase.Update(ctx, p))
+}
+
+func (s *PgPersonaStore) Delete(ctx context.Context, id string) error {
+	return mapPersonaPersistenceError(s.pgPersonaStoreBase.Delete(ctx, id))
 }
 
 func (s *PgPersonaStore) FindActiveByUserID(ctx context.Context, userID string) (*model.Persona, error) {
-	return scanPersona(s.pool.QueryRow(ctx,
+	persona, err := scanPersona(s.pool.QueryRow(ctx,
 		`SELECT `+personaNullableSafeCols+` FROM personas WHERE user_id = $1 AND is_active = true AND COALESCE(status, 'active') <> 'retired'`, userID))
+	return persona, mapPersonaPersistenceError(err)
 }
 
 func (s *PgPersonaStore) FindByUserHandle(ctx context.Context, userHandle string) (*model.Persona, error) {
-	return scanPersona(s.pool.QueryRow(ctx,
+	persona, err := scanPersona(s.pool.QueryRow(ctx,
 		`SELECT `+personaNullableSafeCols+` FROM personas WHERE user_handle = $1`, userHandle))
+	return persona, mapPersonaPersistenceError(err)
 }
 
-func (s *PgPersonaStore) DeactivateAll(ctx context.Context, userID string) error {
-	_, err := s.pool.Exec(ctx,
-		`UPDATE personas SET is_active = false, updated_at = NOW() WHERE user_id = $1 AND is_active = true`, userID)
-	return err
-}
+func (s *PgPersonaStore) SwitchActive(ctx context.Context, userID, subAccountID string) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return mapPersonaPersistenceError(err)
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
 
-func (s *PgPersonaStore) ActivateOne(ctx context.Context, id string) error {
-	_, err := s.pool.Exec(ctx,
-		`UPDATE personas SET is_active = true, updated_at = NOW() WHERE sub_account_id = $1 AND COALESCE(status, 'active') <> 'retired'`, id)
-	return err
+	if _, err := tx.Exec(ctx,
+		`UPDATE personas SET is_active = false, updated_at = NOW() WHERE user_id = $1 AND is_active = true`,
+		userID,
+	); err != nil {
+		return mapPersonaPersistenceError(err)
+	}
+	tag, err := tx.Exec(ctx,
+		`UPDATE personas
+		 SET is_active = true, last_activated_at = NOW(), updated_at = NOW()
+		 WHERE user_id = $1
+		   AND sub_account_id = $2
+		   AND COALESCE(status, 'active') <> 'retired'`,
+		userID,
+		subAccountID,
+	)
+	if err != nil {
+		return mapPersonaPersistenceError(err)
+	}
+	if tag.RowsAffected() == 0 {
+		return repository.ErrPersonaNotFound
+	}
+	return mapPersonaPersistenceError(tx.Commit(ctx))
 }
 
 // FindBySubAccountID looks up a persona by its public sub_account_id.
 func (s *PgPersonaStore) FindBySubAccountID(ctx context.Context, subAccountID string) (*model.Persona, error) {
-	return scanPersona(s.pool.QueryRow(ctx,
+	persona, err := scanPersona(s.pool.QueryRow(ctx,
 		`SELECT `+personaNullableSafeCols+` FROM personas WHERE sub_account_id = $1`, subAccountID))
+	return persona, mapPersonaPersistenceError(err)
 }
 
 func (s *PgPersonaStore) HasAttributedHistory(ctx context.Context, subAccountID string) (bool, error) {
@@ -142,7 +182,7 @@ func (s *PgPersonaStore) HasAttributedHistory(ctx context.Context, subAccountID 
 			)
 	`, subAccountID).Scan(&hasPGHistory)
 	if err != nil {
-		return false, err
+		return false, mapPersonaPersistenceError(err)
 	}
 	if hasPGHistory {
 		return true, nil
@@ -201,4 +241,18 @@ func (s *PgPersonaStore) hasMongoAttributedHistory(ctx context.Context, subAccou
 		}
 	}
 	return false, nil
+}
+
+func mapPersonaPersistenceError(err error) error {
+	if err == nil {
+		return nil
+	}
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		return err
+	}
+	if pgErr.ConstraintName == "uq_personas_user_handle" {
+		return repository.ErrPersonaHandleConflict
+	}
+	return repository.ErrPersonaPersistence
 }

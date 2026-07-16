@@ -31,11 +31,6 @@ class FeedItemDto {
   final DateTime createdAt;
   final DateTime? updatedAt;
   final DateTime? publishedAt;
-  final List<Map<String, dynamic>>? circleSummaries;
-  final List<String>? circleIds;
-  final List<String>? circleNames;
-  final String? circleId;
-  final String? circleName;
   final List<String>? tagRefs;
   final String? visibility;
   final String? summary;
@@ -83,11 +78,6 @@ class FeedItemDto {
     required this.createdAt,
     this.updatedAt,
     this.publishedAt,
-    this.circleSummaries,
-    this.circleIds,
-    this.circleNames,
-    this.circleId,
-    this.circleName,
     this.tagRefs,
     this.visibility,
     this.summary,
@@ -137,11 +127,6 @@ class FeedItemDto {
       createdAt: _parseDateTime(m['createdAt']) ?? _parseDateTime(m['created_at']) ?? DateTime(0),
       updatedAt: _parseDateTime(m['updatedAt']) ?? _parseDateTime(m['updated_at']) ?? null,
       publishedAt: _parseDateTime(m['publishedAt']) ?? _parseDateTime(m['published_at']) ?? null,
-      circleSummaries: _parseMapList(m['circleSummaries']),
-      circleIds: _parseStringList(m['circleIds']) ?? null,
-      circleNames: _parseStringList(m['circleNames']) ?? null,
-      circleId: m['circleId']?.toString() ?? null,
-      circleName: m['circleName']?.toString() ?? null,
       tagRefs: _parseStringList(m['tagRefs']) ?? null,
       visibility: m['visibility']?.toString() ?? null,
       summary: m['summary']?.toString() ?? m['highlightText']?.toString() ?? null,
@@ -192,11 +177,6 @@ class FeedItemDto {
       'createdAt': createdAt,
       'updatedAt': updatedAt,
       'publishedAt': publishedAt,
-      'circleSummaries': circleSummaries,
-      'circleIds': circleIds,
-      'circleNames': circleNames,
-      'circleId': circleId,
-      'circleName': circleName,
       'tagRefs': tagRefs,
       'visibility': visibility,
       'summary': summary,
@@ -246,11 +226,6 @@ class FeedItemDto {
     DateTime? createdAt,
     DateTime? updatedAt,
     DateTime? publishedAt,
-    List<Map<String, dynamic>>? circleSummaries,
-    List<String>? circleIds,
-    List<String>? circleNames,
-    String? circleId,
-    String? circleName,
     List<String>? tagRefs,
     String? visibility,
     String? summary,
@@ -298,11 +273,6 @@ class FeedItemDto {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       publishedAt: publishedAt ?? this.publishedAt,
-      circleSummaries: circleSummaries ?? this.circleSummaries,
-      circleIds: circleIds ?? this.circleIds,
-      circleNames: circleNames ?? this.circleNames,
-      circleId: circleId ?? this.circleId,
-      circleName: circleName ?? this.circleName,
       tagRefs: tagRefs ?? this.tagRefs,
       visibility: visibility ?? this.visibility,
       summary: summary ?? this.summary,

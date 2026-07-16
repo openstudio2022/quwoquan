@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/_common/data_issue.schema.json",
+  "title": "Data workflow issue",
+  "description": "Offline Data control-flow issue. code and recovery drive automation; message is presentation only.",
+  "type": "object",
+  "required": ["code", "stage", "ref", "lane", "recovery", "message", "attrs"],
+  "additionalProperties": false,
+  "properties": {
+    "code": {
+      "enum": [
+        "DATA.SOURCE.MISSING",
+        "DATA.SOURCE.UNREADABLE",
+        "DATA.SOURCE.PLAN_INVALID",
+        "DATA.SOURCE.RETAINED_SHORTFALL",
+        "DATA.SOURCE.CATEGORY_SHORTFALL",
+        "DATA.SOURCE.PRIMARY_AUTHORITY_MISSING",
+        "DATA.SOURCE.ENTITY_MISMATCH",
+        "DATA.SOURCE.PAGE_TYPE_INVALID",
+        "DATA.MEDIA.FETCH_FAILED",
+        "DATA.MEDIA.RIGHTS_UNAVAILABLE",
+        "DATA.MEDIA.PUBLISHABLE_SHORTFALL",
+        "DATA.MEDIA.ENUMERATION_INCOMPLETE",
+        "DATA.MEDIA.DOWNLOAD_INCOMPLETE",
+        "DATA.MEDIA.CAPTION_INVALID",
+        "DATA.MEDIA.COVER_CONFLICT",
+        "DATA.AGENT.REVIEW_UNAVAILABLE",
+        "DATA.AGENT.REVIEW_INVALID",
+        "DATA.CONTENT.CLASSIFICATION_REJECTED",
+        "DATA.INFRA.NETWORK_UNREACHABLE",
+        "DATA.CONTRACT.INVALID",
+        "DATA.QUALITY.FAILED",
+        "DATA.INTERNAL.UNEXPECTED"
+      ]
+    },
+    "stage": {
+      "enum": [
+        "annotate-entities", "agent_compose", "author", "baseline", "build_homepage",
+        "build_prepare", "build_validate", "compose_brief", "content_plan",
+        "controller_yield", "download", "download_fetch", "download_plan", "4.draft",
+        "entity_source_bundle", "explore", "image_fetch", "image_rights",
+        "media_check", "post_annotate", "post_author", "post_compose", "post_plan",
+        "post_review", "publish", "quality_analysis",
+        "review", "source_gate", "source_plan", "source_screen", "verify_homepage_media"
+      ]
+    },
+    "ref": { "type": "string", "maxLength": 512 },
+    "lane": { "enum": ["all", "homepage", "article", "image", "video"] },
+    "recovery": {
+      "enum": [
+        "retry_source_discovery",
+        "replace_source",
+        "replace_media",
+        "rewind_download",
+        "rewind_compose",
+        "manual_review",
+        "stop"
+      ]
+    },
+    "message": { "type": "string", "minLength": 1, "maxLength": 2048 },
+    "attrs": {
+      "type": "object",
+      "maxProperties": 16,
+      "propertyNames": { "type": "string", "minLength": 1, "maxLength": 64 },
+      "additionalProperties": { "type": "string", "maxLength": 512 }
+    }
+  }
+}

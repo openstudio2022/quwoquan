@@ -2,7 +2,6 @@
 // ignore_for_file: prefer_const_constructors, unnecessary_null_in_if_null_operators
 
 import 'article_entity_mention_dto.g.dart';
-import 'content_post_detail_circle_summary_wire_dto.g.dart';
 
 class ContentPostDetailWireDto {
   final bool? isOfficial;
@@ -19,11 +18,6 @@ class ContentPostDetailWireDto {
   final String? paperTexture;
   final List<ArticleEntityMentionDto> entityMentions;
   final String? coverUrlWire;
-  final List<ContentPostDetailCircleSummaryWireDto> circleSummaries;
-  final List<String>? circleIds;
-  final List<String>? circleNames;
-  final String? circleId;
-  final String? circleName;
   final List<String>? tagRefs;
   final String? visibility;
 
@@ -42,11 +36,6 @@ class ContentPostDetailWireDto {
     this.paperTexture,
     this.entityMentions = const <ArticleEntityMentionDto>[],
     this.coverUrlWire,
-    this.circleSummaries = const <ContentPostDetailCircleSummaryWireDto>[],
-    this.circleIds,
-    this.circleNames,
-    this.circleId,
-    this.circleName,
     this.tagRefs,
     this.visibility,
   });
@@ -67,11 +56,6 @@ class ContentPostDetailWireDto {
       paperTexture: m['paperTexture']?.toString() ?? m['articlePaperTexture']?.toString() ?? null,
       entityMentions: _parseProjectionDtoList(m['entityMentions'], ArticleEntityMentionDto.fromMap),
       coverUrlWire: m['coverUrl']?.toString() ?? null,
-      circleSummaries: _parseProjectionDtoList(m['circleSummaries'], ContentPostDetailCircleSummaryWireDto.fromMap),
-      circleIds: _parseStringList(m['circleIds']) ?? null,
-      circleNames: _parseStringList(m['circleNames']) ?? null,
-      circleId: m['circleId']?.toString() ?? null,
-      circleName: m['circleName']?.toString() ?? null,
       tagRefs: _parseStringList(m['tagRefs']) ?? null,
       visibility: m['visibility']?.toString() ?? null,
     );
@@ -93,11 +77,6 @@ class ContentPostDetailWireDto {
       'paperTexture': paperTexture,
       'entityMentions': entityMentions,
       'coverUrlWire': coverUrlWire,
-      'circleSummaries': circleSummaries,
-      'circleIds': circleIds,
-      'circleNames': circleNames,
-      'circleId': circleId,
-      'circleName': circleName,
       'tagRefs': tagRefs,
       'visibility': visibility,
     };
@@ -118,11 +97,6 @@ class ContentPostDetailWireDto {
     String? paperTexture,
     List<ArticleEntityMentionDto>? entityMentions,
     String? coverUrlWire,
-    List<ContentPostDetailCircleSummaryWireDto>? circleSummaries,
-    List<String>? circleIds,
-    List<String>? circleNames,
-    String? circleId,
-    String? circleName,
     List<String>? tagRefs,
     String? visibility,
   }) {
@@ -141,11 +115,6 @@ class ContentPostDetailWireDto {
       paperTexture: paperTexture ?? this.paperTexture,
       entityMentions: entityMentions ?? this.entityMentions,
       coverUrlWire: coverUrlWire ?? this.coverUrlWire,
-      circleSummaries: circleSummaries ?? this.circleSummaries,
-      circleIds: circleIds ?? this.circleIds,
-      circleNames: circleNames ?? this.circleNames,
-      circleId: circleId ?? this.circleId,
-      circleName: circleName ?? this.circleName,
       tagRefs: tagRefs ?? this.tagRefs,
       visibility: visibility ?? this.visibility,
     );

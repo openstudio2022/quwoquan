@@ -4,35 +4,58 @@ import 'package:meta/meta.dart';
 @immutable
 class ContentReactionState {
   const ContentReactionState({
+    required this.found,
     required this.postId,
-    required this.userId,
     required this.liked,
-    this.shared = false,
-    this.reported = false,
-    this.likedAt,
+    required this.version,
     this.updatedAt,
   });
 
+  final bool found;
   final String postId;
-  final String userId;
   final bool liked;
-  final bool shared;
-  final bool reported;
-  final DateTime? likedAt;
+  final int version;
   final DateTime? updatedAt;
 
   factory ContentReactionState.fromMap(Map<String, dynamic> m) {
-    DateTime? parseTs(Object? v) =>
-        DateTime.tryParse(v?.toString() ?? '')?.toUtc();
+    const allowedFields = <String>{
+      'found',
+      'postId',
+      'liked',
+      'version',
+      'updatedAt',
+    };
+    if (m.keys.any((key) => !allowedFields.contains(key))) {
+      throw const FormatException('unknown ContentReactionState field');
+    }
+    final found = m['found'];
+    final postId = m['postId'];
+    final liked = m['liked'];
+    final version = m['version'];
+    if (found is! bool ||
+        postId is! String ||
+        postId.trim().isEmpty ||
+        liked is! bool ||
+        version is! num ||
+        version.toInt() != version) {
+      throw const FormatException('invalid ContentReactionState payload');
+    }
+    final rawUpdatedAt = m['updatedAt'];
+    final updatedAt = rawUpdatedAt == null
+        ? null
+        : DateTime.tryParse(
+            rawUpdatedAt is String ? rawUpdatedAt : '',
+          )?.toUtc();
+    if (rawUpdatedAt != null && updatedAt == null) {
+      throw const FormatException('invalid ContentReactionState.updatedAt');
+    }
 
     return ContentReactionState(
-      postId: (m['postId'] ?? '').toString(),
-      userId: (m['userId'] ?? m['profileSubjectId'] ?? '').toString(),
-      liked: m['liked'] == true,
-      shared: m['shared'] == true,
-      reported: m['reported'] == true,
-      likedAt: parseTs(m['likedAt']),
-      updatedAt: parseTs(m['updatedAt']),
+      found: found,
+      postId: postId,
+      liked: liked,
+      version: version.toInt(),
+      updatedAt: updatedAt,
     );
   }
 
@@ -41,22 +64,12 @@ class ContentReactionState {
       identical(this, other) ||
       other is ContentReactionState &&
           runtimeType == other.runtimeType &&
+          found == other.found &&
           postId == other.postId &&
-          userId == other.userId &&
           liked == other.liked &&
-          shared == other.shared &&
-          reported == other.reported &&
-          likedAt == other.likedAt &&
+          version == other.version &&
           updatedAt == other.updatedAt;
 
   @override
-  int get hashCode => Object.hash(
-    postId,
-    userId,
-    liked,
-    shared,
-    reported,
-    likedAt,
-    updatedAt,
-  );
+  int get hashCode => Object.hash(found, postId, liked, version, updatedAt);
 }

@@ -6,7 +6,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/recommendation/feed_realtim
 import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_message_handler.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
-import 'package:quwoquan_app/core/services/app_content_repository.dart';
+import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 import 'package:quwoquan_app/ui/discovery/providers/feed_realtime_patch_provider.dart';
 
@@ -77,7 +77,7 @@ void main() {
 
   test('chat 事件不被误判为 feed patch', () {
     RealtimeMessageHandler(container.read).handle(<String, dynamic>{
-      'type': 'ReadReceiptSent',
+      'type': 'ConversationReadWatermarkAdvanced',
       'conversationId': 'c1',
     });
 

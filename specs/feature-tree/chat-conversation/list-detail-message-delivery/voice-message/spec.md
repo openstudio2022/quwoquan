@@ -57,7 +57,7 @@
 
 - 录音库必须支持 AAC 编码、iOS/Android 双端，推荐 `record` 包
 - 播放库必须支持流式播放（边下边播）、进度回调，推荐 `just_audio`
-- 上传必须通过 `runtime/media.MediaStore`（`CategoryMessaging`），禁止直接调用 OSS
+- 上传必须通过 `runtime/content.source.media.MediaStore`（`CategoryMessaging`），禁止直接调用 OSS
 - 发送必须通过 `ChatRepository.sendMessage`，禁止绕过消息链路
 - 语音气泡 UI 必须使用 `AppTypography`/`AppSpacing`/`AppColors`，禁止硬编码
 - metadata 变更必须走 `metadata → verify → codegen` 流程
@@ -68,7 +68,7 @@
 - 最短录音时长 1 秒（低于 1 秒不发送，提示"录音时间太短"）
 - 最大录音时长 120 秒（可配置），到达上限自动停止并发送
 - 音频文件大小上限 5MB（120s AAC 约 2-3MB，余量充足）
-- 波形数据由客户端录音时实时采集，存入 `media.waveform`（float 数组，约 50-100 采样点）
+- 波形数据由客户端录音时实时采集，存入 `content.source.media.waveform`（float 数组，约 50-100 采样点）
 - 录音 HUD 波形只保留固定窗口采样，最新采样从右侧进入并整体向左推进，长录音不得导致 UI 状态无限增长
 
 ### 弱网与性能约束

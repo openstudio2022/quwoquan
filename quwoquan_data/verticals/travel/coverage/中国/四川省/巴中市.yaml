@@ -1,11 +1,10 @@
 # 全国地点主清单 · 四川省巴中市（discovery_seed/2，WP2 区县级全量枚举）
-# schema: quwoquan_data/schema/coverage/master_list.schema.json
-# 门禁: qwq-data verify coverage-master-list
+# schema: quwoquan_data/schema/governance/master_list.schema.json
+# 门禁: qwq-data verify coverage-static-identity
 schemaVersion: quwoquan_data.discovery_seed/2
 country: 中国
 province: 四川省
 city: 巴中市
-generatedBy: wp2_enumeration_20260708
 districts:
 - district: 南江县
   leaves:
@@ -20,7 +19,6 @@ districts:
     aliases:
     - 光雾山旅游景区
     selectionPriority: 1
-    sourceReadiness: pending
   - name: 米仓山国家森林公园
     canonicalName: 米仓山国家森林公园
     entityType: 地点/景区
@@ -31,7 +29,6 @@ districts:
     aliases:
     - 米仓山森林公园
     selectionPriority: 2
-    sourceReadiness: ready
   - name: 玉湖—七彩长滩
     canonicalName: 南江玉湖—七彩长滩
     entityType: 地点/景区
@@ -42,7 +39,6 @@ districts:
     aliases:
     - 最美玉湖—七彩长滩旅游景区
     selectionPriority: 3
-    sourceReadiness: pending
   - name: 断渠
     canonicalName: 南江断渠
     entityType: 地点/公园
@@ -52,14 +48,12 @@ districts:
     aliases:
     - 断渠公园
     selectionPriority: 4
-    sourceReadiness: pending
   - name: 南江米倉古道
     canonicalName: 南江米倉古道
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/南江县
-    sourceReadiness: pending
     selectionPriority: 5
   - name: 南江紅三十一軍醫院舊址
     canonicalName: 南江紅三十一軍醫院舊址
@@ -67,7 +61,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/南江县
-    sourceReadiness: pending
     selectionPriority: 6
   - name: 南江迎暉門及城牆
     canonicalName: 南江迎暉門及城牆
@@ -75,7 +68,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/南江县
-    sourceReadiness: pending
     selectionPriority: 7
   - name: 巴山游擊隊指揮部舊址
     canonicalName: 巴山游擊隊指揮部舊址
@@ -83,7 +75,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/南江县
-    sourceReadiness: pending
     selectionPriority: 8
   - name: 白坪馬氏祠堂
     canonicalName: 白坪馬氏祠堂
@@ -91,7 +82,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/南江县
-    sourceReadiness: pending
     selectionPriority: 9
   - name: 萬山營劉氏祠堂
     canonicalName: 萬山營劉氏祠堂
@@ -99,7 +89,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/南江县
-    sourceReadiness: pending
     selectionPriority: 10
   - name: 觀音井何氏家族墓
     canonicalName: 觀音井何氏家族墓
@@ -107,7 +96,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/南江县
-    sourceReadiness: pending
     selectionPriority: 11
   - name: 赤溪岳氏家族墓
     canonicalName: 赤溪岳氏家族墓
@@ -115,7 +103,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/南江县
-    sourceReadiness: pending
     selectionPriority: 12
   - name: 長赤縣蘇維埃政府舊址及石刻標語
     canonicalName: 長赤縣蘇維埃政府舊址及石刻標語
@@ -123,7 +110,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/南江县
-    sourceReadiness: pending
     selectionPriority: 13
   - name: 鳳儀蔣氏祠堂
     canonicalName: 鳳儀蔣氏祠堂
@@ -131,7 +117,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/南江县
-    sourceReadiness: pending
     selectionPriority: 14
 - district: 巴州区
   leaves:
@@ -146,7 +131,6 @@ districts:
     - 南龛山景区
     - 南龛摩崖造像
     selectionPriority: 1
-    sourceReadiness: pending
   - name: 川陕革命根据地博物馆
     canonicalName: 川陕革命根据地博物馆
     entityType: 地点/博物馆
@@ -154,7 +138,6 @@ districts:
     - Entity/地点/博物馆
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/巴州区
     selectionPriority: 2
-    sourceReadiness: pending
   - name: 山水化湖
     canonicalName: 山水化湖
     entityType: 地点/景区
@@ -165,7 +148,6 @@ districts:
     aliases:
     - 化湖
     selectionPriority: 3
-    sourceReadiness: pending
   - name: 阴灵山
     canonicalName: 巴中阴灵山
     entityType: 地点/自然景观
@@ -175,14 +157,12 @@ districts:
     aliases:
     - 阴灵山碑林
     selectionPriority: 4
-    sourceReadiness: pending
   - name: 北龕摩岩造像
     canonicalName: 北龕摩岩造像
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/巴州区
-    sourceReadiness: pending
     selectionPriority: 5
   - name: 南龕摩崖造像
     canonicalName: 南龕摩崖造像
@@ -190,7 +170,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/巴州区
-    sourceReadiness: pending
     selectionPriority: 6
   - name: 回風亭
     canonicalName: 回風亭
@@ -198,7 +177,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/巴州区
-    sourceReadiness: pending
     selectionPriority: 7
   - name: 川陝省總工會舊址
     canonicalName: 川陝省總工會舊址
@@ -206,7 +184,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/巴州区
-    sourceReadiness: pending
     selectionPriority: 8
   - name: 川陝省蘇維埃政府舊址
     canonicalName: 川陝省蘇維埃政府舊址
@@ -214,7 +191,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/巴州区
-    sourceReadiness: pending
     selectionPriority: 9
   - name: 巴中特別市蘇維埃舊址
     canonicalName: 巴中特別市蘇維埃舊址
@@ -222,7 +198,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/巴州区
-    sourceReadiness: pending
     selectionPriority: 10
   - name: 巴州奎星閣
     canonicalName: 巴州奎星閣
@@ -230,7 +205,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/巴州区
-    sourceReadiness: pending
     selectionPriority: 11
   - name: 巴州淩雲塔
     canonicalName: 巴州淩雲塔
@@ -238,7 +212,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/巴州区
-    sourceReadiness: pending
     selectionPriority: 12
   - name: 巴州龍門山石窟
     canonicalName: 巴州龍門山石窟
@@ -246,7 +219,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/巴州区
-    sourceReadiness: pending
     selectionPriority: 13
   - name: 平梁城遺址
     canonicalName: 平梁城遺址
@@ -254,7 +226,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/巴州区
-    sourceReadiness: pending
     selectionPriority: 14
   - name: 水寧寺摩崖造像
     canonicalName: 水寧寺摩崖造像
@@ -262,7 +233,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/巴州区
-    sourceReadiness: pending
     selectionPriority: 15
   - name: 石門寺摩崖造像
     canonicalName: 石門寺摩崖造像
@@ -270,7 +240,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/巴州区
-    sourceReadiness: pending
     selectionPriority: 16
   - name: 西龕摩岩造像
     canonicalName: 西龕摩岩造像
@@ -278,7 +247,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/巴州区
-    sourceReadiness: pending
     selectionPriority: 17
   - name: 雷輔天將軍墓
     canonicalName: 雷輔天將軍墓
@@ -286,7 +254,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/巴州区
-    sourceReadiness: pending
     selectionPriority: 18
 - district: 平昌县
   leaves:
@@ -300,7 +267,6 @@ districts:
     aliases:
     - 佛头山旅游景区
     selectionPriority: 1
-    sourceReadiness: pending
   - name: 驷马水乡
     canonicalName: 驷马水乡
     entityType: 地点/景区
@@ -308,7 +274,6 @@ districts:
     - Entity/地点/景区/4A景区
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/平昌县
     selectionPriority: 2
-    sourceReadiness: pending
   - name: 白衣古镇
     canonicalName: 白衣古镇
     entityType: 地点/景区
@@ -317,7 +282,6 @@ districts:
     - Entity/地点/古镇/历史古镇
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/平昌县
     selectionPriority: 3
-    sourceReadiness: pending
   - name: 巴灵台
     canonicalName: 巴灵台
     entityType: 地点/景区
@@ -328,7 +292,6 @@ districts:
     aliases:
     - 巴灵台旅游风景区
     selectionPriority: 4
-    sourceReadiness: pending
   - name: 南天门
     canonicalName: 平昌南天门
     entityType: 地点/景区
@@ -339,7 +302,6 @@ districts:
     aliases:
     - 平昌南天门旅游景区
     selectionPriority: 5
-    sourceReadiness: pending
   - name: 皇家山
     canonicalName: 平昌皇家山
     entityType: 地点/景区
@@ -348,9 +310,6 @@ districts:
     - Entity/地点/自然景观/山岳
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/平昌县
     selectionPriority: 6
-    sourceReadiness: ready
-    sourceScreenedAt: '2026-07-09T11:40:34Z'
-    sourceScreenEvidence: zh.wikipedia.org:皇家山 extract=487ch
   - name: 三十二梁
     canonicalName: 平昌三十二梁
     entityType: 地点/景区
@@ -360,14 +319,12 @@ districts:
     aliases:
     - 三十二梁旅游景区
     selectionPriority: 7
-    sourceReadiness: pending
   - name: 劉伯堅烈士故居
     canonicalName: 劉伯堅烈士故居
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/平昌县
-    sourceReadiness: pending
     selectionPriority: 8
   - name: 劉伯堅烈士紀念碑
     canonicalName: 劉伯堅烈士紀念碑
@@ -375,7 +332,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/平昌县
-    sourceReadiness: pending
     selectionPriority: 9
   - name: 北山寺會議舊址
     canonicalName: 北山寺會議舊址
@@ -383,7 +339,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/平昌县
-    sourceReadiness: pending
     selectionPriority: 10
   - name: 古佛洞摩崖造像
     canonicalName: 古佛洞摩崖造像
@@ -391,7 +346,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/平昌县
-    sourceReadiness: pending
     selectionPriority: 11
   - name: 小宁城
     canonicalName: 小宁城
@@ -399,7 +353,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/平昌县
-    sourceReadiness: pending
     selectionPriority: 12
   - name: 巴靈寨遺址
     canonicalName: 巴靈寨遺址
@@ -407,7 +360,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/平昌县
-    sourceReadiness: pending
     selectionPriority: 13
   - name: 平昌漢中古道
     canonicalName: 平昌漢中古道
@@ -415,7 +367,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/平昌县
-    sourceReadiness: pending
     selectionPriority: 14
   - name: 平昌長安古道
     canonicalName: 平昌長安古道
@@ -423,7 +374,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/平昌县
-    sourceReadiness: pending
     selectionPriority: 15
   - name: 白衣古鎮古建築群
     canonicalName: 白衣古鎮古建築群
@@ -431,7 +381,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/平昌县
-    sourceReadiness: pending
     selectionPriority: 16
   - name: 長靈寨遺址
     canonicalName: 長靈寨遺址
@@ -439,7 +388,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/平昌县
-    sourceReadiness: pending
     selectionPriority: 17
   - name: 雙竹堂牌坊
     canonicalName: 雙竹堂牌坊
@@ -447,7 +395,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/平昌县
-    sourceReadiness: pending
     selectionPriority: 18
   - name: 靈山吳家大院
     canonicalName: 靈山吳家大院
@@ -455,7 +402,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/平昌县
-    sourceReadiness: pending
     selectionPriority: 19
   - name: 靈山吳氏墓
     canonicalName: 靈山吳氏墓
@@ -463,7 +409,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/平昌县
-    sourceReadiness: pending
     selectionPriority: 20
   - name: 驷马镇
     canonicalName: 驷马镇
@@ -471,7 +416,6 @@ districts:
     typeTagRefs:
     - Entity/地点/景区/4A景区
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/平昌县
-    sourceReadiness: pending
     selectionPriority: 21
   - name: 黑馬山墓群
     canonicalName: 黑馬山墓群
@@ -479,7 +423,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/平昌县
-    sourceReadiness: pending
     selectionPriority: 22
 - district: 恩阳区
   leaves:
@@ -491,7 +434,6 @@ districts:
     - Entity/地点/古镇/历史古镇
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/恩阳区
     selectionPriority: 1
-    sourceReadiness: pending
   - name: 万寿养生谷
     canonicalName: 恩阳万寿养生谷
     entityType: 地点/景区
@@ -501,14 +443,12 @@ districts:
     aliases:
     - 万寿养生谷旅游景区
     selectionPriority: 2
-    sourceReadiness: pending
   - name: 土寨柏家祠堂
     canonicalName: 土寨柏家祠堂
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/恩阳区
-    sourceReadiness: pending
     selectionPriority: 3
   - name: 明阳镇
     canonicalName: 明阳镇
@@ -516,7 +456,6 @@ districts:
     typeTagRefs:
     - Entity/地点/景区/4A景区
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/恩阳区
-    sourceReadiness: pending
     selectionPriority: 4
   - name: 朝陽洞石窟
     canonicalName: 朝陽洞石窟
@@ -524,7 +463,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/恩阳区
-    sourceReadiness: pending
     selectionPriority: 5
   - name: 牛角寨崖墓群
     canonicalName: 牛角寨崖墓群
@@ -532,7 +470,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/恩阳区
-    sourceReadiness: pending
     selectionPriority: 6
 - district: 通江县
   leaves:
@@ -547,7 +484,6 @@ districts:
     aliases:
     - 诺水河风景名胜区
     selectionPriority: 1
-    sourceReadiness: ready
   - name: 王坪旅游景区
     canonicalName: 川陕革命根据地红军烈士陵园
     entityType: 地点/景区
@@ -558,9 +494,6 @@ districts:
     aliases:
     - 王坪红军烈士陵园
     selectionPriority: 2
-    sourceReadiness: ready
-    sourceScreenedAt: '2026-07-09T11:40:42Z'
-    sourceScreenEvidence: zh.wikipedia.org:川陕革命根据地红军烈士陵园 extract=334ch
   - name: 红四方面军总指挥部旧址纪念馆
     canonicalName: 红四方面军总指挥部旧址纪念馆
     entityType: 地点/博物馆
@@ -569,7 +502,6 @@ districts:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
     selectionPriority: 3
-    sourceReadiness: pending
   - name: 空山天盆
     canonicalName: 空山天盆
     entityType: 地点/景区
@@ -580,7 +512,6 @@ districts:
     aliases:
     - 空山国家森林公园
     selectionPriority: 4
-    sourceReadiness: pending
   - name: 诺水洞天
     canonicalName: 诺水洞天
     entityType: 地点/景区
@@ -591,7 +522,6 @@ districts:
     aliases:
     - 诺水洞天景区
     selectionPriority: 5
-    sourceReadiness: pending
   - name: 唱歌石林
     canonicalName: 通江唱歌石林
     entityType: 地点/景区
@@ -600,7 +530,6 @@ districts:
     - Entity/地点/自然景观/山岳
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
     selectionPriority: 6
-    sourceReadiness: pending
   - name: 梨园坝古村
     canonicalName: 通江梨园坝古村
     entityType: 地点/古镇
@@ -610,7 +539,6 @@ districts:
     aliases:
     - 梨园坝村
     selectionPriority: 7
-    sourceReadiness: pending
   - name: 得汉城
     canonicalName: 通江得汉城
     entityType: 地点/遗址
@@ -618,16 +546,12 @@ districts:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
     selectionPriority: 8
-    sourceReadiness: ready
-    sourceScreenedAt: '2026-07-09T11:40:47Z'
-    sourceScreenEvidence: zh.wikipedia.org:得汉城 extract=406ch
   - name: 中共川陝省委黨校舊址
     canonicalName: 中共川陝省委黨校舊址
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
-    sourceReadiness: pending
     selectionPriority: 9
   - name: 佛爺河石窟
     canonicalName: 佛爺河石窟
@@ -635,7 +559,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
-    sourceReadiness: pending
     selectionPriority: 10
   - name: 佛爾岩塬石窟
     canonicalName: 佛爾岩塬石窟
@@ -643,7 +566,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
-    sourceReadiness: pending
     selectionPriority: 11
   - name: 佛爾嶺石窟
     canonicalName: 佛爾嶺石窟
@@ -651,7 +573,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
-    sourceReadiness: pending
     selectionPriority: 12
   - name: 佛耳岩石窟
     canonicalName: 佛耳岩石窟
@@ -659,7 +580,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
-    sourceReadiness: pending
     selectionPriority: 13
   - name: 大城寨紅軍烈士墓
     canonicalName: 大城寨紅軍烈士墓
@@ -667,7 +587,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
-    sourceReadiness: pending
     selectionPriority: 14
   - name: 小新場獨善橋
     canonicalName: 小新場獨善橋
@@ -675,7 +594,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
-    sourceReadiness: pending
     selectionPriority: 15
   - name: 擂鼓寨遺址
     canonicalName: 擂鼓寨遺址
@@ -683,7 +601,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
-    sourceReadiness: pending
     selectionPriority: 16
   - name: 木關壩觀音岩石窟
     canonicalName: 木關壩觀音岩石窟
@@ -691,7 +608,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
-    sourceReadiness: pending
     selectionPriority: 17
   - name: 梭埡梁石窟
     canonicalName: 梭埡梁石窟
@@ -699,7 +615,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
-    sourceReadiness: pending
     selectionPriority: 18
   - name: 毛浴壩會議會址
     canonicalName: 毛浴壩會議會址
@@ -707,7 +622,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
-    sourceReadiness: pending
     selectionPriority: 19
   - name: 毛浴謝氏墓
     canonicalName: 毛浴謝氏墓
@@ -715,7 +629,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
-    sourceReadiness: pending
     selectionPriority: 20
   - name: 永安壩八一紀念會會址
     canonicalName: 永安壩八一紀念會會址
@@ -723,7 +636,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
-    sourceReadiness: pending
     selectionPriority: 21
   - name: 王家灣張氏家族墓
     canonicalName: 王家灣張氏家族墓
@@ -731,7 +643,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
-    sourceReadiness: pending
     selectionPriority: 22
   - name: 白乳溪石窟
     canonicalName: 白乳溪石窟
@@ -739,7 +650,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
-    sourceReadiness: pending
     selectionPriority: 23
   - name: 白石寺
     canonicalName: 白石寺
@@ -747,7 +657,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
-    sourceReadiness: pending
     selectionPriority: 24
   - name: 神口河陳氏墓
     canonicalName: 神口河陳氏墓
@@ -755,7 +664,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
-    sourceReadiness: pending
     selectionPriority: 25
   - name: 紅四方面軍總政治部舊址
     canonicalName: 紅四方面軍總政治部舊址
@@ -763,7 +671,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
-    sourceReadiness: pending
     selectionPriority: 26
   - name: 紅江縣政治保衛局舊址
     canonicalName: 紅江縣政治保衛局舊址
@@ -771,7 +678,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
-    sourceReadiness: pending
     selectionPriority: 27
   - name: 紅軍石刻標語「赤化全川」
     canonicalName: 紅軍石刻標語「赤化全川」
@@ -779,7 +685,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
-    sourceReadiness: pending
     selectionPriority: 28
   - name: 趙巧岩石窟
     canonicalName: 趙巧岩石窟
@@ -787,7 +692,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
-    sourceReadiness: pending
     selectionPriority: 29
   - name: 通江千佛岩石窟
     canonicalName: 通江千佛岩石窟
@@ -795,7 +699,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
-    sourceReadiness: pending
     selectionPriority: 30
   - name: 通江川陝省工農總醫院舊址
     canonicalName: 通江川陝省工農總醫院舊址
@@ -803,7 +706,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
-    sourceReadiness: pending
     selectionPriority: 31
   - name: 通江文廟
     canonicalName: 通江文廟
@@ -811,7 +713,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
-    sourceReadiness: pending
     selectionPriority: 32
   - name: 通江紅四方面軍總醫院舊址
     canonicalName: 通江紅四方面軍總醫院舊址
@@ -819,7 +720,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
-    sourceReadiness: pending
     selectionPriority: 33
   - name: 鄺繼勳烈士墓
     canonicalName: 鄺繼勳烈士墓
@@ -827,7 +727,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
-    sourceReadiness: pending
     selectionPriority: 34
   - name: 鐵佛蒲氏家族墓
     canonicalName: 鐵佛蒲氏家族墓
@@ -835,7 +734,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
-    sourceReadiness: pending
     selectionPriority: 35
   - name: 隱身洞摩崖造像
     canonicalName: 隱身洞摩崖造像
@@ -843,7 +741,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
-    sourceReadiness: pending
     selectionPriority: 36
   - name: 雲曇古佛洞石窟
     canonicalName: 雲曇古佛洞石窟
@@ -851,7 +748,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
-    sourceReadiness: pending
     selectionPriority: 37
   - name: 魯班寺
     canonicalName: 魯班寺
@@ -859,7 +755,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
-    sourceReadiness: pending
     selectionPriority: 38
   - name: 鳳凰包遺址
     canonicalName: 鳳凰包遺址
@@ -867,5 +762,4 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
-    sourceReadiness: pending
     selectionPriority: 39

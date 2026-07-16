@@ -39,6 +39,8 @@ enum RuntimeFailureNature {
 
 abstract interface class RuntimeFailureBase {
   String get code;
+  String get semanticReason;
+  int? get transportStatus;
   RuntimeFailureOrigin get origin;
   RuntimeFailureKind get kind;
   RuntimeFailureNature get nature;
@@ -50,6 +52,8 @@ abstract interface class RuntimeFailureBase {
 class RuntimeFailure implements RuntimeFailureBase {
   const RuntimeFailure({
     required this.code,
+    this.semanticReason = '',
+    this.transportStatus,
     required this.origin,
     required this.kind,
     required this.nature,
@@ -72,6 +76,8 @@ class RuntimeFailure implements RuntimeFailureBase {
   factory RuntimeFailure.fromJson(Map<String, dynamic> json) {
     return RuntimeFailure(
       code: ((json['code'] as String?) ?? 'CLOUD.SYSTEM.unknown_error').trim(),
+      semanticReason: ((json['semanticReason'] as String?) ?? '').trim(),
+      transportStatus: _transportStatus(json['transportStatus']),
       origin: _enumByName(
         RuntimeFailureOrigin.values,
         json['origin'],
@@ -102,6 +108,10 @@ class RuntimeFailure implements RuntimeFailureBase {
   @override
   final String code;
   @override
+  final String semanticReason;
+  @override
+  final int? transportStatus;
+  @override
   final RuntimeFailureOrigin origin;
   @override
   final RuntimeFailureKind kind;
@@ -117,6 +127,8 @@ class RuntimeFailure implements RuntimeFailureBase {
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
       'code': code,
+      'semanticReason': semanticReason,
+      if (transportStatus != null) 'transportStatus': transportStatus,
       'origin': origin.name,
       'kind': kind.name,
       'nature': nature.name,
@@ -125,6 +137,16 @@ class RuntimeFailure implements RuntimeFailureBase {
       'recovery': recovery.toJson(),
     };
   }
+}
+
+int? _transportStatus(Object? raw) {
+  final value = switch (raw) {
+    int value => value,
+    String value => int.tryParse(value.trim()),
+    _ => null,
+  };
+  if (value == null || value < 100 || value > 599) return null;
+  return value;
 }
 
 T _enumByName<T extends Enum>(List<T> values, Object? raw, T fallback) {

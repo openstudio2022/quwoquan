@@ -10,15 +10,15 @@
 ///   API_CONTRACT_ENV=gamma \
 ///   GAMMA_BASE_URL=https://gamma-api.quwoquan.com \
 ///   GAMMA_PRODUCT_OPS_BASE_URL=https://gamma-product-ops.quwoquan.com \
-///   GAMMA_TEST_AUTH_TOKEN=TOKEN \
 ///   make test-api-contract
 ///
 ///   # 或直接执行本文件：
 ///   flutter test test/api_integration/cloud/content/api_contract_runner.dart \
 ///     --dart-define=API_CONTRACT_ENV=gamma \
-///     --dart-define=API_CONTRACT_BASE_URL=... \
-///     --dart-define=TEST_AUTH_TOKEN=...
+///     --dart-define=API_CONTRACT_BASE_URL=...
 ///   ```
+///
+/// Runner 通过公开匿名登录取得短期 bearer；不接收外部 token，也不注入用户身份头。
 ///
 /// CI 策略：
 ///   - daily（gamma 必须可用）
@@ -38,6 +38,7 @@ import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 
 import '../../../support/api_contract/local_bad_certificate_overrides.dart';
+import '../../../support/api_contract/local_gamma_anonymous_session.dart';
 
 // dart-define 注入；本地执行时通过 make test-api-contract 传入。
 const _apiContractEnv = String.fromEnvironment(
@@ -45,12 +46,10 @@ const _apiContractEnv = String.fromEnvironment(
   defaultValue: 'gamma',
 );
 const _apiBase = String.fromEnvironment('API_CONTRACT_BASE_URL');
-const _testToken = String.fromEnvironment('TEST_AUTH_TOKEN');
 const _localGammaT3Scope = String.fromEnvironment('LOCAL_GAMMA_T3_SCOPE');
 const _allowBadCertificateForLocalApiContract = bool.fromEnvironment(
   'API_CONTRACT_ALLOW_BAD_CERT',
 );
-const _currentUserId = 'fixture_user_current';
 const _localGammaSeedImageUrl =
     'media/image/s/archived-image/post/fixture_photo_001/v1/cover.png';
 
@@ -61,6 +60,7 @@ const _localGammaSeedImageUrl =
 // checking this flag prevents LateInitializationError on _client.
 bool _apiAvailable = false;
 late http.Client _client;
+late LocalGammaAnonymousSession _session;
 
 /// 在目标环境上创建一条 image post，返回新建 postId。
 Future<String> _seedPhotoPost() async {
@@ -109,16 +109,11 @@ Future<void> _deletePost(String postId) async {
   // 404 可接受（已被其他测试删除或自动清理）
 }
 
-Map<String, String> _authHeaders(String pageId) =>
-    CloudRequestHeaders.withOwnerSubAccountContext(
-      <String, String>{
-        ..._client.headers ?? {},
-        ...CloudRequestHeaders.forPage(pageId),
-        if (_testToken.isNotEmpty) 'Authorization': 'Bearer $_testToken',
-      },
-      ownerUserId: _currentUserId,
-      subAccountId: _currentUserId,
-    );
+Map<String, String> _authHeaders(String pageId) => <String, String>{
+  ..._client.headers ?? {},
+  ...CloudRequestHeaders.forPage(pageId),
+  'Authorization': _session.authorizationHeader,
+};
 
 bool get _isLocalGammaContentOnly =>
     _apiContractEnv == 'gamma' && _localGammaT3Scope == 'content';
@@ -145,6 +140,11 @@ void main() {
       throw StateError('L3: $_apiContractEnv unreachable ($e)');
     }
     _client = http.Client();
+    _session = await LocalGammaAnonymousSession.login(
+      client: _client,
+      baseUrl: _apiBase,
+      subject: 'content-api-contract-v1',
+    );
     _apiAvailable = true;
   });
 
@@ -431,8 +431,11 @@ void main() {
         body: resp.body,
         requestPath: '/v1/content/posts/nonexistent',
       );
-      expect(exception.errorCode, ContentErrorCode.postNotFound);
-      expect(ContentErrorMessages.zh[exception.errorCode!], '内容不存在或已删除');
+      expect(exception.domainErrorCode?.value, ContentErrorCode.postNotFound);
+      expect(
+        ContentErrorMessages.zh[exception.domainErrorCode?.value],
+        '内容不存在或已删除',
+      );
     });
   });
 
@@ -500,20 +503,18 @@ void main() {
             headers: {
               ..._authHeaders('content.report.create'),
               'Content-Type': 'application/json',
+              'Idempotency-Key':
+                  'report-${DateTime.now().microsecondsSinceEpoch}',
             },
             body: jsonEncode({
               'targetId': postId,
               'targetType': 'post',
-              'reason': 'inappropriate',
-              'note': 'api contract',
+              'reason': 'spam',
+              'description': 'api contract',
             }),
           )
           .timeout(const Duration(seconds: 10));
-      expect(
-        [200, 201, 204].contains(resp.statusCode),
-        isTrue,
-        reason: 'report route should be available and successful',
-      );
+      expect(resp.statusCode, 204);
     });
 
     test(

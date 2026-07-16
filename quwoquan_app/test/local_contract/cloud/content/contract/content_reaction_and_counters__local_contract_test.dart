@@ -6,13 +6,28 @@ void main() {
   group('ContentReactionState.fromMap', () {
     test('parses liked and postId', () {
       final s = ContentReactionState.fromMap(<String, dynamic>{
+        'found': true,
         'postId': 'p1',
-        'userId': 'u1',
         'liked': true,
+        'version': 3,
       });
       expect(s.postId, 'p1');
-      expect(s.userId, 'u1');
+      expect(s.found, isTrue);
       expect(s.liked, isTrue);
+      expect(s.version, 3);
+    });
+
+    test('rejects retired mixed reaction/share aliases', () {
+      expect(
+        () => ContentReactionState.fromMap(<String, dynamic>{
+          'found': true,
+          'postId': 'p1',
+          'liked': true,
+          'version': 1,
+          'shared': true,
+        }),
+        throwsFormatException,
+      );
     });
   });
 

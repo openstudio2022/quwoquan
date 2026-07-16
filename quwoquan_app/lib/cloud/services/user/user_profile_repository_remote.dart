@@ -4,10 +4,8 @@ class RemoteUserProfileRepository extends UserProfileRepository {
   RemoteUserProfileRepository({CloudHttpClient? httpClient, String? baseUrl})
     : _httpClient = httpClient ?? CloudHttpClient(),
       _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
-
   final CloudHttpClient _httpClient;
   final String _baseUrl;
-
   Uri _uri(String path, {Map<String, String>? queryParameters}) {
     return Uri.parse(
       '$_baseUrl$path',
@@ -51,89 +49,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     );
   }
 
-  static String _normalizeRelationshipState(Map<String, dynamic> map) {
-    final state = map['relationState']?.toString() ?? '';
-    if (state.isNotEmpty) {
-      return state;
-    }
-    final isFollowing = map['isFollowing'] == true;
-    final isFollowedBy = map['isFollowedBy'] == true;
-    if (isFollowing && isFollowedBy) return 'mutual';
-    if (isFollowing) return 'following';
-    if (isFollowedBy) return 'followed_by';
-    return 'not_following';
-  }
-
-  static Map<String, dynamic> _normalizeRelationshipItem(
-    Map<String, dynamic> raw,
-  ) {
-    final subAccountId =
-        raw['subAccountId']?.toString() ??
-        raw['targetSubAccountId']?.toString() ??
-        raw['userId']?.toString() ??
-        '';
-    final displayName =
-        raw['displayName']?.toString() ??
-        raw['nickname']?.toString() ??
-        subAccountId;
-    final userHandle =
-        raw['userHandle']?.toString() ??
-        raw['username']?.toString() ??
-        subAccountId;
-    final username =
-        raw['username']?.toString() ??
-        raw['userHandle']?.toString() ??
-        subAccountId;
-    final avatarUrl =
-        raw['avatarUrl']?.toString() ??
-        raw['avatarUrlSnapshot']?.toString() ??
-        '';
-    final relationState = _normalizeRelationshipState(raw);
-    final hasRelationshipCapability = raw['relationshipCapability'] is Map;
-    final relationshipCapability = hasRelationshipCapability
-        ? Map<String, dynamic>.from(raw['relationshipCapability'] as Map)
-        : <String, dynamic>{
-            'targetSubAccountId': subAccountId,
-            'relationState': relationState,
-            'canFollow':
-                relationState == 'not_following' ||
-                relationState == 'followed_by',
-            'canUnfollow':
-                relationState == 'following' || relationState == 'mutual',
-            'canFollowBack': relationState == 'followed_by',
-          };
-    return <String, dynamic>{
-      ...raw,
-      'subAccountId': subAccountId,
-      'userId': subAccountId,
-      'username': username,
-      'userHandle': userHandle,
-      'displayName': displayName,
-      'nickname': displayName,
-      'avatarUrl': avatarUrl,
-      'profileVisibility': raw['profileVisibility']?.toString() ?? 'public',
-      'relationState': relationState,
-      'relationshipCapability': relationshipCapability,
-    };
-  }
-
-  static RelationshipNormalizedWireDto relationshipNormalizedFromRaw(
-    Map<String, dynamic> raw,
-  ) {
-    final relationState = _normalizeRelationshipState(raw);
-    final isMutual = relationState == 'mutual';
-    final isFollowing = relationState == 'following' || isMutual;
-    final isFollowedBy = relationState == 'followed_by' || isMutual;
-    return RelationshipNormalizedWireDto(
-      relationState: relationState,
-      isFollowing: raw['isFollowing'] == true || isFollowing,
-      isFollowedBy: raw['isFollowedBy'] == true || isFollowedBy,
-      isMutual: raw['isMutual'] == true || isMutual,
-    );
-  }
-
   // ── 档案 ──────────────────────────────────────────────────────────────────
-
   @override
   Future<SubAccountProfileViewData> getUserProfile(String userId) async {
     if (userId == 'me') {
@@ -152,7 +68,6 @@ class RemoteUserProfileRepository extends UserProfileRepository {
         );
       }
     }
-
     final subjectUrl = _uri(
       UserApiMetadata.getSubAccountProfilePath(subAccountId: userId),
     );
@@ -171,7 +86,6 @@ class RemoteUserProfileRepository extends UserProfileRepository {
         SubAccountProfileWireDto.fromMap(map),
       );
     }
-
     throw Exception('getUserProfile failed: subject=${subjectResp.statusCode}');
   }
 
@@ -349,44 +263,6 @@ class RemoteUserProfileRepository extends UserProfileRepository {
   }
 
   @override
-  Future<CursorPage<CircleDto>> listUserCirclesPage(
-    String userId, {
-    String? query,
-    String? cursor,
-    int limit = CloudApiDefaults.userCirclesLimit,
-  }) async {
-    final params = <String, String>{'limit': '$limit'};
-    if ((query ?? '').trim().isNotEmpty) {
-      params['query'] = query!.trim();
-    }
-    if ((cursor ?? '').trim().isNotEmpty) {
-      params['cursor'] = cursor!.trim();
-    }
-    final url = _uri(
-      CircleApiMetadata.listUserCirclesPath(userId: userId),
-      queryParameters: params,
-    );
-    final resp = await _httpClient.get(
-      url,
-      headers: CloudRequestHeaders.forPage(
-        CircleRequestPageIds.listUserCircles,
-      ),
-    );
-    if (resp.statusCode != 200) {
-      throw Exception('listUserCircles failed: ${resp.statusCode}');
-    }
-    final page = CloudResponseDecoder.asCursorPage(
-      json.decode(resp.body),
-      context: CircleRequestPageIds.listUserCircles,
-    );
-    return CursorPage<CircleDto>(
-      items: page.items.map(CircleDto.fromMap).toList(growable: false),
-      nextCursor: page.nextCursor,
-      totalCount: page.totalCount,
-    );
-  }
-
-  @override
   Future<UserProfileStatsViewData> getUserStats(String userId) async {
     final profile = await getUserProfile(userId);
     return UserProfileStatsViewData.fromProfile(profile);
@@ -476,11 +352,11 @@ class RemoteUserProfileRepository extends UserProfileRepository {
 
   @override
   Future<List<RecentSearchEntryView>> listRecentSearches() async {
-    final url = _uri(UserApiMetadata.listRecentSearchesPath);
+    final url = _uri(SearchApiMetadata.listRecentSearchesPath);
     final resp = await _httpClient.get(
       url,
       headers: CloudRequestHeaders.forPage(
-        UserRequestPageIds.listRecentSearches,
+        SearchRequestPageIds.listRecentSearches,
       ),
     );
     if (resp.statusCode != 200) {
@@ -488,7 +364,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     }
     return _decodeItemsAs(
       resp,
-      UserRequestPageIds.listRecentSearches,
+      SearchRequestPageIds.listRecentSearches,
       (m) => RecentSearchEntryView.fromRecentSearchEntryWire(
         RecentSearchEntryWireDto.fromMap(m),
       ),
@@ -504,11 +380,13 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     final scopeValue = scope.wireValue;
     final seed = '$scopeValue|${facet ?? ''}|${query.trim().toLowerCase()}';
     final entryId = 'recent_${seed.hashCode.abs().toRadixString(16)}';
-    final url = _uri(UserApiMetadata.upsertRecentSearchPath(entryId: entryId));
+    final url = _uri(
+      SearchApiMetadata.upsertRecentSearchPath(entryId: entryId),
+    );
     final resp = await _httpClient.put(
       url,
       headers: {
-        ...CloudRequestHeaders.forPage(UserRequestPageIds.upsertRecentSearch),
+        ...CloudRequestHeaders.forPage(SearchRequestPageIds.upsertRecentSearch),
         'Content-Type': 'application/json',
       },
       body: json.encode(<String, dynamic>{
@@ -523,18 +401,20 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     }
     return RecentSearchEntryView.fromRecentSearchEntryWire(
       RecentSearchEntryWireDto.fromMap(
-        _decodeObject(resp, UserRequestPageIds.upsertRecentSearch),
+        _decodeObject(resp, SearchRequestPageIds.upsertRecentSearch),
       ),
     );
   }
 
   @override
   Future<void> deleteRecentSearch(String entryId) async {
-    final url = _uri(UserApiMetadata.deleteRecentSearchPath(entryId: entryId));
+    final url = _uri(
+      SearchApiMetadata.deleteRecentSearchPath(entryId: entryId),
+    );
     final resp = await _httpClient.delete(
       url,
       headers: CloudRequestHeaders.forPage(
-        UserRequestPageIds.deleteRecentSearch,
+        SearchRequestPageIds.deleteRecentSearch,
       ),
     );
     if (resp.statusCode != 200 && resp.statusCode != 204) {
@@ -544,11 +424,11 @@ class RemoteUserProfileRepository extends UserProfileRepository {
 
   @override
   Future<void> clearRecentSearches() async {
-    final url = _uri(UserApiMetadata.clearRecentSearchesPath);
+    final url = _uri(SearchApiMetadata.clearRecentSearchesPath);
     final resp = await _httpClient.delete(
       url,
       headers: CloudRequestHeaders.forPage(
-        UserRequestPageIds.clearRecentSearches,
+        SearchRequestPageIds.clearRecentSearches,
       ),
     );
     if (resp.statusCode != 200 && resp.statusCode != 204) {
@@ -709,7 +589,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
       context: UserRequestPageIds.getRelationship,
     );
     return RelationshipViewData.fromRelationshipNormalizedWire(
-      relationshipNormalizedFromRaw(data),
+      _relationshipNormalizedFromRaw(data),
     );
   }
 
@@ -766,22 +646,17 @@ class RemoteUserProfileRepository extends UserProfileRepository {
         ContentRequestPageIds.listProfileInteractionActivitiesReceived,
       ),
     );
-    if (resp.statusCode == 200) {
-      return _decodeItemsAs(
-        resp,
-        ContentRequestPageIds.listProfileInteractionActivitiesReceived,
-        (m) =>
-            ProfileInteractionActivityViewData.fromProfileInteractionActivityWire(
-              ProfileInteractionActivityWireDto.fromMap(m),
-            ),
-      );
+    if (resp.statusCode != 200) {
+      _throwStatus(resp, url.path);
     }
-    if (resp.statusCode == 204 ||
-        resp.statusCode == 404 ||
-        resp.statusCode == 501) {
-      return const <ProfileInteractionActivityViewData>[];
-    }
-    throw Exception('listUserInteractionReceived failed: ${resp.statusCode}');
+    return _decodeItemsAs(
+      resp,
+      ContentRequestPageIds.listProfileInteractionActivitiesReceived,
+      (m) =>
+          ProfileInteractionActivityViewData.fromProfileInteractionActivityWire(
+            ProfileInteractionActivityWireDto.fromMap(m),
+          ),
+    );
   }
 
   @override
@@ -804,28 +679,93 @@ class RemoteUserProfileRepository extends UserProfileRepository {
         ContentRequestPageIds.listProfileInteractionActivitiesSent,
       ),
     );
-    if (resp.statusCode == 200) {
-      return _decodeItemsAs(
-        resp,
-        ContentRequestPageIds.listProfileInteractionActivitiesSent,
-        (m) =>
-            ProfileInteractionActivityViewData.fromProfileInteractionActivityWire(
-              ProfileInteractionActivityWireDto.fromMap(m),
-            ),
-      );
+    if (resp.statusCode != 200) {
+      _throwStatus(resp, url.path);
     }
-    if (resp.statusCode == 204 ||
-        resp.statusCode == 404 ||
-        resp.statusCode == 501) {
-      return const <ProfileInteractionActivityViewData>[];
+    return _decodeItemsAs(
+      resp,
+      ContentRequestPageIds.listProfileInteractionActivitiesSent,
+      (m) =>
+          ProfileInteractionActivityViewData.fromProfileInteractionActivityWire(
+            ProfileInteractionActivityWireDto.fromMap(m),
+          ),
+    );
+  }
+
+  @override
+  Future<CursorPage<ProfileInteractionActivityViewData>>
+  listProfileShareInteractions(
+    String subAccountId, {
+    required String direction,
+    String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
+    final isReceived = direction == 'received';
+    final path = isReceived
+        ? ContentApiMetadata.listProfileInteractionActivitiesReceivedPath(
+            subAccountId: subAccountId,
+          )
+        : ContentApiMetadata.listProfileInteractionActivitiesSentPath(
+            subAccountId: subAccountId,
+          );
+    final context = isReceived
+        ? ContentRequestPageIds.listProfileInteractionActivitiesReceived
+        : ContentRequestPageIds.listProfileInteractionActivitiesSent;
+    final params = <String, String>{'type': 'share', 'limit': '$limit'};
+    if (cursor != null && cursor.trim().isNotEmpty) {
+      params['cursor'] = cursor.trim();
     }
-    throw Exception('listUserInteractionSent failed: ${resp.statusCode}');
+    final response = await _httpClient.get(
+      _uri(path, queryParameters: params),
+      headers: CloudRequestHeaders.forPage(context),
+    );
+    if (response.statusCode != 200) {
+      _throwStatus(response, path);
+    }
+    final payload = CloudResponseDecoder.asObject(
+      json.decode(response.body),
+      context: context,
+    );
+    final items = CloudResponseDecoder.mapList(payload, 'items')
+        .map(
+          (item) =>
+              ProfileInteractionActivityViewData.fromProfileInteractionActivityWire(
+                ProfileInteractionActivityWireDto.fromMap(item),
+              ),
+        )
+        .toList(growable: false);
+    final nextCursor = payload['nextCursor']?.toString().trim();
+    return CursorPage<ProfileInteractionActivityViewData>(
+      items: items,
+      nextCursor: nextCursor == null || nextCursor.isEmpty ? null : nextCursor,
+    );
+  }
+
+  @override
+  Future<void> markProfileShareInteractionState(
+    String subAccountId,
+    String interactionId, {
+    required String state,
+  }) async {
+    final path = ContentApiMetadata.updateProfileInteractionStatePath(
+      subAccountId: subAccountId,
+      interactionId: interactionId,
+    );
+    final response = await _httpClient.patch(
+      _uri(path, queryParameters: <String, String>{'state': state}),
+      headers: CloudRequestHeaders.forPage(
+        ContentRequestPageIds.updateProfileInteractionState,
+      ),
+    );
+    if (response.statusCode != 204) {
+      _throwStatus(response, path);
+    }
   }
 
   // ── 分身 ──────────────────────────────────────────────────────────────────
 
   @override
-  Future<List<PersonaDto>> listPersonas() async {
+  Future<List<PersonaManagementItemWireDto>> listPersonas() async {
     final url = _uri(UserApiMetadata.listPersonasPath);
     final resp = await _httpClient.get(
       url,
@@ -843,7 +783,9 @@ class RemoteUserProfileRepository extends UserProfileRepository {
   }
 
   @override
-  Future<PersonaDto> createPersona(PersonaCreateRequestDto request) async {
+  Future<PersonaManagementItemWireDto> createPersona(
+    PersonaCreateRequestDto request,
+  ) async {
     final url = _uri(UserApiMetadata.createPersonaPath);
     final bodyMap = _omitNullMapValues(request.toMap());
     final resp = await _httpClient.post(

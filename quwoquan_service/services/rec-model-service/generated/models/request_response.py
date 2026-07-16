@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict
 
 
 class CandidateInput(BaseModel):
-    """候选条目特征（请求中用）"""
+    """评分 Reader 的候选 transport DTO，不登记为业务对象。"""
     contentId: str | None = None
     contentType: str | None = None
     authorId: str | None = None
@@ -24,14 +24,14 @@ class CandidateInput(BaseModel):
 
 
 class CandidateScore(BaseModel):
-    """单条候选得分"""
+    """单条候选评分 transport 结果。"""
     contentId: str | None = None
     score: float | None = None
     detail: dict[str, Any] | None = None
 
 
 class ModelScoreRequest(BaseModel):
-    """打分请求（多场景：content_feed / circle_discovery / friend_suggestion）"""
+    """已激活 RecommendationModelRelease 的多场景评分 transport DTO，不是业务对象。"""
     scenario: str
     userId: str
     sessionId: str
@@ -42,5 +42,15 @@ class ModelScoreRequest(BaseModel):
 
 
 class ModelScoreResponse(BaseModel):
-    """打分响应"""
+    """单次评分 Reader 的 transport 结果。"""
     scores: list[CandidateScore]
+
+
+class BatchModelScoreRequest(BaseModel):
+    """同一调用上下文中的强类型批量评分请求。"""
+    requests: list[ModelScoreRequest]
+
+
+class BatchModelScoreResponse(BaseModel):
+    """与批量评分请求顺序一一对应的强类型结果。"""
+    results: list[ModelScoreResponse]

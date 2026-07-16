@@ -9,18 +9,54 @@ import (
 
 	rterr "quwoquan_service/runtime/errors"
 	"quwoquan_service/services/circle-service/internal/application"
+	behaviorfactapp "quwoquan_service/services/circle-service/internal/application/circle/circle_behavior_fact"
+	fileapp "quwoquan_service/services/circle-service/internal/application/circle/circle_file"
+	groupapp "quwoquan_service/services/circle-service/internal/application/circle/circle_group"
+	groupmembershipapp "quwoquan_service/services/circle-service/internal/application/circle/circle_group_membership"
+	membershipapp "quwoquan_service/services/circle-service/internal/application/circle/circle_membership"
+	placementapp "quwoquan_service/services/circle-service/internal/application/circle/circle_post_placement"
+	behaviorfactmodel "quwoquan_service/services/circle-service/internal/domain/circle/circle_behavior_fact/model"
 	model "quwoquan_service/services/circle-service/internal/domain/circle/model"
-	"quwoquan_service/services/circle-service/internal/infrastructure/persistence"
 )
 
 // CircleHandler adapts circle application services to HTTP.
 type CircleHandler struct {
-	circleService *application.CircleService
-	fileService   *application.FileService
+	circleService           *application.CircleService
+	fileCommands            *fileapp.CommandFacade
+	fileQueries             *fileapp.QueryFacade
+	behaviorFacts           *behaviorfactapp.Writer
+	groupCommands           *groupapp.CommandFacade
+	groupQueries            *groupapp.QueryFacade
+	groupMembershipCommands *groupmembershipapp.CommandFacade
+	groupMembershipQueries  *groupmembershipapp.QueryFacade
+	membershipCommands      *membershipapp.CommandFacade
+	membershipQueries       *membershipapp.QueryFacade
+	placementCommands       *placementapp.CommandFacade
 }
 
-func NewCircleHandler(cs *application.CircleService, fs *application.FileService) *CircleHandler {
-	return &CircleHandler{circleService: cs, fileService: fs}
+func NewCircleHandler(
+	cs *application.CircleService,
+	fileCommands *fileapp.CommandFacade,
+	fileQueries *fileapp.QueryFacade,
+	behaviorFacts *behaviorfactapp.Writer,
+	groupCommands *groupapp.CommandFacade,
+	groupQueries *groupapp.QueryFacade,
+	groupMembershipCommands *groupmembershipapp.CommandFacade,
+	groupMembershipQueries *groupmembershipapp.QueryFacade,
+	membershipCommands *membershipapp.CommandFacade,
+	membershipQueries *membershipapp.QueryFacade,
+	placements *placementapp.CommandFacade,
+) *CircleHandler {
+	if cs == nil || fileCommands == nil || fileQueries == nil || behaviorFacts == nil || groupCommands == nil || groupQueries == nil || groupMembershipCommands == nil || groupMembershipQueries == nil || membershipCommands == nil || membershipQueries == nil || placements == nil {
+		panic("CircleHandler requires all object facades")
+	}
+	return &CircleHandler{
+		circleService: cs, fileCommands: fileCommands, fileQueries: fileQueries, behaviorFacts: behaviorFacts,
+		groupCommands: groupCommands, groupQueries: groupQueries,
+		groupMembershipCommands: groupMembershipCommands, groupMembershipQueries: groupMembershipQueries,
+		membershipCommands: membershipCommands, membershipQueries: membershipQueries,
+		placementCommands: placements,
+	}
 }
 
 func (h *CircleHandler) Routes() http.Handler {
@@ -33,8 +69,8 @@ func (h *CircleHandler) Routes() http.Handler {
 	mux.HandleFunc("/v1/circles/behaviors", h.handleBehaviors)
 	mux.HandleFunc("/v1/circles/", h.handleCircleSubRoutes)
 
-	// User circles
-	mux.HandleFunc("/v1/users/", h.handleUserCircles)
+	// Persona membership projection
+	mux.HandleFunc("/v1/personas/", h.handlePersonaCircles)
 
 	return mux
 }
@@ -132,12 +168,8 @@ func (h *CircleHandler) handleCircleSubRoutes(w http.ResponseWriter, r *http.Req
 
 	subResource := parts[1]
 	switch subResource {
-	case "join":
-		h.handleJoinCircle(w, r, circleID)
-	case "leave":
-		h.handleLeaveCircle(w, r, circleID)
-	case "members":
-		h.handleMembers(w, r, circleID, parts[2:])
+	case "memberships":
+		h.handleMemberships(w, r, circleID, parts[2:])
 	case "groups":
 		h.handleGroups(w, r, circleID, parts[2:])
 	case "feed":
@@ -150,6 +182,8 @@ func (h *CircleHandler) handleCircleSubRoutes(w http.ResponseWriter, r *http.Req
 		h.handleUpdateSections(w, r, circleID)
 	case "files":
 		h.handleFiles(w, r, circleID, parts[2:])
+	case "post-placements":
+		h.handlePostPlacements(w, r, circleID, parts[2:])
 	default:
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "无效路径", "unknown sub-resource: "+subResource))
 	}
@@ -186,75 +220,6 @@ func (h *CircleHandler) handleArchiveCircle(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// --- Membership ---
-
-func (h *CircleHandler) handleJoinCircle(w http.ResponseWriter, r *http.Request, circleID string) {
-	if r.Method != http.MethodPost {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "only POST"))
-		return
-	}
-	if err := h.circleService.JoinCircle(r.Context(), circleID, resolveActorSubAccountID(r)); err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func (h *CircleHandler) handleLeaveCircle(w http.ResponseWriter, r *http.Request, circleID string) {
-	if r.Method != http.MethodPost {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "only POST"))
-		return
-	}
-	if err := h.circleService.LeaveCircle(r.Context(), circleID, resolveActorSubAccountID(r)); err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func (h *CircleHandler) handleMembers(w http.ResponseWriter, r *http.Request, circleID string, rest []string) {
-	if len(rest) == 0 {
-		if r.Method != http.MethodGet {
-			writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "only GET"))
-			return
-		}
-		q := r.URL.Query()
-		limit, _ := strconv.Atoi(q.Get("limit"))
-		if limit <= 0 {
-			limit = 20
-		}
-		members, cursor := h.circleService.ListMembers(r.Context(), circleID, limit, q.Get("cursor"))
-		if members == nil {
-			members = []model.CircleMember{}
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"items": members, "cursor": cursor})
-		return
-	}
-
-	// /v1/circles/{circleId}/members/{userId}/role
-	if len(rest) >= 2 && rest[1] == "role" {
-		if r.Method != http.MethodPatch {
-			writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "only PATCH"))
-			return
-		}
-		var body struct {
-			Role string `json:"role"`
-		}
-		if err := readJSON(r, &body); err != nil {
-			writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "请求体无效", err.Error()))
-			return
-		}
-		if err := h.circleService.UpdateMemberRole(r.Context(), circleID, rest[0], body.Role); err != nil {
-			writeHTTPError(w, r, err)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
-
-	writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "无效路径", "unknown member sub-resource"))
 }
 
 // --- Feed ---
@@ -360,105 +325,6 @@ func (h *CircleHandler) handleUpdateSections(w http.ResponseWriter, r *http.Requ
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *CircleHandler) handleGroups(w http.ResponseWriter, r *http.Request, circleID string, rest []string) {
-	if len(rest) != 0 || r.Method != http.MethodGet {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "only GET"))
-		return
-	}
-	q := r.URL.Query()
-	limit, _ := strconv.Atoi(q.Get("limit"))
-	if limit <= 0 {
-		limit = 20
-	}
-	resp, err := h.circleService.ListGroups(r.Context(), application.ListCircleGroupsRequest{
-		CircleID:      circleID,
-		GroupType:     q.Get("groupType"),
-		Visibility:    q.Get("visibility"),
-		ParentGroupID: q.Get("parentGroupId"),
-		NodeType:      q.Get("nodeType"),
-		Cursor:        q.Get("cursor"),
-		Limit:         limit,
-	})
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, resp)
-}
-
-// --- Files ---
-
-func (h *CircleHandler) handleFiles(w http.ResponseWriter, r *http.Request, circleID string, rest []string) {
-	if len(rest) == 0 {
-		switch r.Method {
-		case http.MethodGet:
-			q := r.URL.Query()
-			limit, _ := strconv.Atoi(q.Get("limit"))
-			if limit <= 0 {
-				limit = 20
-			}
-			files, cursor := h.fileService.ListFiles(r.Context(), circleID, persistence.ListFilesOpts{
-				ParentID: q.Get("parentId"),
-				Sort:     q.Get("sort"),
-				Cursor:   q.Get("cursor"),
-				Limit:    limit,
-			})
-			if files == nil {
-				files = []model.CircleFile{}
-			}
-			writeJSON(w, http.StatusOK, map[string]any{"items": files, "cursor": cursor})
-		case http.MethodPost:
-			var req application.CreateFileRequest
-			if err := readJSON(r, &req); err != nil {
-				writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "请求体无效", err.Error()))
-				return
-			}
-			req.CircleID = circleID
-			req.UploaderID = resolveUserID(r)
-			file, err := h.fileService.CreateFile(r.Context(), req)
-			if err != nil {
-				writeHTTPError(w, r, err)
-				return
-			}
-			writeJSON(w, http.StatusCreated, map[string]any{"data": file})
-		default:
-			writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "method not allowed"))
-		}
-		return
-	}
-
-	fileID := rest[0]
-	switch r.Method {
-	case http.MethodGet:
-		file, err := h.fileService.GetFile(r.Context(), circleID, fileID)
-		if err != nil {
-			writeHTTPError(w, r, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"data": file})
-	case http.MethodPatch:
-		var req application.UpdateFileRequest
-		if err := readJSON(r, &req); err != nil {
-			writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "请求体无效", err.Error()))
-			return
-		}
-		file, err := h.fileService.UpdateFile(r.Context(), circleID, fileID, req)
-		if err != nil {
-			writeHTTPError(w, r, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"data": file})
-	case http.MethodDelete:
-		if err := h.fileService.DeleteFile(r.Context(), circleID, fileID); err != nil {
-			writeHTTPError(w, r, err)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-	default:
-		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "method not allowed"))
-	}
-}
-
 // --- Behaviors ---
 
 func (h *CircleHandler) handleBehaviors(w http.ResponseWriter, r *http.Request) {
@@ -466,43 +332,21 @@ func (h *CircleHandler) handleBehaviors(w http.ResponseWriter, r *http.Request) 
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "only POST"))
 		return
 	}
-	var report map[string]any
-	if err := readJSON(r, &report); err != nil {
+	var request struct {
+		CircleID  string `json:"circleId"`
+		EventType string `json:"eventType"`
+	}
+	if err := readStrictJSON(r, &request); err != nil {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "请求体无效", err.Error()))
 		return
 	}
-	if err := h.circleService.ReportBehavior(r.Context(), report); err != nil {
+	if _, err := h.behaviorFacts.Append(r.Context(), behaviorfactapp.AppendCommand{
+		CircleID: request.CircleID, EventType: behaviorfactmodel.BehaviorEventType(request.EventType),
+	}); err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// --- User circles ---
-
-func (h *CircleHandler) handleUserCircles(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "only GET"))
-		return
-	}
-	// /v1/users/{userId}/circles
-	path := strings.TrimPrefix(r.URL.Path, "/v1/users/")
-	parts := strings.Split(path, "/")
-	if len(parts) < 2 || parts[1] != "circles" {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "无效路径", "expected /v1/users/{userId}/circles"))
-		return
-	}
-	userID := parts[0]
-	q := r.URL.Query()
-	limit, _ := strconv.Atoi(q.Get("limit"))
-	if limit <= 0 {
-		limit = 20
-	}
-	circles, cursor := h.circleService.ListUserCircles(r.Context(), userID, limit, q.Get("cursor"))
-	if circles == nil {
-		circles = []model.Circle{}
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": circles, "cursor": cursor})
 }
 
 // --- Helpers ---
@@ -512,13 +356,6 @@ func resolveUserID(r *http.Request) string {
 		return uid
 	}
 	return "anonymous"
-}
-
-func resolveActorSubAccountID(r *http.Request) string {
-	if actorID := r.Header.Get("X-Client-Sub-Account-Id"); actorID != "" {
-		return actorID
-	}
-	return resolveUserID(r)
 }
 
 func readJSON(r *http.Request, v any) error {

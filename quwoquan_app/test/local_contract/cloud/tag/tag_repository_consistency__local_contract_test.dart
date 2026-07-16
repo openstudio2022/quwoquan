@@ -73,10 +73,6 @@ void main() {
       expect(result.valid, contains('Topic/主题/自然风光'));
       expect(result.invalid, contains('Topic/不存在'));
     });
-
-    test('feedback 返回 bool（alpha 乐观占位）', () async {
-      expect(await repo.feedback('Topic/旅行', 'click'), isA<bool>());
-    });
   });
 
   group('端云 DTO 字段一致性（后端 *View → 前端 fromJson）', () {

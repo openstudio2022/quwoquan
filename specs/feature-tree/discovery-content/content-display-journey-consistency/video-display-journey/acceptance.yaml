@@ -135,7 +135,7 @@ gwt_acceptance:
     - 数据导入重跑不改变既有 post 的封面优先级。
     - 远端返回只含 `coverUrl` 的兼容样本仍通过同源回退展示。
     contract_refs:
-    - quwoquan_data/schema/produce/post_manifest.schema.json
+    - quwoquan_data/schema/content/post_manifest.schema.json
     - quwoquan_service/services/content-service/cmd/import/main.go
     - quwoquan_app/lib/cloud/runtime/generated/content/post_base_dto.dart
     tests:

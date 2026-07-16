@@ -7,6 +7,8 @@ import 'package:quwoquan_app/core/auth/auth_gate.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
+import '../../../support/runtime_failure_fixtures.dart';
 
 void main() {
   test('source appearance helpers map route values and brightness', () {
@@ -53,6 +55,11 @@ void main() {
       error: CloudException(
         type: CloudErrorType.forbidden,
         message: '请在设置中为本应用开启定位权限',
+        runtimeFailure: testRuntimeFailure(
+          code: 'INTEGRATION.USER.location_permission_required',
+          kind: RuntimeFailureKind.permission,
+          nature: RuntimeFailureNature.requiresPermission,
+        ),
       ),
       category: UiErrorCategory.permissionRequired,
       scope: UiErrorScope.page,
@@ -113,7 +120,15 @@ void main() {
 
     final semantic = UiErrorSemanticResolver.resolve(
       capturedContext,
-      error: CloudException(type: CloudErrorType.network, message: 'network'),
+      error: CloudException(
+        type: CloudErrorType.network,
+        message: 'network',
+        runtimeFailure: testRuntimeFailure(
+          code: 'APP.NETWORK.offline',
+          kind: RuntimeFailureKind.network,
+          nature: RuntimeFailureNature.transient,
+        ),
+      ),
       category: UiErrorCategory.listAppend,
       scope: UiErrorScope.section,
     );
@@ -142,7 +157,15 @@ void main() {
 
     final semantic = UiErrorSemanticResolver.resolve(
       capturedContext,
-      error: CloudException(type: CloudErrorType.network, message: 'network'),
+      error: CloudException(
+        type: CloudErrorType.network,
+        message: 'network',
+        runtimeFailure: testRuntimeFailure(
+          code: 'APP.NETWORK.offline',
+          kind: RuntimeFailureKind.network,
+          nature: RuntimeFailureNature.transient,
+        ),
+      ),
       category: UiErrorCategory.backgroundAction,
       scope: UiErrorScope.section,
       allowRetry: false,
@@ -171,6 +194,10 @@ void main() {
         type: CloudErrorType.notFound,
         message: 'Not found',
         code: EntityErrorCode.homepageNotFound.code,
+        runtimeFailure: testRuntimeFailure(
+          code: EntityErrorCode.homepageNotFound.code,
+          kind: RuntimeFailureKind.notFound,
+        ),
       ),
       category: UiErrorCategory.pageLoad,
       scope: UiErrorScope.page,
@@ -207,7 +234,15 @@ void main() {
       );
       return UiErrorSemanticResolver.resolve(
         capturedContext,
-        error: CloudException(type: CloudErrorType.network, message: 'network'),
+        error: CloudException(
+          type: CloudErrorType.network,
+          message: 'network',
+          runtimeFailure: testRuntimeFailure(
+            code: 'APP.NETWORK.offline',
+            kind: RuntimeFailureKind.network,
+            nature: RuntimeFailureNature.transient,
+          ),
+        ),
         category: category,
         scope: scope,
       );
@@ -220,6 +255,15 @@ void main() {
         scope: UiErrorScope.inlineField,
       );
       expect(semantic.presentation, UiErrorPresentation.inlineField);
+    });
+
+    testWidgets('规则1b form scope → formInlineCard', (tester) async {
+      final semantic = await resolveCase(
+        tester,
+        category: UiErrorCategory.submit,
+        scope: UiErrorScope.form,
+      );
+      expect(semantic.presentation, UiErrorPresentation.formInlineCard);
     });
 
     testWidgets('规则2 authRequired/permissionRequired → gateCard', (

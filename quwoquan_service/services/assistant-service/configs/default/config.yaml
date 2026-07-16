@@ -57,3 +57,8 @@ content_search:
 user_profile:
   base_url: ""
   timeout_ms: 5000
+
+# Assistant 仅通过 typed command client 写 Notification；缺失即启动失败。
+notification_service:
+  base_url: ""
+  timeout_ms: 5000

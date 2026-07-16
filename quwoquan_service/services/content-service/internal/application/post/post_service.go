@@ -1,42 +1,19 @@
 package post
 
 import (
-	"context"
-	"fmt"
 	"log/slog"
-	"net/url"
 	rterr "quwoquan_service/runtime/errors"
-	runtimemedia "quwoquan_service/runtime/media"
+	messaging "quwoquan_service/runtime/messaging"
 	rtrec "quwoquan_service/runtime/recommendation"
-	"quwoquan_service/runtime/repository"
-	"quwoquan_service/services/content-service/internal/application/identity"
-	"quwoquan_service/services/content-service/internal/application/ports"
-	commentdomain "quwoquan_service/services/content-service/internal/domain/comment"
+	commentports "quwoquan_service/services/content-service/internal/domain/comment/ports"
+	postdomain "quwoquan_service/services/content-service/internal/domain/post"
 	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
 	postsemantic "quwoquan_service/services/content-service/internal/domain/post/semantic"
+	reactionports "quwoquan_service/services/content-service/internal/domain/reaction/ports"
 	"strings"
 	"sync"
 	"time"
 )
-
-type ProjectionRebuildReport struct {
-	DryRun                       bool `json:"dryRun"`
-	TotalPosts                   int  `json:"totalPosts"`
-	DraftPosts                   int  `json:"draftPosts"`
-	PublishedPosts               int  `json:"publishedPosts"`
-	DeletedPosts                 int  `json:"deletedPosts"`
-	PublicPosts                  int  `json:"publicPosts"`
-	PrivatePosts                 int  `json:"privatePosts"`
-	CircleVisiblePosts           int  `json:"circleVisiblePosts"`
-	AssistantExcludedPosts       int  `json:"assistantExcludedPosts"`
-	BackfilledContentIdentity    int  `json:"backfilledContentIdentity"`
-	BackfilledAssistantUsePolicy int  `json:"backfilledAssistantUsePolicy"`
-	DiscoveryEligiblePosts       int  `json:"discoveryEligiblePosts"`
-	DiscoveryRevokedPosts        int  `json:"discoveryRevokedPosts"`
-	SemanticMentionPosts         int  `json:"semanticMentionPosts"`
-	ActiveReferenceChanges       int  `json:"activeReferenceChanges"`
-	InvalidPublishedMentions     int  `json:"invalidPublishedMentions"`
-}
 
 type SemanticMentionReprojectionReport struct {
 	CandidateID            string `json:"candidateId"`
@@ -59,75 +36,40 @@ type StoryRuntimeConfig struct {
 }
 
 type PostService struct {
-	store         ports.PostRepository
-	signaler      rtrec.SignalProcessor
-	publisher     repository.EventPublisher
-	projector     ports.Projector
-	logger        *slog.Logger
-	mu            sync.RWMutex
-	reactions     map[string]map[string]contentReactionState // postID -> userID -> state
-	distributions map[string]map[string]bool                 // postID -> circleID -> active
-	reshares      map[string]map[string]bool                 // postID -> (circleID:userID) -> active
-	tombstones    map[string]time.Time                       // postID -> deletedAt
-	mediaAssets   map[string]postmodel.MediaAsset            // mediaID -> asset
-	uploadSession map[string]string                          // sessionID -> mediaID
-	// 评论读写已迁出进程内存：commentStore 承载评论 CRUD/分页/排序/计数（Mongo+Redis
-	// 或内存降级），commentReactionStore 承载三态反应权威成员关系（R-CMT01）。
-	commentStore         commentdomain.Store
-	commentReactionStore commentdomain.ReactionStore
-	commentMaxLen        int // configurable, default 500
-	storyRuntime         StoryRuntimeConfig
-	mediaCDNBase         string
-	mediaUploadBase      string
-	mediaStore           runtimemedia.MediaStore
-	ipResolver           IPLocationResolver // 评论属地解析（默认确定性 stub，生产注入 GeoIP）
+	store                  postDataAccess
+	mediaAssetBindings     MediaAssetBindingReader
+	signaler               rtrec.SignalProcessor
+	publisher              messaging.EventPublisher
+	logger                 *slog.Logger
+	mu                     sync.RWMutex
+	tombstones             map[string]time.Time // postID -> deletedAt
+	commentCounts          commentports.CountReader
+	commentAuthorPage      commentports.AuthorCommentPageReader
+	commentReceivedPage    commentports.ReceivedCommentPageReader
+	shareInteractionStore  postdomain.ShareInteractionStore
+	reactionActivityReader reactionports.ProfileActivityReader
+	commentReactionValues  reactionports.CommentReactionValueReader
+	storyRuntime           StoryRuntimeConfig
+	ipResolver             IPLocationResolver // 评论属地解析（默认确定性 stub，生产注入 GeoIP）
 }
 
-func NewPostService(store ports.PostRepository, opts ...PostServiceOption) *PostService {
-	s := &PostService{
-		store:           store,
-		logger:          slog.Default(),
-		reactions:       map[string]map[string]contentReactionState{},
-		distributions:   map[string]map[string]bool{},
-		reshares:        map[string]map[string]bool{},
-		tombstones:      map[string]time.Time{},
-		mediaAssets:     map[string]postmodel.MediaAsset{},
-		uploadSession:   map[string]string{},
-		commentMaxLen:   500,
-		storyRuntime:    defaultStoryRuntimeConfig(),
-		mediaCDNBase:    "https://media.quwoquan.invalid",
-		mediaUploadBase: "https://media-origin.quwoquan.invalid",
-		mediaStore:      runtimemedia.NewMockMediaStore(),
-		ipResolver:      newDeterministicProvinceResolver(),
+func NewPostService(dataPorts DataPorts, opts ...PostServiceOption) *PostService {
+	if dataPorts.Aggregate == nil || dataPorts.Detail == nil ||
+		dataPorts.Collection == nil || dataPorts.Counters == nil {
+		panic("PostService requires aggregate, detail, collection and counter data ports")
 	}
+	s := &PostService{
+		store:        postDataAccess{ports: dataPorts},
+		logger:       slog.Default(),
+		tombstones:   map[string]time.Time{},
+		storyRuntime: defaultStoryRuntimeConfig(),
+		ipResolver:   newDeterministicProvinceResolver(),
+	}
+	s.mediaAssetBindings = dataPorts.MediaAssets
 	for _, opt := range opts {
 		opt(s)
 	}
 	return s
-}
-
-type contentReactionState struct {
-	Liked bool
-}
-
-func directShareKey(userID string) string {
-	return "direct:" + strings.TrimSpace(userID)
-}
-
-func hasActiveShareForUser(shares map[string]bool, userID string) bool {
-	normalizedUserID := strings.TrimSpace(userID)
-	if normalizedUserID == "" {
-		return false
-	}
-	for shareKey, active := range shares {
-		if !active {
-			continue
-		}
-		if shareActorID(shareKey) == normalizedUserID {
-			return true
-		}
-	}
-	return false
 }
 
 type PostServiceOption func(*PostService)
@@ -138,31 +80,50 @@ func WithSignalProcessor(sp rtrec.SignalProcessor) PostServiceOption {
 }
 
 // WithEventPublisher enables domain event publishing (e.g. PostCreated).
-func WithEventPublisher(pub repository.EventPublisher) PostServiceOption {
+func WithEventPublisher(pub messaging.EventPublisher) PostServiceOption {
 	return func(s *PostService) { s.publisher = pub }
 }
 
-// WithProjector enables in-process read-model projection after writes.
-func WithProjector(p ports.Projector) PostServiceOption {
-	return func(s *PostService) { s.projector = p }
-}
-
-// WithCommentStore injects the comment repository (Mongo+Redis in beta/gamma/prod,
-// in-memory in alpha/tests). Interface lives in the domain layer (R01/R10).
-func WithCommentStore(store commentdomain.Store) PostServiceOption {
+// WithCommentReaders 注入 Profile/Post 投影所需的 Comment 具名只读端口。
+// Comment 写模型和命令 Facade 不得回流到 PostService。
+func WithCommentReaders(readers interface {
+	commentports.CountReader
+	commentports.AuthorCommentPageReader
+	commentports.ReceivedCommentPageReader
+}) PostServiceOption {
 	return func(s *PostService) {
-		if store != nil {
-			s.commentStore = store
+		if readers != nil {
+			s.commentCounts = readers
+			s.commentAuthorPage = readers
+			s.commentReceivedPage = readers
 		}
 	}
 }
 
-// WithCommentReactionStore injects the authoritative three-state comment reaction
-// store. Membership is authoritative; per-comment counts are derived from it.
-func WithCommentReactionStore(store commentdomain.ReactionStore) PostServiceOption {
+func WithProfileCommentReactionValueReader(
+	reader reactionports.CommentReactionValueReader,
+) PostServiceOption {
+	return func(s *PostService) {
+		if reader != nil {
+			s.commentReactionValues = reader
+		}
+	}
+}
+
+// WithShareInteractionStore 注入转发互动不可变事件读模型。
+func WithShareInteractionStore(store postdomain.ShareInteractionStore) PostServiceOption {
 	return func(s *PostService) {
 		if store != nil {
-			s.commentReactionStore = store
+			s.shareInteractionStore = store
+		}
+	}
+}
+
+// WithProfileReactionActivityReader 注入 ContentReaction 的公开 persona 活动读模型。
+func WithProfileReactionActivityReader(reader reactionports.ProfileActivityReader) PostServiceOption {
+	return func(s *PostService) {
+		if reader != nil {
+			s.reactionActivityReader = reader
 		}
 	}
 }
@@ -176,74 +137,6 @@ func WithStoryRuntimeConfig(cfg StoryRuntimeConfig) PostServiceOption {
 	return func(s *PostService) {
 		s.storyRuntime = normalizeStoryRuntimeConfig(cfg)
 	}
-}
-
-func WithMediaURLConfig(cdnBaseURL, uploadBaseURL string) PostServiceOption {
-	return func(s *PostService) {
-		if normalized := normalizeHTTPSBaseURL(cdnBaseURL); normalized != "" {
-			s.mediaCDNBase = normalized
-		}
-		if normalized := normalizeHTTPSBaseURL(uploadBaseURL); normalized != "" {
-			s.mediaUploadBase = normalized
-		}
-	}
-}
-
-func WithMediaStore(store runtimemedia.MediaStore) PostServiceOption {
-	return func(s *PostService) {
-		s.mediaStore = store
-	}
-}
-
-func normalizeHTTPSBaseURL(raw string) string {
-	value := strings.TrimRight(strings.TrimSpace(raw), "/")
-	if value == "" {
-		return ""
-	}
-	parsed, err := url.Parse(value)
-	if err != nil || parsed.Scheme != "https" || parsed.Host == "" {
-		return ""
-	}
-	return value
-}
-
-func mediaFileExt(mediaType string) string {
-	switch strings.ToLower(strings.TrimSpace(mediaType)) {
-	case "video":
-		return "mp4"
-	case "audio":
-		return "m4a"
-	default:
-		return "jpg"
-	}
-}
-
-func mediaMimeType(mediaType string) string {
-	switch strings.ToLower(strings.TrimSpace(mediaType)) {
-	case "video":
-		return "video/mp4"
-	case "audio":
-		return "audio/mp4"
-	default:
-		return "image/jpeg"
-	}
-}
-
-func mediaObjectKey(scope, ownerID, sessionID, mediaID, mediaType string) string {
-	normalizedScope := defaultString(strings.TrimSpace(scope), "draft")
-	normalizedOwner := defaultString(strings.TrimSpace(ownerID), identity.AnonymousFallbackSubAccountID)
-	return fmt.Sprintf(
-		"uploads/post/%s/%s/%s/%s/original.%s",
-		normalizedScope,
-		normalizedOwner,
-		sessionID,
-		mediaID,
-		mediaFileExt(mediaType),
-	)
-}
-
-func mediaURL(base, objectKey string) string {
-	return strings.TrimRight(base, "/") + "/" + strings.TrimLeft(objectKey, "/")
 }
 
 func defaultStoryRuntimeConfig() StoryRuntimeConfig {
@@ -292,82 +185,11 @@ func normalizeStoryRuntimeConfig(cfg StoryRuntimeConfig) StoryRuntimeConfig {
 	return normalized
 }
 
-func (s *PostService) publishPostEvent(
-	ctx context.Context,
-	eventType string,
-	post *postmodel.Post,
-	payload map[string]any,
-	occurredAt time.Time,
-) {
-	if s.publisher == nil || post == nil {
-		return
-	}
-	_ = s.publisher.Publish(ctx, repository.DomainEvent{
-		Type:          eventType,
-		AggregateType: "Post",
-		AggregateID:   post.ID,
-		Payload:       payload,
-		OccurredAt:    occurredAt.Format(time.RFC3339),
-	})
-}
-
-func (s *PostService) projectPostEvent(
-	ctx context.Context,
-	eventType string,
-	post *postmodel.Post,
-	payload map[string]any,
-	occurredAt time.Time,
-) {
-	if s.projector == nil || post == nil {
-		return
-	}
-	projErr := s.projector.Project(ctx, ports.ProjectorEvent{
-		Type:          eventType,
-		AggregateType: "Post",
-		AggregateID:   post.ID,
-		Payload:       payload,
-		OccurredAt:    occurredAt,
-	})
-	if projErr != nil {
-		s.logger.Warn("projector failed after post event", "type", eventType, "postId", post.ID, "err", projErr)
-	}
-}
-
-func (s *PostService) syncDistributionsFromPost(post *postmodel.Post) {
-	if post == nil {
-		return
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	circleIDs := asStringSlice(post.CircleIds)
-	if len(circleIDs) == 0 {
-		delete(s.distributions, post.ID)
-		return
-	}
-	byPost := map[string]bool{}
-	for _, circleID := range circleIDs {
-		if cid := strings.TrimSpace(circleID); cid != "" {
-			byPost[cid] = true
-		}
-	}
-	if len(byPost) == 0 {
-		delete(s.distributions, post.ID)
-		return
-	}
-	s.distributions[post.ID] = byPost
-}
-
 func normalizePostForRead(post *postmodel.Post) *postmodel.Post {
 	if post == nil {
 		return nil
 	}
 	copy := *post
-	if strings.TrimSpace(copy.ContentIdentity) == "" {
-		copy.ContentIdentity = normalizeContentIdentity(copy.ContentType, "")
-	}
-	if strings.TrimSpace(copy.AssistantUsePolicy) == "" {
-		copy.AssistantUsePolicy = "inherit"
-	}
 	copy.Visibility = normalizeVisibility(copy.Visibility)
 	projectSemanticMentionRefs(&copy)
 	return &copy
@@ -413,26 +235,4 @@ func applySemanticMentionPayload(post *postmodel.Post, payload map[string]any) e
 		)
 	}
 	return nil
-}
-
-func canViewPost(post *postmodel.Post, viewerID string, viewerCircleIDs []string) bool {
-	if post == nil {
-		return false
-	}
-	viewerID = strings.TrimSpace(viewerID)
-	if !strings.EqualFold(strings.TrimSpace(post.Status), "published") {
-		return viewerID != "" && viewerID == strings.TrimSpace(post.AuthorId)
-	}
-	visibility := normalizeVisibility(post.Visibility)
-	switch visibility {
-	case "public":
-		return true
-	case "circle_visible":
-		if viewerID != "" && viewerID == strings.TrimSpace(post.AuthorId) {
-			return true
-		}
-		return sharesCircle(asStringSlice(post.CircleIds), viewerCircleIDs)
-	default:
-		return viewerID != "" && viewerID == strings.TrimSpace(post.AuthorId)
-	}
 }

@@ -48,6 +48,10 @@ repo verify/package
 - 本地 host 暴露端口必须来自 `quwoquan_ops/environments/local_env_port_manifest.yaml` 的 1000 端口块 + plane + 10 端口槽位模型。
 - 官方自动化入口统一为 `python3 quwoquan_ops/cli/stackctl.py`。底层脚本可保留，但只作为实现细节；不保留第二套 stackctl wrapper。
 - GitHub Actions、Cursor skill、runbook 与手动命令都必须复用同一套 `stackctl` 子命令，不得复制第二套健康检查、探针或回滚语义。
+- 环境可重建输出只能写入 `.qwq_output/env/<env>/{runs,observability,release,local}/`；
+  本地 target 状态只能写入 `local/<target>/{process,cache}/`，其中 prod 发布状态固定为
+  `QWQ_OUTPUT_ROOT/env/prod/local/prod-hosted/process/release-state/`。静态配置、网络拓扑和
+  证书生成规则仍由领域 deploy 与 Ops environments 维护，不进入 output。
 
 ## 1.0.1 Artifact Policy
 
@@ -159,7 +163,7 @@ curated 媒体目录与公网路由复验已下沉到 prod `gray-initial` rollou
 |------|-------------|----------|
 | `alpha` | 单服务 `APP_ENV=alpha go test ./...`；端侧 `flutter test` | 单实例用例绿 |
 | `beta` | `python3 quwoquan_ops/cli/stackctl.py up --env beta`；App 注入 `APP_RUNTIME_ENV=beta` + `APP_DATA_SOURCE=remote` | 本地 Android/iOS 设备矩阵通过，且新启动前会 stop 旧 beta 栈 |
-| `gamma-local` | `python3 quwoquan_ops/cli/stackctl.py up --env gamma` | local-gamma mirror + App 达到 steady state，并生成 `.qwq_output/env/gamma/local/gamma-local/report.json` / `.qwq_output/env/gamma/runs/**` |
+| `gamma-local` | `python3 quwoquan_ops/cli/stackctl.py up --env gamma` | local-gamma mirror + App 达到 steady state，并生成 `.qwq_output/env/gamma/local/gamma-local/process/report.json` / `.qwq_output/env/gamma/runs/**` |
 | `prod-hosted`（唯一远端目标） | `python3 quwoquan_ops/cli/stackctl.py deploy --target prod-hosted --service <svc> --from-image <old> --to-image <new> --from-config <old_cfg> --to-config <new_cfg> --step <step> --error-rate <rate> --p95-ms <ms> --redis-error-rate <rate>` | `prod gray-initial -> carry-on/checks -> full` 按 rollout stage 自动推进；`gray-initial` 承接真实远端集成与 curated 媒体路由复验；失败自动回滚；关键路径不超过 900 秒 |
 
 ### 4.1 开发者一键启动
@@ -196,7 +200,7 @@ python3 quwoquan_ops/cli/stackctl.py deploy --target prod-hosted --service <svc>
 
 - `deploy --target prod-hosted` 成功后会自动串联 `health --scope full`、`inspect --scope all`、`doctor`；`gray-initial` 还会阻断执行 `stackctl verify --target prod-hosted --tier t4` 页面级 smoke，每个 rollout stage 留下机器可读证据。
 - prod-hosted 为 backend SSH 托管，gray 与 full 因成本共享同一集群；这是有意保留的共享集群拓扑，不抽象成 `prod-gray` 第二环境。
-- 本轮已验证的 gray/full 证据分别见 `.qwq_output/env/prod/runs/20260617T164119Z-deploy-prod-hosted`（`gray-initial` 成功，`4/4 healthy`）与 `.qwq_output/env/prod/runs/20260617T172537Z-deploy-prod-hosted`（`full` 成功，`4/4 healthy`，doctor 无问题）。
+- 本轮已验证的 gray/full 结果：已迁移 canonical run evidence（`gray-initial` 与 `full` 均成功，`4/4 healthy`，doctor 无问题）。
 
 约束：
 
@@ -209,7 +213,7 @@ python3 quwoquan_ops/cli/stackctl.py deploy --target prod-hosted --service <svc>
 
 | 范围 | 命令 / 条件 | 通过判据 |
 |------|-------------|----------|
-| `local-gamma mirror` | `make gate-local-gamma` / `python3 quwoquan_ops/cli/stackctl.py up --env gamma` | `T1/T2` 本地门禁、`T3` 本地真实 API/存储、`T4` 共享 gamma patrol/chat-avatar/environment-smoke 旅程通过并生成 `.qwq_output/env/gamma/local/gamma-local/report.json` 或 `.qwq_output/env/gamma/runs/**` |
+| `local-gamma mirror` | `make gate-local-gamma` / `python3 quwoquan_ops/cli/stackctl.py up --env gamma` | `T1/T2` 本地门禁、`T3` 本地真实 API/存储、`T4` 共享 gamma patrol/chat-avatar/environment-smoke 旅程通过并生成 `.qwq_output/env/gamma/local/gamma-local/process/report.json` 或 `.qwq_output/env/gamma/runs/**` |
 | `prod-sim` | `python3 quwoquan_ops/cli/stackctl.py up --env prod-sim` → `python3 quwoquan_ops/cli/stackctl.py verify --target prod-sim --kind topology --tier t4` | 本地 `api-edge/product-ops-edge/media-edge/media-origin` 可探测，页面 smoke 覆盖首页、我的、他人主页、记录列表、视频流，产物归档到 `.qwq_output/env/prod/runs/**/environment-page-smoke/report.json` |
 | `prod-hosted gray-initial` | `python3 quwoquan_ops/cli/stackctl.py deploy --target prod-hosted ... --step <initial>` | 部署后 `health/inspect/doctor` 与 hosted 页面 smoke 均为 blocking；通过前不得推进 `carry-on/full` |
 

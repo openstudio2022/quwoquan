@@ -73,16 +73,16 @@ void main() {
           },
         ),
         messages: <LocalChatSearchMessageRecord>[
-          LocalChatSearchMessageRecord.fromWireMap(const <String, dynamic>{
-            'messageId': 'msg_1',
-            'conversationId': 'conv_1',
-            'content': '今晚讨论摄影布光技巧',
-            'senderDisplayName': '小趣',
-            'senderSubAccountId': 'u_1',
-            'type': 'text',
-            'seq': 1,
-            'timestamp': '2026-03-27T10:00:00.000Z',
-          }),
+          const LocalChatSearchMessageRecord(
+            messageId: 'msg_1',
+            conversationId: 'conv_1',
+            contentPreview: '今晚讨论摄影布光技巧',
+            senderDisplayName: '小趣',
+            senderPersonaId: 'u_1',
+            messageType: 'text',
+            seq: 1,
+            timestamp: '2026-03-27T10:00:00.000Z',
+          ),
         ],
       );
 
@@ -157,7 +157,7 @@ void main() {
             conversationId: 'conv_owner',
             contentPreview: '今晚讨论摄影布光技巧',
             senderDisplayName: '小趣',
-            senderSubAccountId: 'u_1',
+            senderPersonaId: 'u_1',
             messageType: 'text',
             seq: 1,
             timestamp: '2026-03-27T10:00:00.000Z',
@@ -189,7 +189,7 @@ void main() {
             conversationId: 'conv_sub',
             contentPreview: '本周末去西湖拍照',
             senderDisplayName: '小趣',
-            senderSubAccountId: 'u_1',
+            senderPersonaId: 'u_1',
             messageType: 'text',
             seq: 1,
             timestamp: '2026-03-27T11:00:00.000Z',
@@ -206,5 +206,37 @@ void main() {
         isEmpty,
       );
     });
+
+    test(
+      'message projection codec is versioned and rejects removed wire keys',
+      () {
+        const record = LocalChatSearchMessageRecord(
+          messageId: 'msg_projection_1',
+          conversationId: 'conv_projection_1',
+          senderPersonaId: 'persona_1',
+          messageType: 'text',
+          contentPreview: 'typed projection',
+          seq: 7,
+          timestamp: '2026-07-16T00:00:00.000Z',
+        );
+
+        expect(
+          LocalChatSearchMessageRecord.fromProjectionMap(
+            record.toProjectionMap(),
+          ).senderPersonaId,
+          'persona_1',
+        );
+        expect(
+          () =>
+              LocalChatSearchMessageRecord.fromProjectionMap(<String, dynamic>{
+                ...record.toProjectionMap(),
+                'senderSub'
+                        'AccountId':
+                    'retired-persona-key',
+              }),
+          throwsFormatException,
+        );
+      },
+    );
   });
 }

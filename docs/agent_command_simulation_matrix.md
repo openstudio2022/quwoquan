@@ -23,10 +23,8 @@
 | `/audit` | “全栈审计 / 看代码库健康” | 代码库级发现结构、metadata、特性树和测试漂移 | 不用审计替代特性 `/verify`， findings 必须可定位 | `.cursor/commands/audit.md`、相关 rules/gates | 空泛建议、无文件行号、无修复路径 | Findings、严重度、文件行号、建议验证命令 | `make verify` 或专项审计命令 |
 | `/deliver` | “闭环交付这一项” | 串联 `/dev` + `/verify` + `/commit`，先证据后提交 | 不提交未闭环 Story，不用 commit 掩盖缺口 | `.cursor/commands/deliver.md`、`dev/verify/commit` | 无验收、无测试、CR 未闭环 | 实现、Exit Review、门禁、提交准备状态 | 触达范围 gate |
 | `/commit` | “提交这轮改动” | 只提交已闭环增量和对应文档/测试/CR | 不提交无证据、旧树口径或手改 generated | `.cursor/commands/commit.md`、acceptance、gate 输出 | 未跑门禁、未说明风险、混入无关改动 | commit scope、验证摘要、剩余风险 | `make verify-agent-context-contract` + 触达范围测试 |
-| `data-baseline` | “冻结数据专题基线” | 经 `quwoquan_data/scripts/cli.py` 校验数据规格 | 数据任务先规格/schema/blueprint，再生产 | `.cursor/commands/data-baseline.md`、`quwoquan_data/AGENTS.md` | 使用 `tools/cli.py`、跳过 schema | baseline 文件存在性、schema/lint 结果 | `python3 quwoquan_data/scripts/cli.py data baseline ...` |
-| `data-build-entities-tags` | “构建实体标签 / 归一化实体标签” | CLI prepare 后由 Agent semantic 处理归一化 | 校验七角色准出和实体/标签一致性 | `.cursor/commands/data-build-entities-tags.md`、data AGENTS | 孤立脚本、区域硬编码、无证据归一化 | entityId 无重复、tagRefs 可解析、catalog 一致 | `python3 quwoquan_data/scripts/cli.py verify data-role-gate` |
-| `crawl` | “跑数据抓取总控 / 内容候选到发布闭环” | 通过 `qwq-data task geo-homepages/run-recipe` 编排控制面任务 | 保证 select-targets/run-recipe/readiness/ship 走同一主干 | `.cursor/commands/crawl.md`、data skill | mock 产物凑数、版权不清图片、旧 runtime/artifacts 根 | task lint、output-root-isolation、publish manifest、readiness | `python3 quwoquan_data/scripts/cli.py task lint && python3 quwoquan_data/scripts/cli.py verify output-root-isolation` |
-| `crawl-topic` | “处理这个 topic / 单个对象/批次复核” | 通过 `task show/status/trace/retry-stage/audit-batch` 回到当前批次 | 不新建第二 worker，不绕过 task/run-recipe | `.cursor/commands/crawl-topic.md`、data AGENTS | 直接写 `runtime/**`、`.qwq_sandbox/**`、无证据 topic 发布 | trace、audit-batch、retry-stage、readiness 结果 | `python3 quwoquan_data/scripts/cli.py verify output-root-isolation` |
+| `crawl` | “跑数据抓取总控 / 内容候选到发布闭环” | 通过 `qwq-data task geo-homepages` 创建唯一 execution 工作包 | 保证来源、五阶段、review、publish、release、ship 走同一主干 | `.cursor/commands/crawl.md`、data skill | mock 产物凑数、版权不清图片、task/batch 双身份、旧输出根 | execution-readiness、output-root-isolation、publish-purity、环境证据 | `python3 quwoquan_data/scripts/cli.py verify content-execution-layout && python3 quwoquan_data/scripts/cli.py verify output-root-isolation` |
+| `crawl-topic` | “处理这个对象 / 复核或恢复这个 execution” | 读取 execution manifest 与 evidence，并用原 `geo-homepages` 命令 resume | 同 ID 只 resume；新尝试递增 sequence 并写 retryOf | `.cursor/commands/crawl-topic.md`、data AGENTS | 阶段 runner、taskId/batchId、手写阶段证据、原地改输入 | execution-readiness、失败阶段、重试关系 | `python3 quwoquan_data/scripts/cli.py verify execution-readiness --execution-id <executionId>` |
 
 ## Simulation Cases
 
@@ -61,10 +59,10 @@
 - Spec Entry：目标是从数据工程产物到 gamma 可消费样本闭环；范围包括 plan/download/produce/media/verify/ship/importer。
 - 区域规则：`quwoquan_data/AGENTS.md`、data skill、`quwoquan_ops/AGENTS.md`。
 - Pre-work Reflection：必须 CLI-first、Agent-only 正文、七角色准出、ship sample bundle、service importer 幂等、gamma stackctl 验证。
-- Cursor voice：我会读取 `.qwq_output/**` 运行证据、`quwoquan_data/publish/**` 发布真相源与 gate report，不把离线文件生成当完成。
+- Cursor voice：我会读取 `.qwq_output/data/tasks/<executionId>/**` 运行证据、`quwoquan_data/publish/**` 发布真相源与环境 run，不把离线文件生成当完成。
 - Codex voice：我会只通过 `python3 quwoquan_data/scripts/cli.py` 和 stackctl 收集证据。
 - 出口证据：stage result、gate report、repair report、manifest、review、sample bundle、importer 结果、gamma verify。
-- 应跑门禁：`bash quwoquan_data/scripts/verify/verify_quwoquan_data.sh`、`stackctl verify --env gamma --kind all --tier all`。
+- 应跑门禁：`python3 quwoquan_data/scripts/cli.py verify all`、`stackctl verify --env gamma --kind all --tier all`。
 
 ### Case 4: prod-hosted 小流量放量
 

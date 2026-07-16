@@ -1,5 +1,5 @@
-// Command codegen_chat_domain_events regenerates chat-service conversation
-// domain event constants from contracts/metadata/messages/conversation/events.yaml.
+// Command codegen_chat_domain_events regenerates chat-service domain event
+// constants from each messages aggregate's events.yaml contract.
 package main
 
 import (
@@ -8,8 +8,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"quwoquan_service/runtime/codegen"
-	"quwoquan_service/runtime/registry"
+	contractcodegen "quwoquan_service/internal/metadata/codegen"
+	"quwoquan_service/internal/metadata/validate"
 )
 
 func main() {
@@ -19,23 +19,25 @@ func main() {
 	flag.StringVar(&outputDir, "output-dir", "services/chat-service/internal", "chat-service internal output directory")
 	flag.Parse()
 
-	reg, err := registry.LoadFromDirectory(metadataDir)
+	source, err := contractcodegen.NewSource(metadataDir, validate.ProfileBaseline)
 	if err != nil {
-		exitErr(fmt.Errorf("load registry: %w", err))
+		exitErr(fmt.Errorf("compile ContractGraph: %w", err))
 	}
-
-	g := codegen.NewGenerator(
-		reg,
+	generator := contractcodegen.NewDomainGenerator(
+		source,
 		filepath.Clean(outputDir),
-		codegen.WithTypedEnums(),
-		codegen.WithSliceEntityRefs(),
-		codegen.WithSkipViewEntities(),
-		codegen.WithGoFieldIDSuffix(),
 	)
-	if err := g.GenerateDomainEventsOnly("Conversation"); err != nil {
-		exitErr(fmt.Errorf("generate Conversation events: %w", err))
+	for _, aggregate := range []string{
+		"Conversation",
+		"ConversationMembership",
+		"ConversationUserState",
+		"Message",
+	} {
+		if err := generator.GenerateDomainEvents(aggregate); err != nil {
+			exitErr(fmt.Errorf("generate %s events: %w", aggregate, err))
+		}
 	}
-	fmt.Printf("codegen_chat_domain_events: wrote conversation event constants under %s\n", outputDir)
+	fmt.Printf("codegen_chat_domain_events: wrote chat event constants under %s\n", outputDir)
 }
 
 func exitErr(err error) {

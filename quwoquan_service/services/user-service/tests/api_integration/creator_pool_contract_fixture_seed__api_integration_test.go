@@ -21,9 +21,9 @@ type creatorPoolSeedUser struct {
 
 func loadCreatorPoolSeedUsers(t *testing.T, limit int) []creatorPoolSeedUser {
 	t.Helper()
-	repoRoot := filepath.Clean("../../../../")
+	workspaceRoot := locateWorkspaceRoot(t)
 	seedPath := filepath.Join(
-		repoRoot,
+		workspaceRoot,
 		"quwoquan_service",
 		"contracts",
 		"metadata",
@@ -49,6 +49,24 @@ func loadCreatorPoolSeedUsers(t *testing.T, limit int) []creatorPoolSeedUser {
 		return payload.Users[:limit]
 	}
 	return payload.Users
+}
+
+func locateWorkspaceRoot(t *testing.T) string {
+	t.Helper()
+	current, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for {
+		if info, statErr := os.Stat(filepath.Join(current, "quwoquan_service", "contracts", "metadata")); statErr == nil && info.IsDir() {
+			return current
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			t.Fatal("reader root not found")
+		}
+		current = parent
+	}
 }
 
 func seedCreatorPoolUsers(t *testing.T, users []creatorPoolSeedUser) {
@@ -122,7 +140,7 @@ func assertCreatorPoolReadsViaHandler(t *testing.T, users []creatorPoolSeedUser)
 }
 
 // TestContractFixtureSeed_CreatorPoolBetaReadsViaHandler validates the 100-user
-// curated 1k subset reads back via the user-service handler.
+// curated subset of the commercial creator pool via the user-service handler.
 func TestContractFixtureSeed_CreatorPoolBetaReadsViaHandler(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	users := loadCreatorPoolSeedUsers(t, 100)
@@ -131,12 +149,12 @@ func TestContractFixtureSeed_CreatorPoolBetaReadsViaHandler(t *testing.T) {
 }
 
 // TestContractFixtureSeed_CreatorPoolFullBatchReadsViaHandler scales validation
-// to the full commercial batch (1000 creators), not just the pilot subset.
+// to the full commercial batch (1200 creators), not just the pilot subset.
 func TestContractFixtureSeed_CreatorPoolFullBatchReadsViaHandler(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	users := loadCreatorPoolSeedUsers(t, 0)
-	if len(users) != 1000 {
-		t.Fatalf("expected full batch of 1000 creators, got %d", len(users))
+	if len(users) != 1200 {
+		t.Fatalf("expected full batch of 1200 creators, got %d", len(users))
 	}
 	seedCreatorPoolUsers(t, users)
 	assertCreatorPoolReadsViaHandler(t, users)

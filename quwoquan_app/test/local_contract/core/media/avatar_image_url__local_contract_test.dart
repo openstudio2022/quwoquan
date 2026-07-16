@@ -70,7 +70,9 @@ void main() {
         ),
         <String>[
           'https://127.0.0.1:18088/media/avatar/s/archived-avatar/beta-avatar.png',
+          'https://localhost:18088/media/avatar/s/archived-avatar/beta-avatar.png',
           'https://127.0.0.1:18080/media/avatar/s/archived-avatar/beta-avatar.png',
+          'https://localhost:18080/media/avatar/s/archived-avatar/beta-avatar.png',
         ],
       );
     });
@@ -106,11 +108,11 @@ void main() {
           avatarCdnBaseUrl: 'https://${scenario.avatar}',
         );
         expect(candidates, <String>[
-          'https://localhost:$avatarPort/$objectKey',
           'https://127.0.0.1:$avatarPort/$objectKey',
+          'https://localhost:$avatarPort/$objectKey',
           'https://${scenario.avatar}/$objectKey',
-          'https://localhost:$apiPort/$objectKey',
           'https://127.0.0.1:$apiPort/$objectKey',
+          'https://localhost:$apiPort/$objectKey',
           'https://${scenario.api}/$objectKey',
         ], reason: scenario.api);
         expect(candidates.join('\n'), isNot(contains('https://10.0.2.2')));
@@ -125,10 +127,10 @@ void main() {
           avatarCdnBaseUrl: 'https://10.0.2.2:17100',
         ),
         <String>[
-          'https://localhost:17100/media/avatar/s/archived-avatar/circle/demo/v1/avatar.png',
           'https://127.0.0.1:17100/media/avatar/s/archived-avatar/circle/demo/v1/avatar.png',
-          'https://localhost:17000/media/avatar/s/archived-avatar/circle/demo/v1/avatar.png',
+          'https://localhost:17100/media/avatar/s/archived-avatar/circle/demo/v1/avatar.png',
           'https://127.0.0.1:17000/media/avatar/s/archived-avatar/circle/demo/v1/avatar.png',
+          'https://localhost:17000/media/avatar/s/archived-avatar/circle/demo/v1/avatar.png',
         ],
       );
     });
@@ -175,7 +177,9 @@ void main() {
         ),
         <String>[
           'https://127.0.0.1:18088/media/avatar/s/archived-avatar/beta-avatar.png',
+          'https://localhost:18088/media/avatar/s/archived-avatar/beta-avatar.png',
           'https://127.0.0.1:18080/media/avatar/s/archived-avatar/beta-avatar.png',
+          'https://localhost:18080/media/avatar/s/archived-avatar/beta-avatar.png',
         ],
       );
     });
@@ -197,7 +201,7 @@ void main() {
         gatewayBaseUrl: 'https://127.0.0.1:18080',
         avatarCdnBaseUrl: 'https://127.0.0.1:18088',
       );
-      expect(candidates, hasLength(2));
+      expect(candidates, hasLength(4));
       expect(
         candidates.first,
         startsWith(
@@ -206,12 +210,12 @@ void main() {
       );
       expect(candidates.first, isNot(contains('/mock/seed/')));
       expect(
-        candidates.last,
+        candidates[2],
         startsWith(
           'https://127.0.0.1:18080/media/avatar/s/archived-avatar/user/fixture_user_',
         ),
       );
-      expect(candidates.last, isNot(contains('/mock/seed/')));
+      expect(candidates.join('\n'), isNot(contains('/mock/seed/')));
     });
 
     test(
@@ -222,7 +226,7 @@ void main() {
           gatewayBaseUrl: 'https://127.0.0.1:18080',
           avatarCdnBaseUrl: 'https://127.0.0.1:18088',
         );
-        expect(mockUserCandidates, hasLength(2));
+        expect(mockUserCandidates, hasLength(4));
         expect(
           mockUserCandidates.first,
           startsWith(
@@ -236,7 +240,7 @@ void main() {
           gatewayBaseUrl: 'https://127.0.0.1:18080',
           avatarCdnBaseUrl: 'https://127.0.0.1:18088',
         );
-        expect(malformedArchivedCandidates, hasLength(2));
+        expect(malformedArchivedCandidates, hasLength(4));
         expect(
           malformedArchivedCandidates.first,
           startsWith(

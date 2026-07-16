@@ -41,9 +41,9 @@ abstract class RtcRepository {
 
   Future<void> stopScreenShare(String callId);
 
-  Future<void> startRecording(String callId);
+  Future<String> startRecording(String callId);
 
-  Future<void> stopRecording(String callId);
+  Future<void> stopRecording(String recordingId);
 
   Future<List<CallSessionDto>> listCallHistory({
     String? cursor,
@@ -123,10 +123,10 @@ class MockRtcRepository implements RtcRepository {
   Future<void> stopScreenShare(String callId) async {}
 
   @override
-  Future<void> startRecording(String callId) async {}
+  Future<String> startRecording(String callId) async => 'recording_$callId';
 
   @override
-  Future<void> stopRecording(String callId) async {}
+  Future<void> stopRecording(String recordingId) async {}
 
   @override
   Future<List<CallSessionDto>> listCallHistory({
@@ -324,19 +324,34 @@ class RemoteRtcRepository implements RtcRepository {
   }
 
   @override
-  Future<void> startRecording(String callId) async {
-    await _http.postJson(
-      _uri(RtcApiMetadata.startRecordingPath(callId: callId)),
-      headers: CloudRequestHeaders.forPage(RtcRequestPageIds.startRecording),
+  Future<String> startRecording(String callId) async {
+    final decoded = await _http.postJson(
+      _uri(RtcApiMetadata.startCallRecordingPath(callId: callId)),
+      headers: CloudRequestHeaders.forPage(
+        RtcRequestPageIds.startCallRecording,
+      ),
       body: _emptyPost.toJson(),
     );
+    final response = CloudResponseDecoder.asObject(
+      decoded,
+      context: RtcRequestPageIds.startCallRecording,
+    );
+    final recordingId = (response['recordingId'] ?? response['id'] ?? '')
+        .toString()
+        .trim();
+    if (recordingId.isEmpty) {
+      throw StateError('StartCallRecording response missing recordingId');
+    }
+    return recordingId;
   }
 
   @override
-  Future<void> stopRecording(String callId) async {
+  Future<void> stopRecording(String recordingId) async {
     await _http.postJson(
-      _uri(RtcApiMetadata.stopRecordingPath(callId: callId)),
-      headers: CloudRequestHeaders.forPage(RtcRequestPageIds.stopRecording),
+      _uri(RtcApiMetadata.stopCallRecordingPath(recordingId: recordingId)),
+      headers: CloudRequestHeaders.forPage(
+        RtcRequestPageIds.stopCallRecording,
+      ),
       body: _emptyPost.toJson(),
     );
   }

@@ -1,0 +1,378 @@
+version: 1
+service:
+  name: user-service
+  domain: user
+  owner: identity-platform
+  description: AccountSession 对象专属 command packet。
+  commercial_defaults:
+    status: blocked
+    block_reason: 对象专属 Store/outbox、transport 与 generated client 尚未完成生产装配
+    gap_id: ACCOUNT_OBJECT_PACKET_WIRING
+    target_story: app-cloud-business-object-commercial-closure
+api_routes:
+  - method: POST
+    path: /v1/auth/login/phone
+    operation: LoginWithPhone
+    actor: device
+    application:
+      kind: command
+      facet: AccountSessionCommandFacade
+      method: loginWithPhone
+      aggregate_owner: AccountSession
+      mutation_target: AccountSession
+      invariant_target: AccountSession
+    description: 手机号 + OTP 登录，创建或恢复 OwnerAccount
+    request_fields: [phone, otpCode, deviceId, platform, appVersion, agreementVersion, privacyVersion]
+    response_fields: [accessToken, refreshToken, ownerId, activeSub, subAccountCount, accountState, identityOrigin, logicalShard, anonymousRetentionPolicy, accountHint, sessionRememberTtlSeconds]
+    authorization:
+      principal: public
+      ownership_policy: account_session_bootstrap
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: none
+      max_attempts: 1
+      idempotency: none
+    error_codes:
+      - USER.USER.invalid_argument
+      - USER.AUTH.otp_expired
+      - USER.AUTH.otp_mismatch
+      - USER.AUTH.otp_attempts_exceeded
+      - USER.AUTH.login_locked
+      - USER.AUTH.consent_required
+      - USER.AUTH.credential_conflict
+      - USER.AUTH.account_suspended
+      - USER.AUTH.account_deleted
+      - USER.SYSTEM.internal_error
+    privacy:
+      request_classification: SECRET
+      response_classification: SECRET
+      log_policy: none
+    telemetry:
+      metric: user_auth_phone_login
+      trace: true
+      attributes: [environment, platform, outcome, error_code]
+    slo:
+      latency_p95_ms: 1500
+      availability_percent: 99.9
+    security:
+      auth_mode: public
+      principal: public
+      token_transport: none
+      anonymous_policy: allow
+      visibility: private
+
+  - method: POST
+    path: /v1/auth/login/wechat
+    operation: LoginWithWechat
+    actor: device
+    application:
+      kind: command
+      facet: AccountSessionCommandFacade
+      method: loginWithWechat
+      aggregate_owner: AccountSession
+      mutation_target: AccountSession
+      invariant_target: AccountSession
+    description: 微信授权码登录；App 只上传短期 code，服务端置换 openid/unionid 与公开资料并首次同步昵称头像
+    request_fields: [wechatCode, deviceId, platform, appVersion]
+    response_fields: [accessToken, refreshToken, ownerId, activeSub, subAccountCount, accountState, identityOrigin, logicalShard, anonymousRetentionPolicy, sessionRememberTtlSeconds]
+    authorization:
+      principal: public
+      ownership_policy: account_session_bootstrap
+    commercial:
+      status: blocked
+      block_reason: prod WeChat credentials and real-device SDK evidence are not injected
+      gap_id: R_AUTH_001
+      target_story: four-environment-commercial-login-maturity
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: none
+      max_attempts: 1
+      idempotency: none
+    error_codes:
+      - USER.USER.invalid_argument
+      - USER.AUTH.wechat_auth_failed
+      - USER.AUTH.social_provider_cancelled
+      - USER.AUTH.social_provider_unavailable
+      - USER.AUTH.credential_conflict
+      - USER.AUTH.account_suspended
+      - USER.AUTH.account_deleted
+      - USER.SYSTEM.internal_error
+    privacy:
+      request_classification: SECRET
+      response_classification: SECRET
+      log_policy: none
+    telemetry:
+      metric: user_auth_wechat_login
+      trace: true
+      attributes: [environment, platform, outcome, error_code]
+    slo:
+      latency_p95_ms: 1500
+      availability_percent: 99.9
+    security:
+      auth_mode: public
+      principal: public
+      token_transport: none
+      anonymous_policy: allow
+      visibility: private
+
+  - method: POST
+    path: /v1/auth/login/alipay
+    operation: LoginWithAlipay
+    actor: device
+    application:
+      kind: command
+      facet: AccountSessionCommandFacade
+      method: loginWithAlipay
+      aggregate_owner: AccountSession
+      mutation_target: AccountSession
+      invariant_target: AccountSession
+    description: 支付宝授权码登录；App 只上传短期 authCode，服务端置换 userId/openid 与公开资料并首次同步昵称头像
+    request_fields: [alipayAuthCode, deviceId, platform, appVersion]
+    response_fields: [accessToken, refreshToken, ownerId, activeSub, subAccountCount, accountState, identityOrigin, logicalShard, anonymousRetentionPolicy, sessionRememberTtlSeconds]
+    authorization:
+      principal: public
+      ownership_policy: account_session_bootstrap
+    commercial:
+      status: blocked
+      block_reason: prod Alipay credentials and real-device SDK evidence are not injected
+      gap_id: R_AUTH_001
+      target_story: four-environment-commercial-login-maturity
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: none
+      max_attempts: 1
+      idempotency: none
+    error_codes:
+      - USER.USER.invalid_argument
+      - USER.AUTH.alipay_auth_failed
+      - USER.AUTH.social_provider_cancelled
+      - USER.AUTH.social_provider_unavailable
+      - USER.AUTH.credential_conflict
+      - USER.AUTH.account_suspended
+      - USER.AUTH.account_deleted
+      - USER.SYSTEM.internal_error
+    privacy:
+      request_classification: SECRET
+      response_classification: SECRET
+      log_policy: none
+    telemetry:
+      metric: user_auth_alipay_login
+      trace: true
+      attributes: [environment, platform, outcome, error_code]
+    slo:
+      latency_p95_ms: 1500
+      availability_percent: 99.9
+    security:
+      auth_mode: public
+      principal: public
+      token_transport: none
+      anonymous_policy: allow
+      visibility: private
+
+  - method: POST
+    path: /v1/auth/login/qq
+    operation: LoginWithQq
+    actor: device
+    application:
+      kind: command
+      facet: AccountSessionCommandFacade
+      method: loginWithQq
+      aggregate_owner: AccountSession
+      mutation_target: AccountSession
+      invariant_target: AccountSession
+    description: QQ 授权码登录；App 只上传短期 accessToken/code，服务端置换 openid/unionid 与公开资料并首次同步昵称头像
+    request_fields: [qqAuthCode, deviceId, platform, appVersion]
+    response_fields: [accessToken, refreshToken, ownerId, activeSub, subAccountCount, accountState, identityOrigin, logicalShard, anonymousRetentionPolicy, sessionRememberTtlSeconds]
+    authorization:
+      principal: public
+      ownership_policy: account_session_bootstrap
+    commercial:
+      status: blocked
+      block_reason: prod QQ credentials and real-device SDK evidence are not injected
+      gap_id: R_AUTH_001
+      target_story: four-environment-commercial-login-maturity
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: none
+      max_attempts: 1
+      idempotency: none
+    error_codes:
+      - USER.USER.invalid_argument
+      - USER.AUTH.qq_auth_failed
+      - USER.AUTH.social_provider_cancelled
+      - USER.AUTH.social_provider_unavailable
+      - USER.AUTH.credential_conflict
+      - USER.AUTH.account_suspended
+      - USER.AUTH.account_deleted
+      - USER.SYSTEM.internal_error
+    privacy:
+      request_classification: SECRET
+      response_classification: SECRET
+      log_policy: none
+    telemetry:
+      metric: user_auth_qq_login
+      trace: true
+      attributes: [environment, platform, outcome, error_code]
+    slo:
+      latency_p95_ms: 1500
+      availability_percent: 99.9
+    security:
+      auth_mode: public
+      principal: public
+      token_transport: none
+      anonymous_policy: allow
+      visibility: private
+
+  - method: POST
+    path: /v1/auth/login/one-tap
+    operation: LoginOneTap
+    actor: device
+    application:
+      kind: command
+      facet: AccountSessionCommandFacade
+      method: loginOneTap
+      aggregate_owner: AccountSession
+      mutation_target: AccountSession
+      invariant_target: AccountSession
+    description: 运营商一键登录；App 只提交授权 token，服务端向认证厂商置换真实手机号后创建或恢复 OwnerAccount
+    request_fields: [vendor, carrierToken, deviceId, platform, appVersion, agreementVersion, privacyVersion]
+    response_fields: [accessToken, refreshToken, ownerId, activeSub, subAccountCount, accountState, identityOrigin, logicalShard, anonymousRetentionPolicy, accountHint, sessionRememberTtlSeconds]
+    authorization:
+      principal: public
+      ownership_policy: account_session_bootstrap
+    commercial:
+      status: blocked
+      block_reason: prod carrier credentials, controlled SDK, and real-device evidence are not injected
+      gap_id: R_AUTH_001
+      target_story: four-environment-commercial-login-maturity
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: none
+      max_attempts: 1
+      idempotency: none
+    error_codes:
+      - USER.USER.invalid_argument
+      - USER.AUTH.carrier_unavailable
+      - USER.AUTH.carrier_token_invalid
+      - USER.AUTH.carrier_provider_timeout
+      - USER.AUTH.carrier_phone_mismatch
+      - USER.AUTH.consent_required
+      - USER.AUTH.credential_conflict
+      - USER.AUTH.account_suspended
+      - USER.AUTH.account_deleted
+      - USER.SYSTEM.internal_error
+    privacy:
+      request_classification: SECRET
+      response_classification: SECRET
+      log_policy: none
+    telemetry:
+      metric: user_auth_one_tap_login
+      trace: true
+      attributes: [environment, platform, vendor, outcome, error_code]
+    slo:
+      latency_p95_ms: 1500
+      availability_percent: 99.9
+    security:
+      auth_mode: public
+      principal: public
+      token_transport: none
+      anonymous_policy: allow
+      visibility: private
+
+  - method: POST
+    path: /v1/auth/login/anonymous
+    operation: LoginAnonymous
+    # Anonymous login bootstraps a device-bound account from request evidence;
+    # it must not pretend a bearer-authenticated device actor already exists.
+    actor: none
+    application:
+      kind: command
+      facet: AccountSessionCommandFacade
+      method: loginAnonymous
+      aggregate_owner: AccountSession
+      mutation_target: AccountSession
+      invariant_target: AccountSession
+    description: 基于 installId + deviceFingerprintHash 匿名引导，复用同设备稳定 owner/subAccount
+    response_entity: AuthLoginResult
+    response_body: AuthLoginResult
+    response_body_kind: object
+    request_fields: [installId, deviceFingerprintHash, platform, appVersion]
+    response_fields: [accessToken, refreshToken, ownerId, activeSub, subAccountCount, accountState, identityOrigin, logicalShard, anonymousRetentionPolicy, sessionRememberTtlSeconds]
+    authorization:
+      principal: public
+      ownership_policy: anonymous_device_bootstrap
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - USER.USER.invalid_argument
+      - USER.SYSTEM.internal_error
+    privacy:
+      request_classification: PII
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: user_anonymous_login
+      trace: true
+      attributes: [platform, outcome]
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    security:
+      auth_mode: public
+      principal: public
+      token_transport: none
+      anonymous_policy: allow
+      visibility: private
+
+  - method: POST
+    path: /v1/auth/token/refresh
+    operation: RefreshToken
+    actor: account
+    application:
+      kind: command
+      facet: AccountSessionCommandFacade
+      method: refreshToken
+      aggregate_owner: AccountSession
+      mutation_target: AccountSession
+      invariant_target: AccountSession
+    # 云侧子任务：登录/刷新响应需下发 sessionRememberTtlSeconds（快速登录有效期，秒，
+    # 默认 2592000=30 天，可由系统配置调整）；端侧据此推算软退出后免验证码快速登录过期时间。
+    description: 刷新 access token（滑动延期）
+    auth_required: false
+    request_fields: [refreshToken]
+    response_fields: [accessToken, refreshToken, sessionRememberTtlSeconds]
+
+  - method: POST
+    path: /v1/auth/logout
+    operation: Logout
+    actor: account
+    application:
+      kind: command
+      facet: AccountSessionCommandFacade
+      method: logout
+      aggregate_owner: AccountSession
+      mutation_target: AccountSession
+      invariant_target: AccountSession
+    description: 登出（吊销 refresh token）
+    request_fields: [refreshToken, deviceId]
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+
+  # ── 凭证管理（OwnerAccount 视图，需登录） ────────────────────────────────

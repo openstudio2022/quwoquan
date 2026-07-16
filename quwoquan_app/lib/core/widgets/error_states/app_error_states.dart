@@ -2,15 +2,12 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
-import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/widgets/app_modal_presenter.dart';
-import 'package:quwoquan_app/core/widgets/app_toast.dart';
 
 typedef UiErrorActionCallback = Future<void> Function(UiErrorAction action);
 
@@ -30,10 +27,9 @@ class AppPageErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final resolvedSemantic = _withSafePageExit(context, semantic);
     return _wrapWithErrorAppearance(
       context,
-      resolvedSemantic,
+      semantic,
       Builder(
         builder: (themedContext) {
           final background = AppColors.iosPageBackground(themedContext);
@@ -54,28 +50,20 @@ class AppPageErrorState extends StatelessWidget {
                   height: height,
                   child: DefaultTextStyle(
                     style: fallbackStyle,
-                    child: Stack(
-                      children: <Widget>[
-                        Center(
-                          child: Padding(
-                            padding:
-                                padding ??
-                                EdgeInsets.all(AppSpacing.containerMd),
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(
-                                maxWidth: AppSpacing.feedMaxContentWidth,
-                              ),
-                              child: _ErrorEmptyPageBody(
-                                semantic: resolvedSemantic,
-                                onAction: onAction,
-                              ),
-                            ),
+                    child: Center(
+                      child: Padding(
+                        padding:
+                            padding ?? EdgeInsets.all(AppSpacing.containerMd),
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(
+                            maxWidth: AppSpacing.feedMaxContentWidth,
+                          ),
+                          child: _ErrorEmptyPageBody(
+                            semantic: semantic,
+                            onAction: onAction,
                           ),
                         ),
-                        _PageErrorCloseButton(
-                          onPressed: () => _popOrGoHome(themedContext),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 );
@@ -83,6 +71,42 @@ class AppPageErrorState extends StatelessWidget {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+/// 区块首屏无可用数据时的阻塞错误态。
+///
+/// 与 [AppSectionErrorCard] 的局部软失败不同，这里不渲染灰色
+/// 卡片外框，避免在已经是空白的内容区中再嵌一张“设置卡”。
+class AppSectionErrorState extends StatelessWidget {
+  const AppSectionErrorState({
+    super.key,
+    required this.semantic,
+    this.onAction,
+    this.padding,
+  });
+
+  final UiErrorSemantic semantic;
+  final UiErrorActionCallback? onAction;
+  final EdgeInsetsGeometry? padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return _wrapWithErrorAppearance(
+      context,
+      semantic,
+      Center(
+        child: Padding(
+          padding: padding ?? EdgeInsets.all(AppSpacing.containerXl),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxWidth: AppSpacing.feedMaxContentWidth,
+            ),
+            child: _ErrorEmptyPageBody(semantic: semantic, onAction: onAction),
+          ),
+        ),
       ),
     );
   }
@@ -105,6 +129,63 @@ class AppSectionErrorCard extends StatelessWidget {
     return Padding(
       padding: margin ?? EdgeInsets.all(AppSpacing.containerMd),
       child: _ErrorSoftCardBody(semantic: semantic, onAction: onAction),
+    );
+  }
+}
+
+enum AppFormErrorCardDensity { regular, compact }
+
+/// 与当前表单操作点关联的唯一主错误反馈；不持有路由或焦点控制权。
+class AppFormErrorCard extends StatelessWidget {
+  const AppFormErrorCard({
+    super.key,
+    required this.semantic,
+    this.onAction,
+    this.margin = EdgeInsets.zero,
+    this.density = AppFormErrorCardDensity.regular,
+  });
+
+  final UiErrorSemantic semantic;
+  final UiErrorActionCallback? onAction;
+  final EdgeInsetsGeometry margin;
+  final AppFormErrorCardDensity density;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      liveRegion: true,
+      container: true,
+      child: Padding(
+        padding: margin,
+        child: _ErrorSoftCardBody(
+          semantic: semantic,
+          onAction: onAction,
+          density: density,
+        ),
+      ),
+    );
+  }
+}
+
+/// 输入控件下方的字段级错误；调用方负责同步输入边框错误态。
+class AppInlineFieldError extends StatelessWidget {
+  const AppInlineFieldError({super.key, required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      liveRegion: true,
+      container: true,
+      child: Text(
+        message,
+        style: TextStyle(
+          color: AppColors.iosDestructive(context),
+          fontSize: AppTypography.iosFootnote,
+          height: AppSpacing.textLineHeightFootnote,
+        ),
+      ),
     );
   }
 }
@@ -271,10 +352,6 @@ class AppActionErrorFeedback {
     UiErrorActionCallback? onAction,
   }) async {
     final primary = semantic.primaryAction;
-    if (primary == null) {
-      AppToast.show(context, semantic.message);
-      return;
-    }
     if (!context.mounted) {
       return;
     }
@@ -294,60 +371,24 @@ class AppActionErrorFeedback {
               },
               child: Text(semantic.secondaryAction!.label),
             ),
-          CupertinoDialogAction(
-            isDefaultAction: true,
-            onPressed: () {
-              Navigator.of(dialogContext).pop();
-              if (onAction != null) {
-                unawaited(onAction(primary));
-              }
-            },
-            child: Text(primary.label),
-          ),
+          if (primary != null)
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                if (onAction != null) {
+                  unawaited(onAction(primary));
+                }
+              },
+              child: Text(primary.label),
+            )
+          else if (semantic.secondaryAction == null)
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text(UITextConstants.gotIt),
+            ),
         ],
-      ),
-    );
-  }
-}
-
-class _PageErrorCloseButton extends StatelessWidget {
-  const _PageErrorCloseButton({required this.onPressed});
-
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final foreground = AppColors.iosLabel(context);
-    return PositionedDirectional(
-      top: AppSpacing.sm,
-      start: AppSpacing.containerSm,
-      child: SafeArea(
-        bottom: false,
-        child: Semantics(
-          button: true,
-          label: UITextConstants.close,
-          child: CupertinoButton(
-            key: const ValueKey<String>('app-page-error-close-button'),
-            padding: EdgeInsets.zero,
-            minimumSize: const Size(
-              AppSpacing.minInteractiveSize,
-              AppSpacing.minInteractiveSize,
-            ),
-            borderRadius: BorderRadius.circular(
-              AppSpacing.circularBorderRadius,
-            ),
-            onPressed: onPressed,
-            child: SizedBox(
-              width: AppSpacing.minInteractiveSize,
-              height: AppSpacing.minInteractiveSize,
-              child: Icon(
-                CupertinoIcons.xmark,
-                size: AppSpacing.iconMedium,
-                color: foreground,
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -414,11 +455,13 @@ class _ErrorSoftCardBody extends StatelessWidget {
     required this.semantic,
     this.onAction,
     this.gate = false,
+    this.density = AppFormErrorCardDensity.regular,
   });
 
   final UiErrorSemantic semantic;
   final UiErrorActionCallback? onAction;
   final bool gate;
+  final AppFormErrorCardDensity density;
 
   @override
   Widget build(BuildContext context) {
@@ -429,6 +472,44 @@ class _ErrorSoftCardBody extends StatelessWidget {
     final accent = _toneAccentColor(context, semantic.tone);
     final titleColor = AppColors.iosLabel(context);
     final messageColor = AppColors.iosSecondaryLabel(context);
+    if (density == AppFormErrorCardDensity.compact) {
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
+        ),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: AppSpacing.containerSm,
+            vertical: AppSpacing.sm,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: <Widget>[
+              Container(
+                width: AppSpacing.xs,
+                height: AppSpacing.xs,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.72),
+                  shape: BoxShape.circle,
+                ),
+              ),
+              SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  semantic.message,
+                  style: TextStyle(
+                    fontSize: AppTypography.iosFootnote,
+                    color: messageColor,
+                    height: AppSpacing.textLineHeightFootnote,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     return DecoratedBox(
       decoration: BoxDecoration(
         color: background,
@@ -569,7 +650,10 @@ class _ErrorActionRow extends StatelessWidget {
           horizontal: compact ? AppSpacing.sm : AppSpacing.containerMd,
           vertical: compact ? AppSpacing.xs : AppSpacing.sm,
         ),
-        minimumSize: Size.zero,
+        minimumSize: const Size(
+          AppSpacing.minInteractiveSize,
+          AppSpacing.minInteractiveSize,
+        ),
         borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
         onPressed: _canDispatch(action)
             ? () => unawaited(_dispatchAction(context, action))
@@ -595,7 +679,10 @@ class _ErrorActionRow extends StatelessWidget {
         horizontal: compact ? AppSpacing.containerSm : AppSpacing.containerMd,
         vertical: compact ? AppSpacing.xs : AppSpacing.sm,
       ),
-      minimumSize: Size.zero,
+      minimumSize: const Size(
+        AppSpacing.minInteractiveSize,
+        AppSpacing.minInteractiveSize,
+      ),
       color: AppColors.iosTintedFill(context),
       borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
       onPressed: _canDispatch(action)
@@ -619,10 +706,6 @@ class _ErrorActionRow extends StatelessWidget {
     BuildContext context,
     UiErrorAction action,
   ) async {
-    if (action.type == UiErrorActionType.back) {
-      _popOrGoHome(context);
-      return;
-    }
     if (onAction == null) {
       return;
     }
@@ -630,7 +713,7 @@ class _ErrorActionRow extends StatelessWidget {
   }
 
   bool _canDispatch(UiErrorAction action) {
-    return action.type == UiErrorActionType.back || onAction != null;
+    return onAction != null;
   }
 }
 
@@ -728,70 +811,6 @@ Color _toneAccentColor(BuildContext context, UiErrorTone tone) {
   };
 }
 
-UiErrorSemantic _withSafePageExit(
-  BuildContext context,
-  UiErrorSemantic semantic,
-) {
-  if (semantic.scope != UiErrorScope.page) {
-    return semantic;
-  }
-  final backAction = UiErrorAction(
-    type: UiErrorActionType.back,
-    label: UITextConstants.back,
-  );
-  final primary = semantic.primaryAction;
-  final secondary = semantic.secondaryAction;
-  if (primary == null && secondary == null) {
-    return UiErrorSemantic(
-      category: semantic.category,
-      scope: semantic.scope,
-      title: semantic.title,
-      message: semantic.message,
-      secondaryMessage: semantic.secondaryMessage,
-      primaryAction: backAction,
-      secondaryAction: null,
-      dismissible: semantic.dismissible,
-      sourceCode: semantic.sourceCode,
-      failureKind: semantic.failureKind,
-      copyKey: semantic.copyKey,
-      recoveryAction: semantic.recoveryAction,
-      presentation: semantic.presentation,
-      tone: semantic.tone,
-      appearanceMode: semantic.appearanceMode,
-      sourceRouteId: semantic.sourceRouteId,
-      sourceSurfaceId: semantic.sourceSurfaceId,
-    );
-  }
-  final shouldAppendBack =
-      secondary == null &&
-      primary != null &&
-      primary.type != UiErrorActionType.back &&
-      primary.type != UiErrorActionType.login &&
-      primary.type != UiErrorActionType.openSettings;
-  if (!shouldAppendBack) {
-    return semantic;
-  }
-  return UiErrorSemantic(
-    category: semantic.category,
-    scope: semantic.scope,
-    title: semantic.title,
-    message: semantic.message,
-    secondaryMessage: semantic.secondaryMessage,
-    primaryAction: primary,
-    secondaryAction: backAction,
-    dismissible: semantic.dismissible,
-    sourceCode: semantic.sourceCode,
-    failureKind: semantic.failureKind,
-    copyKey: semantic.copyKey,
-    recoveryAction: semantic.recoveryAction,
-    presentation: semantic.presentation,
-    tone: semantic.tone,
-    appearanceMode: semantic.appearanceMode,
-    sourceRouteId: semantic.sourceRouteId,
-    sourceSurfaceId: semantic.sourceSurfaceId,
-  );
-}
-
 Widget _wrapWithErrorAppearance(
   BuildContext context,
   UiErrorSemantic semantic,
@@ -805,16 +824,4 @@ Widget _wrapWithErrorAppearance(
     data: CupertinoTheme.of(context).copyWith(brightness: brightness),
     child: child,
   );
-}
-
-void _popOrGoHome(BuildContext context) {
-  final navigator = Navigator.maybeOf(context);
-  if (navigator != null && navigator.canPop()) {
-    navigator.pop();
-    return;
-  }
-  final router = GoRouter.maybeOf(context);
-  if (router != null) {
-    router.go(AppRoutePaths.home);
-  }
 }

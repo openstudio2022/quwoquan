@@ -12,7 +12,7 @@ import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_comments_provider.dart';
 import 'package:quwoquan_app/ui/user/utils/profile_comment_detail_route.dart';
 
-/// 评论收发列表；数据为 ContentRepository 返回的 CommentDto（非页内 Map）。
+/// 评论收发列表；只消费 ContentCommentFacet 的强类型查询投影。
 class ProfileCommentsPage extends ConsumerStatefulWidget {
   const ProfileCommentsPage({super.key});
 
@@ -243,7 +243,7 @@ class _CommentsListView extends ConsumerWidget {
 }
 
 class _ProfileCommentItem extends StatelessWidget {
-  final CommentDto comment;
+  final ContentCommentListItem comment;
   final bool isDark;
   final bool canReplyInContext;
 
@@ -291,7 +291,7 @@ class _ProfileCommentItem extends StatelessWidget {
               SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Text(
-                  comment.displayName ?? comment.authorId,
+                  comment.authorDisplayNameSnapshot ?? comment.authorId,
                   style: TextStyle(
                     fontSize: AppTypography.xs,
                     fontWeight: FontWeight.w500,
@@ -392,8 +392,6 @@ class _ProfileCommentItem extends StatelessWidget {
   }
 
   String get _postId {
-    final summaryPostId = comment.postSummary['postId']?.toString() ?? '';
-    if (summaryPostId.isNotEmpty) return summaryPostId;
     return comment.postId;
   }
 
@@ -411,15 +409,11 @@ class _ProfileCommentItem extends StatelessWidget {
 class _PostSummaryCard extends StatelessWidget {
   const _PostSummaryCard({required this.comment, required this.isDark});
 
-  final CommentDto comment;
+  final ContentCommentListItem comment;
   final bool isDark;
 
   @override
   Widget build(BuildContext context) {
-    final summary = comment.postSummary;
-    final title = (summary['title'] ?? comment.postId).toString();
-    final status = (summary['status'] ?? 'published').toString();
-    final unavailable = status == 'deleted' || status == 'hidden';
     return Container(
       width: double.infinity,
       padding: EdgeInsets.all(AppSpacing.sm),
@@ -431,16 +425,14 @@ class _PostSummaryCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppSpacing.smallBorderRadius),
       ),
       child: Text(
-        unavailable ? UITextConstants.profileCommentOriginalUnavailable : title,
+        comment.postId,
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
           fontSize: AppTypography.xs,
           color: AppColorsFunctional.getColor(
             isDark,
-            unavailable
-                ? ColorType.foregroundTertiary
-                : ColorType.foregroundSecondary,
+            ColorType.foregroundSecondary,
           ),
         ),
       ),
