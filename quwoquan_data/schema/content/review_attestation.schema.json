@@ -3,7 +3,7 @@
   "title": "5.review compact attestation",
   "type": "object",
   "required": [
-    "schemaVersion",
+    "schema",
     "stage",
     "executionId",
     "executionBinding",
@@ -18,55 +18,136 @@
   ],
   "additionalProperties": false,
   "properties": {
-    "schemaVersion": { "const": "quwoquan_data.review_attestation/1" },
-    "stage": { "const": "5.review" },
-    "executionId": { "type": "string", "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(canary|m1|m2|m3)-[0-9]{3,}$" },
-    "executionBinding": { "enum": ["frozen", "standalone"] },
-    "objectRef": { "type": "string", "minLength": 1 },
-    "decision": { "enum": ["approved", "revision_needed", "rejected"] },
-    "deterministicGate": { "$ref": "#/$defs/check" },
+    "stage": {
+      "const": "5.review"
+    },
+    "executionId": {
+      "type": "string",
+      "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(canary|m1|m2|m3)-[0-9]{3,}$"
+    },
+    "executionBinding": {
+      "enum": [
+        "frozen",
+        "standalone"
+      ]
+    },
+    "objectRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "decision": {
+      "enum": [
+        "approved",
+        "revision_needed",
+        "rejected"
+      ]
+    },
+    "deterministicGate": {
+      "$ref": "#/$defs/check"
+    },
     "independentReviewer": {
       "type": "object",
-      "required": ["status", "provider", "model", "modelFamily", "runId"],
+      "required": [
+        "status",
+        "provider",
+        "model",
+        "modelFamily",
+        "runId"
+      ],
       "additionalProperties": false,
       "properties": {
-        "status": { "enum": ["pending", "passed", "failed"] },
-        "provider": { "type": "string", "minLength": 1 },
-        "model": { "type": "string", "minLength": 1 },
-        "modelFamily": { "type": "string", "minLength": 1 },
+        "status": {
+          "enum": [
+            "pending",
+            "passed",
+            "failed"
+          ]
+        },
+        "provider": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "modelFamily": {
+          "type": "string",
+          "minLength": 1
+        },
         "runId": {
           "type": "string",
           "minLength": 1,
-          "not": { "pattern": "^contract-output:" }
+          "not": {
+            "pattern": "^contract-output:"
+          }
         },
         "resultHash": {
           "oneOf": [
-            { "type": "null" },
-            { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
           ]
         }
       }
     },
-    "mediaRefReview": { "$ref": "#/$defs/check" },
+    "mediaRefReview": {
+      "$ref": "#/$defs/check"
+    },
     "repair": {
       "type": "object",
-      "required": ["status"],
+      "required": [
+        "status"
+      ],
       "additionalProperties": false,
       "properties": {
-        "status": { "enum": ["not_required", "pending", "completed", "failed"] }
+        "status": {
+          "enum": [
+            "not_required",
+            "pending",
+            "completed",
+            "failed"
+          ]
+        }
       }
     },
-    "finalizationRef": { "type": "string", "minLength": 1 },
-    "evidenceIndexRef": { "type": "string", "minLength": 1 }
+    "finalizationRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "evidenceIndexRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "schema": {
+      "const": "quwoquan_data.review_attestation"
+    }
   },
   "$defs": {
     "check": {
       "type": "object",
-      "required": ["status", "issues"],
+      "required": [
+        "status",
+        "issues"
+      ],
       "additionalProperties": false,
       "properties": {
-        "status": { "enum": ["passed", "failed"] },
-        "issues": { "type": "array", "items": { "type": "string" } }
+        "status": {
+          "enum": [
+            "passed",
+            "failed"
+          ]
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
       }
     }
   }

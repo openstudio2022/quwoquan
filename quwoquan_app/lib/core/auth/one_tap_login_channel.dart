@@ -85,7 +85,6 @@ class MethodChannelOneTapLoginClient implements OneTapLoginClient {
       final expiresAtEpochMs = (result['expiresAtEpochMs'] as num?)?.toInt();
       final availability = _availabilityFromWire(
         result['availability']?.toString(),
-        legacyAvailable: result['isAvailable'] as bool? ?? false,
       );
       return OneTapLoginProbe(
         availability: availability,
@@ -132,17 +131,12 @@ class MethodChannelOneTapLoginClient implements OneTapLoginClient {
   }
 }
 
-OneTapAvailability _availabilityFromWire(
-  String? raw, {
-  required bool legacyAvailable,
-}) {
+OneTapAvailability _availabilityFromWire(String? raw) {
   final normalized = raw?.trim().toLowerCase() ?? '';
   for (final value in OneTapAvailability.values) {
     if (value.name.toLowerCase() == normalized) return value;
   }
-  return legacyAvailable
-      ? OneTapAvailability.available
-      : OneTapAvailability.invalidProbe;
+  return OneTapAvailability.invalidProbe;
 }
 
 OneTapAvailability _availabilityFromPlatformError(String raw) {

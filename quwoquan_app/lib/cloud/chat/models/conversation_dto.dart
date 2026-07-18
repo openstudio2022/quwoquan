@@ -57,41 +57,34 @@ class ConversationDto {
 
   factory ConversationDto.fromMap(Map<String, dynamic> map) {
     return ConversationDto(
-      id: (map['_id'] ?? map['id'] ?? '') as String,
-      type: (map['type'] ?? 'direct') as String,
-      title: map['title'] as String?,
+      id: _requiredString(map, 'id'),
+      type: _requiredString(map, 'type'),
+      title: _optionalTypedString(map, 'title'),
       avatarUrl: _optionalString(map['avatarUrl']),
       groupAvatarVersion: (map['groupAvatarVersion'] as num?)?.toInt() ?? 0,
       groupAvatarSourceHash: _optionalString(map['groupAvatarSourceHash']),
-      creatorId: (map['creatorId'] ?? '') as String,
-      circleId: map['circleId'] as String?,
+      creatorId: _requiredString(map, 'creatorId'),
+      circleId: _optionalTypedString(map, 'circleId'),
       circleGroupId: _optionalString(map['circleGroupId']),
-      originType: (map['originType'] ?? 'direct_init') as String,
-      bindingType: (map['bindingType'] ?? 'none') as String,
-      lifecyclePolicy: (map['lifecyclePolicy'] ?? 'persistent') as String,
+      originType: _optionalString(map['originType']) ?? 'direct_init',
+      bindingType: _optionalString(map['bindingType']) ?? 'none',
+      lifecyclePolicy: _optionalString(map['lifecyclePolicy']) ?? 'persistent',
       maxSeq: (map['maxSeq'] as num?)?.toInt() ?? 0,
       memberCount: (map['memberCount'] as num?)?.toInt() ?? 0,
-      maxGroupSize: (map['maxGroupSize'] as num?)?.toInt() ?? 1000,
-      receiptEnabled: (map['receiptEnabled'] as bool?) ?? true,
-      lastMessageId: map['lastMessageId'] as String?,
-      lastMessagePreview: map['lastMessagePreview'] as String?,
-      lastMessageTime: map['lastMessageTime'] != null
-          ? DateTime.tryParse(map['lastMessageTime'] as String)
-          : null,
+      maxGroupSize: _requiredInt(map, 'maxGroupSize'),
+      receiptEnabled: _requiredBool(map, 'receiptEnabled'),
+      lastMessageId: _optionalTypedString(map, 'lastMessageId'),
+      lastMessagePreview: _optionalTypedString(map, 'lastMessagePreview'),
+      lastMessageTime: _optionalDateTime(map, 'lastMessageTime'),
       messageCount: (map['messageCount'] as num?)?.toInt() ?? 0,
-      status: (map['status'] ?? 'active') as String,
-      createdAt:
-          DateTime.tryParse((map['createdAt'] ?? '') as String) ??
-          DateTime.now(),
-      updatedAt:
-          DateTime.tryParse((map['updatedAt'] ?? '') as String) ??
-          DateTime.now(),
+      status: _requiredString(map, 'status'),
+      createdAt: _requiredDateTime(map, 'createdAt'),
+      updatedAt: _requiredDateTime(map, 'updatedAt'),
       membersRosterRevision: (map['membersRosterRevision'] as num?)?.toInt(),
     );
   }
 
   Map<String, dynamic> toMap() => {
-    '_id': id,
     'id': id,
     'type': type,
     if (title != null) 'title': title,
@@ -111,10 +104,8 @@ class ConversationDto {
     'receiptEnabled': receiptEnabled,
     if (lastMessageId != null) 'lastMessageId': lastMessageId,
     if (lastMessagePreview != null) 'lastMessagePreview': lastMessagePreview,
-    if (lastMessageTime != null) ...{
+    if (lastMessageTime != null)
       'lastMessageTime': lastMessageTime!.toIso8601String(),
-      'lastMessageAt': lastMessageTime!.toIso8601String(),
-    },
     'messageCount': messageCount,
     'status': status,
     'createdAt': createdAt.toIso8601String(),
@@ -127,4 +118,72 @@ class ConversationDto {
 String? _optionalString(Object? value) {
   final s = value?.toString().trim() ?? '';
   return s.isEmpty ? null : s;
+}
+
+String _requiredString(Map<String, dynamic> map, String key) {
+  final value = map[key];
+  if (value is! String || value.trim().isEmpty) {
+    throw FormatException('Conversation.$key must be a non-empty string');
+  }
+  return value.trim();
+}
+
+String? _optionalTypedString(Map<String, dynamic> map, String key) {
+  final value = map[key];
+  if (value == null) {
+    return null;
+  }
+  if (value is! String) {
+    throw FormatException('Conversation.$key must be a string when present');
+  }
+  final normalized = value.trim();
+  return normalized.isEmpty ? null : normalized;
+}
+
+int _requiredInt(Map<String, dynamic> map, String key) {
+  final value = map[key];
+  if (value is! num) {
+    throw FormatException('Conversation.$key must be an integer');
+  }
+  return value.toInt();
+}
+
+bool _requiredBool(Map<String, dynamic> map, String key) {
+  final value = map[key];
+  if (value is! bool) {
+    throw FormatException('Conversation.$key must be a boolean');
+  }
+  return value;
+}
+
+DateTime _requiredDateTime(Map<String, dynamic> map, String key) {
+  final parsed = _parseDateTime(map[key]);
+  if (parsed == null) {
+    throw FormatException('Conversation.$key must be an RFC3339 timestamp');
+  }
+  return parsed;
+}
+
+DateTime? _optionalDateTime(Map<String, dynamic> map, String key) {
+  final value = map[key];
+  if (value == null) {
+    return null;
+  }
+  final parsed = _parseDateTime(value);
+  if (parsed == null) {
+    throw FormatException(
+      'Conversation.$key must be an RFC3339 timestamp when present',
+    );
+  }
+  return parsed;
+}
+
+DateTime? _parseDateTime(Object? value) {
+  if (value is DateTime) {
+    return value;
+  }
+  if (value is String) {
+    return DateTime.tryParse(value);
+  }
+  return null;
 }

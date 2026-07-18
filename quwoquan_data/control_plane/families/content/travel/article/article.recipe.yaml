@@ -1,4 +1,4 @@
-schemaVersion: quwoquan.content.recipe
+schema: quwoquan.content.recipe
 recipeId: content/travel/article/article
 title: 旅行文章执行（通用模板）
 presetRef: content/travel/article/base
@@ -10,11 +10,11 @@ selection:
   entityHomepagesPerTarget: 0
   entityArticlesPerTarget: 1
   imageWorksPerTarget: 0
+  videoWorksPerTarget: 0
   mandatory: ""
 contract:
   requireActiveStatus: true
 execution:
-  runtime: local
   model: composer
   modelFamily: composer
   reviewModel: gpt-5.5

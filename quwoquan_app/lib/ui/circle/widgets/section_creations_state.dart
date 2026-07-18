@@ -823,7 +823,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
   }
 
   bool _rawIsArticle(Map<String, dynamic> item) {
-    return (item['contentType'] ?? item['type'] ?? '').toString() == 'article';
+    return (item['contentType'] ?? '').toString() == 'article';
   }
 
   String _rawTitle(Map<String, dynamic> item) {

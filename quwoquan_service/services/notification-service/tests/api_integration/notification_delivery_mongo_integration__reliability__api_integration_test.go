@@ -283,7 +283,7 @@ func TestNotificationDeliveryOperatorFacadesListRecoverAndConvergeMetrics(t *tes
 		listRecorder,
 		httptest.NewRequest(
 			http.MethodGet,
-			"/internal/v1/notifications/delivery-jobs/dead-letters?eventType="+application.NotificationPushRequestedEvent+"&limit=20",
+			"/internal/notifications/delivery-jobs/dead-letters?eventType="+application.NotificationPushRequestedEvent+"&limit=20",
 			nil,
 		),
 	)
@@ -307,7 +307,7 @@ func TestNotificationDeliveryOperatorFacadesListRecoverAndConvergeMetrics(t *tes
 		t.Fatalf("metrics before recovery did not expose dead delivery: %+v", metricsBefore)
 	}
 
-	recoveryPath := "/internal/v1/notifications/delivery-jobs/" + record.NotificationID + ":recover"
+	recoveryPath := "/internal/notifications/delivery-jobs/" + record.NotificationID + ":recover"
 	recoverRecorder := httptest.NewRecorder()
 	recoverRequest := httptest.NewRequest(http.MethodPost, recoveryPath, nil)
 	recoverRequest.Header.Set("Idempotency-Key", "recover-dead-operator-001")
@@ -370,7 +370,7 @@ func TestNotificationDeliveryOperatorFacadesListRecoverAndConvergeMetrics(t *tes
 	removedRouteRecorder := httptest.NewRecorder()
 	handler.ServeHTTP(
 		removedRouteRecorder,
-		httptest.NewRequest(http.MethodPost, "/internal/v1/notifications/dead-letters/"+record.NotificationID+"/recovery", nil),
+		httptest.NewRequest(http.MethodPost, "/internal/notifications/dead-letters/"+record.NotificationID+"/recovery", nil),
 	)
 	if removedRouteRecorder.Code != http.StatusNotFound {
 		t.Fatalf("removed recovery route must stay unavailable, status=%d", removedRouteRecorder.Code)
@@ -440,7 +440,7 @@ func requestNotificationMetrics(
 		recorder,
 		httptest.NewRequest(
 			http.MethodGet,
-			"/internal/v1/notifications/delivery-jobs/metrics",
+			"/internal/notifications/delivery-jobs/metrics",
 			nil,
 		),
 	)

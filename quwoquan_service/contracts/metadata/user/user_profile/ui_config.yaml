@@ -1,4 +1,3 @@
-version: 1
 aggregate: UserProfile
 
 description: |
@@ -121,6 +120,6 @@ profile_tabs:
   - id: footprint
     label_key: profile_tab_footprint
     order: 2
-    # 隐私门控：足迹=浏览历史（GET /v1/content/footprint，仅本人可见的只读消费轨迹），
+    # 隐私门控：足迹=浏览历史（GET /content/footprint，仅本人可见的只读消费轨迹），
     # 只能出现在本人主页；他人主页禁止展示。modes 为空表示全模式可见，此处显式收敛为 mine。
     modes: [mine]

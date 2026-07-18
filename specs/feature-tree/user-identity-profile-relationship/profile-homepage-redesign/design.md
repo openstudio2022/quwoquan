@@ -400,7 +400,7 @@ lib/ui/user/
 |------|------|------|
 | `user/user_profile/fields.yaml` | 新增 `circleCount: int`、`likeCount: int` | 统计字段补齐 |
 | `content/post/ui_config.yaml` | 新增 `profile_tabs` 节 | 主页 Tab 配置元数据化 |
-| `social/circle/service.yaml` | 新增 `GET /v1/user/{userId}/circles` | 用户已加入圈子 API 声明 |
+| `social/circle/service.yaml` | 新增 `GET /user/{userId}/circles` | 用户已加入圈子 API 声明 |
 
 ---
 
@@ -454,7 +454,7 @@ lib/ui/user/
 
 ### E2: 足迹 Tab 浏览历史能力增强
 
-V5 足迹 Tab 复用既有浏览历史（`GET /v1/content/footprint`）。未来可演进：
+V5 足迹 Tab 复用既有浏览历史（`GET /content/footprint`）。未来可演进：
 - 触发条件：浏览历史需支持按内容形态/时间窗筛选或去重聚合。
 - 变更范围：footprint 浏览历史 Provider + 端侧过滤逻辑（不引入 `UserLifeItem`）。
 - 说明：历史「生活 Tab（书影音/味蕾/爱物，基于 `UserLifeItem`）」在 V5 已废止为 profile 一级 Tab；`UserLifeItem` 域保留为独立后端能力，演进不在本主页范围。

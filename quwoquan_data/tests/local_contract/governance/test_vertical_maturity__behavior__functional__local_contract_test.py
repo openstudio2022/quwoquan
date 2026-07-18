@@ -173,7 +173,7 @@ def test_post_activation_requires_smoke_report_and_active_release_match():
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
         contract = {
-            "schemaVersion": "quwoquan_data.release_desired_state/1",
+            "schema": "quwoquan_data.release_desired_state",
             "releaseId": "rel-1",
             "desiredRefs": {"entities": [], "posts": []},
             "actions": [],

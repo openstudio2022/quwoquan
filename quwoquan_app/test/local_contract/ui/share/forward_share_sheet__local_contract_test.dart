@@ -20,6 +20,8 @@ import 'package:quwoquan_app/ui/share/widgets/forward_recipient_widgets.dart';
 import 'package:quwoquan_app/ui/share/widgets/forward_share_sheet.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
+import '../../../support/fixtures/chat/chat_inbox_fixture_builder.dart';
+
 const _payload = AppForwardPayload(
   kind: AppForwardSubjectKind.profileQr,
   title: 'fixture_user_current 的二维码',
@@ -397,7 +399,7 @@ class _ForwardSheetChatRepository extends MockChatRepository {
     final base = DateTime.utc(2026, 6, 27, 12);
     return List<ChatInboxDto>.generate(
       12,
-      (index) => ChatInboxDto(
+      (index) => chatInboxFixture(
         id: 'conv_$index',
         type: index.isEven ? 'direct' : 'group',
         title: '最近 $index',

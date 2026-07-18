@@ -10,7 +10,7 @@ for _path in (DATA_ROOT, SCRIPTS_ROOT):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
-from content.execution.pipeline.content_plan_prep import _article_source_quality_sort_key  # noqa: E402
+from content.execution.controller.content_plan_prep import _article_source_quality_sort_key  # noqa: E402
 from core.entity_focus import (  # noqa: E402
     entity_focus_score as _entity_focus_score,
     entity_focus_aliases as _entity_focus_aliases,

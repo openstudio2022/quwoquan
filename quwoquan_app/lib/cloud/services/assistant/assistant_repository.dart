@@ -85,25 +85,17 @@ class AssistantSkillConsent {
   final DateTime updatedAt;
 
   factory AssistantSkillConsent.fromJson(Map<String, dynamic> json) {
-    final revokedAt = (json['revokedAt'] ?? json['revoked_at'] ?? '')
-        .toString()
-        .trim();
+    final revokedAt = (json['revokedAt'] ?? '').toString().trim();
     return AssistantSkillConsent(
-      skillId: (json['skillId'] ?? json['skill_id'] ?? '').toString().trim(),
+      skillId: (json['skillId'] ?? '').toString().trim(),
       grantedScope:
-          (json['grantedScope'] ??
-                  json['granted_scope'] ??
-                  json['scope'] ??
-                  kPersonalContentAccessSkillId)
+          (json['grantedScope'] ?? kPersonalContentAccessSkillId)
               .toString()
               .trim(),
       // 服务端必须显式确认 granted=true；字段缺失、false 或已有撤回时间均失败关闭。
       granted: json['granted'] == true && revokedAt.isEmpty,
       updatedAt:
-          DateTime.tryParse(
-            (json['updatedAt'] ?? json['updated_at'] ?? json['grantedAt'] ?? '')
-                .toString(),
-          ) ??
+          DateTime.tryParse((json['grantedAt'] ?? '').toString()) ??
           DateTime.now(),
     );
   }
@@ -112,7 +104,7 @@ class AssistantSkillConsent {
     'skillId': skillId,
     'grantedScope': grantedScope,
     'granted': granted,
-    'updatedAt': updatedAt.toIso8601String(),
+    'grantedAt': updatedAt.toIso8601String(),
   };
 }
 
@@ -264,18 +256,18 @@ abstract class AssistantRepository
     required AssistantOpenContext context,
   });
 
-  /// GET /v1/assistant/tasks
+  /// GET /assistant/tasks
   Future<List<AssistantUserTaskView>> listAssistantTasks({
     int limit = _kAssistantListPageDefaultLimit,
     String? status,
   });
 
-  /// GET /v1/assistant/memories
+  /// GET /assistant/memories
   Future<List<AssistantUserMemoryView>> listAssistantMemories({
     int limit = _kAssistantListPageDefaultLimit,
   });
 
-  /// GET /v1/assistant/skills
+  /// GET /assistant/skills
   Future<List<AssistantSkillCatalogItemView>> listSkillCatalog({
     int limit = _kAssistantSkillCatalogDefaultLimit,
   });
@@ -691,6 +683,7 @@ class MockAssistantRepository implements AssistantRepository {
       completedAt: createdAt,
     );
     yield AssistantStreamEventWire(
+      schema: 'assistant_stream_event',
       eventId: '$runId:assistant.turn.started',
       conversationId: 'acv_mock_personal_assistant',
       turnId: runId,
@@ -700,6 +693,7 @@ class MockAssistantRepository implements AssistantRepository {
       createdAt: createdAt,
     );
     yield AssistantStreamEventWire(
+      schema: 'assistant_stream_event',
       eventId: '$runId:assistant.tool.requested',
       conversationId: 'acv_mock_personal_assistant',
       turnId: runId,
@@ -709,6 +703,7 @@ class MockAssistantRepository implements AssistantRepository {
       createdAt: createdAt,
     );
     yield AssistantStreamEventWire(
+      schema: 'assistant_stream_event',
       eventId: '$runId:assistant.tool.completed',
       conversationId: 'acv_mock_personal_assistant',
       turnId: runId,
@@ -718,6 +713,7 @@ class MockAssistantRepository implements AssistantRepository {
       createdAt: createdAt,
     );
     yield AssistantStreamEventWire(
+      schema: 'assistant_stream_event',
       eventId: '$runId:assistant.answer.final',
       conversationId: 'acv_mock_personal_assistant',
       turnId: runId,
@@ -1701,35 +1697,58 @@ AssistantStreamEventWire? _decodeAssistantStreamFrame(String frame) {
     return null;
   }
   final envelope = decoded.cast<String, dynamic>();
-  final payload =
-      (envelope['payload'] as Map?)?.cast<String, dynamic>() ??
-      (envelope['data'] as Map?)?.cast<String, dynamic>() ??
-      const <String, dynamic>{};
-  final eventType = (envelope['eventType'] ?? envelope['event'] ?? '')
-      .toString()
-      .trim();
-  final turnId = (payload['turnId'] ?? envelope['turnId'] ?? '')
-      .toString()
-      .trim();
-  final conversationId =
-      (payload['conversationId'] ?? envelope['conversationId'] ?? '')
-          .toString()
-          .trim();
-  return AssistantStreamEventWire.fromJson(<String, dynamic>{
-    'schemaVersion':
-        (envelope['schemaVersion'] ?? payload['schemaVersion'] ?? '')
-            .toString(),
-    'eventId': (envelope['eventId'] ?? envelope['id'] ?? '$turnId:$eventType')
-        .toString(),
-    'conversationId': conversationId,
-    'turnId': turnId,
-    'seq': envelope['seq'],
-    'eventType': eventType,
-    'traceId': (envelope['traceId'] ?? payload['traceId'] ?? '').toString(),
-    'payload': payload,
-    'runtimeFailure': envelope['runtimeFailure'],
-    'createdAt': (envelope['createdAt'] ?? '').toString(),
-  });
+  const allowedKeys = <String>{
+    'schema',
+    'eventId',
+    'conversationId',
+    'turnId',
+    'seq',
+    'eventType',
+    'traceId',
+    'payload',
+    'runtimeFailure',
+    'createdAt',
+  };
+  final unknownKeys = envelope.keys
+      .where((key) => !allowedKeys.contains(key))
+      .toList(growable: false);
+  if (unknownKeys.isNotEmpty) {
+    throw FormatException(
+      'AssistantStreamEvent contains unknown fields: ${unknownKeys.join(',')}',
+    );
+  }
+  if (envelope['schema'] != 'assistant_stream_event') {
+    throw const FormatException(
+      'AssistantStreamEvent.schema must be assistant_stream_event',
+    );
+  }
+  for (final field in const <String>[
+    'eventId',
+    'conversationId',
+    'turnId',
+    'eventType',
+    'createdAt',
+  ]) {
+    final value = envelope[field];
+    if (value is! String || value.trim().isEmpty) {
+      throw FormatException(
+        'AssistantStreamEvent.$field must be a non-empty string',
+      );
+    }
+  }
+  final seq = envelope['seq'];
+  if (seq is! int || seq <= 0) {
+    throw const FormatException(
+      'AssistantStreamEvent.seq must be a positive integer',
+    );
+  }
+  final payload = envelope['payload'];
+  if (payload is! Map || payload.keys.any((key) => key is! String)) {
+    throw const FormatException(
+      'AssistantStreamEvent.payload must be an object',
+    );
+  }
+  return AssistantStreamEventWire.fromJson(envelope);
 }
 
 void _debugAssistantRepository(String message) {
@@ -1750,7 +1769,7 @@ String _assistantDebugSnippet(String value, {int maxLength = 120}) {
 String _assistantToolNameFromPayload(Map<String, dynamic> payload) {
   final raw = payload['toolUse'];
   if (raw is Map) {
-    return (raw['toolName'] ?? raw['tool_name'] ?? '').toString().trim();
+    return (raw['toolName'] ?? '').toString().trim();
   }
   return '';
 }
@@ -1762,10 +1781,11 @@ class AssistantConsentStore {
           : actorScope.trim();
 
   final String _actorScope;
+  static const int schema = 1;
 
   String get _key {
     final digest = sha256.convert(utf8.encode(_actorScope)).toString();
-    return 'assistant_skill_consents_v2:${digest.substring(0, 24)}';
+    return 'assistant_skill_consents:${digest.substring(0, 24)}';
   }
 
   Future<List<AssistantSkillConsent>> load() async {
@@ -1776,10 +1796,13 @@ class AssistantConsentStore {
     }
     try {
       final decoded = jsonDecode(raw);
-      if (decoded is! List) {
+      if (decoded is! Map<String, dynamic> ||
+          decoded['schema'] != schema ||
+          decoded['items'] is! List) {
+        await prefs.remove(_key);
         return const <AssistantSkillConsent>[];
       }
-      return decoded
+      return (decoded['items'] as List)
           .whereType<Map>()
           .map(
             (item) =>
@@ -1788,6 +1811,7 @@ class AssistantConsentStore {
           .where((item) => item.skillId.isNotEmpty)
           .toList(growable: false);
     } catch (_) {
+      await prefs.remove(_key);
       return const <AssistantSkillConsent>[];
     }
   }
@@ -1796,7 +1820,10 @@ class AssistantConsentStore {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
       _key,
-      jsonEncode(items.map((item) => item.toJson()).toList(growable: false)),
+      jsonEncode(<String, dynamic>{
+        'schema': schema,
+        'items': items.map((item) => item.toJson()).toList(growable: false),
+      }),
     );
   }
 

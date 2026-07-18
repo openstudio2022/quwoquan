@@ -717,7 +717,7 @@ func main() {
 	commentService := commentapp.BindFacades(commentServiceCore)
 	postDataPorts := postapp.WithMediaAssetBindingReader(
 		postapp.BindDataPorts(store),
-		mediainfra.NewPostBindingReader(mediaStore),
+		mediainfra.NewPostBindingReader(mediaStore, mediaObjectGateway),
 	)
 	postServiceCore := postapp.NewPostService(postDataPorts, postServiceOpts...)
 	postService := postapp.BindFacades(postServiceCore)

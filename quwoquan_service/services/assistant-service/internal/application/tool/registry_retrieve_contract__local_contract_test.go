@@ -55,7 +55,7 @@ func TestAppSearchExecutesViaRetrieveTargets(t *testing.T) {
 	}
 }
 
-func TestSearchToolCompatQueryStillParsed(t *testing.T) {
+func TestSearchToolQueryCanonicalInput(t *testing.T) {
 	registry := DefaultRegistry()
 	result, err := registry.Execute(context.Background(), Request{
 		ToolName: "search",

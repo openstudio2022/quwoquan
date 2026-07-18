@@ -1,4 +1,3 @@
-version: 1
 
 service:
   name: content-service
@@ -13,7 +12,8 @@ service:
 
 api_routes:
   - method: POST
-    path: /internal/v1/content/media/{mediaId}:processing-result
+    path: /internal/content/media/{mediaId}:processing-result
+
     operation: RecordMediaProcessingResult
     actor: account
     application:
@@ -55,16 +55,17 @@ api_routes:
     slo:
       latency_p95_ms: 1200
       availability_percent: 99.9
-    request_fields: [processingStatus, failureReason]
-    response_fields: [assetId, version, processingStatus, accessPolicy, replayed]
+    request_fields: [processingStatus, failureReason, processorProfile, verifiedDurationMs, videoWidth, videoHeight, videoCodec, videoContainer, videoPublicSliceKey, coverPublicSliceKey, previewTrackVersion, previewTrackManifestSliceKey]
+    response_fields: [assetId, version, processingStatus, accessPolicy, verifiedDurationMs, videoWidth, videoHeight, videoCodec, videoContainer, previewTrackVersion, replayed]
     security:
       auth_mode: required
       token_transport: bearer
       visibility: internal
-    description: 处理 worker 回写 processing、ready 或 rejected；owner 不能伪造处理结果。
+    description: 处理 worker 回写 processing、ready 或 rejected；ready 必须同时携带探测后的权威 descriptor 输出，owner 不能伪造处理结果。
 
   - method: PATCH
-    path: /internal/v1/content/media/{mediaId}:access-policy
+    path: /internal/content/media/{mediaId}:access-policy
+
     operation: UpdateMediaAssetAccessPolicy
     actor: persona
     application:
@@ -114,7 +115,8 @@ api_routes:
     description: asset owner 修改 accessPolicy；任何跨 Persona 写入必须拒绝。
 
   - method: GET
-    path: /internal/v1/content/media/{mediaId}
+    path: /internal/content/media/{mediaId}
+
     operation: GetOwnedMediaAsset
     actor: persona
     application:
@@ -160,7 +162,8 @@ api_routes:
     description: owner-scoped MediaAsset BSON projection；不会暴露其他 Persona 的资产。
 
   - method: GET
-    path: /internal/v1/content/media/{mediaId}:reference
+    path: /internal/content/media/{mediaId}:reference
+
     operation: GetMediaAssetReference
     actor: account
     application:
@@ -207,7 +210,8 @@ api_routes:
     description: 仅供目标 bounded context 验证 owner-scoped ready MediaAsset 引用，不暴露对象存储键。
 
   - method: GET
-    path: /internal/v1/content/media/{mediaId}:delivery-reference
+    path: /internal/content/media/{mediaId}:delivery-reference
+
     operation: GetMediaAssetDeliveryReference
     actor: account
     application:
@@ -254,7 +258,8 @@ api_routes:
     description: Chat 等已完成自身访问控制的 bounded context 获取 owner-scoped ready MediaAsset 交付投影；不暴露 object key。
 
   - method: GET
-    path: /v1/content/media/{mediaId}
+    path: /content/media/{mediaId}
+
     operation: GetMediaAsset
     actor: none
     application:
@@ -307,7 +312,8 @@ api_routes:
     description: 仅返回 processingStatus=ready 且 accessPolicy=public 的媒体资产。
 
   - method: POST
-    path: /v1/content/media/{mediaId}/cover:auto
+    path: /content/media/{mediaId}/cover:auto
+
     operation: SelectAutoVideoCover
     actor: persona
     application:
@@ -364,7 +370,8 @@ api_routes:
     description: asset owner 选择首帧派生封面；MediaAsset 仍是封面策略唯一真相源。
 
   - method: POST
-    path: /v1/content/media/{mediaId}/cover:manual
+    path: /content/media/{mediaId}/cover:manual
+
     operation: SelectManualVideoCover
     actor: persona
     application:

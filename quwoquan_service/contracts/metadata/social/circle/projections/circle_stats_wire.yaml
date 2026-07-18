@@ -1,4 +1,3 @@
-version: 1
 read_model: CircleStatsWire
 
 description: |
@@ -7,14 +6,13 @@ description: |
 
 consumer: app
 
-# 非穷尽列举，仅供契约文档与评审；新增键不应破坏客户端对 raw 的透传。
+# 非穷尽列举，仅供契约文档与评审；客户端只认下列 canonical 键，禁止 alias 双读。
 documented_keys_examples:
-  - totalMembers
-  - members
-  - posts
-  - totalDiscussions
-  - discussions
-  - weeklyActive
+  - memberCount
+  - postCount
+  - discussionCount
+  - weeklyActiveCount
+  - likeCount
   - storageUsedBytes
   - storageQuotaBytes
 

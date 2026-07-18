@@ -3,13 +3,13 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/app/app_startup_runtime.dart';
 import 'package:quwoquan_app/app/navigation/app_page_access_navigator_observer.dart';
 import 'package:quwoquan_app/app/navigation/native_back_navigation.dart';
 import 'package:quwoquan_app/app/providers/welcome_state_provider.dart';
-import 'package:quwoquan_app/app/navigation/main_tab_registry.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/app/navigation/main_tab_registry.dart';
 import 'package:quwoquan_app/app/shell/main_app_shell.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/ops/ops_event_record_errors.g.dart';
 import 'package:quwoquan_app/ui/user/pages/other_profile_page.dart';
 import 'package:quwoquan_app/ui/welcome/welcome_motion_timeline.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
@@ -17,6 +17,7 @@ import 'package:quwoquan_app/core/models/start_group_chat_route_extra.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
     show ReferralSource, ReferralSourceExt;
 import 'package:quwoquan_app/ui/content/models/content_route_models.dart';
@@ -36,7 +37,6 @@ import 'package:quwoquan_app/ui/settings/pages/settings_about_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_dark_mode_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_permissions_page.dart';
-import 'package:quwoquan_app/ui/chat/pages/chat_conversation_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_conversation_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_settings_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/group_manage_page.dart';
@@ -85,10 +85,13 @@ import 'package:quwoquan_app/ui/rtc/pages/video_call_page.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_participant_picker_route_extra.dart';
 import 'package:quwoquan_app/ui/rtc/pages/call_participant_picker_page.dart';
 import 'package:quwoquan_app/ui/welcome/pages/welcome_screen.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 part 'app_router_create_entry_route.dart';
 part 'app_router_contact_routes.dart';
+part 'app_router_helpers.dart';
 part 'app_router_profile_routes.dart';
+part 'app_router_recovery_page.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final refreshListenable = ValueNotifier<int>(0);
@@ -96,9 +99,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     ref.read(visitRecorderServiceProvider),
   );
   AppPageAccessNavigatorObserver.instance.attachEventReporter(
-    repository: ref.read(opsEventRepositoryProvider),
-    currentUserId: ref.read(currentUserIdProvider),
-    experimentBucket: '',
+    ref.read(appTelemetryReporterProvider),
   );
   ref.listen<bool>(welcomeCompletedProvider, (Object? previous, bool next) {
     refreshListenable.value++;
@@ -153,6 +154,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       }
       return null;
     },
+    errorPageBuilder: (context, state) => appRoutePage<void>(
+      state: state,
+      child: _RouterRecoveryPage(onRetry: () => context.go(AppRoutePaths.home)),
+    ),
     routes: [
       GoRoute(
         path: AppRoutePaths.welcome,
@@ -1009,22 +1014,3 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
-
-void _completeWelcome(WidgetRef ref) {
-  ref.read(welcomeCompletedProvider.notifier).setCompleted(true);
-  AppStartupRuntime.instance.scheduleHomeReadyReport(
-    (provider) => ref.read(provider),
-  );
-}
-
-ReferralSource _referralSourceFromRoute(String value) {
-  if (value.trim().isEmpty) {
-    return ReferralSource.deepLink;
-  }
-  for (final source in ReferralSource.values) {
-    if (source.value == value) {
-      return source;
-    }
-  }
-  return ReferralSource.deepLink;
-}

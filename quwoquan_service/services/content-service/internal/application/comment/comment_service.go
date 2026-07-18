@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -161,43 +162,64 @@ func (s *CommentService) DeleteComment(
 	if replayed, found, err := s.replay(ctx, actorID, "DeleteComment", commandDigest); err != nil || found {
 		return replayed, err
 	}
-	aggregate, found, err := s.load(ctx, command.CommentID)
-	if err != nil {
-		return CommentCommandResult{}, err
+	for attempt := 0; attempt < 3; attempt++ {
+		aggregate, found, loadErr := s.load(ctx, command.CommentID)
+		if loadErr != nil {
+			return CommentCommandResult{}, loadErr
+		}
+		if !found || aggregate.Snapshot().PostID != strings.TrimSpace(command.PostID) {
+			return CommentCommandResult{}, commentNotFound(command.CommentID)
+		}
+		if aggregate.Status() == commentmodel.StatusDeleted {
+			return s.recordIdempotentReceipt(
+				ctx,
+				actorID,
+				aggregate,
+				"DeleteComment",
+				commandDigest,
+			)
+		}
+		expectedVersion := aggregate.Version()
+		now := s.now().UTC()
+		if deleteErr := aggregate.Delete(actorID, now); deleteErr != nil {
+			return CommentCommandResult{}, mapDomainError(deleteErr)
+		}
+		snapshot := aggregate.Snapshot()
+		payload, marshalErr := json.Marshal(commentDeletedEvent{
+			CommentID:       snapshot.ID,
+			Version:         snapshot.Version,
+			PostID:          snapshot.PostID,
+			AuthorID:        snapshot.AuthorID,
+			ParentCommentID: snapshot.ParentCommentID,
+			DeletedAt:       now,
+		})
+		if marshalErr != nil {
+			return CommentCommandResult{}, unavailable(marshalErr)
+		}
+		result, commitErr := s.commit(
+			ctx,
+			actorID,
+			aggregate,
+			expectedVersion,
+			"DeleteComment",
+			commandDigest,
+			commentDeletedEventType,
+			payload,
+			now,
+		)
+		if commitErr == nil {
+			return result, nil
+		}
+		if !isCommentVersionConflict(commitErr) || attempt == 2 {
+			if isCommentVersionConflict(commitErr) {
+				return CommentCommandResult{}, contentgenerated.AppErrorFromVersionConflict(
+					"comment changed repeatedly while applying delete intent",
+				)
+			}
+			return CommentCommandResult{}, commitErr
+		}
 	}
-	if !found || aggregate.Snapshot().PostID != strings.TrimSpace(command.PostID) {
-		return CommentCommandResult{}, commentNotFound(command.CommentID)
-	}
-	if err := requireExpectedVersion(command.ExpectedVersion, aggregate.Version()); err != nil {
-		return CommentCommandResult{}, err
-	}
-	now := s.now().UTC()
-	if err := aggregate.Delete(actorID, now); err != nil {
-		return CommentCommandResult{}, mapDomainError(err)
-	}
-	snapshot := aggregate.Snapshot()
-	payload, err := json.Marshal(commentDeletedEvent{
-		CommentID:       snapshot.ID,
-		Version:         snapshot.Version,
-		PostID:          snapshot.PostID,
-		AuthorID:        snapshot.AuthorID,
-		ParentCommentID: snapshot.ParentCommentID,
-		DeletedAt:       now,
-	})
-	if err != nil {
-		return CommentCommandResult{}, unavailable(err)
-	}
-	return s.commit(
-		ctx,
-		actorID,
-		aggregate,
-		command.ExpectedVersion,
-		"DeleteComment",
-		commandDigest,
-		commentDeletedEventType,
-		payload,
-		now,
-	)
+	panic("unreachable Comment delete retry")
 }
 
 func (s *CommentService) PinComment(
@@ -230,16 +252,6 @@ func (s *CommentService) changePin(
 	if replayed, found, err := s.replay(ctx, actorID, commandName, commandDigest); err != nil || found {
 		return replayed, err
 	}
-	aggregate, found, err := s.load(ctx, command.CommentID)
-	if err != nil {
-		return CommentCommandResult{}, err
-	}
-	if !found || aggregate.Snapshot().PostID != strings.TrimSpace(command.PostID) {
-		return CommentCommandResult{}, commentNotFound(command.CommentID)
-	}
-	if err := requireExpectedVersion(command.ExpectedVersion, aggregate.Version()); err != nil {
-		return CommentCommandResult{}, err
-	}
 	ownership, ownershipFound, err := s.data.PostRelation.FindPostOwnership(
 		ctx,
 		strings.TrimSpace(command.PostID),
@@ -252,33 +264,64 @@ func (s *CommentService) changePin(
 			fmt.Sprintf("post %s is unavailable for comment pin", command.PostID),
 		)
 	}
-	now := s.now().UTC()
-	if err := aggregate.ChangePin(actorID, ownership.AuthorID, command.Pinned, now); err != nil {
-		return CommentCommandResult{}, mapDomainError(err)
+	for attempt := 0; attempt < 3; attempt++ {
+		aggregate, found, loadErr := s.load(ctx, command.CommentID)
+		if loadErr != nil {
+			return CommentCommandResult{}, loadErr
+		}
+		if !found || aggregate.Snapshot().PostID != strings.TrimSpace(command.PostID) {
+			return CommentCommandResult{}, commentNotFound(command.CommentID)
+		}
+		if aggregate.Snapshot().IsPinned == command.Pinned {
+			return s.recordIdempotentReceipt(
+				ctx,
+				actorID,
+				aggregate,
+				commandName,
+				commandDigest,
+			)
+		}
+		expectedVersion := aggregate.Version()
+		now := s.now().UTC()
+		if pinErr := aggregate.ChangePin(actorID, ownership.AuthorID, command.Pinned, now); pinErr != nil {
+			return CommentCommandResult{}, mapDomainError(pinErr)
+		}
+		snapshot := aggregate.Snapshot()
+		payload, marshalErr := json.Marshal(commentPinChangedEvent{
+			CommentID:  snapshot.ID,
+			Version:    snapshot.Version,
+			PostID:     snapshot.PostID,
+			OperatorID: actorID,
+			IsPinned:   snapshot.IsPinned,
+			PinnedAt:   snapshot.PinnedAt,
+		})
+		if marshalErr != nil {
+			return CommentCommandResult{}, unavailable(marshalErr)
+		}
+		result, commitErr := s.commit(
+			ctx,
+			actorID,
+			aggregate,
+			expectedVersion,
+			commandName,
+			commandDigest,
+			commentPinChangedEventType,
+			payload,
+			now,
+		)
+		if commitErr == nil {
+			return result, nil
+		}
+		if !isCommentVersionConflict(commitErr) || attempt == 2 {
+			if isCommentVersionConflict(commitErr) {
+				return CommentCommandResult{}, contentgenerated.AppErrorFromVersionConflict(
+					"comment changed repeatedly while applying pin intent",
+				)
+			}
+			return CommentCommandResult{}, commitErr
+		}
 	}
-	snapshot := aggregate.Snapshot()
-	payload, err := json.Marshal(commentPinChangedEvent{
-		CommentID:  snapshot.ID,
-		Version:    snapshot.Version,
-		PostID:     snapshot.PostID,
-		OperatorID: actorID,
-		IsPinned:   snapshot.IsPinned,
-		PinnedAt:   snapshot.PinnedAt,
-	})
-	if err != nil {
-		return CommentCommandResult{}, unavailable(err)
-	}
-	return s.commit(
-		ctx,
-		actorID,
-		aggregate,
-		command.ExpectedVersion,
-		commandName,
-		commandDigest,
-		commentPinChangedEventType,
-		payload,
-		now,
-	)
+	panic("unreachable Comment pin retry")
 }
 
 func (s *CommentService) BindAttachments(
@@ -294,45 +337,69 @@ func (s *CommentService) BindAttachments(
 	if replayed, found, err := s.replay(ctx, actorID, "BindCommentAttachments", commandDigest); err != nil || found {
 		return replayed, err
 	}
-	aggregate, found, err := s.load(ctx, command.CommentID)
-	if err != nil {
-		return CommentCommandResult{}, err
-	}
-	if !found {
-		return CommentCommandResult{}, commentNotFound(command.CommentID)
-	}
-	if err := requireExpectedVersion(command.ExpectedVersion, aggregate.Version()); err != nil {
-		return CommentCommandResult{}, err
-	}
 	if err := s.data.Attachments.ValidateCommentAttachments(ctx, actorID, command.AttachmentMediaIDs); err != nil {
 		return CommentCommandResult{}, mapDomainError(err)
 	}
-	now := s.now().UTC()
-	if err := aggregate.BindAttachments(actorID, command.AttachmentMediaIDs, now); err != nil {
-		return CommentCommandResult{}, mapDomainError(err)
+	for attempt := 0; attempt < 3; attempt++ {
+		aggregate, found, loadErr := s.load(ctx, command.CommentID)
+		if loadErr != nil {
+			return CommentCommandResult{}, loadErr
+		}
+		if !found {
+			return CommentCommandResult{}, commentNotFound(command.CommentID)
+		}
+		if slices.Equal(
+			aggregate.Snapshot().AttachmentMediaIDs,
+			command.AttachmentMediaIDs,
+		) {
+			return s.recordIdempotentReceipt(
+				ctx,
+				actorID,
+				aggregate,
+				"BindCommentAttachments",
+				commandDigest,
+			)
+		}
+		expectedVersion := aggregate.Version()
+		now := s.now().UTC()
+		if bindErr := aggregate.BindAttachments(actorID, command.AttachmentMediaIDs, now); bindErr != nil {
+			return CommentCommandResult{}, mapDomainError(bindErr)
+		}
+		snapshot := aggregate.Snapshot()
+		payload, marshalErr := json.Marshal(commentAttachmentsBoundEvent{
+			CommentID:          snapshot.ID,
+			Version:            snapshot.Version,
+			PostID:             snapshot.PostID,
+			AuthorID:           snapshot.AuthorID,
+			AttachmentMediaIDs: cloneStrings(snapshot.AttachmentMediaIDs),
+		})
+		if marshalErr != nil {
+			return CommentCommandResult{}, unavailable(marshalErr)
+		}
+		result, commitErr := s.commit(
+			ctx,
+			actorID,
+			aggregate,
+			expectedVersion,
+			"BindCommentAttachments",
+			commandDigest,
+			commentAttachmentsBoundEventType,
+			payload,
+			now,
+		)
+		if commitErr == nil {
+			return result, nil
+		}
+		if !isCommentVersionConflict(commitErr) || attempt == 2 {
+			if isCommentVersionConflict(commitErr) {
+				return CommentCommandResult{}, contentgenerated.AppErrorFromVersionConflict(
+					"comment changed repeatedly while applying attachment intent",
+				)
+			}
+			return CommentCommandResult{}, commitErr
+		}
 	}
-	snapshot := aggregate.Snapshot()
-	payload, err := json.Marshal(commentAttachmentsBoundEvent{
-		CommentID:          snapshot.ID,
-		Version:            snapshot.Version,
-		PostID:             snapshot.PostID,
-		AuthorID:           snapshot.AuthorID,
-		AttachmentMediaIDs: cloneStrings(snapshot.AttachmentMediaIDs),
-	})
-	if err != nil {
-		return CommentCommandResult{}, unavailable(err)
-	}
-	return s.commit(
-		ctx,
-		actorID,
-		aggregate,
-		command.ExpectedVersion,
-		"BindCommentAttachments",
-		commandDigest,
-		commentAttachmentsBoundEventType,
-		payload,
-		now,
-	)
+	panic("unreachable Comment attachment retry")
 }
 
 func (s *CommentService) ListComments(
@@ -521,6 +588,37 @@ func (s *CommentService) commit(
 	return commandResult(result.Aggregate, result.Replayed), nil
 }
 
+func (s *CommentService) recordIdempotentReceipt(
+	ctx context.Context,
+	actorID string,
+	aggregate *commentmodel.Comment,
+	commandName string,
+	commandDigest string,
+) (CommentCommandResult, error) {
+	idempotencyKey, err := scopedIdempotencyKey(ctx, actorID)
+	if err != nil {
+		return CommentCommandResult{}, err
+	}
+	result, err := s.data.Aggregate.RecordIdempotentReceipt(
+		ctx,
+		commentports.IdempotentReceipt{
+			Aggregate:        aggregate,
+			IdempotencyKey:   idempotencyKey,
+			CommandName:      commandName,
+			CommandDigest:    commandDigest,
+			ReceiptExpiresAt: s.now().UTC().Add(commentReceiptTTL),
+		},
+	)
+	if err != nil {
+		return CommentCommandResult{}, unavailable(err)
+	}
+	if result.Aggregate == nil {
+		return CommentCommandResult{},
+			unavailable(errors.New("comment no-op receipt returned no aggregate"))
+	}
+	return commandResult(result.Aggregate, result.Replayed), nil
+}
+
 func commandResult(aggregate *commentmodel.Comment, replayed bool) CommentCommandResult {
 	return CommentCommandResult{
 		ID:       aggregate.ID(),
@@ -547,15 +645,6 @@ func scopedIdempotencyKey(ctx context.Context, actorID string) (string, error) {
 	}
 	sum := sha256.Sum256([]byte(strings.TrimSpace(actorID) + "\x00" + rawKey))
 	return "comment:" + hex.EncodeToString(sum[:]), nil
-}
-
-func requireExpectedVersion(expectedVersion, actualVersion int64) error {
-	if expectedVersion < 1 || expectedVersion != actualVersion {
-		return contentgenerated.AppErrorFromVersionConflict(
-			fmt.Sprintf("expected comment version %d, current version %d", expectedVersion, actualVersion),
-		)
-	}
-	return nil
 }
 
 func pageLimit(limit int) int {
@@ -786,6 +875,12 @@ func mapDomainError(err error) error {
 	}
 }
 
+func isCommentVersionConflict(err error) bool {
+	var appError *rterr.AppError
+	return errors.As(err, &appError) &&
+		appError.Code.String() == contentgenerated.ErrVersionConflict.Error()
+}
+
 func commentNotFound(commentID string) error {
 	return contentgenerated.AppErrorFromCommentNotFound(
 		fmt.Sprintf("comment %s not found", strings.TrimSpace(commentID)),
@@ -891,41 +986,4 @@ func containsAssistantMention(mentions []commentmodel.Mention) bool {
 		}
 	}
 	return false
-}
-
-type commentCreatedEvent struct {
-	CommentID        string    `json:"commentId"`
-	Version          int64     `json:"version"`
-	PostID           string    `json:"postId"`
-	AuthorID         string    `json:"authorId"`
-	ReplyToCommentID string    `json:"replyToCommentId,omitempty"`
-	ReplyToUserID    string    `json:"replyToUserId,omitempty"`
-	ParentCommentID  string    `json:"parentCommentId,omitempty"`
-	CreatedAt        time.Time `json:"createdAt"`
-}
-
-type commentDeletedEvent struct {
-	CommentID       string    `json:"commentId"`
-	Version         int64     `json:"version"`
-	PostID          string    `json:"postId"`
-	AuthorID        string    `json:"authorId"`
-	ParentCommentID string    `json:"parentCommentId,omitempty"`
-	DeletedAt       time.Time `json:"deletedAt"`
-}
-
-type commentPinChangedEvent struct {
-	CommentID  string     `json:"commentId"`
-	Version    int64      `json:"version"`
-	PostID     string     `json:"postId"`
-	OperatorID string     `json:"operatorId"`
-	IsPinned   bool       `json:"isPinned"`
-	PinnedAt   *time.Time `json:"pinnedAt,omitempty"`
-}
-
-type commentAttachmentsBoundEvent struct {
-	CommentID          string   `json:"commentId"`
-	Version            int64    `json:"version"`
-	PostID             string   `json:"postId"`
-	AuthorID           string   `json:"authorId"`
-	AttachmentMediaIDs []string `json:"attachmentMediaIds"`
 }

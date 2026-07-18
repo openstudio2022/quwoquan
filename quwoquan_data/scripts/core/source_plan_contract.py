@@ -8,7 +8,7 @@ from typing import Any, Mapping
 
 import yaml
 
-SOURCE_PLAN_RULE_SIGNATURE_VERSION = "quwoquan.source_plan_rules.v4"
+SOURCE_PLAN_RULE_SIGNATURE_VERSION = "quwoquan.source_plan_rules"
 
 _DATA_ROOT = Path(__file__).resolve().parents[2]
 _ENTITY_SCOPED_REGISTRY_KEYS = {
@@ -96,7 +96,7 @@ def source_plan_rule_signature(vertical: str, entity_id: str) -> dict[str, Any]:
     Global executable/catalog changes intentionally affect every entity. The
     travel source registry is split: site/extractor policy is global, while
     known official/article rows are scoped by entity；homepage authority 只由
-    content_source_registry 的四百科 policy 控制。
+    content_source_registry 的三百科 policy 控制。
     """
     vertical = str(vertical or "travel").strip() or "travel"
     entity_id = str(entity_id or "").strip()

@@ -32,6 +32,8 @@ void main() {
     expect(find.text(UITextConstants.tryAgain), findsOneWidget);
     expect(find.text(UITextConstants.loadFailed), findsNothing);
     expect(find.text(UITextConstants.retry), findsNothing);
+    expect(UITextConstants.checkNetworkAndTryAgain, isNot(contains('再试一次')));
+    expect(UITextConstants.checkNetworkAndTryAgain, isNot(contains('稍后')));
     final defaultText = tester.widget<DefaultTextStyle>(
       find
           .ancestor(
@@ -91,10 +93,12 @@ void main() {
     expect(find.byType(AppSectionErrorState), findsOneWidget);
     expect(find.byType(AppSectionErrorCard), findsNothing);
     expect(find.text(UITextConstants.commentLoadFailedTitle), findsOneWidget);
+    expect(UITextConstants.pageLoadFailedMessage, isNot(contains('再试一次')));
+    expect(UITextConstants.pageLoadFailedMessage, isNot(contains('稍后')));
     expect(find.text(UITextConstants.tryAgain), findsOneWidget);
   });
 
-  testWidgets('AppFormErrorCard 就近展示、播报一次并提供 44dp 恢复动作', (tester) async {
+  testWidgets('AppFormErrorCard 使用透明统一错误行并提供 44dp 恢复动作', (tester) async {
     var retryCount = 0;
     await tester.pumpWidget(
       CupertinoApp(
@@ -102,10 +106,9 @@ void main() {
           semantic: const UiErrorSemantic(
             category: UiErrorCategory.submit,
             scope: UiErrorScope.form,
-            title: '未能获取验证码',
+            title: '',
             message: '验证码发送失败，请重试',
             presentation: UiErrorPresentation.formInlineCard,
-            tone: UiErrorTone.caution,
             primaryAction: UiErrorAction(
               type: UiErrorActionType.retry,
               label: '重新获取',
@@ -118,6 +121,14 @@ void main() {
 
     final semantics = tester.widgetList<Semantics>(find.byType(Semantics));
     expect(semantics.any((node) => node.properties.liveRegion == true), isTrue);
+    expect(find.byIcon(CupertinoIcons.exclamationmark_circle), findsOneWidget);
+    final message = tester.widget<Text>(find.text('验证码发送失败，请重试'));
+    expect(message.style?.fontSize, AppTypography.inlineError);
+    expect(message.style?.fontWeight, AppTypography.inlineErrorWeight);
+    expect(
+      message.style?.color,
+      AppColors.errorForeground(tester.element(find.text('验证码发送失败，请重试'))),
+    );
     expect(
       tester.getSize(find.widgetWithText(CupertinoButton, '重新获取')).height,
       greaterThanOrEqualTo(AppSpacing.minInteractiveSize),
@@ -151,15 +162,40 @@ void main() {
     expect(semantics.any((node) => node.properties.liveRegion == true), isTrue);
   });
 
-  testWidgets('AppInlineFieldError 使用破坏色并建立 live region', (tester) async {
+  testWidgets('AppInlineFieldError 使用统一错误色和 16px 图标', (tester) async {
     await tester.pumpWidget(
       const CupertinoApp(home: AppInlineFieldError(message: '请输入正确的手机号')),
     );
 
     final text = tester.widget<Text>(find.text('请输入正确的手机号'));
-    expect(text.style?.color, isNotNull);
+    final context = tester.element(find.text('请输入正确的手机号'));
+    expect(text.style?.color, AppColors.errorForeground(context));
+    expect(text.style?.fontSize, AppTypography.inlineError);
+    final icon = tester.widget<Icon>(
+      find.byIcon(CupertinoIcons.exclamationmark_circle),
+    );
+    expect(icon.size, AppSpacing.inlineErrorIconSize);
     final semantics = tester.widgetList<Semantics>(find.byType(Semantics));
     expect(semantics.any((node) => node.properties.liveRegion == true), isTrue);
+  });
+
+  testWidgets('窄屏内联错误最多显示两行并使用深色 token', (tester) async {
+    await tester.pumpWidget(
+      const CupertinoApp(
+        theme: CupertinoThemeData(brightness: Brightness.dark),
+        home: MediaQuery(
+          data: MediaQueryData(size: Size(320, 640)),
+          child: AppInlineFieldError(message: '登录服务暂不可用，请使用其他方式登录并确认网络连接后再继续'),
+        ),
+      ),
+    );
+
+    final text = tester.widget<Text>(
+      find.text('登录服务暂不可用，请使用其他方式登录并确认网络连接后再继续'),
+    );
+    expect(text.maxLines, 2);
+    final color = text.style!.color! as CupertinoDynamicColor;
+    expect(color.darkColor, const Color(0xFFFF6B6B));
   });
 
   testWidgets('AppPageErrorState 按 semantic appearanceMode 局部渲染', (

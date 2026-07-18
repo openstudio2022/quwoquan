@@ -49,13 +49,11 @@ class CircleSearchItemView {
 
   factory CircleSearchItemView.fromMap(Map<String, dynamic> map) {
     return CircleSearchItemView(
-      circleId: (map['circleId'] ?? map['id'] ?? map['_id'] ?? '')
-          .toString()
-          .trim(),
+      circleId: (map['circleId'] ?? '').toString().trim(),
       name: (map['name'] ?? '').toString().trim(),
       description: map['description']?.toString(),
-      coverUrl: (map['coverUrl'] ?? map['cover'])?.toString(),
-      categoryId: (map['categoryId'] ?? map['category'])?.toString(),
+      coverUrl: map['coverUrl']?.toString(),
+      categoryId: map['categoryId']?.toString(),
       subCategory: map['subCategory']?.toString(),
       domainId: map['domainId']?.toString(),
       kind: map['kind']?.toString(),
@@ -65,7 +63,7 @@ class CircleSearchItemView {
       highlightText: map['highlightText']?.toString(),
       matchedField: map['matchedField']?.toString(),
       circleName:
-          map['circleName']?.toString() ?? map['circle_name']?.toString(),
+          map['circleName']?.toString(),
       linkedHomepageId: map['linkedHomepageId']?.toString(),
       linkedHomepageType: map['linkedHomepageType']?.toString(),
       linkedHomepageTitle: map['linkedHomepageTitle']?.toString(),
@@ -74,7 +72,6 @@ class CircleSearchItemView {
 
   /// 全局搜索 [SearchHit.payload]（与记录手写字段表一致，避免与视图字段漂移）。
   Map<String, dynamic> toSearchHitPayload() => <String, dynamic>{
-    'id': circleId,
     'circleId': circleId,
     'name': name,
     'description': description,
@@ -113,13 +110,8 @@ class CircleFacetBucketView {
 
   factory CircleFacetBucketView.fromMap(Map<String, dynamic> map) {
     return CircleFacetBucketView(
-      facetKey:
-          (map['facetKey'] ?? map['subCategory'] ?? map['categoryId'] ?? '')
-              .toString()
-              .trim(),
-      label: (map['label'] ?? map['subCategory'] ?? map['categoryId'] ?? '')
-          .toString()
-          .trim(),
+      facetKey: (map['facetKey'] ?? '').toString().trim(),
+      label: (map['label'] ?? '').toString().trim(),
       categoryId: map['categoryId']?.toString(),
       subCategory: map['subCategory']?.toString(),
       facetCount: (map['facetCount'] as num?)?.toInt() ?? 0,

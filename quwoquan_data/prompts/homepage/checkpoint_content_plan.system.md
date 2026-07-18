@@ -9,7 +9,7 @@
     - 源图是加分与可选证据，article 必须写 baseSourceRef 且一稿一用，若使用 assetRefs 则资产必须权利合规（图文同源底稿，图片可跨内容复用，无需全批独占），无合格源图的优质文字底稿可写 publishMediaMode=text_only。
     - 图片作品底稿是 image_research 的图片集合，carrier=image，只写 sourceCollectionId/assetRefs，同一作品只能使用同一作者/页面/专辑/授权凭证下 1..20 张图，标题<=80字且可空，配文<=300字且可空。
     - 每个 article/image/video 内容对象必须绑定平台 creator assignment，字段至少包含 authorId、creatorProfileId、creatorArchetype、creatorProfileVersion、creatorDisclosure、experienceClaimMode、authorQualitySignals；creator 必须来自系统 creator registry。
-    - 写 _shared/content_plan_packet.json（schemaVersion=quwoquan_data.content_plan_packet），注册 content_object，并写每项 3.compose/brief.json。
+    - 写 _shared/content_plan_packet.json（schema=quwoquan_data.content_plan_packet），注册 content_object，并写每项 3.compose/brief.json。
     - ref/title 必须由证据归纳；evidenceRefs 必须存在，blocked/reject 来源不可引用。
     - 完成后运行 content_plan validator 并修复到无问题。
   </always>

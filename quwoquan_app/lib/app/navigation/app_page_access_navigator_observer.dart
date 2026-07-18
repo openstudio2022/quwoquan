@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:quwoquan_app/app/navigation/page_access_log_util.dart';
 import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart';
-import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
 import 'package:quwoquan_app/core/services/visit_recorder_service.dart';
+import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
 
 class _TrackedOverlay {
   const _TrackedOverlay({
@@ -26,22 +26,14 @@ class AppPageAccessNavigatorObserver extends NavigatorObserver {
 
   final List<_TrackedOverlay> _overlayStack = <_TrackedOverlay>[];
   VisitRecorderService? _visitRecorder;
-  OpsEventRepository? _eventRepository;
-  String _currentUserId = '';
-  String _experimentBucket = '';
+  AppTelemetryRecorder? _telemetryReporter;
 
   void attachVisitRecorder(VisitRecorderService service) {
     _visitRecorder = service;
   }
 
-  void attachEventReporter({
-    required OpsEventRepository repository,
-    required String currentUserId,
-    required String experimentBucket,
-  }) {
-    _eventRepository = repository;
-    _currentUserId = currentUserId.trim();
-    _experimentBucket = experimentBucket.trim();
+  void attachEventReporter(AppTelemetryRecorder reporter) {
+    _telemetryReporter = reporter;
   }
 
   void _logOpenForRoute(Route<dynamic> route) {
@@ -60,9 +52,7 @@ class AppPageAccessNavigatorObserver extends NavigatorObserver {
         location: loc,
         pageVisitId: visitId,
         visitRecorder: _visitRecorder,
-        eventRepository: _eventRepository,
-        currentUserId: _currentUserId,
-        experimentBucket: _experimentBucket,
+        telemetryReporter: _telemetryReporter,
       ),
     );
   }
@@ -77,9 +67,7 @@ class AppPageAccessNavigatorObserver extends NavigatorObserver {
         location: t.location,
         pageVisitId: t.pageVisitId,
         enterAt: t.enterAt,
-        eventRepository: _eventRepository,
-        currentUserId: _currentUserId,
-        experimentBucket: _experimentBucket,
+        telemetryReporter: _telemetryReporter,
       ),
     );
   }

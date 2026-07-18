@@ -4,67 +4,7 @@ info:
     title: quwoquan assistant API
     version: v1
 paths:
-    /internal/v1/assistant/learning/scorecards:
-        post:
-            operationId: ReportScorecard
-            x-contract-operation-id: assistant.assistant_scorecard_fact.ReportScorecard
-            x-object-id: assistant.assistant_scorecard_fact
-            x-actor: account
-            x-application:
-                kind: command
-                facet: AssistantScorecardFactAppendSink
-                method: append
-                appendSink: AssistantScorecardFact
-            requestBody:
-                required: true
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/Scorecard'
-            responses:
-                "204":
-                    description: No Content
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-    /internal/v1/assistant/skill-subscriptions:tick:
-        post:
-            operationId: TickSkillSubscriptionCron
-            x-contract-operation-id: assistant.skill_subscription.TickSkillSubscriptionCron
-            x-object-id: assistant.skill_subscription
-            x-actor: none
-            x-application:
-                kind: command
-                facet: SkillSubscriptionCommandFacade
-                method: acquireDueLeases
-                aggregateOwner: SkillSubscription
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/TickSkillSubscriptionCronRequest'
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/SkillSubscriptionCronTickResult'
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-    /v1/assistant/consents:
+    /assistant/consents:
         get:
             operationId: ListConsents
             x-contract-operation-id: assistant.skill_consent.ListConsents
@@ -91,7 +31,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/assistant/conversations:
+    /assistant/conversations:
         post:
             operationId: CreateAssistantConversation
             x-contract-operation-id: assistant.assistant_conversation.CreateAssistantConversation
@@ -123,7 +63,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/assistant/conversations/{conversationId}:
+    /assistant/conversations/{conversationId}:
         get:
             operationId: GetAssistantConversation
             x-contract-operation-id: assistant.assistant_conversation.GetAssistantConversation
@@ -156,7 +96,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/assistant/conversations/{conversationId}/runs:
+    /assistant/conversations/{conversationId}/runs:
         post:
             operationId: StartAssistantRun
             x-contract-operation-id: assistant.assistant_run.StartAssistantRun
@@ -194,7 +134,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/assistant/learning/events:
+    /assistant/learning/events:
         post:
             operationId: ReportInteractionEvent
             x-contract-operation-id: assistant.assistant_interaction_event.ReportInteractionEvent
@@ -222,7 +162,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/assistant/memories:
+    /assistant/memories:
         get:
             operationId: ListAssistantMemories
             x-contract-operation-id: assistant.assistant_run.ListAssistantMemories
@@ -249,7 +189,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/assistant/ops/learning-summary:
+    /assistant/ops/learning-summary:
         get:
             operationId: GetLearningOpsSummary
             x-contract-operation-id: assistant.assistant_run.GetLearningOpsSummary
@@ -276,7 +216,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/assistant/page-context:
+    /assistant/page-context:
         post:
             operationId: ReportPageContext
             x-contract-operation-id: assistant.assistant_run.ReportPageContext
@@ -308,7 +248,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/assistant/personalization:
+    /assistant/personalization:
         get:
             operationId: GetEntryPersonalization
             x-contract-operation-id: assistant.assistant_run.GetEntryPersonalization
@@ -335,7 +275,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/assistant/policy:
+    /assistant/policy:
         get:
             operationId: GetPolicy
             x-contract-operation-id: assistant.assistant_run.GetPolicy
@@ -360,7 +300,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-    /v1/assistant/runs/{runId}:
+    /assistant/runs/{runId}:
         get:
             operationId: GetAssistantRun
             x-contract-operation-id: assistant.assistant_run.GetAssistantRun
@@ -393,7 +333,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/assistant/runs/{runId}/events:
+    /assistant/runs/{runId}/events:
         get:
             operationId: StreamAssistantRunEvents
             x-contract-operation-id: assistant.assistant_run.StreamAssistantRunEvents
@@ -426,7 +366,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/assistant/search/xiaoqu:
+    /assistant/search/xiaoqu:
         post:
             operationId: SearchXiaoquResults
             x-contract-operation-id: assistant.assistant_run.SearchXiaoquResults
@@ -459,7 +399,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/assistant/skill-subscriptions:
+    /assistant/skill-subscriptions:
         get:
             operationId: ListSkillSubscriptions
             x-contract-operation-id: assistant.skill_subscription.ListSkillSubscriptions
@@ -517,7 +457,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/assistant/skill-subscriptions/{subscriptionId}:
+    /assistant/skill-subscriptions/{subscriptionId}:
         get:
             operationId: GetSkillSubscription
             x-contract-operation-id: assistant.skill_subscription.GetSkillSubscription
@@ -550,7 +490,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/assistant/skill-subscriptions/{subscriptionId}/status:
+    /assistant/skill-subscriptions/{subscriptionId}/status:
         patch:
             operationId: UpdateSkillSubscriptionStatus
             x-contract-operation-id: assistant.skill_subscription.UpdateSkillSubscriptionStatus
@@ -588,7 +528,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/assistant/skills:
+    /assistant/skills:
         get:
             operationId: ListSkills
             x-contract-operation-id: assistant.assistant_run.ListSkills
@@ -613,7 +553,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-    /v1/assistant/skills/{skillId}/consent:
+    /assistant/skills/{skillId}/consent:
         post:
             operationId: GrantSkillConsent
             x-contract-operation-id: assistant.skill_consent.GrantSkillConsent
@@ -674,7 +614,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/assistant/skills/creation-suggest:
+    /assistant/skills/creation-suggest:
         post:
             operationId: SuggestCreationAssistance
             x-contract-operation-id: assistant.assistant_run.SuggestCreationAssistance
@@ -707,7 +647,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/assistant/suggested-actions:
+    /assistant/suggested-actions:
         get:
             operationId: GetSuggestedActions
             x-contract-operation-id: assistant.assistant_run.GetSuggestedActions
@@ -734,7 +674,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/assistant/tasks:
+    /assistant/tasks:
         get:
             operationId: ListAssistantTasks
             x-contract-operation-id: assistant.assistant_run.ListAssistantTasks
@@ -753,6 +693,66 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/AssistantUserTaskListView'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/assistant/learning/scorecards:
+        post:
+            operationId: ReportScorecard
+            x-contract-operation-id: assistant.assistant_scorecard_fact.ReportScorecard
+            x-object-id: assistant.assistant_scorecard_fact
+            x-actor: account
+            x-application:
+                kind: command
+                facet: AssistantScorecardFactAppendSink
+                method: append
+                appendSink: AssistantScorecardFact
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/Scorecard'
+            responses:
+                "204":
+                    description: No Content
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/assistant/skill-subscriptions:tick:
+        post:
+            operationId: TickSkillSubscriptionCron
+            x-contract-operation-id: assistant.skill_subscription.TickSkillSubscriptionCron
+            x-object-id: assistant.skill_subscription
+            x-actor: none
+            x-application:
+                kind: command
+                facet: SkillSubscriptionCommandFacade
+                method: acquireDueLeases
+                aggregateOwner: SkillSubscription
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/TickSkillSubscriptionCronRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SkillSubscriptionCronTickResult'
                 default:
                     description: Runtime failure
                     content:

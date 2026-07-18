@@ -145,7 +145,7 @@ void main() {
     final repo = _RecordingIntersectionRepository();
     final behaviorRepo = MockBehaviorRepository();
     final tracker = ContentBehaviorTracker(
-      repository: behaviorRepo,
+      reporter: behaviorRepo,
       maxBatchSize: 1,
       enablePeriodicFlush: false,
     );
@@ -206,7 +206,7 @@ void main() {
     final repo = _RecordingIntersectionRepository();
     final behaviorRepo = MockBehaviorRepository();
     final tracker = ContentBehaviorTracker(
-      repository: behaviorRepo,
+      reporter: behaviorRepo,
       maxBatchSize: 1,
       enablePeriodicFlush: false,
     );

@@ -92,7 +92,6 @@ _PRODUCT_CONFIG_SCHEMA_JSON = r'''{
       "type": "string",
       "ui_editable": true
     }
-  ],
-  "version": 1
+  ]
 }'''
 PRODUCT_CONFIG_SCHEMA = json.loads(_PRODUCT_CONFIG_SCHEMA_JSON)

@@ -1,8 +1,7 @@
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
-import 'package:quwoquan_app/core/media/avatar_image_url.dart';
-import 'package:quwoquan_app/core/media/content_media_url.dart';
+import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view.dart';
 import 'package:quwoquan_app/ui/content/services/post_view_projection.dart';
 
@@ -21,38 +20,78 @@ class ContentSurfaceViewMapper {
     ContentSurfaceReferral referral = const ContentSurfaceReferral(),
   }) {
     final read = PostReadPresentation.fromPostBase(dto, wire: wire);
+    final resolver = MediaDeliveryResolver.fromRuntimeConfig();
 
     final title = read.title.trim().isEmpty ? null : read.title.trim();
     final body = read.body.trim().isEmpty ? null : read.body.trim();
 
-    final projectedCoverUrl = resolveContentMediaUrl(read.coverUrl);
-    final mediaCoverUrl = resolveContentMediaUrl(dto.mediaCoverUrl);
-    final mediaThumbnailUrl = resolveContentMediaUrl(dto.mediaThumbnailUrl);
-    final mediaVideoUrl = resolveContentVideoUrl(dto.mediaVideoUrl);
-    final mediaVideoCoverUrl = mediaThumbnailUrl.isNotEmpty
-        ? mediaThumbnailUrl
-        : mediaCoverUrl;
-    final coverUrl = dto.isVideoLike
-        ? mediaVideoCoverUrl
-        : (projectedCoverUrl.isEmpty ? mediaCoverUrl : projectedCoverUrl);
-    final cover = coverUrl.isEmpty
+    final projectedCover = resolver.tryResolve(
+      read.coverUrl,
+      kind: MediaDeliveryKind.image,
+      assetId: dto.id,
+    );
+    final mediaCover = resolver.tryResolve(
+      dto.mediaCoverUrl,
+      kind: MediaDeliveryKind.image,
+      assetId: dto.id,
+    );
+    final mediaThumbnail = resolver.tryResolve(
+      dto.mediaThumbnailUrl,
+      kind: MediaDeliveryKind.image,
+      assetId: dto.id,
+    );
+    final mediaVideo = resolver.tryResolve(
+      dto.mediaVideoUrl,
+      kind: MediaDeliveryKind.video,
+      assetId: dto.id,
+    );
+    final mediaVideoCover = mediaThumbnail ?? mediaCover;
+    final coverReference = dto.isVideoLike
+        ? mediaVideoCover
+        : (projectedCover ?? mediaCover);
+    final cover = coverReference == null
         ? null
-        : ContentCoverRef(url: coverUrl, aspectRatio: dto.aspectRatio);
+        : ContentCoverRef(
+            delivery: coverReference,
+            aspectRatio: dto.aspectRatio,
+          );
 
     final images = dto.mediaImageUrls
-        .map(resolveContentMediaUrl)
-        .where((url) => url.isNotEmpty)
-        .map((url) => ContentImageRef(url: url, aspectRatio: dto.aspectRatio))
+        .map(
+          (raw) => resolver.tryResolve(
+            raw,
+            kind: MediaDeliveryKind.image,
+            assetId: dto.id,
+          ),
+        )
+        .whereType<MediaDeliveryReference>()
+        .map(
+          (reference) => ContentImageRef(
+            delivery: reference,
+            aspectRatio: dto.aspectRatio,
+          ),
+        )
         .toList(growable: false);
 
-    final ContentVideoRef? video = mediaVideoUrl.isNotEmpty
+    final ContentVideoRef? video = mediaVideo != null
         ? ContentVideoRef(
-            url: mediaVideoUrl,
-            thumbnailUrl: mediaVideoCoverUrl,
+            delivery: mediaVideo,
+            thumbnail: mediaVideoCover,
             durationMs: dto.durationMs,
             aspectRatio: dto.aspectRatio,
           )
         : null;
+
+    final authorAvatar = resolver.tryResolve(
+      dto.avatarUrl,
+      kind: MediaDeliveryKind.avatar,
+      assetId: dto.subAccountId,
+    );
+    final authorBackground = resolver.tryResolve(
+      dto.authorBackgroundUrl,
+      kind: MediaDeliveryKind.background,
+      assetId: dto.subAccountId,
+    );
 
     return ContentSurfaceView(
       postId: dto.id,
@@ -62,8 +101,8 @@ class ContentSurfaceViewMapper {
       author: ContentAuthorRef(
         id: dto.subAccountId,
         displayName: dto.displayName,
-        avatarUrl: resolveAvatarImageUrl(dto.avatarUrl),
-        backgroundUrl: resolveContentMediaUrl(dto.authorBackgroundUrl),
+        avatar: authorAvatar,
+        background: authorBackground,
       ),
       stats: ContentStats(
         like: dto.likeCount,

@@ -4,6 +4,10 @@ import {
   isRuntimeErrorResponse,
 } from "../runtime/errors/runtimeError.js";
 import { productControlPlane } from "../../generated/control-plane/productControlPlane.generated.js";
+import { eventCatalog } from "../../generated/telemetry/eventCatalog.generated.js";
+
+export type ProductTelemetryNetworkClass =
+  (typeof eventCatalog.network_classes)[number];
 
 export interface ExperimentItem {
   id: string;
@@ -443,32 +447,49 @@ export interface ProductProjectionSummary {
 
 export interface ProductEventSummary {
   totalCount: number;
-  eventType?: string;
-  eventName?: string;
-  latestOccurredAt?: string;
+  sessionCount: number;
   dimensions: Record<string, Record<string, number>>;
+  source: 'sls_aggregate';
+  freshness: string;
+  actualFrom: string;
+  actualTo: string;
 }
 
 export interface ProductEventDrilldownItem {
-  eventId: string;
+  rowKey: string;
+  logType: 'event' | 'error';
   eventType: string;
-  eventName: string;
+  sessionId: string;
+  pageName: string;
   occurredAt: string;
-  pageName?: string;
-  surfaceId?: string;
-  routeId?: string;
-  targetType?: string;
-  targetKey?: string;
-  entityType?: string;
-  entityId?: string;
-  experimentBucket?: string;
-  payload?: Record<string, unknown>;
-  metrics?: Record<string, unknown>;
+  deviceManufacturer: string;
+  deviceModel: string;
+  appVersion: string;
+  networkClass: ProductTelemetryNetworkClass;
+  durationMs?: number;
+  result?: string;
+  failReasonCode?: string;
+  errorCode?: string;
+  operationId?: string;
+  httpStatus?: number;
+  callStack?: string[];
+  tClickToFirstFrameMs?: number;
+  tFirstFrameToShellMs?: number;
+  tShellToContentMs?: number;
+  tClickToContentMs?: number;
+  hasError?: boolean;
+  journey?: string;
+  action?: string;
+  ingestedAt: string;
 }
 
 export interface ProductEventDrilldown {
   totalCount: number;
   items: ProductEventDrilldownItem[];
+  source: 'sls_raw';
+  freshness: string;
+  actualFrom: string;
+  actualTo: string;
 }
 
 export interface ControlPlaneBacklogCandidate {
@@ -489,18 +510,28 @@ export interface ControlPlaneBacklogCandidate {
 }
 
 export interface ProductEventQuery {
+  logType?: 'event' | 'error';
   eventType?: string;
-  eventName?: string;
   pageName?: string;
-  surfaceId?: string;
-  routeId?: string;
-  targetType?: string;
-  targetKey?: string;
-  entityType?: string;
-  entityId?: string;
-  experimentBucket?: string;
-  source?: string;
+  appVersion?: string;
+  networkClass?: ProductTelemetryNetworkClass;
+  errorCode?: string;
+  sessionId?: string;
+  from?: string;
+  to?: string;
   limit?: number;
+  revealSession?: boolean;
+}
+
+export interface RecommendationBehaviorMetricSeries {
+  labels: Record<string, string>;
+  value: number;
+}
+
+export interface RecommendationBehaviorMetrics {
+  source: 'recommendation_behavior_by_attribution_total';
+  freshness: 'process_realtime';
+  series: RecommendationBehaviorMetricSeries[];
 }
 
 export interface ControlPlaneScopeQuery {
@@ -711,7 +742,7 @@ async function postJSON<T>(baseUrl: string, path: string, payload: unknown): Pro
 
 function withQuery(
   path: string,
-  query: Record<string, string | number | undefined | null> | ProductEventQuery | ControlPlaneScopeQuery = {},
+  query: Record<string, string | number | boolean | undefined | null> | ProductEventQuery | ControlPlaneScopeQuery = {},
 ): string {
   const params = new URLSearchParams();
   Object.entries(query).forEach(([key, value]) => {
@@ -744,7 +775,7 @@ function productControlPlaneOperationPath(operation: string): string {
 export async function fetchExperiments(): Promise<ExperimentItem[]> {
   const payload = await fetchJSON<{ items: ExperimentItem[] }>(
     envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
-    '/v1/control-plane/product/experiments',
+    '/control-plane/product/experiments',
   );
   return payload.items;
 }
@@ -752,7 +783,7 @@ export async function fetchExperiments(): Promise<ExperimentItem[]> {
 export async function fetchRuntimeClusters(): Promise<RuntimeClusterItem[]> {
   const payload = await fetchJSON<{ items: RuntimeClusterItem[] }>(
     envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    '/v1/control-plane/platform/topology/clusters',
+    '/control-plane/platform/topology/clusters',
   );
   return payload.items;
 }
@@ -760,7 +791,7 @@ export async function fetchRuntimeClusters(): Promise<RuntimeClusterItem[]> {
 export async function fetchRuntimeServices(): Promise<RuntimeServiceItem[]> {
   const payload = await fetchJSON<{ items: RuntimeServiceItem[] }>(
     envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    '/v1/control-plane/platform/topology/services',
+    '/control-plane/platform/topology/services',
   );
   return payload.items;
 }
@@ -768,7 +799,7 @@ export async function fetchRuntimeServices(): Promise<RuntimeServiceItem[]> {
 export async function fetchRuntimeInstances(): Promise<RuntimeInstanceItem[]> {
   const payload = await fetchJSON<{ items: RuntimeInstanceItem[] }>(
     envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    '/v1/control-plane/platform/topology/instances',
+    '/control-plane/platform/topology/instances',
   );
   return payload.items;
 }
@@ -776,7 +807,7 @@ export async function fetchRuntimeInstances(): Promise<RuntimeInstanceItem[]> {
 export async function fetchReleases(): Promise<ReleaseItem[]> {
   const payload = await fetchJSON<{ items: ReleaseItem[] }>(
     envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    '/v1/control-plane/platform/releases',
+    '/control-plane/platform/releases',
   );
   return payload.items;
 }
@@ -792,7 +823,7 @@ export async function fetchReports(): Promise<ReportItem[]> {
 export async function fetchServiceCatalog(): Promise<ServiceCatalogItem[]> {
   const payload = await fetchJSON<{ items: ServiceCatalogItem[] }>(
     envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    '/v1/control-plane/platform/catalog/services',
+    '/control-plane/platform/catalog/services',
   );
   return payload.items;
 }
@@ -800,7 +831,7 @@ export async function fetchServiceCatalog(): Promise<ServiceCatalogItem[]> {
 export async function fetchOnboardingDomains(): Promise<OnboardingDomainItem[]> {
   const payload = await fetchJSON<{ items: OnboardingDomainItem[] }>(
     envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    '/v1/control-plane/platform/onboarding/domains',
+    '/control-plane/platform/onboarding/domains',
   );
   return payload.items;
 }
@@ -808,7 +839,7 @@ export async function fetchOnboardingDomains(): Promise<OnboardingDomainItem[]> 
 export async function fetchPlaneBindings(): Promise<PlaneBindingItem[]> {
   const payload = await fetchJSON<{ items: PlaneBindingItem[] }>(
     envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    '/v1/control-plane/platform/topology/planes',
+    '/control-plane/platform/topology/planes',
   );
   return payload.items;
 }
@@ -816,7 +847,7 @@ export async function fetchPlaneBindings(): Promise<PlaneBindingItem[]> {
 export async function fetchEnvironmentTopologies(): Promise<EnvironmentTopologyItem[]> {
   const payload = await fetchJSON<{ items: EnvironmentTopologyItem[] }>(
     envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    '/v1/control-plane/platform/topology/environments',
+    '/control-plane/platform/topology/environments',
   );
   return payload.items;
 }
@@ -824,7 +855,7 @@ export async function fetchEnvironmentTopologies(): Promise<EnvironmentTopologyI
 export async function fetchDependencies(): Promise<DependencyItem[]> {
   const payload = await fetchJSON<{ items: DependencyItem[] }>(
     envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    '/v1/control-plane/platform/topology/dependencies',
+    '/control-plane/platform/topology/dependencies',
   );
   return payload.items;
 }
@@ -832,7 +863,7 @@ export async function fetchDependencies(): Promise<DependencyItem[]> {
 export async function fetchCapacityProfiles(): Promise<CapacityProfileItem[]> {
   const payload = await fetchJSON<{ items: CapacityProfileItem[] }>(
     envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    '/v1/control-plane/platform/topology/capacity',
+    '/control-plane/platform/topology/capacity',
   );
   return payload.items;
 }
@@ -840,7 +871,7 @@ export async function fetchCapacityProfiles(): Promise<CapacityProfileItem[]> {
 export async function fetchGovernanceBindings(): Promise<GovernanceBindingItem[]> {
   const payload = await fetchJSON<{ items: GovernanceBindingItem[] }>(
     envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    '/v1/control-plane/platform/governance/bindings',
+    '/control-plane/platform/governance/bindings',
   );
   return payload.items;
 }
@@ -848,7 +879,7 @@ export async function fetchGovernanceBindings(): Promise<GovernanceBindingItem[]
 export async function fetchGovernanceTemplates(): Promise<GovernanceTemplateItem[]> {
   const payload = await fetchJSON<{ items: GovernanceTemplateItem[] }>(
     envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    '/v1/control-plane/platform/governance/templates',
+    '/control-plane/platform/governance/templates',
   );
   return payload.items;
 }
@@ -856,7 +887,7 @@ export async function fetchGovernanceTemplates(): Promise<GovernanceTemplateItem
 export async function fetchGateRules(): Promise<GateRuleItem[]> {
   const payload = await fetchJSON<{ items: GateRuleItem[] }>(
     envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    '/v1/control-plane/platform/gates',
+    '/control-plane/platform/gates',
   );
   return payload.items;
 }
@@ -864,7 +895,7 @@ export async function fetchGateRules(): Promise<GateRuleItem[]> {
 export async function fetchRunbooks(): Promise<RunbookItem[]> {
   const payload = await fetchJSON<{ items: RunbookItem[] }>(
     envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    '/v1/control-plane/platform/runbooks',
+    '/control-plane/platform/runbooks',
   );
   return payload.items;
 }
@@ -872,7 +903,7 @@ export async function fetchRunbooks(): Promise<RunbookItem[]> {
 export async function fetchPlatformAudits(): Promise<PlatformAuditItem[]> {
   const payload = await fetchJSON<{ items: PlatformAuditItem[] }>(
     envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    '/v1/control-plane/platform/audits',
+    '/control-plane/platform/audits',
   );
   return payload.items;
 }
@@ -880,7 +911,7 @@ export async function fetchPlatformAudits(): Promise<PlatformAuditItem[]> {
 export async function fetchPlatformApprovals(): Promise<PlatformApprovalItem[]> {
   const payload = await fetchJSON<{ items: PlatformApprovalItem[] }>(
     envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    '/v1/control-plane/platform/approvals',
+    '/control-plane/platform/approvals',
   );
   return payload.items;
 }
@@ -888,14 +919,14 @@ export async function fetchPlatformApprovals(): Promise<PlatformApprovalItem[]> 
 export async function fetchPlatformProjectionSummary(): Promise<PlatformProjectionSummary> {
   return fetchJSON<PlatformProjectionSummary>(
     envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    '/v1/control-plane/platform/projections/summary',
+    '/control-plane/platform/projections/summary',
   );
 }
 
 export async function fetchSLOPolicies(): Promise<SLOPolicyItem[]> {
   const payload = await fetchJSON<{ items: SLOPolicyItem[] }>(
     envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    '/v1/control-plane/platform/observability/slos',
+    '/control-plane/platform/observability/slos',
   );
   return payload.items;
 }
@@ -903,7 +934,7 @@ export async function fetchSLOPolicies(): Promise<SLOPolicyItem[]> {
 export async function fetchAlertTemplates(): Promise<AlertTemplateItem[]> {
   const payload = await fetchJSON<{ items: AlertTemplateItem[] }>(
     envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    '/v1/control-plane/platform/observability/alerts',
+    '/control-plane/platform/observability/alerts',
   );
   return payload.items;
 }
@@ -911,7 +942,7 @@ export async function fetchAlertTemplates(): Promise<AlertTemplateItem[]> {
 export async function fetchDashboardCards(): Promise<DashboardCardItem[]> {
   const payload = await fetchJSON<{ items: DashboardCardItem[] }>(
     envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    '/v1/control-plane/platform/observability/dashboards/cards',
+    '/control-plane/platform/observability/dashboards/cards',
   );
   return payload.items;
 }
@@ -919,7 +950,7 @@ export async function fetchDashboardCards(): Promise<DashboardCardItem[]> {
 export async function fetchPlatformConfigKeys(): Promise<ConfigKeyItem[]> {
   const payload = await fetchJSON<{ items: ConfigKeyItem[] }>(
     envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    '/v1/control-plane/platform/configs',
+    '/control-plane/platform/configs',
   );
   return payload.items;
 }
@@ -927,7 +958,7 @@ export async function fetchPlatformConfigKeys(): Promise<ConfigKeyItem[]> {
 export async function fetchPlatformConfigLayers(): Promise<ConfigLayerItem[]> {
   const payload = await fetchJSON<{ items: ConfigLayerItem[] }>(
     envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    '/v1/control-plane/platform/configs/layers',
+    '/control-plane/platform/configs/layers',
   );
   return payload.items;
 }
@@ -935,7 +966,7 @@ export async function fetchPlatformConfigLayers(): Promise<ConfigLayerItem[]> {
 export async function fetchPlatformConfigPackages(): Promise<ConfigPackageItem[]> {
   const payload = await fetchJSON<{ items: ConfigPackageItem[] }>(
     envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    '/v1/control-plane/platform/configs/packages',
+    '/control-plane/platform/configs/packages',
   );
   return payload.items;
 }
@@ -946,21 +977,21 @@ export async function fetchPlatformConfigInstanceReports(): Promise<{
 }> {
   return fetchJSON<{ items: ConfigInstanceReportItem[]; summary: ConfigInstanceReportSummary }>(
     envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    '/v1/control-plane/platform/configs/instances',
+    '/control-plane/platform/configs/instances',
   );
 }
 
 export async function fetchEffectiveConfig(query: ControlPlaneScopeQuery = {}): Promise<EffectiveConfigResponse> {
   return fetchJSON<EffectiveConfigResponse>(
     envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    withQuery('/v1/control-plane/platform/configs/resolve', query),
+    withQuery('/control-plane/platform/configs/resolve', query),
   );
 }
 
 export async function fetchPlatformTriageSummary(query: ControlPlaneScopeQuery = {}): Promise<PlatformTriageSummaryResponse> {
   return fetchJSON<PlatformTriageSummaryResponse>(
     envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    withQuery('/v1/control-plane/platform/triage/summary', query),
+    withQuery('/control-plane/platform/triage/summary', query),
   );
 }
 
@@ -970,7 +1001,7 @@ export async function applyPlatformRelease(
 ): Promise<PlatformReleaseMutationResponse> {
   return postJSON<PlatformReleaseMutationResponse>(
     envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    `/v1/control-plane/platform/releases/${releaseId}:apply`,
+    `/control-plane/platform/releases/${releaseId}:apply`,
     payload,
   );
 }
@@ -981,7 +1012,7 @@ export async function rollbackPlatformRelease(
 ): Promise<PlatformReleaseMutationResponse> {
   return postJSON<PlatformReleaseMutationResponse>(
     envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
-    `/v1/control-plane/platform/releases/${releaseId}:rollback`,
+    `/control-plane/platform/releases/${releaseId}:rollback`,
     payload,
   );
 }
@@ -989,7 +1020,7 @@ export async function rollbackPlatformRelease(
 export async function fetchModerationCases(): Promise<ModerationCaseItem[]> {
   const payload = await fetchJSON<{ items: ModerationCaseItem[] }>(
     envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
-    '/v1/control-plane/product/moderation/cases',
+    '/control-plane/product/moderation/cases',
   );
   return payload.items;
 }
@@ -997,7 +1028,7 @@ export async function fetchModerationCases(): Promise<ModerationCaseItem[]> {
 export async function fetchRecoveryCases(): Promise<RecoveryCaseItem[]> {
   const payload = await fetchJSON<{ items: RecoveryCaseItem[] }>(
     envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
-    '/v1/control-plane/product/recovery/cases',
+    '/control-plane/product/recovery/cases',
   );
   return payload.items;
 }
@@ -1005,7 +1036,7 @@ export async function fetchRecoveryCases(): Promise<RecoveryCaseItem[]> {
 export async function fetchAppealCases(): Promise<AppealCaseItem[]> {
   const payload = await fetchJSON<{ items: AppealCaseItem[] }>(
     envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
-    '/v1/control-plane/product/appeal/cases',
+    '/control-plane/product/appeal/cases',
   );
   return payload.items;
 }
@@ -1013,7 +1044,7 @@ export async function fetchAppealCases(): Promise<AppealCaseItem[]> {
 export async function fetchRecommendationPolicies(): Promise<RecommendationPolicyItem[]> {
   const payload = await fetchJSON<{ items: RecommendationPolicyItem[] }>(
     envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
-    '/v1/control-plane/product/recommendation/policies',
+    '/control-plane/product/recommendation/policies',
   );
   return payload.items;
 }
@@ -1021,7 +1052,7 @@ export async function fetchRecommendationPolicies(): Promise<RecommendationPolic
 export async function fetchProductWorkflows(): Promise<WorkflowItem[]> {
   const payload = await fetchJSON<{ items: WorkflowItem[] }>(
     envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
-    '/v1/control-plane/product/workflows',
+    '/control-plane/product/workflows',
   );
   return payload.items;
 }
@@ -1029,7 +1060,7 @@ export async function fetchProductWorkflows(): Promise<WorkflowItem[]> {
 export async function fetchProductApprovals(): Promise<ProductApprovalItem[]> {
   const payload = await fetchJSON<{ items: ProductApprovalItem[] }>(
     envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
-    '/v1/control-plane/product/approvals',
+    '/control-plane/product/approvals',
   );
   return payload.items;
 }
@@ -1037,34 +1068,41 @@ export async function fetchProductApprovals(): Promise<ProductApprovalItem[]> {
 export async function fetchProductProjectionSummary(): Promise<ProductProjectionSummary> {
   return fetchJSON<ProductProjectionSummary>(
     envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
-    '/v1/control-plane/product/projections/summary',
+    '/control-plane/product/projections/summary',
   );
 }
 
 export async function fetchProductEventSummary(query: ProductEventQuery = {}): Promise<ProductEventSummary> {
   return fetchJSON<ProductEventSummary>(
     envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
-    withQuery('/v1/ops/events/summary', query),
+    withQuery('/ops/events/summary', query),
   );
 }
 
 export async function fetchProductEventDrilldown(query: ProductEventQuery = {}): Promise<ProductEventDrilldown> {
   return fetchJSON<ProductEventDrilldown>(
     envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
-    withQuery('/v1/ops/events/drilldown', query),
+    withQuery('/ops/events/drilldown', query),
+  );
+}
+
+export async function fetchRecommendationBehaviorMetrics(): Promise<RecommendationBehaviorMetrics> {
+  return fetchJSON<RecommendationBehaviorMetrics>(
+    envBaseUrl('VITE_CONTENT_SERVICE_BASE_URL'),
+    '/metrics/rec/behavior-attribution',
   );
 }
 
 export async function fetchProductL1L4Metrics(query: ControlPlaneScopeQuery = {}): Promise<ProductL1L4MetricsResponse> {
   return fetchJSON<ProductL1L4MetricsResponse>(
     envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
-    withQuery('/v1/control-plane/product/metrics/l1l4', query),
+    withQuery('/control-plane/product/metrics/l1l4', query),
   );
 }
 
 export async function fetchProductTriageSummary(query: ProductEventQuery = {}): Promise<ProductTriageSummaryResponse> {
   return fetchJSON<ProductTriageSummaryResponse>(
     envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
-    withQuery('/v1/control-plane/product/triage/summary', query),
+    withQuery('/control-plane/product/triage/summary', query),
   );
 }

@@ -2,19 +2,18 @@
 from __future__ import annotations
 
 import argparse
-import os
 from typing import Any, Mapping
 
 from core.io import write_json
 from core.python_environment import resolve_cursor_startup_timeout_seconds
 from core.python_runtime import environment_preflight
 from core.schema import assert_valid
-from core.control_types import AgentProvider, RuntimeEnvironment
+from core.control_types import ExecutionStage
 from core.runtime_policy import active_runtime_policy
 from content.execution import store
 from content.execution.qualification import prepare_execution_qualification
 from content.execution.identity import validate_execution_id
-from content.execution.pipeline.cli import handle_run
+from content.execution.controller.entrypoint import ControllerRequest, run_controlled_execution
 from content.execution.baseline import handle_baseline
 from content.source.discovery.handler import handle_explore
 
@@ -44,7 +43,7 @@ def _prepare_execution(execution_id: str) -> None:
             spec_doc=None,
             design_doc=None,
             acceptance_doc=None,
-            workflow_doc=None,
+            execution_guide=None,
             command_matrix_doc=None,
             catalog_config=None,
             naming_rules=None,
@@ -80,7 +79,7 @@ def preflight_execution_models(recipe: Mapping[str, Any]) -> dict[str, object]:
     pair = execution_model_pair(recipe)
     execution = recipe.get("execution")
     assert isinstance(execution, Mapping)
-    runtime = str(execution.get("runtime") or "local")
+    runtime = active_runtime_policy().cursor_runtime.value
     timeout_seconds = resolve_cursor_startup_timeout_seconds(
         active_runtime_policy().startup_timeout_seconds
     )
@@ -89,7 +88,6 @@ def preflight_execution_models(recipe: Mapping[str, Any]) -> dict[str, object]:
         report = environment_preflight(
             require_cursor_key=True,
             check_network=True,
-            check_cursor_cloud_api=True,
             check_cursor_startup=True,
             cursor_startup_model=model.model_id,
             cursor_startup_runtime=runtime,
@@ -117,7 +115,6 @@ def preflight_execution_models(recipe: Mapping[str, Any]) -> dict[str, object]:
     if blockers:
         raise RuntimeError("; ".join(blockers))
     return {
-        "contractVersion": "execution-model-readiness-v1",
         "ready": True,
         "runtime": runtime,
         "author": {
@@ -137,7 +134,7 @@ def write_execution_model_readiness(execution_id: str, report: Mapping[str, obje
     """Persist the runtime-only model capability proof inside its work package."""
     normalized = validate_execution_id(execution_id)
     payload = {
-        "schemaVersion": "quwoquan_data.execution_model_readiness/1",
+        "schema": "quwoquan_data.execution_model_readiness",
         "executionId": normalized,
         **dict(report),
     }
@@ -157,38 +154,23 @@ def run_execution(
     recover_stage: str | None = None,
     recovery_reason: str | None = None,
 ) -> None:
-    """Run exactly one execution without exposing another CLI workflow surface."""
+    """Run exactly one execution without exposing another orchestration surface."""
     execution_id = validate_execution_id(execution_id)
     if bool(recover_stage) != bool(recovery_reason):
         raise ValueError("recover_stage and recovery_reason must be provided together")
-    pair = execution_model_pair(recipe)
     # Internal callers must not bypass the public facade's G0 capability proof.
     preflight_execution_models(recipe)
-    execution = recipe.get("execution") or {}
-    policy = active_runtime_policy()
-    os.environ["QWQ_HOMEPAGE_AUTHOR_MODEL_FAMILY"] = pair.author.family.value
-    os.environ["QWQ_HOMEPAGE_REVIEW_MODEL"] = pair.reviewer.model_id
-    os.environ["QWQ_HOMEPAGE_REVIEW_MODEL_FAMILY"] = pair.reviewer.family.value
     _prepare_execution(execution_id)
     prepare_execution_qualification(execution_id)
-    handle_run(
-        argparse.Namespace(
-            mode="single",
+    run_controlled_execution(
+        ControllerRequest(
             execution_id=execution_id,
             resume=True,
-            reset_state=False,
-            reset_stage_retries=recover_stage,
-            reset_stage_reason=recovery_reason,
-            reset_react_rewinds=False,
+            recover_stage=ExecutionStage(recover_stage) if recover_stage else None,
+            recovery_reason=recovery_reason,
             baseline_packet=None,
-            until=None,
             managed=True,
-            runtime=str(execution.get("runtime") or RuntimeEnvironment.LOCAL),
-            max_workers=policy.author_workers,
-            agent_provider=AgentProvider.CURSOR_SDK.value,
-            model=str(execution.get("model") or policy.cursor_model),
-            startup_timeout_seconds=float(policy.startup_timeout_seconds),
-            force_clean_workspace_agent_state=bool(execution.get("forceCleanWorkspaceAgentState", True)),
+            force_clean_workspace_agent_state=False,
             release_only=False,
         )
     )

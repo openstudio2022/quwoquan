@@ -1,5 +1,4 @@
 templateId: 主题_风物美食
-version: 1
 subject: { kind: topic, type: 旅行/主题, minEntityRefs: 3, subjectTagRef: Topic/美食餐饮/特色食材/应季食材 }
 vertical: travel
 category: travel

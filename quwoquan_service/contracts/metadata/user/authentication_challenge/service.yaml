@@ -1,4 +1,3 @@
-version: 1
 service:
   name: user-service
   domain: user
@@ -11,7 +10,8 @@ service:
     target_story: app-cloud-business-object-commercial-closure
 api_routes:
   - method: POST
-    path: /v1/auth/otp/send
+    path: /auth/otp/send
+
     operation: SendOtp
     actor: device
     application:
@@ -59,7 +59,8 @@ api_routes:
       visibility: private
 
   - method: POST
-    path: /v1/auth/authorization/alipay
+    path: /auth/authorization/alipay
+
     operation: CreateAlipayAuthorizationRequest
     actor: device
     application:
@@ -110,7 +111,8 @@ api_routes:
       visibility: private
 
   - method: POST
-    path: /v1/auth/login/one-tap/hint
+    path: /auth/login/one-tap/hint
+
     operation: ResolveOneTapLoginHint
     actor: device
     application:

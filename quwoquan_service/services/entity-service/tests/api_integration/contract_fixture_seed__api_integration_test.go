@@ -19,10 +19,10 @@ type entityFixtureSeedSet struct {
 }
 
 type entityFixtureHomepage struct {
-	HomepageID string `json:"homepageId"`
-	Type       string `json:"type"`
-	Title      string `json:"title"`
-	Summary    string `json:"summary"`
+	HomepageID   string `json:"homepageId"`
+	HomepageType string `json:"homepageType"`
+	Title        string `json:"title"`
+	Summary      string `json:"summary"`
 }
 
 func TestContractFixtureSeed_EntityReadsViaHandler(t *testing.T) {
@@ -43,17 +43,17 @@ func TestContractFixtureSeed_EntityReadsViaHandler(t *testing.T) {
 	defer server.Close()
 
 	for _, homepage := range seed.Homepages {
-		candidate := requestJSON(t, server.Client(), http.MethodPost, server.URL+"/v1/homepages/candidates", map[string]any{
+		candidate := requestJSON(t, server.Client(), http.MethodPost, server.URL+"/homepages/candidates", map[string]any{
 			"title":        homepage.Title,
 			"subtitle":     homepage.Summary,
-			"homepageType": supportedHomepageType(homepage.Type),
+			"homepageType": supportedHomepageType(homepage.HomepageType),
 			"city":         "杭州",
 		}, http.StatusCreated)
-		homepageID := stringField(t, candidate, "_id")
-		requestJSON(t, server.Client(), http.MethodPost, server.URL+"/v1/homepages/candidates/"+homepageID+":publish", nil, http.StatusOK)
+		homepageID := stringField(t, candidate, "homepageId")
+		requestJSON(t, server.Client(), http.MethodPost, server.URL+"/homepages/candidates/"+homepageID+":publish", nil, http.StatusOK)
 	}
 
-	search := requestJSON(t, server.Client(), http.MethodGet, server.URL+"/v1/homepages/search?query=契约&status=published", nil, http.StatusOK)
+	search := requestJSON(t, server.Client(), http.MethodGet, server.URL+"/homepages/search?query=契约&status=published", nil, http.StatusOK)
 	if len(sliceField(t, search, "items")) == 0 {
 		t.Fatalf("expected contract fixture homepages in search response")
 	}

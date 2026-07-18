@@ -47,7 +47,7 @@ type FeedbackSink interface {
 }
 
 // QueryLog mirrors the metadata SearchQuery entity write subset. It is the
-// raw record of one /v1/search call, the write source for search-term heat
+// raw record of one /search call, the write source for search-term heat
 // mining and relevance evaluation. SearchRequestID ties later impression/click/
 // dwell feedback and ranking observability back to this single request.
 type QueryLog struct {

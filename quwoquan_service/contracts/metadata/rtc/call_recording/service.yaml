@@ -1,4 +1,3 @@
-version: 1
 service:
   name: rtc-service
   domain: rtc
@@ -11,7 +10,8 @@ service:
     target_story: app-cloud-business-object-commercial-closure
 api_routes:
   - method: POST
-    path: /v1/rtc/calls/{callId}/recordings
+    path: /rtc/calls/{callId}/recordings
+
     operation: StartCallRecording
     actor: persona
     application:
@@ -22,9 +22,11 @@ api_routes:
       mutation_target: CallRecording
       invariant_target: CallRecording
     request_fields: [consentSnapshot, clientRequestId]
-    auth: required
+    security:
+      auth_mode: required
   - method: POST
-    path: /v1/rtc/call-recordings/{recordingId}:stop
+    path: /rtc/call-recordings/{recordingId}:stop
+
     operation: StopCallRecording
     actor: persona
     application:
@@ -34,5 +36,6 @@ api_routes:
       aggregate_owner: CallRecording
       mutation_target: CallRecording
       invariant_target: CallRecording
-    request_fields: [expectedVersion, idempotencyKey]
-    auth: required
+    request_fields: [idempotencyKey]
+    security:
+      auth_mode: required

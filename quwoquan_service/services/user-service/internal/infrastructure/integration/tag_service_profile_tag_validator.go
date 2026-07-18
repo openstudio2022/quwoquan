@@ -48,7 +48,7 @@ func (v *TagServiceProfileTagValidator) ValidateProfileTags(ctx context.Context,
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, v.baseURL+"/v1/tag/validate", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, v.baseURL+"/tag/validate", bytes.NewReader(body))
 	if err != nil {
 		return err
 	}

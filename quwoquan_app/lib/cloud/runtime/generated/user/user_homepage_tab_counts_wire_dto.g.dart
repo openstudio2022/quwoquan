@@ -16,9 +16,9 @@ class UserHomepageTabCountsWireDto {
 
   factory UserHomepageTabCountsWireDto.fromMap(Map<String, dynamic> m) {
     return UserHomepageTabCountsWireDto(
-      worksCount: (m['worksCount'] as num?)?.toInt() ?? (m['postCount'] as num?)?.toInt() ?? 0,
-      likesCount: (m['likesCount'] as num?)?.toInt() ?? (m['likeCount'] as num?)?.toInt() ?? 0,
-      circlesCount: (m['circlesCount'] as num?)?.toInt() ?? (m['circleCount'] as num?)?.toInt() ?? 0,
+      worksCount: (m['worksCount'] as num?)?.toInt() ?? 0,
+      likesCount: (m['likesCount'] as num?)?.toInt() ?? 0,
+      circlesCount: (m['circlesCount'] as num?)?.toInt() ?? 0,
       collectionsCount: (m['collectionsCount'] as num?)?.toInt() ?? 0,
     );
   }

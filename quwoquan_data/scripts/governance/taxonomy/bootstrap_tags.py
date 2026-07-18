@@ -153,8 +153,6 @@ def write_taxonomy():
         by_group[d["group"]] = by_group.get(d["group"], 0) + d["count"]
 
     write_json(TAGS_ROOT / "_taxonomy.json", {
-        "version": "v4",
-        "schemaVersion": "1.0",
         "groups": ["Topic", "Audience", "Format", "Entity"],
         "dimensions": dimensions,
         "totalCount": total,

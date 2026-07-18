@@ -9,10 +9,10 @@ func TestGroupAvatar_GetConversationReturnsPrecomposedAvatar(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"group","title":"group avatar test"}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 	waitForConversationAvatarVersion(t, convId, 1)
 
-	code, result := doGet(t, "/v1/chat/conversations/"+convId, "user_test_001")
+	code, result := doGet(t, "/chat/conversations/"+convId, "user_test_001")
 	if code != 200 {
 		t.Fatalf("expected 200, got %d", code)
 	}
@@ -33,10 +33,10 @@ func TestGroupAvatar_InboxReturnsPrecomposedAvatar(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"group","title":"group avatar inbox"}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 	waitForConversationAvatarVersion(t, convId, 1)
 
-	code, inbox := doGet(t, "/v1/chat/inbox?limit=50", "user_test_001")
+	code, inbox := doGet(t, "/chat/inbox?limit=50", "user_test_001")
 	if code != 200 {
 		t.Fatalf("expected 200, got %d", code)
 	}
@@ -65,22 +65,22 @@ func TestGroupAvatar_VersionBumpsWhenTopNineChanges(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"group","title":"group avatar bump"}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 	waitForConversationAvatarVersion(t, convId, 1)
 
-	_, before := doGet(t, "/v1/chat/conversations/"+convId, "user_test_001")
+	_, before := doGet(t, "/chat/conversations/"+convId, "user_test_001")
 	beforeVersion, _ := before["groupAvatarVersion"].(float64)
 
 	doPost(
 		t,
-		"/v1/chat/conversations/"+convId+"/members",
+		"/chat/conversations/"+convId+"/members",
 		`{"userIds":["group_avatar_new_member"]}`,
 		"user_test_001",
 		200,
 	)
 
 	waitForConversationAvatarVersion(t, convId, int(beforeVersion)+1)
-	_, after := doGet(t, "/v1/chat/conversations/"+convId, "user_test_001")
+	_, after := doGet(t, "/chat/conversations/"+convId, "user_test_001")
 	afterVersion, _ := after["groupAvatarVersion"].(float64)
 	if int(afterVersion) <= int(beforeVersion) {
 		t.Fatalf("expected groupAvatarVersion to increase, before=%v after=%v", beforeVersion, afterVersion)

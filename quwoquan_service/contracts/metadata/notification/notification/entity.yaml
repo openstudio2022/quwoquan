@@ -1,4 +1,3 @@
-version: 1
 domain: notification
 entity: Notification
 object_kind: aggregate_root

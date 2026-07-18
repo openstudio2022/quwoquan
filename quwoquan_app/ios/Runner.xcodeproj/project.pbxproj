@@ -504,7 +504,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "FLUTTER_ROOT=\"${FLUTTER_ROOT:-$(grep -E '^FLUTTER_ROOT=' \"${SRCROOT}/Flutter/Generated.xcconfig\" | cut -d= -f2-)}\"\n/bin/sh \"$FLUTTER_ROOT/packages/flutter_tools/bin/xcode_backend.sh\" build";
+			shellScript = "eval \"$(bash \"${SRCROOT}/../scripts/ios/prepare_dart_defines.sh\")\"\nFLUTTER_ROOT=\"${FLUTTER_ROOT:-$(grep -E '^FLUTTER_ROOT=' \"${SRCROOT}/Flutter/Generated.xcconfig\" | cut -d= -f2-)}\"\n/bin/sh \"$FLUTTER_ROOT/packages/flutter_tools/bin/xcode_backend.sh\" build";
 		};
 		A7B8C9D0E1F2030405060708 /* Prepare Alpha HTTPS Local Plane */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -551,7 +551,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "FLUTTER_ROOT=\"${FLUTTER_ROOT:-$(grep -E '^FLUTTER_ROOT=' \"${SRCROOT}/Flutter/Generated.xcconfig\" | cut -d= -f2-)}\"\n/bin/sh \"$FLUTTER_ROOT/packages/flutter_tools/bin/xcode_backend.sh\" build";
+			shellScript = "eval \"$(bash \"${SRCROOT}/../scripts/ios/prepare_dart_defines.sh\")\"\nFLUTTER_ROOT=\"${FLUTTER_ROOT:-$(grep -E '^FLUTTER_ROOT=' \"${SRCROOT}/Flutter/Generated.xcconfig\" | cut -d= -f2-)}\"\n/bin/sh \"$FLUTTER_ROOT/packages/flutter_tools/bin/xcode_backend.sh\" build";
 		};
 		A1B2C3D4E5F60718293A0010 /* xcode_backend embed_and_thin */ = {
 			isa = PBXShellScriptBuildPhase;

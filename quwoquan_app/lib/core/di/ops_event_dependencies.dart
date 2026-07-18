@@ -6,11 +6,16 @@ import 'package:quwoquan_app/assistant/observability/logging/app_exception_telem
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/context/actor_queue_partition.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
-import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
-import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import 'package:quwoquan_app/core/di/cloud_http_client_provider.dart';
+import 'package:quwoquan_app/core/telemetry/app_telemetry_context_provider.dart';
+import 'package:quwoquan_app/core/telemetry/app_telemetry_coordinator.dart';
+import 'package:quwoquan_app/core/telemetry/app_telemetry_outbox.dart';
+import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
+import 'package:quwoquan_app/core/telemetry/app_telemetry_session_store.dart';
+import 'package:quwoquan_app/core/telemetry/app_telemetry_transport.dart';
 import 'package:quwoquan_app/infrastructure/local/actor_queue/actor_queue_storage.dart';
 
 final actorQueueStorageProvider = Provider<ActorQueueStorage>((ref) {
@@ -22,68 +27,120 @@ final actorQueueSessionBoundaryProvider = Provider<ActorQueueSessionBoundary>((
 ) {
   return ActorQueueSessionBoundary(
     storage: ref.watch(actorQueueStorageProvider),
-    queueNames: const <String>[
-      kBehaviorPendingQueueBoxName,
-      kOpsEventQueueBoxName,
-      kAppExceptionQueueBoxName,
-    ],
+    queueNames: const <String>[kBehaviorPendingQueueBoxName],
   );
 });
 
-/// 统一 OpsEvent 组合入口，供 analytics、登录漏斗和全应用复用。
-final opsEventRepositoryProvider = Provider<OpsEventRepository>((ref) {
-  final mode = ref.watch(appDataSourceModeProvider);
-  if (mode == AppDataSourceMode.mock) {
-    AppExceptionTelemetryService.instance.unbind();
-    return MockOpsEventRepository();
-  }
+final appTelemetrySessionStoreProvider = Provider<AppTelemetrySessionStore>((
+  ref,
+) {
+  return AppTelemetrySessionStore.instance;
+});
 
-  final session = ref.watch(authSessionControllerProvider);
-  final queueStorage = ref.watch(actorQueueStorageProvider);
-  final queuePartition = ActorQueuePartition(
-    environment: CloudRuntimeConfig.appRuntimeEnv,
-    accountId: session.ownerId,
-    personaId: session.activeSubAccountId,
-    deviceId: CloudRequestHeaders.deviceActorId ?? session.installId,
+final appTelemetryContextProvider = Provider<AppTelemetryContextProvider>((
+  ref,
+) {
+  return AppTelemetryContextProvider.instance;
+});
+
+final appTelemetryTransportProvider = Provider<AppTelemetryTransport>((ref) {
+  return CloudAppTelemetryTransport(
+    httpClient: ref.watch(cloudHttpClientProvider),
   );
+});
+
+/// 产品事件与异常的唯一 production 组合入口。这里不提供运行时 Mock/Remote
+/// 分支；local_contract 通过 Provider override 注入测试 recorder。
+final appTelemetryReporterProvider = Provider<AppTelemetryRecorder>((ref) {
+  final sessionStore = ref.watch(appTelemetrySessionStoreProvider);
+  final contextProvider = ref.watch(appTelemetryContextProvider);
+  if (!sessionStore.isInitialized || !contextProvider.isInitialized) {
+    // 完整应用在 runApp 前由 app_bootstrap.bootstrapForColdStart 同步就绪；
+    // 局部 widget test / golden / 预览不会经过该入口，必须明确拒绝入云
+    // 而不是伪造产品会话。
+    return const _UnavailableAppTelemetryRecorder();
+  }
+  final queueStorage = ref.watch(actorQueueStorageProvider);
+  final transport = ref.watch(appTelemetryTransportProvider);
+  final initialAuth = ref.read(authSessionControllerProvider);
+  final coordinator = AppTelemetryCoordinator(
+    sessionStore: sessionStore,
+    contextProvider: contextProvider,
+    queueStorage: queueStorage,
+    transport: transport,
+    initialPartition: _partitionFor(initialAuth),
+    initialActorKey: _actorKeyFor(initialAuth),
+  );
+  final networkSubscription = contextProvider.networkChanges.listen((value) {
+    if (value != 'none') coordinator.onNetworkAvailable();
+  });
+
   ref.listen<AuthSessionState>(authSessionControllerProvider, (previous, next) {
-    if (previous == null) return;
-    final previousPartition = ActorQueuePartition(
-      environment: CloudRuntimeConfig.appRuntimeEnv,
-      accountId: previous.ownerId,
-      personaId: previous.activeSubAccountId,
-      deviceId: CloudRequestHeaders.deviceActorId ?? previous.installId,
-    );
-    final currentPartition = ActorQueuePartition(
-      environment: CloudRuntimeConfig.appRuntimeEnv,
-      accountId: next.ownerId,
-      personaId: next.activeSubAccountId,
-      deviceId: CloudRequestHeaders.deviceActorId ?? next.installId,
-    );
-    unawaited(
-      ref
-          .read(actorQueueSessionBoundaryProvider)
-          .transition(previous: previousPartition, current: currentPartition)
-          .catchError((Object error, StackTrace stackTrace) {
-            developer.log(
-              'actor queue session-boundary purge failed',
-              name: 'ActorQueueSessionBoundary',
-              error: error,
-              stackTrace: stackTrace,
-            );
-          }),
+    if (previous != null) {
+      unawaited(
+        ref
+            .read(actorQueueSessionBoundaryProvider)
+            .transition(
+              previous: _partitionFor(previous),
+              current: _partitionFor(next),
+            )
+            .catchError((Object error, StackTrace stackTrace) {
+              developer.log(
+                'behavior queue session-boundary purge failed',
+                name: 'ActorQueueSessionBoundary',
+                error: error,
+                stackTrace: stackTrace,
+              );
+            }),
+      );
+    }
+    coordinator.transition(
+      partition: _partitionFor(next),
+      actorKey: _actorKeyFor(next),
     );
   });
-  final repository = RemoteOpsEventRepository(
-    httpClient: ref.watch(cloudHttpClientProvider),
-    queuePartition: queuePartition,
-    queueStorage: queueStorage,
-  );
-  AppExceptionTelemetryService.instance.bind(
-    eventRepository: repository,
-    queuePartition: queuePartition,
-    queueStorage: queueStorage,
-  );
-  ref.onDispose(repository.dispose);
-  return repository;
+
+  AppExceptionTelemetryService.instance.bind(reporter: coordinator);
+  ref.onDispose(() {
+    AppExceptionTelemetryService.instance.unbind(coordinator);
+    unawaited(networkSubscription.cancel());
+    unawaited(coordinator.dispose());
+  });
+  return coordinator;
 });
+
+ActorQueuePartition _partitionFor(AuthSessionState session) {
+  final deviceId = (CloudRequestHeaders.deviceActorId ?? '').trim().isNotEmpty
+      ? CloudRequestHeaders.deviceActorId!
+      : session.installId;
+  return ActorQueuePartition(
+    environment: CloudRuntimeConfig.appRuntimeEnv,
+    accountId: session.isAuthenticated ? session.ownerId : '',
+    personaId: session.isAuthenticated ? session.activeSubAccountId : '',
+    deviceId: deviceId,
+  );
+}
+
+String _actorKeyFor(AuthSessionState session) =>
+    session.isAuthenticated ? session.ownerId : '';
+
+final class _UnavailableAppTelemetryRecorder implements AppTelemetryRecorder {
+  const _UnavailableAppTelemetryRecorder();
+
+  @override
+  Future<void> clearPendingForLogout() async {}
+
+  @override
+  Future<AppTelemetryFlushResult> flush() async =>
+      AppTelemetryFlushResult.empty;
+
+  @override
+  void onNetworkAvailable() {}
+
+  @override
+  Future<AppTelemetryRecordResult> record(
+    AppTelemetryPayload payload, {
+    String? pageName,
+    DateTime? occurredAt,
+  }) async => AppTelemetryRecordResult.rejected;
+}

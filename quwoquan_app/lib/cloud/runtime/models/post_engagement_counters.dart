@@ -17,9 +17,9 @@ class PostEngagementCounters {
     int n(Object? v) => (v is num) ? v.toInt() : int.tryParse('$v') ?? 0;
 
     return PostEngagementCounters(
-      likeCount: n(m['likeCount'] ?? m['likesCount'] ?? m['likes']),
-      commentCount: n(m['commentCount'] ?? m['commentsCount'] ?? m['comments']),
-      shareCount: n(m['shareCount'] ?? m['shares']),
+      likeCount: n(m['likeCount']),
+      commentCount: n(m['commentCount']),
+      shareCount: n(m['shareCount']),
     );
   }
 

@@ -554,7 +554,7 @@ void main() {
     testWidgets('旅程 E5：维度简报下钻分组列表，再进对象主页', (tester) async {
       final behaviorRepo = MockBehaviorRepository();
       final tracker = ContentBehaviorTracker(
-        repository: behaviorRepo,
+        reporter: behaviorRepo,
         maxBatchSize: 1,
         enablePeriodicFlush: false,
       );

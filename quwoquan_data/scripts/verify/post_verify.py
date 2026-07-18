@@ -57,7 +57,7 @@ def _posts_root_uses_current_schema(posts_root: Path) -> bool:
             payload = read_json(manifest_path)
         except Exception:
             return False
-        if payload.get("schemaVersion") != CURRENT_POST_MANIFEST_SCHEMA:
+        if payload.get("schema") != CURRENT_POST_MANIFEST_SCHEMA:
             return False
     return True
 

@@ -1,4 +1,3 @@
-version: 1
 aggregate: ProfileUpdateProposal
 events:
   - name: ProfileUpdateProposalCreated
@@ -13,6 +12,12 @@ events:
     channel: transactional_outbox
     payload_entity: ProfileUpdateProposal
     payload_fields: [id, personaId, status, version, reviewedBy, targetPersonaExpectedVersion]
+  - name: ProfileUpdateProposalApplyStarted
+    producer: user-service
+    consumers: [projection-workers]
+    channel: transactional_outbox
+    payload_entity: ProfileUpdateProposal
+    payload_fields: [id, personaId, status, version]
   - name: ProfileUpdateProposalApplied
     producer: user-service
     consumers: [projection-workers]
@@ -25,3 +30,9 @@ events:
     channel: transactional_outbox
     payload_entity: ProfileUpdateProposal
     payload_fields: [id, personaId, status, version, reviewedBy, resolvedAt]
+  - name: ProfileUpdateProposalExpired
+    producer: user-service
+    consumers: [projection-workers]
+    channel: transactional_outbox
+    payload_entity: ProfileUpdateProposal
+    payload_fields: [id, personaId, status, version, resolvedAt]

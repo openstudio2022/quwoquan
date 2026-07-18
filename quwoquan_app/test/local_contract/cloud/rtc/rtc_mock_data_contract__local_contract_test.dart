@@ -7,13 +7,7 @@ void main() {
       for (final row in kMockCallSessions) {
         final s = row.status;
         expect(
-          const {
-            'initiated',
-            'ringing',
-            'connecting',
-            'in_call',
-            'ended',
-          },
+          const {'initiated', 'ringing', 'connecting', 'in_call', 'ended'},
           contains(s),
           reason: 'status=$s 应在 fields.yaml CallStatus 枚举内',
         );
@@ -22,7 +16,7 @@ void main() {
 
     test('主键与 roomId 存在', () {
       for (final row in kMockCallSessions) {
-        expect(row.id, isNotEmpty);
+        expect(row.callId, isNotEmpty);
         expect(row.roomId, isNotEmpty);
       }
     });

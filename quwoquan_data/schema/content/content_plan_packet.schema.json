@@ -1,40 +1,146 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "description": "证据驱动篇目规划包 — batches/{batch}/_shared/content_plan_packet.json（见 content_pipeline_spec.md §1.2.1）",
+  "description": "证据驱动篇目规划包，位于 data task execution 工作包的 _shared/content_plan_packet.json。",
   "type": "object",
   "properties": {
-    "schemaVersion": { "type": "string" },
     "items": {
       "type": "array",
       "minItems": 1,
       "items": {
         "type": "object",
         "properties": {
-          "ref": { "type": "string" },
-          "kind": { "type": "string", "enum": ["entity", "route"] },
-          "title": { "type": "string" },
-          "caption": { "type": "string", "maxLength": 300 },
-          "carrier": { "type": "string", "enum": ["article", "image"] },
-          "researchLane": { "type": "string", "enum": ["article", "image"] },
-          "sourceCollectionId": { "type": "string" },
+          "ref": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "entity",
+              "route"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "caption": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "carrier": {
+            "type": "string",
+            "enum": [
+              "article",
+              "image",
+              "video"
+            ]
+          },
+          "researchLane": {
+            "type": "string",
+            "enum": [
+              "article",
+              "image",
+              "video"
+            ]
+          },
+          "sourceCollectionId": {
+            "type": "string"
+          },
           "assetRefs": {
             "type": "array",
             "minItems": 1,
             "maxItems": 20,
             "uniqueItems": true,
-            "items": { "type": "string" }
+            "items": {
+              "type": "string"
+            }
           },
-          "entityRefs": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+          "sourceFrames": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "object",
+              "properties": {
+                "assetRef": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "sourceRef": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "rightsRef": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "sourceUrl": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "creator": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "license": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "sha256": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "caption": {
+                  "type": "string"
+                },
+                "sourceCollectionId": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "assetRef",
+                "sourceRef",
+                "rightsRef",
+                "sourceUrl",
+                "creator",
+                "license",
+                "sha256",
+                "sourceCollectionId"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "entityRefs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          },
           "entityTags": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "底稿派生的实体多标签集合（可多）；entityRefs 的语义对齐，作为检索/可点击标签，不再作单实体聚焦弃稿门"
           },
-          "evidenceRefs": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
-          "rationale": { "type": "string" },
+          "evidenceRefs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          },
+          "rationale": {
+            "type": "string"
+          },
           "writingIntent": {
             "type": "string",
-            "enum": ["planning_consultation", "decision_experience", "post_trip_journal"],
+            "enum": [
+              "planning_consultation",
+              "decision_experience",
+              "post_trip_journal"
+            ],
             "description": "底稿派生的可选内容角度标签（不再单篇唯一/硬阻断）：攻略=planning_consultation，体验=decision_experience，游记=post_trip_journal"
           },
           "baseSourceRef": {
@@ -43,34 +149,104 @@
           },
           "sourceUseMode": {
             "type": "string",
-            "enum": ["licensed_adaptation", "factual_reference_only"],
+            "enum": [
+              "licensed_adaptation",
+              "factual_reference_only"
+            ],
             "description": "主来源使用模式；blocked 来源不得进入 content_plan"
           }
         },
-        "required": ["ref", "kind", "entityRefs", "evidenceRefs", "rationale"],
+        "required": [
+          "ref",
+          "kind",
+          "entityRefs",
+          "evidenceRefs",
+          "rationale"
+        ],
         "allOf": [
           {
             "if": {
-              "properties": { "carrier": { "const": "image" } },
-              "required": ["carrier"]
+              "properties": {
+                "carrier": {
+                  "const": "image"
+                }
+              },
+              "required": [
+                "carrier"
+              ]
             },
             "then": {
-              "required": ["researchLane", "sourceCollectionId", "assetRefs"],
+              "required": [
+                "researchLane",
+                "sourceCollectionId",
+                "assetRefs"
+              ],
               "properties": {
-                "title": { "type": "string", "maxLength": 80 },
-                "researchLane": { "const": "image" }
+                "title": {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                "researchLane": {
+                  "const": "image"
+                }
               }
-            },
-            "else": {
-              "required": ["title"],
+            }
+          },
+          {
+            "if": {
               "properties": {
-                "researchLane": { "enum": ["article"] }
+                "carrier": {
+                  "const": "video"
+                }
+              },
+              "required": [
+                "carrier"
+              ]
+            },
+            "then": {
+              "required": [
+                "title",
+                "researchLane",
+                "assetRefs",
+                "sourceFrames"
+              ],
+              "properties": {
+                "researchLane": {
+                  "const": "video"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "carrier": {
+                  "const": "article"
+                }
+              },
+              "required": [
+                "carrier"
+              ]
+            },
+            "then": {
+              "required": [
+                "title"
+              ],
+              "properties": {
+                "researchLane": {
+                  "const": "article"
+                }
               }
             }
           }
         ]
       }
+    },
+    "schema": {
+      "const": "quwoquan_data.content_plan_packet"
     }
   },
-  "required": ["items"]
+  "required": [
+    "items"
+  ]
 }

@@ -1,13 +1,12 @@
 // Command import 按 immutable release desired state 把 canonical objects 灌入运行库。
 //
-// canonical 只提供对象事实，release overlay 是唯一选择集；禁止 sample bundle fallback
-// 与不带 release 的全树导入。
+// release payload 是对象事实与选择集的唯一不可变输入；禁止 canonical publish、
+// sample bundle fallback 与不带 release 的全树导入。
 //
 // 用法:
 //
 //	go run ./services/content-service/cmd/import \
-//	  --publish-root ../quwoquan_data/publish \
-//	  --release-root ../.qwq_output/data/release/<releaseId> \
+//	  --release-root ../.qwq_output/data/releases/<releaseId> \
 //	  --mongo-uri mongodb://localhost:27017 --env gamma
 package main
 
@@ -31,9 +30,9 @@ import (
 )
 
 func main() {
-	publishRoot := flag.String("publish-root", "../quwoquan_data/publish", "path to publish mainline")
 	releaseRoot := flag.String("release-root", "", "immutable release root containing payload/desired_state.json (required)")
 	mongoURI := flag.String("mongo-uri", "mongodb://localhost:27017", "mongo connection uri")
+	mediaBaseURL := flag.String("media-base-url", "", "environment media origin/CDN base URL")
 	postsDB := flag.String("posts-db", "quwoquan_content", "target db for posts")
 	entitiesDB := flag.String("entities-db", "quwoquan_entity", "target db for entities")
 	env := flag.String("env", "", "environment label (for logging)")
@@ -53,12 +52,19 @@ func main() {
 	}
 	postFilter := toSet(desired.DesiredRefs.Posts)
 	entityFilter := toSet(desired.DesiredRefs.Entities)
+	objectRoot, err := ReleaseObjectRoot(*releaseRoot)
+	if err != nil {
+		log.Fatalf("load release object closure: %v", err)
+	}
 
-	posts, err := LoadPosts(*publishRoot, postFilter)
+	posts, err := LoadPosts(objectRoot, postFilter)
 	if err != nil {
 		log.Fatalf("load posts: %v", err)
 	}
-	entities, err := LoadEntities(*publishRoot, entityFilter)
+	if err := BindPostAssetURLs(posts, *mediaBaseURL); err != nil {
+		log.Fatalf("bind post asset URLs: %v", err)
+	}
+	entities, err := LoadEntities(objectRoot, entityFilter)
 	if err != nil {
 		log.Fatalf("load entities: %v", err)
 	}
@@ -67,12 +73,12 @@ func main() {
 	if *dryRun {
 		log.Printf("[import] dry-run: not writing mongo")
 		_ = WriteImportReport(*reportPath, bson.M{
-			"schemaVersion": "quwoquan.content_import_report.v1",
-			"status":        "dry-run",
-			"environment":   *env,
-			"releaseId":     desired.ReleaseID,
-			"counts":        bson.M{"postsLoaded": len(posts), "entitiesLoaded": len(entities)},
-			"auditEvents":   []string{"DataReleasePrepared"},
+			"schema":      "quwoquan.content_import_report",
+			"status":      "dry-run",
+			"environment": *env,
+			"releaseId":   desired.ReleaseID,
+			"counts":      bson.M{"postsLoaded": len(posts), "entitiesLoaded": len(entities)},
+			"auditEvents": []string{"DataReleasePrepared"},
 		})
 		return
 	}
@@ -133,13 +139,13 @@ func main() {
 		log.Fatalf("upsert release state: %v", err)
 	}
 	if err := WriteImportReport(*reportPath, bson.M{
-		"schemaVersion": "quwoquan.content_import_report.v1",
-		"status":        "active",
-		"environment":   *env,
-		"releaseId":     opts.ReleaseID,
-		"sourceOwner":   opts.SourceOwner,
-		"mode":          opts.Mode,
-		"deletePolicy":  opts.DeletePolicy,
+		"schema":       "quwoquan.content_import_report",
+		"status":       "active",
+		"environment":  *env,
+		"releaseId":    opts.ReleaseID,
+		"sourceOwner":  opts.SourceOwner,
+		"mode":         opts.Mode,
+		"deletePolicy": opts.DeletePolicy,
 		"counts": bson.M{
 			"postsLoaded": len(posts), "entitiesLoaded": len(entities),
 			"postsUpserted": np, "entitiesUpserted": ne, "feedUpserted": nf,

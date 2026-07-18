@@ -34,6 +34,8 @@ _PROMPT_FAMILY = {
     "checkpoint_author_image": "image",
     "image_curation": "image",
     "source_plan_image": "image",
+    "video_author": "video",
+    "checkpoint_author_video": "video",
     "checkpoint_build_homepage": "homepage",
     "checkpoint_content_plan": "homepage",
     "entity_homepage": "homepage",

@@ -1,11 +1,19 @@
-"""Explicit builders for canonical v2 execution test workspaces."""
+"""Explicit builders for canonical execution test workspaces."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Iterable, Mapping
 
-from core.control_types import ContentType, SelectionPolicy
+from core.control_types import (
+    ContentType,
+    ExecutionStage,
+    ExecutionStateStatus,
+    SelectionPolicy,
+)
+from content.execution.contracts import ExecutionState, ExecutionStateTransition
+from content.execution.spec_contract import ExecutionSpec
 from content.execution.identity import parse_execution_id
+from content.execution.store import save_spec
 from content.execution.workspace import (
     TARGET_SET_REF,
     create_execution_manifest,
@@ -25,7 +33,7 @@ _DEFAULT_TARGET = {"name": "测试实体", "entityType": "地点/景区"}
 
 @dataclass(frozen=True, slots=True)
 class ExecutionFixtureBuilder:
-    """Build one explicit v2 manifest whose recipe matches its content type."""
+    """Build one explicit manifest whose recipe matches its content type."""
 
     execution_id: str
     targets: tuple[Mapping[str, object], ...] = field(
@@ -43,6 +51,7 @@ class ExecutionFixtureBuilder:
             targets=normalized,
             source_ref="quwoquan_data/tests/support/execution_manifest_fixture.py",
         )
+        save_spec(self.spec_payload())
         return create_execution_manifest(
             execution_id=identity.execution_id,
             recipe_ref=recipe_ref,
@@ -52,6 +61,118 @@ class ExecutionFixtureBuilder:
             target_set_sha256=digest,
             retry_of=self.retry_of,
         )
+
+    def spec_payload(self) -> dict[str, object]:
+        """Build a complete effective spec without writing runtime output."""
+        identity = parse_execution_id(self.execution_id)
+        quotas = {
+            "entityHomepagesPerTarget": 0,
+            "entityArticlesPerTarget": 0,
+            "imageWorksPerTarget": 0,
+            "videoWorksPerTarget": 0,
+            "routeArticles": 0,
+        }
+        quota_key = {
+            ContentType.HOMEPAGE: "entityHomepagesPerTarget",
+            ContentType.ARTICLE: "entityArticlesPerTarget",
+            ContentType.IMAGE: "imageWorksPerTarget",
+            ContentType.VIDEO: "videoWorksPerTarget",
+        }[identity.content_type]
+        quotas[quota_key] = 1
+        targets = [dict(item) for item in self.targets]
+        entity_types = tuple(
+            dict.fromkeys(str(item["entityType"]) for item in targets)
+        )
+        return {
+            "schema": "quwoquan.content.execution_spec",
+            "executionId": identity.execution_id,
+            "title": "contract fixture",
+            "intentLabel": "contract fixture",
+            "executionArchetype": "region_category_coverage",
+            "vertical": "travel",
+            "organizeBy": "地域",
+            "key": identity.scope,
+            "entityCategory": "景区",
+            "status": "active",
+            "scope": {
+                "region": identity.scope,
+                "entityTypes": list(entity_types),
+                "coverageTargets": targets,
+            },
+            "provenance": {
+                "createdAt": "2026-07-16T00:00:00Z",
+                "createdBy": "local_contract",
+            },
+            "presetRef": _RECIPE_BY_CONTENT_TYPE[identity.content_type].rsplit("/", 1)[0] + "/base",
+            "content": {
+                "modalityContract": "separated_research",
+                "research": {
+                    "lanes": [identity.content_type.value],
+                    "allowAiImages": False,
+                },
+                "carriers": [identity.content_type.value],
+                "quotas": quotas,
+            },
+            "acceptance": {
+                "minEntities": len(targets),
+                "minPostsPerEntity": 1,
+                "requiredAngles": [],
+            },
+            "executionPolicy": {
+                "selectionPolicy": "frozen",
+                "targetEntityCount": len(targets),
+                "targetObjectCount": len(targets),
+                "executionBranch": "dev1.0",
+                "gitCommitSha": "local-contract-fixture",
+            },
+            "queuePolicy": {
+                "backend": "reliabletask",
+                "reliableTask": {
+                    "taskType": "data.content_object.execute",
+                    "queue": "reliabletask.data.content_supply",
+                    "store": "MongoStore",
+                    "readyIndex": "RedisReadyIndex",
+                },
+                "leaseSeconds": 1800,
+                "heartbeatSeconds": 60,
+                "deadLetterAfterAttempts": 2,
+            },
+        }
+
+    def spec(self) -> ExecutionSpec:
+        return ExecutionSpec.from_mapping(self.spec_payload())
+
+    def state(
+        self,
+        *,
+        status: ExecutionStateStatus = ExecutionStateStatus.QUEUED,
+        completed: Iterable[ExecutionStage] = (),
+        failed_objects: Iterable[str] = (),
+        retry_counts: Mapping[ExecutionStage, int] | None = None,
+        infrastructure_retry_counts: Mapping[ExecutionStage, int] | None = None,
+        react_rewinds: Mapping[ExecutionStage, int] | None = None,
+    ) -> ExecutionStateTransition:
+        """Build a validated workflow-state transaction for contract tests."""
+        return ExecutionState.from_mapping(
+            {
+                "schema": "quwoquan.content.execution_state",
+                "executionId": self.execution_id,
+                "completed": [stage.value for stage in completed],
+                "status": status.value,
+                "updatedAt": "2026-07-16T00:00:00Z",
+                "failedObjects": list(failed_objects),
+                "retryCounts": {
+                    stage.value: count for stage, count in (retry_counts or {}).items()
+                },
+                "infrastructureRetryCounts": {
+                    stage.value: count
+                    for stage, count in (infrastructure_retry_counts or {}).items()
+                },
+                "reactRewinds": {
+                    stage.value: count for stage, count in (react_rewinds or {}).items()
+                },
+            }
+        ).open_transition()
 
 
 def build_execution_fixture(

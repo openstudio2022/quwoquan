@@ -1,4 +1,3 @@
-version: 1
 read_model: InviteAcceptResponse
 
 description: |
@@ -19,12 +18,10 @@ client_projection:
       dart_type: String
       nullable: false
       source: linkCode
-      aliases: [linkCode]
       default: "''"
 
     - name: status
       dart_type: String
       nullable: false
       source: status
-      aliases: [status]
       default: "''"

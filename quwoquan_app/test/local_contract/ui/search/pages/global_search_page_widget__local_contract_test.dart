@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/cupertino.dart';
@@ -9,8 +10,10 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
 import 'package:quwoquan_app/cloud/services/chat/mock/chat_repository_mock.dart';
+import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
@@ -18,6 +21,7 @@ import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/search/pages/global_search_page.dart';
 import 'package:quwoquan_app/ui/search/pages/search_network_results_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 GoRouter _buildRouter({
   SearchLaunchContext launchContext = const SearchLaunchContext(
@@ -64,6 +68,15 @@ GoRouter _buildRouter({
           return Text('circle:${state.pathParameters['id']}');
         },
       ),
+      GoRoute(
+        path: AppRoutePaths.homepageDetailPathTemplate.replaceAll(
+          '{id}',
+          ':id',
+        ),
+        builder: (context, state) {
+          return Text('homepage:${state.pathParameters['id']}');
+        },
+      ),
     ],
   );
 }
@@ -72,12 +85,15 @@ Widget _buildApp({
   SearchLaunchContext launchContext = const SearchLaunchContext(
     entrySurfaceId: '/search',
   ),
+  HomepageRepository? homepageRepository,
 }) {
   return ProviderScope(
     overrides: [
       searchRepositoryProvider.overrideWithValue(_FakeSearchRepository()),
       assistantRepositoryProvider.overrideWithValue(_FakeAssistantRepository()),
       chatRepositoryProvider.overrideWithValue(MockChatRepository()),
+      if (homepageRepository != null)
+        homepageRepositoryProvider.overrideWithValue(homepageRepository),
     ],
     child: MaterialApp.router(
       routerConfig: _buildRouter(launchContext: launchContext),
@@ -243,7 +259,7 @@ void main() {
     expect(find.text('搜索历史'), findsNothing);
   });
 
-  testWidgets('输入关键词后展示本地匹配与匹配搜索词', (tester) async {
+  testWidgets('输入关键词后展示本地匹配与搜索网络结果', (tester) async {
     await tester.pumpWidget(_buildApp());
     await tester.pumpAndSettle();
 
@@ -254,7 +270,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 220));
     await tester.pumpAndSettle();
 
-    expect(find.text('匹配搜索词'), findsOneWidget);
+    expect(find.text('搜索网络结果'), findsOneWidget);
     expect(find.text('联系人'), findsWidgets);
 
     final liXiangButton = find.ancestor(
@@ -266,6 +282,113 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('chat:conv_007'), findsOneWidget);
+  });
+
+  testWidgets('输入钱时输入框无 spinner 且东钱湖主页可直接打开', (tester) async {
+    await tester.pumpWidget(_buildApp());
+    await tester.pumpAndSettle();
+
+    final field = find.byKey(const ValueKey<String>('global_search_field'));
+    await tester.enterText(field, '钱');
+    await tester.pump(const Duration(milliseconds: 220));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(
+        of: field,
+        matching: find.byType(CupertinoActivityIndicator),
+      ),
+      findsNothing,
+    );
+    expect(find.text('东钱湖'), findsOneWidget);
+
+    await tester.tap(find.text('东钱湖'));
+    await tester.pumpAndSettle();
+    expect(find.text('homepage:homepage_sight_dongqian_lake'), findsOneWidget);
+  });
+
+  testWidgets('查询替换后旧东钱湖 completion 不得回写', (tester) async {
+    final homepages = _ManualHomepageRepository();
+    await tester.pumpWidget(_buildApp(homepageRepository: homepages));
+    await tester.pump();
+
+    final field = find.byKey(const ValueKey<String>('global_search_field'));
+    await tester.enterText(field, '钱');
+    await tester.pump(const Duration(milliseconds: 220));
+    await tester.enterText(field, '钱塘');
+    await tester.pump(const Duration(milliseconds: 220));
+
+    homepages.complete('钱', const <HomepageSummary>[
+      HomepageSummary(
+        id: 'homepage_sight_dongqian_lake',
+        homepageType: 'sight',
+        title: '东钱湖',
+        status: 'published',
+      ),
+    ]);
+    homepages.complete('钱塘', const <HomepageSummary>[]);
+    await tester.pump();
+
+    expect(find.text('东钱湖'), findsNothing);
+  });
+
+  testWidgets('云实体 3 秒提示一次且 5.9 秒返回仍可展示', (tester) async {
+    await tester.pumpWidget(
+      _buildApp(
+        homepageRepository: _DelayedHomepageRepository(
+          Duration(milliseconds: 5900),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final field = find.byKey(const ValueKey<String>('global_search_field'));
+    await tester.enterText(field, '钱');
+    await tester.pump(const Duration(milliseconds: 220));
+    await tester.pump(const Duration(milliseconds: 2959));
+
+    expect(find.text(UITextConstants.searchWaitSlow), findsNothing);
+
+    await tester.pump(const Duration(milliseconds: 1));
+    expect(find.text(UITextConstants.searchWaitSlow), findsOneWidget);
+
+    await tester.pump(const Duration(milliseconds: 2899));
+    expect(find.text('东钱湖'), findsNothing);
+
+    await tester.pump(const Duration(milliseconds: 1));
+    await tester.pump();
+    expect(find.text('东钱湖'), findsOneWidget);
+    expect(find.text(UITextConstants.searchWaitSlow), findsNothing);
+  });
+
+  testWidgets('云实体 6 秒未返回时停止 indicator 且不误报空态', (tester) async {
+    await tester.pumpWidget(
+      _buildApp(homepageRepository: _NeverCompletingHomepageRepository()),
+    );
+    await tester.pump();
+
+    final field = find.byKey(const ValueKey<String>('global_search_field'));
+    await tester.enterText(field, '钱');
+    await tester.pump(const Duration(milliseconds: 220));
+    await tester.pump();
+    // debounce 在 180ms 启动请求；当前时钟为 220ms，因此再推进 5959ms
+    // 正好落在请求开始后的 5999ms。
+    await tester.pump(const Duration(milliseconds: 5959));
+
+    expect(find.byType(CupertinoActivityIndicator), findsOneWidget);
+    expect(find.text(UITextConstants.searchEmptyResult), findsNothing);
+
+    await tester.pump(const Duration(milliseconds: 1));
+    await tester.pump();
+
+    expect(find.byType(CupertinoActivityIndicator), findsNothing);
+    expect(find.text(UITextConstants.searchPartialResult), findsOneWidget);
+    expect(find.text(UITextConstants.tryAgain), findsOneWidget);
+    expect(find.text(UITextConstants.searchEmptyResult), findsNothing);
+
+    await tester.tap(find.text(UITextConstants.tryAgain));
+    await tester.pump();
+    expect(find.byType(CupertinoActivityIndicator), findsOneWidget);
   });
 
   testWidgets('聊天记录最多三条且可直达对应对话页', (tester) async {
@@ -401,7 +524,11 @@ Future<void> _pumpUntil(
 
 class _FakeSearchRepository implements SearchRepository {
   @override
-  Future<SearchResponse> search(SearchRequest request) async {
+  Future<SearchResponse> search(
+    SearchRequest request, {
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  }) async {
     final normalized = request.normalized();
     if (normalized.mode == SearchMode.suggest) {
       final hits = <SearchHit>[
@@ -618,6 +745,97 @@ class _FakeSearchRepository implements SearchRepository {
           resolvedFrom: SearchResolvedFrom.remote,
         ),
     ];
+  }
+}
+
+class _ManualHomepageRepository extends MockHomepageRepository {
+  final Map<String, Completer<List<HomepageSummary>>> _pending =
+      <String, Completer<List<HomepageSummary>>>{};
+
+  @override
+  Future<List<HomepageSummary>> searchHomepages({
+    required String query,
+    String? homepageType,
+    String? city,
+    String? status,
+    int limit = 20,
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  }) {
+    final normalized = query.trim();
+    if (normalized.isEmpty) {
+      return Future<List<HomepageSummary>>.value(const []);
+    }
+    return _pending
+        .putIfAbsent(normalized, () => Completer<List<HomepageSummary>>())
+        .future;
+  }
+
+  void complete(String query, List<HomepageSummary> values) {
+    _pending
+        .putIfAbsent(query, () => Completer<List<HomepageSummary>>())
+        .complete(values);
+  }
+}
+
+class _NeverCompletingHomepageRepository extends MockHomepageRepository {
+  @override
+  Future<List<HomepageSummary>> searchHomepages({
+    required String query,
+    String? homepageType,
+    String? city,
+    String? status,
+    int limit = 20,
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  }) {
+    if (query.trim().isEmpty) {
+      return Future<List<HomepageSummary>>.value(const []);
+    }
+    final signal = cancellation;
+    if (signal == null) return Completer<List<HomepageSummary>>().future;
+    return signal.whenCancelled.then<List<HomepageSummary>>((_) {
+      throw const CloudOperationCancelledException();
+    });
+  }
+}
+
+class _DelayedHomepageRepository extends MockHomepageRepository {
+  _DelayedHomepageRepository(this.delay);
+
+  final Duration delay;
+
+  @override
+  Future<List<HomepageSummary>> searchHomepages({
+    required String query,
+    String? homepageType,
+    String? city,
+    String? status,
+    int limit = 20,
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  }) {
+    if (query.trim().isEmpty) {
+      return Future<List<HomepageSummary>>.value(const []);
+    }
+    final completion = Future<List<HomepageSummary>>.delayed(
+      delay,
+      () => const <HomepageSummary>[
+        HomepageSummary(
+          id: 'homepage_sight_dongqian_lake',
+          homepageType: 'sight',
+          title: '东钱湖',
+          status: 'published',
+        ),
+      ],
+    );
+    if (cancellation == null) return completion;
+    return Future.any<List<HomepageSummary>>(<Future<List<HomepageSummary>>>[
+      completion,
+      cancellation.whenCancelled.then<List<HomepageSummary>>((_) {
+        throw const CloudOperationCancelledException();
+      }),
+    ]);
   }
 }
 

@@ -16,7 +16,6 @@ type ShardDirectoryEntry struct {
 }
 
 type ShardDirectory struct {
-	Version              int                   `yaml:"version"`
 	RuleVersion          string                `yaml:"rule_version"`
 	SlotCount            int                   `yaml:"slot_count"`
 	HashFn               string                `yaml:"hash_fn"`
@@ -34,7 +33,9 @@ func LoadShardDirectory(path string) (*ShardDirectory, error) {
 		return nil, fmt.Errorf("read shard directory: %w", err)
 	}
 	var directory ShardDirectory
-	if err := yaml.Unmarshal(contents, &directory); err != nil {
+	decoder := yaml.NewDecoder(strings.NewReader(string(contents)))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&directory); err != nil {
 		return nil, fmt.Errorf("decode shard directory: %w", err)
 	}
 	if err := directory.Validate(); err != nil {
@@ -73,9 +74,6 @@ func ResolveDefaultShardDirectoryPath() (string, error) {
 func (d *ShardDirectory) Validate() error {
 	if d == nil {
 		return fmt.Errorf("shard directory is nil")
-	}
-	if d.Version != 1 {
-		return fmt.Errorf("unsupported shard directory version: %d", d.Version)
 	}
 	if strings.TrimSpace(d.RuleVersion) != identityRuleVersion {
 		return fmt.Errorf("unexpected shard rule version: %s", d.RuleVersion)

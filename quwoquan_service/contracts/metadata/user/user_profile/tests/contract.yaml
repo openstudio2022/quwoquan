@@ -1,4 +1,3 @@
-version: 1
 aggregate: UserProfile
 layer: service_side
 

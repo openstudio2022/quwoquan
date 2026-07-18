@@ -5,6 +5,7 @@ import 'package:flutter/material.dart' show Material, MaterialType;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/app_startup_runtime.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/navigation/home_primary_tab_strip.dart';
 import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';
@@ -23,9 +24,14 @@ import 'package:quwoquan_app/ui/discovery/widgets/home_multi_form_feed.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer.dart';
 
 class HomePage extends ConsumerStatefulWidget {
-  const HomePage({super.key, this.routeLocation});
+  const HomePage({
+    super.key,
+    this.routeLocation,
+    this.isStartupHomeActive = true,
+  });
 
   final String? routeLocation;
+  final bool isStartupHomeActive;
 
   @override
   ConsumerState<HomePage> createState() => _HomePageState();
@@ -335,11 +341,24 @@ class _HomePageState extends ConsumerState<HomePage>
       isDark: isDark,
       channelId: channel.id,
       template: channel.template,
+      onInitialContentPainted:
+          activeChannelId == _defaultChannelId && widget.isStartupHomeActive
+          ? _markStartupHomeFeedContentPainted
+          : null,
       onUserTap: _openUserProfile,
       onPostTap: (post, index, {feedPosts}) {
         _openFeedPost(post, index, feedPosts: feedPosts);
       },
     );
+  }
+
+  void _markStartupHomeFeedContentPainted() {
+    if (!mounted ||
+        _activeChannelId != _defaultChannelId ||
+        !widget.isStartupHomeActive) {
+      return;
+    }
+    AppStartupRuntime.instance.markHomeFeedContentPainted();
   }
 
   void _openUserProfile(

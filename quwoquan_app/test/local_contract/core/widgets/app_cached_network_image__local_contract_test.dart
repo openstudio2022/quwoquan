@@ -11,6 +11,7 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/cloud/media/cdn_image_url_builder.dart';
+import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
@@ -212,10 +213,8 @@ void main() {
     });
 
     test('evictAvatar 只驱逐原 URL 的登录头像缓存', () async {
-      const target =
-          'https://127.0.0.1:17100/media/avatar/s/mock/user/current/v1/avatar.png';
-      const untouched =
-          'https://127.0.0.1:17100/media/avatar/s/mock/user/other/v1/avatar.png';
+      const target = 'media/avatar/s/mock/user/current/v1/avatar.png';
+      const untouched = 'media/avatar/s/mock/user/other/v1/avatar.png';
       final targetCacheKeys = resolveAvatarImageUrlCandidates(target)
           .map(
             (candidate) => CdnImageUrlBuilder.avatar(
@@ -327,11 +326,11 @@ void main() {
       );
       expect(
         image.imageUrl,
-        'https://127.0.0.1:17100/media/background/s/archived-avatar/user/fixture_user_current/v1/background.png',
+        '${CloudRuntimeConfig.mediaImageCdnBaseUrl}/media/background/s/archived-avatar/user/fixture_user_current/v1/background.png',
       );
     });
 
-    testWidgets('auto rewrites archived mock seed images before load', (
+    testWidgets('resolves canonical mock seed image without path rewriting', (
       tester,
     ) async {
       await tester.pumpWidget(
@@ -348,11 +347,9 @@ void main() {
       );
       expect(
         image.imageUrl,
-        startsWith(
-          'https://127.0.0.1:17100/media/image/s/archived-image/post/fixture_',
-        ),
+        '${CloudRuntimeConfig.mediaImageCdnBaseUrl}/media/image/s/mock/seed/p_1501785888041-af3ef285b470/v1/image.jpg',
       );
-      expect(image.imageUrl, isNot(contains('/mock/seed/')));
+      expect(image.imageUrl, contains('/mock/seed/'));
     });
 
     testWidgets(

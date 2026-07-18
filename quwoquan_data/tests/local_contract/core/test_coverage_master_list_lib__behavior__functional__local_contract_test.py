@@ -60,7 +60,7 @@ def _write_city_file(
         for district, names in district_leaves.items()
     ]
     payload = {
-        "schemaVersion": "quwoquan_data.discovery_seed/2",
+        "schema": "quwoquan_data.discovery_seed",
         "country": "中国",
         "province": province,
         "city": city,

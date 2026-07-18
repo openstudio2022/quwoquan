@@ -1,4 +1,3 @@
-version: 1
 read_model: HomepageReviewDimensionScore
 
 description: |
@@ -19,12 +18,10 @@ client_projection:
       dart_type: String
       nullable: false
       source: label
-      aliases: [label]
       default: "''"
 
     - name: score
       dart_type: double
       nullable: false
       source: score
-      aliases: [score]
       default: "0.0"

@@ -11,14 +11,14 @@ import (
 func TestGetHelperRead_Article(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	created := createPost(t, `{
+	created := submitPublishedPost(t, `{
 		"contentType":"article",
 		"title":"深度解析 Go 并发模型",
 		"body":"Go 语言的并发模型基于 goroutine 和 channel，它提供了轻量级的并发原语..."
 	}`)
-	postID, _ := created["_id"].(string)
+	postID, _ := created["postId"].(string)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/content/helper-read/"+postID, nil)
+	req := httptest.NewRequest(http.MethodGet, "/content/helper-read/"+postID, nil)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 
@@ -39,10 +39,10 @@ func TestGetHelperRead_Article(t *testing.T) {
 func TestGetHelperRead_NonArticle_Returns404(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	created := createPost(t, `{"contentType":"image","title":"photo","mediaUrls":["https://example.com/img.jpg"]}`)
-	postID, _ := created["_id"].(string)
+	created := submitPublishedPost(t, `{"contentType":"image","title":"photo"}`)
+	postID, _ := created["postId"].(string)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/content/helper-read/"+postID, nil)
+	req := httptest.NewRequest(http.MethodGet, "/content/helper-read/"+postID, nil)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 
@@ -51,13 +51,13 @@ func TestGetHelperRead_NonArticle_Returns404(t *testing.T) {
 	}
 }
 
-func TestCreatePostResponseShape_NoPrivateFields(t *testing.T) {
+func TestSubmitPostPublicationResponseShapeNoPrivateFields(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	created := createPost(t, `{"contentType":"micro","body":"hello world"}`)
-	postID, _ := created["_id"].(string)
+	created := submitPublishedPost(t, `{"contentType":"micro","body":"hello world"}`)
+	postID, _ := created["postId"].(string)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/content/posts/"+postID, nil)
+	req := httptest.NewRequest(http.MethodGet, "/content/posts/"+postID, nil)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 

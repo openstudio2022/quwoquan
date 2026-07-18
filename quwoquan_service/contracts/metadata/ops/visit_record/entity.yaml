@@ -1,4 +1,3 @@
-version: 1
 domain: ops
 entity: VisitRecord
 object_kind: append_only_fact

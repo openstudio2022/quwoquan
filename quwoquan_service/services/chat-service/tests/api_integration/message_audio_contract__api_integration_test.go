@@ -10,7 +10,7 @@ func TestSendAudioMessageWithMedia(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"direct","title":"audio test","initialMemberIds":["user_test_002"]}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 
 	payload := `{
 		"type": "audio",
@@ -36,7 +36,7 @@ func TestSendAudioMessagePersistsMediaField(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"direct","title":"audio persist test","initialMemberIds":["user_test_002"]}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 
 	payload := `{
 		"type": "audio",
@@ -47,7 +47,7 @@ func TestSendAudioMessagePersistsMediaField(t *testing.T) {
 
 	sendMessage(t, convId, payload)
 
-	code, result := doGet(t, "/v1/chat/conversations/"+convId+"/messages?limit=10", "user_test_001")
+	code, result := doGet(t, "/chat/conversations/"+convId+"/messages?limit=10", "user_test_001")
 	if code != 200 {
 		t.Fatalf("expected 200, got %d", code)
 	}
@@ -78,7 +78,7 @@ func TestSendAudioMessageUpdatesConversationPreview(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"direct","title":"preview test","initialMemberIds":["user_test_002"]}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 
 	payload := `{
 		"type": "audio",
@@ -88,7 +88,7 @@ func TestSendAudioMessageUpdatesConversationPreview(t *testing.T) {
 	}`
 	sendMessage(t, convId, payload)
 
-	code, convResult := doGet(t, "/v1/chat/conversations/"+convId, "user_test_001")
+	code, convResult := doGet(t, "/chat/conversations/"+convId, "user_test_001")
 	if code != 200 {
 		t.Fatalf("expected 200, got %d", code)
 	}
@@ -102,7 +102,7 @@ func TestSendAudioMessageDedup(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"direct","title":"audio dedup test","initialMemberIds":["user_test_002"]}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 
 	payload := `{
 		"type": "audio",
@@ -123,7 +123,7 @@ func TestSendAudioMessageSyncIncludesMedia(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"direct","title":"audio sync test","initialMemberIds":["user_test_002"]}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 
 	sendMessage(t, convId, `{"type":"text","content":"hello","clientMsgId":"sync-text-1"}`)
 
@@ -136,7 +136,7 @@ func TestSendAudioMessageSyncIncludesMedia(t *testing.T) {
 	sendMessage(t, convId, payload)
 
 	syncResult := doPost(t,
-		"/v1/chat/conversations/"+convId+"/sync",
+		"/chat/conversations/"+convId+"/sync",
 		`{"lastSeq": 0, "limit": 10}`,
 		"user_test_001", 200)
 
@@ -165,13 +165,13 @@ func TestSendAudioMessage_MixedTypes(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"group","title":"mixed type test"}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 
 	sendMessage(t, convId, `{"type":"text","content":"before audio","clientMsgId":"mix-1"}`)
 	sendMessage(t, convId, `{"type":"audio","content":"","mediaAssetId":"asset-audio-mixed","clientMsgId":"mix-2"}`)
 	sendMessage(t, convId, `{"type":"text","content":"after audio","clientMsgId":"mix-3"}`)
 
-	code, result := doGet(t, "/v1/chat/conversations/"+convId+"/messages?limit=10", "user_test_001")
+	code, result := doGet(t, "/chat/conversations/"+convId+"/messages?limit=10", "user_test_001")
 	if code != 200 {
 		t.Fatalf("expected 200, got %d", code)
 	}
@@ -196,11 +196,11 @@ func TestSendAudioMessageRejectsRemovedMediaURL(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"direct","title":"typed audio test","initialMemberIds":["user_test_002"]}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 
 	failure := doPost(
 		t,
-		"/v1/chat/conversations/"+convId+"/messages",
+		"/chat/conversations/"+convId+"/messages",
 		`{"type":"audio","content":"","mediaUrl":"https://cdn.example.com/old.m4a","clientMsgId":"removed-media-url"}`,
 		"user_test_001",
 		http.StatusBadRequest,
@@ -213,10 +213,10 @@ func TestSendAudioMessageRejectsRemovedMediaURL(t *testing.T) {
 func TestSendAudioMessageRejectsMissingMediaAssetID(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	conv := createConversation(t, `{"type":"direct","title":"missing asset","initialMemberIds":["user_test_002"]}`)
-	convID := conv["_id"].(string)
+	convID := conv["id"].(string)
 	failure := doPost(
 		t,
-		"/v1/chat/conversations/"+convID+"/messages",
+		"/chat/conversations/"+convID+"/messages",
 		`{"type":"audio","content":"","clientMsgId":"missing-media-asset"}`,
 		"user_test_001",
 		http.StatusBadRequest,
@@ -229,10 +229,10 @@ func TestSendAudioMessageRejectsMissingMediaAssetID(t *testing.T) {
 func TestSendAudioMessageRejectsWrongMediaAssetType(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	conv := createConversation(t, `{"type":"direct","title":"wrong asset type","initialMemberIds":["user_test_002"]}`)
-	convID := conv["_id"].(string)
+	convID := conv["id"].(string)
 	failure := doPost(
 		t,
-		"/v1/chat/conversations/"+convID+"/messages",
+		"/chat/conversations/"+convID+"/messages",
 		`{"type":"audio","content":"","mediaAssetId":"asset-image-not-voice","clientMsgId":"wrong-media-type"}`,
 		"user_test_001",
 		http.StatusBadRequest,

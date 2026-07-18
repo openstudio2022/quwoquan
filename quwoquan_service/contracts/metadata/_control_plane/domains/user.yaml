@@ -1,4 +1,3 @@
-version: 1
 domain: user
 display_name: User
 template_role: replica_ready

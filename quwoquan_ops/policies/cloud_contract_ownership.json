@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "leaseRoot": ".qwq_output/env/repo/local/control-plane/process/app-cloud-handoff/leases",
   "resources": [
     {
@@ -43,8 +42,8 @@
         "quwoquan_app/lib/cloud/runtime/generated/**",
         "quwoquan_app/lib/cloud/**/generated/**",
         "quwoquan_app/lib/app/navigation/generated/**",
-            "quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/generated/**",
-            "quwoquan_app/tool/cloud_codegen/generated_manifest.json"
+        "quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/generated/**",
+        "quwoquan_app/tool/cloud_codegen/generated_manifest.json"
       ],
       "consumers": [
         "app-production-composition",
@@ -110,5 +109,6 @@
       "app-production-composition",
       "app-alpha-composition"
     ]
-  ]
+  ],
+  "schema": "1"
 }

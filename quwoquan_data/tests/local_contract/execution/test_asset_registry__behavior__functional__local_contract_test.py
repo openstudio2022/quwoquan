@@ -206,7 +206,9 @@ def test_verify_asset_id_zero_collision_cli_passes():
     write_execution_runtime_state(TASK, command="execution")
     from content.execution.runtime_state import load_execution_runtime_state
 
-    global_seq = int(load_execution_runtime_state(TASK)["executionSequence"])
+    runtime_state = load_execution_runtime_state(TASK)
+    assert runtime_state is not None
+    global_seq = runtime_state.execution_sequence
     registry = ExecutionAssetRegistry(execution_id=TASK, execution_sequence=global_seq)
     cover = allocate_post_asset_id(
         entity_name="峨眉山",
@@ -251,7 +253,9 @@ def test_verify_asset_id_zero_collision_counts_image_manifest_without_gallery():
     write_execution_runtime_state(TASK, command="execution")
     from content.execution.runtime_state import load_execution_runtime_state
 
-    global_seq = int(load_execution_runtime_state(TASK)["executionSequence"])
+    runtime_state = load_execution_runtime_state(TASK)
+    assert runtime_state is not None
+    global_seq = runtime_state.execution_sequence
     registry = ExecutionAssetRegistry(execution_id=TASK, execution_sequence=global_seq)
     cover = allocate_post_asset_id(
         entity_name="峨眉山",

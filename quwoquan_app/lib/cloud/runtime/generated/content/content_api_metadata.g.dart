@@ -8,85 +8,92 @@ class ContentApiMetadata {
 
   static const String domain = 'content';
   static const List<String> apiPrefixes = <String>[
-    '/internal/v1',
-    '/v1/config',
-    '/v1/content',
+    '/config/app',
+    '/content/articles',
+    '/content/behaviors',
+    '/content/comments',
+    '/content/feed',
+    '/content/footprint',
+    '/content/helper-read',
+    '/content/intersections',
+    '/content/media',
+    '/content/posts',
+    '/content/posts:publish',
+    '/content/reports',
+    '/content/sub-accounts',
+    '/content/users',
+    '/internal/content',
   ];
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
-    'AbortMediaUpload': '/v1/content/media/uploads/{sessionId}:abort',
-    'BeginReportReview': '/v1/content/reports/{reportId}/review',
-    'BindMediaAssetsToComment': '/v1/content/comments/{commentId}/media:bind',
-    'BindMediaAssetsToPost': '/v1/content/posts/{postId}/media:bind',
-    'CompleteMediaUpload': '/v1/content/media/uploads/{sessionId}:complete',
-    'CreateComment': '/v1/content/posts/{postId}/comments',
-    'CreateOutboundShare': '/v1/content/posts/{postId}/outbound-shares',
-    'CreatePost': '/v1/content/posts',
-    'CreateReport': '/v1/content/reports',
-    'DecidePostModeration': '/internal/v1/content/posts/{postId}:moderate',
-    'DeleteComment': '/v1/content/posts/{postId}/comments/{commentId}',
-    'DeletePost': '/v1/content/posts/{postId}',
-    'GenerateArticleSummary': '/v1/content/articles/summary:generate',
-    'GetAppConfig': '/v1/config/app',
-    'GetAuthorImpact': '/v1/content/sub-accounts/{subAccountId}/author-impact',
-    'GetContentReactionState': '/v1/content/posts/{postId}/reactions',
-    'GetCounters': '/v1/content/posts/{postId}/counters',
-    'GetFeed': '/v1/content/feed',
-    'GetHelperRead': '/v1/content/helper-read/{contentId}',
-    'GetMediaAsset': '/v1/content/media/{mediaId}',
-    'GetMediaAssetDeliveryReference': '/internal/v1/content/media/{mediaId}:delivery-reference',
-    'GetMediaAssetReference': '/internal/v1/content/media/{mediaId}:reference',
-    'GetMediaUploadSession': '/v1/content/media/uploads/{sessionId}',
-    'GetMyFootprint': '/v1/content/footprint',
-    'GetMyIntersectionSummary': '/v1/content/intersections/summary',
-    'GetObjectIntersections': '/v1/content/intersections/object',
-    'GetOwnedMediaAsset': '/internal/v1/content/media/{mediaId}',
-    'GetPost': '/v1/content/posts/{postId}',
-    'GetPostPublicationEligibility': '/internal/v1/content/posts/{postId}/publication-eligibility',
-    'GetReport': '/v1/content/reports/{reportId}',
-    'InitMediaUpload': '/v1/content/media/uploads:init',
-    'LikePost': '/v1/content/posts/{postId}/like',
-    'ListAuthorImpactEvidence': '/v1/content/sub-accounts/{subAccountId}/author-impact/evidence',
-    'ListCommentReplies': '/v1/content/posts/{postId}/comments/{commentId}/replies',
-    'ListComments': '/v1/content/posts/{postId}/comments',
-    'ListCommentsByAuthor': '/v1/content/users/me/comments',
-    'ListCommentsForPostAuthor': '/v1/content/users/me/received-comments',
-    'ListMyIntersections': '/v1/content/intersections',
-    'ListProfileInteractionActivitiesReceived': '/v1/content/sub-accounts/{subAccountId}/interactions/received',
-    'ListProfileInteractionActivitiesSent': '/v1/content/sub-accounts/{subAccountId}/interactions/sent',
-    'ListReports': '/v1/content/reports',
-    'ListUserPosts': '/v1/content/sub-accounts/{subAccountId}/posts',
-    'OpenPostModerationCase': '/internal/v1/content/posts/{postId}:open-moderation-case',
-    'PinComment': '/v1/content/posts/{postId}/comments/{commentId}/pin',
-    'PromotePostToWork': '/v1/content/posts/{postId}:promoteToWork',
-    'PublishPost': '/v1/content/posts/{postId}/publish',
-    'ReactToComment': '/v1/content/comments/{commentId}/reaction',
-    'RecordMediaProcessingResult': '/internal/v1/content/media/{mediaId}:processing-result',
-    'ReportBehaviors': '/v1/content/behaviors',
-    'RequestOriginalImageAccess': '/v1/content/media/{mediaId}/original:access',
-    'ResolveReport': '/v1/content/reports/{reportId}',
-    'ReviewPostModerationCase': '/internal/v1/content/posts/{postId}:review-moderation',
-    'SearchPosts': '/v1/content/posts/search',
-    'SelectAutoVideoCover': '/v1/content/media/{mediaId}/cover:auto',
-    'SelectManualVideoCover': '/v1/content/media/{mediaId}/cover:manual',
-    'SupersedePostModerationCase': '/internal/v1/content/posts/{postId}:supersede-moderation',
-    'UnlikePost': '/v1/content/posts/{postId}/like',
-    'UnpinComment': '/v1/content/posts/{postId}/comments/{commentId}/pin',
-    'UpdateMediaAssetAccessPolicy': '/internal/v1/content/media/{mediaId}:access-policy',
-    'UpdatePost': '/v1/content/posts/{postId}',
-    'UpdatePostSettings': '/v1/content/posts/{postId}/settings',
-    'UpdateProfileInteractionState': '/v1/content/sub-accounts/{subAccountId}/interactions/{interactionId}/state',
+    'AbortMediaUpload': '/content/media/uploads/{sessionId}:abort',
+    'BeginReportReview': '/content/reports/{reportId}/review',
+    'BindMediaAssetsToComment': '/content/comments/{commentId}/media:bind',
+    'CompleteMediaUpload': '/content/media/uploads/{sessionId}:complete',
+    'CreateComment': '/content/posts/{postId}/comments',
+    'CreateOutboundShare': '/content/posts/{postId}/outbound-shares',
+    'CreateReport': '/content/reports',
+    'DecidePostModeration': '/internal/content/posts/{postId}:moderate',
+    'DeleteComment': '/content/posts/{postId}/comments/{commentId}',
+    'DeletePost': '/content/posts/{postId}',
+    'GenerateArticleSummary': '/content/articles/summary:generate',
+    'GetAppConfig': '/config/app',
+    'GetAuthorImpact': '/content/sub-accounts/{subAccountId}/author-impact',
+    'GetContentReactionState': '/content/posts/{postId}/reactions',
+    'GetCounters': '/content/posts/{postId}/counters',
+    'GetFeed': '/content/feed',
+    'GetHelperRead': '/content/helper-read/{contentId}',
+    'GetMediaAsset': '/content/media/{mediaId}',
+    'GetMediaAssetDeliveryReference': '/internal/content/media/{mediaId}:delivery-reference',
+    'GetMediaAssetReference': '/internal/content/media/{mediaId}:reference',
+    'GetMediaUploadSession': '/content/media/uploads/{sessionId}',
+    'GetMyFootprint': '/content/footprint',
+    'GetMyIntersectionSummary': '/content/intersections/summary',
+    'GetObjectIntersections': '/content/intersections/object',
+    'GetOwnedMediaAsset': '/internal/content/media/{mediaId}',
+    'GetPost': '/content/posts/{postId}',
+    'GetPostPublicationEligibility': '/internal/content/posts/{postId}/publication-eligibility',
+    'GetReport': '/content/reports/{reportId}',
+    'InitMediaUpload': '/content/media/uploads:init',
+    'LikePost': '/content/posts/{postId}/like',
+    'ListAuthorImpactEvidence': '/content/sub-accounts/{subAccountId}/author-impact/evidence',
+    'ListCommentReplies': '/content/posts/{postId}/comments/{commentId}/replies',
+    'ListComments': '/content/posts/{postId}/comments',
+    'ListCommentsByAuthor': '/content/users/me/comments',
+    'ListCommentsForPostAuthor': '/content/users/me/received-comments',
+    'ListMyIntersections': '/content/intersections',
+    'ListProfileInteractionActivitiesReceived': '/content/sub-accounts/{subAccountId}/interactions/received',
+    'ListProfileInteractionActivitiesSent': '/content/sub-accounts/{subAccountId}/interactions/sent',
+    'ListReports': '/content/reports',
+    'ListUserPosts': '/content/sub-accounts/{subAccountId}/posts',
+    'OpenPostModerationCase': '/internal/content/posts/{postId}:open-moderation-case',
+    'PinComment': '/content/posts/{postId}/comments/{commentId}/pin',
+    'PromotePostToWork': '/content/posts/{postId}:promoteToWork',
+    'ReactToComment': '/content/comments/{commentId}/reaction',
+    'RecordMediaProcessingResult': '/internal/content/media/{mediaId}:processing-result',
+    'ReportBehaviors': '/content/behaviors',
+    'RequestOriginalImageAccess': '/content/media/{mediaId}/original:access',
+    'ResolveReport': '/content/reports/{reportId}',
+    'ReviewPostModerationCase': '/internal/content/posts/{postId}:review-moderation',
+    'SearchPosts': '/content/posts/search',
+    'SelectAutoVideoCover': '/content/media/{mediaId}/cover:auto',
+    'SelectManualVideoCover': '/content/media/{mediaId}/cover:manual',
+    'SubmitPostPublication': '/content/posts:publish',
+    'SupersedePostModerationCase': '/internal/content/posts/{postId}:supersede-moderation',
+    'UnlikePost': '/content/posts/{postId}/like',
+    'UnpinComment': '/content/posts/{postId}/comments/{commentId}/pin',
+    'UpdateMediaAssetAccessPolicy': '/internal/content/media/{mediaId}:access-policy',
+    'UpdatePostSettings': '/content/posts/{postId}/settings',
+    'UpdateProfileInteractionState': '/content/sub-accounts/{subAccountId}/interactions/{interactionId}/state',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
     'AbortMediaUpload': 'POST',
     'BeginReportReview': 'POST',
     'BindMediaAssetsToComment': 'POST',
-    'BindMediaAssetsToPost': 'POST',
     'CompleteMediaUpload': 'POST',
     'CreateComment': 'POST',
     'CreateOutboundShare': 'POST',
-    'CreatePost': 'POST',
     'CreateReport': 'POST',
     'DecidePostModeration': 'POST',
     'DeleteComment': 'DELETE',
@@ -124,7 +131,6 @@ class ContentApiMetadata {
     'OpenPostModerationCase': 'POST',
     'PinComment': 'POST',
     'PromotePostToWork': 'POST',
-    'PublishPost': 'POST',
     'ReactToComment': 'POST',
     'RecordMediaProcessingResult': 'POST',
     'ReportBehaviors': 'POST',
@@ -134,11 +140,11 @@ class ContentApiMetadata {
     'SearchPosts': 'GET',
     'SelectAutoVideoCover': 'POST',
     'SelectManualVideoCover': 'POST',
+    'SubmitPostPublication': 'POST',
     'SupersedePostModerationCase': 'POST',
     'UnlikePost': 'DELETE',
     'UnpinComment': 'DELETE',
     'UpdateMediaAssetAccessPolicy': 'PATCH',
-    'UpdatePost': 'PATCH',
     'UpdatePostSettings': 'PATCH',
     'UpdateProfileInteractionState': 'PATCH',
   };
@@ -148,11 +154,9 @@ class ContentApiMetadata {
     'AbortMediaUpload': 'required',
     'BeginReportReview': 'required',
     'BindMediaAssetsToComment': 'required',
-    'BindMediaAssetsToPost': 'required',
     'CompleteMediaUpload': 'required',
     'CreateComment': 'required',
     'CreateOutboundShare': 'optional',
-    'CreatePost': 'required',
     'CreateReport': 'required',
     'DecidePostModeration': 'required',
     'DeleteComment': 'required',
@@ -190,7 +194,6 @@ class ContentApiMetadata {
     'OpenPostModerationCase': 'required',
     'PinComment': 'required',
     'PromotePostToWork': 'required',
-    'PublishPost': 'required',
     'ReactToComment': 'required',
     'RecordMediaProcessingResult': 'required',
     'ReportBehaviors': 'required',
@@ -200,11 +203,11 @@ class ContentApiMetadata {
     'SearchPosts': 'required',
     'SelectAutoVideoCover': 'required',
     'SelectManualVideoCover': 'required',
+    'SubmitPostPublication': 'required',
     'SupersedePostModerationCase': 'required',
     'UnlikePost': 'optional',
     'UnpinComment': 'required',
     'UpdateMediaAssetAccessPolicy': 'required',
-    'UpdatePost': 'required',
     'UpdatePostSettings': 'required',
     'UpdateProfileInteractionState': 'required',
   };
@@ -254,11 +257,9 @@ class ContentApiMetadata {
   static const String abortMediaUploadOperation = 'AbortMediaUpload';
   static const String beginReportReviewOperation = 'BeginReportReview';
   static const String bindMediaAssetsToCommentOperation = 'BindMediaAssetsToComment';
-  static const String bindMediaAssetsToPostOperation = 'BindMediaAssetsToPost';
   static const String completeMediaUploadOperation = 'CompleteMediaUpload';
   static const String createCommentOperation = 'CreateComment';
   static const String createOutboundShareOperation = 'CreateOutboundShare';
-  static const String createPostOperation = 'CreatePost';
   static const String createReportOperation = 'CreateReport';
   static const String decidePostModerationOperation = 'DecidePostModeration';
   static const String deleteCommentOperation = 'DeleteComment';
@@ -296,7 +297,6 @@ class ContentApiMetadata {
   static const String openPostModerationCaseOperation = 'OpenPostModerationCase';
   static const String pinCommentOperation = 'PinComment';
   static const String promotePostToWorkOperation = 'PromotePostToWork';
-  static const String publishPostOperation = 'PublishPost';
   static const String reactToCommentOperation = 'ReactToComment';
   static const String recordMediaProcessingResultOperation = 'RecordMediaProcessingResult';
   static const String reportBehaviorsOperation = 'ReportBehaviors';
@@ -306,310 +306,292 @@ class ContentApiMetadata {
   static const String searchPostsOperation = 'SearchPosts';
   static const String selectAutoVideoCoverOperation = 'SelectAutoVideoCover';
   static const String selectManualVideoCoverOperation = 'SelectManualVideoCover';
+  static const String submitPostPublicationOperation = 'SubmitPostPublication';
   static const String supersedePostModerationCaseOperation = 'SupersedePostModerationCase';
   static const String unlikePostOperation = 'UnlikePost';
   static const String unpinCommentOperation = 'UnpinComment';
   static const String updateMediaAssetAccessPolicyOperation = 'UpdateMediaAssetAccessPolicy';
-  static const String updatePostOperation = 'UpdatePost';
   static const String updatePostSettingsOperation = 'UpdatePostSettings';
   static const String updateProfileInteractionStateOperation = 'UpdateProfileInteractionState';
 
-  static const String abortMediaUploadPathTemplate = '/v1/content/media/uploads/{sessionId}:abort';
+  static const String abortMediaUploadPathTemplate = '/content/media/uploads/{sessionId}:abort';
   static String abortMediaUploadPath({required String sessionId}) {
     return _fillPath(abortMediaUploadPathTemplate, <String, String>{
       'sessionId': sessionId,
     });
   }
-  static const String beginReportReviewPathTemplate = '/v1/content/reports/{reportId}/review';
+  static const String beginReportReviewPathTemplate = '/content/reports/{reportId}/review';
   static String beginReportReviewPath({required String reportId}) {
     return _fillPath(beginReportReviewPathTemplate, <String, String>{
       'reportId': reportId,
     });
   }
-  static const String bindMediaAssetsToCommentPathTemplate = '/v1/content/comments/{commentId}/media:bind';
+  static const String bindMediaAssetsToCommentPathTemplate = '/content/comments/{commentId}/media:bind';
   static String bindMediaAssetsToCommentPath({required String commentId}) {
     return _fillPath(bindMediaAssetsToCommentPathTemplate, <String, String>{
       'commentId': commentId,
     });
   }
-  static const String bindMediaAssetsToPostPathTemplate = '/v1/content/posts/{postId}/media:bind';
-  static String bindMediaAssetsToPostPath({required String postId}) {
-    return _fillPath(bindMediaAssetsToPostPathTemplate, <String, String>{
-      'postId': postId,
-    });
-  }
-  static const String completeMediaUploadPathTemplate = '/v1/content/media/uploads/{sessionId}:complete';
+  static const String completeMediaUploadPathTemplate = '/content/media/uploads/{sessionId}:complete';
   static String completeMediaUploadPath({required String sessionId}) {
     return _fillPath(completeMediaUploadPathTemplate, <String, String>{
       'sessionId': sessionId,
     });
   }
-  static const String createCommentPathTemplate = '/v1/content/posts/{postId}/comments';
+  static const String createCommentPathTemplate = '/content/posts/{postId}/comments';
   static String createCommentPath({required String postId}) {
     return _fillPath(createCommentPathTemplate, <String, String>{
       'postId': postId,
     });
   }
-  static const String createOutboundSharePathTemplate = '/v1/content/posts/{postId}/outbound-shares';
+  static const String createOutboundSharePathTemplate = '/content/posts/{postId}/outbound-shares';
   static String createOutboundSharePath({required String postId}) {
     return _fillPath(createOutboundSharePathTemplate, <String, String>{
       'postId': postId,
     });
   }
-  static const String createPostPath = '/v1/content/posts';
-  static const String createReportPath = '/v1/content/reports';
-  static const String decidePostModerationPathTemplate = '/internal/v1/content/posts/{postId}:moderate';
+  static const String createReportPath = '/content/reports';
+  static const String decidePostModerationPathTemplate = '/internal/content/posts/{postId}:moderate';
   static String decidePostModerationPath({required String postId}) {
     return _fillPath(decidePostModerationPathTemplate, <String, String>{
       'postId': postId,
     });
   }
-  static const String deleteCommentPathTemplate = '/v1/content/posts/{postId}/comments/{commentId}';
+  static const String deleteCommentPathTemplate = '/content/posts/{postId}/comments/{commentId}';
   static String deleteCommentPath({required String postId, required String commentId}) {
     return _fillPath(deleteCommentPathTemplate, <String, String>{
       'postId': postId,
       'commentId': commentId,
     });
   }
-  static const String deletePostPathTemplate = '/v1/content/posts/{postId}';
+  static const String deletePostPathTemplate = '/content/posts/{postId}';
   static String deletePostPath({required String postId}) {
     return _fillPath(deletePostPathTemplate, <String, String>{
       'postId': postId,
     });
   }
-  static const String generateArticleSummaryPath = '/v1/content/articles/summary:generate';
-  static const String getAppConfigPath = '/v1/config/app';
-  static const String getAuthorImpactPathTemplate = '/v1/content/sub-accounts/{subAccountId}/author-impact';
+  static const String generateArticleSummaryPath = '/content/articles/summary:generate';
+  static const String getAppConfigPath = '/config/app';
+  static const String getAuthorImpactPathTemplate = '/content/sub-accounts/{subAccountId}/author-impact';
   static String getAuthorImpactPath({required String subAccountId}) {
     return _fillPath(getAuthorImpactPathTemplate, <String, String>{
       'subAccountId': subAccountId,
     });
   }
-  static const String getContentReactionStatePathTemplate = '/v1/content/posts/{postId}/reactions';
+  static const String getContentReactionStatePathTemplate = '/content/posts/{postId}/reactions';
   static String getContentReactionStatePath({required String postId}) {
     return _fillPath(getContentReactionStatePathTemplate, <String, String>{
       'postId': postId,
     });
   }
-  static const String getCountersPathTemplate = '/v1/content/posts/{postId}/counters';
+  static const String getCountersPathTemplate = '/content/posts/{postId}/counters';
   static String getCountersPath({required String postId}) {
     return _fillPath(getCountersPathTemplate, <String, String>{
       'postId': postId,
     });
   }
-  static const String getFeedPath = '/v1/content/feed';
-  static const String getHelperReadPathTemplate = '/v1/content/helper-read/{contentId}';
+  static const String getFeedPath = '/content/feed';
+  static const String getHelperReadPathTemplate = '/content/helper-read/{contentId}';
   static String getHelperReadPath({required String contentId}) {
     return _fillPath(getHelperReadPathTemplate, <String, String>{
       'contentId': contentId,
     });
   }
-  static const String getMediaAssetPathTemplate = '/v1/content/media/{mediaId}';
+  static const String getMediaAssetPathTemplate = '/content/media/{mediaId}';
   static String getMediaAssetPath({required String mediaId}) {
     return _fillPath(getMediaAssetPathTemplate, <String, String>{
       'mediaId': mediaId,
     });
   }
-  static const String getMediaAssetDeliveryReferencePathTemplate = '/internal/v1/content/media/{mediaId}:delivery-reference';
+  static const String getMediaAssetDeliveryReferencePathTemplate = '/internal/content/media/{mediaId}:delivery-reference';
   static String getMediaAssetDeliveryReferencePath({required String mediaId}) {
     return _fillPath(getMediaAssetDeliveryReferencePathTemplate, <String, String>{
       'mediaId': mediaId,
     });
   }
-  static const String getMediaAssetReferencePathTemplate = '/internal/v1/content/media/{mediaId}:reference';
+  static const String getMediaAssetReferencePathTemplate = '/internal/content/media/{mediaId}:reference';
   static String getMediaAssetReferencePath({required String mediaId}) {
     return _fillPath(getMediaAssetReferencePathTemplate, <String, String>{
       'mediaId': mediaId,
     });
   }
-  static const String getMediaUploadSessionPathTemplate = '/v1/content/media/uploads/{sessionId}';
+  static const String getMediaUploadSessionPathTemplate = '/content/media/uploads/{sessionId}';
   static String getMediaUploadSessionPath({required String sessionId}) {
     return _fillPath(getMediaUploadSessionPathTemplate, <String, String>{
       'sessionId': sessionId,
     });
   }
-  static const String getMyFootprintPath = '/v1/content/footprint';
-  static const String getMyIntersectionSummaryPath = '/v1/content/intersections/summary';
-  static const String getObjectIntersectionsPath = '/v1/content/intersections/object';
-  static const String getOwnedMediaAssetPathTemplate = '/internal/v1/content/media/{mediaId}';
+  static const String getMyFootprintPath = '/content/footprint';
+  static const String getMyIntersectionSummaryPath = '/content/intersections/summary';
+  static const String getObjectIntersectionsPath = '/content/intersections/object';
+  static const String getOwnedMediaAssetPathTemplate = '/internal/content/media/{mediaId}';
   static String getOwnedMediaAssetPath({required String mediaId}) {
     return _fillPath(getOwnedMediaAssetPathTemplate, <String, String>{
       'mediaId': mediaId,
     });
   }
-  static const String getPostPathTemplate = '/v1/content/posts/{postId}';
+  static const String getPostPathTemplate = '/content/posts/{postId}';
   static String getPostPath({required String postId}) {
     return _fillPath(getPostPathTemplate, <String, String>{
       'postId': postId,
     });
   }
-  static const String getPostPublicationEligibilityPathTemplate = '/internal/v1/content/posts/{postId}/publication-eligibility';
+  static const String getPostPublicationEligibilityPathTemplate = '/internal/content/posts/{postId}/publication-eligibility';
   static String getPostPublicationEligibilityPath({required String postId}) {
     return _fillPath(getPostPublicationEligibilityPathTemplate, <String, String>{
       'postId': postId,
     });
   }
-  static const String getReportPathTemplate = '/v1/content/reports/{reportId}';
+  static const String getReportPathTemplate = '/content/reports/{reportId}';
   static String getReportPath({required String reportId}) {
     return _fillPath(getReportPathTemplate, <String, String>{
       'reportId': reportId,
     });
   }
-  static const String initMediaUploadPath = '/v1/content/media/uploads:init';
-  static const String likePostPathTemplate = '/v1/content/posts/{postId}/like';
+  static const String initMediaUploadPath = '/content/media/uploads:init';
+  static const String likePostPathTemplate = '/content/posts/{postId}/like';
   static String likePostPath({required String postId}) {
     return _fillPath(likePostPathTemplate, <String, String>{
       'postId': postId,
     });
   }
-  static const String listAuthorImpactEvidencePathTemplate = '/v1/content/sub-accounts/{subAccountId}/author-impact/evidence';
+  static const String listAuthorImpactEvidencePathTemplate = '/content/sub-accounts/{subAccountId}/author-impact/evidence';
   static String listAuthorImpactEvidencePath({required String subAccountId}) {
     return _fillPath(listAuthorImpactEvidencePathTemplate, <String, String>{
       'subAccountId': subAccountId,
     });
   }
-  static const String listCommentRepliesPathTemplate = '/v1/content/posts/{postId}/comments/{commentId}/replies';
+  static const String listCommentRepliesPathTemplate = '/content/posts/{postId}/comments/{commentId}/replies';
   static String listCommentRepliesPath({required String postId, required String commentId}) {
     return _fillPath(listCommentRepliesPathTemplate, <String, String>{
       'postId': postId,
       'commentId': commentId,
     });
   }
-  static const String listCommentsPathTemplate = '/v1/content/posts/{postId}/comments';
+  static const String listCommentsPathTemplate = '/content/posts/{postId}/comments';
   static String listCommentsPath({required String postId}) {
     return _fillPath(listCommentsPathTemplate, <String, String>{
       'postId': postId,
     });
   }
-  static const String listCommentsByAuthorPath = '/v1/content/users/me/comments';
-  static const String listCommentsForPostAuthorPath = '/v1/content/users/me/received-comments';
-  static const String listMyIntersectionsPath = '/v1/content/intersections';
-  static const String listProfileInteractionActivitiesReceivedPathTemplate = '/v1/content/sub-accounts/{subAccountId}/interactions/received';
+  static const String listCommentsByAuthorPath = '/content/users/me/comments';
+  static const String listCommentsForPostAuthorPath = '/content/users/me/received-comments';
+  static const String listMyIntersectionsPath = '/content/intersections';
+  static const String listProfileInteractionActivitiesReceivedPathTemplate = '/content/sub-accounts/{subAccountId}/interactions/received';
   static String listProfileInteractionActivitiesReceivedPath({required String subAccountId}) {
     return _fillPath(listProfileInteractionActivitiesReceivedPathTemplate, <String, String>{
       'subAccountId': subAccountId,
     });
   }
-  static const String listProfileInteractionActivitiesSentPathTemplate = '/v1/content/sub-accounts/{subAccountId}/interactions/sent';
+  static const String listProfileInteractionActivitiesSentPathTemplate = '/content/sub-accounts/{subAccountId}/interactions/sent';
   static String listProfileInteractionActivitiesSentPath({required String subAccountId}) {
     return _fillPath(listProfileInteractionActivitiesSentPathTemplate, <String, String>{
       'subAccountId': subAccountId,
     });
   }
-  static const String listReportsPath = '/v1/content/reports';
-  static const String listUserPostsPathTemplate = '/v1/content/sub-accounts/{subAccountId}/posts';
+  static const String listReportsPath = '/content/reports';
+  static const String listUserPostsPathTemplate = '/content/sub-accounts/{subAccountId}/posts';
   static String listUserPostsPath({required String subAccountId}) {
     return _fillPath(listUserPostsPathTemplate, <String, String>{
       'subAccountId': subAccountId,
     });
   }
-  static const String openPostModerationCasePathTemplate = '/internal/v1/content/posts/{postId}:open-moderation-case';
+  static const String openPostModerationCasePathTemplate = '/internal/content/posts/{postId}:open-moderation-case';
   static String openPostModerationCasePath({required String postId}) {
     return _fillPath(openPostModerationCasePathTemplate, <String, String>{
       'postId': postId,
     });
   }
-  static const String pinCommentPathTemplate = '/v1/content/posts/{postId}/comments/{commentId}/pin';
+  static const String pinCommentPathTemplate = '/content/posts/{postId}/comments/{commentId}/pin';
   static String pinCommentPath({required String postId, required String commentId}) {
     return _fillPath(pinCommentPathTemplate, <String, String>{
       'postId': postId,
       'commentId': commentId,
     });
   }
-  static const String promotePostToWorkPathTemplate = '/v1/content/posts/{postId}:promoteToWork';
+  static const String promotePostToWorkPathTemplate = '/content/posts/{postId}:promoteToWork';
   static String promotePostToWorkPath({required String postId}) {
     return _fillPath(promotePostToWorkPathTemplate, <String, String>{
       'postId': postId,
     });
   }
-  static const String publishPostPathTemplate = '/v1/content/posts/{postId}/publish';
-  static String publishPostPath({required String postId}) {
-    return _fillPath(publishPostPathTemplate, <String, String>{
-      'postId': postId,
-    });
-  }
-  static const String reactToCommentPathTemplate = '/v1/content/comments/{commentId}/reaction';
+  static const String reactToCommentPathTemplate = '/content/comments/{commentId}/reaction';
   static String reactToCommentPath({required String commentId}) {
     return _fillPath(reactToCommentPathTemplate, <String, String>{
       'commentId': commentId,
     });
   }
-  static const String recordMediaProcessingResultPathTemplate = '/internal/v1/content/media/{mediaId}:processing-result';
+  static const String recordMediaProcessingResultPathTemplate = '/internal/content/media/{mediaId}:processing-result';
   static String recordMediaProcessingResultPath({required String mediaId}) {
     return _fillPath(recordMediaProcessingResultPathTemplate, <String, String>{
       'mediaId': mediaId,
     });
   }
-  static const String reportBehaviorsPath = '/v1/content/behaviors';
-  static const String requestOriginalImageAccessPathTemplate = '/v1/content/media/{mediaId}/original:access';
+  static const String reportBehaviorsPath = '/content/behaviors';
+  static const String requestOriginalImageAccessPathTemplate = '/content/media/{mediaId}/original:access';
   static String requestOriginalImageAccessPath({required String mediaId}) {
     return _fillPath(requestOriginalImageAccessPathTemplate, <String, String>{
       'mediaId': mediaId,
     });
   }
-  static const String resolveReportPathTemplate = '/v1/content/reports/{reportId}';
+  static const String resolveReportPathTemplate = '/content/reports/{reportId}';
   static String resolveReportPath({required String reportId}) {
     return _fillPath(resolveReportPathTemplate, <String, String>{
       'reportId': reportId,
     });
   }
-  static const String reviewPostModerationCasePathTemplate = '/internal/v1/content/posts/{postId}:review-moderation';
+  static const String reviewPostModerationCasePathTemplate = '/internal/content/posts/{postId}:review-moderation';
   static String reviewPostModerationCasePath({required String postId}) {
     return _fillPath(reviewPostModerationCasePathTemplate, <String, String>{
       'postId': postId,
     });
   }
-  static const String searchPostsPath = '/v1/content/posts/search';
-  static const String selectAutoVideoCoverPathTemplate = '/v1/content/media/{mediaId}/cover:auto';
+  static const String searchPostsPath = '/content/posts/search';
+  static const String selectAutoVideoCoverPathTemplate = '/content/media/{mediaId}/cover:auto';
   static String selectAutoVideoCoverPath({required String mediaId}) {
     return _fillPath(selectAutoVideoCoverPathTemplate, <String, String>{
       'mediaId': mediaId,
     });
   }
-  static const String selectManualVideoCoverPathTemplate = '/v1/content/media/{mediaId}/cover:manual';
+  static const String selectManualVideoCoverPathTemplate = '/content/media/{mediaId}/cover:manual';
   static String selectManualVideoCoverPath({required String mediaId}) {
     return _fillPath(selectManualVideoCoverPathTemplate, <String, String>{
       'mediaId': mediaId,
     });
   }
-  static const String supersedePostModerationCasePathTemplate = '/internal/v1/content/posts/{postId}:supersede-moderation';
+  static const String submitPostPublicationPath = '/content/posts:publish';
+  static const String supersedePostModerationCasePathTemplate = '/internal/content/posts/{postId}:supersede-moderation';
   static String supersedePostModerationCasePath({required String postId}) {
     return _fillPath(supersedePostModerationCasePathTemplate, <String, String>{
       'postId': postId,
     });
   }
-  static const String unlikePostPathTemplate = '/v1/content/posts/{postId}/like';
+  static const String unlikePostPathTemplate = '/content/posts/{postId}/like';
   static String unlikePostPath({required String postId}) {
     return _fillPath(unlikePostPathTemplate, <String, String>{
       'postId': postId,
     });
   }
-  static const String unpinCommentPathTemplate = '/v1/content/posts/{postId}/comments/{commentId}/pin';
+  static const String unpinCommentPathTemplate = '/content/posts/{postId}/comments/{commentId}/pin';
   static String unpinCommentPath({required String postId, required String commentId}) {
     return _fillPath(unpinCommentPathTemplate, <String, String>{
       'postId': postId,
       'commentId': commentId,
     });
   }
-  static const String updateMediaAssetAccessPolicyPathTemplate = '/internal/v1/content/media/{mediaId}:access-policy';
+  static const String updateMediaAssetAccessPolicyPathTemplate = '/internal/content/media/{mediaId}:access-policy';
   static String updateMediaAssetAccessPolicyPath({required String mediaId}) {
     return _fillPath(updateMediaAssetAccessPolicyPathTemplate, <String, String>{
       'mediaId': mediaId,
     });
   }
-  static const String updatePostPathTemplate = '/v1/content/posts/{postId}';
-  static String updatePostPath({required String postId}) {
-    return _fillPath(updatePostPathTemplate, <String, String>{
-      'postId': postId,
-    });
-  }
-  static const String updatePostSettingsPathTemplate = '/v1/content/posts/{postId}/settings';
+  static const String updatePostSettingsPathTemplate = '/content/posts/{postId}/settings';
   static String updatePostSettingsPath({required String postId}) {
     return _fillPath(updatePostSettingsPathTemplate, <String, String>{
       'postId': postId,
     });
   }
-  static const String updateProfileInteractionStatePathTemplate = '/v1/content/sub-accounts/{subAccountId}/interactions/{interactionId}/state';
+  static const String updateProfileInteractionStatePathTemplate = '/content/sub-accounts/{subAccountId}/interactions/{interactionId}/state';
   static String updateProfileInteractionStatePath({required String subAccountId, required String interactionId}) {
     return _fillPath(updateProfileInteractionStatePathTemplate, <String, String>{
       'subAccountId': subAccountId,

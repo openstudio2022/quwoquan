@@ -11,12 +11,14 @@ import {
   fetchProductL1L4Metrics,
   fetchProductProjectionSummary,
   fetchProductWorkflows,
+  fetchRecommendationBehaviorMetrics,
   fetchReleases,
   type PlatformAuditItem,
   type ProductEventDrilldownItem,
   type ProductEventSummary,
   type ProductMetricItem,
   type ProductProjectionSummary,
+  type RecommendationBehaviorMetrics,
   type ReleaseItem,
   type WorkflowItem,
 } from '../../shared/api/controlPlane.js';
@@ -31,21 +33,27 @@ export function OverviewDashboardPage() {
   const [releases, setReleases] = useState<ReleaseItem[]>([]);
   const [summary, setSummary] = useState<ProductProjectionSummary | null>(null);
   const [pageAccessSummary, setPageAccessSummary] = useState<ProductEventSummary | null>(null);
-  const [behaviorSummary, setBehaviorSummary] = useState<ProductEventSummary | null>(null);
+  const [behaviorMetrics, setBehaviorMetrics] = useState<RecommendationBehaviorMetrics | null>(null);
   const [drilldownItems, setDrilldownItems] = useState<ProductEventDrilldownItem[]>([]);
   const [l1l4Metrics, setL1l4Metrics] = useState<ProductMetricItem[]>([]);
   const [remoteReady, setRemoteReady] = useState(false);
   const [runtimeError, setRuntimeError] = useState<RuntimeError | null>(null);
 
   useEffect(() => {
+    const now = new Date();
+    const rawFrom = new Date(now.getTime() - 15 * 60 * 1000).toISOString();
+    const rawTo = now.toISOString();
+    const closedTo = new Date(now);
+    closedTo.setUTCMinutes(0, 0, 0);
+    const closedFrom = new Date(closedTo.getTime() - 24 * 60 * 60 * 1000).toISOString();
     Promise.all([
       fetchPlatformAudits(),
       fetchProductWorkflows(),
       fetchReleases(),
       fetchProductProjectionSummary(),
-      fetchProductEventSummary({ source: 'page_access' }),
-      fetchProductEventSummary({ eventType: 'behavior' }),
-      fetchProductEventDrilldown({ limit: 6 }),
+      fetchProductEventSummary({ eventType: 'page_open', from: closedFrom, to: closedTo.toISOString() }),
+      fetchRecommendationBehaviorMetrics(),
+      fetchProductEventDrilldown({ from: rawFrom, to: rawTo, limit: 6 }),
       fetchProductL1L4Metrics({}),
     ])
       .then(([auditItems, workflowItems, releaseItems, summaryItem, pageAccessItem, behaviorItem, drilldown, l1l4Payload]) => {
@@ -54,7 +62,7 @@ export function OverviewDashboardPage() {
         setReleases(releaseItems);
         setSummary(summaryItem);
         setPageAccessSummary(pageAccessItem);
-        setBehaviorSummary(behaviorItem);
+        setBehaviorMetrics(behaviorItem);
         setDrilldownItems(drilldown.items);
         setL1l4Metrics(l1l4Payload.items);
         setRemoteReady(true);
@@ -116,6 +124,14 @@ export function OverviewDashboardPage() {
     const entries = Object.entries(pageAccessSummary?.dimensions.pageName ?? {});
     return entries.sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'n/a';
   }, [pageAccessSummary]);
+  const behaviorTotal = useMemo(
+    () => behaviorMetrics?.series.reduce((total, item) => total + item.value, 0) ?? 0,
+    [behaviorMetrics],
+  );
+  const behaviorStates = useMemo(
+    () => new Set(behaviorMetrics?.series.map((item) => item.labels.state).filter(Boolean) ?? []).size,
+    [behaviorMetrics],
+  );
 
   return (
     <PageScaffold
@@ -166,6 +182,14 @@ export function OverviewDashboardPage() {
           description="来自统一 event ingestion 的 page access / perf 主事实源。"
         />
         <KpiCard
+          label="页面访问会话"
+          value={String(pageAccessSummary?.sessionCount ?? 0)}
+          icon={<Activity size={20} color="#16A34A" />}
+          trendLabel="跨迟到增量合并 HLL"
+          trendTone="positive"
+          description="会话数由无身份 HyperLogLog 草图合并计算，不直接累加分片 UV。"
+        />
+        <KpiCard
           label="SLA 风险队列"
           value={String(summary?.pendingDualReview ?? 0)}
           icon={<AlertTriangle size={20} color="#F59E0B" />}
@@ -174,12 +198,12 @@ export function OverviewDashboardPage() {
           description="主要集中在恢复案例补证据和人工复核。"
         />
         <KpiCard
-          label="行为事件总量"
-          value={String(behaviorSummary?.totalCount ?? 0)}
+          label="推荐反馈总量"
+          value={String(behaviorTotal)}
           icon={<Activity size={20} color="#16A34A" />}
-          trendLabel={`${Object.keys(behaviorSummary?.dimensions.eventName ?? {}).length} 类行为`}
+          trendLabel={`${behaviorStates} 类反馈状态`}
           trendTone="positive"
-          description="内容行为已桥接到统一事件面，可与页面、实验桶一起复盘。"
+          description="直接读取 recommendation_behavior_by_attribution_total，不再伪装为 Ops 事件。"
         />
       </div>
 
@@ -255,7 +279,7 @@ export function OverviewDashboardPage() {
       </div>
 
       <div className="section-grid section-grid--two">
-        <SectionCard title="业务埋点总览" subtitle="统一事件事实源的页面访问、行为与实验桶维度">
+        <SectionCard title="业务埋点总览" subtitle="产品日志与推荐行为保持正交事实源">
           <table className="table">
             <thead>
               <tr>
@@ -271,29 +295,34 @@ export function OverviewDashboardPage() {
                 <td>{Object.keys(pageAccessSummary?.dimensions.pageName ?? {}).slice(0, 3).join(', ') || 'n/a'}</td>
               </tr>
               <tr>
-                <td>behavior</td>
-                <td>{behaviorSummary?.totalCount ?? 0}</td>
-                <td>{Object.keys(behaviorSummary?.dimensions.eventName ?? {}).slice(0, 3).join(', ') || 'n/a'}</td>
+                <td>page access sessions</td>
+                <td>{pageAccessSummary?.sessionCount ?? 0}</td>
+                <td>merged sessionHll</td>
               </tr>
               <tr>
-                <td>experiment bucket</td>
-                <td>{Object.keys(pageAccessSummary?.dimensions.experimentBucket ?? {}).length}</td>
-                <td>{Object.keys(pageAccessSummary?.dimensions.experimentBucket ?? {}).join(', ') || 'n/a'}</td>
+                <td>recommendation behavior</td>
+                <td>{behaviorTotal}</td>
+                <td>{behaviorMetrics?.source ?? 'n/a'}</td>
+              </tr>
+              <tr>
+                <td>产品日志 freshness</td>
+                <td>{pageAccessSummary?.freshness ?? 'n/a'}</td>
+                <td>{pageAccessSummary?.source ?? 'n/a'}</td>
               </tr>
             </tbody>
           </table>
         </SectionCard>
 
-        <SectionCard title="统一事件下钻" subtitle="页面 -> 行为 -> 实验桶的最近事件样本">
+        <SectionCard title="产品事件下钻" subtitle="最近 15 分钟 SLS raw 样本；sessionId 默认掩码">
           <div className="stack-list">
             {drilldownItems.map((item) => (
-              <div className="timeline-item" key={item.eventId}>
+              <div className="timeline-item" key={item.rowKey}>
                 <div>
                   <p className="item-title">
-                    {item.eventType} / {item.eventName}
+                    {item.logType} / {item.eventType}
                   </p>
                   <p className="item-subtitle">
-                    {item.pageName || item.targetKey || 'n/a'} · bucket={item.experimentBucket || 'n/a'} · {item.occurredAt}
+                    {item.pageName} · {item.appVersion} · {item.networkClass} · {item.occurredAt}
                   </p>
                 </div>
               </div>

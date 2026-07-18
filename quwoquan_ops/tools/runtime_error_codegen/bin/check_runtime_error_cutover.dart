@@ -3,6 +3,7 @@ import 'dart:io';
 void main() {
   final repoRoot = Directory.current;
   final failures = <String>[
+    ..._runtimeErrorCutoverDetectorSelfTestFailures(),
     ..._reject(
       repoRoot,
       relativePath: 'quwoquan_ops/portal/src/domains',
@@ -213,15 +214,6 @@ void main() {
       pattern: RegExp(r'Details\s+map\[string\]any'),
       message: 'Go public response exposes weak Details map',
     ),
-    ..._reject(
-      repoRoot,
-      relativePath: 'quwoquan_service',
-      pattern: RegExp(
-        r'NewAppError\([^\n)]*\b(true|false)\)|NewAppError\([\s\S]*?\n\s*(true|false),\s*\n\s*\)',
-        multiLine: true,
-      ),
-      message: 'Go runtime AppError encodes retryability in constructor',
-    ),
     ..._rejectGoNewAppErrorBoolArgs(repoRoot),
     ..._reject(
       repoRoot,
@@ -360,8 +352,9 @@ List<String> _rejectGoNewAppErrorBoolArgs(Directory repoRoot) {
   for (final entity in root.listSync(recursive: true, followLinks: false)) {
     if (entity is! File || !entity.path.endsWith('.go')) continue;
     if (_isIgnored(entity.path)) continue;
-    final text = _readUtf8(entity);
-    if (text == null) continue;
+    final source = _readUtf8(entity);
+    if (source == null) continue;
+    final text = _maskGoNonCode(source);
     var searchFrom = 0;
     while (true) {
       final start = text.indexOf('NewAppError(', searchFrom);
@@ -380,6 +373,114 @@ List<String> _rejectGoNewAppErrorBoolArgs(Directory repoRoot) {
     }
   }
   return failures;
+}
+
+List<String> _runtimeErrorCutoverDetectorSelfTestFailures() {
+  const rejected = <String>[
+    'rterr.NewAppError(code, "message", "debug", true)',
+    'rterr.NewAppError(\n  code,\n  "message",\n  "debug",\n  false,\n)',
+  ];
+  const accepted = <String>[
+    'rterr.NewAppError(code, "message", "debug")',
+    'rterr.NewAppError(code, messageFor(false), "debug")',
+    'const template = `rterr.NewAppError(code, "message", "debug", false)`;',
+    'const text = "rterr.NewAppError(code, message, debug, true)";',
+    '// rterr.NewAppError(code, message, debug, true)',
+  ];
+  final failures = <String>[];
+  for (final source in rejected) {
+    if (!_containsTopLevelBoolNewAppError(source)) {
+      failures.add(
+        'runtime error detector self-test missed forbidden bool arg',
+      );
+      break;
+    }
+  }
+  for (final source in accepted) {
+    if (_containsTopLevelBoolNewAppError(source)) {
+      failures.add('runtime error detector self-test rejected valid Go source');
+      break;
+    }
+  }
+  return failures;
+}
+
+bool _containsTopLevelBoolNewAppError(String source) {
+  final text = _maskGoNonCode(source);
+  var searchFrom = 0;
+  while (true) {
+    final start = text.indexOf('NewAppError(', searchFrom);
+    if (start < 0) return false;
+    final openParen = text.indexOf('(', start);
+    final end = _findMatchingParen(text, openParen);
+    if (end < 0) return false;
+    final call = text.substring(openParen + 1, end);
+    if (_topLevelArgs(call).any((arg) => arg == 'true' || arg == 'false')) {
+      return true;
+    }
+    searchFrom = end + 1;
+  }
+}
+
+String _maskGoNonCode(String source) {
+  final masked = StringBuffer();
+  String? quote;
+  var escaped = false;
+  var lineComment = false;
+  var blockComment = false;
+  for (var i = 0; i < source.length; i++) {
+    final ch = source[i];
+    final next = i + 1 < source.length ? source[i + 1] : '';
+    if (lineComment) {
+      if (ch == '\n') {
+        lineComment = false;
+        masked.write(ch);
+      } else {
+        masked.write(' ');
+      }
+      continue;
+    }
+    if (blockComment) {
+      if (ch == '*' && next == '/') {
+        masked.write('  ');
+        i++;
+        blockComment = false;
+      } else {
+        masked.write(ch == '\n' ? '\n' : ' ');
+      }
+      continue;
+    }
+    if (quote != null) {
+      if (quote != '`' && escaped) {
+        escaped = false;
+      } else if (quote != '`' && ch == r'\') {
+        escaped = true;
+      } else if (ch == quote) {
+        quote = null;
+      }
+      masked.write(ch == '\n' ? '\n' : ' ');
+      continue;
+    }
+    if (ch == '/' && next == '/') {
+      masked.write('  ');
+      i++;
+      lineComment = true;
+      continue;
+    }
+    if (ch == '/' && next == '*') {
+      masked.write('  ');
+      i++;
+      blockComment = true;
+      continue;
+    }
+    if (ch == '"' || ch == "'" || ch == '`') {
+      quote = ch;
+      masked.write(' ');
+      continue;
+    }
+    masked.write(ch);
+  }
+  return masked.toString();
 }
 
 List<String> _rejectOpsExtensionlessRelativeImports(Directory repoRoot) {

@@ -27,7 +27,7 @@ class ProfileUserLikeRowWireDto {
       coverUrl: m['coverUrl']?.toString() ?? '',
       likerNickname: m['likerNickname']?.toString() ?? '',
       likerAvatarUrl: m['likerAvatarUrl']?.toString() ?? '',
-      likerAvatarVersion: (m['likerAvatarVersion'] as num?)?.toInt() ?? (m['avatarVersion'] as num?)?.toInt() ?? 0,
+      likerAvatarVersion: (m['likerAvatarVersion'] as num?)?.toInt() ?? 0,
       likedAt: _parseDateTime(m['likedAt']) ?? null,
     );
   }

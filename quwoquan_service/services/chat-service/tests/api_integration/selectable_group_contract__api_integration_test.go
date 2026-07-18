@@ -42,7 +42,7 @@ func socialMutualServer(viewer string, contactIDs ...string) *httptest.Server {
 		items = append(items, map[string]any{
 			"subAccountId":  id,
 			"displayName":   "Display_" + id,
-			"avatarUrl":     "media/avatar/s/mock/user/" + id + "/v1/avatar.png",
+			"avatarUrl":     "media/avatar/s/mock/user/" + id + "/avatar.png",
 			"followedAt":    "2026-06-06T12:00:00Z",
 			"relationState": "mutual",
 		})
@@ -50,10 +50,10 @@ func socialMutualServer(viewer string, contactIDs ...string) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
-		case "/v1/user/sub-accounts/" + viewer + "/following",
-			"/v1/user/sub-accounts/" + viewer + "/followers":
+		case "/user/sub-accounts/" + viewer + "/following",
+			"/user/sub-accounts/" + viewer + "/followers":
 			_ = json.NewEncoder(w).Encode(map[string]any{"items": items, "cursor": ""})
-		case "/v1/user/contact-discovery/latest":
+		case "/user/contact-discovery/latest":
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"matchedSubAccountIds": []string{},
 				"status":               "completed",
@@ -80,7 +80,7 @@ func seedSelectableGroup(
 		ID:             conversationID,
 		Type:           "group",
 		Title:          title,
-		AvatarUrl:      "media/avatar/s/archived-avatar/conversation/" + conversationID + "/v1/mock.png",
+		AvatarUrl:      "media/avatar/s/archived-avatar/conversation/" + conversationID + "/mock.png",
 		CreatorId:      viewer,
 		MemberCount:    len(memberIDs) + 1,
 		MaxGroupSize:   500,
@@ -97,7 +97,7 @@ func seedSelectableGroup(
 		ConversationId: conversationID,
 		UserId:         viewer,
 		DisplayName:    "Display_" + viewer,
-		AvatarUrl:      "media/avatar/s/mock/user/" + viewer + "/v1/avatar.png",
+		AvatarUrl:      "media/avatar/s/mock/user/" + viewer + "/avatar.png",
 		MemberType:     "user",
 		Role:           "owner",
 		JoinedAt:       now,
@@ -111,7 +111,7 @@ func seedSelectableGroup(
 			ConversationId: conversationID,
 			UserId:         id,
 			DisplayName:    "Display_" + id,
-			AvatarUrl:      "media/avatar/s/mock/user/" + id + "/v1/avatar.png",
+			AvatarUrl:      "media/avatar/s/mock/user/" + id + "/avatar.png",
 			MemberType:     "user",
 			Role:           "member",
 			InvitedBy:      viewer,
@@ -186,7 +186,7 @@ func TestListSelectableGroupConversations_ReturnsGroupsWithFriendCount(t *testin
 	seedSelectableGroup(t, "conv_sg_no_friends", viewer, "陌生人群", []string{"stranger_y"})
 
 	handler := newSelectableGroupHandler(t, viewer, mutual, "friend_a", "friend_b")
-	code, payload := getSelectableJSON(t, handler, "/v1/chat/selectable-group-conversations?limit=50", viewer)
+	code, payload := getSelectableJSON(t, handler, "/chat/selectable-group-conversations?limit=50", viewer)
 	if code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %#v", code, payload)
 	}
@@ -219,7 +219,7 @@ func TestListSelectableGroupContactMembers_IntersectsMutualMembers(t *testing.T)
 	code, payload := getSelectableJSON(
 		t,
 		handler,
-		"/v1/chat/selectable-group-conversations/conv_sg_with_friends/contact-members?limit=100",
+		"/chat/selectable-group-conversations/conv_sg_with_friends/contact-members?limit=100",
 		viewer,
 	)
 	if code != http.StatusOK {
@@ -258,7 +258,7 @@ func TestListSelectableGroupContactMembers_NotFoundReturnsStructuredError(t *tes
 	code, payload := getSelectableJSON(
 		t,
 		handler,
-		"/v1/chat/selectable-group-conversations/conv_missing/contact-members",
+		"/chat/selectable-group-conversations/conv_missing/contact-members",
 		viewer,
 	)
 	if code != http.StatusNotFound {

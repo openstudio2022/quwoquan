@@ -270,7 +270,7 @@ func fileEventType(kind filemodel.ChangeKind) string {
 }
 
 type fileEventPayload struct {
-	FileID            string                     `json:"_id"`
+	FileID            string                     `json:"id"`
 	Version           int64                      `json:"version"`
 	CircleID          string                     `json:"circleId"`
 	GroupID           string                     `json:"groupId,omitempty"`

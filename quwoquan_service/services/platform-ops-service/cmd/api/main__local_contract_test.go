@@ -28,7 +28,7 @@ func newTestPlatformService(t *testing.T) *platformService {
 func TestPlatformCatalogAndTopologyEndpoints(t *testing.T) {
 	server := newServerMux(newTestPlatformService(t))
 
-	catalogReq := httptest.NewRequest(http.MethodGet, "/v1/control-plane/platform/catalog/services", nil)
+	catalogReq := httptest.NewRequest(http.MethodGet, "/control-plane/platform/catalog/services", nil)
 	catalogResp := httptest.NewRecorder()
 	server.ServeHTTP(catalogResp, catalogReq)
 	if catalogResp.Code != http.StatusOK {
@@ -45,21 +45,21 @@ func TestPlatformCatalogAndTopologyEndpoints(t *testing.T) {
 		t.Fatalf("expected catalog items")
 	}
 
-	onboardingReq := httptest.NewRequest(http.MethodGet, "/v1/control-plane/platform/onboarding/domains", nil)
+	onboardingReq := httptest.NewRequest(http.MethodGet, "/control-plane/platform/onboarding/domains", nil)
 	onboardingResp := httptest.NewRecorder()
 	server.ServeHTTP(onboardingResp, onboardingReq)
 	if onboardingResp.Code != http.StatusOK {
 		t.Fatalf("onboarding status=%d body=%s", onboardingResp.Code, onboardingResp.Body.String())
 	}
 
-	planeReq := httptest.NewRequest(http.MethodGet, "/v1/control-plane/platform/topology/planes", nil)
+	planeReq := httptest.NewRequest(http.MethodGet, "/control-plane/platform/topology/planes", nil)
 	planeResp := httptest.NewRecorder()
 	server.ServeHTTP(planeResp, planeReq)
 	if planeResp.Code != http.StatusOK {
 		t.Fatalf("plane bindings status=%d body=%s", planeResp.Code, planeResp.Body.String())
 	}
 
-	templateReq := httptest.NewRequest(http.MethodGet, "/v1/control-plane/platform/governance/templates", nil)
+	templateReq := httptest.NewRequest(http.MethodGet, "/control-plane/platform/governance/templates", nil)
 	templateResp := httptest.NewRecorder()
 	server.ServeHTTP(templateResp, templateReq)
 	if templateResp.Code != http.StatusOK {
@@ -70,7 +70,7 @@ func TestPlatformCatalogAndTopologyEndpoints(t *testing.T) {
 func TestPlatformMutableEndpointsEmitAudit(t *testing.T) {
 	server := newServerMux(newTestPlatformService(t))
 
-	runbookReq := httptest.NewRequest(http.MethodPost, "/v1/control-plane/platform/runbooks/cfg-rollback-drill:runDrill", nil)
+	runbookReq := httptest.NewRequest(http.MethodPost, "/control-plane/platform/runbooks/cfg-rollback-drill:runDrill", nil)
 	runbookReq.Header.Set("X-Actor", "platform-admin")
 	runbookResp := httptest.NewRecorder()
 	server.ServeHTTP(runbookResp, runbookReq)
@@ -78,7 +78,7 @@ func TestPlatformMutableEndpointsEmitAudit(t *testing.T) {
 		t.Fatalf("run drill status=%d body=%s", runbookResp.Code, runbookResp.Body.String())
 	}
 
-	gateReq := httptest.NewRequest(http.MethodPost, "/v1/control-plane/platform/gates/config_release_error_rate:override", bytes.NewBufferString(`{"status":"warning","summary":"manual override"}`))
+	gateReq := httptest.NewRequest(http.MethodPost, "/control-plane/platform/gates/config_release_error_rate:override", bytes.NewBufferString(`{"status":"warning","summary":"manual override"}`))
 	gateReq.Header.Set("Content-Type", "application/json")
 	gateReq.Header.Set("X-Actor", "platform-admin")
 	gateResp := httptest.NewRecorder()
@@ -87,7 +87,7 @@ func TestPlatformMutableEndpointsEmitAudit(t *testing.T) {
 		t.Fatalf("override gate status=%d body=%s", gateResp.Code, gateResp.Body.String())
 	}
 
-	auditReq := httptest.NewRequest(http.MethodGet, "/v1/control-plane/platform/audits", nil)
+	auditReq := httptest.NewRequest(http.MethodGet, "/control-plane/platform/audits", nil)
 	auditResp := httptest.NewRecorder()
 	server.ServeHTTP(auditResp, auditReq)
 	if auditResp.Code != http.StatusOK {
@@ -104,7 +104,7 @@ func TestPlatformMutableEndpointsEmitAudit(t *testing.T) {
 		t.Fatalf("expected audit items, got %+v", auditPayload.Items)
 	}
 
-	approvalReq := httptest.NewRequest(http.MethodGet, "/v1/control-plane/platform/approvals", nil)
+	approvalReq := httptest.NewRequest(http.MethodGet, "/control-plane/platform/approvals", nil)
 	approvalResp := httptest.NewRecorder()
 	server.ServeHTTP(approvalResp, approvalReq)
 	if approvalResp.Code != http.StatusOK {
@@ -121,7 +121,7 @@ func TestPlatformMutableEndpointsEmitAudit(t *testing.T) {
 		t.Fatalf("expected approval items, got %+v", approvalPayload.Items)
 	}
 
-	projectionReq := httptest.NewRequest(http.MethodGet, "/v1/control-plane/platform/projections/summary", nil)
+	projectionReq := httptest.NewRequest(http.MethodGet, "/control-plane/platform/projections/summary", nil)
 	projectionResp := httptest.NewRecorder()
 	server.ServeHTTP(projectionResp, projectionReq)
 	if projectionResp.Code != http.StatusOK {
@@ -134,7 +134,7 @@ func TestPlatformConfigResolveAndInstanceReports(t *testing.T) {
 
 	resolveReq := httptest.NewRequest(
 		http.MethodGet,
-		"/v1/control-plane/platform/configs/resolve?env=beta&cluster=beta-control-a&service=product-ops-service&instance=product-ops-service-beta-control-a-0",
+		"/control-plane/platform/configs/resolve?env=beta&cluster=beta-control-a&service=product-ops-service&instance=product-ops-service-beta-control-a-0",
 		nil,
 	)
 	resolveResp := httptest.NewRecorder()
@@ -159,7 +159,7 @@ func TestPlatformConfigResolveAndInstanceReports(t *testing.T) {
 
 	reportReq := httptest.NewRequest(
 		http.MethodPost,
-		"/v1/control-plane/platform/configs/instances/product-ops-service-beta-control-a-0:report",
+		"/control-plane/platform/configs/instances/product-ops-service-beta-control-a-0:report",
 		bytes.NewBufferString(`{"environment":"beta","cluster":"beta-control-a","service":"product-ops-service","desiredHash":"hash-a","effectiveHash":"hash-b","source":"disk-fallback"}`),
 	)
 	reportReq.Header.Set("Content-Type", "application/json")
@@ -169,7 +169,7 @@ func TestPlatformConfigResolveAndInstanceReports(t *testing.T) {
 		t.Fatalf("report config instance status=%d body=%s", reportResp.Code, reportResp.Body.String())
 	}
 
-	instancesReq := httptest.NewRequest(http.MethodGet, "/v1/control-plane/platform/configs/instances", nil)
+	instancesReq := httptest.NewRequest(http.MethodGet, "/control-plane/platform/configs/instances", nil)
 	instancesResp := httptest.NewRecorder()
 	server.ServeHTTP(instancesResp, instancesReq)
 	if instancesResp.Code != http.StatusOK {
@@ -196,7 +196,7 @@ func TestPlatformReleaseWorkflowRequiresApprovalAndReturnsWorkflowContext(t *tes
 
 	applyReq := httptest.NewRequest(
 		http.MethodPost,
-		"/v1/control-plane/platform/releases/v2026.02.28.0:apply",
+		"/control-plane/platform/releases/v2026.02.28.0:apply",
 		bytes.NewBufferString(`{"service":"content-service","fromImage":"img-old","toImage":"img-new","fromConfig":"v2026.02.27.1","toConfig":"v2026.02.28.0","step":25}`),
 	)
 	applyReq.Header.Set("Content-Type", "application/json")
@@ -226,7 +226,7 @@ func TestPlatformReleaseWorkflowRequiresApprovalAndReturnsWorkflowContext(t *tes
 
 	rollbackReq := httptest.NewRequest(
 		http.MethodPost,
-		"/v1/control-plane/platform/releases/v2026.02.28.0:rollback",
+		"/control-plane/platform/releases/v2026.02.28.0:rollback",
 		bytes.NewBufferString(`{"service":"content-service","targetConfigVersion":"v2026.02.27.1","workflowRef":"wf-1","rollbackToken":"rb-1"}`),
 	)
 	rollbackReq.Header.Set("Content-Type", "application/json")
@@ -257,7 +257,7 @@ func TestPlatformReleaseWorkflowRequiresApprovalAndReturnsWorkflowContext(t *tes
 func TestPlatformTriageSummaryEndpointIncludesBacklogRepairSemantics(t *testing.T) {
 	server := newServerMux(newTestPlatformService(t))
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/control-plane/platform/triage/summary?env=beta&cluster=beta-control-a&service=platform-ops-service", nil)
+	req := httptest.NewRequest(http.MethodGet, "/control-plane/platform/triage/summary?env=beta&cluster=beta-control-a&service=platform-ops-service", nil)
 	resp := httptest.NewRecorder()
 	server.ServeHTTP(resp, req)
 	if resp.Code != http.StatusOK {

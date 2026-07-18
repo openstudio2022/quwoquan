@@ -1,0 +1,252 @@
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+import json
+import urllib.parse
+
+import pytest
+
+
+DATA_ROOT = next(
+    parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data"
+)
+SCRIPTS_ROOT = DATA_ROOT / "scripts"
+if str(SCRIPTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_ROOT))
+
+from content.source.research import network_io  # noqa: E402
+from content.source.research.baike_com import (  # noqa: E402
+    BaikePageResolution,
+    geo_context_terms_from_ref,
+    resolve_toutiao_baike_page,
+)
+from content.source.research.baidu_baike import (  # noqa: E402
+    BaiduBaikeResolution,
+    decode_baidu_baike_payload,
+    resolve_baidu_baike_page,
+)
+from content.source.research.auto_plan_homepage import (  # noqa: E402
+    HomepageResearchInput,
+    _candidate_sources,
+)
+from core.baike_source_contract import (  # noqa: E402
+    BAIDU_BAIKE_API_POLICY,
+    TOUTIAO_BAIKE_CANONICAL_RESOLUTION,
+)
+
+
+def _baidu_payload(*, title: str, abstract: str) -> bytes:
+    return json.dumps(
+        {
+            "title": title,
+            "abstract": abstract,
+            "card": [
+                {"name": "位置", "value": ["浙江省绍兴市嵊州市"]},
+                {"name": "开放时间", "value": ["全年"]},
+            ],
+        },
+        ensure_ascii=False,
+    ).encode("utf-8")
+
+
+def test_baidu_card_api_decodes_structured_facts() -> None:
+    page = decode_baidu_baike_payload(
+        _baidu_payload(
+            title="嵊州越剧小镇",
+            abstract="嵊州越剧小镇位于浙江省嵊州市，是以越剧文化为主题的旅游目的地。",
+        )
+    )
+
+    assert page is not None
+    assert page.title == "嵊州越剧小镇"
+    assert "位置：浙江省绍兴市嵊州市" in page.text
+    assert "开放时间：全年" in page.text
+
+
+def test_baidu_card_api_resolution_requires_exact_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    body = _baidu_payload(
+        title="嵊州越剧小镇",
+        abstract="嵊州越剧小镇位于浙江省绍兴市嵊州市，展示越剧文化。",
+    )
+    monkeypatch.setattr(
+        network_io,
+        "fetch_http",
+        lambda url, *, timeout: network_io.HttpFetchResult(
+            returncode=0,
+            status_code=200,
+            final_url=url,
+            body=body,
+        ),
+    )
+
+    result = resolve_baidu_baike_page(
+        "嵊州越剧小镇",
+        geo_context_terms=("浙江省", "绍兴市", "嵊州市"),
+    )
+
+    assert result is not None
+    assert result.title == "嵊州越剧小镇"
+    assert result.url == "https://baike.baidu.com/item/%E5%B5%8A%E5%B7%9E%E8%B6%8A%E5%89%A7%E5%B0%8F%E9%95%87"
+    assert result.match_confidence == BAIDU_BAIKE_API_POLICY.canonical_confidence
+
+
+def _page(*, title: str, description: str) -> bytes:
+    return (
+        "<html><head>"
+        f"<title>{title} - 快懂百科</title>"
+        f'<meta name="description" content="{description}">'
+        "</head></html>"
+    ).encode("utf-8")
+
+
+def _response(*, final_url: str, title: str, description: str) -> network_io.HttpFetchResult:
+    return network_io.HttpFetchResult(
+        returncode=0,
+        status_code=200,
+        final_url=final_url,
+        body=_page(title=title, description=description),
+    )
+
+
+def test_exact_entity_resolves_only_to_contract_wikiid(monkeypatch: pytest.MonkeyPatch):
+    calls: list[str] = []
+
+    def fake_fetch(url: str, *, timeout: int) -> network_io.HttpFetchResult:
+        assert timeout > 0
+        calls.append(url)
+        return _response(
+            final_url="https://www.baike.com/wikiid/7360066735180479986",
+            title="古堰画乡",
+            description="古堰画乡位于浙江省丽水市莲都区。",
+        )
+
+    monkeypatch.setattr(network_io, "fetch_http", fake_fetch)
+
+    result = resolve_toutiao_baike_page(
+        "古堰画乡",
+        geo_context_terms=("浙江省", "丽水市"),
+    )
+
+    assert result is not None
+    assert result.title == "古堰画乡"
+    assert result.matched_term == "古堰画乡"
+    assert result.match_confidence == TOUTIAO_BAIKE_CANONICAL_RESOLUTION.canonical_confidence
+    assert calls == [f"{TOUTIAO_BAIKE_CANONICAL_RESOLUTION.base_url}%E5%8F%A4%E5%A0%B0%E7%94%BB%E4%B9%A1"]
+
+
+def test_alias_requires_matching_geo_context(monkeypatch: pytest.MonkeyPatch):
+    responses = {
+        "云和仙宫湖景区": network_io.HttpFetchResult(
+            returncode=0,
+            status_code=404,
+            final_url="https://www.baike.com/wiki/%E4%BA%91%E5%92%8C%E4%BB%99%E5%AE%AB%E6%B9%96%E6%99%AF%E5%8C%BA",
+            body=b"",
+        ),
+        "仙宫湖": _response(
+            final_url="https://www.baike.com/wikiid/123456789",
+            title="仙宫湖",
+            description="仙宫湖位于浙江省丽水市云和县。",
+        ),
+    }
+
+    def fake_fetch(url: str, *, timeout: int) -> network_io.HttpFetchResult:
+        assert timeout > 0
+        decoded_url = urllib.parse.unquote(url)
+        term = next(term for term in responses if decoded_url.endswith(term))
+        return responses[term]
+
+    monkeypatch.setattr(network_io, "fetch_http", fake_fetch)
+
+    result = resolve_toutiao_baike_page(
+        "云和仙宫湖景区",
+        entity_aliases=("仙宫湖",),
+        geo_context_terms=("浙江省", "丽水市", "云和县"),
+    )
+
+    assert result is not None
+    assert result.matched_term == "仙宫湖"
+    assert result.match_confidence == TOUTIAO_BAIKE_CANONICAL_RESOLUTION.alias_confidence
+
+
+def test_alias_with_wrong_region_is_rejected(monkeypatch: pytest.MonkeyPatch):
+    def fake_fetch(url: str, *, timeout: int) -> network_io.HttpFetchResult:
+        assert timeout > 0
+        return _response(
+            final_url="https://www.baike.com/wikiid/123456789",
+            title="仙宫湖",
+            description="仙宫湖位于福建省福州市。",
+        )
+
+    monkeypatch.setattr(network_io, "fetch_http", fake_fetch)
+
+    assert resolve_toutiao_baike_page(
+        "云和仙宫湖景区",
+        entity_aliases=("仙宫湖",),
+        geo_context_terms=("浙江省", "丽水市", "云和县"),
+    ) is None
+
+
+def test_non_contract_redirect_is_rejected(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(
+        network_io,
+        "fetch_http",
+        lambda url, *, timeout: _response(
+            final_url="https://www.baike.com/search?keyword=%E5%8F%A4%E5%A0%B0%E7%94%BB%E4%B9%A1",
+            title="古堰画乡",
+            description="古堰画乡位于浙江省丽水市。",
+        ),
+    )
+
+    assert resolve_toutiao_baike_page("古堰画乡") is None
+
+
+def test_geo_context_terms_are_derived_from_canonical_tag_ref():
+    assert geo_context_terms_from_ref("地域/地球/亚洲/中国/浙江省/丽水市/莲都区") == (
+        "浙江省",
+        "丽水市",
+        "莲都区",
+    )
+    assert geo_context_terms_from_ref("地域/未知") == ()
+
+
+def test_verified_wikiid_resolution_enters_homepage_source_plan(tmp_path: Path):
+    resolution = BaikePageResolution(
+        url="https://www.baike.com/wikiid/7360066735180479986",
+        title="古堰画乡景区",
+        matched_term="古堰画乡",
+        match_confidence=TOUTIAO_BAIKE_CANONICAL_RESOLUTION.canonical_confidence,
+    )
+    sources = _candidate_sources(HomepageResearchInput(
+        execution_id="20260717--travel-homepage-coverage--cn-zhejiang--m1-004",
+        entity_id="古堰画乡",
+        entity_aliases=("古堰画乡景区",),
+        vertical="travel",
+        plan_dir=tmp_path,
+        report={"sourceUnavailable": []},
+        updated=[],
+        prior_homepage_sources=(),
+        wiki_url="",
+        wiki_title="",
+        wiki_page_images=(),
+        related_wiki_titles=(),
+        baidu_baike=None,
+        toutiao_baike=resolution,
+        prior_image_pool=(),
+        voyage_page_images=(),
+        commons=(),
+        hint_commons=(),
+        wikidata_commons=(),
+        openverse=(),
+        rejected_source_urls=frozenset(),
+        force=True,
+        related_page_images=lambda *_args, **_kwargs: [],
+    ))
+
+    source = next(row for row in sources if row["source_id"] == "home_toutiao_baike")
+    assert source["url"] == resolution.url
+    assert source["sourceKind"] == "toutiao_baike"
+    assert source["extractor"] == "toutiao_baike_html"
+    assert source["policyRevision"] == "encyclopedia-primary"

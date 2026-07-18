@@ -40,22 +40,22 @@ class MessageHomeRowDto {
 
   factory MessageHomeRowDto.fromMap(Map<String, dynamic> m) {
     return MessageHomeRowDto(
-      id: m['id']?.toString() ?? m['conversationId']?.toString() ?? m['messageId']?.toString() ?? '',
-      kind: m['kind']?.toString() ?? m['rowKind']?.toString() ?? 'conversation',
+      id: m['id']?.toString() ?? '',
+      kind: m['kind']?.toString() ?? 'conversation',
       conversationId: m['conversationId']?.toString() ?? '',
-      notificationId: m['notificationId']?.toString() ?? m['appMessageId']?.toString() ?? '',
-      conversationType: m['conversationType']?.toString() ?? m['type']?.toString() ?? '',
+      notificationId: m['notificationId']?.toString() ?? '',
+      conversationType: m['conversationType']?.toString() ?? '',
       title: m['title']?.toString() ?? '',
-      summary: m['summary']?.toString() ?? m['subtitle']?.toString() ?? m['lastMessagePreview']?.toString() ?? '',
-      avatarUrl: m['avatarUrl']?.toString() ?? m['avatar']?.toString() ?? '',
+      summary: m['summary']?.toString() ?? '',
+      avatarUrl: m['avatarUrl']?.toString() ?? '',
       groupAvatarVersion: (m['groupAvatarVersion'] as num?)?.toInt() ?? 0,
-      lastActiveAt: _parseDateTime(m['lastActiveAt']) ?? _parseDateTime(m['lastMessageTime']) ?? _parseDateTime(m['createdAt']) ?? _parseDateTime(m['updatedAt']) ?? null,
+      lastActiveAt: _parseDateTime(m['lastActiveAt']) ?? null,
       unreadCount: (m['unreadCount'] as num?)?.toInt() ?? 0,
       mentionUnreadCount: (m['mentionUnreadCount'] as num?)?.toInt() ?? 0,
       muted: m['muted'] as bool? ?? false,
       pinned: m['pinned'] as bool? ?? false,
-      notificationType: m['notificationType']?.toString() ?? m['messageType']?.toString() ?? '',
-      read: m['read'] as bool? ?? m['isRead'] as bool? ?? false,
+      notificationType: m['notificationType']?.toString() ?? '',
+      read: m['read'] as bool? ?? false,
     );
   }
 

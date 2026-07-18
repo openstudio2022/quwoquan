@@ -17,22 +17,22 @@ import (
 func (h *ContentHandler) handleNotImplemented(w http.ResponseWriter, r *http.Request, operation string) {
 	switch operation {
 	case "LikePost":
-		h.handleLikePost(w, r, postIDFromPath(r.URL.Path))
+		h.handleLikePost(w, r, strings.TrimSpace(r.PathValue("postId")))
 		return
 	case "UnlikePost":
-		h.handleUnlikePost(w, r, postIDFromPath(r.URL.Path))
+		h.handleUnlikePost(w, r, strings.TrimSpace(r.PathValue("postId")))
 		return
 	case "GetContentReactionState":
-		h.handleGetReactionState(w, r, postIDFromPath(r.URL.Path))
+		h.handleGetReactionState(w, r, strings.TrimSpace(r.PathValue("postId")))
 		return
 	case "GetMyFootprint":
 		h.handleGetMyFootprint(w, r)
 		return
 	case "CreateComment":
-		h.handleCreateComment(w, r, postIDFromPath(r.URL.Path))
+		h.handleCreateComment(w, r, strings.TrimSpace(r.PathValue("postId")))
 		return
-	case "PublishPost":
-		h.handlePublishPost(w, r)
+	case "SubmitPostPublication":
+		h.handleSubmitPostPublication(w, r)
 		return
 	case "UpdatePostSettings":
 		h.handleUpdatePostSettings(w, r)
@@ -47,28 +47,50 @@ func (h *ContentHandler) handleNotImplemented(w http.ResponseWriter, r *http.Req
 		h.handleGenerateArticleSummary(w, r)
 		return
 	case "ListComments":
-		h.handleListComments(w, r, postIDFromPath(r.URL.Path))
+		h.handleListComments(w, r, strings.TrimSpace(r.PathValue("postId")))
 		return
 	case "ListCommentReplies":
-		h.handleListCommentReplies(w, r)
+		h.handleListCommentReplies(
+			w,
+			r,
+			strings.TrimSpace(r.PathValue("postId")),
+			strings.TrimSpace(r.PathValue("commentId")),
+		)
 		return
 	case "ReactToComment":
-		h.handleReactToComment(w, r, commentIDFromPath(r.URL.Path))
+		h.handleReactToComment(w, r, strings.TrimSpace(r.PathValue("commentId")))
 		return
 	case "BindMediaAssetsToComment":
-		h.handleBindMediaAssetsToComment(w, r, commentIDFromPath(r.URL.Path))
+		h.handleBindMediaAssetsToComment(w, r, strings.TrimSpace(r.PathValue("commentId")))
 		return
 	case "DeleteComment":
-		h.handleDeleteComment(w, r)
+		h.handleDeleteComment(
+			w,
+			r,
+			strings.TrimSpace(r.PathValue("postId")),
+			strings.TrimSpace(r.PathValue("commentId")),
+		)
 		return
 	case "PinComment":
-		h.handleSetCommentPinned(w, r, true)
+		h.handleSetCommentPinned(
+			w,
+			r,
+			strings.TrimSpace(r.PathValue("postId")),
+			strings.TrimSpace(r.PathValue("commentId")),
+			true,
+		)
 		return
 	case "UnpinComment":
-		h.handleSetCommentPinned(w, r, false)
+		h.handleSetCommentPinned(
+			w,
+			r,
+			strings.TrimSpace(r.PathValue("postId")),
+			strings.TrimSpace(r.PathValue("commentId")),
+			false,
+		)
 		return
 	case "GetCounters":
-		h.handleGetCounters(w, r, postIDFromPath(r.URL.Path))
+		h.handleGetCounters(w, r, strings.TrimSpace(r.PathValue("postId")))
 		return
 	case "GetHelperRead":
 		h.handleGetHelperRead(w, r)
@@ -135,7 +157,7 @@ func (h *ContentHandler) handleGetReport(w http.ResponseWriter, r *http.Request)
 	if _, ok := verifiedReportOperatorAccountID(w, r); !ok {
 		return
 	}
-	reportID := pathParamAfter(r.URL.Path, "/v1/content/reports/", "")
+	reportID := pathParamAfter(r.URL.Path, "/content/reports/", "")
 	if reportID == "" {
 		writeHTTPError(
 			w,
@@ -174,7 +196,7 @@ func (h *ContentHandler) handleBeginReportReview(w http.ResponseWriter, r *http.
 		)
 		return
 	}
-	reportID := pathParamAfter(r.URL.Path, "/v1/content/reports/", "/review")
+	reportID := pathParamAfter(r.URL.Path, "/content/reports/", "/review")
 	if reportID == "" {
 		writeHTTPError(
 			w,
@@ -221,7 +243,7 @@ func (h *ContentHandler) handleResolveReport(w http.ResponseWriter, r *http.Requ
 		)
 		return
 	}
-	reportID := pathParamAfter(r.URL.Path, "/v1/content/reports/", "")
+	reportID := pathParamAfter(r.URL.Path, "/content/reports/", "")
 	if reportID == "" {
 		writeHTTPError(
 			w,

@@ -20,7 +20,7 @@
   - 容器：`quwoquan_service/docker-compose.gamma-local.yaml` 新增 `tag-service`（go run, `:18092`,
     healthz 探活），`gamma-proxy` 依赖其 healthy。
   - 配置：`start_local_gamma_mirror.sh` 的 `prepare_config_root` 落 `tag-service` default/gamma/release。
-  - 路由：`prepare_caddyfile` 在 `gamma-api` 与 `:80` 两个 server 块加 `@api_tag path /v1/tag*`
+  - 路由：`prepare_caddyfile` 在 `gamma-api` 与 `:80` 两个 server 块加 `@api_tag path /tag*`
     → `tag-service:18092`。
   - podman fallback 分支同步新增 `tag-service` 启动与就绪等待。
 
@@ -45,7 +45,7 @@ curl -s "$GW/v1/tag/shared-tags?objectAId=u1&objectAType=user&objectBId=u2&objec
 curl -s "$GW/v1/tag/search?q=旅"
 ```
 
-端侧 `objectSharedReasonsProvider` → `tag-service /v1/tag/shared-tags` 在 `APP_RUNTIME_ENV=gamma`
+端侧 `objectSharedReasonsProvider` → `tag-service /tag/shared-tags` 在 `APP_RUNTIME_ENV=gamma`
 下经网关真打（不再读 Dart mock）。
 
 ## 3. 环境补齐步骤（Colima / 镜像源 / patrol）
@@ -70,7 +70,7 @@ curl -s "$GW/v1/tag/search?q=旅"
   - gamma 自动化：`start_local_gamma_mirror.sh` 在 host ready 后 `seed_tag_service_data()` 自动灌
     `tag_nodes`（control-plane taxonomy）+ `object_tag_index`（fixture）；导入失败必须阻断环境就绪。
   - 端到端真数据对齐以 gamma user seed 的真实 userId 和交集卡动态验证为准。
-- **`feedback` 写路径**：`POST /v1/tag/feedback` 保留 501。它是写操作（点击/忽略/修正），与
+- **`feedback` 写路径**：`POST /tag/feedback` 保留 501。它是写操作（点击/忽略/修正），与
   tag-service「只读消费导入产物」定位冲突，落地需新增写存储或路由到 behavior/recommendation 域，
   待架构评审；前端 `MockTagRepository.feedback` 为 alpha 乐观占位，Remote 为休眠代码、无 UI 消费。
 - **交集 user_acceptance patrol case**：对象页交集卡的端到端真打用例待补入 gamma patrol 矩阵。

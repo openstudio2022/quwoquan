@@ -18,14 +18,12 @@ import (
 const membershipReceiptRetention = 7 * 24 * time.Hour
 
 type LeaveCommand struct {
-	CircleID        string
-	ExpectedVersion int64
+	CircleID string
 }
 
 type UpdateRoleCommand struct {
 	CircleID        string
 	TargetPersonaID string
-	ExpectedVersion int64
 	Role            membershipmodel.CircleMemberRole
 }
 
@@ -97,7 +95,7 @@ func (facade *CommandFacade) Leave(ctx context.Context, command LeaveCommand) (C
 	return facade.commit(ctx, currentContext, actorID, membershipmodel.ChangeSet{
 		Kind: membershipmodel.ChangeLeave, MembershipID: membership.ID,
 		CircleID: membership.CircleID, PersonaID: actorID,
-		ExpectedVersion: command.ExpectedVersion, OccurredAt: facade.now().UTC(),
+		ExpectedVersion: membership.Version, OccurredAt: facade.now().UTC(),
 	})
 }
 
@@ -133,7 +131,7 @@ func (facade *CommandFacade) UpdateRole(ctx context.Context, command UpdateRoleC
 	return facade.commit(ctx, currentContext, actorID, membershipmodel.ChangeSet{
 		Kind: membershipmodel.ChangeRole, MembershipID: target.ID,
 		CircleID: target.CircleID, PersonaID: target.PersonaID, Role: command.Role,
-		ExpectedVersion: command.ExpectedVersion, OccurredAt: facade.now().UTC(),
+		ExpectedVersion: target.Version, OccurredAt: facade.now().UTC(),
 	})
 }
 
@@ -156,17 +154,34 @@ func (facade *CommandFacade) commit(ctx context.Context, current operation.Conte
 	if err != nil {
 		return CommandResult{}, generated.AppErrorFromMembershipStorageWriteFailed(err.Error())
 	}
-	receipt, err := facade.store.Commit(ctx, membershipports.CommitRequest{
-		Change: change, ReceiptKey: membershipReceiptKey(actorID, current.IdempotencyKey),
-		CommandDigest: digest, ReceiptExpiresAt: facade.now().UTC().Add(membershipReceiptRetention),
-	})
-	if err != nil {
-		return CommandResult{}, mapMembershipCommitError(err)
+	for attempt := 0; attempt < 3; attempt++ {
+		receipt, commitErr := facade.store.Commit(ctx, membershipports.CommitRequest{
+			Change: change, ReceiptKey: membershipReceiptKey(actorID, current.IdempotencyKey),
+			CommandDigest: digest, ReceiptExpiresAt: facade.now().UTC().Add(membershipReceiptRetention),
+		})
+		if commitErr == nil {
+			return CommandResult{
+				MembershipID: receipt.MembershipID, Version: receipt.Version,
+				State: string(receipt.State), Role: string(receipt.Role), IdempotentReplay: receipt.Replayed,
+			}, nil
+		}
+		if !errors.Is(commitErr, membershipmodel.ErrVersionConflict) || attempt == 2 {
+			return CommandResult{}, mapMembershipCommitError(commitErr)
+		}
+		latest, found, loadErr := facade.store.LoadByIdentity(
+			ctx,
+			change.CircleID,
+			change.PersonaID,
+		)
+		if loadErr != nil {
+			return CommandResult{}, generated.AppErrorFromMembershipStorageWriteFailed(loadErr.Error())
+		}
+		if !found {
+			return CommandResult{}, mapMembershipCommitError(membershipmodel.ErrNotFound)
+		}
+		change.ExpectedVersion = latest.Version
 	}
-	return CommandResult{
-		MembershipID: receipt.MembershipID, Version: receipt.Version,
-		State: string(receipt.State), Role: string(receipt.Role), IdempotentReplay: receipt.Replayed,
-	}, nil
+	panic("unreachable CircleMembership commit retry")
 }
 
 func trustedMembershipContext(ctx context.Context) (operation.Context, string, error) {
@@ -178,22 +193,14 @@ func trustedMembershipContext(ctx context.Context) (operation.Context, string, e
 }
 
 func membershipCommandDigest(actorID string, change membershipmodel.ChangeSet) (string, error) {
-	// Join has no client-supplied expected version. The current aggregate version
-	// is resolved by the Facade and must not make the same Idempotency-Key drift
-	// from replay into conflict after the first commit.
-	expectedVersion := change.ExpectedVersion
-	if change.Kind == membershipmodel.ChangeJoin {
-		expectedVersion = 0
-	}
 	payload, err := json.Marshal(struct {
-		ActorID         string                           `json:"actorId"`
-		Kind            membershipmodel.ChangeKind       `json:"kind"`
-		MembershipID    string                           `json:"membershipId"`
-		CircleID        string                           `json:"circleId"`
-		PersonaID       string                           `json:"personaId"`
-		ExpectedVersion int64                            `json:"expectedVersion"`
-		Role            membershipmodel.CircleMemberRole `json:"role"`
-	}{actorID, change.Kind, change.MembershipID, change.CircleID, change.PersonaID, expectedVersion, change.Role})
+		ActorID      string                           `json:"actorId"`
+		Kind         membershipmodel.ChangeKind       `json:"kind"`
+		MembershipID string                           `json:"membershipId"`
+		CircleID     string                           `json:"circleId"`
+		PersonaID    string                           `json:"personaId"`
+		Role         membershipmodel.CircleMemberRole `json:"role"`
+	}{actorID, change.Kind, change.MembershipID, change.CircleID, change.PersonaID, change.Role})
 	if err != nil {
 		return "", err
 	}

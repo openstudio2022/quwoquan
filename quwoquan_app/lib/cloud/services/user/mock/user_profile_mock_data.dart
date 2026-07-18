@@ -108,7 +108,7 @@ class UserProfileMockData {
         'authorAvatarUrl': _avatarFor(userId),
         'authorBackgroundUrl': _backgroundFor(userId),
         'videoUrl':
-            'media/video/s/mock/external/flutter/butterfly/v1/video.mp4',
+            'media/video/s/video-primary-0001/post/video-content-0001/source.mp4',
         'thumbnailUrl':
             'media/image/s/mock/seed/p_1646034296147-d8ed3aace9a4/v1/image.jpg',
         'width': 720,

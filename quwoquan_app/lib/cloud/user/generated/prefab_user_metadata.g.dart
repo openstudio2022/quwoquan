@@ -5,5 +5,5 @@ class PrefabUserMetadata {
   const PrefabUserMetadata._();
 
   static const String currentUserId = "fixture_user_current";
-  static const String currentSubAccountId = "fixture_sub_current";
+  static const String currentSubAccountId = "fixture_persona_daily";
 }

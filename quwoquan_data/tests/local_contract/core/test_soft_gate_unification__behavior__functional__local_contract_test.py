@@ -23,8 +23,8 @@ import os  # noqa: E402
 
 
 from core import quality_gates as qg  # noqa: E402
-from content.post import base_draft  # noqa: E402
-from content.post import route_core  # noqa: E402
+from content.post.article import base_draft  # noqa: E402
+from content.post.article import route_core  # noqa: E402
 from verify.verify_content_quality import _semantic_gate_issues  # noqa: E402
 
 

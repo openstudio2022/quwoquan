@@ -2,7 +2,7 @@
 """作品判定（WorksClassifier）契约门禁。
 
 校验单一真相源闭环：
-- works_classification.yaml：schemaVersion/version/必需键 + 权重覆盖全部 tier/affinity + video 后置。
+- works_classification.yaml：schema/version/必需键 + 权重覆盖全部 tier/affinity + video 后置。
 - content_source_registry.yaml：sourceTierSignals 完整（复用 verify_content_source_registry）。
 - 判定 smoke：代表样本 decision 正确，且裁决符合 schema/content/works_classification.schema.json。
 
@@ -23,7 +23,7 @@ from core.content_source_registry import (  # noqa: E402
     verify_content_source_registry,
 )
 from core.schema import validate_result  # noqa: E402
-from content.post.works_classifier import classify_works, load_works_classification_config  # noqa: E402
+from content.post.image.works_classifier import classify_works, load_works_classification_config  # noqa: E402
 
 _LONG = """# 九寨沟旅游全攻略
 
@@ -74,8 +74,11 @@ def check() -> list[str]:
             issues.append(f"affinityWeights: missing weight for {affinity!r}")
 
     quotas = cfg.get("carrierQuotas") or {}
-    if not (quotas.get("video") or {}).get("deferred"):
-        issues.append("carrierQuotas.video.deferred must be true (video 作品后置 Phase 5)")
+    video_quota = quotas.get("video") or {}
+    if "deferred" in video_quota:
+        issues.append("carrierQuotas.video.deferred is retired; formal video is an active lane")
+    if float(video_quota.get("weight") or 0) <= 0:
+        issues.append("carrierQuotas.video.weight must be positive")
 
     issues.extend(verify_content_source_registry())
 

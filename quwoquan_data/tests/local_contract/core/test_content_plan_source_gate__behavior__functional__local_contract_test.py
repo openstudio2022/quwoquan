@@ -38,7 +38,7 @@ def test_content_plan_blocks_missing_creator_assignment_when_required():
     }
     write_json(
         execution_content_plan_packet_path(EXECUTION_ID),
-        {"schemaVersion": cp.CONTENT_PLAN_SCHEMA, "items": [item]},
+        {"schema": cp.CONTENT_PLAN_SCHEMA, "items": [item]},
     )
     content_object.write_brief_object(
         EXECUTION_ID,
@@ -54,7 +54,7 @@ def test_content_plan_blocks_missing_creator_assignment_when_required():
     issues = cp.validate_content_plan(
         EXECUTION_ID,
         {
-            "workflowPolicy": {"requireCreatorAssignment": True},
+            "executionPolicy": {"requireCreatorAssignment": True},
             "scope": {"coverageTargets": [{"entityType": "地点/景区", "name": entity}]},
             "content": {
                 "modalityContract": "separated_research",
@@ -144,7 +144,7 @@ def test_content_plan_accepts_off_entity_source_as_multi_tag_work():
     write_json(
         execution_content_plan_packet_path(EXECUTION_ID),
         {
-            "schemaVersion": cp.CONTENT_PLAN_SCHEMA,
+            "schema": cp.CONTENT_PLAN_SCHEMA,
             "items": [{
                 "ref": article_ref,
                 "kind": "entity",
@@ -162,7 +162,7 @@ def test_content_plan_accepts_off_entity_source_as_multi_tag_work():
     write_json(
         execution_content_plan_packet_path(IMAGE_EXECUTION_ID),
         {
-            "schemaVersion": cp.CONTENT_PLAN_SCHEMA,
+            "schema": cp.CONTENT_PLAN_SCHEMA,
             "items": [{
                 "ref": image_ref,
                 "kind": "entity",
@@ -251,7 +251,7 @@ def test_content_plan_blocks_qunar_off_entity_travelogue_as_article_base():
     write_json(
         execution_content_plan_packet_path(EXECUTION_ID),
         {
-            "schemaVersion": cp.CONTENT_PLAN_SCHEMA,
+            "schema": cp.CONTENT_PLAN_SCHEMA,
             "items": [
                 {
                     "ref": ref,
@@ -342,7 +342,7 @@ def test_content_plan_blocks_base_source_reuse_policy_in_strict_mode():
         items.append(item)
     write_json(
         execution_content_plan_packet_path(EXECUTION_ID),
-        {"schemaVersion": cp.CONTENT_PLAN_SCHEMA, "items": items},
+        {"schema": cp.CONTENT_PLAN_SCHEMA, "items": items},
     )
     spec = {
         "scope": {"coverageTargets": [{"entityType": "地点/景区", "name": entity}]},
@@ -415,7 +415,7 @@ def test_content_plan_blocks_cross_source_unit_asset_and_records_conflict():
     write_json(
         execution_content_plan_packet_path(EXECUTION_ID),
         {
-            "schemaVersion": cp.CONTENT_PLAN_SCHEMA,
+            "schema": cp.CONTENT_PLAN_SCHEMA,
             "items": [
                 {
                     "ref": ref,
@@ -485,7 +485,7 @@ def test_content_plan_allows_text_only_article_base_source_without_source_assets
     write_json(
         execution_content_plan_packet_path(EXECUTION_ID),
         {
-            "schemaVersion": cp.CONTENT_PLAN_SCHEMA,
+            "schema": cp.CONTENT_PLAN_SCHEMA,
             "items": [
                 {
                     "ref": ref,
@@ -566,7 +566,7 @@ def test_content_plan_blocks_declared_article_asset_missing_rights_fields():
     write_json(
         execution_content_plan_packet_path(EXECUTION_ID),
         {
-            "schemaVersion": cp.CONTENT_PLAN_SCHEMA,
+            "schema": cp.CONTENT_PLAN_SCHEMA,
             "items": [
                 {
                     "ref": ref,
@@ -602,7 +602,7 @@ def test_content_plan_blocks_declared_article_asset_missing_rights_fields():
 
     assert any("missing rights fields" in issue for issue in issues), issues
 
-def test_content_plan_blocks_oversized_image_asset_refs():
+def test_content_plan_allows_asset_over_assessment_budget_below_publish_budget():
     entity = "九寨沟"
     image_root = execution_root(IMAGE_EXECUTION_ID)
     image_source = (
@@ -634,7 +634,7 @@ def test_content_plan_blocks_oversized_image_asset_refs():
     write_json(
         execution_content_plan_packet_path(IMAGE_EXECUTION_ID),
         {
-            "schemaVersion": cp.CONTENT_PLAN_SCHEMA,
+            "schema": cp.CONTENT_PLAN_SCHEMA,
             "items": [
                 {
                     "ref": ref,
@@ -646,6 +646,85 @@ def test_content_plan_blocks_oversized_image_asset_refs():
                     "evidenceRefs": [source_path.relative_to(image_root).as_posix()],
                     "rationale": "同一图片集合证据",
                     "sourceCollectionId": "jiuzhaigou:image:huge",
+                    "assetRefs": [asset_file.relative_to(image_root).as_posix()],
+                }
+            ],
+        },
+    )
+    spec = {
+        "scope": {"coverageTargets": [{"entityType": "地点/景区", "name": entity}]},
+        "content": {
+            "modalityContract": "separated_research",
+            "quotas": {
+                "entityArticlesPerTarget": 0,
+                "imageWorksPerTarget": 1,
+                "entityHomepagesPerTarget": 0,
+                "routeArticles": 0,
+            },
+        },
+        "acceptance": {"requiredAngles": ["image"]},
+    }
+
+    issues = cp.validate_content_plan(IMAGE_EXECUTION_ID, spec)
+
+    assert not any("image asset blocked by image safety gate" in issue for issue in issues), issues
+
+
+def test_content_plan_blocks_asset_over_publish_budget():
+    from core.image_safety import MAX_PUBLISHABLE_PIXELS
+
+    entity = "九寨沟"
+    image_root = execution_root(IMAGE_EXECUTION_ID)
+    image_source = (
+        image_root
+        / "entities/地点/景区/九寨沟/1.download/sources/01.image_collection"
+    )
+    asset_dir = image_source / "assets"
+    asset_dir.mkdir(parents=True, exist_ok=True)
+    source_path = image_source / "source.md"
+    source_path.write_text("九寨沟同一摄影集合，图片底稿。", encoding="utf-8")
+    asset_file = asset_dir / "over-publish-budget.png"
+    asset_file.write_bytes(
+        _oversized_png_header(width=MAX_PUBLISHABLE_PIXELS + 1, height=1)
+    )
+    collection_id = "jiuzhaigou:image:over-publish-budget"
+    write_json(
+        asset_dir / "index.json",
+        {"assets": [{"fileName": asset_file.name, "sourceCollectionId": collection_id}]},
+    )
+    write_json(
+        image_source / "meta.json",
+        {"researchLane": "image", "sourceCollectionId": collection_id},
+    )
+    ref = f"{entity}_image"
+    content_object.register_content_object(
+        IMAGE_EXECUTION_ID,
+        ref,
+        content_type="image",
+        angle="画报",
+        title="九寨沟图片作品",
+    )
+    brief_dir = content_object.content_object_stage_dir(
+        IMAGE_EXECUTION_ID,
+        ref,
+        STAGE_COMPOSE,
+    )
+    write_json(brief_dir / content_object.BRIEF_FILE, {"titleHint": "九寨沟图片作品"})
+    write_json(
+        execution_content_plan_packet_path(IMAGE_EXECUTION_ID),
+        {
+            "schema": cp.CONTENT_PLAN_SCHEMA,
+            "items": [
+                {
+                    "ref": ref,
+                    "kind": "entity",
+                    "carrier": "image",
+                    "researchLane": "image",
+                    "title": "九寨沟图片作品",
+                    "entityRefs": [f"/entity/地点/景区/{entity}"],
+                    "evidenceRefs": [source_path.relative_to(image_root).as_posix()],
+                    "rationale": "同一图片集合证据",
+                    "sourceCollectionId": collection_id,
                     "assetRefs": [asset_file.relative_to(image_root).as_posix()],
                 }
             ],
@@ -734,7 +813,7 @@ def test_content_plan_blocks_cross_carrier_packet_before_asset_dedupe():
     write_json(
         execution_content_plan_packet_path(EXECUTION_ID),
         {
-            "schemaVersion": cp.CONTENT_PLAN_SCHEMA,
+            "schema": cp.CONTENT_PLAN_SCHEMA,
             "items": [
                 {
                     "ref": article_ref,

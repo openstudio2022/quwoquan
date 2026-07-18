@@ -1,139 +1,80 @@
-import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive/hive.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
-import 'package:quwoquan_app/cloud/runtime/context/actor_queue_partition.dart';
-import 'package:quwoquan_app/infrastructure/local/actor_queue/actor_queue_storage.dart';
-import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
-import 'package:quwoquan_app/core/services/hive_runtime.dart';
+import 'package:quwoquan_app/core/telemetry/app_telemetry_outbox.dart';
+import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
+
+import '../../../../../../support/recording_app_telemetry_recorder.dart';
 
 void main() {
-  Directory? tempDir;
-
-  tearDown(() async {
-    for (final baseName in <String>[
-      'app_exception_queue_failure_test',
-      'app_exception_queue_success_test',
-    ]) {
-      final boxName = _partition().boxName(baseName);
-      if (Hive.isBoxOpen(boxName)) {
-        await Hive.box<String>(boxName).close();
-      }
-    }
-    await Hive.deleteFromDisk();
-    if (tempDir != null && await tempDir!.exists()) {
-      await tempDir!.delete(recursive: true);
-    }
-    HiveRuntime.resetForTest();
-  });
-
-  test('Hive 未就绪时异常遥测降级跳过本地队列，不再抛异常', () async {
-    HiveRuntime.debugEnsureInitializedHook = () async => false;
-    final service = AppExceptionTelemetryService(
-      eventRepository: MockOpsEventRepository(),
-      queuePartition: _partition(),
-      queueBoxName: 'app_exception_queue_unavailable_test',
-      queueStorage: _storage(),
-    );
+  test('Reporter 未绑定时异常采集安全跳过且不维护第二套队列', () async {
+    final service = AppExceptionTelemetryService();
 
     await service.recordGlobalException(
       source: 'widget_test',
-      exceptionText: 'Hive unavailable during bootstrap',
-      stackText: 'stack',
-    );
-
-    await service.flushPending();
-  });
-
-  test('远端上报失败时保留队列并记录结构化失败状态', () async {
-    tempDir = await Directory.systemTemp.createTemp('app_exception_telemetry_');
-    Hive.init(tempDir!.path);
-    final repository = _FailingOpsEventRepository();
-    final service = AppExceptionTelemetryService(
-      eventRepository: repository,
-      queuePartition: _partition(),
-      queueBoxName: 'app_exception_queue_failure_test',
-      queueStorage: _storage(),
-    );
-
-    await service.recordGlobalException(
-      source: 'widget_test',
-      exceptionText: 'boom',
+      exceptionText: 'bootstrap unavailable',
       stackText: 'stack',
     );
     await service.flushPending();
 
-    final box = Hive.box<String>(
-      _partition().boxName('app_exception_queue_failure_test'),
-    );
-    expect(box.length, 1);
-    expect(service.lastFlushFailure, isNotNull);
-    expect(service.lastFlushFailure?.errorType, 'StateError');
-    expect(service.lastFlushFailure?.queueDepth, 1);
-  });
-
-  test('flush 成功后清理本地队列', () async {
-    tempDir = await Directory.systemTemp.createTemp('app_exception_telemetry_');
-    Hive.init(tempDir!.path);
-    final repository = MockOpsEventRepository();
-    final service = AppExceptionTelemetryService(
-      eventRepository: repository,
-      queuePartition: _partition(),
-      queueBoxName: 'app_exception_queue_success_test',
-      queueStorage: _storage(),
-    );
-
-    await service.recordGlobalException(
-      source: 'widget_test',
-      exceptionText: 'boom',
-      stackText: 'stack',
-    );
-    await service.flushPending();
-
-    final box = Hive.box<String>(
-      _partition().boxName('app_exception_queue_success_test'),
-    );
-    expect(box.length, 0);
-    expect(repository.recorded, isNotEmpty);
     expect(service.lastFlushFailure, isNull);
   });
-}
 
-ActorQueueStorage _storage() =>
-    ActorQueueStorage(keyStore: _MemoryActorQueueKeyStore());
+  test('Reporter 拒绝时记录结构化 delivery degradation', () async {
+    final recorder = RecordingAppTelemetryRecorder(
+      recordResult: AppTelemetryRecordResult.rateLimited,
+    );
+    final service = AppExceptionTelemetryService(reporter: recorder);
 
-final class _MemoryActorQueueKeyStore implements ActorQueueEncryptionKeyStore {
-  final Map<String, String> _values = <String, String>{};
+    await service.recordGlobalException(
+      source: 'widget_test',
+      exceptionText: 'boom',
+      stackText:
+          'Widget.build (/Users/test/private.dart:1)\n#1 token_12345678901234567890',
+    );
 
-  @override
-  Future<void> delete(String key) async {
-    _values.remove(key);
-  }
+    expect(service.lastFlushFailure?.errorType, 'rateLimited');
+    expect(service.lastFlushFailure?.queueDepth, 0);
+  });
 
-  @override
-  Future<String?> read(String key) async => _values[key];
+  test('异常使用 runtime_exception 强类型字段并裁剪方法栈', () async {
+    final recorder = RecordingAppTelemetryRecorder();
+    final service = AppExceptionTelemetryService(reporter: recorder);
+    final stack = List<String>.generate(
+      12,
+      (index) =>
+          '#$index Package.method$index (/private/user/input_$index.dart:1)',
+    ).join('\n');
 
-  @override
-  Future<void> write(String key, String value) async {
-    _values[key] = value;
-  }
-}
+    await service.recordGlobalException(
+      source: 'widget_test',
+      exceptionText: 'boom',
+      stackText: stack,
+    );
+    await service.recordGlobalException(
+      source: 'widget_test',
+      exceptionText: 'boom',
+      stackText: stack,
+    );
 
-ActorQueuePartition _partition() {
-  return ActorQueuePartition(
-    environment: 'alpha',
-    accountId: 'account-a',
-    personaId: 'persona-a',
-    deviceId: 'device-a',
-  );
-}
+    expect(recorder.recorded, hasLength(1));
+    final event = recorder.recorded.single;
+    expect(event.eventType, 'runtime_exception');
+    expect(event.extensions['errorCode'], 'APP.RUNTIME.uncaught_exception');
+    final methods = event.extensions['callStack']! as List<String>;
+    expect(methods, hasLength(10));
+    expect(methods.join('\n'), isNot(contains('/private/')));
+    expect(service.lastFlushFailure, isNull);
+  });
 
-class _FailingOpsEventRepository extends MockOpsEventRepository {
-  @override
-  Future<OpsEventBatchAck> reportEventBatch({
-    required List<OpsEventRecordInput> events,
-  }) async {
-    throw StateError('ops unavailable');
-  }
+  test('统一 Reporter flush 延迟时保留结构化失败状态', () async {
+    final recorder = RecordingAppTelemetryRecorder(
+      flushResult: AppTelemetryFlushResult.deferred,
+    );
+    final service = AppExceptionTelemetryService(reporter: recorder);
+
+    await service.flushPending();
+
+    expect(recorder.flushCount, 1);
+    expect(service.lastFlushFailure?.errorType, 'deferred');
+  });
 }

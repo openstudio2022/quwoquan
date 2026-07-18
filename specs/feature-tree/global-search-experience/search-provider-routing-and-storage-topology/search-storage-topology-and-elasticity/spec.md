@@ -24,24 +24,24 @@
 
 ## 2026-06-15 架构决定（取代下文阶段二边界）
 
-本节为最新冻结决定，凡与下文“本期不新增统一 `/v1/search`”“不指定搜索引擎产品”冲突处一律以本节为准：
+本节为最新冻结决定，凡与下文“本期不新增统一 `/search`”“不指定搜索引擎产品”冲突处一律以本节为准：
 
 - 统一搜索读库本期落地为**专用 ES/OpenSearch 集群**，索引 `quwoquan_objects`，作为派生读模型。
-- 新建**独立可部署 `search-service`** 承载统一 `POST /v1/search`（`mode=suggest|result`）与 `POST /v1/search/feedback`，单趟 `runtime/search.Retrieve` 跨类型排序。
+- 新建**独立可部署 `search-service`** 承载统一 `POST /search`（`mode=suggest|result`）与 `POST /search/feedback`，单趟 `runtime/search.Retrieve` 跨类型排序。
 - 召回后端 **ES 主 + native 透明回退**（`FallbackBackend`）；ES 故障整体降级 native。
-- 各域（content/entity/circle/user/integration）经统一 indexer 灌入同一 ES 索引；原各域 `/v1/.../search` 只读路由收敛为 indexer 数据源/内部回退。
+- 各域（content/entity/circle/user/integration）经统一 indexer 灌入同一 ES 索引；原各域 `/.../search` 只读路由收敛为 indexer 数据源/内部回退。
 - 读模型仍是派生数据，可重建/回放；多读切片按 objectType / query class 拆分仍适用于 ES 分片与副本弹性。
 
 ## 本阶段交付边界
 
 - 收口统一 `search-service` + ES 集群的搜索读路径护栏、metadata 对齐、请求头审计与验证证据。
 - 各域作为 indexer 数据源/内部回退的只读路径（保留，不再是 App 主路径）：
-  - `content.post`：`GET /v1/content/posts/search`
-  - `circle.circle`：`GET /v1/circles/search`
-  - `circle.group`：`GET /v1/circles/{circleId}/groups/search`
-  - `entity.homepage`：`GET /v1/homepages/search`、`GET /v1/homepages/{homepageId}/shell`、`GET /v1/homepages/{homepageId}/review-summary`、`GET /v1/homepages/{homepageId}/related-groups`
-  - `integration.location_poi`：`GET /v1/integration/location/search`、`GET /v1/integration/location/nearby`
-- App 主搜索路径走统一 `POST /v1/search`（search-service + ES）；私有对象（`chat.*`）仍 `local_only`，绝不上云。
+  - `content.post`：`GET /content/posts/search`
+  - `circle.circle`：`GET /circles/search`
+  - `circle.group`：`GET /circles/{circleId}/groups/search`
+  - `entity.homepage`：`GET /homepages/search`、`GET /homepages/{homepageId}/shell`、`GET /homepages/{homepageId}/review-summary`、`GET /homepages/{homepageId}/related-groups`
+  - `integration.location_poi`：`GET /integration/location/search`、`GET /integration/location/nearby`
+- App 主搜索路径走统一 `POST /search`（search-service + ES）；私有对象（`chat.*`）仍 `local_only`，绝不上云。
 
 ## 约束
 
@@ -62,10 +62,10 @@
 以下已落地事实纳入本 Scenario 正式规格（证据见 `docs/outstanding_risks_backlog.md`）：
 
 - **R-S05a~e 各域灌数**：`content.post / entity.homepage / circle.circle / circle.group / user.profile` 经各域写时 `Projector` + `Backfill` 灌入统一 ES 索引 `quwoquan_objects`；新增第一方地点对象 `location.place`（content 域 `place_snapshots` 派生读模型，复用 geo 维度，与 `entity.homepage` 互斥单源）。读模型仍是派生数据，posts / 各域写模型为唯一写真相源。
-- **R-S06 App 接线**：`RemoteSearchRepository` 走 `CloudHttpClient` + codegen path 调 `/v1/search`，按 `appDataSourceModeProvider` 切换；读路径护栏（metadata path + header 审计）成立。
+- **R-S06 App 接线**：`RemoteSearchRepository` 走 `CloudHttpClient` + codegen path 调 `/search`，按 `appDataSourceModeProvider` 切换；读路径护栏（metadata path + header 审计）成立。
 - **R-S07 反馈/热力/排序**：`feedbackstore`(Mongo, TTL) + `queryheat` 派生 `rm_search_term_heat`(TTL 86400) + 排序透明化信封；多读切片原则在 ES 分片/副本弹性上落地。
 - **R-S07-5 推荐信号注入**：search → Redis Stream `events.search.recommendation_signals` → content-service consumer → `rm_recommend_feature`（代码 local_contract 通过）。
-- **R-S06-S 端到端冒烟**：stackctl 实例化 search-service 进 local-gamma（ES-enabled，`quwoquan_objects` backfill），网关 `/v1/search` 200、`/v1/search/feedback` 202，证据已迁移 canonical run evidence（`search_smoke_report.json`）与 `QWQ_OUTPUT_ROOT/env/gamma/runs/**`。
+- **R-S06-S 端到端冒烟**：stackctl 实例化 search-service 进 local-gamma（ES-enabled，`quwoquan_objects` backfill），网关 `/search` 200、`/search/feedback` 202，证据已迁移 canonical run evidence（`search_smoke_report.json`）与 `QWQ_OUTPUT_ROOT/env/gamma/runs/**`。
 - **R-S06-S-3 根 Go module 可复现**：search-service 与其余服务统一消费 `quwoquan_service/go.mod/go.sum`，独立二进制从根 package path 构建；`verify_go_single_module.py` 阻断嵌套 module，搜索构建与完整测试已绿。
 
 ## 未完成风险（弹性/长稳缺口，登记为后续 /dev）
@@ -144,8 +144,8 @@
 
 | 环节 | 合同 | 证据 |
 |---|---|---|
-| Query log | `/v1/search` 成功后 best-effort 记录 query、viewer/session、requestId、experimentBucket、top hits | search-service handler / feedbackstore tests |
-| Feedback | `/v1/search/feedback` 记录点击、曝光、反馈，202 accepted，不阻塞 result | search-service contract test |
+| Query log | `/search` 成功后 best-effort 记录 query、viewer/session、requestId、experimentBucket、top hits | search-service handler / feedbackstore tests |
+| Feedback | `/search/feedback` 记录点击、曝光、反馈，202 accepted，不阻塞 result | search-service contract test |
 | Queryheat | `rm_search_term_heat` TTL 86400，基于次数、点击、共现、时间衰减计算 relatedTerms 与 term heat | queryheat tests + storage TTL contract |
 | Result ranking | term-heat 由 RankingDecorator 注入，输出 rankReasons/rankPosition/rankingVersion/experimentBucket | application ranking tests |
 | Recommendation | Redis Stream → content-service consumer → `rm_recommend_feature.searchTermAffinity` → FeatureStore → RuleScorer | `search_signal_consumer_test.go`、`runtime/recommendation` tests、已迁移 canonical run evidence（`search_signal_t3_report.json`） |

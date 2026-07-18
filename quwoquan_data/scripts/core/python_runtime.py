@@ -3,21 +3,19 @@ from __future__ import annotations
 
 from typing import Iterable
 
-from core.cursor_startup_probe import _cached_cursor_startup_probe
+from core.cursor_startup_cache import cached_cursor_startup_probe
 from core.python_environment import (
-    CURSOR_CLOUD_API_ME_URL,
     DEFAULT_CURSOR_STARTUP_MODEL,
     DEFAULT_CURSOR_STARTUP_RUNTIME,
     runtime_report,
 )
-from core.python_network import _cursor_cloud_api_probe, check_network_endpoints
+from core.python_network import check_network_endpoints
 from core.runtime_policy import active_runtime_policy
 
 def environment_preflight(
     *,
     require_cursor_key: bool = True,
     check_network: bool = True,
-    check_cursor_cloud_api: bool = True,
     endpoints: Iterable[str] | None = None,
     timeout_seconds: float | None = None,
     check_cursor_startup: bool = False,
@@ -82,27 +80,8 @@ def environment_preflight(
             "endpoints": [],
             "issues": [],
         }
-    if require_cursor_key and check_cursor_cloud_api and not issues:
-        cursor_cloud_api = _cursor_cloud_api_probe(timeout_seconds=effective_timeout_seconds)
-        issues.extend(cursor_cloud_api.get("issues") or [])
-    else:
-        cursor_cloud_api = {
-            "checked": False,
-            "ready": True,
-            "endpoint": CURSOR_CLOUD_API_ME_URL,
-            "issues": [],
-            "skipReason": (
-                "cursor_key_not_required"
-                if not require_cursor_key
-                else (
-                    "local_runtime_only"
-                    if not check_cursor_cloud_api
-                    else "local_preflight_failed_or_network_unavailable"
-                )
-            ),
-        }
     if check_cursor_startup and not issues and require_cursor_key:
-        cursor_startup = _cached_cursor_startup_probe(
+        cursor_startup = cached_cursor_startup_probe(
             model=effective_startup_model,
             runtime=effective_startup_runtime,
             timeout_seconds=effective_startup_timeout_seconds,
@@ -123,11 +102,10 @@ def environment_preflight(
             ),
         }
     return {
-        "schemaVersion": "quwoquan_data.environment_preflight",
+        "schema": "quwoquan_data.environment_preflight",
         "runtime": runtime,
         "cursorApiKey": cursor_key,
         "network": network,
-        "cursorCloudApi": cursor_cloud_api,
         "cursorStartup": cursor_startup,
         "ready": not issues,
         "issues": issues,

@@ -124,12 +124,12 @@ func (s *productService) handleUpsertPremiumPool(w http.ResponseWriter, r *http.
 }
 
 func (s *productService) handleRollbackPremiumPool(w http.ResponseWriter, r *http.Request) {
-	contentID := segmentBetween(r.URL.Path, "/v1/control-plane/product/recommendation/premium-pool/", ":rollback")
+	contentID := segmentBetween(r.URL.Path, "/control-plane/product/recommendation/premium-pool/", ":rollback")
 	s.transitionPremiumPoolEntry(w, r, contentID, "rolled_back", "rollback_global_premium", false)
 }
 
 func (s *productService) handleTakedownPremiumPool(w http.ResponseWriter, r *http.Request) {
-	contentID := segmentBetween(r.URL.Path, "/v1/control-plane/product/recommendation/premium-pool/", ":takedown")
+	contentID := segmentBetween(r.URL.Path, "/control-plane/product/recommendation/premium-pool/", ":takedown")
 	s.transitionPremiumPoolEntry(w, r, contentID, "takedown_ejected", "takedown_eject_global_premium", true)
 }
 

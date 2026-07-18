@@ -67,13 +67,13 @@ class CircleDto {
 
   factory CircleDto.fromMap(Map<String, dynamic> m) {
     return CircleDto(
-      id: (m['_id'] ?? m['id'] ?? '').toString(),
+      id: (m['id'] ?? '').toString(),
       name: (m['name'] ?? '').toString(),
       description: m['description'] as String?,
-      coverUrl: (m['coverUrl'] ?? m['cover']) as String?,
-      iconUrl: (m['iconUrl'] ?? m['icon'] ?? m['avatarUrl']) as String?,
+      coverUrl: m['coverUrl'] as String?,
+      iconUrl: m['iconUrl'] as String?,
       ownerId: (m['ownerId'] ?? '').toString(),
-      category: m['category'] ?? m['categoryId'] as String?,
+      category: m['category'] as String?,
       tags:
           (m['tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ??
           const [],

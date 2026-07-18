@@ -24,7 +24,7 @@ func (c fixedServiceCredential) AuthorizationHeader(context.Context) (string, er
 func TestIntegrationDeliveryAdapterReturnsTraceableAcceptedSequence(t *testing.T) {
 	var acceptedRequestID string
 	upstream := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/integrations/external-requests" {
+		if r.URL.Path != "/integrations/external-requests" {
 			http.Error(w, "unexpected integration path", http.StatusNotFound)
 			return
 		}

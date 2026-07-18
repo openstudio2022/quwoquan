@@ -1,4 +1,3 @@
-version: 1
 
 domain_operation_page_ids:
   assistant:
@@ -68,7 +67,7 @@ domain_operation_page_ids:
     CompleteMediaUpload: content.media.complete
     CreateComment: content.comment.create
     CreateOutboundShare: content.outbound_share.create
-    CreatePost: content.post.create
+    SubmitPostPublication: content.post.publish
     CreateReport: content.report.create
     DeleteComment: content.comment.delete
     DeletePost: content.post.delete
@@ -86,7 +85,6 @@ domain_operation_page_ids:
     ListProfileInteractionActivitiesReceived: content.profile.interactions.received
     ListProfileInteractionActivitiesSent: content.profile.interactions.sent
     ListUserPosts: content.user.posts
-    PublishPost: content.post.publish
     ReportBehaviors: content.behaviors.report
     SelectAutoVideoCover: content.media.cover.auto
     SelectManualVideoCover: content.media.cover.manual

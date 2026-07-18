@@ -127,7 +127,7 @@ def _lane_payload(
     if lane == "homepage":
         return {
             **common,
-            "policyRevision": "encyclopedia-primary-v2",
+            "policyRevision": "encyclopedia-primary",
             "sourceGuidanceRef": guidance_ref,
             "sourceCategorySummary": category_summary,
             "sourceImagePolicy": {
@@ -152,6 +152,27 @@ def _lane_payload(
             "sourceCategorySummary": category_summary,
             "sourceImagePolicy": source_image_policy,
             "sources": [],
+        }
+    if lane == "video":
+        return {
+            **common,
+            "sourceGuidanceRef": guidance_ref,
+            "sourceCategorySummary": category_summary,
+            "renderStrategy": "rights_cleared_image_sequence",
+            "sourceAssetPolicy": {
+                "sameEntityRequired": True,
+                "rightsEvidenceRequired": True,
+                "commercialUseRequired": True,
+                "watermarkForbidden": True,
+                "requiredFields": [
+                    "assetRef",
+                    "sha256",
+                    "license",
+                    "authorizationProof",
+                    "sourceUrl",
+                ],
+            },
+            "assets": [],
         }
     return {
         **common,
@@ -181,12 +202,7 @@ def _lane_payload(
 
 
 def prepare_source_plan(execution_id: str, entities: list[dict]) -> Path:
-    """Prepare three independent research plans for every entity.
-
-    New managed batches use homepage/article/image plans only. Legacy mixed
-    ``source_plan.json`` is intentionally non-consumable so one research agent
-    cannot silently supply evidence for another modality.
-    """
+    """Prepare one isolated research plan per formal content carrier."""
     guidance = source_plan_guidance(vertical_from_task_id(execution_id))
     vertical = vertical_from_task_id(execution_id)
     registry_guidance = build_travel_source_guidance() if vertical == "travel" else {}
@@ -206,7 +222,7 @@ def prepare_source_plan(execution_id: str, entities: list[dict]) -> Path:
     write_json(
         guidance_path,
         {
-            "schemaVersion": "quwoquan_data.source_research_guidance",
+            "schema": "quwoquan_data.source_research_guidance",
             "vertical": vertical,
             "sourceCategoryGuidance": guidance,
             "sourceRegistryGuidance": registry_guidance,
@@ -237,7 +253,7 @@ def prepare_source_plan(execution_id: str, entities: list[dict]) -> Path:
                 write_json(
                     plan_path,
                     {
-                        "schemaVersion": "quwoquan_data.stage_envelope",
+                        "schema": "quwoquan_data.stage_envelope",
                         "executionId": execution_id,
                         "step": f"{lane}_research",
                         "ref": ref,
@@ -277,7 +293,7 @@ def prepare_source_screen(execution_id: str, fetched_sources: list[dict]) -> Pat
     for src in fetched_sources:
         ref = src.get("sourceId", src.get("id"))
         write_json(inputs_dir / f"{ref}.json", {
-            "schemaVersion": "quwoquan_data.stage_envelope",
+            "schema": "quwoquan_data.stage_envelope",
             "executionId": execution_id,
             "step": "source_screen", "ref": ref,
             "payload": src,

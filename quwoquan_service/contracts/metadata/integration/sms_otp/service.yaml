@@ -1,4 +1,3 @@
-version: 1
 
 service:
   name: integration-service
@@ -12,7 +11,7 @@ service:
   description: |
     SmsOtp 是 ExternalInteraction 的类型化外部引用，OTP challenge 归 User/Auth。
     发送与回调统一由 integration/external_interaction/service.yaml 声明，禁止恢复
-    /v1/integrations/sms-otp 兼容路由。
+    /integrations/sms-otp 兼容路由。
 
 api_routes: []
 

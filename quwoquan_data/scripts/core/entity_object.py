@@ -221,7 +221,7 @@ def write_entity_object_index(
     write_json(
         path,
         {
-            "schemaVersion": "quwoquan.object.index",
+            "schema": "quwoquan.object.index",
             "objectKind": "entity",
             "objectRef": f"/entity/{domain}/{etype}/{name}",
             "publishTargetRef": rel,

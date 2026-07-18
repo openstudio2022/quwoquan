@@ -7,6 +7,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -16,6 +17,8 @@ import (
 
 	postsemantic "quwoquan_service/services/content-service/internal/domain/post/semantic"
 )
+
+const articleAssetManifestSchema = "article-asset-manifest"
 
 var (
 	sha256Pattern       = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
@@ -39,17 +42,18 @@ type AssetManifestItem struct {
 	CoverURL             string `json:"coverUrl,omitempty" bson:"coverUrl,omitempty"`
 	CoverStrategy        string `json:"coverStrategy,omitempty" bson:"coverStrategy,omitempty"`
 	CoverFrameTimeMs     int64  `json:"coverFrameTimeMs,omitempty" bson:"coverFrameTimeMs,omitempty"`
+	PosterAssetID        string `json:"posterAssetId,omitempty" bson:"posterAssetId,omitempty"`
 	SourceCollectionID   string `json:"sourceCollectionId,omitempty" bson:"sourceCollectionId,omitempty"`
 }
 
 type ArticleAssetManifestDoc struct {
-	SchemaVersion          int                 `json:"schemaVersion" bson:"schemaVersion"`
-	ArticleMarkdownVersion string              `json:"articleMarkdownVersion,omitempty" bson:"articleMarkdownVersion,omitempty"`
-	ArticleMarkdownDigest  string              `json:"articleMarkdownDigest" bson:"articleMarkdownDigest"`
-	DocumentSha256         string              `json:"documentSha256" bson:"documentSha256"`
-	AssetManifestSha256    string              `json:"assetManifestSha256" bson:"assetManifestSha256"`
-	DocumentVersionSha256  string              `json:"documentVersionSha256" bson:"documentVersionSha256"`
-	Assets                 []AssetManifestItem `json:"assets" bson:"assets"`
+	Schema                string              `json:"schema" bson:"schema"`
+	MarkdownDialect       string              `json:"markdownDialect,omitempty" bson:"markdownDialect,omitempty"`
+	ArticleMarkdownDigest string              `json:"articleMarkdownDigest" bson:"articleMarkdownDigest"`
+	DocumentSha256        string              `json:"documentSha256" bson:"documentSha256"`
+	AssetManifestSha256   string              `json:"assetManifestSha256" bson:"assetManifestSha256"`
+	DocumentVersionSha256 string              `json:"documentVersionSha256" bson:"documentVersionSha256"`
+	Assets                []AssetManifestItem `json:"assets" bson:"assets"`
 }
 
 type EntityAssetManifestDoc struct {
@@ -118,12 +122,24 @@ type EntityDoc struct {
 }
 
 type ReleaseDesiredState struct {
-	SchemaVersion string `json:"schemaVersion"`
-	ReleaseID     string `json:"releaseId"`
-	DesiredRefs   struct {
+	Schema      string `json:"schema"`
+	ReleaseID   string `json:"releaseId"`
+	DesiredRefs struct {
 		Posts    []string `json:"posts"`
 		Entities []string `json:"entities"`
 	} `json:"desiredRefs"`
+}
+
+func ReleaseObjectRoot(releaseRoot string) (string, error) {
+	root := filepath.Join(releaseRoot, "payload", "objects")
+	info, err := os.Stat(root)
+	if err != nil {
+		return "", fmt.Errorf("release object closure unavailable: %s: %w", root, err)
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("release object closure is not a directory: %s", root)
+	}
+	return root, nil
 }
 
 func LoadReleaseDesiredState(releaseRoot string) (*ReleaseDesiredState, error) {
@@ -136,11 +152,11 @@ func LoadReleaseDesiredState(releaseRoot string) (*ReleaseDesiredState, error) {
 	if err := json.Unmarshal(raw, &desired); err != nil {
 		return nil, err
 	}
-	if desired.SchemaVersion != "quwoquan_data.release_desired_state/1" {
+	if desired.Schema != "quwoquan_data.release_desired_state" {
 		return nil, fmt.Errorf(
-			"%s: unsupported release schema %q; retired dual-read is forbidden",
+			"%s: unsupported release schema %q",
 			path,
-			desired.SchemaVersion,
+			desired.Schema,
 		)
 	}
 	if strings.TrimSpace(desired.ReleaseID) == "" {
@@ -256,9 +272,95 @@ func validateAssetItem(asset AssetManifestItem, ref string) error {
 	return nil
 }
 
+func validateVideoAssets(assets []AssetManifestItem, ref string) error {
+	byID := make(map[string]AssetManifestItem, len(assets))
+	for _, asset := range assets {
+		if err := validateAssetItem(asset, ref); err != nil {
+			return err
+		}
+		if _, exists := byID[asset.AssetID]; exists {
+			return fmt.Errorf("%s: duplicate assetId %q", ref, asset.AssetID)
+		}
+		byID[asset.AssetID] = asset
+	}
+	hasVideo := false
+	for _, asset := range assets {
+		if !strings.EqualFold(strings.TrimSpace(asset.Kind), "video") {
+			continue
+		}
+		hasVideo = true
+		posterID := strings.TrimSpace(asset.PosterAssetID)
+		poster, exists := byID[posterID]
+		if posterID == "" || !exists {
+			return fmt.Errorf("%s: video asset %q posterAssetId does not resolve", ref, asset.AssetID)
+		}
+		if !strings.EqualFold(strings.TrimSpace(poster.Kind), "image") ||
+			!strings.EqualFold(strings.TrimSpace(poster.Role), "cover") {
+			return fmt.Errorf("%s: video poster %q must be an image cover asset", ref, posterID)
+		}
+	}
+	if !hasVideo {
+		return fmt.Errorf("%s: video manifest requires a video asset", ref)
+	}
+	return nil
+}
+
+func BindPostAssetURLs(posts []PostDoc, mediaBaseURL string) error {
+	hasAssets := false
+	for _, post := range posts {
+		if len(post.Assets) > 0 {
+			hasAssets = true
+			break
+		}
+	}
+	if !hasAssets {
+		return nil
+	}
+	base := strings.TrimRight(strings.TrimSpace(mediaBaseURL), "/")
+	parsed, err := url.Parse(base)
+	if err != nil ||
+		(parsed.Scheme != "http" && parsed.Scheme != "https") ||
+		parsed.Host == "" ||
+		parsed.RawQuery != "" ||
+		parsed.Fragment != "" {
+		return fmt.Errorf("media base URL must be an absolute http(s) URL")
+	}
+	for postIndex := range posts {
+		assets := posts[postIndex].Assets
+		byID := make(map[string]*AssetManifestItem, len(assets))
+		for assetIndex := range assets {
+			asset := &assets[assetIndex]
+			asset.CDNURL = base + "/" + strings.TrimLeft(asset.ObjectKey, "/")
+			byID[asset.AssetID] = asset
+		}
+		for assetIndex := range assets {
+			asset := &assets[assetIndex]
+			if !strings.EqualFold(strings.TrimSpace(asset.Kind), "video") {
+				continue
+			}
+			poster := byID[asset.PosterAssetID]
+			if poster == nil || poster.CDNURL == "" {
+				return fmt.Errorf("%s: video poster URL cannot be resolved", posts[postIndex].PostRef)
+			}
+			asset.ThumbnailURL = poster.CDNURL
+			asset.CoverURL = poster.CDNURL
+		}
+		posts[postIndex].Assets = assets
+	}
+	return nil
+}
+
 func validateArticleAssetManifest(manifest *ArticleAssetManifestDoc, ref string) error {
 	if manifest == nil {
 		return nil
+	}
+	if manifest.Schema != articleAssetManifestSchema {
+		return fmt.Errorf(
+			"%s: articleAssetManifest.schema must be %q, got %q",
+			ref,
+			articleAssetManifestSchema,
+			manifest.Schema,
+		)
 	}
 	if !sha256Pattern.MatchString(strings.TrimSpace(manifest.ArticleMarkdownDigest)) {
 		return fmt.Errorf("%s: articleAssetManifest.articleMarkdownDigest invalid", ref)
@@ -449,17 +551,8 @@ func LoadPosts(publishRoot string, filter map[string]bool) ([]PostDoc, error) {
 			if len(m.Assets) == 0 || len(m.Assets) > 20 {
 				return fmt.Errorf("%s: video manifest assets must contain 1..20 items", postRef)
 			}
-			hasVideo := false
-			for _, asset := range m.Assets {
-				if err := validateAssetItem(asset, postRef); err != nil {
-					return err
-				}
-				if strings.EqualFold(strings.TrimSpace(asset.Kind), "video") {
-					hasVideo = true
-				}
-			}
-			if !hasVideo {
-				return fmt.Errorf("%s: video manifest requires a video asset", postRef)
+			if err := validateVideoAssets(m.Assets, postRef); err != nil {
+				return err
 			}
 		}
 		if err := postsemantic.ValidateSuppliedRefs(

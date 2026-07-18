@@ -117,13 +117,8 @@ func (handler *CircleHandler) handleGroups(w http.ResponseWriter, request *http.
 		}
 		writeJSON(w, http.StatusOK, result)
 	case http.MethodDelete:
-		expectedVersion, err := parseExpectedVersion(request.Header.Get("If-Match"))
-		if err != nil {
-			writeHTTPError(w, request, rterr.NewInvalidArgument(rterr.ModuleCircle, "请求缺少有效版本", err.Error()))
-			return
-		}
 		result, err := handler.groupCommands.Archive(request.Context(), groupapp.ArchiveCommand{
-			CircleID: circleID, GroupID: groupID, ExpectedVersion: expectedVersion,
+			CircleID: circleID, GroupID: groupID,
 		})
 		if err != nil {
 			writeHTTPError(w, request, err)

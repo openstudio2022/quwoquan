@@ -155,7 +155,6 @@ class _ResyncChatRepository extends MockChatRepository {
   Future<List<ConversationDto>> batchGetConversations(List<String> ids) async {
     return <ConversationDto>[
       ConversationDto.fromMap(<String, dynamic>{
-        '_id': 'conv_001',
         'id': 'conv_001',
         'type': 'group',
         'title': '群聊',
@@ -186,7 +185,7 @@ class _FakeLocalChatSearchStore extends LocalChatSearchStore {
   int? lastContactAvatarVersion;
 
   void seedConversation(Map<String, dynamic> conversation) {
-    final record = ConversationCacheRecord.fromWireMap(conversation);
+    final record = ConversationCacheRecord.fromCacheMap(conversation);
     final id = record.id;
     if (id.isEmpty) {
       return;
@@ -264,8 +263,6 @@ void main() {
     );
     store.seedConversation(<String, dynamic>{
       'conversationId': 'conv_001',
-      'id': 'conv_001',
-      '_id': 'conv_001',
       'title': '群聊',
       'type': 'group',
       'groupAvatarVersion': 1,
@@ -295,9 +292,7 @@ void main() {
               ref
                   .read(conversationCacheProvider)
                   .put(
-                    ConversationCacheRecord.fromWireMap(<String, dynamic>{
-                      'id': 'conv_001',
-                      '_id': 'conv_001',
+                    ConversationCacheRecord.fromCacheMap(<String, dynamic>{
                       'conversationId': 'conv_001',
                       'type': 'group',
                       'title': '群聊',
@@ -392,8 +387,6 @@ void main() {
     );
     store.seedConversation(<String, dynamic>{
       'conversationId': 'conv_001',
-      'id': 'conv_001',
-      '_id': 'conv_001',
       'title': '群聊',
       'type': 'group',
       'groupAvatarVersion': 1,
@@ -424,9 +417,7 @@ void main() {
               ref
                   .read(conversationCacheProvider)
                   .put(
-                    ConversationCacheRecord.fromWireMap(<String, dynamic>{
-                      'id': 'conv_001',
-                      '_id': 'conv_001',
+                    ConversationCacheRecord.fromCacheMap(<String, dynamic>{
                       'conversationId': 'conv_001',
                       'type': 'group',
                       'title': '群聊',
@@ -520,8 +511,6 @@ void main() {
     );
     store.seedConversation(<String, dynamic>{
       'conversationId': 'conv_001',
-      'id': 'conv_001',
-      '_id': 'conv_001',
       'title': '群聊',
       'type': 'group',
       'groupAvatarVersion': 1,
@@ -551,9 +540,7 @@ void main() {
               ref
                   .read(conversationCacheProvider)
                   .put(
-                    ConversationCacheRecord.fromWireMap(<String, dynamic>{
-                      'id': 'conv_001',
-                      '_id': 'conv_001',
+                    ConversationCacheRecord.fromCacheMap(<String, dynamic>{
                       'conversationId': 'conv_001',
                       'type': 'group',
                       'title': '群聊',

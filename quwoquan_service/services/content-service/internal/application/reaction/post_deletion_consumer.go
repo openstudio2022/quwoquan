@@ -17,7 +17,7 @@ import (
 const postDeletionReactionBatchSize = 500
 
 type postDeletedFact struct {
-	PostID          string   `json:"_id"`
+	PostID          string   `json:"postId"`
 	AuthorID        string   `json:"authorId"`
 	ContentType     string   `json:"contentType"`
 	ContentIdentity string   `json:"contentIdentity"`

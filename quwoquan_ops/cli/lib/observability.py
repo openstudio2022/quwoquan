@@ -121,7 +121,7 @@ def write_run_manifest(
     data_release_id: str = "",
 ) -> Path:
     manifest = {
-        "contractVersion": OBSERVABILITY_CONTRACT_VERSION,
+        "schema": OBSERVABILITY_CONTRACT_VERSION,
         "env": env_name,
         "runId": run_id,
         "command": command,

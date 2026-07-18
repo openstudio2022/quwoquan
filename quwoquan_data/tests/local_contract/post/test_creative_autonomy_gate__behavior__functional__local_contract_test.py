@@ -19,7 +19,8 @@ for _path in (DATA_ROOT, SCRIPTS_ROOT):
 
 
 from core.creative_brief import complete_creative_meta, creative_governance_issues  # noqa: E402
-from content.post.writing_pack import build_writing_pack, render_prompt_md  # noqa: E402
+from content.post.article.prompt_renderer import render_prompt_md  # noqa: E402
+from content.post.article.writing_pack import build_writing_pack  # noqa: E402
 
 
 def _pack() -> dict:

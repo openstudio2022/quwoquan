@@ -2,7 +2,6 @@ dart_class: RuntimeFailureWire
 library_path: assistant/generated/contracts/runtime_failure.g.dart
 output_path: assistant/generated/contracts/runtime_failure.g.dart
 contract: runtime_failure
-version: runtime_failure.m2
 kind: shared_wire_contract
 fields:
   - { name: code, type: string, default: '' }

@@ -17,7 +17,7 @@ const defaultIntersectionFreshnessTTL = 7 * 24 * time.Hour
 //     仅当快照缺失、或其「最易腐维度」的保鲜期已过时，才回落底层 compute 源重算，并经
 //     materializeFactReasons 真算 Graph 边权 + Lifecycle 弱标（以上一次快照为增量基线）后回写
 //     （分维度保鲜：不同 dimension 各有 TTL，按最短者触发整快照刷新，避免任一维度陈旧占位）。
-//   - AffinityReasons 透传底层 compute 后经 applyGraphWeights 真算边权（确定性算术，非 /v1/score
+//   - AffinityReasons 透传底层 compute 后经 applyGraphWeights 真算边权（确定性算术，非 /score
 //     同步打分），替换原裸 count 启发式；ObjectReasons 为 viewer×object 点查，亦补边权真算。
 //
 // 架构基线 v2 §21：edgeWeight / lifecycleState / previousStrength / strengthDelta 全部在「写/刷新
@@ -61,7 +61,7 @@ func (s *ReadModelIntersectionSource) ttlFor(dimension string) time.Duration {
 }
 
 // recomputeDeadline 返回快照需重算的时刻：取所有事实维度中最早到期者（分维度保鲜，
-// 按最短 TTL 触发整快照刷新）。affinity 理由不参与（其新鲜度由 /v1/score 通道负责）。
+// 按最短 TTL 触发整快照刷新）。affinity 理由不参与（其新鲜度由 /score 通道负责）。
 func (s *ReadModelIntersectionSource) recomputeDeadline(doc ViewerIntersectionDoc) time.Time {
 	deadline := doc.ComputedAt.Add(defaultIntersectionFreshnessTTL)
 	for _, r := range doc.Reasons {

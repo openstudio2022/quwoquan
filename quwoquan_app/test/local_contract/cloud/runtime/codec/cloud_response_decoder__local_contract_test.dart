@@ -61,18 +61,14 @@ void main() {
     });
   });
 
-  group('CloudResponseDecoder.mapListFirstNonEmpty', () {
-    test('跳过空 items 取 subAccounts', () {
+  group('CloudResponseDecoder.mapList', () {
+    test('只读单一 canonical items 键', () {
       final obj = <String, dynamic>{
-        'items': <Map<String, dynamic>>[],
-        'subAccounts': <Map<String, dynamic>>[
+        'items': <Map<String, dynamic>>[
           <String, dynamic>{'id': 'x'},
         ],
       };
-      final list = CloudResponseDecoder.mapListFirstNonEmpty(obj, <String>[
-        'items',
-        'subAccounts',
-      ]);
+      final list = CloudResponseDecoder.mapList(obj, 'items');
       expect(list.length, 1);
       expect(list.first['id'], 'x');
     });

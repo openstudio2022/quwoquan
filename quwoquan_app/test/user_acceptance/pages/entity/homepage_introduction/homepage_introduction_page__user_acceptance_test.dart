@@ -29,6 +29,7 @@ void main() {
       'user_acceptance.page.homepageIntroduction.empty_permission_error',
       'user_acceptance.page.homepageIntroduction.primary_cta',
       'user_acceptance.page.homepageIntroduction.trace_context',
+      'user_acceptance.page.homepageIntroduction.request_wait_recovery',
       'user_acceptance.page.homepageIntroduction.public_source_card_security',
     ];
 
@@ -44,6 +45,7 @@ void main() {
         'user_acceptance.page.$surfaceId.empty_permission_error',
         'user_acceptance.page.$surfaceId.primary_cta',
         'user_acceptance.page.$surfaceId.trace_context',
+        'user_acceptance.page.$surfaceId.request_wait_recovery',
         'user_acceptance.page.$surfaceId.public_source_card_security',
       ]),
     );

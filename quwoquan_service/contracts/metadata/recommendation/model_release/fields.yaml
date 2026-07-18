@@ -1,4 +1,3 @@
-version: 1
 aggregate: RecommendationModelRelease
 
 entities:
@@ -21,21 +20,16 @@ entities:
       - { name: scenario, type: string, constraints: [NOT_NULL] }
       - { name: modelDigest, type: string, constraints: [NOT_NULL] }
       - { name: featureContractVersion, type: string, constraints: [NOT_NULL] }
-      - { name: idempotencyKey, type: string, constraints: [NOT_NULL] }
 
   ActivateRecommendationModelReleaseRequest:
     description: 激活已登记发布并设定灰度比例的强类型命令输入。
     fields:
       - { name: rolloutPercent, type: int, constraints: [NOT_NULL] }
-      - { name: expectedVersion, type: int64, constraints: [NOT_NULL] }
-      - { name: idempotencyKey, type: string, constraints: [NOT_NULL] }
 
   RollbackRecommendationModelReleaseRequest:
     description: 将场景回滚到目标已激活发布的强类型命令输入。
     fields:
       - { name: targetReleaseId, type: string, constraints: [NOT_NULL] }
-      - { name: expectedVersion, type: int64, constraints: [NOT_NULL] }
-      - { name: idempotencyKey, type: string, constraints: [NOT_NULL] }
 
   RecommendationModelReleaseCommandResult:
     description: 发布命令提交回执。

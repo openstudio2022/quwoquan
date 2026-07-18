@@ -45,6 +45,19 @@ if [[ -n "$RUNTIME_ENV" && "$RUNTIME_ENV" != "alpha" ]]; then
 fi
 
 echo "[ios-alpha-local] preparing alpha HTTPS public plane for flutter run"
+# CI/Patrol 会提供明确的 Simulator UDID；Xcode build phase 若暴露
+# TARGET_DEVICE_IDENTIFIER，只将其作为设备专属传递，绝不回退到任意 booted Simulator。
+if [[ -z "${QWQ_IOS_SIMULATOR_UDID:-}" && -n "${TARGET_DEVICE_IDENTIFIER:-}" ]]; then
+  export QWQ_IOS_SIMULATOR_UDID="$TARGET_DEVICE_IDENTIFIER"
+fi
+if [[ "${EFFECTIVE_PLATFORM_NAME:-}" == *"iphonesimulator"* || "${PLATFORM_NAME:-}" == "iphonesimulator" ]]; then
+  if [[ -z "${QWQ_IOS_SIMULATOR_UDID:-}" ]]; then
+    echo "[ios-alpha-local] GATE_BLOCK: Simulator CA trust needs TARGET_DEVICE_IDENTIFIER or QWQ_IOS_SIMULATOR_UDID." >&2
+    echo "[ios-alpha-local] Repair: run flutter with an explicit Simulator device, then rerun the build." >&2
+    exit 2
+  fi
+  export QWQ_IOS_SIMULATOR_CA_REQUIRED=1
+fi
 # iOS Simulator validates HTTPS against the booted simulator keychain, not the
 # macOS login keychain. Skip macOS trustRoot writes here to avoid the repeated
 # Certificate Trust Settings password prompt on every flutter run build.

@@ -35,7 +35,7 @@ def evaluate_benchmark(targets: list[int] | None = None) -> dict[str, Any]:
             "blockers": blockers,
         })
     return {
-        "schemaVersion": "quwoquan.data_engineering_benchmark.v1",
+        "schema": "quwoquan.data_engineering_benchmark",
         "coverageGapUnits": coverage_gap_units,
         "qualityIssueCount": len(quality_issues),
         "targets": results,

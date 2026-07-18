@@ -1,4 +1,3 @@
-version: 1
 domain: integration
 entity: Location
 object_kind: external_reference

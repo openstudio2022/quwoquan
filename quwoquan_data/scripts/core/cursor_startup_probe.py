@@ -5,7 +5,9 @@ import json
 import os
 import subprocess
 import sys
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Mapping
@@ -231,6 +233,12 @@ except Exception as exc:
         if returncode != 0 and payload.get("ready"):
             payload["ready"] = False
             payload["error"] = f"cursor startup probe exited {returncode}"
+        retryable = bool(payload.get("retryable", False))
+        if not payload.get("ready") and not _cursor_probe_attempt_is_auth(payload):
+            retryable = retryable or _cursor_probe_attempt_has_5xx(
+                payload
+            ) or _cursor_probe_attempt_is_bridge_disconnect(payload)
+        payload["retryable"] = retryable
         attempts.append(
             {
                 "attempt": attempt,
@@ -250,14 +258,19 @@ except Exception as exc:
         )
         if payload.get("ready"):
             break
-        if not bool(payload.get("retryable", False)) or attempt >= 3:
+        if (
+            not bool(payload.get("retryable", False))
+            or attempt >= runtime_policy.preflight_startup_attempts
+        ):
             break
         retry_after = payload.get("retryAfter")
         try:
             requested_delay = float(retry_after) if retry_after is not None else 0.0
         except (TypeError, ValueError):
             requested_delay = 0.0
-        exponential_delay = float(2 ** (attempt - 1))
+        exponential_delay = float(
+            runtime_policy.preflight_retry_delay_seconds * (2 ** (attempt - 1))
+        )
         sleep_seconds = min(
             max(exponential_delay, requested_delay),
             max(0.0, deadline - time.monotonic()),
@@ -406,6 +419,7 @@ def cursor_startup_probe_suite(
         else runtime_policy.startup_timeout_seconds
     )
     started_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    suite_started = time.monotonic()
     rows: list[dict] = []
     latencies: list[float] = []
     success_count = 0
@@ -414,15 +428,45 @@ def cursor_startup_probe_suite(
     startup_timeout_count = 0
     bridge_disconnect_count = 0
     cold_start_5xx_observed = 0
-    for index in range(1, total + 1):
+    worker_limit = min(
+        total,
+        runtime_policy.author_workers,
+        runtime_policy.cursor_bridge_instances,
+    )
+    active_workers = 0
+    maximum_active_workers = 0
+    active_lock = threading.Lock()
+
+    def run_probe(index: int) -> tuple[int, dict, float]:
+        nonlocal active_workers, maximum_active_workers
+        with active_lock:
+            active_workers += 1
+            maximum_active_workers = max(maximum_active_workers, active_workers)
         begin = time.monotonic()
-        payload = cursor_startup_probe(
-            model=model,
-            runtime=runtime,
-            timeout_seconds=effective_timeout_seconds,
-            cwd=cwd,
-        )
-        elapsed = round(time.monotonic() - begin, 4)
+        try:
+            payload = cursor_startup_probe(
+                model=model,
+                runtime=runtime,
+                timeout_seconds=effective_timeout_seconds,
+                cwd=cwd,
+            )
+        except Exception as exc:  # noqa: BLE001 - external SDK boundary
+            payload = {
+                "ready": False,
+                "status": "error",
+                "errorClass": type(exc).__name__,
+                "error": _redact_secret_text(str(exc)),
+            }
+        finally:
+            with active_lock:
+                active_workers -= 1
+        return index, payload, round(time.monotonic() - begin, 4)
+
+    with ThreadPoolExecutor(max_workers=worker_limit) as executor:
+        futures = [executor.submit(run_probe, index) for index in range(1, total + 1)]
+        outcomes = [future.result() for future in as_completed(futures)]
+
+    for index, payload, elapsed in outcomes:
         latencies.append(elapsed)
         ready = bool(payload.get("ready"))
         has_auth = _cursor_probe_attempt_is_auth(payload)
@@ -472,6 +516,13 @@ def cursor_startup_probe_suite(
                 "attemptCount": payload.get("attemptCount"),
             }
         )
+    rows.sort(key=lambda row: int(row["attempt"]))
+    elapsed_seconds = round(time.monotonic() - suite_started, 4)
+    probe_jobs_per_hour = (
+        round((success_count / elapsed_seconds) * 3600, 4)
+        if elapsed_seconds > 0
+        else 0.0
+    )
     true_5xx_rate = round(true_5xx_count / total, 4)
     startup_timeout_rate = round(startup_timeout_count / total, 4)
     bridge_disconnect_rate = round(bridge_disconnect_count / total, 4)
@@ -492,7 +543,7 @@ def cursor_startup_probe_suite(
     if success_count == 0:
         issues.append("Cursor startup probe never succeeded")
     return {
-        "schemaVersion": "quwoquan_data.cursor_startup_probe_suite/2",
+        "schema": "quwoquan_data.cursor_startup_probe_suite",
         "model": model,
         "runtime": runtime,
         "attempts": total,
@@ -507,86 +558,14 @@ def cursor_startup_probe_suite(
         "bridgeDisconnectCount": bridge_disconnect_count,
         "bridgeDisconnectRate": bridge_disconnect_rate,
         "startupLatencyP95": _p95(latencies),
+        "elapsedSeconds": elapsed_seconds,
+        "configuredConcurrency": worker_limit,
+        "effectiveConcurrency": maximum_active_workers,
+        "probeJobsPerHour": probe_jobs_per_hour,
+        "unrecoveredFailures": total - success_count,
         "ready": not issues,
         "issues": issues,
         "startedAt": started_at,
         "finishedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "results": rows,
     }
-
-
-_CURSOR_STARTUP_PROBE_CACHE_FILENAME = "cursor_startup_probe_cache.json"
-
-
-def _cursor_startup_probe_cache_ttl_seconds() -> float:
-    raw = os.environ.get("QWQ_CURSOR_STARTUP_PROBE_CACHE_TTL_SECONDS", "")
-    try:
-        value = float(raw) if raw else 600.0
-    except ValueError:
-        value = 600.0
-    return max(0.0, value)
-
-
-def _cursor_startup_probe_cache_path() -> Path:
-    from core.paths import DATA_LOCAL_ROOT
-
-    return DATA_LOCAL_ROOT / "cache" / "cursor" / _CURSOR_STARTUP_PROBE_CACHE_FILENAME
-
-
-def _cached_cursor_startup_probe(
-    *,
-    model: str,
-    runtime: str,
-    timeout_seconds: float,
-) -> dict:
-    """resume 轮 preflight 降本：TTL 内复用最近一次成功的 startup probe。
-
-    只缓存 ready=true 的结果（失败必须重新探测）；缓存键不包含凭据派生值。
-    凭据轮换后应通过 ``task preflight`` 重新探测，而不是从缓存推断鉴权结论。
-    """
-    ttl = _cursor_startup_probe_cache_ttl_seconds()
-    cache_key = f"{model}::{runtime}"
-    cache_path = _cursor_startup_probe_cache_path()
-    if ttl > 0 and cache_path.is_file():
-        try:
-            cached = json.loads(cache_path.read_text(encoding="utf-8"))
-            entry = cached.get(cache_key) if isinstance(cached, dict) else None
-            if (
-                isinstance(entry, dict)
-                and bool((entry.get("report") or {}).get("ready"))
-                and (time.time() - float(entry.get("cachedAtEpoch") or 0)) < ttl
-            ):
-                report = dict(entry["report"])
-                report["cacheHit"] = True
-                report["cachedAt"] = entry.get("cachedAt")
-                return report
-        except (OSError, ValueError, TypeError):
-            pass
-    report = cursor_startup_probe(
-        model=model,
-        runtime=runtime,
-        timeout_seconds=timeout_seconds,
-    )
-    if ttl > 0 and bool(report.get("ready")):
-        try:
-            cache_path.parent.mkdir(parents=True, exist_ok=True)
-            existing: dict = {}
-            if cache_path.is_file():
-                try:
-                    existing = json.loads(cache_path.read_text(encoding="utf-8"))
-                except (OSError, ValueError):
-                    existing = {}
-            if not isinstance(existing, dict):
-                existing = {}
-            existing[cache_key] = {
-                "cachedAtEpoch": time.time(),
-                "cachedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                "report": report,
-            }
-            cache_path.write_text(
-                json.dumps(existing, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
-        except OSError:
-            pass
-    return report

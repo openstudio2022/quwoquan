@@ -6,23 +6,19 @@ import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_visual.g.dart';
 
-/// 将 [FeedItemDto] 还原为发现区 / postBaseDtoFromMap 兼容的 wire 形状（含别名键）。
+/// 将 [FeedItemDto] 投影为发现区 / postBaseDtoFromMap 共用的 canonical wire。
 extension FeedItemDtoDiscoveryWireMap on FeedItemDto {
   Map<String, dynamic> toDiscoveryWireMap() {
     final createdIso = createdAt.toUtc().toIso8601String();
     final updatedIso = updatedAt?.toUtc().toIso8601String();
     final publishedIso = publishedAt?.toUtc().toIso8601String();
     return <String, dynamic>{
-      'postId': id,
-      '_id': id,
-      'contentType': type,
-      'contentIdentity': identity,
+      'id': id,
+      'type': type,
       'identity': identity,
       'assistantUsePolicy': assistantUsePolicy,
       'authorId': authorId,
-      'authorNickname': displayName,
       'displayName': displayName,
-      'authorAvatarUrl': avatarUrl,
       'avatarUrl': avatarUrl,
       if (authorRoleLabel.trim().isNotEmpty) 'authorRoleLabel': authorRoleLabel,
       if (authorIdentityTags.isNotEmpty)
@@ -34,7 +30,6 @@ extension FeedItemDtoDiscoveryWireMap on FeedItemDto {
       'coverUrl': coverUrl,
       'thumbnailUrl': thumbnailUrl,
       if (videoUrl != null && videoUrl!.isNotEmpty) 'videoUrl': videoUrl,
-      'mediaUrls': imageUrls,
       'imageUrls': imageUrls,
       if (durationMs != null) 'durationMs': durationMs,
       if (width != null) 'width': width,

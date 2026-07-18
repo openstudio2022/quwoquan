@@ -1,4 +1,3 @@
-version: 1
 read_model: GroupHome
 description: |
   商用群主页 / 聊天信息页 read model。由 Conversation、ConversationMember、
@@ -13,101 +12,84 @@ client_projection:
       dart_type: String
       nullable: false
       source: conversationId
-      aliases: [conversationId, id]
       default: "''"
     - name: title
       dart_type: String
       nullable: false
       source: title
-      aliases: [title, name]
       default: "''"
     - name: avatarUrl
       dart_type: String
       nullable: false
       source: avatarUrl
-      aliases: [avatarUrl, avatar]
       default: "''"
     - name: groupAvatarVersion
       dart_type: int
       nullable: false
       source: groupAvatarVersion
-      aliases: [groupAvatarVersion]
       default: "0"
     - name: circleId
       dart_type: String
       nullable: false
       source: circleId
-      aliases: [circleId]
       default: "''"
     - name: circleGroupId
       dart_type: String
       nullable: false
       source: circleGroupId
-      aliases: [circleGroupId]
       default: "''"
     - name: entityId
       dart_type: String
       nullable: false
       source: entityId
-      aliases: [entityId, homepageId]
       default: "''"
     - name: sourceEntityTitle
       dart_type: String
       nullable: false
       source: sourceEntityTitle
-      aliases: [sourceEntityTitle, entityTitle]
       default: "''"
     - name: sourceCircleTitle
       dart_type: String
       nullable: false
       source: sourceCircleTitle
-      aliases: [sourceCircleTitle, circleTitle]
       default: "''"
     - name: memberCount
       dart_type: int
       nullable: false
       source: memberCount
-      aliases: [memberCount]
       default: "0"
     - name: announcement
       dart_type: String
       nullable: false
       source: announcement
-      aliases: [announcement, notice]
       default: "''"
     - name: capabilities
       dart_type: List<String>
       nullable: false
       source: capabilities
-      aliases: [capabilities]
       default: "const <String>[]"
     - name: originType
       dart_type: String
       nullable: false
       source: originType
-      aliases: [originType]
       default: "''"
     - name: bindingType
       dart_type: String
       nullable: false
       source: bindingType
-      aliases: [bindingType]
       default: "''"
     - name: lifecyclePolicy
       dart_type: String
       nullable: false
       source: lifecyclePolicy
-      aliases: [lifecyclePolicy]
       default: "''"
     - name: canManageMembers
       dart_type: bool
       nullable: false
       source: canManageMembers
-      aliases: [canManageMembers]
       default: "false"
     - name: canDissolve
       dart_type: bool
       nullable: false
       source: canDissolve
-      aliases: [canDissolve]
       default: "false"

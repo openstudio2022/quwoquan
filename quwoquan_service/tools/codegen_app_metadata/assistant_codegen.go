@@ -17,10 +17,9 @@ type assistantEnumDef struct {
 }
 
 type assistantEnumValueDef struct {
-	Name            string   `yaml:"name"`
-	Wire            string   `yaml:"wire"`
-	Aliases         []string `yaml:"aliases"`
-	FastConvergence bool     `yaml:"fast_convergence"`
+	Name            string `yaml:"name"`
+	Wire            string `yaml:"wire"`
+	FastConvergence bool   `yaml:"fast_convergence"`
 }
 
 type assistantFieldDef struct {
@@ -36,10 +35,9 @@ type assistantLabeledEnumDef struct {
 }
 
 type assistantLabeledEnumValueDef struct {
-	Name    string   `yaml:"name"`
-	Wire    string   `yaml:"wire"`
-	Label   string   `yaml:"label"`
-	Aliases []string `yaml:"aliases"`
+	Name  string `yaml:"name"`
+	Wire  string `yaml:"wire"`
+	Label string `yaml:"label"`
 }
 
 type assistantSubagentPlanDefaults struct {
@@ -367,15 +365,10 @@ func renderAssistantRuntimeEnumsDart(catalog *assistantEnumCatalog) string {
 		b.WriteString("  switch (raw.trim()) {\n")
 		defaultName := assistantEnumDefault(enumDef.Name)
 		for _, value := range enumDef.Values {
-			if value.Wire != "" {
-				b.WriteString(fmt.Sprintf("    case %q:\n", value.Wire))
-			}
-			for _, alias := range value.Aliases {
-				b.WriteString(fmt.Sprintf("    case %q:\n", alias))
-			}
-			if value.Wire == "" && len(value.Aliases) == 0 {
+			if value.Wire == "" {
 				continue
 			}
+			b.WriteString(fmt.Sprintf("    case %q:\n", value.Wire))
 			b.WriteString(fmt.Sprintf("      return %s.%s;\n", enumDef.Name, value.Name))
 		}
 		b.WriteString("    default:\n")

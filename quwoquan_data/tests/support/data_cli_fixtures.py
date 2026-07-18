@@ -63,7 +63,7 @@ from core.paths import (  # noqa: E402
     execution_audit_markdown_path,
     execution_audit_summary_path,
     execution_entity_object_dir,
-    execution_workflow_state_path,
+    execution_state_path,
     ensure_execution_command_layout,
     ensure_execution_layout,
     execution_spec_path,
@@ -116,7 +116,7 @@ def _make_task(execution_id: str = "旅行/地域/四川省/景区/景区精选"
     )
     spec["executionId"] = execution_id
     spec["title"] = "四川景区精选"
-    spec["workflowPolicy"] = {
+    spec["executionPolicy"] = {
         "selectionPolicy": "frozen",
         "targetEntityCount": 2,
         "targetObjectCount": 2,
@@ -147,7 +147,7 @@ def _seed_baseline(execution_id: str) -> None:
             "catalogPath": str(execution_catalog(execution_id)),
         },
         outputs={"packetPath": str(execution_baseline_freeze_packet_path(execution_id))},
-        handoff_to="task geo-homepages",
+        handoff_to="task execute",
         evidence={"required": ["baseline_freeze_packet.json"]},
         summary={"coverageTargetCount": 2, "catalogRowCount": 2},
     )
@@ -188,7 +188,9 @@ def _seed_entity_object_for_audit(execution_id: str, *, name: str) -> None:
             "originTaskId": execution_id,
         },
     )
-    global_seq = int(load_execution_runtime_state(execution_id)["executionSequence"])
+    runtime_state = load_execution_runtime_state(execution_id)
+    assert runtime_state is not None
+    global_seq = runtime_state.execution_sequence
     registry = ExecutionAssetRegistry(execution_id=execution_id, execution_sequence=global_seq)
     asset_id = allocate_post_asset_id(
         entity_name=name,
@@ -240,7 +242,7 @@ def _seed_entity_object_for_audit(execution_id: str, *, name: str) -> None:
     write_json(
         ent / "5.review" / "provenance.json",
         {
-            "schemaVersion": "quwoquan_data.provenance",
+            "schema": "quwoquan_data.provenance",
             "ref": f"/entity/地点/景区/{name}",
             "final": {"generator": "agent", "agentRunId": f"run-{name}", "entityRefs": [f"/entity/地点/景区/{name}"], "articleDigest": None},
             "agentInput": {"writingPack": f"entities/地点/景区/{name}/3.compose/entity_page_input.json"},
@@ -252,7 +254,7 @@ def _seed_entity_object_for_audit(execution_id: str, *, name: str) -> None:
     write_json(
         ent / "5.review" / "finalization_report.json",
         {
-            "schemaVersion": "quwoquan_data.finalization_report",
+            "schema": "quwoquan_data.finalization_report",
             "draftArticleRef": "4.draft/page.md",
             "finalArticleRef": "page.md",
             "draftSha256": compute_document_sha256((ent / "4.draft" / "page.md").read_text(encoding="utf-8")),
@@ -298,7 +300,7 @@ def _seed_verified_post_for_audit(execution_id: str, *, ref: str, title: str, na
     write_json(
         obj / "2.quality" / "quality_analysis.json",
         {
-            "schemaVersion": "quwoquan_data.stage_envelope",
+            "schema": "quwoquan_data.stage_envelope",
             "executionId": execution_id,
             "executionId": execution_id,
             "step": "quality_analysis",
@@ -370,12 +372,12 @@ def _seed_verified_post_for_audit(execution_id: str, *, ref: str, title: str, na
             ],
         },
     )
-    # 单底稿零参考宪法 v2：source_refs.json 仅保留 baseSourceRef + sources（只留 sha256），
+    # 单底稿零参考宪法：source_refs.json 仅保留 baseSourceRef + sources（只留 sha256），
     # 禁止 citedSourceRefs / sourcePaths（第二来源/全量索引）与内联 sourceMarkdown 原文镜像。
     write_json(
         obj / "1.download" / "source_refs.json",
         {
-            "schemaVersion": "quwoquan_data.source_refs",
+            "schema": "quwoquan_data.source_refs",
             "baseSourceRef": source_ref,
             "sources": [
                 {
@@ -405,7 +407,7 @@ def _seed_verified_post_for_audit(execution_id: str, *, ref: str, title: str, na
     write_json(
         obj / "5.review" / "review_gate.json",
         {
-            "schemaVersion": "quwoquan_data.stage_envelope",
+            "schema": "quwoquan_data.stage_envelope",
             "payload": {
                 "passed": True,
                 "issues": [],
@@ -416,7 +418,7 @@ def _seed_verified_post_for_audit(execution_id: str, *, ref: str, title: str, na
     write_json(
         obj / "5.review" / "review_ledger.json",
         {
-            "schemaVersion": "quwoquan_data.review_ledger",
+            "schema": "quwoquan_data.review_ledger",
             "executionId": execution_id,
             "executionId": execution_id,
             "ref": ref,
@@ -443,7 +445,7 @@ def _seed_verified_post_for_audit(execution_id: str, *, ref: str, title: str, na
     write_json(
         obj / "5.review" / "review_entities.json",
         {
-            "schemaVersion": "quwoquan_data.review_entities",
+            "schema": "quwoquan_data.review_entities",
             "ref": ref,
             "entities": [
                 {
@@ -461,7 +463,7 @@ def _seed_verified_post_for_audit(execution_id: str, *, ref: str, title: str, na
     write_json(
         obj / "5.review" / "provenance.json",
         {
-            "schemaVersion": "quwoquan_data.provenance",
+            "schema": "quwoquan_data.provenance",
             "ref": ref,
             "final": {
                 "publishTitle": title,
@@ -494,7 +496,7 @@ def _seed_verified_post_for_audit(execution_id: str, *, ref: str, title: str, na
     write_json(
         obj / "5.review" / "finalization_report.json",
         {
-            "schemaVersion": "quwoquan_data.finalization_report",
+            "schema": "quwoquan_data.finalization_report",
             "draftArticleRef": "4.draft/draft.article.md",
             "finalArticleRef": "article.md",
             "draftSha256": article_digest,

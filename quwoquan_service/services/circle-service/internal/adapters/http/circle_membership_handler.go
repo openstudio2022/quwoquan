@@ -1,7 +1,6 @@
 package http
 
 import (
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -55,13 +54,8 @@ func (handler *CircleHandler) handleMemberships(w http.ResponseWriter, request *
 			writeHTTPError(w, request, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "self membership accepts GET or DELETE"))
 			return
 		}
-		expectedVersion, err := parseExpectedVersion(request.Header.Get("If-Match"))
-		if err != nil {
-			writeHTTPError(w, request, rterr.NewInvalidArgument(rterr.ModuleCircle, "请求缺少有效版本", err.Error()))
-			return
-		}
 		result, err := handler.membershipCommands.Leave(request.Context(), membershipapp.LeaveCommand{
-			CircleID: circleID, ExpectedVersion: expectedVersion,
+			CircleID: circleID,
 		})
 		if err != nil {
 			writeHTTPError(w, request, err)
@@ -76,19 +70,15 @@ func (handler *CircleHandler) handleMemberships(w http.ResponseWriter, request *
 			return
 		}
 		var body struct {
-			Role            string `json:"role"`
-			ExpectedVersion int64  `json:"expectedVersion"`
+			Role string `json:"role"`
 		}
-		if err := readStrictJSON(request, &body); err != nil || body.ExpectedVersion <= 0 {
-			if err == nil {
-				err = fmt.Errorf("expectedVersion must be positive")
-			}
+		if err := readStrictJSON(request, &body); err != nil {
 			writeHTTPError(w, request, rterr.NewInvalidArgument(rterr.ModuleCircle, "请求体无效", err.Error()))
 			return
 		}
 		result, err := handler.membershipCommands.UpdateRole(request.Context(), membershipapp.UpdateRoleCommand{
 			CircleID: circleID, TargetPersonaID: strings.TrimSpace(rest[0]),
-			ExpectedVersion: body.ExpectedVersion, Role: membershipmodel.CircleMemberRole(body.Role),
+			Role: membershipmodel.CircleMemberRole(body.Role),
 		})
 		if err != nil {
 			writeHTTPError(w, request, err)
@@ -105,10 +95,10 @@ func (handler *CircleHandler) handlePersonaCircles(w http.ResponseWriter, reques
 		writeHTTPError(w, request, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "Persona circles only accepts GET"))
 		return
 	}
-	path := strings.TrimPrefix(request.URL.Path, "/v1/personas/")
+	path := strings.TrimPrefix(request.URL.Path, "/personas/")
 	parts := strings.Split(strings.Trim(path, "/"), "/")
 	if len(parts) != 2 || parts[0] == "" || parts[1] != "circles" {
-		writeHTTPError(w, request, rterr.NewInvalidArgument(rterr.ModuleCircle, "无效路径", "expected /v1/personas/{personaId}/circles"))
+		writeHTTPError(w, request, rterr.NewInvalidArgument(rterr.ModuleCircle, "无效路径", "expected /personas/{personaId}/circles"))
 		return
 	}
 	result, err := handler.membershipQueries.ListPersonaCircles(

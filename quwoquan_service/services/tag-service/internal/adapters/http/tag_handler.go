@@ -23,18 +23,18 @@ func NewTagHandler(svc *application.TagService) *TagHandler {
 // Routes 注册已实现的交集核心、创作打标查询、推荐搜索与共现图谱路由。
 func (h *TagHandler) Routes() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /v1/tag/resolve", h.resolve)
-	mux.HandleFunc("GET /v1/tag/children", h.listChildren)
-	mux.HandleFunc("GET /v1/tag/shared-tags", h.sharedTags)
-	mux.HandleFunc("GET /v1/tag/inverted", h.inverted)
-	mux.HandleFunc("GET /v1/tag/dimensions", h.listDimensions)
-	mux.HandleFunc("GET /v1/tag/suggest", h.suggest)
-	mux.HandleFunc("POST /v1/tag/validate", h.validate)
-	mux.HandleFunc("GET /v1/tag/search", h.search)
-	mux.HandleFunc("GET /v1/tag/related", h.related)
-	mux.HandleFunc("POST /v1/tag/search-by-tags", h.searchByTags)
-	mux.HandleFunc("GET /v1/tag/graph/cooccurrence", h.cooccurrence)
-	mux.HandleFunc("GET /v1/tag/related-objects", h.relatedObjects)
+	mux.HandleFunc("GET /tag/resolve", h.resolve)
+	mux.HandleFunc("GET /tag/children", h.listChildren)
+	mux.HandleFunc("GET /tag/shared-tags", h.sharedTags)
+	mux.HandleFunc("GET /tag/inverted", h.inverted)
+	mux.HandleFunc("GET /tag/dimensions", h.listDimensions)
+	mux.HandleFunc("GET /tag/suggest", h.suggest)
+	mux.HandleFunc("POST /tag/validate", h.validate)
+	mux.HandleFunc("GET /tag/search", h.search)
+	mux.HandleFunc("GET /tag/related", h.related)
+	mux.HandleFunc("POST /tag/search-by-tags", h.searchByTags)
+	mux.HandleFunc("GET /tag/graph/cooccurrence", h.cooccurrence)
+	mux.HandleFunc("GET /tag/related-objects", h.relatedObjects)
 	return mux
 }
 

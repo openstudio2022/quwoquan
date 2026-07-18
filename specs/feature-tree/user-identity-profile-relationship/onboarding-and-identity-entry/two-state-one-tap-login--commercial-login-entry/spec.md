@@ -25,7 +25,7 @@
 
 - 微信、QQ、支付宝的正式 SDK 与服务端票据置换由 `four-environment-commercial-login-maturity` Story 负责；本 Story 只要求其入口与手机号/一键登录共享同一页面骨架和安全恢复路径。
 - Apple、Passkey 当前不提供正式 SDK、App 登录入口或公开 HTTP 登录路由。
-- 不保留未上线旧聚合登录 request 字段、旧 `/v1/auth/login` 别名路由或第二套 Web 登录视觉。
+- 不保留未上线旧聚合登录 request 字段、旧 `/auth/login` 别名路由或第二套 Web 登录视觉。
 - Web 不承诺运营商一键登录可用；Web 仅展示同构壳并按能力位降级。
 
 ## UX 与视觉约束
@@ -46,8 +46,9 @@
   - 本机号码态：大号脱敏手机号、账号创建或恢复说明。
   - 手机号验证码态：手机号输入区、六格验证码区与就近错误提示；主按钮 Y 坐标稳定。
 - 验证码必须显示为 6 个独立方框；隐藏输入只能用于焦点、粘贴和键盘控制，普通输入框不得外露。
-- 所有异常态必须就近提示，并保留关闭、修改手机号、重试或切换其它方式的清晰路径。手机号格式/验证码不匹配使用字段错误；发送失败、限流、验证码过期使用表单内联卡片；社交失败只在其他登录方式区域展示；同一次失败只允许一个可见反馈。
-- 初始能力不可用属于入口选择而非用户错误，静默进入手机号验证码；用户明确点击运营商一键后失败才自动降级并显示无嵌套动作的紧凑 `formInlineCard`，用户开始编辑后清除。
+- 所有异常态必须就近提示，并保留关闭、修改手机号、重试或切换其它方式的清晰路径。手机号格式/验证码不匹配使用字段错误；发送失败、限流、验证码过期使用表单内联错误；社交失败只在其他登录方式区域展示；同一次失败只允许一个可见反馈。
+- 登录页的字段、表单、操作与服务状态错误共用透明内联错误行：16px 圆形感叹号、14px 常规文字、6px 间距，浅色 `#E5484D`、深色 `#FF6B6B`；不使用胶囊、色块、卡片、阴影、警示色点或灰色提示。字段错误才使用同色输入边框，网络、发送、限流和服务不可用不得标红输入框。
+- 初始能力不可用属于入口选择而非用户错误，静默进入手机号验证码；用户明确点击运营商一键后失败才自动降级并显示无嵌套动作的紧凑 `formInlineCard`，用户开始编辑后清除。运营商 hint 的 `account_suspended`、`account_deleted`、`login_locked` 不得静默降级，必须进入结构化阻断面。
 - 背景保持简洁，优先使用系统页面背景；不新增复杂渐变或多余卡片。
 - 顶部关闭与帮助按钮触控区不得小于 44dp。
 - iPhone 17 为截图基准；iPad/Web 使用同一内容 frame 居中，最大宽度受控，不重排信息层级。
@@ -62,7 +63,7 @@
 - `phoneOtpIdle` / `phoneEditing` / `phoneInvalid` / `phoneValid`：手机号输入子状态。
 - `sendingCode` / `codeSent` / `codeEditing` / `codeComplete`：发码与验证码输入子状态。
 - `loggingIn` / `success` / `codeError` / `codeExpired` / `rateLimited` / `sendFailed` / `loginLocked`：登录与异常子状态。
-- `unavailable`：仅表示所有当前可用登录方式都暂不可用；正常情况下必须降级到 `phoneOtp`。
+- `unavailable`：仅表示所有当前可用登录方式都暂不可用；正常情况下必须收敛到 `phoneOtp` 的服务状态错误槽位，不维护第二套不可用页面。
 - `submitting`：用户点击主按钮后等待服务端认证。
 - `error`：结构化登录错误，可重试或降级。
 
@@ -83,7 +84,7 @@
 - 展示面固定为 `phoneField`、`otpField`、`agreement`、`socialMethod`、`topLevel`、`accountBlocked`；任何新增错误码必须先在 metadata 声明恢复动作，再进入该矩阵。
 - `social_provider_cancelled` 由恢复策略吸收，不显示失败。产品支持的平台不得把“未配置、未安装客户端、SDK 缺失、探测超时、平台不支持”合并为一个不可用布尔值：未安装或瞬时探测失败保留入口并就近解释，alpha 未配置保留入口并说明测试环境状态，明确不支持的平台才隐藏；beta/gamma/prod 缺 SDK 或凭据由发布门禁阻断。
 - 用户可见文案使用服务端安全 `userMessage`、本地化 codegen baseline 与通用兜底三级链，禁止展示原始异常、debugMessage 或关联 ID。
-- 账号暂停、删除、锁定采用稳定阻断面，必须同时提供帮助与关闭安全态。
+- 账号暂停、删除、锁定采用稳定阻断面，必须同时提供受 metadata 管理的帮助入口与关闭安全态；若不存在帮助入口，不得伪造 URL。
 
 ## 端云契约
 
@@ -97,7 +98,7 @@
 ## 四环境验证码策略
 
 - alpha/beta/gamma 默认使用固定测试验证码 `123456`，仍执行 challenge 哈希、有效期、限流、失败次数与一次性消费；禁止任意六位数放通、响应回传验证码或 UI 显示调试码。
-- alpha 裸 `flutter run` 的 public plane 必须实现 metadata 同源的 `/v1/auth/otp/send` 与 `/v1/auth/login/phone`，不得返回 HTML 404；独立 alpha runner 使用同一固定码语义。
+- alpha 裸 `flutter run` 的 public plane 必须实现 metadata 同源的 `/auth/otp/send` 与 `/auth/login/phone`，不得返回 HTML 404；独立 alpha runner 使用同一固定码语义。
 - beta/gamma 可以显式切换官方沙箱或真实供应商；prod 只允许真实供应商，测试 provider、固定测试码、缺失凭据或缺失密封密钥必须 fail-closed。
 - user-service 仅保存 challenge/code hash；短信明文与真实收件号码封装为短时 `codeRef`，integration-service 只在供应商调用前于内存中解析，日志、指标、attempt ledger 与公开响应不得包含手机号、验证码、token、授权载荷或 `codeRef`。
 - provider 模式的 user-service → integration-service 请求必须同时使用受 scope 约束的 service principal、HTTPS 与 mTLS 客户端证书；CA、client cert、client key 由 Secret Manager 以文件注入，任一缺失或证书校验失败均 fail-closed。

@@ -51,7 +51,7 @@ func (r *CircleListResolverClient) ListCircles(
 	if limit <= 0 {
 		limit = 50
 	}
-	endpoint, err := url.Parse(r.baseURL + "/v1/circles")
+	endpoint, err := url.Parse(r.baseURL + "/circles")
 	if err != nil {
 		return nil, err
 	}

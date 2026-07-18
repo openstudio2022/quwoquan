@@ -1,4 +1,3 @@
-version: 1
 
 service:
   name: realtime-gateway
@@ -13,7 +12,8 @@ service:
 
 api_routes:
   - method: POST
-    path: /v1/channel/{channelType}/webhook
+    path: /channel/{channelType}/webhook
+
     operation: ChannelWebhook
     actor: none
     application:

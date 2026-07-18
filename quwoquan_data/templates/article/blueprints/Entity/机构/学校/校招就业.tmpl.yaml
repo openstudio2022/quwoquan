@@ -1,5 +1,4 @@
 templateId: 学校_校招就业
-version: 1
 subject: { kind: entity, type: 机构/学校 }
 vertical: campus
 category: life

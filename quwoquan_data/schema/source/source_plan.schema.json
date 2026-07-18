@@ -5,7 +5,7 @@
   "properties": {
     "entityId": { "type": "string" },
     "entityName": { "type": "string", "minLength": 1 },
-    "policyRevision": { "const": "encyclopedia-primary-v2" },
+    "policyRevision": { "const": "encyclopedia-primary" },
     "dispatchByContentType": {
       "type": "object",
       "additionalProperties": { "type": "integer", "minimum": 0 }
@@ -40,9 +40,9 @@
             "then": {
               "properties": {
                 "sourceKind": {
-                  "enum": ["wikipedia", "baidu_baike", "sogou_baike", "toutiao_baike"]
+                  "enum": ["wikipedia", "baidu_baike", "toutiao_baike"]
                 },
-                "policyRevision": { "const": "encyclopedia-primary-v2" }
+                "policyRevision": { "const": "encyclopedia-primary" }
               },
               "required": [
                 "sourceKind",
@@ -61,13 +61,7 @@
                 {
                   "properties": {
                     "sourceKind": { "const": "baidu_baike" },
-                    "extractor": { "const": "baidu_baike_html" }
-                  }
-                },
-                {
-                  "properties": {
-                    "sourceKind": { "const": "sogou_baike" },
-                    "extractor": { "const": "sogou_baike_html" }
+                    "extractor": { "const": "baidu_baike_openapi" }
                   }
                 },
                 {

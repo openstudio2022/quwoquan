@@ -47,8 +47,8 @@ func renderContentMetadataDart(
 	b.WriteString("  };\n\n")
 
 	b.WriteString(fmt.Sprintf("  static const int feedDefaultLimit = %d;\n\n", feedDefaultLimit))
-	b.WriteString(fmt.Sprintf("  static const String feedPath = '%s';\n", nonEmpty(feedRoute.Path, "/v1/content/feed")))
-	b.WriteString(fmt.Sprintf("  static const String postDetailPathTemplate = '%s';\n\n", nonEmpty(getPostRoute.Path, "/v1/content/posts/{postId}")))
+	b.WriteString(fmt.Sprintf("  static const String feedPath = '%s';\n", nonEmpty(feedRoute.Path, "/content/feed")))
+	b.WriteString(fmt.Sprintf("  static const String postDetailPathTemplate = '%s';\n\n", nonEmpty(getPostRoute.Path, "/content/posts/{postId}")))
 
 	b.WriteString("  static const List<String> feedQueryParams = <String>[\n")
 	for _, key := range feedRoute.QueryParams {
@@ -56,7 +56,7 @@ func renderContentMetadataDart(
 	}
 	b.WriteString("  ];\n\n")
 
-	b.WriteString("  static const List<String> createWritableFields = <String>[\n")
+	b.WriteString("  static const List<String> publicationWritableFields = <String>[\n")
 	for _, f := range writableFields {
 		b.WriteString(fmt.Sprintf("    '%s',\n", f))
 	}

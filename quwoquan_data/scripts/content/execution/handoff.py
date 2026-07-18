@@ -16,6 +16,8 @@ from core import public_contacts as pc
 from core import quality_gates as qg
 from core.io import write_json
 from core.paths import execution_root
+from core.runtime_policy import active_runtime_policy
+from content.execution.model_contract import execution_model_pair_for_execution
 
 
 # ---------------------------------------------------------------------------
@@ -44,17 +46,15 @@ def build_execution_contract(
     permissions: list[str] | None = None,
     completion_conditions: list[str] | None = None,
     output_paths: list[str] | None = None,
-    max_wall_clock_seconds: int = 1200,
-    max_attempts: int = 2,
-    stuck_threshold: int = 3,
 ) -> dict[str, Any]:
+    policy = active_runtime_policy()
     return {
         "inputs": inputs
         or ["4.draft/author_job_packet.json", "3.compose/writing_pack.json", "2.quality/*", "5.review/repair_report.json"],
         "budget": {
-            "maxWallClockSeconds": int(max_wall_clock_seconds),
-            "maxAttempts": int(max_attempts),
-            "stuckThreshold": int(stuck_threshold),
+            "maxWallClockSeconds": policy.queue_max_wall_clock_seconds,
+            "maxAttempts": policy.queue_max_attempts,
+            "stuckThreshold": policy.queue_stuck_threshold,
         },
         "permissions": list(permissions) if permissions is not None else list(DEFAULT_AUTHOR_PERMISSIONS),
         "completionConditions": list(completion_conditions) if completion_conditions is not None else [
@@ -96,13 +96,13 @@ def build_author_job_packet(
     prompt_rel: str,
     content_object_rel: str | None = None,
 ) -> dict[str, Any]:
-    import os
-
     from content.execution.runtime_contract import canonical_sha256, stage_execution_context
 
     carrier = writing_pack.get("carrier") or brief.get("carrier")
     is_image = str(carrier or "") == "image"
+    is_video = str(carrier or "") == "video"
     execution = stage_execution_context(execution_id)
+    author_model = execution_model_pair_for_execution(execution_id).author
     run_id = "author_" + canonical_sha256(
         {"executionId": execution["executionId"], "objectRef": ref}
     ).removeprefix("sha256:")[:20]
@@ -113,6 +113,13 @@ def build_author_job_packet(
             "4.draft/agent_result_envelope.json",
         ]
         if is_image
+        else [
+            "4.draft/video_script.json",
+            "4.draft/draft_meta.json",
+            "4.draft/author_self_check.json",
+            "4.draft/agent_result_envelope.json",
+        ]
+        if is_video
         else [
             "4.draft/draft.article.md",
             "4.draft/draft_meta.json",
@@ -135,14 +142,14 @@ def build_author_job_packet(
         if a.get("assetId")
     ]
     return {
-        "schemaVersion": "quwoquan_data.author_job_packet/1",
+        "schema": "quwoquan_data.author_job_packet",
         "stage": "4.draft",
         **execution,
         "objectRef": ref,
         "composePacketRef": "3.compose/writing_pack.json",
         "promptSnapshotRef": "4.draft/prompt_snapshot.json",
-        "provider": os.environ.get("QWQ_AUTHOR_PROVIDER", "local_cursor_sdk"),
-        "model": os.environ.get("QWQ_AUTHOR_MODEL", "composer"),
+        "provider": author_model.provider.value,
+        "model": author_model.model_id,
         "runId": run_id,
         "outputRefs": output_refs,
         "ref": ref,
@@ -162,6 +169,7 @@ def build_author_job_packet(
         "creatorAssignment": creator_assignment,
         "captionPolicy": writing_pack.get("captionPolicy") or ({"titleMaxChars": 80, "captionMaxChars": 300} if is_image else {}),
         "assets": assets,
+        "sourceFrames": list(writing_pack.get("sourceFrames") or []),
         "exitGates": [
             *(
                 [
@@ -171,6 +179,8 @@ def build_author_job_packet(
                     "galleryCaption",
                 ]
                 if is_image
+                else ["videoScriptContract", "videoSourceRights", "videoDeliveryContract"]
+                if is_video
                 else [
                     "writingIntentConsistency",
                     "imageReferenceClosure",
@@ -184,20 +194,40 @@ def build_author_job_packet(
             ),
         ],
         "executionContract": build_execution_contract(
-            inputs=["4.draft/author_job_packet.json", "4.draft/prompt.md", "5.review/repair_report.json"]
-            if is_image
-            else None,
-            completion_conditions=[
-                "4.draft/draft.article.md 不存在",
-                "4.draft/draft_meta.json.generator == image_evidence_pack",
-                "ref_review_gate.passed == true (reviewDecision == approved)",
-            ]
-            if is_image
-            else None,
-            output_paths=["4.draft/draft_meta.json", "5.review/ref_review_gate.json"]
-            if is_image
-            else None,
-            max_wall_clock_seconds=420 if is_image else 1200,
+            inputs=(
+                ["4.draft/author_job_packet.json", "4.draft/prompt.md", "5.review/repair_report.json"]
+                if is_image
+                else ["4.draft/author_job_packet.json", "4.draft/prompt.md", "3.compose/writing_pack.json"]
+                if is_video
+                else None
+            ),
+            completion_conditions=(
+                [
+                    "4.draft/draft.article.md 不存在",
+                    "4.draft/draft_meta.json.generator == image_evidence_pack",
+                    "ref_review_gate.passed == true (reviewDecision == approved)",
+                ]
+                if is_image
+                else [
+                    "4.draft/video_script.json 通过 video_script schema",
+                    "4.draft/draft_meta.json.generator == agent",
+                    "ref_review_gate.passed == true (reviewDecision == approved)",
+                ]
+                if is_video
+                else None
+            ),
+            output_paths=(
+                ["4.draft/draft_meta.json", "5.review/ref_review_gate.json"]
+                if is_image
+                else [
+                    "4.draft/video_script.json",
+                    "4.draft/draft_meta.json",
+                    "4.draft/author_self_check.json",
+                    "5.review/ref_review_gate.json",
+                ]
+                if is_video
+                else None
+            ),
         ),
         "isolation": "single-ref: 只读本 ref 的 packet/template/source，禁止读取同批其它文章正文作为底稿",
     }
@@ -233,7 +263,7 @@ def build_ref_review_gate(
         gate_issues.append("exitGate: author_self_check.json missing (subagent must self-check, not just declare done)")
     passed = not gate_issues and review_decision == "approved"
     return {
-        "schemaVersion": "quwoquan_data.ref_review_gate",
+        "schema": "quwoquan_data.ref_review_gate",
         "ref": ref,
         "passed": passed,
         "reviewDecision": review_decision,
@@ -284,7 +314,7 @@ def build_execution_reducer_gate(refs_payload: list[Mapping[str, Any]]) -> dict[
         image_coverage[str(p.get("ref"))] = len(qg._ASSET_REF_RE.findall(str(p.get("article") or "")))
 
     return {
-        "schemaVersion": "quwoquan_data.execution_reducer_gate",
+        "schema": "quwoquan_data.execution_reducer_gate",
         "passed": not issues,
         "issues": issues,
         "affectedRefs": sorted(affected),

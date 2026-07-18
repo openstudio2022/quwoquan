@@ -1,14 +1,15 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
+import 'package:quwoquan_app/cloud/user/generated/prefab_user_metadata.g.dart';
 import '../../../../support/fakes/test_auth_repository.dart';
 
 void main() {
   test('测试专用 Auth double 的五种登录统一返回 metadata 当前身份', () async {
     final originalDirectory = Directory.current;
-    final expectedIdentity = _readCurrentUserIdentity();
+    const expectedUserId = PrefabUserMetadata.currentUserId;
+    const expectedSubAccountId = PrefabUserMetadata.currentSubAccountId;
     final isolatedDirectory = await Directory.systemTemp.createTemp(
       'qwq_auth_test_double_',
     );
@@ -51,28 +52,8 @@ void main() {
     ];
 
     for (final result in results) {
-      expect(result.ownerId, expectedIdentity.userId);
-      expect(result.activeSub?['subAccountId'], expectedIdentity.subAccountId);
+      expect(result.ownerId, expectedUserId);
+      expect(result.activeSub?['subAccountId'], expectedSubAccountId);
     }
   });
-}
-
-({String userId, String subAccountId}) _readCurrentUserIdentity() {
-  final candidates = <File>[
-    File(
-      '../quwoquan_service/contracts/metadata/_shared/test_fixtures/'
-      'user_pool.manifest.travel_photo_1k_v1.json',
-    ),
-    File(
-      'quwoquan_service/contracts/metadata/_shared/test_fixtures/'
-      'user_pool.manifest.travel_photo_1k_v1.json',
-    ),
-  ];
-  final source = candidates.where((candidate) => candidate.existsSync()).first;
-  final decoded = jsonDecode(source.readAsStringSync()) as Map<String, dynamic>;
-  final current = decoded['currentUserVariant'] as Map<String, dynamic>;
-  return (
-    userId: current['userId'] as String,
-    subAccountId: current['subAccountId'] as String,
-  );
 }

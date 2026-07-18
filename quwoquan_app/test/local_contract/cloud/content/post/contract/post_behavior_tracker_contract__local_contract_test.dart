@@ -5,7 +5,7 @@ import 'package:quwoquan_app/cloud/content/generated/content_behaviors.g.dart';
 ///
 /// 三维度覆盖：
 ///   常规契约  — 批量路由正确、各事件类型入队
-///   兼容性契约 — 重置后队列清空；多事件累积不串扰
+///   单轨契约 — 重置后队列清空；多事件累积不串扰
 ///   异常/边界契约 — 无效参数不崩溃
 void main() {
   setUp(() {
@@ -16,8 +16,8 @@ void main() {
   // 常规契约
   // ──────────────────────────────────────────────────────────────────
   group('ContentBehaviorTracker — 常规契约', () {
-    test('batch_route_matches_service_yaml — route == /v1/content/behaviors', () {
-      expect(ContentBehaviorTracker.batchRoute, equals('/v1/content/behaviors'));
+    test('batch_route_matches_service_yaml — route == /content/behaviors', () {
+      expect(ContentBehaviorTracker.batchRoute, equals('/content/behaviors'));
     });
 
     test('trackImpression enqueues impression event with postId', () {
@@ -86,9 +86,9 @@ void main() {
   });
 
   // ──────────────────────────────────────────────────────────────────
-  // 兼容性契约：重置/多事件累积
+  // 单轨契约：重置/多事件累积
   // ──────────────────────────────────────────────────────────────────
-  group('ContentBehaviorTracker — 兼容性契约', () {
+  group('ContentBehaviorTracker — 单轨契约', () {
     test('multiple events accumulate in queue without dropping', () {
       ContentBehaviorTracker.trackImpression('p1');
       ContentBehaviorTracker.trackImpression('p2');

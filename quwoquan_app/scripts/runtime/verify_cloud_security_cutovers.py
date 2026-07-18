@@ -138,23 +138,44 @@ def main() -> int:
         "TestAssistantConsentLifecycleUsesAuthoritativeStore",
     )
 
-    for relative in (
+    require(
         "quwoquan_app/lib/cloud/services/behavior/behavior_repository.dart",
-        "quwoquan_app/lib/cloud/services/ops/ops_event_repository.dart",
-    ):
-        require(
-            relative,
-            "ActorQueuePartition",
-            "ActorQueueStorage",
-            "actorPartitionKey",
-            ".acceptsEnvelope(",
-            ".moveToDlq(",
-            "clearPendingForLogout",
-        )
-        forbid(
-            relative,
-            "queuePartition ??",
-            "httpClient ?? CloudHttpClient()",
+        "ActorQueuePartition",
+        "ActorQueueStorage",
+        "actorPartitionKey",
+        ".acceptsEnvelope(",
+        ".moveToDlq(",
+        "clearPendingForLogout",
+    )
+    forbid(
+        "quwoquan_app/lib/cloud/services/behavior/behavior_repository.dart",
+        "queuePartition ??",
+        "httpClient ?? CloudHttpClient()",
+    )
+    require(
+        "quwoquan_app/lib/core/telemetry/app_telemetry_outbox.dart",
+        "ActorQueuePartition",
+        "ActorQueueStorage",
+        "actorPartitionKey",
+        ".acceptsEnvelope(",
+        ".moveToDlq(",
+        "ActorQueueSignalKind.overflowMoved",
+        "idempotencyKey: sealed.digest",
+    )
+    require(
+        "quwoquan_app/lib/core/telemetry/app_telemetry_transport.dart",
+        "OpsApiMetadata.reportEventBatchPath",
+        "required CloudHttpClient httpClient",
+        "'Idempotency-Key': idempotencyKey",
+        "CloudErrorMapper.fromStatusCode",
+    )
+    retired_ops_repository = (
+        ROOT / "quwoquan_app/lib/cloud/services/ops/ops_event_repository.dart"
+    )
+    if retired_ops_repository.exists():
+        raise AssertionError(
+            "退休的 OpsEventRepository 不得恢复；产品遥测唯一出口是 "
+            "AppTelemetryOutbox + CloudAppTelemetryTransport"
         )
     require(
         "quwoquan_app/lib/infrastructure/local/actor_queue/actor_queue_storage.dart",
@@ -167,8 +188,7 @@ def main() -> int:
     )
     for relative in (
         "quwoquan_app/lib/cloud/services/behavior/behavior_repository.dart",
-        "quwoquan_app/lib/cloud/services/ops/ops_event_repository.dart",
-        "quwoquan_app/lib/assistant/observability/logging/app_exception_telemetry_service.dart",
+        "quwoquan_app/lib/core/telemetry/app_telemetry_outbox.dart",
     ):
         require(relative, "ActorQueueSignalKind.overflowMoved")
     require(
@@ -179,14 +199,14 @@ def main() -> int:
     require(
         "quwoquan_app/lib/ui/settings/pages/settings_page.dart",
         "behaviorRepositoryProvider).clearPendingForLogout()",
-        "opsEventRepositoryProvider).clearPendingForLogout()",
-        "AppExceptionTelemetryService.instance.clearPendingForLogout()",
+        "appTelemetryReporterProvider).clearPendingForLogout()",
     )
     require(
         "quwoquan_app/lib/core/di/ops_event_dependencies.dart",
-        "accountId: session.ownerId",
+        "accountId: session.isAuthenticated ? session.ownerId : ''",
         "actorQueueSessionBoundaryProvider",
-        ".transition(previous: previousPartition, current: currentPartition)",
+        "previous: _partitionFor(previous)",
+        "current: _partitionFor(next)",
         "AppExceptionTelemetryService.instance.bind",
     )
     require_glob(
@@ -197,12 +217,17 @@ def main() -> int:
     )
     require(
         "quwoquan_app/lib/assistant/observability/logging/app_exception_telemetry_service.dart",
-        "_queueStorage.open(partition, _queueBoxName)",
+        "AppTelemetryRecorder",
+        "AppTelemetryPayload.runtimeException",
+        "await reporter.record(",
+        "await reporter.flush()",
+    )
+    forbid(
+        "quwoquan_app/lib/assistant/observability/logging/app_exception_telemetry_service.dart",
+        "ActorQueueStorage",
         "actorPartitionKey",
         ".moveToDlq(",
-        "clearPendingForLogout",
-        "_redactor.redactText(exceptionText)",
-        "_redactor.redactText(stackText)",
+        "package:hive",
     )
 
     for relative in (
@@ -246,7 +271,6 @@ def main() -> int:
         "contentMediaUploadSessionInitMediaUpload",
         "contentMediaUploadSessionCompleteMediaUpload",
         "contentMediaUploadSessionAbortMediaUpload",
-        "contentPostBindMediaAssetsToPost",
     )
 
     require(

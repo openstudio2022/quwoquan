@@ -13,7 +13,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.lib.local_gamma_object_storage import prepare_local_gamma_object_storage
-from quwoquan_ops.cli.lib.local_gamma_auth import prepare_local_gamma_auth
+from quwoquan_ops.cli.lib.local_environment_auth import prepare_local_environment_auth
 
 
 class LocalGammaObjectStorageTest(unittest.TestCase):
@@ -45,8 +45,8 @@ class LocalGammaObjectStorageTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp_dir:
             deploy_root = Path(tmp_dir) / "deploy"
             with mock.patch.dict(os.environ, {"QWQ_DEPLOY_WORK_ROOT": str(deploy_root)}, clear=False):
-                first = prepare_local_gamma_auth()
-                second = prepare_local_gamma_auth()
+                first = prepare_local_environment_auth("gamma", "gamma-local")
+                second = prepare_local_environment_auth("gamma", "gamma-local")
 
             self.assertEqual(first.environment, second.environment)
             self.assertTrue(first.secret_path.is_file())
@@ -69,8 +69,8 @@ class LocalGammaObjectStorageTest(unittest.TestCase):
                 {"QWQ_DEPLOY_WORK_ROOT": str(deploy_root)},
                 clear=False,
             ):
-                migrated = prepare_local_gamma_auth()
-                repeated = prepare_local_gamma_auth()
+                migrated = prepare_local_environment_auth("gamma", "gamma-local")
+                repeated = prepare_local_environment_auth("gamma", "gamma-local")
 
             self.assertEqual(migrated.environment, repeated.environment)
             self.assertIn("existing-jwt", migrated.environment.values())

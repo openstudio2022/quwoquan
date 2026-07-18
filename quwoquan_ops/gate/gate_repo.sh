@@ -4,6 +4,7 @@ export PYTHONDONTWRITEBYTECODE=1
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
+export PYTHONPYCACHEPREFIX="$ROOT/.qwq_output/env/repo/local/python-cache/repo-gate"
 export PYTEST_ADDOPTS="${PYTEST_ADDOPTS:-} -o cache_dir=$ROOT/.qwq_output/env/repo/local/tests/cache/pytest"
 
 if [ -x "/opt/homebrew/opt/ruby/bin/ruby" ]; then
@@ -43,6 +44,7 @@ python3 quwoquan_ops/gate/verify_agent_context_contract.py
 python3 quwoquan_ops/gate/verify_business_object_design_freeze.py
 python3 quwoquan_ops/gate/verify_retired_runtime_architecture.py
 python3 quwoquan_ops/gate/verify_cloud_commercial_directory_governance.py
+python3 quwoquan_ops/gate/verify_single_track_contracts.py
 python3 quwoquan_ops/cli/cloud_contract_handoff.py verify
 python3 quwoquan_app/scripts/runtime/verify_app_generated_manifest.py
 python3 quwoquan_app/scripts/runtime/verify_cloud_package_boundaries.py
@@ -64,8 +66,9 @@ run_service() {
   echo "[gate] quwoquan_service"
   bash quwoquan_ops/gate/scaffold/verify_feature_traceability.sh
   python3 quwoquan_ops/gate/verify_stackctl_args_contract.py
-  python3 quwoquan_ops/gate/verify_dev_up_cli_surface.py
-  python3 quwoquan_ops/gate/verify_environment_topology_manifest.py
+python3 quwoquan_ops/gate/verify_dev_up_cli_surface.py
+python3 quwoquan_ops/gate/verify_api_path_unversioned.py
+python3 quwoquan_ops/gate/verify_environment_topology_manifest.py
   python3 quwoquan_ops/gate/verify_local_env_port_manifest.py
   python3 quwoquan_ops/gate/verify_prod_rollout_stackctl_contract.py
   python3 quwoquan_ops/gate/verify_prod_plane_access_isolation.py
@@ -140,6 +143,7 @@ run_app() {
     python3 quwoquan_app/scripts/runtime/verify_behavior_error_stack_convergence.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_cloud_services_semantic.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_app_remote_config_contract.py || exit 1
+    python3 quwoquan_app/scripts/runtime/verify_ops_event_schema_completeness.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_route_and_context_semantic.py || exit 1
     python3 quwoquan_app/scripts/env/verify_runtime_host_literals.py || exit 1
     python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/gate/verify_no_personal_assistant_imports.py || exit 1
@@ -205,6 +209,7 @@ run_app() {
     python3 quwoquan_service/scripts/contract/verify_assistant_context_contract.py || exit 1
     python3 quwoquan_service/scripts/contract/verify_assistant_security_contract.py || exit 1
     python3 quwoquan_app/scripts/env/verify_ui_mock_isolation.py || exit 1
+    python3 quwoquan_ops/gate/verify_media_delivery_contract.py || exit 1
     python3 quwoquan_app/scripts/env/verify_contract_mock_data_inventory.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_app_no_integration_test_dir.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_lib_no_import_test_tree.py || exit 1

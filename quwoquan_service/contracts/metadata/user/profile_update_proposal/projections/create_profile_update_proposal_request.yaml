@@ -1,4 +1,3 @@
-version: 1
 read_model: CreateProfileUpdateProposalRequest
 description: 创建资料修改提案的闭集 request body；actor、surface 与幂等键由 Runtime 注入。
 source_entities: [ProfileUpdateProposal, Persona]

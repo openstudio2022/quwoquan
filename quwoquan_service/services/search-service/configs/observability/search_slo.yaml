@@ -20,7 +20,7 @@ metrics:
 
 slis:
   - id: retrieve_latency
-    description: /v1/search 检索延迟（用户感知），分位数取自 histogram
+    description: /search 检索延迟（用户感知），分位数取自 histogram
     sli: histogram_quantile(q, sum(rate(search_retrieve_duration_seconds_bucket[5m])) by (le))
     objectives:
       p50_ms: 80
@@ -66,7 +66,7 @@ load_model:
   traffic_classes:
     suggest:
       description: 输入即时联想；App 本地优先，云侧轻量联想可选
-      path: POST /v1/search (mode=suggest)
+      path: POST /search (mode=suggest)
       target_rps: { baseline: 60, peak: 200, spike: 500 }
       max_concurrency_per_instance: 120
       server_latency_ms: { p50: 40, p95: 120, p99: 250 }   # search_retrieve_duration_seconds
@@ -76,7 +76,7 @@ load_model:
       cost_guard: [no_unbounded_wildcard, no_deep_paging, no_script_sort, "limit<=12"]
     result:
       description: 正式结果页云侧检索（单源云侧）
-      path: POST /v1/search (mode=result)
+      path: POST /search (mode=result)
       target_rps: { baseline: 30, peak: 120, spike: 300 }
       max_concurrency_per_instance: 100
       server_latency_ms: { p50: 80, p95: 400, p99: 800 }    # 服务端 retrieve（histogram）
@@ -86,7 +86,7 @@ load_model:
       degrade_rate_max: 0.05
     feedback:
       description: 点击/曝光/停留反馈写入（非用户感知延迟、best-effort）
-      path: POST /v1/search/feedback
+      path: POST /search/feedback
       target_rps: { baseline: 80, peak: 300, spike: 800 }
       max_concurrency_per_instance: 150
       server_latency_ms: { p50: 20, p95: 80, p99: 200 }

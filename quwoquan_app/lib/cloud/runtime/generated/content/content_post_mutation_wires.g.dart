@@ -10,14 +10,6 @@ CloudJsonMap _mutationPutOpt(CloudJsonMap m, String k, Object? v) {
   return m;
 }
 
-List<String>? _mutationStringList(Object? v) {
-  if (v == null) return null;
-  if (v is List) {
-    return v.map((e) => e.toString()).where((s) => s.isNotEmpty).toList(growable: false);
-  }
-  return null;
-}
-
 CloudJsonMap? _mutationStringKeyedMap(Object? v) {
   if (v is! Map) return null;
   return Map<String, dynamic>.from(v);
@@ -29,309 +21,6 @@ List<CloudJsonMap>? _mutationMapList(Object? v) {
       .whereType<Map>()
       .map((e) => Map<String, dynamic>.from(e))
       .toList(growable: false);
-}
-
-/// HTTP body for CreatePost (metadata writable_fields).
-class CreatePostRequestWire {
-  CreatePostRequestWire({
-    this.contentType,
-    this.contentIdentity,
-    this.title,
-    this.body,
-    this.summary,
-    this.semanticMentions,
-    this.mediaUrls,
-    this.mediaItems,
-    this.coverUrl,
-    this.thumbnailUrl,
-    this.articleMarkdown,
-    this.articleMarkdownVersion,
-    this.articleAssetManifest,
-    this.articleRenderProfile,
-    this.videoUrl,
-    this.coverStrategy,
-    this.coverFrameTimeMs,
-    this.illustrationAssetId,
-    this.location,
-    this.locationName,
-    this.primaryHomepageId,
-    this.primaryHomepageType,
-    this.primaryHomepageSnapshot,
-    this.visibility,
-    this.assistantUsePolicy,
-    this.sourcePostId,
-    this.sourceType,
-    this.deviceInfo,
-    this.publishLocation,
-    this.authorDisplayNameSnapshot,
-    this.authorAvatarUrlSnapshot,
-    this.personaContextVersion,
-  });
-
-  final String? contentType;
-  final String? contentIdentity;
-  final String? title;
-  final String? body;
-  final String? summary;
-  final List<CloudJsonMap>? semanticMentions;
-  final List<String>? mediaUrls;
-  final List<CloudJsonMap>? mediaItems;
-  final String? coverUrl;
-  final String? thumbnailUrl;
-  final String? articleMarkdown;
-  final String? articleMarkdownVersion;
-  final CloudJsonMap? articleAssetManifest;
-  final CloudJsonMap? articleRenderProfile;
-  final String? videoUrl;
-  final String? coverStrategy;
-  final String? coverFrameTimeMs;
-  final String? illustrationAssetId;
-  final CloudJsonMap? location;
-  final String? locationName;
-  final String? primaryHomepageId;
-  final String? primaryHomepageType;
-  final CloudJsonMap? primaryHomepageSnapshot;
-  final String? visibility;
-  final String? assistantUsePolicy;
-  final String? sourcePostId;
-  final String? sourceType;
-  final CloudJsonMap? deviceInfo;
-  final CloudJsonMap? publishLocation;
-  final String? authorDisplayNameSnapshot;
-  final String? authorAvatarUrlSnapshot;
-  final String? personaContextVersion;
-
-  CloudJsonMap toWire() {
-    final m = <String, dynamic>{};
-    _mutationPutOpt(m, 'contentType', contentType);
-    _mutationPutOpt(m, 'contentIdentity', contentIdentity);
-    _mutationPutOpt(m, 'title', title);
-    _mutationPutOpt(m, 'body', body);
-    _mutationPutOpt(m, 'summary', summary);
-    if (semanticMentions != null) m['semanticMentions'] = semanticMentions!;
-    if (mediaUrls != null) m['mediaUrls'] = mediaUrls!;
-    if (mediaItems != null) m['mediaItems'] = mediaItems!;
-    _mutationPutOpt(m, 'coverUrl', coverUrl);
-    _mutationPutOpt(m, 'thumbnailUrl', thumbnailUrl);
-    _mutationPutOpt(m, 'articleMarkdown', articleMarkdown);
-    _mutationPutOpt(m, 'articleMarkdownVersion', articleMarkdownVersion);
-    if (articleAssetManifest != null) m['articleAssetManifest'] = articleAssetManifest!;
-    if (articleRenderProfile != null) m['articleRenderProfile'] = articleRenderProfile!;
-    _mutationPutOpt(m, 'videoUrl', videoUrl);
-    _mutationPutOpt(m, 'coverStrategy', coverStrategy);
-    _mutationPutOpt(m, 'coverFrameTimeMs', coverFrameTimeMs);
-    _mutationPutOpt(m, 'illustrationAssetId', illustrationAssetId);
-    if (location != null) m['location'] = location!;
-    _mutationPutOpt(m, 'locationName', locationName);
-    _mutationPutOpt(m, 'primaryHomepageId', primaryHomepageId);
-    _mutationPutOpt(m, 'primaryHomepageType', primaryHomepageType);
-    if (primaryHomepageSnapshot != null) m['primaryHomepageSnapshot'] = primaryHomepageSnapshot!;
-    _mutationPutOpt(m, 'visibility', visibility);
-    _mutationPutOpt(m, 'assistantUsePolicy', assistantUsePolicy);
-    _mutationPutOpt(m, 'sourcePostId', sourcePostId);
-    _mutationPutOpt(m, 'sourceType', sourceType);
-    if (deviceInfo != null) m['deviceInfo'] = deviceInfo!;
-    if (publishLocation != null) m['publishLocation'] = publishLocation!;
-    _mutationPutOpt(m, 'authorDisplayNameSnapshot', authorDisplayNameSnapshot);
-    _mutationPutOpt(m, 'authorAvatarUrlSnapshot', authorAvatarUrlSnapshot);
-    _mutationPutOpt(m, 'personaContextVersion', personaContextVersion);
-    return m;
-  }
-
-  factory CreatePostRequestWire.fromMap(CloudJsonMap m) {
-    return CreatePostRequestWire(
-      contentType: m['contentType']?.toString(),
-      contentIdentity: m['contentIdentity']?.toString(),
-      title: m['title']?.toString(),
-      body: m['body']?.toString(),
-      summary: m['summary']?.toString(),
-      semanticMentions: _mutationMapList(m['semanticMentions']),
-      mediaUrls: _mutationStringList(m['mediaUrls']),
-      mediaItems: _mutationMapList(m['mediaItems']),
-      coverUrl: m['coverUrl']?.toString(),
-      thumbnailUrl: m['thumbnailUrl']?.toString(),
-      articleMarkdown: m['articleMarkdown']?.toString(),
-      articleMarkdownVersion: m['articleMarkdownVersion']?.toString(),
-      articleAssetManifest: _mutationStringKeyedMap(m['articleAssetManifest']),
-      articleRenderProfile: _mutationStringKeyedMap(m['articleRenderProfile']),
-      videoUrl: m['videoUrl']?.toString(),
-      coverStrategy: m['coverStrategy']?.toString(),
-      coverFrameTimeMs: m['coverFrameTimeMs']?.toString(),
-      illustrationAssetId: m['illustrationAssetId']?.toString(),
-      location: _mutationStringKeyedMap(m['location']),
-      locationName: m['locationName']?.toString(),
-      primaryHomepageId: m['primaryHomepageId']?.toString(),
-      primaryHomepageType: m['primaryHomepageType']?.toString(),
-      primaryHomepageSnapshot: _mutationStringKeyedMap(m['primaryHomepageSnapshot']),
-      visibility: m['visibility']?.toString(),
-      assistantUsePolicy: m['assistantUsePolicy']?.toString(),
-      sourcePostId: m['sourcePostId']?.toString(),
-      sourceType: m['sourceType']?.toString(),
-      deviceInfo: _mutationStringKeyedMap(m['deviceInfo']),
-      publishLocation: _mutationStringKeyedMap(m['publishLocation']),
-      authorDisplayNameSnapshot: m['authorDisplayNameSnapshot']?.toString(),
-      authorAvatarUrlSnapshot: m['authorAvatarUrlSnapshot']?.toString(),
-      personaContextVersion: m['personaContextVersion']?.toString(),
-    );
-  }
-}
-
-/// HTTP body for UpdatePost (metadata writable_fields).
-class UpdatePostRequestWire {
-  UpdatePostRequestWire({
-    this.contentType,
-    this.contentIdentity,
-    this.title,
-    this.body,
-    this.summary,
-    this.semanticMentions,
-    this.mediaUrls,
-    this.mediaItems,
-    this.coverUrl,
-    this.thumbnailUrl,
-    this.articleMarkdown,
-    this.articleMarkdownVersion,
-    this.articleAssetManifest,
-    this.articleRenderProfile,
-    this.videoUrl,
-    this.coverStrategy,
-    this.coverFrameTimeMs,
-    this.illustrationAssetId,
-    this.location,
-    this.locationName,
-    this.primaryHomepageId,
-    this.primaryHomepageType,
-    this.primaryHomepageSnapshot,
-    this.visibility,
-    this.assistantUsePolicy,
-  });
-
-  final String? contentType;
-  final String? contentIdentity;
-  final String? title;
-  final String? body;
-  final String? summary;
-  final List<CloudJsonMap>? semanticMentions;
-  final List<String>? mediaUrls;
-  final List<CloudJsonMap>? mediaItems;
-  final String? coverUrl;
-  final String? thumbnailUrl;
-  final String? articleMarkdown;
-  final String? articleMarkdownVersion;
-  final CloudJsonMap? articleAssetManifest;
-  final CloudJsonMap? articleRenderProfile;
-  final String? videoUrl;
-  final String? coverStrategy;
-  final String? coverFrameTimeMs;
-  final String? illustrationAssetId;
-  final CloudJsonMap? location;
-  final String? locationName;
-  final String? primaryHomepageId;
-  final String? primaryHomepageType;
-  final CloudJsonMap? primaryHomepageSnapshot;
-  final String? visibility;
-  final String? assistantUsePolicy;
-
-  CloudJsonMap toWire() {
-    final m = <String, dynamic>{};
-    _mutationPutOpt(m, 'contentType', contentType);
-    _mutationPutOpt(m, 'contentIdentity', contentIdentity);
-    _mutationPutOpt(m, 'title', title);
-    _mutationPutOpt(m, 'body', body);
-    _mutationPutOpt(m, 'summary', summary);
-    if (semanticMentions != null) m['semanticMentions'] = semanticMentions!;
-    if (mediaUrls != null) m['mediaUrls'] = mediaUrls!;
-    if (mediaItems != null) m['mediaItems'] = mediaItems!;
-    _mutationPutOpt(m, 'coverUrl', coverUrl);
-    _mutationPutOpt(m, 'thumbnailUrl', thumbnailUrl);
-    _mutationPutOpt(m, 'articleMarkdown', articleMarkdown);
-    _mutationPutOpt(m, 'articleMarkdownVersion', articleMarkdownVersion);
-    if (articleAssetManifest != null) m['articleAssetManifest'] = articleAssetManifest!;
-    if (articleRenderProfile != null) m['articleRenderProfile'] = articleRenderProfile!;
-    _mutationPutOpt(m, 'videoUrl', videoUrl);
-    _mutationPutOpt(m, 'coverStrategy', coverStrategy);
-    _mutationPutOpt(m, 'coverFrameTimeMs', coverFrameTimeMs);
-    _mutationPutOpt(m, 'illustrationAssetId', illustrationAssetId);
-    if (location != null) m['location'] = location!;
-    _mutationPutOpt(m, 'locationName', locationName);
-    _mutationPutOpt(m, 'primaryHomepageId', primaryHomepageId);
-    _mutationPutOpt(m, 'primaryHomepageType', primaryHomepageType);
-    if (primaryHomepageSnapshot != null) m['primaryHomepageSnapshot'] = primaryHomepageSnapshot!;
-    _mutationPutOpt(m, 'visibility', visibility);
-    _mutationPutOpt(m, 'assistantUsePolicy', assistantUsePolicy);
-    return m;
-  }
-
-  factory UpdatePostRequestWire.fromMap(CloudJsonMap m) {
-    return UpdatePostRequestWire(
-      contentType: m['contentType']?.toString(),
-      contentIdentity: m['contentIdentity']?.toString(),
-      title: m['title']?.toString(),
-      body: m['body']?.toString(),
-      summary: m['summary']?.toString(),
-      semanticMentions: _mutationMapList(m['semanticMentions']),
-      mediaUrls: _mutationStringList(m['mediaUrls']),
-      mediaItems: _mutationMapList(m['mediaItems']),
-      coverUrl: m['coverUrl']?.toString(),
-      thumbnailUrl: m['thumbnailUrl']?.toString(),
-      articleMarkdown: m['articleMarkdown']?.toString(),
-      articleMarkdownVersion: m['articleMarkdownVersion']?.toString(),
-      articleAssetManifest: _mutationStringKeyedMap(m['articleAssetManifest']),
-      articleRenderProfile: _mutationStringKeyedMap(m['articleRenderProfile']),
-      videoUrl: m['videoUrl']?.toString(),
-      coverStrategy: m['coverStrategy']?.toString(),
-      coverFrameTimeMs: m['coverFrameTimeMs']?.toString(),
-      illustrationAssetId: m['illustrationAssetId']?.toString(),
-      location: _mutationStringKeyedMap(m['location']),
-      locationName: m['locationName']?.toString(),
-      primaryHomepageId: m['primaryHomepageId']?.toString(),
-      primaryHomepageType: m['primaryHomepageType']?.toString(),
-      primaryHomepageSnapshot: _mutationStringKeyedMap(m['primaryHomepageSnapshot']),
-      visibility: m['visibility']?.toString(),
-      assistantUsePolicy: m['assistantUsePolicy']?.toString(),
-    );
-  }
-}
-
-/// HTTP body for PublishPost (metadata writable_fields).
-class PublishPostRequestWire {
-  PublishPostRequestWire({
-    this.contentIdentity,
-    this.primaryHomepageId,
-    this.primaryHomepageType,
-    this.primaryHomepageSnapshot,
-    this.visibility,
-    this.assistantUsePolicy,
-  });
-
-  final String? contentIdentity;
-  final String? primaryHomepageId;
-  final String? primaryHomepageType;
-  final CloudJsonMap? primaryHomepageSnapshot;
-  final String? visibility;
-  final String? assistantUsePolicy;
-
-  CloudJsonMap toWire() {
-    final m = <String, dynamic>{};
-    _mutationPutOpt(m, 'contentIdentity', contentIdentity);
-    _mutationPutOpt(m, 'primaryHomepageId', primaryHomepageId);
-    _mutationPutOpt(m, 'primaryHomepageType', primaryHomepageType);
-    if (primaryHomepageSnapshot != null) m['primaryHomepageSnapshot'] = primaryHomepageSnapshot!;
-    _mutationPutOpt(m, 'visibility', visibility);
-    _mutationPutOpt(m, 'assistantUsePolicy', assistantUsePolicy);
-    return m;
-  }
-
-  factory PublishPostRequestWire.fromMap(CloudJsonMap m) {
-    return PublishPostRequestWire(
-      contentIdentity: m['contentIdentity']?.toString(),
-      primaryHomepageId: m['primaryHomepageId']?.toString(),
-      primaryHomepageType: m['primaryHomepageType']?.toString(),
-      primaryHomepageSnapshot: _mutationStringKeyedMap(m['primaryHomepageSnapshot']),
-      visibility: m['visibility']?.toString(),
-      assistantUsePolicy: m['assistantUsePolicy']?.toString(),
-    );
-  }
 }
 
 /// HTTP body for UpdatePostSettings (metadata writable_fields).
@@ -380,7 +69,7 @@ class PromotePostToWorkRequestWire {
     this.semanticMentions,
     this.coverUrl,
     this.articleMarkdown,
-    this.articleMarkdownVersion,
+    this.markdownDialect,
     this.articleAssetManifest,
     this.articleRenderProfile,
     this.primaryHomepageId,
@@ -396,7 +85,7 @@ class PromotePostToWorkRequestWire {
   final List<CloudJsonMap>? semanticMentions;
   final String? coverUrl;
   final String? articleMarkdown;
-  final String? articleMarkdownVersion;
+  final String? markdownDialect;
   final CloudJsonMap? articleAssetManifest;
   final CloudJsonMap? articleRenderProfile;
   final String? primaryHomepageId;
@@ -413,7 +102,7 @@ class PromotePostToWorkRequestWire {
     if (semanticMentions != null) m['semanticMentions'] = semanticMentions!;
     _mutationPutOpt(m, 'coverUrl', coverUrl);
     _mutationPutOpt(m, 'articleMarkdown', articleMarkdown);
-    _mutationPutOpt(m, 'articleMarkdownVersion', articleMarkdownVersion);
+    _mutationPutOpt(m, 'markdownDialect', markdownDialect);
     if (articleAssetManifest != null) m['articleAssetManifest'] = articleAssetManifest!;
     if (articleRenderProfile != null) m['articleRenderProfile'] = articleRenderProfile!;
     _mutationPutOpt(m, 'primaryHomepageId', primaryHomepageId);
@@ -432,7 +121,7 @@ class PromotePostToWorkRequestWire {
       semanticMentions: _mutationMapList(m['semanticMentions']),
       coverUrl: m['coverUrl']?.toString(),
       articleMarkdown: m['articleMarkdown']?.toString(),
-      articleMarkdownVersion: m['articleMarkdownVersion']?.toString(),
+      markdownDialect: m['markdownDialect']?.toString(),
       articleAssetManifest: _mutationStringKeyedMap(m['articleAssetManifest']),
       articleRenderProfile: _mutationStringKeyedMap(m['articleRenderProfile']),
       primaryHomepageId: m['primaryHomepageId']?.toString(),

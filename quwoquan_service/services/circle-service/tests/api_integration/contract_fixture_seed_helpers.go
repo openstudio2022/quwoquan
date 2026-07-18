@@ -56,7 +56,7 @@ type circleFixtureCircle struct {
 }
 
 type circleFixtureGroup struct {
-	ID                   string `json:"_id"`
+	ID                   string `json:"id"`
 	Version              int64  `json:"version"`
 	CircleID             string `json:"circleId"`
 	ParentGroupID        string `json:"parentGroupId"`
@@ -77,7 +77,7 @@ type circleFixtureGroup struct {
 }
 
 type circleFixtureMember struct {
-	ID           string `json:"_id"`
+	ID           string `json:"id"`
 	CircleID     string `json:"circleId"`
 	PersonaID    string `json:"personaId"`
 	Role         string `json:"role"`
@@ -87,7 +87,7 @@ type circleFixtureMember struct {
 }
 
 type circleFixtureFile struct {
-	ID                string `json:"_id"`
+	ID                string `json:"id"`
 	Version           int64  `json:"version"`
 	CircleID          string `json:"circleId"`
 	GroupID           string `json:"groupId"`
@@ -174,11 +174,11 @@ func seedCircleContractFixture(t *testing.T, seedRef string) contractSeedEvidenc
 		TargetStore:   "mongodb:circle_test",
 		InsertedCount: inserted,
 		VerifiedEndpoints: []string{
-			"/v1/circles",
-			"/v1/circles/fixture_circle_photo",
-			"/v1/circles/fixture_circle_photo/impact",
-			"/v1/circles/fixture_circle_photo/memberships",
-			"/v1/circles/fixture_circle_photo/files",
+			"/circles",
+			"/circles/fixture_circle_photo",
+			"/circles/fixture_circle_photo/impact",
+			"/circles/fixture_circle_photo/memberships",
+			"/circles/fixture_circle_photo/files",
 		},
 	}
 }

@@ -252,7 +252,7 @@ func (s *platformService) handleListPlaneBindings(w http.ResponseWriter, r *http
 }
 
 func (s *platformService) handleUpdatePlaneBinding(w http.ResponseWriter, r *http.Request) {
-	bindingID := segmentBetween(r.URL.Path, "/v1/control-plane/platform/topology/planes/", ":update")
+	bindingID := segmentBetween(r.URL.Path, "/control-plane/platform/topology/planes/", ":update")
 	var body map[string]any
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	body["id"] = bindingID
@@ -434,7 +434,7 @@ func configPackageScopeKey(scope controlplane.ConfigResolutionScope) string {
 }
 
 func (s *platformService) handleRunDrill(w http.ResponseWriter, r *http.Request) {
-	runbookID := segmentBetween(r.URL.Path, "/v1/control-plane/platform/runbooks/", ":runDrill")
+	runbookID := segmentBetween(r.URL.Path, "/control-plane/platform/runbooks/", ":runDrill")
 	current, ok, err := s.store.GetDocument("runbooks", runbookID)
 	if err != nil {
 		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())

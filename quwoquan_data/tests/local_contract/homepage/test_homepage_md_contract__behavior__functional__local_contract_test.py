@@ -32,6 +32,9 @@ from content.homepage.homepage_release import (  # noqa: E402
 from content.homepage.homepage_release import (  # noqa: E402
     _normalize_wiki_filename as release_normalize_wiki_filename,
 )
+from content.homepage.homepage_release import (  # noqa: E402
+    final_provenance_source_paths,
+)
 from content.homepage.homepage_validation import homepage_structure_issues  # noqa: E402
 
 
@@ -243,6 +246,19 @@ def test_placement_map_like_blocks_locator_map_from_homepage_assets():
     assert _placement_is_map_like({"coverCandidateRank": -1})
     assert not _placement_is_map_like({"placementType": "inline", "coverCandidateRank": 2})
     assert not _placement_is_map_like({})
+
+
+def test_final_provenance_uses_only_admitted_source_refs():
+    admitted = [
+        "sources/东钱湖__wikipedia__99643c13/source.md",
+        "sources/东钱湖__wikipedia__99643c13/assets/001.jpg",
+    ]
+    candidate = "sources/东钱湖__baidu_baike__4f100f71/source.md"
+
+    projected = final_provenance_source_paths([*admitted, admitted[0], ""])
+
+    assert projected == admitted
+    assert candidate not in projected
 
 
 def _run_all() -> None:

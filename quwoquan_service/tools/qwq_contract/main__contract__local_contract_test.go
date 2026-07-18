@@ -174,7 +174,6 @@ func writeOpenAPICLIFixture(t *testing.T, metadataDir string) {
 		t,
 		filepath.Join(metadataDir, "content", "post", "aggregate.yaml"),
 		`
-version: 1
 domain: content
 aggregate_root: Post
 object_kind: aggregate_root
@@ -187,13 +186,12 @@ members: []
 		t,
 		filepath.Join(metadataDir, "content", "post", "service.yaml"),
 		`
-version: 1
 service:
   name: content-service
   domain: content
 api_routes:
   - method: GET
-    path: /v1/content/posts/{postId}
+    path: /content/posts/{postId}
     operation: GetPost
     actor: persona_or_device
     response_entity: PostView
@@ -204,7 +202,7 @@ api_routes:
       reader: PostReader
       slice: PostSlice
   - method: POST
-    path: /v1/content/posts/{postId}:publish
+    path: /content/posts/{postId}:publish
     operation: PublishPost
     actor: persona
     request_entity: PublishPostRequest
@@ -226,7 +224,6 @@ api_routes:
 			"post_view.yaml",
 		),
 		`
-version: 1
 read_model: PostSlice
 client_projection:
   dart_class: PostView

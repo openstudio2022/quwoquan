@@ -7,37 +7,46 @@ defaults:
   totalCandidates: 0
 fields:
   - name: topK
+    source: topK
     dart_type: List<RecallCandidate>
     json_key: topK
     default: const <RecallCandidate>[]
   - name: recallMethod
+    source: recallMethod
     dart_type: String
     json_key: recallMethod
     default: rule
   - name: totalCandidates
+    source: totalCandidates
     dart_type: int
     json_key: totalCandidates
     default: 0
   - name: scores
+    source: scores
     dart_type: Map<String, double>
     json_key: scores
     default: const <String, double>{}
 candidate_fields:
   - name: domainId
+    source: domainId
     dart_type: String
     json_key: domainId
   - name: description
+    source: description
     dart_type: String
     json_key: description
   - name: mode
+    source: mode
     dart_type: String
     json_key: mode
     default: qa
   - name: score
+    source: score
     dart_type: double
     json_key: score
     default: 0.0
   - name: matchReason
+    source: matchReason
     dart_type: String
     json_key: matchReason
     default: ''

@@ -24,18 +24,15 @@ class CircleHubFeedPostEntry {
   /// 由 [PostBaseDto] 构建；补齐圈子创作区常用的 wire 键（contentType / postId 等）。
   factory CircleHubFeedPostEntry.fromPostDto(PostBaseDto p) {
     final raw = Map<String, dynamic>.from(p.toMap());
-    raw['postId'] = raw['postId'] ?? p.id;
-    raw['contentType'] = raw['contentType'] ?? raw['type'] ?? p.type;
-    raw['contentIdentity'] =
-        raw['contentIdentity'] ?? raw['identity'] ?? p.identity;
-    raw['authorNickname'] =
-        raw['authorNickname'] ?? raw['displayName'] ?? p.displayName;
-    raw['authorAvatarUrl'] =
-        raw['authorAvatarUrl'] ?? raw['avatarUrl'] ?? p.avatarUrl;
+    raw['postId'] = p.id;
+    raw['contentType'] = p.type;
+    raw['contentIdentity'] = p.identity;
+    raw['authorDisplayName'] = p.displayName;
+    raw['authorAvatarUrl'] = p.avatarUrl;
     return CircleHubFeedPostEntry._(raw, p);
   }
 
-  String get postIdForKey => (raw['postId'] ?? raw['id'] ?? '').toString();
+  String get postIdForKey => (raw['postId'] ?? '').toString();
 
   /// 圈子故事卡片 / 筛选用；避免在 UI 上散写 `raw['circleId']`。
   String get wireCircleId => (raw['circleId'] ?? '').toString();
@@ -43,17 +40,12 @@ class CircleHubFeedPostEntry {
   /// 圈子页二级筛选用；兼容 `subCategory` wire 字段。
   String get wireSubCategory => (raw['subCategory'] ?? '').toString();
 
-  /// MediaViewer 回写关注态、互动快照 fallback 等用同一作者主键解析顺序。
-  String get wireAuthorRelationshipId =>
-      (raw['subAccountId'] ?? raw['authorId'] ?? raw['userId'] ?? '')
-          .toString();
+  /// MediaViewer 回写关注态、互动快照使用 canonical 作者主键。
+  String get wireAuthorRelationshipId => (raw['authorId'] ?? '').toString();
 
   /// Wire 计数优先（含用户操作后的回写），其次 [dto]。
   int get wireLikeCount =>
-      (raw['likeCount'] as num?)?.toInt() ??
-      (raw['likes'] as num?)?.toInt() ??
-      dto?.likeCount ??
-      0;
+      (raw['likeCount'] as num?)?.toInt() ?? dto?.likeCount ?? 0;
 
   int get wireShareCount =>
       (raw['shareCount'] as num?)?.toInt() ?? dto?.shareCount ?? 0;
@@ -77,7 +69,7 @@ class CircleHubFeedPostEntry {
       final u = d.primaryVisualUrl.trim();
       if (u.isNotEmpty) return u;
     }
-    final cover = (raw['coverUrl'] ?? raw['thumbnailUrl'] ?? '').toString();
+    final cover = (raw['coverUrl'] ?? '').toString();
     if (cover.isNotEmpty) return cover;
     final imageUrls = raw['imageUrls'];
     if (imageUrls is List && imageUrls.isNotEmpty) {
@@ -119,11 +111,10 @@ class CircleHubFeedPostEntry {
     if (d != null && d.normalizedBody.isNotEmpty) return d.normalizedBody;
     final rp = tryReadPresentation();
     if (rp != null && rp.body.isNotEmpty) return rp.body;
-    return (raw['body'] ?? raw['description'] ?? raw['content'] ?? '')
-        .toString();
+    return (raw['body'] ?? '').toString();
   }
 
-  /// 含 `username` / `authorId` 等 wire 别名，供 hub 信息流卡片使用。
+  /// 使用 canonical 作者昵称，供 hub 信息流卡片使用。
   String get wireAuthorDisplayName {
     final d = dto;
     if (d != null && d.displayName.trim().isNotEmpty) {
@@ -133,12 +124,7 @@ class CircleHubFeedPostEntry {
     if (rp != null && rp.displayName.trim().isNotEmpty) {
       return rp.displayName.trim();
     }
-    return (raw['authorNickname'] ??
-            raw['displayName'] ??
-            raw['username'] ??
-            raw['authorId'] ??
-            '')
-        .toString();
+    return (raw['authorDisplayName'] ?? '').toString();
   }
 
   String get wireAuthorAvatarUrl {
@@ -150,7 +136,7 @@ class CircleHubFeedPostEntry {
     if (rp != null && rp.avatarUrl.trim().isNotEmpty) {
       return rp.avatarUrl.trim();
     }
-    return (raw['authorAvatarUrl'] ?? raw['avatarUrl'] ?? '').toString();
+    return (raw['authorAvatarUrl'] ?? '').toString();
   }
 
   bool get wireIsLiked => raw['isLiked'] as bool? ?? false;

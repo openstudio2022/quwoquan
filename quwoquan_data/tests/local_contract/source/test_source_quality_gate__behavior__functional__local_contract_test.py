@@ -130,7 +130,7 @@ def test_homepage_candidate_gate_allows_registry_fetchable_baike_sources():
     assert _candidate_gate(snapshotted, entity_id="喀纳斯景区", lane="homepage")["passed"]
 
 def test_verified_homepage_reuse_filters_bad_or_thin_source_units():
-    # 源单元复用过滤：消歧页/过短页应滤除，正常四百科主页保留。
+    # 源单元复用过滤：消歧页/过短页应滤除，正常三百科主页保留。
     # 真相源是 iter_source_units 读取的新版 sources/su_* 布局，故用 write_source_unit 写入，
     # 不再手工拼旧版 1.download/sources/NN.name（已随源单元布局迁移废弃，会被 iter 漏读）。
     from content.source.source_unit import write_source_unit
@@ -164,7 +164,7 @@ def test_verified_homepage_reuse_filters_bad_or_thin_source_units():
         source_category="encyclopedia",
         source_kind="wikipedia",
         extractor="wikipedia_api",
-        policy_revision="encyclopedia-primary-v2",
+        policy_revision="encyclopedia-primary",
         research_lane="homepage",
         url="https://zh.wikipedia.org/wiki/%E6%B2%99%E6%B9%96",
         title="沙湖（消歧义）",
@@ -181,8 +181,8 @@ def test_verified_homepage_reuse_filters_bad_or_thin_source_units():
         platform="百度百科",
         source_category="encyclopedia",
         source_kind="baidu_baike",
-        extractor="baidu_baike_html",
-        policy_revision="encyclopedia-primary-v2",
+        extractor="baidu_baike_openapi",
+        policy_revision="encyclopedia-primary",
         research_lane="homepage",
         url="https://baike.baidu.com/item/沙湖旅游景区",
         title="沙湖旅游景区",
@@ -206,7 +206,7 @@ def test_verified_homepage_reuse_filters_bad_or_thin_source_units():
         source_category="encyclopedia",
         source_kind="toutiao_baike",
         extractor="toutiao_baike_html",
-        policy_revision="encyclopedia-primary-v2",
+        policy_revision="encyclopedia-primary",
         research_lane="homepage",
         url="https://www.baike.com/wiki/沙湖旅游景区",
         title="沙湖旅游景区",
@@ -258,7 +258,7 @@ def test_verified_homepage_reuse_hydrates_mediawiki_same_source_images():
         source_category="encyclopedia",
         source_kind="wikipedia",
         extractor="wikipedia_api",
-        policy_revision="encyclopedia-primary-v2",
+        policy_revision="encyclopedia-primary",
         research_lane="homepage",
         url=url,
         title=title,
@@ -413,6 +413,40 @@ def test_wiki_title_for_entity_rejects_cross_entity_generic_alias_title():
     network_io_mod.wiki_api = fake_wiki_api
     try:
         assert _wiki_title_for_entity("zh.wikipedia.org", "北京奥林匹克公园") == ""
+    finally:
+        network_io_mod.wiki_api = original
+
+
+def test_wiki_title_for_entity_accepts_alias_with_admin_disambiguation():
+    original = network_io_mod.wiki_api
+
+    def fake_wiki_api(_host: str, params: dict) -> dict:
+        if params.get("prop") == "extracts" and params.get("titles") == "金沙湖 (浙江省)":
+            return {
+                "query": {
+                    "pages": {
+                        "1": {
+                            "pageid": 1,
+                            "title": "金沙湖 (浙江省)",
+                            "extract": "金沙湖位于杭州下沙，是一座城市人工湖。",
+                        }
+                    }
+                }
+            }
+        if params.get("list") == "search" and params.get("srsearch") == "金沙湖":
+            return {"query": {"search": [{"title": "金沙湖 (浙江省)"}]}}
+        return {"query": {"pages": {"-1": {"missing": ""}}}}
+
+    network_io_mod.wiki_api = fake_wiki_api
+    try:
+        assert (
+            _wiki_title_for_entity(
+                "zh.wikipedia.org",
+                "杭州金沙湖",
+                entity_aliases=("金沙湖", "金沙湖公园"),
+            )
+            == "金沙湖 (浙江省)"
+        )
     finally:
         network_io_mod.wiki_api = original
 
@@ -668,6 +702,22 @@ def test_clean_source_markdown_differs_from_raw_and_keeps_facts():
     assert "ad.example.com" not in cleaned
     assert "[3]" not in cleaned
     assert cleaned != raw
+
+
+def test_clean_source_markdown_removes_inline_urls_without_dropping_facts():
+    raw = (
+        "义乌国际商贸城上线中文交易平台：https://www.chinagoods.com/ "
+        "服务境内采购商；国际站：https://en.chinagoods.com/ 面向海外采购商。\n"
+        "https://example.com/pure-link\n"
+    )
+
+    cleaned = clean_source_markdown(raw, raw_format="mediawiki_api_json")
+
+    assert "义乌国际商贸城上线中文交易平台" in cleaned
+    assert "服务境内采购商" in cleaned
+    assert "面向海外采购商" in cleaned
+    assert "http" not in cleaned
+    assert "pure-link" not in cleaned
 
 def test_qunar_search_result_is_directory_not_article_base():
     source = _source(

@@ -2,7 +2,7 @@
 // Sources: contracts/metadata/rtc/call_session/service.yaml, contracts/metadata/rtc/call_session/client_request_wire.yaml
 // ignore_for_file: prefer_const_constructors
 
-/// HTTP body for `InitiateCall` (POST /v1/rtc/calls).
+/// HTTP body for `InitiateCall` (POST /rtc/calls).
 class RtcInitiateCallRequestWire {
   const RtcInitiateCallRequestWire({
     required this.callType,
@@ -29,7 +29,7 @@ class RtcInitiateCallRequestWire {
   }
 }
 
-/// HTTP body for `InviteToCall` (POST /v1/rtc/calls/{callId}/invite).
+/// HTTP body for `InviteToCall` (POST /rtc/calls/{callId}/invite).
 class RtcInviteToCallRequestWire {
   const RtcInviteToCallRequestWire({
     required this.inviteeIds,
@@ -44,7 +44,7 @@ class RtcInviteToCallRequestWire {
   }
 }
 
-/// HTTP body for `ToggleMute` (POST /v1/rtc/calls/{callId}/mute).
+/// HTTP body for `ToggleMute` (POST /rtc/calls/{callId}/mute).
 class RtcToggleMuteRequestWire {
   const RtcToggleMuteRequestWire({
     required this.muted,
@@ -59,7 +59,7 @@ class RtcToggleMuteRequestWire {
   }
 }
 
-/// HTTP body for `ToggleCamera` (POST /v1/rtc/calls/{callId}/camera).
+/// HTTP body for `ToggleCamera` (POST /rtc/calls/{callId}/camera).
 class RtcToggleCameraRequestWire {
   const RtcToggleCameraRequestWire({
     required this.cameraOn,

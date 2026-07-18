@@ -23,19 +23,6 @@ from urllib.parse import parse_qs, urlsplit
 
 ROOT = _find_repo_root()
 METADATA = ROOT / "quwoquan_service" / "contracts" / "metadata"
-MEDIA_OBJECT_KEY_FIELDS = {
-    "avatarObjectKey",
-    "backgroundObjectKey",
-    "coverObjectKey",
-    "thumbnailObjectKey",
-    "imageObjectKey",
-    "mediaObjectKey",
-    "imageObjectKeys",
-    "mediaObjectKeys",
-    "senderAvatarObjectKeySnapshot",
-    "authorAvatarObjectKey",
-    "authorAvatarObjectKeySnapshot",
-}
 
 
 def load_fixture(relative_path: str) -> dict:
@@ -284,6 +271,8 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
     assistant_upstream_port: int = 18087
     chat_upstream_host: str = "127.0.0.1"
     chat_upstream_port: int = 18081
+    entity_upstream_host: str = "127.0.0.1"
+    entity_upstream_port: int = 18084
     avatar_cdn_base_url: str = ""
     image_cdn_base_url: str = ""
     video_cdn_base_url: str = ""
@@ -417,16 +406,18 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
         self.end_headers()
 
     def _upstream_for_path(self, path: str) -> tuple[str, str, int] | None:
-        if path in {"/v1/chat/contacts", "/v1/chat/inbox", "/v1/chat/conversations"}:
+        if path in {"/chat/contacts", "/chat/inbox", "/chat/conversations"}:
             return None
-        if path.startswith("/v1/chat/conversations/") and (
+        if path.startswith("/chat/conversations/") and (
             path.endswith("/messages") or path.endswith("/members")
         ):
             return None
-        if path.startswith("/v1/assistant"):
+        if path.startswith("/assistant"):
             return ("assistant-service", self.assistant_upstream_host, self.assistant_upstream_port)
-        if path.startswith("/v1/chat") or path == "/v1/user/sync":
+        if path.startswith("/chat"):
             return ("chat-service", self.chat_upstream_host, self.chat_upstream_port)
+        if path.startswith("/homepages"):
+            return ("entity-service", self.entity_upstream_host, self.entity_upstream_port)
         return None
 
     def _fixture_response(self, path: str, query: str = "") -> object | None:
@@ -447,7 +438,7 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
         intersections = intersection_feed_payloads()
         params = parse_qs(query)
 
-        if path == "/v1/content/feed":
+        if path == "/content/feed":
             items = list(content.get("posts", []))
             identity = (params.get("identity") or [""])[0]
             content_type = (params.get("type") or [""])[0]
@@ -459,16 +450,23 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
             if limit_raw.isdigit():
                 items = items[: int(limit_raw)]
             return {"items": items}
-        if path == "/v1/content/feed/intersections":
+        if path == "/content/feed/intersections":
             channel = ((params.get("channel") or ["recommend"])[0] or "recommend").strip()
             limit_raw = (params.get("limit") or ["4"])[0]
             items = list(intersections.get(channel, intersections["recommend"]))
             if limit_raw.isdigit():
                 items = items[: int(limit_raw)]
             return {"items": items}
-        if path == "/v1/content/intersections/summary":
+        if path == "/user/sync":
+            return {
+                "patches": [],
+                "latestSyncSeq": 0,
+                "hasMore": False,
+                "requiresResync": False,
+            }
+        if path == "/content/intersections/summary":
             return intersections["summary"]
-        if path == "/v1/content/intersections":
+        if path == "/content/intersections":
             dimension = ((params.get("dimension") or [""])[0] or "").strip()
             limit_raw = (params.get("limit") or ["50"])[0]
             items = list(intersections["inbox"])
@@ -477,7 +475,7 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
             if limit_raw.isdigit():
                 items = items[: int(limit_raw)]
             return {"items": items}
-        if path == "/v1/config/app":
+        if path == "/config/app":
             return {
                 "content": {
                     "feature_flags": {},
@@ -485,13 +483,13 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
                     "client_state_sync": {"enabled": True},
                 }
             }
-        if path == "/v1/content/behaviors":
+        if path == "/content/behaviors":
             return {"accepted": True}
-        if path == "/v1/content/intersections/visit":
+        if path == "/content/intersections/visit":
             return {"accepted": True}
-        if path == "/v1/content/intersections/exposure":
+        if path == "/content/intersections/exposure":
             return {"accepted": True}
-        if path.startswith("/v1/content/profile-subjects/") and path.endswith("/posts"):
+        if path.startswith("/content/profile-subjects/") and path.endswith("/posts"):
             profile_subject_id = path.split("/")[-2]
             selected_ids = (
                 user_feed.get("myPostIds", [])
@@ -499,41 +497,41 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
                 else user_feed.get("authorPostIds", [])
             )
             return {"items": [p for p in content.get("posts", []) if (p.get("id") or p.get("postId")) in selected_ids]}
-        if path.startswith("/v1/content/posts/"):
+        if path.startswith("/content/posts/"):
             post_id = path.split("/")[-1]
             posts = [p for p in content.get("posts", []) if p.get("id") == post_id or p.get("postId") == post_id]
             return posts[0] if posts else {}
-        if path == "/v1/circles":
+        if path == "/circles":
             return {"items": circle.get("circles", [])}
-        if path.startswith("/v1/circles/") and path.endswith("/feed"):
+        if path.startswith("/circles/") and path.endswith("/feed"):
             circle_id = path.split("/")[-2]
             post_ids = circle_home.get("groupFeedPostIds", [])
             return {"items": [p for p in content.get("posts", []) if (p.get("id") or p.get("postId")) in post_ids]}
-        if path.startswith("/v1/circles/") and path.endswith("/groups"):
+        if path.startswith("/circles/") and path.endswith("/groups"):
             circle_id = path.split("/")[-2]
             return {"items": circle.get("groups", {}).get(circle_id, [])}
-        if path.startswith("/v1/circles/") and path.endswith("/members"):
+        if path.startswith("/circles/") and path.endswith("/members"):
             circle_id = path.split("/")[-2]
             return {"items": circle.get("members", {}).get(circle_id, [])}
-        if path.startswith("/v1/circles/"):
+        if path.startswith("/circles/"):
             circle_id = path.split("/")[-1]
             circles = [c for c in circle.get("circles", []) if c.get("id") == circle_id]
             return {"data": circles[0] if circles else {}}
-        if path == "/v1/chat/contacts":
+        if path == "/chat/contacts":
             return {"items": chat_contacts.get("contacts", [])}
-        if path == "/v1/chat/inbox":
+        if path == "/chat/inbox":
             return {"items": chat.get("conversations", [])}
-        if path == "/v1/chat/conversations":
+        if path == "/chat/conversations":
             return {"items": chat.get("conversations", [])}
-        if path.startswith("/v1/chat/conversations/") and path.endswith("/messages"):
+        if path.startswith("/chat/conversations/") and path.endswith("/messages"):
             conversation_id = path.split("/")[-2]
             return {"items": (chat.get("messages") or {}).get(conversation_id, [])}
-        if path.startswith("/v1/chat/conversations/") and path.endswith("/members"):
+        if path.startswith("/chat/conversations/") and path.endswith("/members"):
             conversation_id = path.split("/")[-2]
             return {"items": (chat.get("members") or {}).get(conversation_id, [])}
-        if path == "/v1/me":
+        if path == "/me":
             return user_profile_wire(user.get("profiles", [])[0])
-        if path == "/v1/user/personas/active":
+        if path == "/user/personas/active":
             profile = user_profile_wire(user.get("profiles", [])[0])
             return {
                 "subAccountId": profile["subAccountId"],
@@ -547,7 +545,7 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
                 "explicitOverride": False,
                 "isPrimary": True,
             }
-        if path == "/v1/user/settings/appearance":
+        if path == "/user/settings/appearance":
             return {
                 "themeMode": "system",
                 "fontSizePreset": "md",
@@ -558,7 +556,7 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
                 "version": 1,
                 "updatedAt": "2026-01-01T00:00:00Z",
             }
-        if path.startswith("/v1/user/sub-accounts/") and path.endswith("/relationship/capability"):
+        if path.startswith("/user/sub-accounts/") and path.endswith("/relationship/capability"):
             target_id = path.split("/")[-3]
             return {
                 "viewerSubAccountId": "fixture_user_current",
@@ -578,13 +576,13 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
                 "isBlocked": False,
                 "isBlockedBy": False,
             }
-        if path.startswith("/v1/user/") and path.count("/") == 3:
+        if path.startswith("/user/") and path.count("/") == 3:
             user_id = path.split("/")[-1]
             profiles = [p for p in user.get("profiles", []) if p.get("userId") == user_id]
             return user_profile_wire(profiles[0]) if profiles else {}
-        if path == "/v1/user/profile":
+        if path == "/user/profile":
             return {"items": user.get("profiles", [])}
-        if path.startswith("/v1/users/") and path.endswith("/works"):
+        if path.startswith("/users/") and path.endswith("/works"):
             user_id = path.split("/")[-2]
             selected_ids = (
                 user_feed.get("myPostIds", [])
@@ -592,35 +590,35 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
                 else user_feed.get("authorPostIds", [])
             )
             return {"items": [work_item_wire(p) for p in content.get("posts", []) if (p.get("id") or p.get("postId")) in selected_ids]}
-        if path.startswith("/v1/users/") and path.endswith("/life-items"):
+        if path.startswith("/users/") and path.endswith("/life-items"):
             return {"items": []}
-        if path.startswith("/v1/users/") and path.endswith("/circles"):
+        if path.startswith("/users/") and path.endswith("/circles"):
             return {"items": circle.get("circles", [])}
-        if path == "/v1/entity/homepages":
+        if path == "/homepages/search":
             return {"items": entity.get("homepages", [])}
-        if path == "/v1/integration/locations/pois":
+        if path == "/integration/locations/pois":
             return {"items": integration.get("pois", [])}
-        if path == "/v1/app-messages":
+        if path == "/app-messages":
             return {
                 "items": notification.get("appMessages", []),
                 "unreadCount": app_message_unread_count(notification),
             }
-        if path == "/v1/app-messages/unread-count" or path == "/v1/notifications/unread-count":
+        if path == "/app-messages/unread-count" or path == "/notifications/unread-count":
             return {"unreadCount": app_message_unread_count(notification)}
-        if path.startswith("/v1/app-messages/") and path.endswith("/ack"):
+        if path.startswith("/app-messages/") and path.endswith("/ack"):
             message_id = path.split("/")[-2]
             return self._app_message_action_wire(notification, message_id, read=None)
-        if path.startswith("/v1/app-messages/") and path.endswith("/read"):
+        if path.startswith("/app-messages/") and path.endswith("/read"):
             message_id = path.split("/")[-2]
             return self._app_message_action_wire(notification, message_id, read=True)
-        if path.startswith("/v1/app-messages/") and path.count("/") == 3:
+        if path.startswith("/app-messages/") and path.count("/") == 3:
             message_id = path.split("/")[-1]
             return self._app_message_action_wire(notification, message_id, read=None)
-        if path == "/v1/rtc/calls":
+        if path == "/rtc/calls":
             return {"items": rtc.get("sessions", []), "participants": rtc.get("participants", [])}
-        if path == "/v1/ops/events":
+        if path == "/ops/events":
             return {"acceptedCount": 1, "duplicateCount": 0}
-        if path == "/v1/ops/visits":
+        if path == "/ops/visits":
             return {"accepted": True}
         return None
 
@@ -646,7 +644,9 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
         return {}
 
     def _send_json(self, payload: object) -> None:
-        raw = json.dumps(self._rewrite_media_urls(payload), ensure_ascii=False).encode("utf-8")
+        # 业务 JSON 始终保留 fixture 中的 canonical publicSliceKey。媒体
+        # authority 只由 App runtime config 注入，不能由 beta gateway 拼接。
+        raw = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(raw)))
@@ -656,40 +656,6 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
 
     def log_message(self, fmt: str, *args: object) -> None:
         print(f"[business-beta-gateway] {self.address_string()} {fmt % args}")
-
-    @classmethod
-    def _rewrite_media_urls(cls, payload: object) -> object:
-        def walk(value: object, field_name: str = "") -> object:
-            if isinstance(value, list):
-                return [walk(item, field_name) for item in value]
-            if isinstance(value, str):
-                return cls._media_url_for_ref(value, field_name)
-            if not isinstance(value, dict):
-                return value
-            return {str(k): walk(v, str(k)) for k, v in value.items()}
-
-        return walk(copy.deepcopy(payload))
-
-    @classmethod
-    def _media_url_for_ref(cls, value: str, field_name: str) -> str:
-        if field_name in MEDIA_OBJECT_KEY_FIELDS or field_name.endswith("ObjectKey"):
-            return value
-        normalized = value.strip()
-        if normalized.startswith("/media/"):
-            normalized = normalized[1:]
-        lower = normalized.lower()
-        if lower.startswith("media/avatar/"):
-            return cls._join_media_base(cls.avatar_cdn_base_url, normalized) or value
-        if lower.startswith("media/background/") or lower.startswith("media/image/"):
-            return cls._join_media_base(cls.image_cdn_base_url or cls.avatar_cdn_base_url, normalized) or value
-        if lower.startswith("media/video/"):
-            return cls._join_media_base(cls.video_cdn_base_url, normalized) or value
-        return value
-
-    @staticmethod
-    def _join_media_base(base_url: str, object_key: str) -> str:
-        base = base_url.rstrip("/")
-        return f"{base}/{object_key}" if base else ""
 
 
 def main() -> None:
@@ -702,6 +668,8 @@ def main() -> None:
     parser.add_argument("--assistant-upstream-port", type=int, default=0)
     parser.add_argument("--chat-upstream-host", default="127.0.0.1")
     parser.add_argument("--chat-upstream-port", type=int, default=18081)
+    parser.add_argument("--entity-upstream-host", default="127.0.0.1")
+    parser.add_argument("--entity-upstream-port", type=int, default=18084)
     parser.add_argument("--avatar-cdn-base-url", default="")
     parser.add_argument("--image-cdn-base-url", default="")
     parser.add_argument("--video-cdn-base-url", default="")
@@ -711,6 +679,8 @@ def main() -> None:
     AssistantBetaGateway.assistant_upstream_port = args.assistant_upstream_port or args.upstream_port
     AssistantBetaGateway.chat_upstream_host = args.chat_upstream_host
     AssistantBetaGateway.chat_upstream_port = args.chat_upstream_port
+    AssistantBetaGateway.entity_upstream_host = args.entity_upstream_host
+    AssistantBetaGateway.entity_upstream_port = args.entity_upstream_port
     AssistantBetaGateway.avatar_cdn_base_url = args.avatar_cdn_base_url
     AssistantBetaGateway.image_cdn_base_url = args.image_cdn_base_url
     AssistantBetaGateway.video_cdn_base_url = args.video_cdn_base_url

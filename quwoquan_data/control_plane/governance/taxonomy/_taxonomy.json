@@ -1,6 +1,4 @@
 {
-  "version": "v4",
-  "schemaVersion": "1.0",
   "groups": [
     "Topic",
     "Audience",

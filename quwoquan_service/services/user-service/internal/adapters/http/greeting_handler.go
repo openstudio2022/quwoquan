@@ -8,12 +8,12 @@ import (
 )
 
 func (h *UserHandler) registerGreetingRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("POST /v1/user/greeting-request", h.handleSendGreeting)
-	mux.HandleFunc("GET /v1/user/greeting-request/inbox", h.handleListGreetingInbox)
-	mux.HandleFunc("GET /v1/user/greeting-request/outbox", h.handleListGreetingOutbox)
-	mux.HandleFunc("POST /v1/user/greeting-request/{requestId}/reply", h.handleReplyGreeting)
-	mux.HandleFunc("POST /v1/user/greeting-request/{requestId}/ignore", h.handleIgnoreGreeting)
-	mux.HandleFunc("DELETE /v1/user/greeting-request/{requestId}", h.handleCancelGreeting)
+	mux.HandleFunc("POST /user/greeting-request", h.handleSendGreeting)
+	mux.HandleFunc("GET /user/greeting-request/inbox", h.handleListGreetingInbox)
+	mux.HandleFunc("GET /user/greeting-request/outbox", h.handleListGreetingOutbox)
+	mux.HandleFunc("POST /user/greeting-request/{requestId}/reply", h.handleReplyGreeting)
+	mux.HandleFunc("POST /user/greeting-request/{requestId}/ignore", h.handleIgnoreGreeting)
+	mux.HandleFunc("DELETE /user/greeting-request/{requestId}", h.handleCancelGreeting)
 }
 
 func (h *UserHandler) handleSendGreeting(w http.ResponseWriter, r *http.Request) {

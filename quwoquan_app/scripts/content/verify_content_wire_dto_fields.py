@@ -53,6 +53,16 @@ COMMENT_PAGE_PROJECTION = (
     / "projections"
     / "comment_page_slice.yaml"
 )
+POST_DETAIL_PROJECTION = (
+    ROOT
+    / "quwoquan_service"
+    / "contracts"
+    / "metadata"
+    / "content"
+    / "post"
+    / "projections"
+    / "content_post_detail_slice.yaml"
+)
 COMMENT_DART = (
     ROOT
     / "quwoquan_app"
@@ -62,6 +72,16 @@ COMMENT_DART = (
     / "src"
     / "content"
     / "comment_contracts.dart"
+)
+POST_READER_DART = (
+    ROOT
+    / "quwoquan_app"
+    / "packages"
+    / "quwoquan_cloud_contracts"
+    / "lib"
+    / "src"
+    / "content"
+    / "post_reader_queries.dart"
 )
 SEARCH_DART = (
     ROOT
@@ -134,7 +154,7 @@ def _extract_function_block(dart: str, function_name: str) -> str:
 
 def _map_keys_in_block(block: str) -> set[str]:
     keys: set[str] = set()
-    for m in re.finditer(r"(?:m|map)\[['\"]([^'\"]+)['\"]\]", block):
+    for m in re.finditer(r"(?:m|map|root|item)\[['\"]([^'\"]+)['\"]\]", block):
         keys.add(m.group(1))
     # Pure contracts use typed accessors instead of direct dynamic-map reads.
     # Keep the gate coupled to the decoder's declared wire keys without
@@ -148,6 +168,19 @@ def _map_keys_in_block(block: str) -> set[str]:
     return keys
 
 
+def _projection_field_names(data: dict) -> set[str]:
+    fields = data.get("fields") or []
+    names: set[str] = set()
+    for field in fields:
+        if isinstance(field, str) and field.strip():
+            names.add(field.strip())
+        elif isinstance(field, dict):
+            name = str(field.get("name") or "").strip()
+            if name:
+                names.add(name)
+    return names
+
+
 def _report_create_body_keys(report_yaml: dict) -> set[str]:
     names = {str(f["name"]) for f in (report_yaml.get("fields") or []) if f.get("name")}
     # CreateReport API body is subset (no server-only fields required in client wire).
@@ -159,6 +192,9 @@ def main() -> int:
     comment = yaml.safe_load(FIELDS_COMMENT.read_text(encoding="utf-8"))
     comment_projection = yaml.safe_load(
         COMMENT_PAGE_PROJECTION.read_text(encoding="utf-8")
+    )
+    post_detail_projection = yaml.safe_load(
+        POST_DETAIL_PROJECTION.read_text(encoding="utf-8")
     )
     comment_fields = {
         str(field["name"])
@@ -195,6 +231,32 @@ def main() -> int:
         print(
             "verify_content_wire_dto_fields: Comment fields missing from strict decoder:\n  "
             + "\n  ".join(missing),
+            file=sys.stderr,
+        )
+        return 1
+
+    post_detail_fields = _projection_field_names(post_detail_projection)
+    if not post_detail_fields:
+        print(
+            "verify_content_wire_dto_fields: ContentPostDetailSlice metadata must declare fields",
+            file=sys.stderr,
+        )
+        return 1
+    post_reader = POST_READER_DART.read_text(encoding="utf-8")
+    post_detail_keys = _map_keys_in_block(
+        _extract_function_block(post_reader, "decodeContentPostDetailSlice(")
+    )
+    post_detail_keys.update(
+        _map_keys_in_block(
+            _extract_function_block(post_reader, "_decodeContentPostProjection(")
+        )
+    )
+    unknown_post_detail = post_detail_keys - post_detail_fields
+    if unknown_post_detail:
+        print(
+            "verify_content_wire_dto_fields: ContentPostDetailSlice decoder uses fields "
+            "absent from metadata:\n  "
+            + "\n  ".join(sorted(unknown_post_detail)),
             file=sys.stderr,
         )
         return 1

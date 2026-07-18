@@ -33,7 +33,7 @@ func (p *StreamProjector) event(eventType string, payload map[string]any, failur
 		payload = map[string]any{}
 	}
 	canonicalType := canonicalStreamEventType(eventType)
-	payload["schemaVersion"] = "assistant_stream_event.m5"
+	payload["schema"] = "assistant_stream_event"
 	payload["conversationId"] = p.Turn.ConversationID
 	payload["turnId"] = p.Turn.TurnID
 	payload["eventType"] = canonicalType

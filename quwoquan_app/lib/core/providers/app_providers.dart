@@ -16,7 +16,6 @@ import 'package:quwoquan_app/cloud/media/media_upload_manager.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_trace_context_store.dart';
 import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart'
     show AppLogService, AppLogType, AppLogLevel, AppLogContext;
-import 'package:quwoquan_app/assistant/observability/logging/app_log_uploader.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/config/cloud_runtime_environment.dart';
@@ -38,6 +37,7 @@ import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
+import 'package:quwoquan_app/cloud/services/entity/remote/homepage_query_remote.dart';
 import 'package:quwoquan_app/core/application/content/create_location_coordinator.dart';
 import 'package:quwoquan_app/cloud/services/integration/remote/location_query_remote.dart';
 import 'package:quwoquan_app/cloud/services/notification/remote/app_message_facets_remote.dart';
@@ -52,7 +52,7 @@ import 'package:quwoquan_app/cloud/remote/content/media/content_media_remote.dar
 import 'package:quwoquan_app/cloud/remote/content/media/content_media_object_uploader.dart';
 import 'package:quwoquan_app/cloud/remote/content/media/local_media_upload_source.dart';
 import 'package:quwoquan_app/cloud/remote/content/outbound_share/outbound_share_remote.dart';
-import 'package:quwoquan_app/cloud/remote/content/post/post_lifecycle_remote.dart';
+import 'package:quwoquan_app/cloud/remote/content/post/post_publication_remote.dart';
 import 'package:quwoquan_app/cloud/remote/circle/post_placement/post_placement_remote.dart';
 import 'package:quwoquan_app/cloud/remote/circle/membership/membership_remote.dart';
 import 'package:quwoquan_app/cloud/remote/circle/group/group_remote.dart';
@@ -129,7 +129,7 @@ export 'package:quwoquan_app/core/di/login_dependencies.dart'
         oneTapLoginClientProvider,
         socialAuthorizationRepositoryProvider;
 export 'package:quwoquan_app/core/di/ops_event_dependencies.dart'
-    show opsEventRepositoryProvider;
+    show appTelemetryReporterProvider;
 part 'app_providers_content_extras.dart';
 part 'app_providers_content_facets.dart';
 part 'app_providers_operations.dart';
@@ -378,16 +378,6 @@ final appearanceSnapshotProvider = Provider<AppearanceSnapshot>((ref) {
   );
 });
 
-/// AppLog 上传服务 — 定期将本地 ndjson 日志批量上传到 OpsEvent 后端。
-final appLogUploaderProvider = Provider<AppLogUploader>((ref) {
-  final uploader = AppLogUploader(
-    eventRepository: ref.watch(opsEventRepositoryProvider),
-  );
-  uploader.start();
-  ref.onDispose(uploader.dispose);
-  return uploader;
-});
-
 /// 浏览记录服务 Provider（小趣基线：记录访问用于 experienceLevel）
 final visitRecorderServiceProvider = Provider<VisitRecorderService>((ref) {
   return VisitRecorderService(
@@ -598,7 +588,7 @@ class ContentRuntimeConfigState {
   /// 首页频道（运营资产）：端默认 [ContentUIConfig.homeChannels]，远程整体覆盖、失败回退默认。
   final List<HomeChannelConfig> homeChannels;
 
-  /// 交集展示控制（就地展开行数 / 推荐候选窗），来自 /v1/config/app，失败回退默认。
+  /// 交集展示控制（就地展开行数 / 推荐候选窗），来自 /config/app，失败回退默认。
   final IntersectionDisplayConfig intersectionDisplay;
 
   bool isEnabled(String flag) => featureFlags[flag] ?? false;
@@ -845,9 +835,9 @@ final contentFeatureFlagProvider = Provider.family<bool, String>((ref, flag) {
   return ref.watch(contentRuntimeConfigProvider).isEnabled(flag);
 });
 
-/// 首页频道（运营资产）：端默认 [ContentUIConfig.homeChannels] + `/v1/config/app` 远程覆盖，
+/// 首页频道（运营资产）：端默认 [ContentUIConfig.homeChannels] + `/config/app` 远程覆盖，
 /// 失败/缺失回退默认；已按 order 升序。UI 通过本 provider 取频道，禁止硬编码频道列表。
-/// 交集展示控制（应用骨架级系统配置），来自 /v1/config/app；UI 通过本 provider 取
+/// 交集展示控制（应用骨架级系统配置），来自 /config/app；UI 通过本 provider 取
 /// 就地展开行数等，禁止硬编码或塞进交集列表接口。
 final intersectionDisplayConfigProvider = Provider<IntersectionDisplayConfig>((
   ref,

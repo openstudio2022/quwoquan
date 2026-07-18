@@ -22,8 +22,7 @@ class ChatConversationTimestampDto {
 
   factory ChatConversationTimestampDto.fromMap(Map<String, dynamic> m) {
     return ChatConversationTimestampDto(
-      conversationId: (m['id'] ?? m['conversationId'] ?? m['_id'] ?? '')
-          .toString(),
+      conversationId: (m['conversationId'] ?? '').toString(),
       updatedAt: m['updatedAt']?.toString(),
       settingsUpdatedAt: m['settingsUpdatedAt']?.toString(),
       lastMessageAt: m['lastMessageAt']?.toString(),
@@ -34,9 +33,9 @@ class ChatConversationTimestampDto {
     );
   }
 
-  /// 与记录 Map 消费路径兼容（本地缓存 / 搜索同步）。
+  /// 本地缓存 / 搜索同步使用同一 canonical 字段。
   Map<String, dynamic> toMap() => <String, dynamic>{
-    'id': conversationId,
+    'conversationId': conversationId,
     if (updatedAt != null) 'updatedAt': updatedAt,
     if (settingsUpdatedAt != null) 'settingsUpdatedAt': settingsUpdatedAt,
     if (lastMessageAt != null) 'lastMessageAt': lastMessageAt,

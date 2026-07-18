@@ -21,7 +21,7 @@ func TestGeneratedOperationGuardDefaultsUnknownAndBlockedRoutesToDeny(t *testing
 			CanonicalOperationID: "content.report.CreateReport",
 			ContractGraphSHA256:  testContractGraphSHA256,
 			Method:               http.MethodPost,
-			PathTemplate:         "/api/v1/content/reports",
+			PathTemplate:         "/api/content/reports",
 			OperationKind:        "command",
 			MutationTarget:       "Report",
 			InvariantTarget:      "Report",
@@ -40,8 +40,8 @@ func TestGeneratedOperationGuardDefaultsUnknownAndBlockedRoutesToDeny(t *testing
 		path       string
 		wantStatus int
 	}{
-		{name: "unknown", path: "/api/v1/content/unknown", wantStatus: http.StatusNotFound},
-		{name: "blocked", path: "/api/v1/content/reports", wantStatus: http.StatusForbidden},
+		{name: "unknown", path: "/api/content/unknown", wantStatus: http.StatusNotFound},
+		{name: "blocked", path: "/api/content/reports", wantStatus: http.StatusForbidden},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			request := httptest.NewRequest(http.MethodPost, testCase.path, nil)
@@ -62,7 +62,7 @@ func TestGeneratedOperationGuardPropagatesMetadataDeadline(t *testing.T) {
 			CanonicalOperationID: "content.report.CreateReport",
 			ContractGraphSHA256:  testContractGraphSHA256,
 			Method:               http.MethodPost,
-			PathTemplate:         "/v1/content/reports",
+			PathTemplate:         "/content/reports",
 			OperationKind:        "command",
 			MutationTarget:       "Report",
 			InvariantTarget:      "Report",
@@ -87,7 +87,7 @@ func TestGeneratedOperationGuardPropagatesMetadataDeadline(t *testing.T) {
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(
 		response,
-		httptest.NewRequest(http.MethodPost, "/v1/content/reports", nil),
+		httptest.NewRequest(http.MethodPost, "/content/reports", nil),
 	)
 	if response.Code != http.StatusNoContent {
 		t.Fatalf("status=%d want=%d", response.Code, http.StatusNoContent)
@@ -102,7 +102,7 @@ func TestGeneratedOperationGuardRequiresVerifiedActorAndScopes(t *testing.T) {
 			CanonicalOperationID: "content.report.CreateReport",
 			ContractGraphSHA256:  testContractGraphSHA256,
 			Method:               http.MethodPost,
-			PathTemplate:         "/api/v1/content/reports/{reportId}",
+			PathTemplate:         "/api/content/reports/{reportId}",
 			OperationKind:        "command",
 			MutationTarget:       "Report",
 			InvariantTarget:      "Report",
@@ -161,7 +161,7 @@ func TestGeneratedOperationGuardRequiresVerifiedActorAndScopes(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			request := httptest.NewRequest(
 				http.MethodPost,
-				"/api/v1/content/reports/report-1",
+				"/api/content/reports/report-1",
 				nil,
 			)
 			request.Header.Set("Idempotency-Key", "idempotency-1")
@@ -211,6 +211,104 @@ func TestGeneratedOperationGuardOptionalActorStillFailsClosed(t *testing.T) {
 	}
 }
 
+func TestGeneratedOperationGuardEnforcesIdempotencyAndVersionPolicy(t *testing.T) {
+	t.Parallel()
+
+	for _, testCase := range []struct {
+		name                string
+		idempotencyPolicy   string
+		versionPrecondition string
+		idempotencyKey      string
+		ifMatch             string
+		wantStatus          int
+	}{
+		{
+			name:              "required idempotency key missing",
+			idempotencyPolicy: "required",
+			wantStatus:        http.StatusBadRequest,
+		},
+		{
+			name:                "if match missing",
+			versionPrecondition: "if_match",
+			wantStatus:          http.StatusBadRequest,
+		},
+		{
+			name:                "if match must be quoted positive version",
+			versionPrecondition: "if_match",
+			ifMatch:             "1",
+			wantStatus:          http.StatusBadRequest,
+		},
+		{
+			name:                "explicit if match accepted",
+			versionPrecondition: "if_match",
+			ifMatch:             `"7"`,
+			wantStatus:          http.StatusNoContent,
+		},
+		{
+			name:       "server owned concurrency forbids if match",
+			ifMatch:    `"7"`,
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:              "required idempotency key accepted",
+			idempotencyPolicy: "required",
+			idempotencyKey:    "publish-intent-1",
+			wantStatus:        http.StatusNoContent,
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			guard := RequireGeneratedOperationAuthorization(
+				[]OperationSecurityDescriptor{{
+					CanonicalOperationID: "content.post.TestCommand",
+					ContractGraphSHA256:  testContractGraphSHA256,
+					Method:               http.MethodPost,
+					PathTemplate:         "/content/test-command",
+					OperationKind:        "command",
+					MutationTarget:       "Post",
+					InvariantTarget:      "Post",
+					AuthMode:             "public",
+					ActorRequirement:     "none",
+					Principal:            "public",
+					CommercialStatus:     "ready",
+					Idempotency:          testCase.idempotencyPolicy,
+					VersionPrecondition:  testCase.versionPrecondition,
+				}},
+			)
+			handler := guard(http.HandlerFunc(func(
+				w http.ResponseWriter,
+				r *http.Request,
+			) {
+				current, ok := operation.FromContext(r.Context())
+				if !ok || current.IdempotencyKey != testCase.idempotencyKey {
+					t.Fatalf("idempotency context mismatch: %+v", current)
+				}
+				w.WriteHeader(http.StatusNoContent)
+			}))
+			request := httptest.NewRequest(
+				http.MethodPost,
+				"/content/test-command",
+				nil,
+			)
+			if testCase.idempotencyKey != "" {
+				request.Header.Set("Idempotency-Key", testCase.idempotencyKey)
+			}
+			if testCase.ifMatch != "" {
+				request.Header.Set("If-Match", testCase.ifMatch)
+			}
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			if response.Code != testCase.wantStatus {
+				t.Fatalf(
+					"status = %d, want %d: %s",
+					response.Code,
+					testCase.wantStatus,
+					response.Body.String(),
+				)
+			}
+		})
+	}
+}
+
 func TestGeneratedOperationGuardForRouteUsesOnlyTheGeneratedDescriptor(t *testing.T) {
 	t.Parallel()
 
@@ -220,7 +318,7 @@ func TestGeneratedOperationGuardForRouteUsesOnlyTheGeneratedDescriptor(t *testin
 				CanonicalOperationID: "user.user_profile.PullUserSync",
 				ContractGraphSHA256:  testContractGraphSHA256,
 				Method:               http.MethodPost,
-				PathTemplate:         "/v1/user/sync",
+				PathTemplate:         "/user/sync",
 				OperationKind:        "command",
 				MutationTarget:       "UserAccount",
 				InvariantTarget:      "UserAccount",
@@ -233,7 +331,7 @@ func TestGeneratedOperationGuardForRouteUsesOnlyTheGeneratedDescriptor(t *testin
 				CanonicalOperationID: "user.user_profile.GetProfile",
 				ContractGraphSHA256:  testContractGraphSHA256,
 				Method:               http.MethodGet,
-				PathTemplate:         "/v1/user/profile/{userId}",
+				PathTemplate:         "/user/profile/{userId}",
 				OperationKind:        "query",
 				AuthMode:             "public",
 				ActorRequirement:     "none",
@@ -242,20 +340,20 @@ func TestGeneratedOperationGuardForRouteUsesOnlyTheGeneratedDescriptor(t *testin
 			},
 		},
 		http.MethodPost,
-		"/v1/user/sync",
+		"/user/sync",
 	)
 	handler := guard(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
-	unauthenticated := httptest.NewRequest(http.MethodPost, "/v1/user/sync", nil)
+	unauthenticated := httptest.NewRequest(http.MethodPost, "/user/sync", nil)
 	unauthenticatedRecorder := httptest.NewRecorder()
 	handler.ServeHTTP(unauthenticatedRecorder, unauthenticated)
 	if unauthenticatedRecorder.Code != http.StatusUnauthorized {
 		t.Fatalf("unauthenticated status=%d want=%d", unauthenticatedRecorder.Code, http.StatusUnauthorized)
 	}
 
-	authorized := httptest.NewRequest(http.MethodPost, "/v1/user/sync", nil)
+	authorized := httptest.NewRequest(http.MethodPost, "/user/sync", nil)
 	authorized = authorized.WithContext(WithPrincipal(authorized.Context(), Principal{
 		Actor: operation.ActorContext{AccountID: "account-1"},
 	}))
@@ -274,7 +372,7 @@ func TestGeneratedOperationGuardForRouteAllowsReadyAnonymousBootstrap(t *testing
 			CanonicalOperationID: "user.user_profile.LoginAnonymous",
 			ContractGraphSHA256:  testContractGraphSHA256,
 			Method:               http.MethodPost,
-			PathTemplate:         "/v1/auth/login/anonymous",
+			PathTemplate:         "/auth/login/anonymous",
 			OperationKind:        "command",
 			MutationTarget:       "AuthenticationChallenge",
 			InvariantTarget:      "AuthenticationChallenge",
@@ -284,7 +382,7 @@ func TestGeneratedOperationGuardForRouteAllowsReadyAnonymousBootstrap(t *testing
 			CommercialStatus:     "ready",
 		}},
 		http.MethodPost,
-		"/v1/auth/login/anonymous",
+		"/auth/login/anonymous",
 	)
 	handler := guard(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -293,7 +391,7 @@ func TestGeneratedOperationGuardForRouteAllowsReadyAnonymousBootstrap(t *testing
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(
 		response,
-		httptest.NewRequest(http.MethodPost, "/v1/auth/login/anonymous", nil),
+		httptest.NewRequest(http.MethodPost, "/auth/login/anonymous", nil),
 	)
 	if response.Code != http.StatusNoContent {
 		t.Fatalf("anonymous bootstrap status=%d want=%d", response.Code, http.StatusNoContent)
@@ -308,7 +406,7 @@ func TestGeneratedOperationGuardSeparatesScopesPermissionsAndRoles(t *testing.T)
 			CanonicalOperationID: "ops.audit.Read",
 			ContractGraphSHA256:  testContractGraphSHA256,
 			Method:               http.MethodGet,
-			PathTemplate:         "/v1/ops/audit/{auditId}",
+			PathTemplate:         "/ops/audit/{auditId}",
 			OperationKind:        "query",
 			AuthMode:             "required",
 			ActorRequirement:     "account",
@@ -362,7 +460,7 @@ func TestGeneratedOperationGuardSeparatesScopesPermissionsAndRoles(t *testing.T)
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			request := httptest.NewRequest(http.MethodGet, "/v1/ops/audit/audit-1", nil)
+			request := httptest.NewRequest(http.MethodGet, "/ops/audit/audit-1", nil)
 			request = request.WithContext(
 				WithPrincipal(request.Context(), testCase.principal),
 			)
@@ -384,7 +482,7 @@ func TestGeneratedOperationEnforcerFailsClosedForBlockedObjects(t *testing.T) {
 			CanonicalOperationID: "integration.location.SearchLocations",
 			ContractGraphSHA256:  testContractGraphSHA256,
 			Method:               http.MethodGet,
-			PathTemplate:         "/v1/integration/location/search",
+			PathTemplate:         "/integration/location/search",
 			OperationKind:        "query",
 			AuthMode:             "optional",
 			ActorRequirement:     "none",
@@ -395,7 +493,7 @@ func TestGeneratedOperationEnforcerFailsClosedForBlockedObjects(t *testing.T) {
 			CanonicalOperationID: "integration.external.Submit",
 			ContractGraphSHA256:  testContractGraphSHA256,
 			Method:               http.MethodPost,
-			PathTemplate:         "/v1/integration/external",
+			PathTemplate:         "/integration/external",
 			OperationKind:        "command",
 			MutationTarget:       "ExternalInteraction",
 			InvariantTarget:      "ExternalInteraction",
@@ -409,7 +507,7 @@ func TestGeneratedOperationEnforcerFailsClosedForBlockedObjects(t *testing.T) {
 
 	readyRequest := httptest.NewRequest(
 		http.MethodGet,
-		"/v1/integration/location/search",
+		"/integration/location/search",
 		nil,
 	)
 	readyResponse := httptest.NewRecorder()
@@ -419,7 +517,7 @@ func TestGeneratedOperationEnforcerFailsClosedForBlockedObjects(t *testing.T) {
 	}
 	blockedRequest := httptest.NewRequest(
 		http.MethodPost,
-		"/v1/integration/external",
+		"/integration/external",
 		nil,
 	)
 	blockedResponse := httptest.NewRecorder()
@@ -441,34 +539,34 @@ func TestGeneratedOperationGuardPanicsOnMalformedOrDuplicateRoute(t *testing.T) 
 		{{
 			CanonicalOperationID: "missing.graph.hash",
 			Method:               http.MethodGet,
-			PathTemplate:         "/v1/missing-graph-hash",
+			PathTemplate:         "/missing-graph-hash",
 			OperationKind:        "query",
 		}},
 		{{
 			CanonicalOperationID: "bad.path",
 			ContractGraphSHA256:  testContractGraphSHA256,
 			Method:               http.MethodGet,
-			PathTemplate:         "/v1/{bad/path}",
+			PathTemplate:         "/{bad/path}",
 			OperationKind:        "query",
 		}},
 		{{
 			CanonicalOperationID: "missing.operation.kind",
 			ContractGraphSHA256:  testContractGraphSHA256,
 			Method:               http.MethodGet,
-			PathTemplate:         "/v1/missing-operation-kind",
+			PathTemplate:         "/missing-operation-kind",
 		}},
 		{{
 			CanonicalOperationID: "missing.command.targets",
 			ContractGraphSHA256:  testContractGraphSHA256,
 			Method:               http.MethodPost,
-			PathTemplate:         "/v1/missing-command-targets",
+			PathTemplate:         "/missing-command-targets",
 			OperationKind:        "command",
 		}},
 		{{
 			CanonicalOperationID: "mismatched.command.targets",
 			ContractGraphSHA256:  testContractGraphSHA256,
 			Method:               http.MethodPost,
-			PathTemplate:         "/v1/mismatched-command-targets",
+			PathTemplate:         "/mismatched-command-targets",
 			OperationKind:        "command",
 			MutationTarget:       "FirstAggregate",
 			InvariantTarget:      "SecondAggregate",
@@ -478,14 +576,14 @@ func TestGeneratedOperationGuardPanicsOnMalformedOrDuplicateRoute(t *testing.T) 
 				CanonicalOperationID: "duplicate.a",
 				ContractGraphSHA256:  testContractGraphSHA256,
 				Method:               http.MethodGet,
-				PathTemplate:         "/v1/items/{itemId}",
+				PathTemplate:         "/items/{itemId}",
 				OperationKind:        "query",
 			},
 			{
 				CanonicalOperationID: "duplicate.b",
 				ContractGraphSHA256:  testContractGraphSHA256,
 				Method:               http.MethodGet,
-				PathTemplate:         "/v1/items/{otherId}",
+				PathTemplate:         "/items/{otherId}",
 				OperationKind:        "query",
 			},
 		},
@@ -494,14 +592,14 @@ func TestGeneratedOperationGuardPanicsOnMalformedOrDuplicateRoute(t *testing.T) 
 				CanonicalOperationID: "mixed.graph.a",
 				ContractGraphSHA256:  testContractGraphSHA256,
 				Method:               http.MethodGet,
-				PathTemplate:         "/v1/mixed-graph/a",
+				PathTemplate:         "/mixed-graph/a",
 				OperationKind:        "query",
 			},
 			{
 				CanonicalOperationID: "mixed.graph.b",
 				ContractGraphSHA256:  "different-contract-graph-sha256",
 				Method:               http.MethodGet,
-				PathTemplate:         "/v1/mixed-graph/b",
+				PathTemplate:         "/mixed-graph/b",
 				OperationKind:        "query",
 			},
 		},
@@ -525,7 +623,7 @@ func TestGeneratedOperationGuardSelectsMostSpecificMatchingRoute(t *testing.T) {
 			CanonicalOperationID: "content.media_asset.GetOwnedMediaAsset",
 			ContractGraphSHA256:  testContractGraphSHA256,
 			Method:               http.MethodGet,
-			PathTemplate:         "/internal/v1/content/media/{mediaId}",
+			PathTemplate:         "/internal/content/media/{mediaId}",
 			OperationKind:        "query",
 			AuthMode:             "public",
 			ActorRequirement:     "none",
@@ -536,7 +634,7 @@ func TestGeneratedOperationGuardSelectsMostSpecificMatchingRoute(t *testing.T) {
 			CanonicalOperationID: "content.media_asset.GetMediaAssetReference",
 			ContractGraphSHA256:  testContractGraphSHA256,
 			Method:               http.MethodGet,
-			PathTemplate:         "/internal/v1/content/media/{mediaId}:reference",
+			PathTemplate:         "/internal/content/media/{mediaId}:reference",
 			OperationKind:        "query",
 			AuthMode:             "public",
 			ActorRequirement:     "none",
@@ -551,7 +649,7 @@ func TestGeneratedOperationGuardSelectsMostSpecificMatchingRoute(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
-	request := httptest.NewRequest(http.MethodGet, "/internal/v1/content/media/asset-1:reference", nil)
+	request := httptest.NewRequest(http.MethodGet, "/internal/content/media/asset-1:reference", nil)
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusNoContent {

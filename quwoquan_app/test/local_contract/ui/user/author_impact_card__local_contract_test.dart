@@ -247,7 +247,7 @@ void main() {
     testWidgets('明细 sheet 中样本视觉可点击进对应对象主页', (tester) async {
       final behaviorRepo = MockBehaviorRepository();
       final tracker = ContentBehaviorTracker(
-        repository: behaviorRepo,
+        reporter: behaviorRepo,
         maxBatchSize: 1,
         enablePeriodicFlush: false,
       );

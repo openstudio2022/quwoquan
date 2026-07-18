@@ -45,6 +45,49 @@ func TestObjectGatewayVerifiesObjectBeforeCASPromotion(t *testing.T) {
 	}
 }
 
+func TestObjectGatewayDeliveryURLUsesPublicSliceWithoutCASPath(t *testing.T) {
+	now := time.Date(2030, time.January, 1, 0, 0, 0, 0, time.UTC)
+	gateway, err := NewObjectGateway(ObjectGatewayConfig{
+		Bucket: "media", CDNDomain: "https://cdn.example.test", CDNSignKey: "test-sign-key", DeliveryTTL: time.Minute,
+	}, &objectClientStub{})
+	if err != nil {
+		t.Fatalf("new gateway: %v", err)
+	}
+	gateway.now = func() time.Time { return now }
+	const publicSlice = "media/video/s/video-primary-0001/post/video-content-0001/source.mp4"
+	delivery, err := gateway.DeliveryURL(context.Background(), publicSlice)
+	if err != nil {
+		t.Fatalf("delivery url: %v", err)
+	}
+	if delivery != "https://cdn.example.test/"+publicSlice {
+		t.Fatalf("public slice delivery must be base+key without CAS path, got %q", delivery)
+	}
+	if strings.Contains(delivery, "media/objects/sha256/") || strings.Contains(delivery, "sign=") {
+		t.Fatalf("public slice delivery must not look like signed CAS URL: %q", delivery)
+	}
+}
+
+func TestObjectGatewayMaterializesPublicSliceWithoutPromotingAwayCASSource(t *testing.T) {
+	client := &objectClientStub{}
+	gateway, err := NewObjectGateway(ObjectGatewayConfig{
+		Bucket: "media", CDNDomain: "https://cdn.example.test", CDNSignKey: "test-sign-key", DeliveryTTL: time.Minute,
+	}, client)
+	if err != nil {
+		t.Fatalf("new gateway: %v", err)
+	}
+	const source = "media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.mp4"
+	const target = "media/video/s/asset/mas_video_001/v1/source.mp4"
+	if err := gateway.PublishPublicSlice(context.Background(), source, target); err != nil {
+		t.Fatalf("materialize public slice: %v", err)
+	}
+	if client.copiedFrom != source || client.copiedTo != target {
+		t.Fatalf("unexpected public copy: from=%q to=%q", client.copiedFrom, client.copiedTo)
+	}
+	if client.promotedTo != "" {
+		t.Fatalf("public materialization must not delete/promote the CAS source: %q", client.promotedTo)
+	}
+}
+
 func TestObjectGatewayRejectsMismatchedUploadedBytes(t *testing.T) {
 	client := &objectClientStub{info: &runtimemedia.ObjectInfo{
 		Exists: true, Sha256: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", ContentType: "image/jpeg", Size: 128,
@@ -66,6 +109,8 @@ func TestObjectGatewayRejectsMismatchedUploadedBytes(t *testing.T) {
 type objectClientStub struct {
 	info       *runtimemedia.ObjectInfo
 	promotedTo string
+	copiedFrom string
+	copiedTo   string
 }
 
 func (s *objectClientStub) PresignPutObject(_ context.Context, _ string, key string, _ runtimemedia.PutObjectConstraints, _ time.Duration) (string, error) {
@@ -78,5 +123,11 @@ func (s *objectClientStub) StatObject(context.Context, string, string) (*runtime
 
 func (s *objectClientStub) PromoteObject(_ context.Context, _ string, _ string, target string, _ map[string]string) error {
 	s.promotedTo = target
+	return nil
+}
+
+func (s *objectClientStub) CopyObject(_ context.Context, _ string, source string, target string) error {
+	s.copiedFrom = source
+	s.copiedTo = target
 	return nil
 }

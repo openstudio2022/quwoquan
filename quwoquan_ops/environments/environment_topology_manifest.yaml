@@ -1,7 +1,8 @@
 {
-  "schemaVersion": "environment-topology/v1",
+  "schema": "environment-topology",
   "environments": {
     "alpha": {
+      "dataReleaseTarget": "alpha-local",
       "publicBases": {
         "api": "https://alpha-api.quwoquan-env.test:17000",
         "realtime": "wss://alpha-api.quwoquan-env.test:17000",
@@ -65,6 +66,7 @@
       }
     },
     "beta": {
+      "dataReleaseTarget": "beta-local",
       "publicBases": {
         "api": "https://beta-api.quwoquan-env.test:18000",
         "realtime": "wss://beta-api.quwoquan-env.test:18000",
@@ -128,6 +130,7 @@
       }
     },
     "gamma": {
+      "dataReleaseTarget": "gamma-local",
       "publicBases": {
         "api": "https://gamma-api.quwoquan-env.test:19000",
         "realtime": "wss://gamma-api.quwoquan-env.test:19000",
@@ -191,14 +194,15 @@
       }
     },
     "prod": {
+      "dataReleaseTarget": "prod-hosted",
       "publicBases": {
-        "api": "https://118.31.239.122:19000",
-        "realtime": "wss://118.31.239.122:19000",
-        "productOps": "https://118.31.239.122:19010",
-        "mediaAvatar": "https://118.31.239.122:19100",
-        "mediaImage": "https://118.31.239.122:19100",
-        "mediaVideo": "https://118.31.239.122:19100",
-        "mediaUpload": "https://118.31.239.122:19100"
+        "api": "https://api.quwoquan.com",
+        "realtime": "wss://realtime.quwoquan.com",
+        "productOps": "https://ops.quwoquan.com",
+        "mediaAvatar": "https://cdn.quwoquan.com",
+        "mediaImage": "https://cdn.quwoquan.com",
+        "mediaVideo": "https://cdn.quwoquan.com",
+        "mediaUpload": "https://upload.quwoquan.com"
       },
       "subnets": {
         "edge": "10.60.10.0/24",
@@ -236,14 +240,20 @@
         }
       },
       "hostAllowlist": [
-        "118.31.239.122"
+        "api.quwoquan.com",
+        "realtime.quwoquan.com",
+        "ops.quwoquan.com",
+        "cdn.quwoquan.com",
+        "upload.quwoquan.com",
+        "quwoquan.com"
       ],
       "forbiddenHostTokens": [
         ".test",
         ".example",
         "127.0.0.1",
         "10.0.2.2",
-        "192.168."
+        "192.168.",
+        "118.31.239.122"
       ],
       "rolloutStagePolicy": {
         "mode": "prod-rollout",
@@ -267,6 +277,14 @@
       },
       "origins": {
         "mediaOrigin": "http://127.0.0.1:17110"
+      },
+      "playbackCanary": {
+        "workId": "v1",
+        "source": "alpha-bundled-contract"
+      },
+      "dataRelease": {
+        "mode": "projection-only",
+        "mediaPublicBaseKey": "mediaImage"
       }
     },
     "beta-local": {
@@ -284,6 +302,17 @@
       },
       "origins": {
         "mediaOrigin": "http://127.0.0.1:18110"
+      },
+      "playbackCanary": {
+        "workId": "fixture_video_001",
+        "source": "beta-seed"
+      },
+      "dataRelease": {
+        "mode": "local-import",
+        "mongoPortRole": "mongodb",
+        "mediaLocalRef": "cache/media",
+        "mediaPublicBaseKey": "mediaImage",
+        "entityReloadPortRole": "entity-service"
       }
     },
     "gamma-local": {
@@ -298,6 +327,17 @@
         "mediaImage": "https://gamma-image.quwoquan-env.test:19100",
         "mediaVideo": "https://gamma-video.quwoquan-env.test:19100",
         "mediaUpload": "https://gamma-upload.quwoquan-env.test:19130"
+      },
+      "playbackCanary": {
+        "workId": "fixture_video_001",
+        "source": "gamma-curated-release"
+      },
+      "dataRelease": {
+        "mode": "local-import",
+        "mongoPortRole": "mongodb",
+        "mediaLocalRef": "cache/media",
+        "mediaPublicBaseKey": "mediaImage",
+        "entityReloadPortRole": "entity-service"
       }
     },
     "prod-sim": {
@@ -315,6 +355,11 @@
       },
       "origins": {
         "mediaOrigin": "http://127.0.0.1:20110"
+      },
+      "playbackCanary": {
+        "source": "published-release",
+        "workIdEnv": "VIDEO_PLAYBACK_CANARY_WORK_ID",
+        "publicSliceKeyEnv": "VIDEO_PLAYBACK_CANARY_PUBLIC_SLICE_KEY"
       }
     },
     "prod-hosted": {
@@ -323,13 +368,26 @@
       "portProfile": null,
       "sharedClusterNote": "gray-initial and full share the same physical cluster because of current cost constraints; gamma is local-only and has no remote target",
       "publicBases": {
-        "api": "https://118.31.239.122:19000",
-        "realtime": "wss://118.31.239.122:19000",
-        "productOps": "https://118.31.239.122:19010",
-        "mediaAvatar": "https://118.31.239.122:19100",
-        "mediaImage": "https://118.31.239.122:19100",
-        "mediaVideo": "https://118.31.239.122:19100",
-        "mediaUpload": "https://118.31.239.122:19100"
+        "api": "https://api.quwoquan.com",
+        "realtime": "wss://realtime.quwoquan.com",
+        "productOps": "https://ops.quwoquan.com",
+        "mediaAvatar": "https://cdn.quwoquan.com",
+        "mediaImage": "https://cdn.quwoquan.com",
+        "mediaVideo": "https://cdn.quwoquan.com",
+        "mediaUpload": "https://upload.quwoquan.com"
+      },
+      "playbackCanary": {
+        "source": "published-release",
+        "workIdEnv": "VIDEO_PLAYBACK_CANARY_WORK_ID",
+        "publicSliceKeyEnv": "VIDEO_PLAYBACK_CANARY_PUBLIC_SLICE_KEY"
+      },
+      "dataRelease": {
+        "mode": "hosted-import",
+        "mongoUriEnv": "QWQ_PROD_DATA_RELEASE_MONGO_URI",
+        "mediaRootEnv": "QWQ_PROD_DATA_RELEASE_MEDIA_ROOT",
+        "mediaPublicBaseKey": "mediaImage",
+        "entityReloadUrlEnv": "QWQ_PROD_ENTITY_RELOAD_URL",
+        "authTokenEnv": "QWQ_PROD_DATA_RELEASE_AUTH_TOKEN"
       }
     }
   }

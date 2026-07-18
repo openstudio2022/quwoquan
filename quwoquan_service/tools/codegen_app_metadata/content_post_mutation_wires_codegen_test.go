@@ -63,12 +63,12 @@ func TestContentPostMutationWiresOnlyEmitMetadataWritableFields(t *testing.T) {
 		&serviceFile{
 			APIRoutes: []routeDef{
 				{
-					Operation:      "CreatePost",
-					WritableFields: []string{"contentType"},
+					Operation:      "UpdatePostSettings",
+					WritableFields: []string{"visibility"},
 				},
 			},
 		},
-		map[string]string{"contentType": "enum"},
+		map[string]string{"visibility": "string"},
 	)
 
 	rendered, err := os.ReadFile(outPath)
@@ -76,10 +76,10 @@ func TestContentPostMutationWiresOnlyEmitMetadataWritableFields(t *testing.T) {
 		t.Fatalf("read generated wire: %v", err)
 	}
 	output := string(rendered)
-	if !strings.Contains(output, "this.contentType") {
-		t.Fatal("generated CreatePost wire is missing metadata writable field contentType")
+	if !strings.Contains(output, "this.visibility") {
+		t.Fatal("generated UpdatePostSettings wire is missing metadata writable field visibility")
 	}
 	if strings.Contains(output, "_mutationPutOpt(m, 'type', type)") {
-		t.Fatal("generated CreatePost wire must not emit non-writable type field")
+		t.Fatal("generated Post mutation wire must not emit non-writable type field")
 	}
 }

@@ -14,6 +14,7 @@
 - 新脚本归位到现有领域目录，禁止在仓库根创建平铺 `scripts/`。
 - 当前阶段未上线：旧模板拼文、区域硬编码、版本化 publish 路径、孤立脚本、不可追溯素材、弱事实证据一律直接清理，不做兼容。
 - `.qwq_output/` 只允许可删除重建的运行产物、部署快照、证据与缓存；禁止把 `control_plane/prompts/templates/schema/specs/policies/reference` 等可复用真相源放入 output。Python venv 只是由仓内 `requirements.txt` 临时重建的 disposable cache，不是可复用测试环境、工程配置或发布资产；任何任务都不得要求该缓存预先存在。
+- Python bytecode、pytest cache 与临时解释器只能写入 `.qwq_output/env/repo/local/**` 或测试隔离临时根；禁止在 `quwoquan_data/**` 生成 `__pycache__`/`*.pyc`。所有 Make/gate/pytest 入口必须显式禁写或重定向，并在执行后运行 Data layout gate。
 
 ## 内容供给端到端闭环
 
@@ -22,7 +23,7 @@
 - 一个执行只有一个 `.qwq_output/data/tasks/<executionId>/` 工作包；失败以新 sequence + `retryOf` 重试，禁止静态 task、batch 双寻址或原地篡改输入。
 - 正文只能由 Agent 基于 `writing_pack.json` 和 `prompt.md` 创作并写回，`generator=agent` 是交付面硬门；脚本不得拼正文。
 - 图片、事实、来源权利、实体主页、tagRefs、semantic mentions、人审账本和发布态必须可追溯；不可追溯即不可发布。
-- 内容载体按底稿形态路由：图片集合为主且文字只是标题/配文的是 `image` 图片作品；图文混合编排且源图随正文共同构成底稿的是 `article`；entity homepage 正文只允许 `encyclopedia-primary-v2` 四百科闭集。官网、政府/文旅门户、OTA、Wikivoyage、360、Wikidata、OSM 与百科搜索不得投影为主页底稿或主证据。
+- 内容载体按底稿形态路由：图片集合为主且文字只是标题/配文的是 `image` 图片作品；图文混合编排且源图随正文共同构成底稿的是 `article`；entity homepage 正文只允许 `encyclopedia-primary` 三百科闭集（Wikipedia、百度百科 OpenAPI、今日头条百科）。官网、政府/文旅门户、OTA、Wikivoyage、360、Wikidata、OSM 与百科搜索不得投影为主页底稿或主证据。
 - canonical `publish/` 只含通过 review 的自治 creators/entities/posts/media objects，及其引用的 `tags/<tagRef>/_definition.json` consumer snapshot；control-plane taxonomy 与 creator profile 仍是唯一可编辑静态输入，禁止复制整棵 taxonomy 或未引用标签进入 publish；事务写入前后使用内容摘要校验，不维护永久 freeze、迁移索引或兼容状态；
   release 唯一在 `.qwq_output/data/releases/{releaseId}`，环境证据唯一在
   `.qwq_output/env/{env}/runs/data-release/{releaseId}/{runId}`。`ship`/importer
@@ -39,14 +40,14 @@
 ## 数据工程七角色准出
 
 - **资深软件工程**：CLI-first、无孤立脚本、复用 `core`、失败可恢复、测试可重复。
-- **资深数据工程师**：DAG/stage result/gate report/repair/fallback/sample bundle/importer 幂等完整。
+- **资深数据工程师**：DAG/stage result/gate report/typed recovery/sample bundle/importer 幂等完整。
 - **数据质量 QA**：schema、事实回溯、图片安全、去重、golden set、rubric、dirty scan 有证据。
 - **法务法律专家**：来源权利、授权快照、blocked 来源、反抄袭、长句复现、人脸/肖像/商用风险可审计。
 - **消费者视角**：标题兑现、信息密度、图文节奏、可读性、feed/search/detail 可消费。
 - **内容运营专家**：SLO/KPI、人审 SLA、发布节奏、反馈修复、内容供给优化闭环。
 - **无人值守自动化**：object queue、fanout、budget、hook-check、repair report、失败回退能自动闭环。
 
-缺任一角色证据，先补 `docs/tests/gates` 或 repair stage，不要把离线文件生成当成完成。
+缺任一角色证据，先补 `specs/tests/gates` 或 repair stage，不要把离线文件生成当成完成。
 
 ## 典型触发与 E2E
 

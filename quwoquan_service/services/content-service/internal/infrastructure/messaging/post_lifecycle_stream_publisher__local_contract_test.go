@@ -15,7 +15,7 @@ func TestPostLifecycleStreamPublisherPreservesDurableIdentity(t *testing.T) {
 	client := rtredis.NewMemoryClient()
 	publisher := NewPostLifecycleStreamPublisher(client)
 	occurredAt := time.Date(2026, 7, 14, 8, 30, 0, 0, time.UTC)
-	payload, _ := json.Marshal(map[string]any{"_id": "post-42", "authorId": "persona-7", "status": "published"})
+	payload, _ := json.Marshal(map[string]any{"postId": "post-42", "authorId": "persona-7", "status": "published"})
 	if err := publisher.Publish(ctx, postports.OutboxEvent{
 		EventID: "post-42:2:PostPublished", EventType: "PostPublished",
 		AggregateType: "Post", AggregateID: "post-42", AggregateVersion: 2,

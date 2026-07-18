@@ -1,5 +1,4 @@
 templateId: 线路_补给避险
-version: 1
 subject: { kind: topic, type: 旅行/线路, minEntityRefs: 2, subjectTagRef: Topic/旅行/旅行筹备/应急避险 }
 vertical: travel
 category: travel

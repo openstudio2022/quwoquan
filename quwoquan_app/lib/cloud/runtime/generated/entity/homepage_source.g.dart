@@ -23,7 +23,7 @@ class HomepageSource {
   factory HomepageSource.fromMap(Map<String, dynamic> m) {
     return HomepageSource(
       sourceKind: m['sourceKind']?.toString() ?? '',
-      sourceUrl: m['sourceUrl']?.toString() ?? m['url']?.toString() ?? '',
+      sourceUrl: m['sourceUrl']?.toString() ?? '',
       title: m['title']?.toString() ?? '',
       fetchedAt: m['fetchedAt']?.toString() ?? '',
       snapshotHash: m['snapshotHash']?.toString() ?? '',

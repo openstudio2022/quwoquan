@@ -1,5 +1,4 @@
 templateId: 打卡地_美图
-version: 1
 subject: { kind: entity, type: 地点/打卡地 }
 vertical: travel
 category: photography

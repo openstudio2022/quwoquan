@@ -51,7 +51,7 @@ def handle_coverage_discover(args: argparse.Namespace) -> None:
         for s in str(
             args.sources
             or "wiki_category,wikidata_geo,osm_poi,baidu_baike_search,"
-            "sogou_baike_search,toutiao_baike_search"
+            "toutiao_baike_search"
         ).split(",")
         if s.strip()
     ]
@@ -210,16 +210,16 @@ def register_coverage_parser(subparsers: argparse._SubParsersAction) -> None:
 
     pcd = sub.add_parser(
         "discover",
-        help="市州分片 coverage 矩阵：区县×10类×六来源 checkpoint（发现只写 runtime）",
+        help="市州分片 coverage 矩阵：区县×10类×五来源 checkpoint（发现只写 runtime）",
     )
     pcd.add_argument("--provinces", required=True, help="省份列表（逗号分隔）")
     pcd.add_argument(
         "--sources",
         default=(
             "wiki_category,wikidata_geo,osm_poi,baidu_baike_search,"
-            "sogou_baike_search,toutiao_baike_search"
+            "toutiao_baike_search"
         ),
-        help="来源列表（默认六路 discovery source）",
+        help="来源列表（默认五路 discovery source）",
     )
     pcd.add_argument("--cities", help="市州分片过滤（逗号分隔）")
     pcd.add_argument(

@@ -24,6 +24,7 @@ _MD_HEADING_RE = re.compile(r"^\s*(#{1,6})\s+(.+?)\s*$")
 _WIKI_HEADING_RE = re.compile(r"^\s*(={2,6})\s*(.+?)\s*=*\s*$")
 # slug 归一化时剔除的标点（中英文括号 / 顿号 / 标点等），便于跨清洗版本做章节匹配。
 _SLUG_DROP_RE = re.compile(r"""[（）()\[\]【】「」『』·.,，。:：;；!！?？"'""''`~～\s—\-/]+""")
+SOURCE_OUTLINE_MIN_BODY_CHARS = 120
 
 
 def match_heading(line: str) -> tuple[int, str] | None:

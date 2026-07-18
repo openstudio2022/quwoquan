@@ -1,4 +1,3 @@
-version: 1
 read_model: PostSearchItemView
 description: |
   SearchPosts 分页结果的单项读模型。分页 envelope 由 Runtime 根据

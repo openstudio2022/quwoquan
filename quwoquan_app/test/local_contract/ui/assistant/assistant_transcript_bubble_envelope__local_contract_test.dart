@@ -49,7 +49,6 @@ void main() {
       senderName: 'U',
       isRead: false,
       extra: <String, dynamic>{
-        '_id': 'mid',
         'messageStatus': 'delivered',
         'media': <String, dynamic>{
           'url': 'https://a/audio',
@@ -63,7 +62,7 @@ void main() {
     expect(env.audioMediaUrl, 'https://a/audio');
     expect(env.audioDurationMs, 1200);
     expect(env.audioWaveform, [0.1, 0.2]);
-    expect(env.audioMessageId, 'mid');
+    expect(env.audioMessageId, 'r3');
     expect(env.audioMessageStatus, 'delivered');
     expect(env.audioIsRead, isFalse);
   });

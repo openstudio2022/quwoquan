@@ -221,6 +221,16 @@ func readUISurfaces(path string) (*uiSurfacesFile, error) {
 	return &parsed, decodeMetadataDocument(path, &parsed)
 }
 
+func readAppPages(path string) (*appPagesFile, error) {
+	var parsed appPagesFile
+	return &parsed, decodeMetadataDocument(path, &parsed)
+}
+
+func readTelemetryEventCatalog(path string) (*telemetryEventCatalogFile, error) {
+	var parsed telemetryEventCatalogFile
+	return &parsed, decodeMetadataDocument(path, &parsed)
+}
+
 func readSearchContract(path string) (*searchContractFile, error) {
 	var parsed searchContractFile
 	return &parsed, decodeMetadataDocument(path, &parsed)

@@ -1,4 +1,3 @@
-version: 2
 domain: chat
 aggregate_root: Conversation
 object_kind: aggregate_root
@@ -7,7 +6,7 @@ description: |
   会话聚合。直聊/群聊/圈子聊/加密四种会话类型。
   助手（小趣）不再是独立会话类型，而是作为特殊成员（memberType=assistant）
   可被邀请到任意会话中，帮助处理聊天中的信息（总结、翻译、问答等）。
-  v2 重构：成员从嵌入拆分为独立 ConversationMember collection（支撑 1,000 人群），
+  成员通过独立 ConversationMember collection 支撑大群，
   用户级设置拆分为独立 ConversationUserState collection（消除写放大），
   Message seq、幂等回执与 outbox 由 Message Store 在同一 MongoDB transaction 中提交。
   Conversation 只保留可由 Message 事件重建的摘要投影。

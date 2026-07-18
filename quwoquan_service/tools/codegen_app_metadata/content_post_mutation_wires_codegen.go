@@ -39,6 +39,27 @@ func writeContentPostMutationWires(outPath string, svc *serviceFile, fieldTypes 
 	if svc == nil {
 		return
 	}
+	type spec struct {
+		op        string
+		className string
+	}
+	specs := []spec{
+		{op: "UpdatePostSettings", className: "UpdatePostSettingsRequestWire"},
+		{op: "PromotePostToWork", className: "PromotePostToWorkRequestWire"},
+	}
+	var needsStringList, needsMap, needsMapList bool
+	for _, sp := range specs {
+		for _, field := range findWritableFields(svc.APIRoutes, sp.op) {
+			switch dartMutationWireFieldType(field, fieldTypes) {
+			case "List<String>?":
+				needsStringList = true
+			case "CloudJsonMap?":
+				needsMap = true
+			case "List<CloudJsonMap>?":
+				needsMapList = true
+			}
+		}
+	}
 	var b strings.Builder
 	b.WriteString("// GENERATED FILE — DO NOT EDIT BY HAND.\n")
 	b.WriteString("// Source: contracts/metadata/content/post/service.yaml (writable_fields per operation).\n")
@@ -51,7 +72,9 @@ func writeContentPostMutationWires(outPath string, svc *serviceFile, fieldTypes 
   return m;
 }
 
-List<String>? _mutationStringList(Object? v) {
+`)
+	if needsStringList {
+		b.WriteString(`List<String>? _mutationStringList(Object? v) {
   if (v == null) return null;
   if (v is List) {
     return v.map((e) => e.toString()).where((s) => s.isNotEmpty).toList(growable: false);
@@ -59,12 +82,18 @@ List<String>? _mutationStringList(Object? v) {
   return null;
 }
 
-CloudJsonMap? _mutationStringKeyedMap(Object? v) {
+`)
+	}
+	if needsMap {
+		b.WriteString(`CloudJsonMap? _mutationStringKeyedMap(Object? v) {
   if (v is! Map) return null;
   return Map<String, dynamic>.from(v);
 }
 
-List<CloudJsonMap>? _mutationMapList(Object? v) {
+`)
+	}
+	if needsMapList {
+		b.WriteString(`List<CloudJsonMap>? _mutationMapList(Object? v) {
   if (v is! List) return null;
   return v
       .whereType<Map>()
@@ -73,18 +102,9 @@ List<CloudJsonMap>? _mutationMapList(Object? v) {
 }
 
 `)
-
-	type spec struct {
-		op        string
-		className string
 	}
-	for _, sp := range []spec{
-		{op: "CreatePost", className: "CreatePostRequestWire"},
-		{op: "UpdatePost", className: "UpdatePostRequestWire"},
-		{op: "PublishPost", className: "PublishPostRequestWire"},
-		{op: "UpdatePostSettings", className: "UpdatePostSettingsRequestWire"},
-		{op: "PromotePostToWork", className: "PromotePostToWorkRequestWire"},
-	} {
+
+	for _, sp := range specs {
 		fields := findWritableFields(svc.APIRoutes, sp.op)
 		renderMutationWireClass(&b, sp.className, fields, fieldTypes)
 	}

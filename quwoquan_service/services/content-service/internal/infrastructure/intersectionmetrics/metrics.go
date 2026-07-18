@@ -3,7 +3,7 @@
 // configs/observability/intersection_slo.yaml): repeat-exposure rate, cooldown
 // write volume, freshness filter rate, display completeness and inbox visit
 // (清零) volume. HTTP latency P95 / error rate / availability for the
-// /v1/content/intersections* routes are produced separately by the
+// /content/intersections* routes are produced separately by the
 // runtime/observability http_server_* middleware; this package only adds the
 // business funnel signals so every SLI has a real metric source (no second
 // truth, no documentation-only SLI).

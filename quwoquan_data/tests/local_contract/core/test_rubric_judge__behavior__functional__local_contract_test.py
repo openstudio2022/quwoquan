@@ -18,7 +18,7 @@ from core import rubric_judge as rj  # noqa: E402
 
 def _good_review() -> dict:
     return {
-        "schemaVersion": "quwoquan_data.rubric_review/1",
+        "schema": "quwoquan_data.rubric_review",
         "ref": "r1",
         "generationModelFamily": "composer",
         "judges": [

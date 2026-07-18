@@ -7,7 +7,7 @@
   - quwoquan_ops/environments/workload_topology_inventory.yaml      （workload 归属：planes application/edge-media）
 
 校验项（保证单一解释、最小权限、与四环境一致）：
-  1. schemaVersion / target=prod-hosted / rolloutStages=[gray-initial,carry-on,full]。
+  1. schema / target=prod-hosted / rolloutStages=[gray-initial,carry-on,full]。
   2. planes 集合 == topology prod.subnets 的四平面 {edge,media,service,data}。
   3. 账号一一对应：每平面账号唯一且命名 prod-<plane>-svc；无两平面共用账号。
   4. 凭据：每平面 sshKeySecret 唯一且命名 PROD_<PLANE>_SSH_KEY；relay=PROD_OPS_SSH_KEY；禁止复用单一全权 secret。
@@ -58,8 +58,8 @@ def main() -> int:
     inventory = load_yaml(INVENTORY)
 
     # 1. 顶层契约
-    if access.get("schemaVersion") != "prod-plane-access-isolation/v1":
-        errors.append("schemaVersion 必须为 prod-plane-access-isolation/v1")
+    if access.get("schema") != "prod-plane-access-isolation":
+        errors.append("schema 必须为 prod-plane-access-isolation")
     if access.get("target") != "prod-hosted":
         errors.append("target 必须为 prod-hosted（远端唯一托管目标）")
     if access.get("rolloutStages") != EXPECTED_STAGES:

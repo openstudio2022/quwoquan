@@ -1,4 +1,3 @@
-version: 1
 aggregate: Homepage
 backend: mongodb
 
@@ -13,6 +12,7 @@ collections:
       - { name: idx_homepages_location, keys: { location: "2dsphere" }, sparse: true }
     search_indexes:
       - name: search_homepages_text
+        source: search_homepages_text
         type: text
         fields: [title, subtitle, address, city]
         weights: { title: 10, subtitle: 5, address: 3, city: 2 }

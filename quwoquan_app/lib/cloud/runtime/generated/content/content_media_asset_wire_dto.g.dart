@@ -24,7 +24,7 @@ class ContentMediaAssetWireDto {
 
   factory ContentMediaAssetWireDto.fromMap(Map<String, dynamic> m) {
     return ContentMediaAssetWireDto(
-      id: m['id']?.toString() ?? m['_id']?.toString() ?? m['mediaId']?.toString() ?? '',
+      id: m['id']?.toString() ?? '',
       status: m['status']?.toString() ?? '',
       type: m['type']?.toString() ?? null,
       cdnUrl: m['cdnUrl']?.toString() ?? null,

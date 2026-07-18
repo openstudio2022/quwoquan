@@ -422,14 +422,12 @@ class CircleMockData {
   static final List<Map<String, dynamic>> _circleFeedWireSeeds = [
     {
       'id': 'circle_post_image_1',
-      'postId': 'circle_post_image_1',
       'circleId': 'circle_photo_01',
-      'type': 'photo',
-      'contentType': 'image',
-      'contentIdentity': 'work',
+      'type': 'image',
+      'identity': 'work',
       'authorId': 'u1',
-      'authorNickname': '旅行摄影师',
-      'authorAvatarUrl':
+      'displayName': '旅行摄影师',
+      'avatarUrl':
           'media/avatar/s/mock/seed/u_1494790108377-be9c29b29330/v1/avatar.jpg',
       'title': '清晨光影练习',
       'body': '第一次踩点就遇到很通透的晨雾，记录下圈友活动前的安静片刻。',
@@ -450,14 +448,12 @@ class CircleMockData {
     },
     {
       'id': 'circle_post_video_1',
-      'postId': 'circle_post_video_1',
       'circleId': 'circle_photo_01',
       'type': 'video',
-      'contentType': 'video',
-      'contentIdentity': 'work',
+      'identity': 'work',
       'authorId': 'u2',
-      'authorNickname': '城市观察员',
-      'authorAvatarUrl':
+      'displayName': '城市观察员',
+      'avatarUrl':
           'media/avatar/s/mock/seed/u_1500648767791-00dcc994a43e/v1/avatar.jpg',
       'title': '夜色车流延时',
       'body': '圈子活动结束后补了一段桥面延时，准备回去剪一个一分钟短片。',
@@ -470,20 +466,19 @@ class CircleMockData {
       'circleName': '光影摄影社',
       'thumbnailUrl':
           'media/image/s/mock/seed/p_1492691527719-9d1e07e534b4/v1/image.jpg',
-      'videoUrl': 'media/video/s/mock/external/flutter/bee/v1/video.mp4',
+      'videoUrl':
+          'media/video/s/video-primary-0001/post/video-content-0001/source.mp4',
       'likeCount': 211,
       'shareCount': 18,
     },
     {
       'id': 'circle_post_moment_text_1',
-      'postId': 'circle_post_moment_text_1',
       'circleId': 'circle_photo_01',
       'type': 'micro',
-      'contentType': 'micro',
-      'contentIdentity': 'moment',
+      'identity': 'moment',
       'authorId': 'u3',
-      'authorNickname': '阿秋',
-      'authorAvatarUrl':
+      'displayName': '阿秋',
+      'avatarUrl':
           'media/avatar/s/mock/seed/u_1438761681033-6461ffad8d80/v1/avatar.jpg',
       'title': '临时改地点提醒',
       'body': '今天风有点大，傍晚拍摄集合点改到南门咖啡车旁，先到的圈友可以在群里报个到。',
@@ -501,14 +496,12 @@ class CircleMockData {
     },
     {
       'id': 'circle_post_note_1',
-      'postId': 'circle_post_note_1',
       'circleId': 'circle_photo_01',
       'type': 'article',
-      'contentType': 'article',
-      'contentIdentity': 'work',
+      'identity': 'work',
       'authorId': 'u4',
-      'authorNickname': '构图实验室',
-      'authorAvatarUrl':
+      'displayName': '构图实验室',
+      'avatarUrl':
           'media/avatar/s/mock/seed/u_1534528741775-53994a69daeb/v1/avatar.jpg',
       'title': '雨夜街拍的三种取景思路',
       'body': '把高光控制、路面反射和人物停顿拆开看，文章里整理了这次活动最有用的 3 个构图模板。',
@@ -526,14 +519,12 @@ class CircleMockData {
     },
     {
       'id': 'circle_journal_cover',
-      'postId': 'circle_journal_cover',
       'circleId': 'circle_photo_01',
       'type': 'article',
-      'contentType': 'article',
-      'contentIdentity': 'work',
+      'identity': 'work',
       'authorId': 'u5',
-      'authorNickname': '山川手账',
-      'authorAvatarUrl':
+      'displayName': '山川手账',
+      'avatarUrl':
           'media/avatar/s/mock/seed/u_1494790108377-be9c29b29330/v1/avatar.jpg',
       'title': '山路晨雾手账：把徒步笔记做成可翻页的旅途册',
       'body': '把路标、票据和雾气里的第一束光整理成一张真正适合在圈子里分发的手账扉页。',
@@ -572,14 +563,12 @@ class CircleMockData {
     },
     {
       'id': 'circle_ritual_plain',
-      'postId': 'circle_ritual_plain',
       'circleId': 'circle_photo_01',
       'type': 'article',
-      'contentType': 'article',
-      'contentIdentity': 'work',
+      'identity': 'work',
       'authorId': 'u6',
-      'authorNickname': '纸上居',
-      'authorAvatarUrl':
+      'displayName': '纸上居',
+      'avatarUrl':
           'media/avatar/s/mock/seed/u_1455390582262-044cdead277a/v1/avatar.jpg',
       'title': '雨夜读帖：为什么东方卷页总能让人慢下来',
       'body': '纸张纹理、行距与墨色密度一起把阅读的呼吸感带了回来，没有封面也能成立为一张完整文字卡。',
@@ -605,14 +594,12 @@ class CircleMockData {
     },
     {
       'id': 'circle_diffuse_cover_body_only',
-      'postId': 'circle_diffuse_cover_body_only',
       'circleId': 'circle_photo_01',
       'type': 'article',
-      'contentType': 'article',
-      'contentIdentity': 'work',
+      'identity': 'work',
       'authorId': 'u7',
-      'authorNickname': '夜色便签',
-      'authorAvatarUrl':
+      'displayName': '夜色便签',
+      'avatarUrl':
           'media/avatar/s/mock/seed/u_1500648767791-00dcc994a43e/v1/avatar.jpg',
       'title': '',
       'body': '把路线、风向和最后一班地铁时间都塞进一段正文里，封面负责气氛，正文负责把人带回活动现场。',
@@ -651,14 +638,12 @@ class CircleMockData {
     },
     {
       'id': 'circle_gentle_plain_body_only',
-      'postId': 'circle_gentle_plain_body_only',
       'circleId': 'circle_photo_01',
       'type': 'article',
-      'contentType': 'article',
-      'contentIdentity': 'work',
+      'identity': 'work',
       'authorId': 'u8',
-      'authorNickname': '慢速纪要',
-      'authorAvatarUrl':
+      'displayName': '慢速纪要',
+      'avatarUrl':
           'media/avatar/s/mock/seed/u_1494790108377-be9c29b29330/v1/avatar.jpg',
       'title': '',
       'body': '没有标题也没封面，只保留一段真正想被圈友读到的正文，作为最轻的一张文字卡。',
@@ -690,27 +675,19 @@ class CircleMockData {
 
   static List<PostBaseDto>? _catalogCircleFeedPostDtosCache;
 
-  /// 由 [_circleFeedWireSeeds] 尽力解析的帖子 DTO（与 Mock 仓库 [postBaseDtoFromMap] 行为一致）。
+  /// 由唯一公开投影 [_circleFeedWireSeeds] 解析的帖子 DTO。
   static List<PostBaseDto> get catalogCircleFeedPostDtos {
-    return _catalogCircleFeedPostDtosCache ??= () {
-      final out = <PostBaseDto>[];
-      for (final m in _circleFeedWireSeeds) {
-        try {
-          out.add(postBaseDtoFromMap(Map<String, dynamic>.from(m)));
-        } catch (_) {
-          /* best-effort: 单条 mock 种子解析失败时跳过该条，其余目录数据照常构建 */
-        }
-      }
-      return out;
-    }();
+    return _catalogCircleFeedPostDtosCache ??= _circleFeedWireSeeds
+        .map((wire) => postBaseDtoFromMap(Map<String, dynamic>.from(wire)))
+        .toList(growable: false);
   }
 
   static final CircleStatsWireDto catalogCircleStatsWire =
       CircleStatsWireDto.fromMap({
-        'totalMembers': 128,
-        'weeklyActive': 45,
-        'totalPosts': 1024,
-        'totalLikes': 128000,
+        'memberCount': 128,
+        'weeklyActiveCount': 45,
+        'postCount': 1024,
+        'likeCount': 128000,
       });
 
   static Map<String, dynamic> get stats =>

@@ -1,4 +1,3 @@
-version: 1
 read_model: CircleImpactSummary
 description: |
   圈子影响摘要（GetCircleImpact 响应真相源）。
@@ -20,17 +19,14 @@ client_projection:
       dart_type: String
       nullable: false
       source: circleId
-      aliases: [circleId]
       default: "''"
     - name: total
       dart_type: int
       nullable: false
       source: total
-      aliases: [total]
       default: "0"
     - name: items
       dart_type: List<CircleImpactItem>
       nullable: false
       source: items
-      aliases: [items]
       list_element_dart_class: CircleImpactItem

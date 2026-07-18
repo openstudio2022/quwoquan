@@ -163,9 +163,11 @@ class DevUpTest(unittest.TestCase):
             "android_physical",
             topology=topology,
         )
-        self.assertEqual(overrides["gatewayBaseUrl"], "https://118.31.239.122:19000")
+        self.assertEqual(overrides["gatewayBaseUrl"], "https://api.quwoquan.com")
         self.assertEqual(overrides["legalBaseUrl"], "https://quwoquan.com/legal")
-        self.assertEqual(overrides["mediaImageBaseUrl"], "https://118.31.239.122:19100")
+        self.assertEqual(overrides["mediaImageBaseUrl"], "https://cdn.quwoquan.com")
+        self.assertEqual(overrides["mediaUploadBaseUrl"], "https://upload.quwoquan.com")
+        self.assertNotIn("118.31.239.122", "\n".join(overrides.values()))
         self.assertNotIn("10.0.2.2", "\n".join(overrides.values()))
 
     def test_gamma_web_uses_local_gamma_public_bases(self) -> None:
@@ -335,12 +337,15 @@ class DevUpTest(unittest.TestCase):
         topology = load_environment_topology()
         checks = _health_checks_for_target(topology, "alpha-local", "media")
         video_check = next(
-            item for item in checks if item["name"] == "media-video-range-sample"
+            item
+            for item in checks
+            if item["name"] == "media-public-content-video-primary"
         )
         self.assertEqual(video_check["headers"], {"Range": "bytes=0-1"})
         self.assertEqual(video_check["expectedStatus"], 206)
+        self.assertEqual(video_check["expectedContentTypePrefix"], "video/")
         self.assertIn(
-            "/media/video/s/archived-video/beta-sample.mp4",
+            "/media/video/s/video-primary-0001/post/video-content-0001/source.mp4",
             video_check["url"],
         )
 
@@ -431,7 +436,9 @@ class DevUpTest(unittest.TestCase):
         self.assertIn("security add-trusted-cert", alpha_script)
         self.assertIn("macos_login_keychain_trust_is_current", alpha_script)
         self.assertIn("QWQ_ALPHA_LOCAL_MACOS_KEYCHAIN_TRUST", alpha_script)
-        self.assertIn("simctl keychain booted add-root-cert", alpha_script)
+        self.assertIn("install-ios-simulator-ca", alpha_script)
+        self.assertIn("--simulator-udid", alpha_script)
+        self.assertNotIn("simctl keychain booted add-root-cert", alpha_script)
         self.assertIn("IP.2 = 10.0.2.2", alpha_script)
         self.assertNotIn("--resolve", alpha_script)
         self.assertNotIn("curl -k", alpha_script)
@@ -668,7 +675,7 @@ class DevUpTest(unittest.TestCase):
 
         self.assertIn("--request-timeout \"$LOCAL_GAMMA_SEARCH_BACKFILL_REQUEST_TIMEOUT\"", gamma_script)
         self.assertIn(
-            "gamma startup is blocked because /v1/search would be incomplete",
+            "gamma startup is blocked because /search would be incomplete",
             gamma_script,
         )
         self.assertNotIn("WARN: skip search backfill", gamma_script)
@@ -836,18 +843,18 @@ class DevUpTest(unittest.TestCase):
 
     def test_beta_gateway_notification_fixture_family(self) -> None:
         handler = AssistantBetaGateway.__new__(AssistantBetaGateway)
-        listing = handler._fixture_response("/v1/app-messages")
+        listing = handler._fixture_response("/app-messages")
         self.assertIsInstance(listing, dict)
         self.assertGreaterEqual(listing["unreadCount"], 0)
-        unread = handler._fixture_response("/v1/app-messages/unread-count")
+        unread = handler._fixture_response("/app-messages/unread-count")
         self.assertEqual(unread["unreadCount"], listing["unreadCount"])
-        aggregate = handler._fixture_response("/v1/notifications/unread-count")
+        aggregate = handler._fixture_response("/notifications/unread-count")
         self.assertEqual(aggregate["unreadCount"], listing["unreadCount"])
         first_message = listing["items"][0]
         message_id = first_message["messageId"]
-        detail = handler._fixture_response(f"/v1/app-messages/{message_id}")
+        detail = handler._fixture_response(f"/app-messages/{message_id}")
         self.assertEqual(detail["messageId"], message_id)
-        read = handler._fixture_response(f"/v1/app-messages/{message_id}/read")
+        read = handler._fixture_response(f"/app-messages/{message_id}/read")
         self.assertTrue(read["read"])
 
     def test_beta_gateway_unread_count_falls_back_to_message_scan(self) -> None:
@@ -862,21 +869,21 @@ class DevUpTest(unittest.TestCase):
 
     def test_beta_gateway_intersection_fixture_family(self) -> None:
         handler = AssistantBetaGateway.__new__(AssistantBetaGateway)
-        summary = handler._fixture_response("/v1/content/intersections/summary")
+        summary = handler._fixture_response("/content/intersections/summary")
         self.assertGreater(summary["totalCount"], 0)
-        listing = handler._fixture_response("/v1/content/intersections", "dimension=interest&limit=5")
+        listing = handler._fixture_response("/content/intersections", "dimension=interest&limit=5")
         self.assertTrue(all(item["dimension"] == "interest" for item in listing["items"]))
         feed = handler._fixture_response(
-            "/v1/content/feed/intersections",
+            "/content/feed/intersections",
             "channel=recommend&limit=2",
         )
         self.assertEqual(len(feed["items"]), 2)
         self.assertEqual(
-            handler._fixture_response("/v1/content/intersections/visit"),
+            handler._fixture_response("/content/intersections/visit"),
             {"accepted": True},
         )
         self.assertEqual(
-            handler._fixture_response("/v1/content/intersections/exposure"),
+            handler._fixture_response("/content/intersections/exposure"),
             {"accepted": True},
         )
 

@@ -84,7 +84,7 @@ class LocalMediaOriginHandler(SimpleHTTPRequestHandler):
     @staticmethod
     def _conversation_avatar_alias_id(parts: tuple[str, ...]) -> str | None:
         # archive alpha/prod-sim 占位路径：
-        #   /media/avatar/conversation/<conversation_id>/v1/mock.png
+        #   /media/avatar/conversation/<conversation_id>/mock.png
         if (
             len(parts) == 6
             and parts[:3] == ("media", "avatar", "conversation")
@@ -94,7 +94,7 @@ class LocalMediaOriginHandler(SimpleHTTPRequestHandler):
             return parts[3]
 
         # 当前 App mock 合约路径：
-        #   /media/avatar/s/archived-avatar/conversation/<conversation_id>/v1/mock.png
+        #   /media/avatar/s/archived-avatar/conversation/<conversation_id>/mock.png
         if (
             len(parts) == 8
             and parts[:5]

@@ -1,4 +1,3 @@
-version: 1
 aggregate: SmsOtp
 
 enums:
@@ -10,6 +9,7 @@ entities:
     description: 短信验证码发送 payload，验证码明文不得进入日志或 provider attempt ledger。
     fields:
       - name: requestId
+        source: requestId
         type: string
         constraints: [PK]
         classification: PUBLIC
@@ -17,6 +17,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: challengeId
+        source: challengeId
         type: string
         constraints: [NOT_NULL]
         classification: PRIVATE
@@ -24,6 +25,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: phoneHash
+        source: phoneHash
         type: string
         constraints: [NOT_NULL]
         classification: PRIVATE
@@ -31,6 +33,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: maskedPhone
+        source: maskedPhone
         type: string
         constraints: [NOT_NULL]
         classification: PRIVATE
@@ -38,6 +41,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: codeRef
+        source: codeRef
         type: string
         constraints: [NOT_NULL]
         classification: SECRET
@@ -49,6 +53,7 @@ entities:
           AAD 绑定 requestId/challengeId/expiresAt。仅 integration-service 在供应商
           调用前于内存中解封，禁止进入日志、指标、attempt ledger 或公开响应。
       - name: templateId
+        source: templateId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -56,6 +61,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: callbackUrl
+        source: callbackUrl
         type: string
         constraints: [NOT_NULL]
         classification: PRIVATE
@@ -63,6 +69,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: expiresAt
+        source: expiresAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -74,6 +81,7 @@ entities:
     description: 验证码短信请求已排队。
     fields:
       - name: requestId
+        source: requestId
         type: string
         constraints: [PK]
         classification: PUBLIC
@@ -81,6 +89,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: status
+        source: status
         type: enum
         enum_ref: SmsOtpDeliveryStatus
         constraints: [NOT_NULL]
@@ -89,6 +98,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: queuedAt
+        source: queuedAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -100,6 +110,7 @@ entities:
     description: 短信供应商回执，进入 integration-service 后归一为 ExternalInteractionResult。
     fields:
       - name: requestId
+        source: requestId
         type: string
         constraints: [PK]
         classification: PUBLIC
@@ -107,6 +118,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: challengeId
+        source: challengeId
         type: string
         constraints: [NOT_NULL]
         classification: PRIVATE
@@ -114,6 +126,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: providerMessageId
+        source: providerMessageId
         type: string
         constraints: [NULLABLE]
         classification: PRIVATE
@@ -121,6 +134,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: status
+        source: status
         type: enum
         enum_ref: SmsOtpDeliveryStatus
         constraints: [NOT_NULL]
@@ -129,6 +143,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: signature
+        source: signature
         type: string
         constraints: [NOT_NULL]
         classification: SECRET
@@ -136,6 +151,7 @@ entities:
         api_exposure: none
         ops_exposure: none
       - name: timestamp
+        source: timestamp
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -147,6 +163,7 @@ entities:
     description: 短信回调已验签并幂等接收。
     fields:
       - name: requestId
+        source: requestId
         type: string
         constraints: [PK]
         classification: PUBLIC
@@ -154,6 +171,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: accepted
+        source: accepted
         type: bool
         constraints: [NOT_NULL]
         classification: PUBLIC

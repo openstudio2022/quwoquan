@@ -2,18 +2,6 @@ codegen_strategy:
   interim: hybrid_hand_written_plus_codegen_app_metadata
   preferred: contract_graph_emit
 domain: circle
-json_decode_aliases:
-  circle_aggregate:
-    category:
-    - category
-    - categoryId
-    coverUrl:
-    - coverUrl
-    - cover
-    id:
-    - _id
-    - id
-version: 1
 wire_to_dart:
   ObjectId: String
   '[]string': List<String>

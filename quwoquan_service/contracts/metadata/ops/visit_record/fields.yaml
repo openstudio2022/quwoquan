@@ -1,8 +1,8 @@
-version: 1
 entity: VisitRecord
 
 fields:
   - name: userId
+    source: userId
     type: string
     constraints: [NOT_NULL]
     classification: PUBLIC
@@ -11,6 +11,7 @@ fields:
     ops_exposure: read
 
   - name: targetType
+    source: targetType
     type: string
     constraints: [NOT_NULL]
     classification: PUBLIC
@@ -20,6 +21,7 @@ fields:
     description: page/post/circle/user
 
   - name: targetKey
+    source: targetKey
     type: string
     constraints: [NOT_NULL]
     classification: PUBLIC
@@ -28,6 +30,7 @@ fields:
     ops_exposure: read
 
   - name: visitCount
+    source: visitCount
     type: int
     constraints: [NOT_NULL, DEFAULT_1]
     classification: PUBLIC
@@ -36,6 +39,7 @@ fields:
     ops_exposure: read
 
   - name: lastSeenAt
+    source: lastSeenAt
     type: timestamp
     constraints: [NOT_NULL]
     classification: PUBLIC
@@ -44,6 +48,7 @@ fields:
     ops_exposure: read
 
   - name: sessionId
+    source: sessionId
     type: string
     constraints: [NULLABLE]
     classification: PUBLIC
@@ -53,6 +58,7 @@ fields:
     description: 超前
 
   - name: source
+    source: source
     type: string
     constraints: [NULLABLE]
     classification: PUBLIC
@@ -62,6 +68,7 @@ fields:
     description: feed/search/share/notification（超前）
 
   - name: timestamp
+    source: timestamp
     type: timestamp
     constraints: [NOT_NULL]
     classification: PUBLIC

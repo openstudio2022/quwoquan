@@ -139,7 +139,7 @@ def write_dirty_report(path: Path, rows: list[dict[str, Any]], deleted: list[str
     write_json(
         path,
         {
-            "schemaVersion": "quwoquan.dirty_data_report.v1",
+            "schema": "quwoquan.dirty_data_report",
             "issueCount": len(rows),
             "deleteCount": len(deleted),
             "issues": rows,

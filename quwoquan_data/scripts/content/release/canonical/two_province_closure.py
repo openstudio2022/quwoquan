@@ -200,7 +200,7 @@ def build_pre_environment_attestations(release_root: Path) -> dict[str, Any]:
 
     recorded_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     common = {
-        "schemaVersion": "quwoquan_data.two_province_release_attestation/1",
+        "schema": "quwoquan_data.two_province_release_attestation",
         "releaseId": release_id,
         "payloadSha256": digest,
         "passed": True,

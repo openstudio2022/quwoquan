@@ -1,5 +1,4 @@
 {
-  "schemaVersion": "assistant.scenario-fixtures",
   "description": "端云 alpha/beta/gamma 共享测试场景。alpha 端侧使用 mock repository 读取 alphaMockStream；beta/gamma 由显式幂等环境预制命令按 manifest 加载 seedRefs 后，通过 remote repository 访问真实存储。",
   "repositoryExpectations": {
     "alpha": "mock",
@@ -81,8 +80,14 @@
       "skillId": "stock_sentinel",
       "domainId": "finance",
       "question": "帮我看一下比亚迪今天有哪些重大消息，会不会影响我关注的股票？",
-      "seedRefs": ["assistant_p0_core"],
-      "expectedAnswerFragments": ["股票哨兵", "重大消息", "非投资建议"],
+      "seedRefs": [
+        "assistant_p0_core"
+      ],
+      "expectedAnswerFragments": [
+        "股票哨兵",
+        "重大消息",
+        "非投资建议"
+      ],
       "expectedEvents": [
         "turn_started",
         "tool_use_requested",
@@ -95,7 +100,11 @@
         "toolSummary": "alpha mock 已返回股票哨兵消息面摘要。"
       },
       "remoteExpectations": {
-        "answerFragments": ["比亚迪", "重大消息", "投资建议"],
+        "answerFragments": [
+          "比亚迪",
+          "重大消息",
+          "投资建议"
+        ],
         "eventTypes": [
           "turn_started",
           "plan_updated",
@@ -131,8 +140,13 @@
       "skillId": "weather",
       "domainId": "weather",
       "question": "shenzhen tian qi",
-      "seedRefs": ["assistant_p0_core"],
-      "expectedAnswerFragments": ["深圳", "天气"],
+      "seedRefs": [
+        "assistant_p0_core"
+      ],
+      "expectedAnswerFragments": [
+        "深圳",
+        "天气"
+      ],
       "expectedEvents": [
         "turn_started",
         "tool_use_requested",
@@ -145,7 +159,11 @@
         "toolSummary": "alpha mock 已返回深圳天气提示。"
       },
       "remoteExpectations": {
-        "answerFragments": ["Shenzhen", "深圳", "天气"],
+        "answerFragments": [
+          "Shenzhen",
+          "深圳",
+          "天气"
+        ],
         "eventTypes": [
           "turn_started",
           "plan_updated",
@@ -181,8 +199,14 @@
       "skillId": "travel_journey_manager",
       "domainId": "travel",
       "question": "下午去西湖，天气和出行有什么要注意？",
-      "seedRefs": ["assistant_p0_core"],
-      "expectedAnswerFragments": ["出行管家", "天气", "建议"],
+      "seedRefs": [
+        "assistant_p0_core"
+      ],
+      "expectedAnswerFragments": [
+        "出行管家",
+        "天气",
+        "建议"
+      ],
       "expectedEvents": [
         "turn_started",
         "plan_updated",
@@ -197,7 +221,10 @@
         "toolSummary": "alpha mock 已返回西湖天气与出行提示。"
       },
       "remoteExpectations": {
-        "answerFragments": ["天气", "建议"],
+        "answerFragments": [
+          "天气",
+          "建议"
+        ],
         "eventTypes": [
           "turn_started",
           "plan_updated",
@@ -233,8 +260,14 @@
       "skillId": "travel_journey_manager",
       "domainId": "travel",
       "question": "明天杭州一日游，帮我结合天气、路况和景点拥堵规划一下。",
-      "seedRefs": ["assistant_p0_core"],
-      "expectedAnswerFragments": ["出行管家", "路况", "拥堵"],
+      "seedRefs": [
+        "assistant_p0_core"
+      ],
+      "expectedAnswerFragments": [
+        "出行管家",
+        "路况",
+        "拥堵"
+      ],
       "expectedEvents": [
         "turn_started",
         "plan_updated",
@@ -249,7 +282,10 @@
         "toolSummary": "alpha mock 已返回杭州行程、路况与景点拥堵提示。"
       },
       "remoteExpectations": {
-        "answerFragments": ["天气", "拥堵"],
+        "answerFragments": [
+          "天气",
+          "拥堵"
+        ],
         "eventTypes": [
           "turn_started",
           "plan_updated",
@@ -284,7 +320,9 @@
       "type": "skill_management",
       "skillId": "stock_sentinel",
       "domainId": "finance",
-      "seedRefs": ["skill_management_core"],
+      "seedRefs": [
+        "skill_management_core"
+      ],
       "operations": [
         {
           "operation": "list_skills",
@@ -338,5 +376,6 @@
         }
       }
     }
-  ]
+  ],
+  "schema": "assistant.scenario-fixtures"
 }

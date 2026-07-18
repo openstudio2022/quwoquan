@@ -9,13 +9,15 @@ import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/rtc/pages/call_participant_picker_page.dart';
 
+import '../../../../support/fixtures/chat/chat_inbox_fixture_builder.dart';
+
 class _MockAppDataSourceModeNotifier extends AppDataSourceModeNotifier {
   @override
   AppDataSourceMode build() => AppDataSourceMode.mock;
 }
 
 class _PickerChatRepository extends MockChatRepository {
-  static final ChatInboxDto _inbox002 = ChatInboxDto(
+  static final ChatInboxDto _inbox002 = chatInboxFixture(
     id: 'conv_002',
     type: 'group',
     title: '当前群聊',
@@ -29,7 +31,7 @@ class _PickerChatRepository extends MockChatRepository {
     pinned: false,
     circleId: '',
   );
-  static final ChatInboxDto _inbox003 = ChatInboxDto(
+  static final ChatInboxDto _inbox003 = chatInboxFixture(
     id: 'conv_003',
     type: 'group',
     title: '摄影群',

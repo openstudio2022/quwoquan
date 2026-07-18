@@ -16,7 +16,7 @@ func TestClientReadsGroundingAndSendsAssistantMessage(t *testing.T) {
 	var sentBody map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/v1/chat/conversations/conv-1/messages":
+		case "/chat/conversations/conv-1/messages":
 			if r.Method == http.MethodGet {
 				if r.URL.Query().Get("beforeSeq") != "12" {
 					t.Fatalf("beforeSeq=%s, want 12", r.URL.Query().Get("beforeSeq"))
@@ -41,7 +41,7 @@ func TestClientReadsGroundingAndSendsAssistantMessage(t *testing.T) {
 				_ = json.NewEncoder(w).Encode(map[string]any{"messageId": "reply-1", "seq": 12})
 				return
 			}
-		case "/v1/chat/conversations/conv-1/members":
+		case "/chat/conversations/conv-1/members":
 			_ = json.NewEncoder(w).Encode(map[string]any{"items": []map[string]any{{
 				"userId": "assistant", "displayName": "小趣", "memberType": "assistant", "assistantSkillId": "general",
 			}}})

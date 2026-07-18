@@ -2,28 +2,33 @@ dart_class: ContextFillTaskDto
 library_path: assistant/contracts/context_fill_contract.dart
 output_path: assistant/generated/contracts/context_fill_task.g.dart
 contract: context_fill_task
-version: v1
 kind: runtime_protocol_contract
 fields:
   - name: fillType
+    source: fillType
     type: enum
     enum_ref: ContextFillType
     default: ''
   - name: targetSlot
+    source: targetSlot
     type: enum
     enum_ref: ContextTargetSlot
     default: ''
   - name: reason
+    source: reason
     type: string
     default: ''
   - name: generatedQueryConditions
+    source: generatedQueryConditions
     type: list<string>
     default: []
   - name: scopeExpansionPolicy
+    source: scopeExpansionPolicy
     type: enum
     enum_ref: ContextScopeExpansionPolicy
     default: none
   - name: retryPolicy
+    source: retryPolicy
     type: enum
     enum_ref: ContextRetryPolicy
     default: single_retry

@@ -12,6 +12,7 @@ import yaml
 
 from test_directory_inventory_lib import (
     PAGE_INVENTORY_PATH,
+    REQUEST_WAIT_MODES,
     REQUIRED_PAGE_CASE_SUFFIXES,
     ROOT,
     iter_canonical_files,
@@ -433,6 +434,53 @@ def verify_page_inventory(failures: Failures) -> None:
         ]
         if not canonical_locals:
             failures.add(f"surface {surface_id} has no reverse-bound local_contract canonical tests")
+        wait_modes = inventory_row.get("wait_modes")
+        if not isinstance(wait_modes, list):
+            failures.add(f"surface {surface_id} must declare wait_modes list")
+            wait_modes = []
+        unknown_wait_modes = sorted(
+            {str(mode) for mode in wait_modes} - REQUEST_WAIT_MODES
+        )
+        if unknown_wait_modes:
+            failures.add(
+                f"surface {surface_id} has unknown wait_modes: {', '.join(unknown_wait_modes)}"
+            )
+        request_wait_tests = inventory_row.get("request_wait_tests") or []
+        if wait_modes and not request_wait_tests:
+            failures.add(f"surface {surface_id} wait_modes lack request_wait_tests")
+        if wait_modes and not any(
+            str(test_path) in {str(source) for source in source_tests}
+            for test_path in request_wait_tests
+        ):
+            failures.add(
+                f"surface {surface_id} request_wait_tests must include page-specific source evidence"
+            )
+        wait_test_text = ""
+        for wait_test in request_wait_tests:
+            wait_test_text_path = ROOT / str(wait_test)
+            if not recorded_file_is_canonical(str(wait_test)):
+                failures.add(
+                    f"surface {surface_id} request wait test not canonical: {wait_test}"
+                )
+            elif not wait_test_text_path.exists():
+                failures.add(
+                    f"surface {surface_id} request wait test missing: {wait_test}"
+                )
+            else:
+                wait_test_text += wait_test_text_path.read_text(
+                    encoding="utf-8", errors="ignore"
+                )
+        wait_mode_markers = {
+            "foreground": "AppRequestWaitMode.foreground",
+            "action": "AppRequestWaitMode.action",
+            "long_task": "AppRequestWaitMode.longTask",
+        }
+        for wait_mode in wait_modes:
+            marker = wait_mode_markers.get(str(wait_mode))
+            if marker and marker not in wait_test_text:
+                failures.add(
+                    f"surface {surface_id} wait mode {wait_mode} has no running behavior marker {marker}"
+                )
         api_tests = inventory_row.get("api_integration_tests") or []
         if not isinstance(api_tests, list) or not api_tests:
             failures.add(f"surface {surface_id} missing api_integration_tests")

@@ -1,0 +1,154 @@
+"""Resolve canonical public baike.com pages for entities without Wikipedia pages."""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from html.parser import HTMLParser
+import re
+import urllib.parse
+
+from core.baike_source_contract import (
+    TOUTIAO_BAIKE_CANONICAL_RESOLUTION,
+    source_url_matches_contract,
+)
+from core.runtime_policy import active_runtime_policy
+from content.source.research import network_io
+from content.source.research.text_match import (
+    _dedupe_terms,
+    _normalized_title,
+    _wiki_resolved_title_matches_entity,
+    _wiki_title_matches_entity,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class BaikePageResolution:
+    url: str
+    title: str
+    matched_term: str
+    match_confidence: float
+
+
+class _PageMetadataParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self._in_title = False
+        self._title_parts: list[str] = []
+        self.description = ""
+
+    @property
+    def title(self) -> str:
+        raw = re.sub(r"\s+", " ", "".join(self._title_parts)).strip()
+        return re.sub(r"[-_—]\s*快懂百科\s*$", "", raw).strip()
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag.casefold() == "title":
+            self._in_title = True
+            return
+        if tag.casefold() != "meta":
+            return
+        values = {key.casefold(): str(value or "") for key, value in attrs}
+        if values.get("name", "").casefold() == "description":
+            self.description = values.get("content", "").strip()
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag.casefold() == "title":
+            self._in_title = False
+
+    def handle_data(self, data: str) -> None:
+        if self._in_title:
+            self._title_parts.append(data)
+
+
+def geo_context_terms_from_ref(geo_tag_ref: str) -> tuple[str, ...]:
+    segments = [
+        segment.strip()
+        for segment in str(geo_tag_ref or "").split("/")
+        if segment.strip()
+    ]
+    try:
+        country_index = segments.index("中国")
+    except ValueError:
+        return ()
+    return tuple(_dedupe_terms(segments[country_index + 1 :], limit=len(segments)))
+
+
+def _metadata_matches_entity(
+    *,
+    title: str,
+    description: str,
+    entity_id: str,
+    aliases: tuple[str, ...],
+    geo_context_terms: tuple[str, ...],
+) -> bool:
+    if not _wiki_resolved_title_matches_entity(
+        title,
+        entity_id,
+        entity_aliases=aliases,
+    ):
+        return False
+    if _wiki_title_matches_entity(title, entity_id):
+        return True
+    if not TOUTIAO_BAIKE_CANONICAL_RESOLUTION.require_geo_context_for_alias:
+        return True
+    normalized_description = _normalized_title(description)
+    return any(
+        _normalized_title(term) in normalized_description
+        for term in geo_context_terms
+        if _normalized_title(term)
+    )
+
+
+def resolve_toutiao_baike_page(
+    entity_id: str,
+    *,
+    entity_aliases: tuple[str, ...] = (),
+    geo_context_terms: tuple[str, ...] = (),
+) -> BaikePageResolution | None:
+    policy = TOUTIAO_BAIKE_CANONICAL_RESOLUTION
+    candidates = _dedupe_terms(
+        [entity_id, *entity_aliases],
+        limit=policy.candidate_limit,
+    )
+    timeout = active_runtime_policy().provider_timeouts.encyclopedia_seconds
+    for candidate in candidates:
+        response = network_io.fetch_http(
+            f"{policy.base_url}{urllib.parse.quote(candidate)}",
+            timeout=timeout,
+        )
+        if not response.ok or not response.body:
+            continue
+        if not source_url_matches_contract("toutiao_baike", response.final_url):
+            continue
+        parser = _PageMetadataParser()
+        try:
+            parser.feed(response.body.decode("utf-8", errors="replace"))
+        except ValueError:
+            continue
+        if not parser.title or not parser.description:
+            continue
+        if not _metadata_matches_entity(
+            title=parser.title,
+            description=parser.description,
+            entity_id=entity_id,
+            aliases=entity_aliases,
+            geo_context_terms=geo_context_terms,
+        ):
+            continue
+        return BaikePageResolution(
+            url=response.final_url,
+            title=parser.title,
+            matched_term=candidate,
+            match_confidence=(
+                policy.canonical_confidence
+                if _wiki_title_matches_entity(parser.title, entity_id)
+                else policy.alias_confidence
+            ),
+        )
+    return None
+
+
+__all__ = [
+    "BaikePageResolution",
+    "geo_context_terms_from_ref",
+    "resolve_toutiao_baike_page",
+]

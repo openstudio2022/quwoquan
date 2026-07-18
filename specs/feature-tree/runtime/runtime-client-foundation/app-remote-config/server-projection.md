@@ -1,4 +1,4 @@
-# /v1/config/app 服务端投影链路
+# /config/app 服务端投影链路
 
 ## 目标态
 
@@ -11,7 +11,7 @@ contracts/metadata/**/ui_config.yaml
   -> runtime/controlplane.ResolveEffectiveConfig
   -> AppConfigProjectionService
   -> signed/precomputed app snapshot
-  -> content-service /v1/config/app
+  -> content-service /config/app
 ```
 
 ## 投影职责
@@ -25,7 +25,7 @@ contracts/metadata/**/ui_config.yaml
 
 ## 当前投影
 
-当前实现下发 `schemaVersion/packageVersion/configHash/fetchedAt/maxAgeSec/activationPolicy/content`，其中 `content.comment`、`content.feature_flags`、`content.gray_release`、`content.client_state_sync` 均采用 canonical snake_case 结构。
+当前实现下发 `schema/packageVersion/configHash/fetchedAt/maxAgeSec/activationPolicy/content`，其中 `content.comment`、`content.feature_flags`、`content.gray_release`、`content.client_state_sync` 均采用 canonical snake_case 结构；禁止 `schemaVersion` 或数字协议版本。
 
 ## 迁移切片
 

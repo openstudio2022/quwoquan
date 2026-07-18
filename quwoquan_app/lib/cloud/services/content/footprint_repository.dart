@@ -2,8 +2,9 @@ import 'package:quwoquan_app/cloud/runtime/contract_fixture_runtime_loader.dart'
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
+import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
 
-/// 我的足迹条目（云侧只读契约 GET /v1/content/footprint 的端侧映射）。
+/// 我的足迹条目（云侧只读契约 GET /content/footprint 的端侧映射）。
 ///
 /// `action` 与 `type` 的语义映射由云侧唯一定义（footprintTypeActions），
 /// 端侧只透传 type 枚举字符串并展示云端下发数据，不解析 action 语义。
@@ -70,14 +71,16 @@ class MockFootprintRepository implements FootprintRepository {
       if (normalizedType.isNotEmpty && itemType != normalizedType) {
         continue;
       }
-      final postRef = (item['postRef'] ?? item['postId'] ?? '').toString();
+      final postRef = (item['postRef'] ?? '').toString();
       final postMap = postsById[postRef];
       entries.add(
         FootprintEntry(
           postId: postRef,
           action: (item['action'] ?? '').toString(),
           occurredAt: _isoMinusHours(item['occurredAgoHours']),
-          post: postMap != null ? postBaseDtoFromMap(postMap) : null,
+          post: postMap != null
+              ? contentPostDtoFromReadModelMap(postMap)
+              : null,
         ),
       );
     }
@@ -97,7 +100,7 @@ class MockFootprintRepository implements FootprintRepository {
     if (rawPosts is List) {
       for (final raw in rawPosts.whereType<Map>()) {
         final map = raw.cast<String, dynamic>();
-        final id = (map['postId'] ?? map['id'] ?? '').toString();
+        final id = (map['postId'] ?? '').toString();
         if (id.isNotEmpty) {
           byId[id] = map;
         }

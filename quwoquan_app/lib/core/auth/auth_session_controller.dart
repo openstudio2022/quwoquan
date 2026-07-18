@@ -3,14 +3,17 @@ part of "auth_session.dart";
 class AuthSessionController extends Notifier<AuthSessionState> {
   static const Duration _staleRestoreRefreshThreshold = Duration(hours: 12);
   static const Duration _foregroundAuthCheckThreshold = Duration(hours: 24);
+  static const Duration _startupRestoreReadBudget = Duration(seconds: 2);
 
   bool _restoreStarted = false;
   Future<bool>? _refreshInFlight;
+  void Function()? _cancelPendingStartupRestore;
 
   AuthSessionStore get _store => ref.read(authSessionStoreProvider);
 
   @override
   AuthSessionState build() {
+    ref.onDispose(_cancelStartupRestore);
     final restoreGateOpen = ref.watch(startupAuthRestoreGateProvider);
     if (restoreGateOpen && !_restoreStarted) {
       _restoreStarted = true;
@@ -21,7 +24,7 @@ class AuthSessionController extends Notifier<AuthSessionState> {
 
   Future<void> restore() async {
     try {
-      final stored = await _store.read();
+      final stored = await _readStoredSessionWithinStartupBudget();
       _syncDeviceActorId(stored.installId);
       if (!ref.mounted) {
         return;
@@ -80,6 +83,63 @@ class AuthSessionController extends Notifier<AuthSessionState> {
         errorMessage: runtimeErrorDisplayMessage(e),
       );
     }
+  }
+
+  Future<StoredAuthSession> _readStoredSessionWithinStartupBudget() {
+    final result = Completer<StoredAuthSession>();
+    Timer? timeoutTimer;
+
+    void completeValue(StoredAuthSession stored) {
+      if (!result.isCompleted) {
+        result.complete(stored);
+      }
+    }
+
+    void completeError(Object error, StackTrace stackTrace) {
+      if (!result.isCompleted) {
+        result.completeError(error, stackTrace);
+      }
+    }
+
+    void cancel() {
+      timeoutTimer?.cancel();
+      timeoutTimer = null;
+      completeError(const _AuthSessionRestoreCancelled(), StackTrace.current);
+    }
+
+    _cancelPendingStartupRestore = cancel;
+    try {
+      _store.read().then<void>(
+        completeValue,
+        onError: (Object error, StackTrace stackTrace) {
+          completeError(error, stackTrace);
+        },
+      );
+      timeoutTimer = Timer(_startupRestoreReadBudget, () {
+        completeError(
+          TimeoutException(
+            'Auth session restore exceeded $_startupRestoreReadBudget',
+          ),
+          StackTrace.current,
+        );
+      });
+    } catch (error, stackTrace) {
+      completeError(error, stackTrace);
+    }
+
+    return result.future.whenComplete(() {
+      timeoutTimer?.cancel();
+      timeoutTimer = null;
+      if (identical(_cancelPendingStartupRestore, cancel)) {
+        _cancelPendingStartupRestore = null;
+      }
+    });
+  }
+
+  void _cancelStartupRestore() {
+    final cancel = _cancelPendingStartupRestore;
+    _cancelPendingStartupRestore = null;
+    cancel?.call();
   }
 
   Future<void> applyLoginResult(AuthLoginResultDto result) async {
@@ -405,3 +465,6 @@ class AuthSessionController extends Notifier<AuthSessionState> {
   }
 }
 
+final class _AuthSessionRestoreCancelled implements Exception {
+  const _AuthSessionRestoreCancelled();
+}

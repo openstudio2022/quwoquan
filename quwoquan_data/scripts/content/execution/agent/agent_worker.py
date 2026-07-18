@@ -1,4 +1,4 @@
-"""Workflow service extracted from the retired monolithic runner."""
+"""Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
 from core.runtime_policy import active_runtime_policy
 from content.execution.support import Any, Callable, ExecutionContext, MANAGED_AGENT_TIMEOUT_SECONDS, Path, _MANAGED_AGENT_SUBPROCESS_LOCK, _MANAGED_AGENT_SUBPROCESS_PIDS, _normalize_managed_agent_provider, _resolve_managed_model, json, os, signal, subprocess, sys, tempfile, time
@@ -90,7 +90,7 @@ def _default_managed_agent_runner_isolated(
                     "ctx": {
                         "executionId": ctx.execution_id,
                         "entityIds": ctx.entity_ids,
-                        "spec": ctx.spec,
+                        "spec": ctx.spec.to_dict(),
                         "runtime": ctx.runtime,
                         "maxWorkers": ctx.max_workers,
                         "model": ctx.model,

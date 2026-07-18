@@ -22,7 +22,7 @@ func TestSectionConfigUpdate(t *testing.T) {
 		{"sectionType": "interaction", "visible": true, "order": 3},
 	}
 
-	rec := doRequest(t, http.MethodPatch, "/v1/circles/"+circleID+"/sections", map[string]any{
+	rec := doRequest(t, http.MethodPatch, "/circles/"+circleID+"/sections", map[string]any{
 		"sections": newSections,
 	})
 	if rec.Code != http.StatusNoContent {
@@ -34,7 +34,7 @@ func TestSectionConfigUpdate(t *testing.T) {
 	}
 
 	// Verify persisted
-	rec = doRequest(t, http.MethodGet, "/v1/circles/"+circleID, nil)
+	rec = doRequest(t, http.MethodGet, "/circles/"+circleID, nil)
 	body := decodeBody(t, rec)
 	data := body["data"].(map[string]any)
 	sections := data["sectionConfig"].([]any)
@@ -59,14 +59,14 @@ func TestFeedPinAndFeature(t *testing.T) {
 		"title":     "待管理帖子",
 	})
 
-	rec := doRequest(t, http.MethodPatch, "/v1/circles/"+circleID+"/feed/post_001/pin", map[string]any{
+	rec := doRequest(t, http.MethodPatch, "/circles/"+circleID+"/feed/post_001/pin", map[string]any{
 		"pinned": true,
 	})
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("pin: expected 204, got %d", rec.Code)
 	}
 
-	rec = doRequest(t, http.MethodPatch, "/v1/circles/"+circleID+"/feed/post_001/feature", map[string]any{
+	rec = doRequest(t, http.MethodPatch, "/circles/"+circleID+"/feed/post_001/feature", map[string]any{
 		"featured": true,
 	})
 	if rec.Code != http.StatusNoContent {

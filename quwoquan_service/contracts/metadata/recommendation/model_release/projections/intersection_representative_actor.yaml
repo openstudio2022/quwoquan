@@ -1,4 +1,3 @@
-version: 1
 read_model: IntersectionRepresentativeActor
 description: |
   交集/影响力人数句的代表人锚点（统一交互子契约）。
@@ -27,47 +26,39 @@ client_projection:
       dart_type: String
       nullable: false
       source: actorId
-      aliases: [actorId]
       default: "''"
     - name: displayName
       dart_type: String
       nullable: false
       source: displayName
-      aliases: [displayName]
       default: "''"
     - name: avatarUrl
       dart_type: String
       nullable: false
       source: avatarUrl
-      aliases: [avatarUrl]
       default: "''"
     - name: relationLabel
       dart_type: String
       nullable: false
       source: relationLabel
-      aliases: [relationLabel]
       default: "''"
     - name: privacyState
       dart_type: String
       nullable: false
       source: privacyState
-      aliases: [privacyState]
       default: "'visible'"
     - name: target
       dart_type: IntersectionTarget
       nullable: true
       source: target
-      aliases: [target]
       map_from_string_key_class: IntersectionTarget
     - name: evidenceRank
       dart_type: int
       nullable: false
       source: evidenceRank
-      aliases: [evidenceRank]
       default: "0"
     - name: snapshotVersion
       dart_type: String
       nullable: false
       source: snapshotVersion
-      aliases: [snapshotVersion, representativeActorVersion]
       default: "''"

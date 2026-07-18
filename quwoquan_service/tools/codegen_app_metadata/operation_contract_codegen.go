@@ -71,6 +71,7 @@ func writeGeneratedOperationContracts(
 	b.WriteString("    required this.retryMode,\n")
 	b.WriteString("    required this.maxAttempts,\n")
 	b.WriteString("    required this.idempotency,\n")
+	b.WriteString("    required this.versionPrecondition,\n")
 	b.WriteString("    required this.errorCodes,\n")
 	b.WriteString("    required this.requestClassification,\n")
 	b.WriteString("    required this.responseClassification,\n")
@@ -109,6 +110,7 @@ func writeGeneratedOperationContracts(
 		"cancellation",
 		"retryMode",
 		"idempotency",
+		"versionPrecondition",
 		"requestClassification",
 		"responseClassification",
 		"logPolicy",
@@ -301,6 +303,7 @@ func writeGeneratedOperationContracts(
 			{"cancellation", operation.Reliability.Cancellation},
 			{"retryMode", operation.Reliability.RetryMode},
 			{"idempotency", operation.Reliability.Idempotency},
+			{"versionPrecondition", string(operation.Concurrency.VersionPrecondition)},
 			{"requestClassification", operation.Privacy.RequestClassification},
 			{"responseClassification", operation.Privacy.ResponseClassification},
 			{"logPolicy", operation.Privacy.LogPolicy},

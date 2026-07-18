@@ -19,24 +19,21 @@ type CreateCommentCommand struct {
 }
 
 type DeleteCommentCommand struct {
-	PostID          string
-	CommentID       string
-	ActorID         string
-	ExpectedVersion int64
+	PostID    string
+	CommentID string
+	ActorID   string
 }
 
 type ChangeCommentPinCommand struct {
-	PostID          string
-	CommentID       string
-	ActorID         string
-	ExpectedVersion int64
-	Pinned          bool
+	PostID    string
+	CommentID string
+	ActorID   string
+	Pinned    bool
 }
 
 type BindCommentAttachmentsCommand struct {
 	CommentID          string
 	ActorID            string
-	ExpectedVersion    int64
 	AttachmentMediaIDs []string
 }
 

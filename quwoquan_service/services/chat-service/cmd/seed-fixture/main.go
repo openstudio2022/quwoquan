@@ -46,7 +46,7 @@ type chatFixtureSeedSet struct {
 }
 
 type chatFixtureConversation struct {
-	ID                 string `json:"_id"`
+	ID                 string `json:"id"`
 	Type               string `json:"type"`
 	Title              string `json:"title"`
 	AvatarURL          string `json:"avatarUrl"`
@@ -88,7 +88,7 @@ type chatFixtureMember struct {
 }
 
 type chatFixtureConversationUserState struct {
-	ID             string `json:"_id"`
+	ID             string `json:"id"`
 	UserID         string `json:"userId"`
 	ConversationID string `json:"conversationId"`
 	ReadSeq        int64  `json:"readSeq"`

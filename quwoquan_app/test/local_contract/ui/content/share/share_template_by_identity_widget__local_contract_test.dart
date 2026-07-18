@@ -23,6 +23,8 @@ import 'package:quwoquan_app/ui/share/forward_external_share_service.dart';
 import 'package:quwoquan_app/ui/share/forward_share_models.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
+import '../../../../support/fixtures/chat/chat_inbox_fixture_builder.dart';
+
 class _FakeShareActionHandler implements ContentShareActionHandler {
   final List<String> executed = <String>[];
 
@@ -708,13 +710,13 @@ class _ContentShareChatRepository extends MockChatRepository {
     int limit = 500,
   }) async {
     return <ChatInboxDto>[
-      ChatInboxDto(
+      chatInboxFixture(
         id: 'direct_share',
         type: 'direct',
         title: '最近私信',
         lastMessageTime: DateTime.utc(2026, 7, 14, 10),
       ),
-      ChatInboxDto(
+      chatInboxFixture(
         id: 'group_share',
         type: 'group',
         title: '最近群聊',

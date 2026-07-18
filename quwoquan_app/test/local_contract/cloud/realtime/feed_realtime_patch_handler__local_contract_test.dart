@@ -2,13 +2,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/feed_realtime_patch.g.dart';
-import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_message_handler.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
-import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 import 'package:quwoquan_app/ui/discovery/providers/feed_realtime_patch_provider.dart';
+
+import '../../../support/recording_app_telemetry_recorder.dart';
 
 const String _authedUserId = 'handler-user';
 const String _channel = 'moment';
@@ -18,8 +17,7 @@ void main() {
 
   setUp(() async {
     final analytics = AnalyticsService.forTesting(
-      mode: AppDataSourceMode.remote,
-      eventRepository: MockOpsEventRepository(),
+      telemetryReporter: RecordingAppTelemetryRecorder(),
     );
     await analytics.initialize(const AnalyticsConfig());
 
@@ -48,7 +46,6 @@ void main() {
 
   test('schema 命中 → 路由到 patch 消费者并展示提示', () {
     RealtimeMessageHandler(container.read).handle(<String, dynamic>{
-      'schemaVersion': feedRealtimePatchSchemaVersion,
       'patchId': 'route-1',
       'patchType': 'new_candidate_hint',
       'userId': _authedUserId,
@@ -62,15 +59,18 @@ void main() {
     expect(hint()!.newCandidateCount, 4);
   });
 
-  test('schema 不符 → 忽略且不落入 chat 处理（不展示、不崩溃）', () {
-    RealtimeMessageHandler(container.read).handle(<String, dynamic>{
-      'schemaVersion': 'feed_patch_v999',
-      'patchId': 'future-1',
-      'patchType': 'new_candidate_hint',
-      'userId': _authedUserId,
-      'affectedCount': 9,
-      'emittedAt': '2026-06-18T00:00:00Z',
-    });
+  test('旧 schema 键直接拒绝，不再静默降级为 null', () {
+    expect(
+      () => RealtimeMessageHandler(container.read).handle(<String, dynamic>{
+        'schema': 'feed_realtime_patch',
+        'patchId': 'future-1',
+        'patchType': 'new_candidate_hint',
+        'userId': _authedUserId,
+        'affectedCount': 9,
+        'emittedAt': '2026-06-18T00:00:00Z',
+      }),
+      throwsFormatException,
+    );
 
     expect(hint(), isNull);
   });
@@ -87,7 +87,6 @@ void main() {
   test('payload 内嵌 schema 也能路由', () {
     RealtimeMessageHandler(container.read).handle(<String, dynamic>{
       'payload': <String, dynamic>{
-        'schemaVersion': feedRealtimePatchSchemaVersion,
         'patchId': 'route-nested-1',
         'patchType': 'refresh_suggestion',
         'userId': _authedUserId,

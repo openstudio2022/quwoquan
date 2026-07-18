@@ -30,7 +30,7 @@ func TestSearchXiaoquContractApiIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal request: %v", err)
 	}
-	req := httptest.NewRequest(http.MethodPost, "/v1/assistant/search/xiaoqu", bytes.NewReader(payload))
+	req := httptest.NewRequest(http.MethodPost, "/assistant/search/xiaoqu", bytes.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Client-User-Id", "user_xiaoqu_api_1")
 	rec := httptest.NewRecorder()

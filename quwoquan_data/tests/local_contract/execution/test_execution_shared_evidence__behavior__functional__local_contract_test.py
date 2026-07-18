@@ -17,7 +17,7 @@ PLAN_FROZEN_EVIDENCE = {
     "content_plan_packet.json",
     "content_object_index.json",
     "env_ready_report.json",
-    "workflow_state.json",
+    "execution_state.json",
     "token_ledger.json",
     "managed_execution_audit.json",
     "scale_readiness.json",
@@ -33,8 +33,8 @@ def test_plan_frozen_evidence_all_authoritative():
 
 
 def test_debug_layers_are_reclaimable_not_authoritative():
-    """assistant_tasks / workflow_packets 等调试态必须是可清理层，不得升级为权威证据。"""
-    for name in ("assistant_tasks", "workflow_packets", "object_queue", "image_safety_cache"):
+    """assistant_tasks / command_packets 等调试态必须是可清理层，不得升级为权威证据。"""
+    for name in ("assistant_tasks", "command_packets", "object_queue", "image_safety_cache"):
         assert paths_mod.execution_shared_entry_role(name) == "reclaimable", name
         assert name not in paths_mod.EXECUTION_SHARED_AUTHORITATIVE_ENTRIES, name
 

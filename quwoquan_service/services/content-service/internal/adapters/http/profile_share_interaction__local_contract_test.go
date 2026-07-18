@@ -64,7 +64,7 @@ func newProfileShareHandler(t *testing.T) http.Handler {
 
 func TestProfileShareHTTPRequiresActiveOwnerPersona(t *testing.T) {
 	handler := newProfileShareHandler(t)
-	path := "/v1/content/sub-accounts/owner-persona/interactions/received?type=share"
+	path := "/content/sub-accounts/owner-persona/interactions/received?type=share"
 
 	unauthorized := httptest.NewRequest(http.MethodGet, path, nil)
 	unauthorizedRec := httptest.NewRecorder()
@@ -111,7 +111,7 @@ func TestProfileShareHTTPStateWriteIsIdempotent(t *testing.T) {
 	handler := newProfileShareHandler(t)
 	list := httptest.NewRequest(
 		http.MethodGet,
-		"/v1/content/sub-accounts/owner-persona/interactions/received?type=share",
+		"/content/sub-accounts/owner-persona/interactions/received?type=share",
 		nil,
 	)
 	list = list.WithContext(rtauth.WithPrincipal(
@@ -126,7 +126,7 @@ func TestProfileShareHTTPStateWriteIsIdempotent(t *testing.T) {
 	for index := 0; index < 2; index++ {
 		request := httptest.NewRequest(
 			http.MethodPatch,
-			"/v1/content/sub-accounts/owner-persona/interactions/"+interactionID+"/state?state=read",
+			"/content/sub-accounts/owner-persona/interactions/"+interactionID+"/state?state=read",
 			nil,
 		)
 		request = request.WithContext(rtauth.WithPrincipal(

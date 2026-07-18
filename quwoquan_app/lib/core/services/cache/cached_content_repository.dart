@@ -13,6 +13,7 @@ import 'package:quwoquan_app/core/services/cache/cache_telemetry_sink.dart';
 import 'package:quwoquan_app/core/services/cache/content_cache_services.dart';
 import 'package:quwoquan_app/core/services/cache/user_profile_cache_service.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 class CachedContentRepository
     implements ContentReadRepository, ContentWriteRepository {
@@ -53,6 +54,8 @@ class CachedContentRepository
     String sort = kFeedSortRecommend,
     String? sessionId,
     String? feedRequestId,
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
   }) async {
     final key = contentFeedQueryKey(
       category: category,
@@ -76,6 +79,8 @@ class CachedContentRepository
         sort: sort,
         sessionId: sessionId,
         feedRequestId: feedRequestId,
+        cancellation: cancellation,
+        deadlineAt: deadlineAt,
       );
       _storeFeedPage(key, page);
       return page;
@@ -132,16 +137,6 @@ class CachedContentRepository
     final payload = await _readDelegate.getPost(postId: postId);
     _storePostDetail(payload);
     return payload;
-  }
-
-  @override
-  Future<PostBaseDto> updatePost({
-    required String postId,
-    required UpdatePostRequestWire body,
-  }) async {
-    final post = await _writeDelegate.updatePost(postId: postId, body: body);
-    _storePostProjection(post);
-    return post;
   }
 
   @override

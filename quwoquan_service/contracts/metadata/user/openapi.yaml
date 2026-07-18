@@ -4,7 +4,7 @@ info:
     title: quwoquan user API
     version: v1
 paths:
-    /v1/auth/authorization/alipay:
+    /auth/authorization/alipay:
         post:
             operationId: CreateAlipayAuthorizationRequest
             x-contract-operation-id: user.authentication_challenge.CreateAlipayAuthorizationRequest
@@ -30,7 +30,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-    /v1/auth/login/alipay:
+    /auth/login/alipay:
         post:
             operationId: LoginWithAlipay
             x-contract-operation-id: user.account_session.LoginWithAlipay
@@ -56,7 +56,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-    /v1/auth/login/anonymous:
+    /auth/login/anonymous:
         post:
             operationId: LoginAnonymous
             x-contract-operation-id: user.account_session.LoginAnonymous
@@ -67,6 +67,13 @@ paths:
                 facet: AccountSessionCommandFacade
                 method: loginAnonymous
                 aggregateOwner: AccountSession
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: false
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:
@@ -86,7 +93,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-    /v1/auth/login/one-tap:
+    /auth/login/one-tap:
         post:
             operationId: LoginOneTap
             x-contract-operation-id: user.account_session.LoginOneTap
@@ -112,7 +119,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-    /v1/auth/login/one-tap/hint:
+    /auth/login/one-tap/hint:
         post:
             operationId: ResolveOneTapLoginHint
             x-contract-operation-id: user.authentication_challenge.ResolveOneTapLoginHint
@@ -138,7 +145,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-    /v1/auth/login/phone:
+    /auth/login/phone:
         post:
             operationId: LoginWithPhone
             x-contract-operation-id: user.account_session.LoginWithPhone
@@ -164,7 +171,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-    /v1/auth/login/qq:
+    /auth/login/qq:
         post:
             operationId: LoginWithQq
             x-contract-operation-id: user.account_session.LoginWithQq
@@ -190,7 +197,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-    /v1/auth/login/wechat:
+    /auth/login/wechat:
         post:
             operationId: LoginWithWechat
             x-contract-operation-id: user.account_session.LoginWithWechat
@@ -216,7 +223,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-    /v1/auth/logout:
+    /auth/logout:
         post:
             operationId: Logout
             x-contract-operation-id: user.account_session.Logout
@@ -244,7 +251,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/auth/otp/send:
+    /auth/otp/send:
         post:
             operationId: SendOtp
             x-contract-operation-id: user.authentication_challenge.SendOtp
@@ -270,7 +277,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-    /v1/auth/token/refresh:
+    /auth/token/refresh:
         post:
             operationId: RefreshToken
             x-contract-operation-id: user.account_session.RefreshToken
@@ -298,7 +305,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/invites/{linkCode}:
+    /invites/{linkCode}:
         get:
             operationId: GetInviteByCode
             x-contract-operation-id: user.invite_record.GetInviteByCode
@@ -332,7 +339,7 @@ paths:
             security:
                 - bearerAuth: []
                 - {}
-    /v1/invites/{linkCode}/accept:
+    /invites/{linkCode}/accept:
         post:
             operationId: AcceptInvite
             x-contract-operation-id: user.invite_record.AcceptInvite
@@ -366,7 +373,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/me:
+    /me:
         get:
             operationId: GetMeProfile
             x-contract-operation-id: user.user_profile.GetMeProfile
@@ -393,7 +400,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/me/invites:
+    /me/invites:
         get:
             operationId: ListMyInvites
             x-contract-operation-id: user.invite_record.ListMyInvites
@@ -447,7 +454,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/owner/contact-discovery:
+    /owner/contact-discovery:
         post:
             operationId: InitiateContactDiscovery
             x-contract-operation-id: user.contact_discovery.InitiateContactDiscovery
@@ -475,7 +482,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/owner/contact-discovery/{id}:
+    /owner/contact-discovery/{id}:
         delete:
             operationId: DismissContactDiscovery
             x-contract-operation-id: user.contact_discovery.DismissContactDiscovery
@@ -503,7 +510,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/owner/contact-discovery/latest:
+    /owner/contact-discovery/latest:
         get:
             operationId: GetLatestContactDiscovery
             x-contract-operation-id: user.contact_discovery.GetLatestContactDiscovery
@@ -530,7 +537,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/owner/credentials:
+    /owner/credentials:
         get:
             operationId: ListCredentials
             x-contract-operation-id: user.user_profile.ListCredentials
@@ -557,7 +564,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/owner/credentials/{credentialType}:
+    /owner/credentials/{credentialType}:
         delete:
             operationId: UnbindCredential
             x-contract-operation-id: user.credential_binding.UnbindCredential
@@ -585,7 +592,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/owner/credentials/bind:
+    /owner/credentials/bind:
         post:
             operationId: BindCredential
             x-contract-operation-id: user.credential_binding.BindCredential
@@ -613,7 +620,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/owner/credentials/carrier-phone/bind:
+    /owner/credentials/carrier-phone/bind:
         post:
             operationId: BindCarrierPhoneCredential
             x-contract-operation-id: user.credential_binding.BindCarrierPhoneCredential
@@ -641,7 +648,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/owner/credentials/phone/bind:
+    /owner/credentials/phone/bind:
         post:
             operationId: BindPhoneCredential
             x-contract-operation-id: user.credential_binding.BindPhoneCredential
@@ -669,7 +676,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/public/profile/qr/resolve:
+    /public/profile/qr/resolve:
         get:
             operationId: ResolveProfileQrToken
             x-contract-operation-id: user.user_profile.ResolveProfileQrToken
@@ -697,7 +704,7 @@ paths:
             security:
                 - bearerAuth: []
                 - {}
-    /v1/relationships/subjects/{subjectType}/{subjectId}/follow:
+    /relationships/subjects/{subjectType}/{subjectId}/follow:
         post:
             operationId: FollowSubject
             x-contract-operation-id: user.subject_follow.FollowSubject
@@ -768,7 +775,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/user/{subAccountId}:
+    /user/{subAccountId}:
         get:
             operationId: GetSubAccountProfile
             x-contract-operation-id: user.user_profile.GetSubAccountProfile
@@ -802,7 +809,7 @@ paths:
             security:
                 - bearerAuth: []
                 - {}
-    /v1/user/blocked:
+    /user/blocked:
         get:
             operationId: ListBlockedUsers
             x-contract-operation-id: user.persona_relationship.ListBlockedUsers
@@ -829,7 +836,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/user/devices/push-tokens:
+    /user/devices/push-tokens:
         post:
             operationId: RegisterDevice
             x-contract-operation-id: user.device_registration.RegisterDevice
@@ -857,7 +864,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/user/followed-subjects/{subjectType}/{subjectId}:mark-visited:
+    /user/followed-subjects/{subjectType}/{subjectId}:mark-visited:
         post:
             operationId: MarkFollowedSubjectVisited
             x-contract-operation-id: user.followed_subject_visit_state.MarkFollowedSubjectVisited
@@ -900,7 +907,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/user/following-subjects:
+    /user/following-subjects:
         get:
             operationId: ListFollowingSubjects
             x-contract-operation-id: user.following_subject.ListFollowingSubjects
@@ -927,7 +934,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/user/greeting-request:
+    /user/greeting-request:
         post:
             operationId: SendGreetingRequest
             x-contract-operation-id: user.greeting_request.SendGreetingRequest
@@ -955,7 +962,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/user/greeting-request/{requestId}:
+    /user/greeting-request/{requestId}:
         delete:
             operationId: CancelGreetingRequest
             x-contract-operation-id: user.greeting_request.CancelGreetingRequest
@@ -983,7 +990,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/user/greeting-request/{requestId}/ignore:
+    /user/greeting-request/{requestId}/ignore:
         post:
             operationId: IgnoreGreetingRequest
             x-contract-operation-id: user.greeting_request.IgnoreGreetingRequest
@@ -1017,7 +1024,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/user/greeting-request/{requestId}/reply:
+    /user/greeting-request/{requestId}/reply:
         post:
             operationId: ReplyGreetingRequest
             x-contract-operation-id: user.greeting_request.ReplyGreetingRequest
@@ -1051,7 +1058,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/user/greeting-request/inbox:
+    /user/greeting-request/inbox:
         get:
             operationId: ListGreetingInbox
             x-contract-operation-id: user.greeting_request.ListGreetingInbox
@@ -1078,7 +1085,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/user/greeting-request/outbox:
+    /user/greeting-request/outbox:
         get:
             operationId: ListGreetingOutbox
             x-contract-operation-id: user.greeting_request.ListGreetingOutbox
@@ -1105,7 +1112,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/user/personas:
+    /user/personas:
         get:
             operationId: ListPersonas
             x-contract-operation-id: user.user_profile.ListPersonas
@@ -1163,7 +1170,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/user/personas/{personaId}/profile-proposals:
+    /user/personas/{personaId}/profile-proposals:
         get:
             operationId: ListProfileUpdateProposals
             x-contract-operation-id: user.profile_update_proposal.ListProfileUpdateProposals
@@ -1212,6 +1219,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: true
                 content:
@@ -1233,7 +1246,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/user/personas/{subAccountId}:
+    /user/personas/{subAccountId}:
         patch:
             operationId: UpdatePersona
             x-contract-operation-id: user.persona.UpdatePersona
@@ -1271,7 +1284,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/user/personas/{subAccountId}/activate:
+    /user/personas/{subAccountId}/activate:
         post:
             operationId: ActivatePersona
             x-contract-operation-id: user.persona.ActivatePersona
@@ -1309,7 +1322,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/user/personas/{subAccountId}/delete-empty:
+    /user/personas/{subAccountId}/delete-empty:
         delete:
             operationId: DeleteEmptyPersona
             x-contract-operation-id: user.persona.DeleteEmptyPersona
@@ -1337,7 +1350,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/user/personas/{subAccountId}/lifecycle-guard:
+    /user/personas/{subAccountId}/lifecycle-guard:
         get:
             operationId: GetPersonaLifecycleGuard
             x-contract-operation-id: user.user_profile.GetPersonaLifecycleGuard
@@ -1370,7 +1383,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/user/personas/{subAccountId}/profile-sync:
+    /user/personas/{subAccountId}/profile-sync:
         post:
             operationId: ApplyPersonaProfileSync
             x-contract-operation-id: user.persona.ApplyPersonaProfileSync
@@ -1404,7 +1417,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/user/personas/{subAccountId}/retire:
+    /user/personas/{subAccountId}/retire:
         post:
             operationId: RetirePersona
             x-contract-operation-id: user.persona.RetirePersona
@@ -1442,7 +1455,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/user/personas/active:
+    /user/personas/active:
         get:
             operationId: GetActivePersonaContext
             x-contract-operation-id: user.user_profile.GetActivePersonaContext
@@ -1469,7 +1482,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/user/personas/summary:
+    /user/personas/summary:
         get:
             operationId: GetPersonaManagementSummary
             x-contract-operation-id: user.user_profile.GetPersonaManagementSummary
@@ -1496,7 +1509,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/user/profile:
+    /user/profile:
         patch:
             operationId: UpdateUserProfile
             x-contract-operation-id: user.persona.UpdateUserProfile
@@ -1524,7 +1537,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/user/profile/{userId}:
+    /user/profile/{userId}:
         get:
             operationId: GetUserProfile
             x-contract-operation-id: user.user_profile.GetUserProfile
@@ -1558,7 +1571,7 @@ paths:
             security:
                 - bearerAuth: []
                 - {}
-    /v1/user/profile/edit-snapshot:
+    /user/profile/edit-snapshot:
         get:
             operationId: GetProfileEditSnapshot
             x-contract-operation-id: user.user_profile.GetProfileEditSnapshot
@@ -1585,7 +1598,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/user/profile/proposals/{id}:
+    /user/profile/proposals/{id}:
         get:
             operationId: GetProfileUpdateProposal
             x-contract-operation-id: user.profile_update_proposal.GetProfileUpdateProposal
@@ -1618,7 +1631,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/user/profile/proposals/{id}/apply:
+    /user/profile/proposals/{id}/apply:
         post:
             operationId: ApplyProposal
             x-contract-operation-id: user.profile_update_proposal.ApplyProposal
@@ -1635,12 +1648,18 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
-                required: true
+                required: false
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/ApplyProfileUpdateProposalRequest'
+                            $ref: '#/components/schemas/ApplyProposalRequest'
             responses:
                 "200":
                     description: OK
@@ -1656,7 +1675,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/user/profile/proposals/{id}/confirm:
+    /user/profile/proposals/{id}/confirm:
         post:
             operationId: ConfirmProposal
             x-contract-operation-id: user.profile_update_proposal.ConfirmProposal
@@ -1673,12 +1692,18 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
-                required: true
+                required: false
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/ConfirmProfileUpdateProposalRequest'
+                            $ref: '#/components/schemas/ConfirmProposalRequest'
             responses:
                 "200":
                     description: OK
@@ -1694,7 +1719,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/user/profile/proposals/{id}/reject:
+    /user/profile/proposals/{id}/reject:
         post:
             operationId: RejectProposal
             x-contract-operation-id: user.profile_update_proposal.RejectProposal
@@ -1711,12 +1736,18 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
-                required: true
+                required: false
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/RejectProfileUpdateProposalRequest'
+                            $ref: '#/components/schemas/RejectProposalRequest'
             responses:
                 "200":
                     description: OK
@@ -1732,7 +1763,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/user/profile/qr-card:
+    /user/profile/qr-card:
         get:
             operationId: GetProfileQrCard
             x-contract-operation-id: user.user_profile.GetProfileQrCard
@@ -1759,7 +1790,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/user/search/social-relations:
+    /user/search/social-relations:
         get:
             operationId: SearchSocialRelations
             x-contract-operation-id: user.user_profile.SearchSocialRelations
@@ -1786,7 +1817,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/user/settings/appearance:
+    /user/settings/appearance:
         get:
             operationId: GetAppearanceSettings
             x-contract-operation-id: user.user_profile.GetAppearanceSettings
@@ -1844,7 +1875,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/user/settings/calls:
+    /user/settings/calls:
         get:
             operationId: GetCallSettings
             x-contract-operation-id: user.user_profile.GetCallSettings
@@ -1898,7 +1929,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/user/settings/notifications:
+    /user/settings/notifications:
         get:
             operationId: GetNotificationSettings
             x-contract-operation-id: user.user_profile.GetNotificationSettings
@@ -1952,7 +1983,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/user/settings/privacy:
+    /user/settings/privacy:
         get:
             operationId: GetPrivacySettings
             x-contract-operation-id: user.user_profile.GetPrivacySettings
@@ -2006,7 +2037,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/user/sub-accounts/{subAccountId}/followers:
+    /user/sub-accounts/{subAccountId}/followers:
         get:
             operationId: ListFollowers
             x-contract-operation-id: user.persona_relationship.ListFollowers
@@ -2040,7 +2071,7 @@ paths:
             security:
                 - bearerAuth: []
                 - {}
-    /v1/user/sub-accounts/{subAccountId}/following:
+    /user/sub-accounts/{subAccountId}/following:
         get:
             operationId: ListFollowing
             x-contract-operation-id: user.persona_relationship.ListFollowing
@@ -2074,7 +2105,7 @@ paths:
             security:
                 - bearerAuth: []
                 - {}
-    /v1/user/sub-accounts/{subAccountId}/homepage-bundle:
+    /user/sub-accounts/{subAccountId}/homepage-bundle:
         get:
             operationId: GetUserHomepageBundle
             x-contract-operation-id: user.user_profile.GetUserHomepageBundle
@@ -2108,7 +2139,7 @@ paths:
             security:
                 - bearerAuth: []
                 - {}
-    /v1/user/sub-accounts/{subAccountId}/relationship:
+    /user/sub-accounts/{subAccountId}/relationship:
         get:
             operationId: GetRelationship
             x-contract-operation-id: user.persona_relationship.GetRelationship
@@ -2142,7 +2173,7 @@ paths:
             security:
                 - bearerAuth: []
                 - {}
-    /v1/user/sub-accounts/{subAccountId}/relationship/capability:
+    /user/sub-accounts/{subAccountId}/relationship/capability:
         get:
             operationId: GetRelationshipCapability
             x-contract-operation-id: user.persona_relationship.GetRelationshipCapability
@@ -2176,7 +2207,7 @@ paths:
             security:
                 - bearerAuth: []
                 - {}
-    /v1/user/sub-accounts/{targetSubAccountId}/block:
+    /user/sub-accounts/{targetSubAccountId}/block:
         post:
             operationId: BlockUser
             x-contract-operation-id: user.persona_relationship.BlockUser
@@ -2237,7 +2268,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/user/sub-accounts/{targetSubAccountId}/follow:
+    /user/sub-accounts/{targetSubAccountId}/follow:
         post:
             operationId: FollowUser
             x-contract-operation-id: user.persona_relationship.FollowUser
@@ -2302,7 +2333,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/user/sync:
+    /user/sync:
         post:
             operationId: PullUserSync
             x-contract-operation-id: user.user_profile.PullUserSync
@@ -2329,7 +2360,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/users/{userId}/interest-profile:
+    /users/{userId}/interest-profile:
         get:
             operationId: GetUserInterestProfile
             x-contract-operation-id: user.user_profile.GetUserInterestProfile
@@ -2362,7 +2393,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/users/{userId}/life-items:
+    /users/{userId}/life-items:
         get:
             operationId: ListUserLifeItems
             x-contract-operation-id: user.user_profile.ListUserLifeItems
@@ -2396,7 +2427,7 @@ paths:
             security:
                 - bearerAuth: []
                 - {}
-    /v1/users/{userId}/likes:
+    /users/{userId}/likes:
         get:
             operationId: ListUserLikes
             x-contract-operation-id: user.user_profile.ListUserLikes
@@ -2430,7 +2461,7 @@ paths:
             security:
                 - bearerAuth: []
                 - {}
-    /v1/users/{userId}/works:
+    /users/{userId}/works:
         get:
             operationId: ListUserWorks
             x-contract-operation-id: user.user_profile.ListUserWorks
@@ -2494,10 +2525,10 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: AppearanceSettingsView
             x-contract-placeholder: true
-        ApplyProfileUpdateProposalRequest:
+        ApplyProposalRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ApplyProfileUpdateProposalRequest
+            x-contract-entity: ApplyProposalRequest
             x-contract-placeholder: true
         AuthLoginResult:
             type: object
@@ -2529,10 +2560,10 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: BlockedListItemView
             x-contract-placeholder: true
-        ConfirmProfileUpdateProposalRequest:
+        ConfirmProposalRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ConfirmProfileUpdateProposalRequest
+            x-contract-entity: ConfirmProposalRequest
             x-contract-placeholder: true
         ContactDiscoveryRecord:
             type: object
@@ -2768,10 +2799,10 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: RefreshTokenRequest
             x-contract-placeholder: true
-        RejectProfileUpdateProposalRequest:
+        RejectProposalRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: RejectProfileUpdateProposalRequest
+            x-contract-entity: RejectProposalRequest
             x-contract-placeholder: true
         RelationshipCapabilityView:
             type: object

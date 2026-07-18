@@ -14,9 +14,9 @@ class HomepageIntroductionTimelineItem {
 
   factory HomepageIntroductionTimelineItem.fromMap(Map<String, dynamic> m) {
     return HomepageIntroductionTimelineItem(
-      dateLabel: m['dateLabel']?.toString() ?? m['date']?.toString() ?? '',
-      text: m['text']?.toString() ?? m['body']?.toString() ?? '',
-      assetUrl: m['assetUrl']?.toString() ?? m['imageUrl']?.toString() ?? null,
+      dateLabel: m['dateLabel']?.toString() ?? '',
+      text: m['text']?.toString() ?? '',
+      assetUrl: m['assetUrl']?.toString() ?? null,
     );
   }
 

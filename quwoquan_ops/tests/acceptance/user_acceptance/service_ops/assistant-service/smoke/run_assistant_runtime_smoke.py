@@ -30,7 +30,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 
 REPO_ROOT = _find_repo_root()
-SCHEMA_VERSION = 1
+REPORT_SCHEMA = "assistant-runtime-smoke-report"
 SCENARIO_FIXTURE = (
     REPO_ROOT
     / "quwoquan_service"
@@ -348,7 +348,7 @@ def stream_assistant_turn(
     timeout_seconds: int,
     stall_timeout_seconds: int,
 ) -> Dict[str, Any]:
-    url = base_url.rstrip("/") + "/v1/assistant/turns/{0}/stream".format(turn_id)
+    url = base_url.rstrip("/") + "/assistant/turns/{0}/stream".format(turn_id)
     connection, path = open_http_connection(url, stall_timeout_seconds)
     body = "{}"
     headers = build_surface_headers(
@@ -545,7 +545,7 @@ def validate_stream_result(
 
 def report_template(args: argparse.Namespace, scenario: Dict[str, Any]) -> Dict[str, Any]:
     return {
-        "schemaVersion": SCHEMA_VERSION,
+        "schema": REPORT_SCHEMA,
         "scenario": "assistant.runtime.protocol_smoke",
         "status": "running",
         "failureCategory": "",
@@ -603,7 +603,7 @@ def main() -> int:
         conversation_started = time.monotonic()
         conversation = request_json(
             args.base_url,
-            "/v1/assistant/conversations",
+            "/assistant/conversations",
             method="POST",
             user_id=args.user_id,
             test_auth_token=args.test_auth_token,
@@ -631,7 +631,7 @@ def main() -> int:
         turn_started = time.monotonic()
         turn = request_json(
             args.base_url,
-            "/v1/assistant/conversations/{0}/turns".format(conversation_id),
+            "/assistant/conversations/{0}/turns".format(conversation_id),
             method="POST",
             user_id=args.user_id,
             test_auth_token=args.test_auth_token,

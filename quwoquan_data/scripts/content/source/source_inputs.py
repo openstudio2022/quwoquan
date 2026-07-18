@@ -1,11 +1,12 @@
 """通用来源计划读取（取代任务/区域专属 curated 语料）。
 
 来源候选由任务/Agent 在 download source_plan 输入中给出，主线不内置任何区域语料。
-对象优先布局（真相源 docs/pipeline_directory_layout_spec.md §15）：
-  data/tasks/{executionId}/entities/{domain}/{type}/{name}/1.download/{homepage,article,image}_source_plan.json
+对象优先布局：
+  data/tasks/{executionId}/entities/{domain}/{type}/{name}/1.download/<lane>_source_plan.json
 统一 payload 形态：
   homepage/article: {"sources": [{"source_id","platform","url","body?","imageUrls?"}]}
   image: {"collections": [{"sourceCollectionId", "creator", "images": [...]}]}
+  video: {"assets": [{"url", "license", "authorizationProof", ...}]}
 """
 from __future__ import annotations
 
@@ -14,6 +15,8 @@ from typing import Any, Iterable
 import re
 
 from core.io import read_json
+from core.carrier_contract import research_plan_files
+from core.control_types import ContentType
 from core.paths import STAGE_DOWNLOAD
 from content.source.source_unit import resolve_entity_object_dir
 
@@ -25,32 +28,21 @@ VALID_SOURCE_USE_MODES = {
     SOURCE_USE_FACTUAL_REFERENCE,
     SOURCE_USE_BLOCKED,
 }
-RESEARCH_PLAN_FILES = {
-    "homepage": "homepage_source_plan.json",
-    "article": "article_source_plan.json",
-    "image": "image_source_plan.json",
-}
-
-# P3 三类解耦：research lane → 发布内容类型（单一真相源）。
-# 实体主页 homepage→entity、攻略文章 article→article、图库作品 image→image。
-# download 据此按内容类型路由各自来源、分类型下发调度，替代既往「全部当 article」的实体键控默认。
-LANE_CONTENT_TYPE = {
-    "homepage": "entity",
-    "article": "article",
-    "image": "image",
-}
+RESEARCH_PLAN_FILES = research_plan_files()
 
 
 def content_type_for_lane(lane: str) -> str:
     """research lane → 发布内容类型路由真相源。
 
-    三类物理解耦后，每条来源按其 lane 路由到对应内容类型：homepage=实体、article=文章、image=图片。
+    每条来源按 carrier contract 路由：homepage=实体，其余 lane 与发布内容类型同名。
     未知/空 lane 直接失败，禁止把弱类型来源静默路由成 article。
     """
     normalized = str(lane or "").strip()
-    if normalized not in LANE_CONTENT_TYPE:
+    try:
+        content_type = ContentType(normalized)
+    except ValueError:
         raise ValueError(f"unsupported or missing research lane: {normalized!r}")
-    return LANE_CONTENT_TYPE[normalized]
+    return "entity" if content_type is ContentType.HOMEPAGE else content_type.value
 
 
 def _source_plan_files(
@@ -62,9 +54,8 @@ def _source_plan_files(
 ) -> list[tuple[str, Path]]:
     """Return independent lane plans.
 
-    A lane-specific caller is strict: ``research_lane=image`` must read only
-    ``image_source_plan.json``. Legacy mixed ``source_plan.json`` is no longer
-    consumable truth; stale batches must regenerate lane plans.
+    A lane-specific caller is strict: it reads only the carrier contract file.
+    Mixed ``source_plan.json`` is not consumable truth.
     """
     obj = resolve_entity_object_dir(execution_id, entity_id, etype_hint=entity_type)
     selected = list(lanes or ("homepage", "article"))
@@ -110,7 +101,7 @@ def _plan_has_payload(path: Path) -> bool:
     if not isinstance(data, dict):
         return False
     payload = data.get("payload") if isinstance(data.get("payload"), dict) else {}
-    for key in ("imageUrls", "collections"):
+    for key in ("imageUrls", "collections", "assets"):
         raw = data.get(key) or payload.get(key) or []
         if isinstance(raw, list) and raw:
             return True
@@ -256,12 +247,13 @@ def curated_images_for_entity(
     download 据此下图到来源单元 assets/，供 post 选图与 imageGate 体检。
     """
     selected_lane = str(research_lane or "").strip() or None
-    if selected_lane not in {None, "homepage", "image"}:
+    if selected_lane not in {None, "homepage", "image", "video"}:
         return []
     files: list[tuple[str, Path]] = []
-    if selected_lane in {None, "image"}:
+    if selected_lane in {None, "image", "video"}:
+        visual_lanes = ("image", "video") if selected_lane is None else (selected_lane,)
         files = _source_plan_files(
-            execution_id, entity_id, entity_type, lanes=("image",)
+            execution_id, entity_id, entity_type, lanes=visual_lanes
         )
     specs: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
@@ -273,6 +265,14 @@ def curated_images_for_entity(
         raw_specs = data.get("imageUrls") or payload.get("imageUrls") or []
         for extra in _normalize_image_specs(raw_specs):
             lane_key = str(extra.get("researchLane") or lane_name or "image")
+            key = (lane_key, extra["url"])
+            if key not in seen:
+                seen.add(key)
+                specs.append(extra)
+        raw_assets = data.get("assets") or payload.get("assets") or []
+        for extra in _normalize_image_specs(raw_assets):
+            extra["researchLane"] = lane_name
+            lane_key = str(extra.get("researchLane") or lane_name)
             key = (lane_key, extra["url"])
             if key not in seen:
                 seen.add(key)
@@ -378,7 +378,7 @@ def curated_images_for_entity(
                             seen.add(key)
                             specs.append(merged)
     for spec in specs:
-        spec.setdefault("researchLane", "image")
+        spec.setdefault("researchLane", selected_lane or "image")
     return specs
 
 

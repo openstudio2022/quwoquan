@@ -1,4 +1,3 @@
-version: 1
 entity: MediaUploadSession
 tests:
   - name: media_upload_session_state_contract

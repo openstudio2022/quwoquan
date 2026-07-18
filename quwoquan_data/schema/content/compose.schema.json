@@ -100,8 +100,6 @@
           "license": { "$ref": "#/$defs/sourceFact" },
           "termsUrl": { "$ref": "#/$defs/sourceFact" },
           "authorizationProof": { "$ref": "#/$defs/sourceFact" },
-          "page": { "$ref": "#/$defs/sourceFact" },
-          "licenseProof": { "$ref": "#/$defs/sourceFact" },
           "kind": { "type": "string" },
           "scope": { "type": "string" },
           "objectKey": { "type": "string" },
@@ -111,16 +109,14 @@
         "required": ["assetId", "fileName"]
       }
     },
-    "carrier": { "type": "string", "enum": ["article", "image", "review"] },
+    "carrier": { "type": "string", "enum": ["article", "image", "video", "review"] },
     "sourceCollectionId": { "type": "string" },
     "creator": { "$ref": "#/$defs/sourceFact" },
     "collectionPageUrl": { "$ref": "#/$defs/sourceFact" },
     "license": { "$ref": "#/$defs/sourceFact" },
     "termsUrl": { "$ref": "#/$defs/sourceFact" },
     "authorizationProof": { "$ref": "#/$defs/sourceFact" },
-    "page": { "$ref": "#/$defs/sourceFact" },
-    "licenseProof": { "$ref": "#/$defs/sourceFact" },
-    "publishLayout": { "type": "string", "enum": ["travel", "campus", "image", "gallery"] },
+    "publishLayout": { "type": "string", "enum": ["travel", "campus", "image", "gallery", "video"] },
     "publishAngle": { "type": "string" },
     "publishTitle": { "type": "string" },
     "publishSeq": { "type": "integer" },
@@ -138,7 +134,14 @@
     },
     "baseSourceRef": { "type": ["string", "null"], "description": "主底稿来源 ref（风格与事实锚点）" },
     "imageBindings": { "type": "array", "items": { "type": "object" } },
-    "videoBindings": { "type": "array", "items": { "type": "object" } }
+    "videoBindings": { "type": "array", "items": { "type": "object" } },
+    "sourceFrames": { "type": "array", "items": { "type": "object" } },
+    "scriptLines": { "type": "array", "items": { "type": "string" } },
+    "agentRunId": { "type": "string" },
+    "generator": { "type": "string" },
+    "generatorModel": { "type": "string" },
+    "createdAt": { "type": ["string", "null"] },
+    "updatedAt": { "type": ["string", "null"] }
   },
   "required": ["topicId", "entityRefs", "tagRefs"],
   "allOf": [
@@ -174,8 +177,42 @@
             "required": ["assets"]
           }
         ]
+      }
+    },
+    {
+      "if": {
+        "anyOf": [
+          {
+            "properties": { "contentType": { "const": "video" } },
+            "required": ["contentType"]
+          },
+          {
+            "properties": { "carrier": { "const": "video" } },
+            "required": ["carrier"]
+          }
+        ]
       },
-      "else": {
+      "then": {
+        "required": ["title", "caption", "sourceFrames", "scriptLines", "storySpine", "generator"],
+        "properties": {
+          "title": { "type": "string", "minLength": 1, "maxLength": 80 },
+          "caption": { "type": "string", "minLength": 1, "maxLength": 300 },
+          "sourceFrames": { "type": "array", "minItems": 1 },
+          "scriptLines": { "type": "array", "minItems": 1 },
+          "generator": { "const": "agent" },
+          "entityRefs": { "type": "array", "minItems": 1 },
+          "tagRefs": { "type": "array", "minItems": 2 }
+        }
+      }
+    },
+    {
+      "if": {
+        "allOf": [
+          { "not": { "properties": { "carrier": { "const": "image" } }, "required": ["carrier"] } },
+          { "not": { "properties": { "carrier": { "const": "video" } }, "required": ["carrier"] } }
+        ]
+      },
+      "then": {
         "required": ["articleMarkdown", "title"],
         "properties": {
           "articleMarkdown": { "type": "string", "minLength": 300 },

@@ -37,8 +37,21 @@ func (r localPostDetailReader) FindPostDetail(
 	if err != nil {
 		return postports.PostDetailSlice{}, false, err
 	}
+	var asMap map[string]any
+	if err := json.Unmarshal(raw, &asMap); err != nil {
+		return postports.PostDetailSlice{}, false, err
+	}
+	if _, ok := asMap["postId"]; !ok {
+		asMap["postId"] = asMap["id"]
+	}
+	delete(asMap, "id")
+	delete(asMap, "_id")
+	normalized, err := json.Marshal(asMap)
+	if err != nil {
+		return postports.PostDetailSlice{}, false, err
+	}
 	var detail postports.PostDetailSlice
-	if err := json.Unmarshal(raw, &detail); err != nil {
+	if err := json.Unmarshal(normalized, &detail); err != nil {
 		return postports.PostDetailSlice{}, false, err
 	}
 	return detail, true, nil
@@ -109,8 +122,8 @@ func setActorHeaders(req *http.Request, ownerID, subAccountID string) {
 	if subAccountID != "" {
 		req.Header.Set("X-Client-Sub-Account-Id", subAccountID)
 	}
-	if req.Header.Get("Idempotency-Key") == "" && req.Header.Get("X-Request-Id") == "" {
-		req.Header.Set("X-Request-Id", "contract-test-"+subAccountID+"-"+strconv.FormatInt(time.Now().UnixNano(), 10))
+	if req.Header.Get("Idempotency-Key") == "" {
+		req.Header.Set("Idempotency-Key", "contract-test-"+subAccountID+"-"+strconv.FormatInt(time.Now().UnixNano(), 10))
 	}
 }
 
@@ -124,7 +137,7 @@ func TestHealthz(t *testing.T) {
 }
 
 func TestFeedAndPostEndpoints(t *testing.T) {
-	feedReq := httptest.NewRequest("GET", "/v1/content/feed?type=photo&limit=1", nil)
+	feedReq := httptest.NewRequest("GET", "/content/feed?type=photo&limit=1", nil)
 	feedRec := httptest.NewRecorder()
 	newTestHandler().ServeHTTP(feedRec, feedReq)
 	if feedRec.Code != 200 {
@@ -140,16 +153,26 @@ func TestFeedAndPostEndpoints(t *testing.T) {
 		t.Fatalf("expected feed items")
 	}
 
-	postReq := httptest.NewRequest("GET", "/v1/content/posts/post_photo_001", nil)
+	postReq := httptest.NewRequest("GET", "/content/posts/post_photo_001", nil)
 	postRec := httptest.NewRecorder()
 	newTestHandler().ServeHTTP(postRec, postReq)
 	if postRec.Code != 200 {
 		t.Fatalf("unexpected post status: %d", postRec.Code)
 	}
+	var postBody map[string]any
+	if err := json.Unmarshal(postRec.Body.Bytes(), &postBody); err != nil {
+		t.Fatalf("decode post response: %v", err)
+	}
+	if postBody["postId"] != "post_photo_001" {
+		t.Fatalf("GetPost must expose the generated postId wire field: %+v", postBody)
+	}
+	if _, legacyID := postBody["_id"]; legacyID {
+		t.Fatalf("GetPost must not expose storage _id as a client wire field: %+v", postBody)
+	}
 }
 
 func TestAppConfigEndpointIsImplemented(t *testing.T) {
-	req := httptest.NewRequest("GET", "/v1/config/app", nil)
+	req := httptest.NewRequest("GET", "/config/app", nil)
 	rec := httptest.NewRecorder()
 	newTestHandler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -166,7 +189,7 @@ func TestAppConfigEndpointIsImplemented(t *testing.T) {
 }
 
 func TestAuthorImpactEndpointIsImplemented(t *testing.T) {
-	req := httptest.NewRequest("GET", "/v1/content/sub-accounts/test_author/author-impact", nil)
+	req := httptest.NewRequest("GET", "/content/sub-accounts/test_author/author-impact", nil)
 	rec := httptest.NewRecorder()
 	newTestHandler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -181,10 +204,10 @@ func TestAuthorImpactEndpointIsImplemented(t *testing.T) {
 	}
 }
 
-func TestCreatePostBodyBindingRejectsUnknownField(t *testing.T) {
+func TestSubmitPostPublicationBodyBindingRejectsUnknownField(t *testing.T) {
 	req := httptest.NewRequest(
 		"POST",
-		"/v1/content/posts",
+		"/content/posts:publish",
 		bytes.NewBufferString(`{"unknownField":"x"}`),
 	)
 	setActorHeaders(req, "owner_test_unknown", "sub_test_unknown")
@@ -195,12 +218,12 @@ func TestCreatePostBodyBindingRejectsUnknownField(t *testing.T) {
 	}
 }
 
-func TestCreatePostRequiresTransportIdempotencyHeader(t *testing.T) {
+func TestSubmitPostPublicationRequiresTransportIdempotencyHeader(t *testing.T) {
 	handler := newTestHandler()
 	req := httptest.NewRequest(
 		http.MethodPost,
-		"/v1/content/posts",
-		bytes.NewBufferString(`{"contentType":"micro","body":"缺少幂等键"}`),
+		"/content/posts:publish",
+		bytes.NewBufferString(`{"publishIntentId":"intent-missing-key","localDraftId":"draft-missing-key","contentType":"micro","body":"缺少幂等键"}`),
 	)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Client-Sub-Account-Id", "persona-idempotency")
@@ -210,38 +233,45 @@ func TestCreatePostRequiresTransportIdempotencyHeader(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf(
-			"expected 400 without Idempotency-Key/X-Request-Id, got %d: %s",
+			"expected 400 without Idempotency-Key, got %d: %s",
 			rec.Code,
 			rec.Body.String(),
 		)
 	}
 }
 
-func TestCreatePostBodyBindingAcceptsWritableFields(t *testing.T) {
+func TestSubmitPostPublicationBodyBindingAcceptsWritableFields(t *testing.T) {
 	req := httptest.NewRequest(
 		"POST",
-		"/v1/content/posts",
-		bytes.NewBufferString(`{"contentType":"article","articleMarkdown":"# 测试文章\n\nb","articleMarkdownVersion":"qwq-rich-md/1","articleAssetManifest":{"assets":[]}}`),
+		"/content/posts:publish",
+		bytes.NewBufferString(`{"publishIntentId":"intent-create","localDraftId":"draft-create","contentType":"article","articleMarkdown":"# 测试文章\n\nb","markdownDialect":"qwq-rich-md","articleAssetManifest":{"assets":[]}}`),
 	)
 	setActorHeaders(req, "owner_test_create", "sub_test_create")
+	req.Header.Set("Idempotency-Key", "intent-create")
 	rec := httptest.NewRecorder()
 	newTestHandler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusCreated {
+	if rec.Code != http.StatusAccepted {
 		t.Fatalf("unexpected create status for valid payload: %d", rec.Code)
 	}
 	var body map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatalf("decode create response: %v", err)
 	}
-	if _, ok := body["_id"]; !ok {
-		t.Fatalf("missing id in create response")
+	postID, _ := body["postId"].(string)
+	if strings.TrimSpace(postID) == "" {
+		t.Fatalf("missing postId in create response: %+v", body)
+	}
+	if body["publishIntentId"] != "intent-create" ||
+		body["localDraftId"] != "draft-create" ||
+		body["state"] != "published" {
+		t.Fatalf("publication receipt is incomplete: %+v", body)
 	}
 }
 
 func TestReportBehaviorsEndpoint(t *testing.T) {
 	req := httptest.NewRequest(
 		"POST",
-		"/v1/content/behaviors",
+		"/content/behaviors",
 		bytes.NewBufferString(`{"userId":"u1","events":[{"contentId":"post_photo_001","action":"click"}]}`),
 	)
 	rec := httptest.NewRecorder()
@@ -256,7 +286,7 @@ func TestReportBehaviorsEndpoint(t *testing.T) {
 func TestFeedIssuesServerFeedRequestID(t *testing.T) {
 	handler := newTestHandler()
 
-	firstReq := httptest.NewRequest("GET", "/v1/content/feed?sort=recommend&limit=2", nil)
+	firstReq := httptest.NewRequest("GET", "/content/feed?sort=recommend&limit=2", nil)
 	firstRec := httptest.NewRecorder()
 	handler.ServeHTTP(firstRec, firstReq)
 	if firstRec.Code != http.StatusOK {
@@ -282,7 +312,7 @@ func TestFeedIssuesServerFeedRequestID(t *testing.T) {
 
 	echoReq := httptest.NewRequest(
 		"GET",
-		"/v1/content/feed?sort=recommend&limit=2&feedRequestId="+firstBody.FeedRequestID,
+		"/content/feed?sort=recommend&limit=2&feedRequestId="+firstBody.FeedRequestID,
 		nil,
 	)
 	echoRec := httptest.NewRecorder()
@@ -305,7 +335,7 @@ func TestFeedRecommendUsesLongTermTagFeatures(t *testing.T) {
 	handler := newFeedHandlerWithFeatures(&stubFeatureProvider{features: &rtrec.UserFeatureVector{
 		TagAffinities: map[string]float64{"art": 10},
 	}})
-	req := httptest.NewRequest("GET", "/v1/content/feed?sort=recommend&limit=1", nil)
+	req := httptest.NewRequest("GET", "/content/feed?sort=recommend&limit=1", nil)
 	req.Header.Set("X-Client-User-Id", "u1")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
@@ -321,14 +351,17 @@ func TestFeedRecommendUsesLongTermTagFeatures(t *testing.T) {
 	if len(body.Items) == 0 {
 		t.Fatalf("expected feed items")
 	}
-	id, _ := body.Items[0]["id"].(string)
-	if id == "" {
-		t.Fatalf("missing id in first item")
+	postID, _ := body.Items[0]["postId"].(string)
+	if postID == "" {
+		t.Fatalf("missing postId in first item: %+v", body.Items[0])
+	}
+	if _, legacyID := body.Items[0]["_id"]; legacyID {
+		t.Fatalf("feed item must not expose storage _id: %+v", body.Items[0])
 	}
 }
 
 func TestFeedWithSessionIdFromHeader(t *testing.T) {
-	req := httptest.NewRequest("GET", "/v1/content/feed?type=photo&limit=1", nil)
+	req := httptest.NewRequest("GET", "/content/feed?type=photo&limit=1", nil)
 	req.Header.Set("X-Client-Session-Id", "dart_session_abc")
 	req.Header.Set("X-Client-User-Id", "user_123")
 	rec := httptest.NewRecorder()
@@ -341,7 +374,7 @@ func TestFeedWithSessionIdFromHeader(t *testing.T) {
 func TestBehaviorsWithSessionIdFromHeader(t *testing.T) {
 	req := httptest.NewRequest(
 		"POST",
-		"/v1/content/behaviors",
+		"/content/behaviors",
 		bytes.NewBufferString(`{"events":[{"contentId":"post_photo_001","action":"click"}]}`),
 	)
 	req.Header.Set("X-Client-Session-Id", "dart_session_abc")
@@ -353,23 +386,31 @@ func TestBehaviorsWithSessionIdFromHeader(t *testing.T) {
 	}
 }
 
-func TestCreatePostWithLocationField(t *testing.T) {
+func TestSubmitPostPublicationWithLocationField(t *testing.T) {
 	req := httptest.NewRequest(
 		"POST",
-		"/v1/content/posts",
-		bytes.NewBufferString(`{"contentType":"article","location":{"latitude":39.9,"longitude":116.4},"locationName":"Beijing","articleMarkdown":"# loc test\n\nb","articleMarkdownVersion":"qwq-rich-md/1","articleAssetManifest":{"assets":[]}}`),
+		"/content/posts:publish",
+		bytes.NewBufferString(`{"publishIntentId":"intent-location","localDraftId":"draft-location","contentType":"article","location":{"latitude":39.9,"longitude":116.4},"locationName":"Beijing","articleMarkdown":"# loc test\n\nb","markdownDialect":"qwq-rich-md","articleAssetManifest":{"assets":[]}}`),
 	)
 	setActorHeaders(req, "owner_test_location", "sub_test_location")
+	req.Header.Set("Idempotency-Key", "intent-location")
 	rec := httptest.NewRecorder()
-	newTestHandler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusCreated {
+	handler := newTestHandler()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusAccepted {
 		t.Fatalf("unexpected create status: %d, body: %s", rec.Code, rec.Body.String())
 	}
 	var body map[string]any
 	json.Unmarshal(rec.Body.Bytes(), &body)
-	loc, ok := body["location"].(map[string]any)
+	postID, _ := body["postId"].(string)
+	getReq := httptest.NewRequest("GET", "/content/posts/"+postID, nil)
+	getRec := httptest.NewRecorder()
+	handler.ServeHTTP(getRec, getReq)
+	var detail map[string]any
+	json.Unmarshal(getRec.Body.Bytes(), &detail)
+	loc, ok := detail["location"].(map[string]any)
 	if !ok {
-		t.Fatalf("location should be a map, got %T", body["location"])
+		t.Fatalf("location should be a map, got %T", detail["location"])
 	}
 	if loc["latitude"].(float64) != 39.9 {
 		t.Errorf("expected latitude 39.9, got %v", loc["latitude"])
@@ -379,10 +420,11 @@ func TestCreatePostWithLocationField(t *testing.T) {
 func TestMomentRequiresBodyOrMedia(t *testing.T) {
 	req := httptest.NewRequest(
 		"POST",
-		"/v1/content/posts",
-		bytes.NewBufferString(`{"contentType":"micro","body":"","mediaUrls":[],"videoUrl":""}`),
+		"/content/posts:publish",
+		bytes.NewBufferString(`{"publishIntentId":"intent-empty","localDraftId":"draft-empty","contentType":"micro","body":""}`),
 	)
 	setActorHeaders(req, "owner_test_moment", "sub_test_moment")
+	req.Header.Set("Idempotency-Key", "intent-empty")
 	rec := httptest.NewRecorder()
 	newTestHandler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadRequest {
@@ -390,85 +432,40 @@ func TestMomentRequiresBodyOrMedia(t *testing.T) {
 	}
 }
 
-func TestPostImmutableAfterPublish(t *testing.T) {
+func TestRetiredPostDraftMutationRoutesAreAbsent(t *testing.T) {
 	handler := newTestHandler()
 	createReq := httptest.NewRequest(
 		"POST",
-		"/v1/content/posts",
-		bytes.NewBufferString(`{"contentType":"article","articleMarkdown":"# t\n\nb","articleMarkdownVersion":"qwq-rich-md/1","articleAssetManifest":{"assets":[]}}`),
+		"/content/posts",
+		bytes.NewBufferString(`{"contentType":"micro","body":"retired"}`),
 	)
 	setActorHeaders(createReq, "u1", "u1")
 	createRec := httptest.NewRecorder()
 	handler.ServeHTTP(createRec, createReq)
-	if createRec.Code != http.StatusCreated {
-		t.Fatalf("unexpected create status: %d", createRec.Code)
+	if createRec.Code != http.StatusNotFound {
+		t.Fatalf("retired CreatePost route must be absent, got %d", createRec.Code)
 	}
-	var created map[string]any
-	_ = json.Unmarshal(createRec.Body.Bytes(), &created)
-	postID, _ := created["_id"].(string)
 	publishReq := httptest.NewRequest(
 		"POST",
-		"/v1/content/posts/"+postID+"/publish",
+		"/content/posts/post-retired/publish",
 		bytes.NewBufferString(`{}`),
 	)
 	setActorHeaders(publishReq, "u1", "u1")
 	publishRec := httptest.NewRecorder()
 	handler.ServeHTTP(publishRec, publishReq)
-	if publishRec.Code != http.StatusOK {
-		t.Fatalf("unexpected publish status: %d", publishRec.Code)
+	if publishRec.Code != http.StatusNotFound {
+		t.Fatalf("retired PublishPost route must be absent, got %d", publishRec.Code)
 	}
-
 	updateReq := httptest.NewRequest(
 		"PATCH",
-		"/v1/content/posts/"+postID,
+		"/content/posts/post-retired",
 		bytes.NewBufferString(`{"title":"new title"}`),
 	)
 	setActorHeaders(updateReq, "u1", "u1")
 	updateRec := httptest.NewRecorder()
 	handler.ServeHTTP(updateRec, updateReq)
-	if updateRec.Code != http.StatusConflict {
-		t.Fatalf("expected 409 for immutable post, got %d", updateRec.Code)
-	}
-}
-
-func TestUpdatePostRejectsDifferentPersonaOwner(t *testing.T) {
-	handler := newTestHandler()
-	createReq := httptest.NewRequest(
-		http.MethodPost,
-		"/v1/content/posts",
-		bytes.NewBufferString(`{"contentType":"micro","body":"private draft"}`),
-	)
-	setActorHeaders(createReq, "account-owner", "persona-owner")
-	createRec := httptest.NewRecorder()
-	handler.ServeHTTP(createRec, createReq)
-	if createRec.Code != http.StatusCreated {
-		t.Fatalf("create status = %d: %s", createRec.Code, createRec.Body.String())
-	}
-
-	var created struct {
-		ID string `json:"_id"`
-	}
-	if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil {
-		t.Fatalf("decode created post: %v", err)
-	}
-	if created.ID == "" {
-		t.Fatal("created post id is empty")
-	}
-
-	updateReq := httptest.NewRequest(
-		http.MethodPatch,
-		"/v1/content/posts/"+created.ID,
-		bytes.NewBufferString(`{"body":"forged update"}`),
-	)
-	setActorHeaders(updateReq, "account-outsider", "persona-outsider")
-	updateRec := httptest.NewRecorder()
-	handler.ServeHTTP(updateRec, updateReq)
-	if updateRec.Code != http.StatusForbidden {
-		t.Fatalf(
-			"expected 403 for a different persona, got %d: %s",
-			updateRec.Code,
-			updateRec.Body.String(),
-		)
+	if updateRec.Code != http.StatusNotFound {
+		t.Fatalf("retired UpdatePost route must be absent, got %d", updateRec.Code)
 	}
 }
 
@@ -476,20 +473,21 @@ func TestDeletePostAndTombstoneLookup(t *testing.T) {
 	handler := newTestHandler()
 	createReq := httptest.NewRequest(
 		"POST",
-		"/v1/content/posts",
-		bytes.NewBufferString(`{"contentType":"article","articleMarkdown":"# to delete\n\nb","articleMarkdownVersion":"qwq-rich-md/1","articleAssetManifest":{"assets":[]}}`),
+		"/content/posts:publish",
+		bytes.NewBufferString(`{"publishIntentId":"intent-delete","localDraftId":"draft-delete","contentType":"article","articleMarkdown":"# to delete\n\nb","markdownDialect":"qwq-rich-md","articleAssetManifest":{"assets":[]}}`),
 	)
 	setActorHeaders(createReq, "u_delete", "u_delete")
+	createReq.Header.Set("Idempotency-Key", "intent-delete")
 	createRec := httptest.NewRecorder()
 	handler.ServeHTTP(createRec, createReq)
-	if createRec.Code != http.StatusCreated {
+	if createRec.Code != http.StatusAccepted {
 		t.Fatalf("create failed: %d", createRec.Code)
 	}
 	var created map[string]any
 	_ = json.Unmarshal(createRec.Body.Bytes(), &created)
-	postID, _ := created["_id"].(string)
+	postID, _ := created["postId"].(string)
 
-	delReq := httptest.NewRequest("DELETE", "/v1/content/posts/"+postID, nil)
+	delReq := httptest.NewRequest("DELETE", "/content/posts/"+postID, nil)
 	setActorHeaders(delReq, "u_delete", "u_delete")
 	delRec := httptest.NewRecorder()
 	handler.ServeHTTP(delRec, delReq)
@@ -497,7 +495,7 @@ func TestDeletePostAndTombstoneLookup(t *testing.T) {
 		t.Fatalf("delete failed: %d", delRec.Code)
 	}
 
-	getReq := httptest.NewRequest("GET", "/v1/content/posts/"+postID, nil)
+	getReq := httptest.NewRequest("GET", "/content/posts/"+postID, nil)
 	getRec := httptest.NewRecorder()
 	handler.ServeHTTP(getRec, getReq)
 	if getRec.Code != http.StatusNotFound {
@@ -509,7 +507,7 @@ func TestRetiredPostCircleMutationRouteIsAbsent(t *testing.T) {
 	handler := newTestHandler()
 	circleReq := httptest.NewRequest(
 		"PATCH",
-		"/v1/content/posts/post-retired-route/circles",
+		"/content/posts/post-retired-route/circles",
 		bytes.NewBufferString(`{"add":["circle_a"]}`),
 	)
 	setActorHeaders(circleReq, "author1", "author1")
@@ -517,5 +515,28 @@ func TestRetiredPostCircleMutationRouteIsAbsent(t *testing.T) {
 	handler.ServeHTTP(circleRec, circleReq)
 	if circleRec.Code != http.StatusNotFound {
 		t.Fatalf("retired Post circle mutation route must be absent, got %d", circleRec.Code)
+	}
+}
+
+func TestPostDetailProjectionUsesCanonicalMediaURLsWire(t *testing.T) {
+	wire := projectPostDetailForClient(postports.PostDetailSlice{
+		PostID:      postports.NewPostID("post_media_wire"),
+		ContentType: postports.ContentType("image"),
+		MediaURLs:   []string{"media/image/s/asset/example"},
+	})
+	payload, err := json.Marshal(wire)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if _, found := decoded["imageUrls"]; found {
+		t.Fatalf("post detail must not expose non-canonical imageUrls: %s", payload)
+	}
+	mediaURLs, found := decoded["mediaUrls"].([]any)
+	if !found || len(mediaURLs) != 1 || mediaURLs[0] != "media/image/s/asset/example" {
+		t.Fatalf("post detail mediaUrls mismatch: %s", payload)
 	}
 }

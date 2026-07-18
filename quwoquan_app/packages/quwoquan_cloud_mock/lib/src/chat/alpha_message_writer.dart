@@ -71,10 +71,11 @@ final class AlphaChatMessageCommandWriter implements ChatMessageCommandWriter {
     return <String, int>{
       for (final raw in conversations)
         if (raw is Map &&
-            (raw['conversationId'] ?? raw['id']) is String &&
-            (raw['conversationId'] ?? raw['id']).toString().trim().isNotEmpty)
-          (raw['conversationId'] ?? raw['id']).toString().trim():
-              raw['maxSeq'] is num ? (raw['maxSeq'] as num).toInt() : 0,
+            raw['conversationId'] is String &&
+            raw['conversationId'].toString().trim().isNotEmpty)
+          raw['conversationId'].toString().trim(): raw['maxSeq'] is num
+              ? (raw['maxSeq'] as num).toInt()
+              : 0,
     };
   }
 }

@@ -11,6 +11,7 @@ import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
+import 'package:quwoquan_app/core/widgets/app_request_feedback.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/ui/search/providers/search_coordinator.dart';
 part 'global_search_page_state.dart';
@@ -620,6 +621,59 @@ class _KeywordSuggestionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final network = entry.cast<NetworkSearchSuggestion>();
+    if (network.isHomepagePreview) {
+      final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+      final secondary = AppColorsFunctional.getColor(
+        isDark,
+        ColorType.foregroundSecondary,
+      );
+      final coverUrl = network.coverUrl?.trim() ?? '';
+      return _BasicSuggestionTile(
+        leading: ClipRRect(
+          borderRadius: BorderRadius.circular(AppSpacing.smallBorderRadius),
+          child: SizedBox.square(
+            dimension: AppSpacing.avatarUserMd,
+            child: coverUrl.isEmpty
+                ? Icon(CupertinoIcons.map_fill, color: secondary)
+                : AppCachedNetworkImage(
+                    imageUrl: coverUrl,
+                    fit: BoxFit.cover,
+                    width: AppSpacing.avatarUserMd,
+                    height: AppSpacing.avatarUserMd,
+                    cdnPreset: CdnImagePreset.cover,
+                    errorWidget: Icon(
+                      CupertinoIcons.map_fill,
+                      color: secondary,
+                    ),
+                  ),
+          ),
+        ),
+        title: _highlightedText(
+          network.displayTitle,
+          query,
+          TextStyle(
+            fontSize: _SearchTokens.bodySize,
+            fontWeight: _SearchTokens.bodyWeight,
+            color: color,
+          ),
+        ),
+        subtitle: Text(
+          network.subtitle ?? '',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: AppTypography.iosFootnote,
+            color: secondary,
+          ),
+        ),
+        trailing: Icon(
+          CupertinoIcons.chevron_forward,
+          color: secondary,
+          size: AppSpacing.iconSmall,
+        ),
+        onTap: onTap,
+      );
+    }
     return CupertinoButton(
       padding: EdgeInsets.symmetric(
         horizontal: AppSpacing.containerSm,

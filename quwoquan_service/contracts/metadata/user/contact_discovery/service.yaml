@@ -1,4 +1,3 @@
-version: 1
 
 service:
   name: user-service
@@ -13,7 +12,8 @@ service:
 
 api_routes:
   - method: POST
-    path: /v1/owner/contact-discovery
+    path: /owner/contact-discovery
+
     operation: InitiateContactDiscovery
     actor: account
     application:
@@ -24,13 +24,15 @@ api_routes:
       mutation_target: ContactDiscoveryRecord
       invariant_target: ContactDiscoveryRecord
     description: 上传哈希手机号列表，触发异步匹配
-    auth_required: true
+    security:
+      auth_mode: required
     request_fields: [hashedPhones]
     response_fields: [id, status, expireAt]
     rate_limit: 5次/24h/ownerAccountId
 
   - method: GET
-    path: /v1/owner/contact-discovery/latest
+    path: /owner/contact-discovery/latest
+
     operation: GetLatestContactDiscovery
     actor: account
     application:
@@ -43,13 +45,15 @@ api_routes:
       获取最近一次发现结果。matchedSubAccountIds 保留为隐私基线（仅 ID）；
       matches[] 为富化投影 ContactDiscoveryMatchWire，回显发起者上传的 hashedPhone（端侧据此映射回本地通讯录显示名）、
       精简 profile 与关系能力位，驱动「添加 / 已添加」。
-    auth_required: true
+    security:
+      auth_mode: required
     response_entity: ContactDiscoveryRecord
     response_read_models: [ContactDiscoveryMatchWire]
     response_fields: [id, status, matchedSubAccountIds, matchCount, expireAt, completedAt]
 
   - method: DELETE
-    path: /v1/owner/contact-discovery/{id}
+    path: /owner/contact-discovery/{id}
+
     operation: DismissContactDiscovery
     actor: account
     application:

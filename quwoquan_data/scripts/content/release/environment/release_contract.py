@@ -8,7 +8,7 @@ from typing import Any, Mapping
 from core.paths import RELEASE_ROOT
 from core.release_layout import payload_file
 
-DESIRED_SCHEMA = "quwoquan_data.release_desired_state/1"
+DESIRED_SCHEMA = "quwoquan_data.release_desired_state"
 
 
 def build_release_contract(
@@ -22,7 +22,7 @@ def build_release_contract(
     if not release_id:
         raise ValueError("release_id required")
     return {
-        "schemaVersion": DESIRED_SCHEMA,
+        "schema": DESIRED_SCHEMA,
         "releaseId": release_id,
         "desiredRefs": {
             "posts": sorted({str(ref) for ref in post_refs}),
@@ -37,9 +37,9 @@ def write_release_contract(
     *,
     release_root: Path | None = None,
 ) -> Path:
-    """create-once 写 desired_state；拒绝 legacy env contract 与覆盖。"""
-    if contract.get("schemaVersion") != DESIRED_SCHEMA:
-        raise ValueError("legacy release contract rejected")
+    """create-once 写 desired_state；拒绝非当前合同与覆盖。"""
+    if contract.get("schema") != DESIRED_SCHEMA:
+        raise ValueError("release contract schema invalid")
     release_id = str(contract.get("releaseId") or "")
     if not release_id:
         raise ValueError("releaseId required")

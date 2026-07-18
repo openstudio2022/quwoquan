@@ -1,4 +1,3 @@
-version: 1
 
 service:
   name: content-service
@@ -13,7 +12,8 @@ service:
 
 api_routes:
   - method: POST
-    path: /v1/content/posts/{postId}/like
+    path: /content/posts/{postId}/like
+
     operation: LikePost
     actor: persona_or_device
     application:
@@ -65,7 +65,8 @@ api_routes:
       visibility: public
 
   - method: DELETE
-    path: /v1/content/posts/{postId}/like
+    path: /content/posts/{postId}/like
+
     operation: UnlikePost
     actor: persona_or_device
     application:
@@ -117,7 +118,8 @@ api_routes:
       visibility: public
 
   - method: POST
-    path: /v1/content/comments/{commentId}/reaction
+    path: /content/comments/{commentId}/reaction
+
     operation: ReactToComment
     actor: persona
     application:
@@ -172,7 +174,8 @@ api_routes:
       visibility: private
 
   - method: GET
-    path: /v1/content/posts/{postId}/reactions
+    path: /content/posts/{postId}/reactions
+
     operation: GetContentReactionState
     actor: persona_or_device
     application:
@@ -248,7 +251,7 @@ contract_test:
             - "同一 actor 对同一 Comment 只保留一条成员关系"
             - "like/dislike 计数只从 ContentReaction 权威集合派生"
             - "Post 目标拒绝 dislike"
-        - name: version_conflict_and_projection_read
+        - name: server_owned_cas_and_projection_read
           assertions:
-            - "stale expectedVersion 被拒绝"
+            - "调用方不提交版本前置条件，服务端以当前聚合版本执行 CAS"
             - "Reader 使用 BSON projection 返回 ContentReactionStateSlice"

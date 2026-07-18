@@ -101,7 +101,7 @@ gwt_acceptance:
         - local_contract.global_search_experience.search_provider_routing_and_storage_topology.search_object_taxonomy_and_provider_registry.contract
         envs: *id001
     notes:
-    - '[migrated_from_planned] T3_integration：gamma ES 灌数后 /v1/search 召回 location.place（随
+    - '[migrated_from_planned] T3_integration：gamma ES 灌数后 /search 召回 location.place（随
       search-service 集成补录）。'
   GWT3:
     title: location.place 命中落地为临时地点卡并引导提升为 entity.homepage（R-S05e-1 / WP-D）

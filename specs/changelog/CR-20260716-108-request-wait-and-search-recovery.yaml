@@ -1,0 +1,89 @@
+id: CR-20260716-108-request-wait-and-search-recovery
+title: 全 App 异步等待恢复规范与全局搜索终态修复
+slug: request-wait-and-search-recovery
+revision: 1
+status: implemented
+
+affected_nodes:
+  - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality
+  - specs/feature-tree/global-search-experience/cross-domain-search-journey/full-screen-search-shell-and-entry
+  - specs/feature-tree/global-search-experience/cross-domain-search-journey/multi-domain-result-composition
+
+entries:
+  - timestamp: "2026-07-16T00:00:00+08:00"
+    summary: |
+      将全 App 等待反馈收敛为 foreground/action/long_task 三种模式和 1.5/3/6
+      三个语义时间点，只新增 AppRequestWaitController 与 AppRequestFeedback。
+      搜索移除输入框 spinner，本地域与云实体并行；query supersede、dispose 和
+      6 秒 deadline 通过真实 transport cancellation 收口。首页沿用既有 skeleton，
+      缓存刷新保留正文，空白阻塞 3 秒提示，6 秒进入既有错误或重试终态。
+    reason: |
+      旧全局搜索同时在输入框和正文表达进度，并把本地联想、同步预热和云端实体
+      串入同一等待链；异常、timeout 与 query 替换存在未关闭 pending 或旧响应回写。
+      页面之间又缺少统一的等待恢复契约和证据看护。本变更以最小公共能力解决
+      计时、取消与反馈位置，不新建业务 outcome 状态体系或 request profile 注册表。
+    change_type:
+      - app
+      - ux
+      - contract
+      - metadata
+      - observability
+      - local_contract
+      - api_integration
+      - user_acceptance
+      - spec
+    changed_documents:
+      - path: specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-spec.md
+        sections:
+          - P9 异步等待与恢复
+      - path: specs/gates/user_acceptance_page_inventory.yaml
+        sections:
+          - wait_modes
+          - request_wait_tests
+          - request_wait_recovery
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/full-screen-search-shell-and-entry/spec.md
+        sections:
+          - 搜索进度与终态约束
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/multi-domain-result-composition/spec.md
+        sections:
+          - 并行结算与 canonical 单请求
+      - path: quwoquan_service/contracts/metadata/search/query/service.yaml
+        sections:
+          - SearchQuery reliability
+      - path: quwoquan_service/contracts/metadata/entity/homepage/service.yaml
+        sections:
+          - SearchHomepages reliability.timeout_ms
+    impact:
+      replan_required: false
+      redesign_required: true
+      retest_layers:
+        - local_contract
+        - api_integration
+        - user_acceptance
+      rollout_impact: high
+      breaking_contract: true
+    test_evidence:
+      planned:
+        - flutter test --no-pub test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
+        - flutter test --no-pub test/local_contract/core/widgets/app_request_feedback__local_contract_test.dart
+        - flutter test --no-pub test/local_contract/cloud/runtime/cloud_http_client_cancellation__local_contract_test.dart
+        - flutter test --no-pub test/local_contract/ui/search/pages/global_search_page_widget__local_contract_test.dart
+        - flutter test --no-pub test/local_contract/ui/search/pages/search_network_results_page_widget__local_contract_test.dart
+        - flutter test --no-pub test/local_contract/ui/discovery/post/widgets/discovery_post_feed_widget__local_contract_test.dart
+        - flutter analyze
+        - make verify-app-page-horizontal-quality
+        - make verify-test-coverage-map
+      recorded:
+        - AppRequestWaitController 的 1.5/3/6 边界、action metadata deadline、long_task、supersede/dispose 和 AppRequestFeedback 无障碍/reduced-motion 定向测试通过。
+        - 可取消 HTTP、搜索联想/正式结果、“钱”命中“东钱湖”、首页缓存刷新与慢提示的 local_contract/UAT 已串行复跑通过；flutter analyze --no-pub lib test 通过。
+        - metadata/OpenAPI/ContractGraph、P9 79 页矩阵、69 surface 证据、覆盖映射、验收标准、no-fake 和测试目录门禁通过。
+        - 中间复跑曾受并行媒体改动的编译错误阻断；该工作树可编译后已重跑成功，不删除此失败历史。
+    notes:
+      - alpha full/lite fixture 已增加发布态“东钱湖”；beta 的延迟、取消、部分失败由注入式 local_contract 看护。
+      - gamma 真实“钱”查询与 prod canonical `/v1/search` 拓扑证据尚未完成；代码与常量一致不等于环境闭环。
+      - prod 不部署、不导入数据；真实环境证据齐备前保持 GATE_BLOCK。
+      - App gate 当前在入口被本地额外 `main` 分支的 branch policy 阻断；本 CR 不越权删除用户分支。
+      - gamma-local 实时健康检查为 22/23，被无关媒体资产 source.mp4 404 阻断；因此不声称 gamma 真实搜索已验收。
+    release:
+      decision: GATE_BLOCK
+      note: App 代码、规格与定向证据已实现；App 全门、gamma 实时搜索及 prod 路由真实证据未齐，不允许发布。

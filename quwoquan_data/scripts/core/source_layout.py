@@ -32,7 +32,7 @@ from typing import Any, Mapping
 
 from core.io import read_json, write_json
 
-SOURCE_LAYOUT_SCHEMA_VERSION = "quwoquan_data.source_layout/1"
+SOURCE_LAYOUT_SCHEMA_VERSION = "quwoquan_data.source_layout"
 SOURCE_LAYOUT_FILE = "source.layout.json"
 
 BLOCK_TYPES = frozenset({"heading", "paragraph", "listItem", "table", "figure", "factRow"})
@@ -177,7 +177,7 @@ def build_layout(
     """
     figures = [b for b in blocks if b.get("type") == "figure"]
     payload: dict[str, Any] = {
-        "schemaVersion": SOURCE_LAYOUT_SCHEMA_VERSION,
+        "schema": SOURCE_LAYOUT_SCHEMA_VERSION,
         "sourceKind": str(source_kind or ""),
         "extractor": str(extractor or ""),
         "title": str(title or ""),
@@ -324,6 +324,128 @@ def render_source_markdown(
     return re.sub(r"\n{3,}", "\n\n", text).strip()
 
 
+_RENDERED_HEADING_RE = re.compile(r"^(={2,6})\s*(.*?)\s*\1$")
+
+
+def rendered_text_blocks(text: str) -> list[dict[str, Any]]:
+    """Parse MediaWiki's expanded plaintext into heading/paragraph IR blocks."""
+    blocks: list[dict[str, Any]] = []
+    paragraph_lines: list[str] = []
+    section_slug = ""
+
+    def _flush_paragraph() -> None:
+        nonlocal paragraph_lines
+        paragraph = re.sub(r"\s+", " ", " ".join(paragraph_lines)).strip()
+        paragraph_lines = []
+        if paragraph:
+            blocks.append(make_paragraph_block(paragraph, section_slug))
+
+    for raw_line in str(text or "").splitlines():
+        line = raw_line.strip()
+        heading = _RENDERED_HEADING_RE.match(line)
+        if heading:
+            _flush_paragraph()
+            heading_text = heading.group(2).strip()
+            section_slug = slugify_rendered_section(heading_text)
+            blocks.append(
+                make_heading_block(len(heading.group(1)), heading_text, section_slug)
+            )
+            continue
+        if not line:
+            _flush_paragraph()
+            continue
+        paragraph_lines.append(line)
+    _flush_paragraph()
+    return blocks
+
+
+def slugify_rendered_section(text: str) -> str:
+    """Keep rendered-text section keys identical to the wikitext parser."""
+    from core.section_outline import slugify_section
+
+    return slugify_section(text)
+
+
+def merge_rendered_text_layout(
+    layout: Mapping[str, Any], rendered_text: str
+) -> dict[str, Any]:
+    """Use template-expanded prose while retaining wikitext image placement.
+
+    MediaWiki plaintext is the prose truth because it contains expanded inline
+    templates.  Wikitext remains the structure truth for figures, infobox facts
+    and tables.  Every retained figure keeps its original section and paragraph
+    anchor; unmatched structural blocks are appended rather than discarded.
+    """
+    rendered_blocks = rendered_text_blocks(rendered_text)
+    if not rendered_blocks:
+        return rejected_layout(
+            source_kind=str(layout.get("sourceKind") or "home_wikipedia"),
+            extractor="wikipedia_api",
+            title=str(layout.get("title") or ""),
+            reject_reason="empty_rendered_text",
+        )
+
+    anchors_by_section: dict[str, list[tuple[int, int, dict[str, Any]]]] = {}
+    for source_index, raw_block in enumerate(layout.get("blocks") or []):
+        if not isinstance(raw_block, Mapping):
+            continue
+        if raw_block.get("type") not in {"figure", "factRow", "table"}:
+            continue
+        block = dict(raw_block)
+        section = str(block.get("sectionSlug") or "")
+        paragraph_index = int(block.get("paragraphIndex") or 0)
+        anchors_by_section.setdefault(section, []).append(
+            (paragraph_index, source_index, block)
+        )
+    for anchors in anchors_by_section.values():
+        anchors.sort(key=lambda row: (row[0], row[1]))
+
+    merged: list[dict[str, Any]] = []
+    paragraph_indexes: dict[str, int] = {}
+    consumed_sections: set[str] = set()
+
+    def _emit_anchors(section: str, through_index: int | None = None) -> None:
+        anchors = anchors_by_section.get(section, [])
+        remaining: list[tuple[int, int, dict[str, Any]]] = []
+        for paragraph_index, source_index, block in anchors:
+            if through_index is None or paragraph_index <= through_index:
+                merged.append(block)
+            else:
+                remaining.append((paragraph_index, source_index, block))
+        anchors_by_section[section] = remaining
+        if not remaining:
+            consumed_sections.add(section)
+
+    current_section = ""
+    for block in rendered_blocks:
+        if block.get("type") == "heading":
+            _emit_anchors(current_section)
+            current_section = str(block.get("sectionSlug") or "")
+            merged.append(block)
+            paragraph_indexes.setdefault(current_section, 0)
+            continue
+        paragraph_index = paragraph_indexes.get(current_section, 0)
+        _emit_anchors(current_section, paragraph_index)
+        merged.append(block)
+        paragraph_indexes[current_section] = paragraph_index + 1
+    _emit_anchors(current_section)
+
+    for section, anchors in anchors_by_section.items():
+        if section in consumed_sections:
+            continue
+        merged.extend(block for _paragraph, _source, block in anchors)
+
+    image_evidence = layout.get("imageEvidence")
+    return build_layout(
+        source_kind=str(layout.get("sourceKind") or "home_wikipedia"),
+        extractor="wikipedia_api",
+        title=str(layout.get("title") or ""),
+        blocks=merged,
+        tables=[dict(row) for row in (layout.get("tables") or []) if isinstance(row, Mapping)],
+        image_evidence=image_evidence if isinstance(image_evidence, Mapping) else None,
+    )
+
+
 def inline_placeholder_for_figure(figure: Mapping[str, Any]) -> str:
     """figure 块 → source.md 占位 id（与 render_source_markdown 同一编号口径）。"""
     return f"source-inline-{int(figure.get('sourceOrder') or 0) + 1:03d}"
@@ -364,6 +486,8 @@ __all__ = [
     "layout_figures",
     "cover_candidates",
     "render_source_markdown",
+    "rendered_text_blocks",
+    "merge_rendered_text_layout",
     "inline_placeholder_for_figure",
     "write_source_layout",
     "read_source_layout",

@@ -5,11 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart';
 import 'package:quwoquan_app/assistant/session/assistant_session_manager.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_skill_center_action_summary.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_skill_center_package_toggle_payload.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_skill_center_restore_default_payload.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_skill_center_simple_mode_payload.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_skill_center_single_skill_payload.g.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
@@ -896,15 +891,15 @@ class _AssistantSkillCenterPageState
         sessionId: trace.sessionId,
         pageVisitId: trace.newPageVisitId(),
       ),
-      payload: AppLogSkillCenterSimpleModePayload(
-        event: 'skill_center_action',
-        action: 'simple_mode_toggle',
-        enabled: enabled,
-      ).toMap(),
-      summaryPayload: AppLogSkillCenterActionSummaryPayload(
-        event: 'skill_center_action',
-        action: 'simple_mode_toggle',
-      ).toMap(),
+      payload: <String, Object?>{
+        'event': 'skill_center_action',
+        'action': 'simple_mode_toggle',
+        'enabled': enabled,
+      },
+      summaryPayload: const <String, Object?>{
+        'event': 'skill_center_action',
+        'action': 'simple_mode_toggle',
+      },
     );
   }
 
@@ -917,15 +912,15 @@ class _AssistantSkillCenterPageState
         sessionId: trace.sessionId,
         pageVisitId: trace.newPageVisitId(),
       ),
-      payload: AppLogSkillCenterRestoreDefaultPayload(
-        event: 'skill_center_action',
-        action: 'restore_default_all',
-        skillCount: skillCount,
-      ).toMap(),
-      summaryPayload: AppLogSkillCenterActionSummaryPayload(
-        event: 'skill_center_action',
-        action: 'restore_default_all',
-      ).toMap(),
+      payload: <String, Object?>{
+        'event': 'skill_center_action',
+        'action': 'restore_default_all',
+        'skillCount': skillCount,
+      },
+      summaryPayload: const <String, Object?>{
+        'event': 'skill_center_action',
+        'action': 'restore_default_all',
+      },
     );
   }
 
@@ -941,16 +936,16 @@ class _AssistantSkillCenterPageState
         sessionId: trace.sessionId,
         pageVisitId: trace.newPageVisitId(),
       ),
-      payload: AppLogSkillCenterPackageTogglePayload(
-        event: 'skill_center_action',
-        action: 'package_toggle',
-        enabled: enabled,
-        skillCount: skillCount,
-      ).toMap(),
-      summaryPayload: AppLogSkillCenterActionSummaryPayload(
-        event: 'skill_center_action',
-        action: 'package_toggle',
-      ).toMap(),
+      payload: <String, Object?>{
+        'event': 'skill_center_action',
+        'action': 'package_toggle',
+        'enabled': enabled,
+        'skillCount': skillCount,
+      },
+      summaryPayload: const <String, Object?>{
+        'event': 'skill_center_action',
+        'action': 'package_toggle',
+      },
     );
   }
 
@@ -966,16 +961,16 @@ class _AssistantSkillCenterPageState
         sessionId: trace.sessionId,
         pageVisitId: trace.newPageVisitId(),
       ),
-      payload: AppLogSkillCenterSingleSkillPayload(
-        event: 'skill_center_action',
-        action: 'single_skill_toggle',
-        skillId: skillId,
-        enabled: enabled,
-      ).toMap(),
-      summaryPayload: AppLogSkillCenterActionSummaryPayload(
-        event: 'skill_center_action',
-        action: 'single_skill_toggle',
-      ).toMap(),
+      payload: <String, Object?>{
+        'event': 'skill_center_action',
+        'action': 'single_skill_toggle',
+        'skillId': skillId,
+        'enabled': enabled,
+      },
+      summaryPayload: const <String, Object?>{
+        'event': 'skill_center_action',
+        'action': 'single_skill_toggle',
+      },
     );
   }
 }

@@ -8,7 +8,7 @@ import (
 )
 
 func TestHTTPWriteOptionsFromRequest(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/v1/assistant/run", nil)
+	req := httptest.NewRequest(http.MethodGet, "/assistant/run", nil)
 	req.Header.Set("X-Request-Id", "req-1")
 	req.Header.Set("X-Trace-Id", "trace-1")
 
@@ -115,7 +115,7 @@ func TestLocaleFromRequest(t *testing.T) {
 		"  en  ":         "en",
 	}
 	for header, want := range cases {
-		req := httptest.NewRequest(http.MethodGet, "/v1/x", nil)
+		req := httptest.NewRequest(http.MethodGet, "/x", nil)
 		if header != "" {
 			req.Header.Set("Accept-Language", header)
 		}
@@ -123,7 +123,7 @@ func TestLocaleFromRequest(t *testing.T) {
 			t.Fatalf("locale for %q: want %q got %q", header, want, got)
 		}
 	}
-	req := httptest.NewRequest(http.MethodGet, "/v1/x", nil)
+	req := httptest.NewRequest(http.MethodGet, "/x", nil)
 	req.Header.Set("X-Client-Locale", "en")
 	req.Header.Set("Accept-Language", "zh-CN")
 	if got := localeFromRequest(req); got != "en" {

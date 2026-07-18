@@ -79,6 +79,18 @@ class TestSyncMediaLibrary:
         assert report["objects"] == 0
         assert any("missing" in issue for issue in report["issues"])
 
+    def test_empty_release_closure_is_an_idempotent_success(self, tmp_path: Path) -> None:
+        report = sync_media_library(
+            tmp_path / "no-canonical-cas-needed",
+            tmp_path / "media-root",
+            object_keys=(),
+        )
+
+        assert report["scope"] == "selected"
+        assert report["requestedObjects"] == 0
+        assert report["objects"] == 0
+        assert report["issues"] == []
+
     def test_selected_release_closure_never_copies_unrelated_cas(self, tmp_path: Path) -> None:
         source = tmp_path / "library"
         dest = tmp_path / "media-root"

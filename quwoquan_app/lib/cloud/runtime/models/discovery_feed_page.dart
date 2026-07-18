@@ -3,7 +3,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart'
 /// 首页发现流强类型 envelope。
 ///
 /// 承载分页 items + 服务端权威下发的归因上下文（feedRequestId / rankingVersion /
-/// reasonVersion）。feedRequestId 由 content-service 在 GET /v1/content/feed 生成并随
+/// reasonVersion）。feedRequestId 由 content-service 在 GET /content/feed 生成并随
 /// 响应下发；端侧只读、回显（分页）并透传后续行为事件，不再由端侧自造。
 class DiscoveryFeedPage {
   const DiscoveryFeedPage({

@@ -22,9 +22,8 @@ type Handler struct {
 }
 
 type UpdateExperimentRolloutRequest struct {
-	ExpectedVersion int64                     `json:"expectedVersion"`
-	Status          string                    `json:"status"`
-	Variants        []experimentmodel.Variant `json:"variants"`
+	Status   string                    `json:"status"`
+	Variants []experimentmodel.Variant `json:"variants"`
 }
 
 type ExperimentCatalogItem struct {
@@ -65,15 +64,15 @@ func NewHandler(experiments *experimentapp.Facade) (*Handler, error) {
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
-	case r.Method == http.MethodGet && r.URL.Path == "/v1/control-plane/product/experiments":
+	case r.Method == http.MethodGet && r.URL.Path == "/control-plane/product/experiments":
 		h.listExperiments(w, r)
-	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/v1/control-plane/product/experiments/") && strings.HasSuffix(r.URL.Path, ":rollout"):
+	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/control-plane/product/experiments/") && strings.HasSuffix(r.URL.Path, ":rollout"):
 		h.updateRollout(w, r)
-	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/v1/ops/experiments/") && strings.HasSuffix(r.URL.Path, "/assignment"):
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/ops/experiments/") && strings.HasSuffix(r.URL.Path, "/assignment"):
 		h.getAssignment(w, r)
-	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/v1/ops/experiments/") && strings.HasSuffix(r.URL.Path, "/assignment"):
+	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/ops/experiments/") && strings.HasSuffix(r.URL.Path, "/assignment"):
 		h.assign(w, r)
-	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/v1/ops/experiments/") && strings.HasSuffix(r.URL.Path, "/stats"):
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/ops/experiments/") && strings.HasSuffix(r.URL.Path, "/stats"):
 		h.getStats(w, r)
 	default:
 		writeError(w, r, productopsgenerated.AppErrorFromInvalidArgument("experiment route or method is not registered"))
@@ -81,7 +80,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) getAssignment(w http.ResponseWriter, r *http.Request) {
-	experimentID := segmentBetween(r.URL.Path, "/v1/ops/experiments/", "/assignment")
+	experimentID := segmentBetween(r.URL.Path, "/ops/experiments/", "/assignment")
 	if experimentID == "" {
 		writeError(w, r, productopsgenerated.AppErrorFromInvalidArgument("experimentId is required"))
 		return
@@ -100,7 +99,7 @@ func (h *Handler) getAssignment(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) assign(w http.ResponseWriter, r *http.Request) {
-	experimentID := segmentBetween(r.URL.Path, "/v1/ops/experiments/", "/assignment")
+	experimentID := segmentBetween(r.URL.Path, "/ops/experiments/", "/assignment")
 	if experimentID == "" {
 		writeError(w, r, productopsgenerated.AppErrorFromInvalidArgument("experimentId is required"))
 		return
@@ -127,7 +126,7 @@ func (h *Handler) assign(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) getStats(w http.ResponseWriter, r *http.Request) {
-	experimentID := segmentBetween(r.URL.Path, "/v1/ops/experiments/", "/stats")
+	experimentID := segmentBetween(r.URL.Path, "/ops/experiments/", "/stats")
 	if experimentID == "" {
 		writeError(w, r, productopsgenerated.AppErrorFromInvalidArgument("experimentId is required"))
 		return
@@ -168,7 +167,7 @@ func (h *Handler) listExperiments(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) updateRollout(w http.ResponseWriter, r *http.Request) {
-	experimentID := segmentBetween(r.URL.Path, "/v1/control-plane/product/experiments/", ":rollout")
+	experimentID := segmentBetween(r.URL.Path, "/control-plane/product/experiments/", ":rollout")
 	if experimentID == "" {
 		writeError(w, r, productopsgenerated.AppErrorFromInvalidArgument("experimentId is required"))
 		return
@@ -178,8 +177,9 @@ func (h *Handler) updateRollout(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, productopsgenerated.AppErrorFromInvalidArgument(err.Error()))
 		return
 	}
-	if command.ExpectedVersion <= 0 {
-		writeError(w, r, productopsgenerated.AppErrorFromInvalidArgument("expectedVersion must be positive"))
+	expectedVersion, err := parseIfMatchVersion(r.Header.Get("If-Match"))
+	if err != nil {
+		writeError(w, r, productopsgenerated.AppErrorFromInvalidArgument(err.Error()))
 		return
 	}
 	idempotencyKey := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
@@ -188,7 +188,7 @@ func (h *Handler) updateRollout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := h.experiments.UpdateRollout(
-		r.Context(), experimentID, command.ExpectedVersion, command.Status,
+		r.Context(), experimentID, expectedVersion, command.Status,
 		command.Variants, idempotencyKey,
 	); err != nil {
 		writeExperimentError(w, r, err, true)
@@ -203,6 +203,17 @@ func (h *Handler) updateRollout(w http.ResponseWriter, r *http.Request) {
 		ID: updated.ID, Status: updated.Status,
 		PolicyVersion: strconv.FormatInt(updated.Version, 10), Variants: updated.Variants,
 	})
+}
+
+func parseIfMatchVersion(raw string) (int64, error) {
+	normalized := strings.TrimSpace(raw)
+	normalized = strings.TrimPrefix(normalized, "W/")
+	normalized = strings.Trim(normalized, "\"")
+	version, err := strconv.ParseInt(normalized, 10, 64)
+	if err != nil || version <= 0 {
+		return 0, fmt.Errorf("If-Match must contain a positive aggregate version")
+	}
+	return version, nil
 }
 
 func trustedSubjectKey(r *http.Request) (string, error) {

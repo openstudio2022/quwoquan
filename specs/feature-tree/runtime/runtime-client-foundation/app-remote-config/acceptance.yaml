@@ -10,7 +10,7 @@ scope:
   summary: 统一 App 远程运营配置的 schema、缓存、激活、投影、灰度与验收。
   in_scope:
   - AppRemoteConfig 字段目录与 schema 风险分级
-  - /v1/config/app 元信息增强与规范投影
+  - /config/app 元信息增强与规范投影
   - 端侧 LKG 缓存、后台刷新与消费者收口
   - 配置发布、漂移、灰度、回滚观测契约
   out_of_scope:
@@ -22,7 +22,7 @@ gwt_acceptance:
     title: 启动不阻塞且有默认可用配置
     given:
     - 首次安装且本地没有远程配置缓存
-    - /v1/config/app 网络不可达
+    - /config/app 网络不可达
     when:
     - App 冷启动进入欢迎页和首页
     then:
@@ -38,7 +38,7 @@ gwt_acceptance:
     - 本地无缓存
     - 远程配置 schema 不兼容
     contract_refs:
-    - /v1/config/app
+    - /config/app
     - AppRemoteConfigSnapshot
     performance_points:
     - 首帧不得等待远程配置网络请求
@@ -110,17 +110,17 @@ gwt_acceptance:
     when:
     - 页面首次构建
     then:
-    - 组件不得直接重复拉取 /v1/config/app
+    - 组件不得直接重复拉取 /config/app
     - 配置均从 AppRemoteConfig/contentRuntime facade 读取
     done_when:
     - comment/home/intersection 等消费者统一走 AppRemoteConfig facade
-    - 页面构建过程中不再重复拉取 /v1/config/app
+    - 页面构建过程中不再重复拉取 /config/app
     - 新配置字段通过统一 provider 下发到消费者
     edge_cases:
     - 消费者在无配置时回退到默认值
     - 同一会话内多次访问不会重复请求
     contract_refs:
-    - /v1/config/app
+    - /config/app
     - contentRuntimeConfigProvider
     - AppRemoteConfig
     performance_points:
@@ -153,13 +153,13 @@ gwt_acceptance:
     given:
     - 控制面发布新配置包
     when:
-    - 客户端请求 /v1/config/app
+    - 客户端请求 /config/app
     then:
-    - 响应包含 schemaVersion/packageVersion/configHash/maxAgeSec
+    - 响应包含 schema/packageVersion/configHash/maxAgeSec
     - ETag 可用于未变更轻响应
     - 回滚后新会话获得回滚版本 hash
     done_when:
-    - /v1/config/app 响应包含可审计的快照元信息
+    - /config/app 响应包含可审计的快照元信息
     - ETag 命中时可返回轻响应
     - 回滚后新会话拿到回滚后的 packageVersion / configHash
     edge_cases:
@@ -167,7 +167,7 @@ gwt_acceptance:
     - ETag 未命中
     - 回滚后客户端仍持有旧缓存
     contract_refs:
-    - /v1/config/app
+    - /config/app
     - AppRemoteConfigSnapshot
     - ConfigProjectionService
     performance_points:

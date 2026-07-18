@@ -24,7 +24,7 @@ func TestGetCircleFeed_Empty(t *testing.T) {
 
 	circleID := createTestCircle(t, "空feed圈子")
 
-	rec := doRequest(t, http.MethodGet, fmt.Sprintf("/v1/circles/%s/feed?limit=10", circleID), nil)
+	rec := doRequest(t, http.MethodGet, fmt.Sprintf("/circles/%s/feed?limit=10", circleID), nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -64,7 +64,7 @@ func TestGetCircleFeed_Latest(t *testing.T) {
 		"createdAt": now,
 	})
 
-	rec := doRequest(t, http.MethodGet, fmt.Sprintf("/v1/circles/%s/feed?sort=latest&limit=10", circleID), nil)
+	rec := doRequest(t, http.MethodGet, fmt.Sprintf("/circles/%s/feed?sort=latest&limit=10", circleID), nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -78,14 +78,14 @@ func TestGetCircleFeed_Latest(t *testing.T) {
 	first := items[0].(map[string]any)
 	second := items[1].(map[string]any)
 	third := items[2].(map[string]any)
-	if first["_id"] != "post_new" {
-		t.Errorf("expected first item post_new, got %v", first["_id"])
+	if first["postId"] != "post_new" {
+		t.Errorf("expected first item post_new, got %v", first["postId"])
 	}
-	if second["_id"] != "post_mid" {
-		t.Errorf("expected second item post_mid, got %v", second["_id"])
+	if second["postId"] != "post_mid" {
+		t.Errorf("expected second item post_mid, got %v", second["postId"])
 	}
-	if third["_id"] != "post_old" {
-		t.Errorf("expected third item post_old, got %v", third["_id"])
+	if third["postId"] != "post_old" {
+		t.Errorf("expected third item post_old, got %v", third["postId"])
 	}
 }
 
@@ -105,7 +105,7 @@ func TestGetCircleFeed_Pagination(t *testing.T) {
 	}
 
 	// Page 1: limit=2, sorted latest (newest first → 4,3)
-	rec := doRequest(t, http.MethodGet, fmt.Sprintf("/v1/circles/%s/feed?sort=latest&limit=2", circleID), nil)
+	rec := doRequest(t, http.MethodGet, fmt.Sprintf("/circles/%s/feed?sort=latest&limit=2", circleID), nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("page1: expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -123,12 +123,12 @@ func TestGetCircleFeed_Pagination(t *testing.T) {
 
 	firstPage := make(map[string]bool)
 	for _, item := range items {
-		id := item.(map[string]any)["_id"].(string)
+		id := item.(map[string]any)["postId"].(string)
 		firstPage[id] = true
 	}
 
 	// Page 2: use cursor
-	rec2 := doRequest(t, http.MethodGet, fmt.Sprintf("/v1/circles/%s/feed?sort=latest&limit=2&cursor=%s", circleID, cursor), nil)
+	rec2 := doRequest(t, http.MethodGet, fmt.Sprintf("/circles/%s/feed?sort=latest&limit=2&cursor=%s", circleID, cursor), nil)
 	if rec2.Code != http.StatusOK {
 		t.Fatalf("page2: expected 200, got %d: %s", rec2.Code, rec2.Body.String())
 	}
@@ -140,7 +140,7 @@ func TestGetCircleFeed_Pagination(t *testing.T) {
 	}
 
 	for _, item := range items2 {
-		id := item.(map[string]any)["_id"].(string)
+		id := item.(map[string]any)["postId"].(string)
 		if firstPage[id] {
 			t.Errorf("page2: item %s overlaps with page1", id)
 		}
@@ -152,7 +152,7 @@ func TestGetCircleFeed_Pagination(t *testing.T) {
 		t.Fatal("page2: expected non-empty cursor")
 	}
 
-	rec3 := doRequest(t, http.MethodGet, fmt.Sprintf("/v1/circles/%s/feed?sort=latest&limit=2&cursor=%s", circleID, cursor2), nil)
+	rec3 := doRequest(t, http.MethodGet, fmt.Sprintf("/circles/%s/feed?sort=latest&limit=2&cursor=%s", circleID, cursor2), nil)
 	if rec3.Code != http.StatusOK {
 		t.Fatalf("page3: expected 200, got %d: %s", rec3.Code, rec3.Body.String())
 	}
@@ -196,7 +196,7 @@ func TestGetCircleFeed_Featured(t *testing.T) {
 		"featuredAt": now.Add(-30 * time.Minute),
 	})
 
-	rec := doRequest(t, http.MethodGet, fmt.Sprintf("/v1/circles/%s/feed?sort=featured&limit=10", circleID), nil)
+	rec := doRequest(t, http.MethodGet, fmt.Sprintf("/circles/%s/feed?sort=featured&limit=10", circleID), nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -208,18 +208,18 @@ func TestGetCircleFeed_Featured(t *testing.T) {
 	}
 
 	first := items[0].(map[string]any)
-	if first["_id"] != "feat_pinned" {
-		t.Errorf("expected pinned post first, got %v", first["_id"])
+	if first["postId"] != "feat_pinned" {
+		t.Errorf("expected pinned post first, got %v", first["postId"])
 	}
 
 	second := items[1].(map[string]any)
-	if second["_id"] != "feat_featured" {
-		t.Errorf("expected featured post second, got %v", second["_id"])
+	if second["postId"] != "feat_featured" {
+		t.Errorf("expected featured post second, got %v", second["postId"])
 	}
 
 	third := items[2].(map[string]any)
-	if third["_id"] != "feat_normal" {
-		t.Errorf("expected normal post third, got %v", third["_id"])
+	if third["postId"] != "feat_normal" {
+		t.Errorf("expected normal post third, got %v", third["postId"])
 	}
 }
 

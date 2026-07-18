@@ -8,6 +8,7 @@ import urllib.parse
 from dataclasses import dataclass, replace
 from enum import StrEnum
 from pathlib import Path
+from typing import Any
 
 from core.paths import DATA_ROOT
 from core.runtime_policy import active_runtime_policy
@@ -62,8 +63,8 @@ class PageImagePayload:
         if not self.sha256 or len(self.sha256) != 64:
             raise ValueError("PageImagePayload.sha256 must be a sha256 hex digest")
 
-    def as_asset_mapping(self) -> dict[str, Any]:
-        """Single adapter at the legacy asset-writer boundary."""
+    def to_asset_mapping(self) -> dict[str, Any]:
+        """Project the validated payload into the canonical asset writer input."""
         return {
             "url": self.url,
             "requestedUrl": self.requested_url,

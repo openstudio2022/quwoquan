@@ -19,7 +19,7 @@ class ContentMediaCompleteUploadResponseDto {
       sessionId: m['sessionId']?.toString() ?? null,
       status: m['status']?.toString() ?? '',
       cdnUrl: m['cdnUrl']?.toString() ?? null,
-      assetId: m['assetId']?.toString() ?? m['mediaId']?.toString() ?? null,
+      assetId: m['assetId']?.toString() ?? null,
     );
   }
 

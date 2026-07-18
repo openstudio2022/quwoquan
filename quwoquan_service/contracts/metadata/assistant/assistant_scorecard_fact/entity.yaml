@@ -1,4 +1,3 @@
-version: 1
 domain: assistant
 entity: AssistantScorecardFact
 object_kind: append_only_fact

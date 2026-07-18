@@ -2,7 +2,7 @@
 """
 v1：校验 page-horizontal-quality-matrix.md
 - 表中 `lib/...` 路径在 quwoquan_app 下存在
-- P1–P8 列仅允许 ✓、—、○（Unicode）
+- P1–P9 列仅允许 ✓、—、○（Unicode）
 
 列扩展（P9…）时：同步增大下方 PILLAR_COUNT 与 label 元组。
 
@@ -24,7 +24,7 @@ APP = ROOT / "quwoquan_app"
 
 PATH_RE = re.compile(r"`(lib/[^`]+\.dart)`")
 PILLAR_OK = frozenset({"✓", "—", "○"})
-PILLAR_COUNT = 8
+PILLAR_COUNT = 9
 P_LABELS = tuple(f"P{i}" for i in range(1, PILLAR_COUNT + 1))
 
 
@@ -60,6 +60,8 @@ def main() -> int:
             val = cells[i].strip()
             if val not in PILLAR_OK:
                 errors.append(f"{rel}: {label} 非法或为空 {val!r}（须为 ✓ / — / ○）")
+            elif label == "P9" and val == "○":
+                errors.append(f"{rel}: P9 不允许待审计 ○（须为 ✓ 或明确 —）")
 
     if errors:
         print("page-horizontal-quality-matrix 校验失败:", file=sys.stderr)

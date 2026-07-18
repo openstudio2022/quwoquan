@@ -26,7 +26,7 @@ def build_packet(
     summary: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     packet: dict[str, Any] = {
-        "schemaVersion": PACKET_SCHEMA,
+        "schema": PACKET_SCHEMA,
         "executionId": execution_id,
         "command": command,
         "objectKind": object_kind,

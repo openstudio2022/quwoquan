@@ -86,9 +86,9 @@ void main() {
   });
 
   // ──────────────────────────────────────────────────────────────────
-  // 兼容性契约
+  // 单轨契约
   // ──────────────────────────────────────────────────────────────────
-  group('RtcErrorCode — 兼容性契约', () {
+  group('RtcErrorCode — 单轨契约', () {
     test('unknown code → null', () {
       final code = RtcErrorCode.fromCode('RTC.USER.nonexistent_error');
       expect(code, isNull);
@@ -108,10 +108,7 @@ void main() {
         RtcErrorCode.fromCode('RTC.USER.not_mutual'),
         RtcErrorCode.notMutual,
       );
-      expect(
-        RtcErrorCode.fromCode('RTC.USER.blocked'),
-        RtcErrorCode.blocked,
-      );
+      expect(RtcErrorCode.fromCode('RTC.USER.blocked'), RtcErrorCode.blocked);
       expect(
         RtcErrorCode.fromCode('RTC.USER.invalid_call_action'),
         RtcErrorCode.invalidCallAction,

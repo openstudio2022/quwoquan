@@ -12,7 +12,7 @@ func TestGroupAvatar_RecomputePublishesConversationAvatarPatch(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"group","title":"group avatar sync patch"}`)
-	convID := conv["_id"].(string)
+	convID := conv["id"].(string)
 	waitForConversationAvatarVersion(t, convID, 1)
 	syncService := runtimesync.NewService(redisRouter.Scene("general"), redisRouter.Scene("realtime"))
 

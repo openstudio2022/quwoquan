@@ -140,7 +140,7 @@ func (r *UserSocialContactResolver) fetchFollowPage(
 	userID, mode, cursor string,
 	limit int,
 ) (*socialContactPage, error) {
-	path := fmt.Sprintf("%s/v1/user/sub-accounts/%s/%s", r.baseURL, url.PathEscape(userID), mode)
+	path := fmt.Sprintf("%s/user/sub-accounts/%s/%s", r.baseURL, url.PathEscape(userID), mode)
 	reqURL, err := url.Parse(path)
 	if err != nil {
 		return nil, err
@@ -176,7 +176,7 @@ func (r *UserSocialContactResolver) collectDiscoveryContacts(
 	userID string,
 	merged map[string]application.SocialContactSeed,
 ) error {
-	requestURL := fmt.Sprintf("%s/v1/user/contact-discovery/latest", r.baseURL)
+	requestURL := fmt.Sprintf("%s/user/contact-discovery/latest", r.baseURL)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
 	if err != nil {
 		return err

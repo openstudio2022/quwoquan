@@ -47,7 +47,7 @@ def test_homepage_triplet_maps_to_introduction_seed(tmp_path: Path) -> None:
                 "title": "西湖",
                 "fetchedAt": "2026-07-11T00:00:00Z",
                 "snapshotHash": "sha256:" + ("a" * 64),
-                "policyRevision": "encyclopedia-primary-v2",
+                "policyRevision": "encyclopedia-primary",
                 "sourceUseMode": "licensed_adaptation",
             },
             "sourceUrls": ["https://zh.wikipedia.org/wiki/西湖"],

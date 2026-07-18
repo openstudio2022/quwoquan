@@ -36,18 +36,18 @@ from core.paths import (  # noqa: E402
 import core.paths as _paths_mod  # noqa: E402
 from content.execution.runtime_state import write_execution_runtime_state  # noqa: E402
 from core.io import read_json, write_json  # noqa: E402
-from content.post.evidence_bundle import public_byline_label  # noqa: E402
-from content.post.draft_io import draft_article_path, draft_meta_path, read_draft_meta, read_writing_pack, write_agent_draft  # noqa: E402
-from content.post.draft_io import prompt_path  # noqa: E402
+from content.post.article.evidence_bundle import public_byline_label  # noqa: E402
+from content.post.article.draft_io import draft_article_path, draft_meta_path, read_draft_meta, read_writing_pack, write_agent_draft  # noqa: E402
+from content.post.article.draft_io import prompt_path  # noqa: E402
 from content.source.source_unit import resolve_entity_object_dir, write_source_unit  # noqa: E402
-from content.post.writing_pack import build_writing_pack as build_generic_writing_pack  # noqa: E402
-from content.post import route_compose as RC  # noqa: E402
-from content.post import route_assets as route_assets  # noqa: E402
-from content.post import route_core as route_core  # noqa: E402
-from content.post import route_assets as route_assets_mod  # noqa: E402
-from content.post.route_analysis import analyze_route_ref  # noqa: E402
-from content.post.route_compose import build_route_writing_pack  # noqa: E402
-from content.post.route_review import review_route_draft  # noqa: E402
+from content.post.article.writing_pack import build_writing_pack as build_generic_writing_pack  # noqa: E402
+from content.post.article import route_compose as RC  # noqa: E402
+from content.post.article import route_assets as route_assets  # noqa: E402
+from content.post.article import route_core as route_core  # noqa: E402
+from content.post.article import route_assets as route_assets_mod  # noqa: E402
+from content.post.article.route_analysis import analyze_route_ref  # noqa: E402
+from content.post.article.route_compose import build_route_writing_pack  # noqa: E402
+from content.post.article.route_review import review_route_draft  # noqa: E402
 from support.helpers.agent_draft_kit import gallery_article  # noqa: E402
 
 
@@ -120,6 +120,7 @@ def _seed():
                 }
                 for k, path in enumerate(image_paths)
             ],
+            execution_id=EXECUTION_ID,
         )
         _SOURCE_PATHS.append(str(obj / "1.download" / "sources" / "01.curated_image_collection" / "source.md"))
 

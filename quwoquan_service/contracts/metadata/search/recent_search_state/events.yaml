@@ -1,4 +1,3 @@
-version: 1
 entity: RecentSearchState
 events:
   - name: RecentSearchStateChanged

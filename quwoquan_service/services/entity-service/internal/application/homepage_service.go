@@ -31,7 +31,7 @@ type HomepageSource struct {
 	SourceUseMode  string `json:"sourceUseMode"`
 }
 type Homepage struct {
-	ID                 string           `json:"_id"`
+	ID                 string           `json:"homepageId"`
 	Title              string           `json:"title"`
 	Subtitle           string           `json:"subtitle,omitempty"`
 	HomepageType       string           `json:"homepageType"`
@@ -131,7 +131,7 @@ type HomepageImpactSummaryView struct {
 }
 
 type HomepageClaimRequest struct {
-	ID                   string     `json:"_id"`
+	ID                   string     `json:"id"`
 	HomepageID           string     `json:"homepageId"`
 	RequesterUserID      string     `json:"requesterUserId"`
 	ClaimTier            string     `json:"claimTier"`
@@ -147,7 +147,7 @@ type HomepageClaimRequest struct {
 }
 
 type HomepageStatusReport struct {
-	ID             string     `json:"_id"`
+	ID             string     `json:"id"`
 	HomepageID     string     `json:"homepageId"`
 	ReporterUserID string     `json:"reporterUserId"`
 	Reason         string     `json:"reason"`

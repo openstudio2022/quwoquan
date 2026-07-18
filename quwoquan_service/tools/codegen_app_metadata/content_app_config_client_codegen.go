@@ -2,7 +2,7 @@ package main
 
 import "strings"
 
-// writeContentAppConfigClientDart emits typed parsing for GET /v1/config/app `content` subtree.
+// writeContentAppConfigClientDart emits typed parsing for GET /config/app `content` subtree.
 // SSOT description: contracts/metadata/content/post/projections/content_app_config_client.yaml
 func writeContentAppConfigClientDart(path string) {
 	writeFile(path, renderContentAppConfigClientDart())

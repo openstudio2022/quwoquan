@@ -28,12 +28,12 @@ const (
 )
 
 func (h *UserHandler) registerProfileProposalRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("POST /v1/user/personas/{personaId}/profile-proposals", h.handleCreateProfileProposal)
-	mux.HandleFunc("POST /v1/user/profile/proposals/{id}/confirm", h.handleConfirmProfileProposal)
-	mux.HandleFunc("POST /v1/user/profile/proposals/{id}/apply", h.handleApplyProfileProposal)
-	mux.HandleFunc("POST /v1/user/profile/proposals/{id}/reject", h.handleRejectProfileProposal)
-	mux.HandleFunc("GET /v1/user/profile/proposals/{id}", h.handleGetProfileProposal)
-	mux.HandleFunc("GET /v1/user/personas/{personaId}/profile-proposals", h.handleListProfileProposals)
+	mux.HandleFunc("POST /user/personas/{personaId}/profile-proposals", h.handleCreateProfileProposal)
+	mux.HandleFunc("POST /user/profile/proposals/{id}/confirm", h.handleConfirmProfileProposal)
+	mux.HandleFunc("POST /user/profile/proposals/{id}/apply", h.handleApplyProfileProposal)
+	mux.HandleFunc("POST /user/profile/proposals/{id}/reject", h.handleRejectProfileProposal)
+	mux.HandleFunc("GET /user/profile/proposals/{id}", h.handleGetProfileProposal)
+	mux.HandleFunc("GET /user/personas/{personaId}/profile-proposals", h.handleListProfileProposals)
 }
 
 type profileProposalChangeRequest struct {
@@ -59,14 +59,6 @@ type createProfileProposalRequest struct {
 	ProposalID string `json:"proposalId"`
 	Source     string `json:"source"`
 	profileProposalChangeRequest
-}
-
-type confirmProfileProposalRequest struct {
-	ExpectedProposalVersion int64 `json:"expectedProposalVersion"`
-}
-
-type proposalVersionRequest struct {
-	ExpectedProposalVersion int64 `json:"expectedProposalVersion"`
 }
 
 func (h *UserHandler) handleCreateProfileProposal(w http.ResponseWriter, r *http.Request) {
@@ -97,15 +89,13 @@ func (h *UserHandler) handleConfirmProfileProposal(w http.ResponseWriter, r *htt
 	if !ok {
 		return
 	}
-	var request confirmProfileProposalRequest
-	if err := decodeStrictJSON(r, &request); err != nil {
+	if err := requireEmptyProfileProposalBody(r); err != nil {
 		writeHTTPError(w, r, generated.AppErrorFromProfileProposalInvalidArgument(err.Error()))
 		return
 	}
 	receipt, err := h.profileProposal.Confirm(r.Context(), proposalapp.ConfirmCommand{
 		ProposalID: strings.TrimSpace(r.PathValue("id")), ActorPersonaID: invocation.Actor.PersonaID,
-		ExpectedProposalVersion: request.ExpectedProposalVersion,
-		IdempotencyKey:          invocation.IdempotencyKey,
+		IdempotencyKey: invocation.IdempotencyKey,
 	})
 	if err != nil {
 		writeProfileProposalError(w, r, err)
@@ -119,15 +109,13 @@ func (h *UserHandler) handleApplyProfileProposal(w http.ResponseWriter, r *http.
 	if !ok {
 		return
 	}
-	var request proposalVersionRequest
-	if err := decodeStrictJSON(r, &request); err != nil {
+	if err := requireEmptyProfileProposalBody(r); err != nil {
 		writeHTTPError(w, r, generated.AppErrorFromProfileProposalInvalidArgument(err.Error()))
 		return
 	}
 	receipt, err := h.profileProposal.Apply(r.Context(), proposalapp.ApplyCommand{
 		ProposalID: strings.TrimSpace(r.PathValue("id")), ActorPersonaID: invocation.Actor.PersonaID,
-		ExpectedProposalVersion: request.ExpectedProposalVersion,
-		IdempotencyKey:          invocation.IdempotencyKey,
+		IdempotencyKey: invocation.IdempotencyKey,
 	})
 	if err != nil {
 		writeProfileProposalError(w, r, err)
@@ -141,15 +129,13 @@ func (h *UserHandler) handleRejectProfileProposal(w http.ResponseWriter, r *http
 	if !ok {
 		return
 	}
-	var request proposalVersionRequest
-	if err := decodeStrictJSON(r, &request); err != nil {
+	if err := requireEmptyProfileProposalBody(r); err != nil {
 		writeHTTPError(w, r, generated.AppErrorFromProfileProposalInvalidArgument(err.Error()))
 		return
 	}
 	receipt, err := h.profileProposal.Reject(r.Context(), proposalapp.RejectCommand{
 		ProposalID: strings.TrimSpace(r.PathValue("id")), ActorPersonaID: invocation.Actor.PersonaID,
-		ExpectedProposalVersion: request.ExpectedProposalVersion,
-		IdempotencyKey:          invocation.IdempotencyKey,
+		IdempotencyKey: invocation.IdempotencyKey,
 	})
 	if err != nil {
 		writeProfileProposalError(w, r, err)
@@ -249,24 +235,34 @@ func decodeStrictJSON(r *http.Request, target any) error {
 	return nil
 }
 
+func requireEmptyProfileProposalBody(r *http.Request) error {
+	body, err := io.ReadAll(io.LimitReader(r.Body, 64*1024))
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(string(body)) != "" {
+		return errors.New("request body must be empty")
+	}
+	return nil
+}
+
 type profileProposalView struct {
-	ID                           string     `json:"id"`
-	PersonaID                    string     `json:"personaId"`
-	Source                       string     `json:"source"`
-	Status                       string     `json:"status"`
-	DisplayName                  *string    `json:"displayName,omitempty"`
-	Bio                          *string    `json:"bio,omitempty"`
-	AvatarMediaAssetID           *string    `json:"avatarMediaAssetId,omitempty"`
-	BackgroundMediaAssetID       *string    `json:"backgroundMediaAssetId,omitempty"`
-	IsPrivate                    *bool      `json:"isPrivate,omitempty"`
-	IsolationLevel               *string    `json:"isolationLevel,omitempty"`
-	PurposeHint                  *string    `json:"purposeHint,omitempty"`
-	ReviewedBy                   *string    `json:"reviewedBy,omitempty"`
-	TargetPersonaExpectedVersion *int64     `json:"targetPersonaExpectedVersion,omitempty"`
-	Version                      int64      `json:"version"`
-	CreatedAt                    time.Time  `json:"createdAt"`
-	UpdatedAt                    time.Time  `json:"updatedAt"`
-	ResolvedAt                   *time.Time `json:"resolvedAt,omitempty"`
+	ID                     string     `json:"id"`
+	PersonaID              string     `json:"personaId"`
+	Source                 string     `json:"source"`
+	Status                 string     `json:"status"`
+	DisplayName            *string    `json:"displayName,omitempty"`
+	Bio                    *string    `json:"bio,omitempty"`
+	AvatarMediaAssetID     *string    `json:"avatarMediaAssetId,omitempty"`
+	BackgroundMediaAssetID *string    `json:"backgroundMediaAssetId,omitempty"`
+	IsPrivate              *bool      `json:"isPrivate,omitempty"`
+	IsolationLevel         *string    `json:"isolationLevel,omitempty"`
+	PurposeHint            *string    `json:"purposeHint,omitempty"`
+	ReviewedBy             *string    `json:"reviewedBy,omitempty"`
+	Version                int64      `json:"version"`
+	CreatedAt              time.Time  `json:"createdAt"`
+	UpdatedAt              time.Time  `json:"updatedAt"`
+	ResolvedAt             *time.Time `json:"resolvedAt,omitempty"`
 }
 
 func profileProposalViewFromModel(proposal proposalmodel.ProfileUpdateProposal) profileProposalView {
@@ -282,8 +278,7 @@ func profileProposalViewFromModel(proposal proposalmodel.ProfileUpdateProposal) 
 		BackgroundMediaAssetID: proposal.ProposedChanges.BackgroundMediaAssetID,
 		IsPrivate:              proposal.ProposedChanges.IsPrivate, IsolationLevel: proposal.ProposedChanges.IsolationLevel,
 		PurposeHint: proposal.ProposedChanges.PurposeHint, ReviewedBy: reviewedBy,
-		TargetPersonaExpectedVersion: proposal.TargetPersonaExpectedVersion,
-		Version:                      proposal.Version, CreatedAt: proposal.CreatedAt, UpdatedAt: proposal.UpdatedAt,
+		Version: proposal.Version, CreatedAt: proposal.CreatedAt, UpdatedAt: proposal.UpdatedAt,
 		ResolvedAt: proposal.ResolvedAt,
 	}
 }

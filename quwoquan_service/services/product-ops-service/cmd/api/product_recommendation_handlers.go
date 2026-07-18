@@ -16,7 +16,7 @@ func (s *productService) handleListRecommendationPolicies(w http.ResponseWriter,
 }
 
 func (s *productService) handleSimulateRecommendationPolicy(w http.ResponseWriter, r *http.Request) {
-	policyID := segmentBetween(r.URL.Path, "/v1/control-plane/product/recommendation/policies/", ":simulate")
+	policyID := segmentBetween(r.URL.Path, "/control-plane/product/recommendation/policies/", ":simulate")
 	policy, ok, err := s.getRecommendationPolicy(policyID)
 	if err != nil {
 		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
@@ -64,7 +64,7 @@ func (s *productService) handleSimulateRecommendationPolicy(w http.ResponseWrite
 }
 
 func (s *productService) handleActivateRecommendationPolicy(w http.ResponseWriter, r *http.Request) {
-	policyID := segmentBetween(r.URL.Path, "/v1/control-plane/product/recommendation/policies/", ":activate")
+	policyID := segmentBetween(r.URL.Path, "/control-plane/product/recommendation/policies/", ":activate")
 	policy, ok, err := s.getRecommendationPolicy(policyID)
 	if err != nil {
 		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())

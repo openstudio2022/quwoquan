@@ -13,7 +13,7 @@ func TestPrivacySettings_BlockedKeywordsRoundTrip(t *testing.T) {
 	patchRec := doRequest(
 		t,
 		http.MethodPatch,
-		"/v1/user/settings/privacy",
+		"/user/settings/privacy",
 		`{"blockedKeywords":["alpha"," beta ","alpha"],"profileVisibility":"friends"}`,
 		authHeaders("settings_user_1"),
 	)
@@ -24,7 +24,7 @@ func TestPrivacySettings_BlockedKeywordsRoundTrip(t *testing.T) {
 	getRec := doRequest(
 		t,
 		http.MethodGet,
-		"/v1/user/settings/privacy",
+		"/user/settings/privacy",
 		"",
 		authHeaders("settings_user_1"),
 	)
@@ -63,7 +63,7 @@ func TestPrivacySettings_PreexistingNullRingtoneRowRemainsCompatible(t *testing.
 	getRec := doRequest(
 		t,
 		http.MethodGet,
-		"/v1/user/settings/privacy",
+		"/user/settings/privacy",
 		"",
 		authHeaders("settings_user_2"),
 	)
@@ -74,7 +74,7 @@ func TestPrivacySettings_PreexistingNullRingtoneRowRemainsCompatible(t *testing.
 	patchRec := doRequest(
 		t,
 		http.MethodPatch,
-		"/v1/user/settings/privacy",
+		"/user/settings/privacy",
 		`{"blockedKeywords":["after"]}`,
 		authHeaders("settings_user_2"),
 	)

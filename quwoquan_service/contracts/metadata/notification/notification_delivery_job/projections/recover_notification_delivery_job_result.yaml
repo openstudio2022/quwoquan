@@ -1,4 +1,3 @@
-version: 1
 read_model: RecoverNotificationDeliveryJobResult
 
 description: NotificationDeliveryJob dead-letter 幂等恢复的持久化命令结果。

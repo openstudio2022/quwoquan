@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+import json
 
 DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
 TESTS_ROOT = DATA_ROOT / "tests"
@@ -12,54 +13,127 @@ for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
         sys.path.insert(0, str(_path))
 
 import content.source.fetch_text as fetch_mod  # noqa: E402
-import content.source.fetch_http as http_mod  # noqa: E402
 import content.source.fetch_payload as payload_mod  # noqa: E402
+import content.source.mediawiki_page as mediawiki_mod  # noqa: E402
+from content.source.mediawiki_page import MediaWikiPageBundle  # noqa: E402
 from content.source.research.text_match import _wiki_resolved_title_matches_entity  # noqa: E402
 
 
-def test_wikipedia_api_extract_preserves_resolved_redirect_identity():
-    raw = (
-        '{"query":{"redirects":[{"from":"南雁荡山","to":"雁荡山"}],'
-        '"pages":{"1":{"pageid":1,"title":"雁荡山","extract":"雁荡山正文"}}}}'
+def _mediawiki_bundle(
+    rendered_text: str,
+    *,
+    wikitext: str | None = None,
+    requested_title: str = "九寨沟",
+    resolved_title: str | None = None,
+) -> MediaWikiPageBundle:
+    resolved = resolved_title or requested_title
+    revision_text = wikitext if wikitext is not None else rendered_text
+    return MediaWikiPageBundle(
+        requested_title=requested_title,
+        resolved_title=resolved,
+        redirect_chain=(
+            (f"{requested_title} -> {resolved}",)
+            if requested_title != resolved
+            else ()
+        ),
+        page_id=1,
+        revision_id=2,
+        content_sha256="a" * 64,
+        rendered_text=rendered_text,
+        wikitext=revision_text,
+        rendered_image_titles=(),
+        raw='{"query":{}}',
     )
-    original = fetch_mod._curl_get_text
-    try:
-        fetch_mod._curl_get_text = lambda url, timeout=90: raw
-        payload = fetch_mod._wikipedia_api_extract_payload(
-            "https://zh.wikipedia.org/wiki/%E5%8D%97%E9%9B%81%E8%8D%A1%E5%B1%B1"
-        )
-    finally:
-        fetch_mod._curl_get_text = original
 
+
+def test_mediawiki_page_bundle_preserves_resolved_redirect_identity():
+    def fake_api(_host: str, _params: dict) -> dict:
+        return {
+            "query": {
+                "redirects": [{"from": "南雁荡山", "to": "雁荡山"}],
+                "pages": {
+                    "1": {
+                        "pageid": 1,
+                        "title": "雁荡山",
+                        "extract": "雁荡山正文",
+                        "revisions": [
+                            {"revid": 2, "slots": {"main": {"*": "雁荡山正文"}}}
+                        ],
+                        "images": [],
+                    }
+                },
+            }
+        }
+
+    original = mediawiki_mod.network_io.wiki_api
+    try:
+        mediawiki_mod.network_io.wiki_api = fake_api
+        payload = mediawiki_mod.fetch_mediawiki_page_bundle("zh.wikipedia.org", "南雁荡山")
+    finally:
+        mediawiki_mod.network_io.wiki_api = original
+
+    assert payload is not None
     assert payload.requested_title == "南雁荡山"
     assert payload.resolved_title == "雁荡山"
     assert payload.redirect_chain == ("南雁荡山 -> 雁荡山",)
-    assert payload.text == "雁荡山正文"
+    assert payload.rendered_text == "雁荡山正文"
     assert not _wiki_resolved_title_matches_entity(payload.resolved_title, "南雁荡山")
 
 
 def test_extract_page_text_dispatches_by_registry_extractor():
     html = "<html><body><div>普通正文</div></body></html>".encode("utf-8")
     orig_wiki = fetch_mod._wikipedia_api_plaintext
-    orig_baike = fetch_mod._baike_html_plaintext
     orig_qunar = fetch_mod._qunar_html_plaintext
     orig_official = fetch_mod._static_official_plaintext
     try:
         fetch_mod._wikipedia_api_plaintext = lambda url: "wiki正文"
-        fetch_mod._baike_html_plaintext = lambda url, extractor="baidu_baike_html", html_bytes=b"": "baike正文"
         fetch_mod._qunar_html_plaintext = lambda html_bytes, url="": "qunar正文"
         fetch_mod._static_official_plaintext = lambda url: "official正文"
         assert fetch_mod.extract_page_text(html, "https://zh.wikipedia.org/wiki/九寨沟", extractor="wikipedia_api") == "wiki正文"
-        assert fetch_mod.extract_page_text(html, "https://baike.baidu.com/item/九寨沟", extractor="baidu_baike_html") == "baike正文"
         assert fetch_mod.extract_page_text(html, "https://travel.qunar.com/p-oi123", extractor="qunar_html") == "qunar正文"
         assert fetch_mod.extract_page_text(html, "https://aba.gov.cn/detail", extractor="static_official_html") == "official正文"
         generic = fetch_mod.extract_page_text(html, "https://example.com/a", extractor="generic_html")
         assert "普通正文" in generic
     finally:
         fetch_mod._wikipedia_api_plaintext = orig_wiki
-        fetch_mod._baike_html_plaintext = orig_baike
         fetch_mod._qunar_html_plaintext = orig_qunar
         fetch_mod._static_official_plaintext = orig_official
+
+
+def test_baidu_baike_openapi_adapter_fetches_structured_text(monkeypatch):
+    body = json.dumps(
+        {
+            "title": "嵊州越剧小镇",
+            "abstract": "嵊州越剧小镇位于浙江省嵊州市，是越剧文化旅游目的地。",
+            "card": [{"name": "位置", "value": ["浙江省嵊州市"]}],
+        },
+        ensure_ascii=False,
+    ).encode("utf-8")
+    requested_urls: list[str] = []
+
+    def fake_get(url: str, *, timeout: int):
+        assert timeout > 0
+        requested_urls.append(url)
+        return 200, body, "application/json"
+
+    monkeypatch.setattr(payload_mod, "_http_get_bytes", fake_get)
+
+    result = payload_mod.fetch_source_payload(
+        "https://baike.baidu.com/item/%E5%B5%8A%E5%B7%9E%E8%B6%8A%E5%89%A7%E5%B0%8F%E9%95%87",
+        source={
+            "sourceKind": "baidu_baike",
+            "sourceTitle": "嵊州越剧小镇",
+            "extractor": "baidu_baike_openapi",
+        },
+    )
+
+    assert result["runtime"]["rawFormat"] == "baidu_baike_openapi_json"
+    assert result["runtime"]["resolvedTitle"] == "嵊州越剧小镇"
+    assert "位置：浙江省嵊州市" in result["text"]
+    assert len(requested_urls) == 1
+    assert requested_urls[0].startswith(
+        "https://baike.baidu.com/api/openapi/BaikeLemmaCardApi?"
+    )
 
 
 def test_generic_html_extractor_preserves_inline_images_as_figures():
@@ -178,7 +252,7 @@ def test_fetch_source_payload_blocks_non_fetchable_registry_site():
 def test_fetch_source_payload_allows_source_level_fetchable_override():
     orig_http = payload_mod._http_get_bytes
     try:
-        payload_mod._http_get_bytes = lambda url, timeout=20, max_redirects=4, max_retries=4: (
+        payload_mod._http_get_bytes = lambda url, timeout=20, max_bytes=0: (
             200,
             "<html><body>沈阳世博园 游记 正文 门票 开放 交通 徒步 转场 返程</body></html>".encode("utf-8"),
             "",
@@ -205,7 +279,7 @@ def test_fetch_source_payload_returns_same_source_inline_images():
     ).encode("utf-8")
     orig_http = payload_mod._http_get_bytes
     try:
-        payload_mod._http_get_bytes = lambda url, timeout=20, max_redirects=4, max_retries=4: (
+        payload_mod._http_get_bytes = lambda url, timeout=20, max_bytes=0: (
             200,
             html,
             "",
@@ -236,7 +310,7 @@ def test_fetch_source_payload_uses_dpm_official_registry_source():
     orig_http = payload_mod._http_get_bytes
     orig_curl = fetch_mod._curl_get_text
     try:
-        payload_mod._http_get_bytes = lambda url, timeout=20, max_redirects=4, max_retries=4: (
+        payload_mod._http_get_bytes = lambda url, timeout=20, max_bytes=0: (
             200,
             html.encode("utf-8"),
             "",
@@ -256,13 +330,14 @@ def test_fetch_source_payload_uses_dpm_official_registry_source():
 
 def test_fetch_source_payload_uses_source_extractor_override():
     orig_http = payload_mod._http_get_bytes
-    orig_curl = fetch_mod._curl_get_text
+    orig_bundle = payload_mod.fetch_mediawiki_page_bundle_for_url
     try:
-        payload_mod._http_get_bytes = lambda url, timeout=20, max_redirects=4, max_retries=4: (_ for _ in ()).throw(
+        payload_mod._http_get_bytes = lambda url, timeout=20, max_bytes=0: (_ for _ in ()).throw(
             AssertionError("wikipedia_api should fetch API evidence directly")
         )
-        fetch_mod._curl_get_text = lambda url, timeout=90: (
-            '{"query":{"pages":{"1":{"extract":"维基导游专用正文"}}}}'
+        payload_mod.fetch_mediawiki_page_bundle_for_url = lambda _url: _mediawiki_bundle(
+            "维基导游专用正文",
+            requested_title="雅安",
         )
         payload = payload_mod.fetch_source_payload(
             "https://zh.wikivoyage.org/wiki/雅安",
@@ -270,84 +345,66 @@ def test_fetch_source_payload_uses_source_extractor_override():
         )
     finally:
         payload_mod._http_get_bytes = orig_http
-        fetch_mod._curl_get_text = orig_curl
+        payload_mod.fetch_mediawiki_page_bundle_for_url = orig_bundle
     assert payload["runtime"]["extractor"] == "wikipedia_api"
     assert payload["runtime"]["sourceExtractorOverride"] is True
     assert payload["runtime"]["rawFormat"] == "mediawiki_api_json"
     assert payload["text"] == "维基导游专用正文"
 
 
-def test_wikipedia_api_payload_falls_back_to_http_bytes_when_curl_fails():
-    orig_http = http_mod._http_get_bytes
-    orig_curl = fetch_mod._curl_get_text
-    orig_wikitext = payload_mod.fetch_wikipedia_wikitext
+def test_mediawiki_page_bundle_follows_image_continuation_without_silent_cap():
+    seen: list[dict] = []
 
-    def fake_http(url: str, timeout=20, max_redirects=4, max_retries=4):
-        _ = (timeout, max_redirects, max_retries)
-        assert "/w/api.php?" in url
-        return (
-            200,
-            '{"query":{"pages":{"1":{"extract":"黄果树瀑布稳定百科正文"}}}}'.encode("utf-8"),
-            "",
-        )
+    def fake_api(_host: str, params: dict) -> dict:
+        seen.append(dict(params))
+        if "imcontinue" in params:
+            return {
+                "query": {
+                    "pages": {"1": {"pageid": 1, "images": [{"title": "File:b.jpg"}]}}
+                }
+            }
+        return {
+            "continue": {"imcontinue": "1|b.jpg", "continue": "||"},
+            "query": {
+                "pages": {
+                    "1": {
+                        "pageid": 1,
+                        "title": "黄果树瀑布",
+                        "extract": "黄果树瀑布稳定百科正文",
+                        "revisions": [
+                            {"revid": 2, "slots": {"main": {"*": "黄果树瀑布稳定百科正文"}}}
+                        ],
+                        "images": [{"title": "File:a.jpg"}],
+                    }
+                }
+            },
+        }
 
+    original = mediawiki_mod.network_io.wiki_api
     try:
-        fetch_mod._curl_get_text = lambda url, timeout=90: (_ for _ in ()).throw(
-            RuntimeError("curl transient failure")
-        )
-        http_mod._http_get_bytes = fake_http
-        payload_mod.fetch_wikipedia_wikitext = lambda _url: ""
-        payload = payload_mod.fetch_source_payload(
-            "https://zh.wikipedia.org/wiki/%E9%BB%84%E6%9E%9C%E6%A0%91%E7%80%91%E5%B8%83"
-        )
+        mediawiki_mod.network_io.wiki_api = fake_api
+        bundle = mediawiki_mod.fetch_mediawiki_page_bundle("zh.wikipedia.org", "黄果树瀑布")
     finally:
-        http_mod._http_get_bytes = orig_http
-        fetch_mod._curl_get_text = orig_curl
-        payload_mod.fetch_wikipedia_wikitext = orig_wikitext
+        mediawiki_mod.network_io.wiki_api = original
 
-    assert payload["statusCode"] == 200
-    assert payload["runtime"]["extractor"] == "wikipedia_api"
-    assert payload["runtime"]["rawFormat"] == "mediawiki_api_json"
-    assert payload["text"] == "黄果树瀑布稳定百科正文"
-
-
-def test_wikipedia_api_payload_repairs_malformed_mediawiki_unicode_escape_for_parse_only():
-    raw = '{"query":{"pages":{"1":{"extract":"中国 \\uWikivoyage 旅行正文"}}}}'
-    orig_curl = fetch_mod._curl_get_text
-    try:
-        fetch_mod._curl_get_text = lambda url, timeout=90: raw
-        payload = payload_mod.fetch_source_payload(
-            "https://zh.wikivoyage.org/wiki/中国",
-            source={"extractor": "wikipedia_api", "fetchable": True},
-        )
-    finally:
-        fetch_mod._curl_get_text = orig_curl
-
-    assert payload["htmlBytes"] == raw.encode("utf-8")
-    assert payload["text"] == "中国 \\uWikivoyage 旅行正文"
+    assert bundle is not None
+    assert bundle.rendered_image_titles == ("File:a.jpg", "File:b.jpg")
+    assert len(seen) == 2
 
 
 def test_wikipedia_api_payload_only_carries_text_layout_not_second_image_path():
-    def fake_curl(url: str, timeout: int = 90) -> str:
-        if "prop=extracts" in url:
-            return '{"query":{"pages":{"1":{"extract":"九寨沟位于四川省阿坝藏族羌族自治州。"}}}}'
-        if "action=parse" in url and "prop=wikitext" in url:
-            # 统一结构化 IR：payload 同时抓 wikitext 产出 source.layout.json 真相源。
-            return (
-                '{"parse":{"wikitext":{"*":"== 概述 ==\\n九寨沟正文段落。\\n'
-                '[[File:Jiuzhaigou.jpg|thumb|五花海]]\\n"}}}'
-            )
-        raise AssertionError(f"unexpected url {url}")
-
-    orig_curl = fetch_mod._curl_get_text
+    orig_bundle = payload_mod.fetch_mediawiki_page_bundle_for_url
     try:
-        fetch_mod._curl_get_text = fake_curl
+        payload_mod.fetch_mediawiki_page_bundle_for_url = lambda _url: _mediawiki_bundle(
+            "== 概述 ==\n九寨沟正文段落。",
+            wikitext="== 概述 ==\n九寨沟正文段落。\n[[File:Jiuzhaigou.jpg|thumb|五花海]]\n",
+        )
         payload = payload_mod.fetch_source_payload(
             "https://zh.wikivoyage.org/wiki/九寨沟",
             source={"extractor": "wikipedia_api", "fetchable": True},
         )
     finally:
-        fetch_mod._curl_get_text = orig_curl
+        payload_mod.fetch_mediawiki_page_bundle_for_url = orig_bundle
     # 结构化口径：layout ok 时 source 正文从 IR 渲染（章节 + 图片原位占位 + 仅原图注）。
     assert "## 概述" in payload["text"]
     assert "九寨沟正文段落。" in payload["text"]
@@ -459,20 +516,16 @@ def test_static_official_plaintext_reads_commented_meta_description():
 
 
 def test_wikipedia_api_plaintext_follows_redirects():
-    seen: dict[str, str] = {}
-
-    def fake_curl(url: str, timeout: int = 90) -> str:
-        seen["url"] = url
-        return '{"query":{"pages":{"1":{"extract":"惠山古镇位于江苏省无锡市梁溪区。"}}}}'
-
-    orig_curl = fetch_mod._curl_get_text
+    original = mediawiki_mod.fetch_mediawiki_page_bundle_for_url
     try:
-        fetch_mod._curl_get_text = fake_curl
+        mediawiki_mod.fetch_mediawiki_page_bundle_for_url = lambda _url: _mediawiki_bundle(
+            "惠山古镇位于江苏省无锡市梁溪区。",
+            requested_title="惠山古镇",
+        )
         text = fetch_mod._wikipedia_api_plaintext("https://zh.wikipedia.org/wiki/惠山古镇")
     finally:
-        fetch_mod._curl_get_text = orig_curl
+        mediawiki_mod.fetch_mediawiki_page_bundle_for_url = original
     assert "惠山古镇位于江苏省无锡市梁溪区" in text
-    assert "redirects=1" in seen["url"]
 
 
 def _run_all() -> None:

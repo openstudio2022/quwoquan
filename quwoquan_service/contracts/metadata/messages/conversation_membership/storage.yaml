@@ -1,4 +1,3 @@
-version: 1
 aggregate: ConversationMembership
 backend: mongodb
 collections:

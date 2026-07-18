@@ -22,7 +22,7 @@ func fixturePublish(t *testing.T) string {
 	root := t.TempDir()
 	// 两篇文章
 	writeFile(t, filepath.Join(root, "posts/article/体验/甲居藏寨体验/1/manifest.json"),
-		`{"contentType":"article","authorId":"builtin_travel_blogger","creatorProfileId":"qwq_creator_travel_blogger_001","creatorArchetype":"travel_blogger","creatorProfileVersion":"1.0.0","creatorDisclosure":{"type":"platform_virtual_creator","displayText":"平台虚拟创作者","visible":true},"experienceClaimMode":"editorial_synthesis","authorQualitySignals":{"qualityScore":0.85,"fatigueScore":0.2,"riskTier":"low"},"entityRefs":["地点/景区/甲居藏寨"],"normalizedEntityRefs":["entity:景区:甲居藏寨"],"tagRefs":["Topic/旅行"],"intersectionHints":[{"dimension":"content","source":"entityRef","tagRefs":[],"actionType":"view_object","actionTargetId":"entity:景区:甲居藏寨"},{"dimension":"interest","source":"tagRef","tagRefs":["Topic/旅行"],"actionType":"join","actionTargetId":"Topic/旅行"}],"template":"journal","generatorModel":"agent/x","articleMarkdownDigest":"sha256:1111111111111111111111111111111111111111111111111111111111111111","publishTitle":"甲居藏寨体验","publishAngle":"体验","publishSeq":1,"sourceTaskId":"旅行/环线/川西环线/川西大环线自驾","createdAt":"2026-05-01T00:00:00Z","updatedAt":"2026-05-03T00:00:00Z","publishedAt":"2026-05-04T00:00:00Z","articleAssetManifest":{"schemaVersion":1,"articleMarkdownVersion":"qwq-rich-md/1","articleMarkdownDigest":"sha256:1111111111111111111111111111111111111111111111111111111111111111","documentSha256":"sha256:1111111111111111111111111111111111111111111111111111111111111111","assetManifestSha256":"sha256:2222222222222222222222222222222222222222222222222222222222222222","documentVersionSha256":"sha256:3333333333333333333333333333333333333333333333333333333333333333","assets":[{"assetId":"cover","objectKey":"media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg","cdnUrl":"https://img.example.com/media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg","sha256":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}}`)
+		`{"contentType":"article","authorId":"builtin_travel_blogger","creatorProfileId":"qwq_creator_travel_blogger_001","creatorArchetype":"travel_blogger","creatorProfileVersion":"1.0.0","creatorDisclosure":{"type":"platform_virtual_creator","displayText":"平台虚拟创作者","visible":true},"experienceClaimMode":"editorial_synthesis","authorQualitySignals":{"qualityScore":0.85,"fatigueScore":0.2,"riskTier":"low"},"entityRefs":["地点/景区/甲居藏寨"],"normalizedEntityRefs":["entity:景区:甲居藏寨"],"tagRefs":["Topic/旅行"],"intersectionHints":[{"dimension":"content","source":"entityRef","tagRefs":[],"actionType":"view_object","actionTargetId":"entity:景区:甲居藏寨"},{"dimension":"interest","source":"tagRef","tagRefs":["Topic/旅行"],"actionType":"join","actionTargetId":"Topic/旅行"}],"template":"journal","generatorModel":"agent/x","articleMarkdownDigest":"sha256:1111111111111111111111111111111111111111111111111111111111111111","publishTitle":"甲居藏寨体验","publishAngle":"体验","publishSeq":1,"sourceTaskId":"旅行/环线/川西环线/川西大环线自驾","createdAt":"2026-05-01T00:00:00Z","updatedAt":"2026-05-03T00:00:00Z","publishedAt":"2026-05-04T00:00:00Z","articleAssetManifest":{"schema":"article-asset-manifest","markdownDialect":"qwq-rich-md","articleMarkdownDigest":"sha256:1111111111111111111111111111111111111111111111111111111111111111","documentSha256":"sha256:1111111111111111111111111111111111111111111111111111111111111111","assetManifestSha256":"sha256:2222222222222222222222222222222222222222222222222222222222222222","documentVersionSha256":"sha256:3333333333333333333333333333333333333333333333333333333333333333","assets":[{"assetId":"cover","objectKey":"media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg","cdnUrl":"https://img.example.com/media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg","sha256":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}}`)
 	writeFile(t, filepath.Join(root, "posts/article/体验/甲居藏寨体验/1/article.md"), "# 甲居藏寨体验\n正文\n")
 	writeFile(t, filepath.Join(root, "posts/article/攻略/色达攻略/1/manifest.json"),
 		`{"contentType":"article","entityRefs":["地点/景区/色达"],"tagRefs":[],"publishTitle":"色达攻略","publishAngle":"攻略","publishSeq":1,"createdAt":"2026-04-01T00:00:00Z","updatedAt":"2026-04-01T00:00:00Z","publishedAt":"2026-04-02T00:00:00Z"}`)
@@ -85,11 +85,30 @@ func TestLoadPostsFull(t *testing.T) {
 	if p.ArticleAssetManifest == nil {
 		t.Fatalf("articleAssetManifest not loaded: %+v", p)
 	}
+	if p.ArticleAssetManifest.Schema != articleAssetManifestSchema {
+		t.Fatalf(
+			"articleAssetManifest.schema = %q, want %q",
+			p.ArticleAssetManifest.Schema,
+			articleAssetManifestSchema,
+		)
+	}
 	if len(p.ArticleAssetManifest.Assets) != 1 {
 		t.Fatalf("articleAssetManifest assets wrong: %+v", p.ArticleAssetManifest)
 	}
 	if p.ArticleAssetManifest.DocumentVersionSha256 == "" {
 		t.Fatalf("documentVersionSha256 not loaded: %+v", p.ArticleAssetManifest)
+	}
+}
+
+func TestValidateArticleAssetManifestRejectsNonCanonicalSchema(t *testing.T) {
+	for _, schema := range []string{"", "article-asset-manifest-retired"} {
+		err := validateArticleAssetManifest(
+			&ArticleAssetManifestDoc{Schema: schema},
+			"posts/article/test",
+		)
+		if err == nil || !strings.Contains(err.Error(), "articleAssetManifest.schema") {
+			t.Fatalf("schema %q must be rejected, got %v", schema, err)
+		}
 	}
 }
 
@@ -207,7 +226,7 @@ func TestDesiredStateLoadRejectsMissingCanonicalObjects(t *testing.T) {
 func TestLoadReleaseDesiredState(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "payload", "desired_state.json"),
-		`{"schemaVersion":"quwoquan_data.release_desired_state/1","releaseId":"release-a","desiredRefs":{"posts":["posts/article/攻略/色达攻略/1"],"entities":["地点/景区/色达"]}}`)
+		`{"schema":"quwoquan_data.release_desired_state","releaseId":"release-a","desiredRefs":{"posts":["posts/article/攻略/色达攻略/1"],"entities":["地点/景区/色达"]}}`)
 	b, err := LoadReleaseDesiredState(root)
 	if err != nil {
 		t.Fatal(err)
@@ -223,15 +242,33 @@ func TestLoadReleaseDesiredState(t *testing.T) {
 	}
 }
 
+func TestReleaseObjectRootRequiresImmutablePayloadObjects(t *testing.T) {
+	releaseRoot := t.TempDir()
+	objects := filepath.Join(releaseRoot, "payload", "objects")
+	if err := os.MkdirAll(objects, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ReleaseObjectRoot(releaseRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != objects {
+		t.Fatalf("object root = %q, want %q", got, objects)
+	}
+	if _, err := ReleaseObjectRoot(filepath.Join(releaseRoot, "missing")); err == nil {
+		t.Fatal("missing immutable object closure must fail closed")
+	}
+}
+
 func TestLoadReleaseDesiredStateRejectsRetiredSchemaAndPathEscape(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "payload", "desired_state.json"),
-		`{"schemaVersion":"quwoquan.content_sample_bundle","releaseId":"release-a","desiredRefs":{"posts":[],"entities":[]}}`)
+		`{"schema":"quwoquan.content_sample_bundle","releaseId":"release-a","desiredRefs":{"posts":[],"entities":[]}}`)
 	if _, err := LoadReleaseDesiredState(root); err == nil {
 		t.Fatal("retired sample schema must be rejected")
 	}
 	writeFile(t, filepath.Join(root, "payload", "desired_state.json"),
-		`{"schemaVersion":"quwoquan_data.release_desired_state/1","releaseId":"release-a","desiredRefs":{"posts":["../escape"],"entities":[]}}`)
+		`{"schema":"quwoquan_data.release_desired_state","releaseId":"release-a","desiredRefs":{"posts":["../escape"],"entities":[]}}`)
 	if _, err := LoadReleaseDesiredState(root); err == nil {
 		t.Fatal("path escape must be rejected")
 	}
@@ -297,7 +334,7 @@ func TestLoadManifestOnlyVideoPostAndCoverContract(t *testing.T) {
 	writeFile(t, filepath.Join(postDir, "manifest.json"), `{
 		"contentType":"video",
 		"title":"雪山视频",
-		"caption":"首帧就是雪山封面。",
+		"caption":"雪山短视频。",
 		"entityRefs":["地点/景区/雪山"],
 		"tagRefs":["Topic/旅行/视频"],
 		"createdAt":"2026-06-20T02:00:00Z",
@@ -307,14 +344,21 @@ func TestLoadManifestOnlyVideoPostAndCoverContract(t *testing.T) {
 			"assetId":"clip",
 			"kind":"video",
 			"objectKey":"media/objects/sha256/dd/dd/dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd.mp4",
-			"cdnUrl":"https://video.example.com/media/objects/sha256/dd/dd/dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd.mp4",
 			"sha256":"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
 			"mimeType":"video/mp4",
-			"thumbnailUrl":"https://video.example.com/media/objects/sha256/dd/dd/dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd.mp4?variant=thumb&t=0",
-			"coverUrl":"https://video.example.com/media/objects/sha256/dd/dd/dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd.mp4?variant=thumb&t=0",
-			"coverStrategy":"first_frame",
+			"posterAssetId":"poster",
+			"coverStrategy":"manual",
 			"coverFrameTimeMs":0,
 			"durationMs":12000,
+			"width":1080,
+			"height":1920
+		},{
+			"assetId":"poster",
+			"kind":"image",
+			"role":"cover",
+			"objectKey":"media/objects/sha256/ee/ee/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee.webp",
+			"sha256":"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+			"mimeType":"image/webp",
 			"width":1080,
 			"height":1920
 		}]
@@ -328,14 +372,19 @@ func TestLoadManifestOnlyVideoPostAndCoverContract(t *testing.T) {
 		t.Fatalf("posts = %d", len(posts))
 	}
 	post := posts[0]
-	if post.ContentType != "video" || len(post.Assets) != 1 {
+	if post.ContentType != "video" || len(post.Assets) != 2 {
 		t.Fatalf("video manifest not loaded: %+v", post)
 	}
+	if err := BindPostAssetURLs(posts, "https://video.example.com/media"); err != nil {
+		t.Fatal(err)
+	}
+	post = posts[0]
 	asset := post.Assets[0]
-	if asset.ThumbnailURL == "" || asset.CoverURL != asset.ThumbnailURL {
+	poster := post.Assets[1]
+	if asset.ThumbnailURL != poster.CDNURL || asset.CoverURL != poster.CDNURL {
 		t.Fatalf("video cover fields not loaded: %+v", asset)
 	}
-	if asset.CoverStrategy != "first_frame" || asset.CoverFrameTimeMs != 0 || asset.DurationMs != 12000 {
+	if asset.CoverStrategy != "manual" || asset.CoverFrameTimeMs != 0 || asset.DurationMs != 12000 {
 		t.Fatalf("video cover strategy/duration wrong: %+v", asset)
 	}
 
@@ -346,14 +395,41 @@ func TestLoadManifestOnlyVideoPostAndCoverContract(t *testing.T) {
 	if media.ThumbnailURL != asset.ThumbnailURL || media.CoverURL != asset.CoverURL {
 		t.Fatalf("cover summary wrong: %+v", media)
 	}
-	if media.CoverStrategy != "first_frame" || media.CoverFrameTimeMs != 0 || media.DurationMs != 12000 {
+	if media.CoverStrategy != "manual" || media.CoverFrameTimeMs != 0 || media.DurationMs != 12000 {
 		t.Fatalf("video summary strategy/duration wrong: %+v", media)
 	}
-	if len(media.MediaItems) != 1 || media.MediaItems[0]["thumbnailUrl"] != asset.ThumbnailURL {
+	if len(media.MediaItems) != 2 || media.MediaItems[0]["thumbnailUrl"] != asset.ThumbnailURL {
 		t.Fatalf("media item thumbnail missing: %+v", media.MediaItems)
 	}
 	if media.MediaItems[0]["coverFrameTimeMs"] != int64(0) {
 		t.Fatalf("media item must preserve first-frame coverFrameTimeMs=0: %+v", media.MediaItems[0])
+	}
+}
+
+func TestBindPostAssetURLsRejectsAmbiguousBaseURL(t *testing.T) {
+	posts := []PostDoc{{
+		PostRef: "posts/image/旅行/封面/1",
+		Assets: []AssetManifestItem{{
+			AssetID:   "cover",
+			ObjectKey: "media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.webp",
+		}},
+	}}
+	for _, base := range []string{
+		"",
+		"media.example.com",
+		"ftp://media.example.com",
+		"https://media.example.com/root?token=secret",
+		"https://media.example.com/root#fragment",
+	} {
+		if err := BindPostAssetURLs(posts, base); err == nil {
+			t.Fatalf("ambiguous media base %q must fail closed", base)
+		}
+	}
+}
+
+func TestBindPostAssetURLsAllowsEmptyBaselineWithoutMediaBase(t *testing.T) {
+	if err := BindPostAssetURLs(nil, ""); err != nil {
+		t.Fatalf("empty baseline must not require a media base: %v", err)
 	}
 }
 

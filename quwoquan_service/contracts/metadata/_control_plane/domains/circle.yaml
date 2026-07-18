@@ -1,4 +1,3 @@
-version: 1
 domain: circle
 display_name: Circle
 template_role: replica_ready

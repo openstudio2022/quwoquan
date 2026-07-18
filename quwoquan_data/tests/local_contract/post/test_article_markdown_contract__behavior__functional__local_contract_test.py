@@ -1,7 +1,7 @@
 """Article Markdown package 格式契约测试（与交付物格式约定对齐，不依赖具体 release）。
 
 构造一个 agent 创作正文的 article 包（front-matter + 封面 figure + 正文 + 资产清单），
-断言 qwq-rich-md/1 版本标记、asset:// 引用在 manifest 声明、封面/标题/正文同文档流。
+断言 qwq-rich-md 方言标记、asset:// 引用在 manifest 声明、封面/标题/正文同文档流。
 """
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ import re
 import yaml
 
 from core.article_package import (  # noqa: E402
-    MARKDOWN_VERSION,
+    MARKDOWN_DIALECT,
     build_markdown_frontmatter,
     compute_document_sha256,
     post_asset_id,
@@ -53,7 +53,7 @@ def _build_fixture() -> tuple[str, dict]:
         f"---\n"
         f"title: {TITLE}\n"
         f"template: journal\n"
-        f"articleMarkdownVersion: {MARKDOWN_VERSION}\n"
+        f"markdownDialect: {MARKDOWN_DIALECT}\n"
         f"coverImage: asset://{asset_id}\n"
         f"---\n\n"
         "出发地成都，周五下班后我其实犹豫了很久要不要走这趟。\n\n"
@@ -66,7 +66,7 @@ def _build_fixture() -> tuple[str, dict]:
     manifest = {
         "topicId": "峨眉山周末_自驾",
         "publishTitle": TITLE,
-        "articleMarkdownVersion": MARKDOWN_VERSION,
+        "markdownDialect": MARKDOWN_DIALECT,
         "assets": assets,
         "articleRenderProfile": render_profile,
         "generator": "agent",
@@ -77,8 +77,8 @@ def _build_fixture() -> tuple[str, dict]:
 def test_article_markdown_package_uses_qwq_rich_markdown_triple():
     markdown, manifest = _build_fixture()
 
-    assert "articleMarkdownVersion: qwq-rich-md/1" in markdown
-    assert manifest["articleMarkdownVersion"] == "qwq-rich-md/1"
+    assert "markdownDialect: qwq-rich-md" in markdown
+    assert manifest["markdownDialect"] == "qwq-rich-md"
     assert manifest["assets"][0]["assetId"]
     assert manifest["articleRenderProfile"]["template"] == "journal"
     assert manifest["articleRenderProfile"]["fontPreset"] == "clean"
@@ -118,14 +118,14 @@ def test_frontmatter_builder_quotes_titles_with_embedded_quotes():
         {
             "title": title,
             "template": "journal",
-            "articleMarkdownVersion": MARKDOWN_VERSION,
+            "markdownDialect": MARKDOWN_DIALECT,
         }
     )
 
     parsed = yaml.safe_load(block.split("\n---\n", 1)[0][4:])
 
     assert parsed["title"] == title
-    assert "articleMarkdownVersion: qwq-rich-md/1" in block
+    assert "markdownDialect: qwq-rich-md" in block
 
 
 def test_document_digest_does_not_abort_on_legacy_malformed_frontmatter():

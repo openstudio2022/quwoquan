@@ -1,4 +1,3 @@
-version: 1
 aggregate: AssistantConversation
 
 entities:
@@ -6,6 +5,7 @@ entities:
     description: 助手会话 wire 响应体（与 assistant_conversation 契约字段对齐）
     fields:
       - name: conversationId
+        source: conversationId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -13,6 +13,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: userId
+        source: userId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -20,6 +21,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: state
+        source: state
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -27,6 +29,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: activeTurnId
+        source: activeTurnId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -34,6 +37,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: lastTurnId
+        source: lastTurnId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -41,6 +45,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: summary
+        source: summary
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -48,6 +53,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: createdAt
+        source: createdAt
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -55,6 +61,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: updatedAt
+        source: updatedAt
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC

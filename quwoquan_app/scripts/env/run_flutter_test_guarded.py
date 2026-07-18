@@ -43,6 +43,7 @@ void main() {
 DEFAULT_TEST_TIMEOUT_SECONDS = int(
   os.environ.get("FLUTTER_TEST_GUARD_TIMEOUT_SECONDS", "1200")
 )
+RUNTIME_DEFINE_SCRIPT = APP_ROOT / "scripts" / "env" / "print_app_env_dart_defines.py"
 
 
 def _run_checked(cmd: list[str], *, cwd: Path = APP_ROOT) -> int:
@@ -156,6 +157,51 @@ def _needs_serial_local_contract_run(args: list[str]) -> bool:
   )
 
 
+def _dart_define_values(args: list[str]) -> dict[str, str]:
+  values: dict[str, str] = {}
+  for arg in args:
+    if not arg.startswith("--dart-define="):
+      continue
+    raw = arg.removeprefix("--dart-define=")
+    key, separator, value = raw.partition("=")
+    if separator and key:
+      values[key] = value
+  return values
+
+
+def _with_runtime_environment_defines(args: list[str]) -> list[str]:
+  defined = _dart_define_values(args)
+  runtime_env = defined.get("APP_RUNTIME_ENV", "alpha").strip() or "alpha"
+  result = subprocess.run(
+    [
+      sys.executable,
+      str(RUNTIME_DEFINE_SCRIPT),
+      "--env",
+      runtime_env,
+      "--format",
+      "args",
+    ],
+    cwd=str(APP_ROOT),
+    text=True,
+    capture_output=True,
+    check=False,
+  )
+  if result.returncode != 0:
+    raise RuntimeError(
+      "cannot resolve explicit runtime Dart defines for Flutter tests: "
+      + (result.stderr or result.stdout).strip()
+    )
+  injected: list[str] = []
+  for line in result.stdout.splitlines():
+    value = line.strip()
+    if not value.startswith("--dart-define="):
+      continue
+    key = value.removeprefix("--dart-define=").partition("=")[0]
+    if key and key not in defined:
+      injected.append(value)
+  return [*injected, *args]
+
+
 def _ensure_flutter_pub_get() -> None:
   package_config = APP_ROOT / ".dart_tool" / "package_config.json"
   if package_config.exists():
@@ -218,6 +264,7 @@ def main(argv: list[str]) -> int:
     _ensure_flutter_pub_get()
     _prewarm_sqlite3()
     flutter_args = [arg for arg in args if arg != "--no-pub"]
+    flutter_args = _with_runtime_environment_defines(flutter_args)
     if _needs_serial_local_contract_run(flutter_args):
       flutter_args = ["--concurrency=1", *flutter_args]
     cmd = ["flutter", "test", "--no-pub", *flutter_args]

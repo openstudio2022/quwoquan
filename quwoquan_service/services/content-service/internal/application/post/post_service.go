@@ -79,7 +79,7 @@ func WithSignalProcessor(sp rtrec.SignalProcessor) PostServiceOption {
 	return func(s *PostService) { s.signaler = sp }
 }
 
-// WithEventPublisher enables domain event publishing (e.g. PostCreated).
+// WithEventPublisher enables domain event publishing (e.g. PostPublished).
 func WithEventPublisher(pub messaging.EventPublisher) PostServiceOption {
 	return func(s *PostService) { s.publisher = pub }
 }

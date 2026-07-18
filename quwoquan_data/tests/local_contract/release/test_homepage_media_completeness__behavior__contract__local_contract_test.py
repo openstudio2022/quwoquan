@@ -87,7 +87,7 @@ def _write_execution(root: Path, *, capped: bool) -> None:
     write_json(
         entity / "evidence" / "media_dispositions.json",
         {
-            "schemaVersion": "quwoquan_data.homepage_media_dispositions/1",
+            "schema": "quwoquan_data.homepage_media_dispositions",
             "executionId": "20260713--travel-homepage-coverage--cn-zhejiang--canary-001",
             "objectRef": "地点/景区/东钱湖",
             "assets": [

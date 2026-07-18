@@ -17,16 +17,14 @@ CircleStatsMemberRowViewData circleStatsMemberRowFromWireMap(
   Map<String, Object?> m,
 ) {
   final dm = Map<String, dynamic>.from(m);
-  final id = (dm['userId'] ?? dm['id'] ?? '').toString();
+  final id = (dm['userId'] ?? '').toString();
   return CircleStatsMemberRowViewData(
     id: id.isNotEmpty ? id : 'unknown',
-    name: (dm['displayName'] ?? dm['name'] ?? id).toString(),
-    avatarUrl: (dm['avatarUrl'] ?? dm['avatar'] ?? '').toString(),
-    worksCountLabel: (dm['worksCountLabel'] ?? dm['worksCount'] ?? '—')
-        .toString(),
-    fansCountLabel: (dm['fansCountLabel'] ?? dm['fansCount'] ?? '—').toString(),
-    likesCountLabel: (dm['likesCountLabel'] ?? dm['likesCount'] ?? '—')
-        .toString(),
+    name: (dm['displayName'] ?? id).toString(),
+    avatarUrl: (dm['avatarUrl'] ?? '').toString(),
+    worksCountLabel: (dm['worksCountLabel'] ?? '—').toString(),
+    fansCountLabel: (dm['fansCountLabel'] ?? '—').toString(),
+    likesCountLabel: (dm['likesCountLabel'] ?? '—').toString(),
     isFollowed: dm['isFollowed'] as bool? ?? false,
   );
 }

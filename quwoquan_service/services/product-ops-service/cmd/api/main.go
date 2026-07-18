@@ -16,8 +16,6 @@ import (
 	controlplanepersistence "quwoquan_service/internal/platform/controlplane/persistence"
 	rtmongo "quwoquan_service/internal/platform/mongodb"
 
-	"log/slog"
-
 	rtauth "quwoquan_service/runtime/auth"
 	runtimeconfig "quwoquan_service/runtime/config"
 	"quwoquan_service/runtime/controlplane"
@@ -219,9 +217,9 @@ func main() {
 		_ = mongoClient.Disconnect(shutdownCtx)
 	}()
 	dbName := strings.TrimSpace(cfg.MongoDB.Database)
-	telemetryStore := telemetrypersistence.NewMongoTelemetryStore(mongoClient.Database(dbName))
-	if err := telemetryStore.EnsureIndexes(ctx); err != nil {
-		log.Fatalf("product-ops-service telemetry index initialization failed: %v", err)
+	visitStore := telemetrypersistence.NewMongoVisitStore(mongoClient.Database(dbName))
+	if err := visitStore.EnsureIndexes(ctx); err != nil {
+		log.Fatalf("product-ops-service visit index initialization failed: %v", err)
 	}
 	healthChecker.Register("mongodb", func(ctx context.Context) error {
 		return mongoClient.Ping(ctx, nil)
@@ -229,17 +227,55 @@ func main() {
 	healthChecker.Register("postgres", func(ctx context.Context) error {
 		return postgresPool.Ping(ctx)
 	})
-	log.Printf("product-ops-service telemetry storage=mongodb db=%s", dbName)
-	var eventMirror application.EventMirror
-	if esURL := strings.TrimSpace(os.Getenv("PRODUCT_OPS_ES_URL")); esURL != "" {
-		esCB := rtgov.NewCircuitBreaker(5, 15*time.Second, slog.Default())
-		esClient := rtgov.WrapClientWithCB(&http.Client{Timeout: 5 * time.Second}, esCB)
-		eventMirror = telemetrypersistence.NewElasticsearchEventMirror(esURL, telemetrypersistence.WithESHTTPClient(esClient))
-		log.Printf("product-ops-service exception ES mirror enabled url=%s", esURL)
+	slsConfig := telemetrypersistence.SLSConfig{
+		Region:                    strings.TrimSpace(cfg.SLS.Region),
+		Endpoint:                  strings.TrimSpace(cfg.SLS.Endpoint),
+		Project:                   strings.TrimSpace(cfg.SLS.Project),
+		RawLogstore:               strings.TrimSpace(cfg.SLS.RawLogstore),
+		StartupDiagnosticLogstore: strings.TrimSpace(cfg.SLS.StartupDiagnosticLogstore),
+		AggregateLogstore:         strings.TrimSpace(cfg.SLS.AggregateLogstore),
+		Timeout:                   time.Duration(cfg.SLS.TimeoutMS) * time.Millisecond,
 	}
+	accessKeyID := strings.TrimSpace(os.Getenv("ALIBABA_CLOUD_ACCESS_KEY_ID"))
+	accessKeySecret := strings.TrimSpace(os.Getenv("ALIBABA_CLOUD_ACCESS_KEY_SECRET"))
+	securityToken := strings.TrimSpace(os.Getenv("ALIBABA_CLOUD_SECURITY_TOKEN"))
+	if accessKeyID == "" || accessKeySecret == "" {
+		log.Fatal("product-ops-service SLS credentials are required through deployment Secret")
+	}
+	slsClient := telemetrypersistence.NewOfficialSLSClient(
+		slsConfig,
+		accessKeyID,
+		accessKeySecret,
+		securityToken,
+	)
+	defer slsClient.Close()
+	eventStore, err := telemetrypersistence.NewSLSEventLogStore(slsClient, slsConfig)
+	if err != nil {
+		log.Fatalf("product-ops-service SLS telemetry store invalid: %v", err)
+	}
+	healthChecker.Register("sls", func(context.Context) error {
+		for _, logstore := range []string{
+			slsConfig.RawLogstore,
+			slsConfig.StartupDiagnosticLogstore,
+			slsConfig.AggregateLogstore,
+		} {
+			if _, err := slsClient.GetLogStore(slsConfig.Project, logstore); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	batchLedger := telemetrypersistence.NewRedisEventBatchLedger(router.Scene("general"))
+	log.Printf(
+		"product-ops-service telemetry storage=sls project=%s raw=%s aggregate=%s visit_storage=mongodb db=%s",
+		slsConfig.Project,
+		slsConfig.RawLogstore,
+		slsConfig.AggregateLogstore,
+		dbName,
+	)
 	service := newProductService(
 		store,
-		application.NewTelemetryServiceWithMirror(telemetryStore, publisher, eventMirror),
+		application.NewTelemetryServiceWithStores(visitStore, instrumentEventLogStore(eventStore), batchLedger),
 		experimentFacade,
 		publisher,
 	)
@@ -247,6 +283,11 @@ func main() {
 	outerMux := http.NewServeMux()
 	outerMux.HandleFunc("/healthz", healthChecker.Handler())
 	outerMux.Handle("/metrics", mux)
+	// 启动遥测是唯一允许匿名接收的 Ops 路径；handler 以固定 schema、proof 与
+	// 每来源 IP 配额收紧，绝不绕过通用 /ops/events 的已验证主体要求。
+	outerMux.HandleFunc("/ops/startup-events", func(w http.ResponseWriter, r *http.Request) {
+		mux.ServeHTTP(w, r)
+	})
 	outerMux.Handle(
 		"/",
 		rtauth.RequireGeneratedOperationAuthorization(

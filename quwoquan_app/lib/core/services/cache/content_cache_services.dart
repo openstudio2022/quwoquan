@@ -537,9 +537,9 @@ String contentUserPostsQueryKey({
 
 String _resolvePostVersion(PostBaseDto post) {
   final map = post.toMap();
-  // 缓存版本以「最后变更时间」为准：updatedAt 优先，缺失回退不可变的 createdAt。
+  // 缓存版本只消费 canonical updatedAt；缺失时使用对象主键。
   // 不再用 publishedAt 借壳——发布时间不是内容变更时间。
-  final version = (map['updatedAt'] ?? map['createdAt'])?.toString().trim();
+  final version = map['updatedAt']?.toString().trim();
   return version?.isNotEmpty == true ? version! : post.id;
 }
 
@@ -549,25 +549,23 @@ Map<String, dynamic> _jsonSafeMap(Map<String, dynamic> map) {
 
 Map<String, dynamic> _postSnapshotMap(PostBaseDto post) {
   final map = _jsonSafeMap(post.toMap());
-  map['postId'] = (map['postId'] ?? map['id'] ?? post.id).toString();
-  map['contentType'] = (map['contentType'] ?? map['type'] ?? post.type)
-      .toString();
-  map['contentIdentity'] =
-      (map['contentIdentity'] ?? map['identity'] ?? post.identity).toString();
+  map['postId'] = post.id;
+  map['contentType'] = post.type;
+  map['contentIdentity'] = post.identity;
   return map;
 }
 
 Map<String, dynamic> _normalizePostSnapshotMap(Map<dynamic, dynamic> raw) {
   final map = Map<String, dynamic>.from(raw);
-  final postId = map['postId'] ?? map['_id'] ?? map['id'];
+  final postId = map['postId'];
   if (postId != null) {
     map['postId'] = postId.toString();
   }
-  final contentType = map['contentType'] ?? map['type'] ?? map['category'];
+  final contentType = map['contentType'];
   if (contentType != null) {
     map['contentType'] = contentType.toString();
   }
-  final identity = map['contentIdentity'] ?? map['identity'];
+  final identity = map['contentIdentity'];
   if (identity != null) {
     map['contentIdentity'] = identity.toString();
   }

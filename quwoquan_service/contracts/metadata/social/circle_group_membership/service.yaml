@@ -1,4 +1,3 @@
-version: 1
 service:
   name: circle-service
   domain: circle
@@ -11,10 +10,12 @@ service:
     target_story: app-cloud-business-object-commercial-closure
 api_routes:
   - method: POST
-    path: /v1/circles/{circleId}/groups/{groupId}/memberships
+    path: /circles/{circleId}/groups/{groupId}/memberships
+
     operation: ApplyJoinCircleGroup
     actor: persona
-    auth: required
+    security:
+      auth_mode: required
     application: { kind: command, facet: CircleGroupMembershipCommandFacet, method: applyJoinCircleGroup, aggregate_owner: CircleGroupMembership, mutation_target: CircleGroupMembership, invariant_target: CircleGroupMembership }
     response_entity: CircleGroupMembershipCommandResult
     authorization: { principal: persona, ownership_policy: active_circle_member_self_group_membership }
@@ -31,10 +32,12 @@ api_routes:
       response_decoder: decodeCircleGroupMembershipCommandResult
 
   - method: GET
-    path: /v1/circles/{circleId}/groups/{groupId}/memberships
+    path: /circles/{circleId}/groups/{groupId}/memberships
+
     operation: ListCircleGroupMemberships
     actor: persona
-    auth: required
+    security:
+      auth_mode: required
     application: { kind: query, facet: CircleGroupMembershipQueryFacet, method: listCircleGroupMemberships, reader: CircleGroupMembershipReader, slice: CircleGroupMembershipPageSlice }
     query_params: [state, cursor, limit]
     response_entity: CircleGroupMembershipSlice
@@ -52,10 +55,12 @@ api_routes:
       response_decoder: decodeCircleGroupMembershipPageSlice
 
   - method: GET
-    path: /v1/circles/{circleId}/groups/{groupId}/memberships/self
+    path: /circles/{circleId}/groups/{groupId}/memberships/self
+
     operation: GetMyCircleGroupMembership
     actor: persona
-    auth: required
+    security:
+      auth_mode: required
     application: { kind: query, facet: CircleGroupMembershipQueryFacet, method: getMyCircleGroupMembership, reader: CircleGroupMembershipReader, slice: CircleGroupMembershipSlice }
     response_entity: CircleGroupMembershipSlice
     authorization: { principal: persona, ownership_policy: self_group_membership_only }
@@ -72,11 +77,13 @@ api_routes:
       response_decoder: decodeCircleGroupMembershipSlice
 
   - method: DELETE
-    path: /v1/circles/{circleId}/groups/{groupId}/memberships/self
+    path: /circles/{circleId}/groups/{groupId}/memberships/self
+
     operation: LeaveCircleGroup
     actor: persona
-    auth: required
-    headers: [If-Match, Idempotency-Key]
+    security:
+      auth_mode: required
+    headers: [Idempotency-Key]
     application: { kind: command, facet: CircleGroupMembershipCommandFacet, method: leaveCircleGroup, aggregate_owner: CircleGroupMembership, mutation_target: CircleGroupMembership, invariant_target: CircleGroupMembership }
     response_entity: CircleGroupMembershipCommandResult
     authorization: { principal: persona, ownership_policy: self_group_membership_only }
@@ -93,11 +100,13 @@ api_routes:
       response_decoder: decodeCircleGroupMembershipCommandResult
 
   - method: POST
-    path: /v1/circles/{circleId}/groups/{groupId}/memberships/{personaId}:approve
+    path: /circles/{circleId}/groups/{groupId}/memberships/{personaId}:approve
+
     operation: ApproveCircleGroupMember
     actor: persona
-    auth: required
-    headers: [If-Match, Idempotency-Key]
+    security:
+      auth_mode: required
+    headers: [Idempotency-Key]
     application: { kind: command, facet: CircleGroupMembershipCommandFacet, method: approveCircleGroupMember, aggregate_owner: CircleGroupMembership, mutation_target: CircleGroupMembership, invariant_target: CircleGroupMembership }
     response_entity: CircleGroupMembershipCommandResult
     authorization: { principal: persona, ownership_policy: group_owner_or_manager }
@@ -114,11 +123,13 @@ api_routes:
       response_decoder: decodeCircleGroupMembershipCommandResult
 
   - method: POST
-    path: /v1/circles/{circleId}/groups/{groupId}/memberships/{personaId}:reject
+    path: /circles/{circleId}/groups/{groupId}/memberships/{personaId}:reject
+
     operation: RejectCircleGroupMember
     actor: persona
-    auth: required
-    headers: [If-Match, Idempotency-Key]
+    security:
+      auth_mode: required
+    headers: [Idempotency-Key]
     application: { kind: command, facet: CircleGroupMembershipCommandFacet, method: rejectCircleGroupMember, aggregate_owner: CircleGroupMembership, mutation_target: CircleGroupMembership, invariant_target: CircleGroupMembership }
     response_entity: CircleGroupMembershipCommandResult
     authorization: { principal: persona, ownership_policy: group_owner_or_manager }
@@ -135,11 +146,13 @@ api_routes:
       response_decoder: decodeCircleGroupMembershipCommandResult
 
   - method: DELETE
-    path: /v1/circles/{circleId}/groups/{groupId}/memberships/{personaId}
+    path: /circles/{circleId}/groups/{groupId}/memberships/{personaId}
+
     operation: RemoveCircleGroupMember
     actor: persona
-    auth: required
-    headers: [If-Match, Idempotency-Key]
+    security:
+      auth_mode: required
+    headers: [Idempotency-Key]
     application: { kind: command, facet: CircleGroupMembershipCommandFacet, method: removeCircleGroupMember, aggregate_owner: CircleGroupMembership, mutation_target: CircleGroupMembership, invariant_target: CircleGroupMembership }
     response_entity: CircleGroupMembershipCommandResult
     authorization: { principal: persona, ownership_policy: group_owner_or_manager }
@@ -156,11 +169,13 @@ api_routes:
       response_decoder: decodeCircleGroupMembershipCommandResult
 
   - method: PATCH
-    path: /v1/circles/{circleId}/groups/{groupId}/memberships/{personaId}/role
+    path: /circles/{circleId}/groups/{groupId}/memberships/{personaId}/role
+
     operation: UpdateCircleGroupMemberRole
     actor: persona
-    auth: required
-    headers: [If-Match, Idempotency-Key]
+    security:
+      auth_mode: required
+    headers: [Idempotency-Key]
     application: { kind: command, facet: CircleGroupMembershipCommandFacet, method: updateCircleGroupMemberRole, aggregate_owner: CircleGroupMembership, mutation_target: CircleGroupMembership, invariant_target: CircleGroupMembership }
     request_entity: UpdateCircleGroupMembershipRoleRequest
     response_entity: CircleGroupMembershipCommandResult
@@ -188,7 +203,7 @@ contract_test:
   mock_strategy:
     service_side:
       description: 使用 MongoDB 7 replica set 与 Redis 7 testcontainers，不 mock Store、outbox、Reader 或 stream
-      real_engines: { mongodb: testcontainers (mongo:7 replica set), redis: testcontainers (redis:7) }
+      real_engines: { mongodb: "testcontainers (mongo:7 replica set)", redis: "testcontainers (redis:7)" }
       data_management:
         seed: 仅插入 Circle、CircleMembership 与 CircleGroup policy；CircleGroupMembership 必须经真实 HTTP Command Facade 创建
         cleanup: DeleteMany all circle_group_membership_* collections and FLUSHDB isolated Redis

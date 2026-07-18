@@ -25,23 +25,23 @@ func TestReportOperationsRejectAnonymousForgedAndUnauthorizedPrincipals(t *testi
 		{
 			name:   "list",
 			method: http.MethodGet,
-			target: "/v1/content/reports?limit=10",
+			target: "/content/reports?limit=10",
 		},
 		{
 			name:   "get",
 			method: http.MethodGet,
-			target: "/v1/content/reports/rpt_missing",
+			target: "/content/reports/rpt_missing",
 		},
 		{
 			name:   "begin review",
 			method: http.MethodPost,
-			target: "/v1/content/reports/rpt_missing/review",
+			target: "/content/reports/rpt_missing/review",
 			body:   `{}`,
 		},
 		{
 			name:   "resolve",
 			method: http.MethodPatch,
-			target: "/v1/content/reports/rpt_missing",
+			target: "/content/reports/rpt_missing",
 			body:   `{"resolution":"warn"}`,
 		},
 	}
@@ -110,7 +110,7 @@ func TestReportOperationsRejectAnonymousForgedAndUnauthorizedPrincipals(t *testi
 	operatorWithoutPermission := newAuthenticatedReportRequest(
 		t,
 		http.MethodGet,
-		"/v1/content/reports?limit=10",
+		"/content/reports?limit=10",
 		nil,
 		rtauth.TokenSubject{
 			AccountID: "operator-without-permission",
@@ -139,7 +139,7 @@ func TestReportOperatorQueueReviewResolveTransitionAndIdempotency(t *testing.T) 
 	create := newAuthenticatedReportRequest(
 		t,
 		http.MethodPost,
-		"/v1/content/reports",
+		"/content/reports",
 		bytes.NewBufferString(`{
 			"targetType":"post",
 			"targetId":"report-target-post",
@@ -169,7 +169,7 @@ func TestReportOperatorQueueReviewResolveTransitionAndIdempotency(t *testing.T) 
 	list := newAuthenticatedReportRequest(
 		t,
 		http.MethodGet,
-		"/v1/content/reports?limit=10",
+		"/content/reports?limit=10",
 		nil,
 		readOperator,
 	)
@@ -196,7 +196,7 @@ func TestReportOperatorQueueReviewResolveTransitionAndIdempotency(t *testing.T) 
 	detail := newAuthenticatedReportRequest(
 		t,
 		http.MethodGet,
-		"/v1/content/reports/"+reportID,
+		"/content/reports/"+reportID,
 		nil,
 		readOperator,
 	)
@@ -215,7 +215,7 @@ func TestReportOperatorQueueReviewResolveTransitionAndIdempotency(t *testing.T) 
 	beginReview := newAuthenticatedReportRequest(
 		t,
 		http.MethodPost,
-		"/v1/content/reports/"+reportID+"/review",
+		"/content/reports/"+reportID+"/review",
 		bytes.NewBufferString(`{}`),
 		writeOperator,
 	)
@@ -241,7 +241,7 @@ func TestReportOperatorQueueReviewResolveTransitionAndIdempotency(t *testing.T) 
 	forgedReviewer := newAuthenticatedReportRequest(
 		t,
 		http.MethodPatch,
-		"/v1/content/reports/"+reportID,
+		"/content/reports/"+reportID,
 		bytes.NewBufferString(`{"resolution":"warn","reviewerId":"forged-reviewer"}`),
 		writeOperator,
 	)
@@ -263,7 +263,7 @@ func TestReportOperatorQueueReviewResolveTransitionAndIdempotency(t *testing.T) 
 		resolve := newAuthenticatedReportRequest(
 			t,
 			http.MethodPatch,
-			"/v1/content/reports/"+reportID,
+			"/content/reports/"+reportID,
 			bytes.NewBufferString(`{"resolution":"warn"}`),
 			writeOperator,
 		)
@@ -302,7 +302,7 @@ func TestReportOperatorQueueReviewResolveTransitionAndIdempotency(t *testing.T) 
 	finalDetail := newAuthenticatedReportRequest(
 		t,
 		http.MethodGet,
-		"/v1/content/reports/"+reportID,
+		"/content/reports/"+reportID,
 		nil,
 		readOperator,
 	)

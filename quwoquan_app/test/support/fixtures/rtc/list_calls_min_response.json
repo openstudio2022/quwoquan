@@ -1,7 +1,7 @@
 {
   "items": [
     {
-      "_id": "call_golden_001",
+      "callId": "call_golden_001",
       "callType": "audio",
       "status": "ended",
       "initiatorId": "user_golden",

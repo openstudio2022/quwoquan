@@ -41,7 +41,7 @@ func startRelationshipContractRuntime(
 		}
 		targetID := strings.TrimSuffix(strings.TrimPrefix(
 			r.URL.Path,
-			"/v1/user/sub-accounts/",
+			"/user/sub-accounts/",
 		), "/relationship/capability")
 		capability := defaultCapability
 		if configured, ok := capabilities[targetID]; ok {

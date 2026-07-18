@@ -50,6 +50,15 @@ type config struct {
 	Postgres struct {
 		DSN string `yaml:"dsn"`
 	} `yaml:"postgres"`
+	SLS struct {
+		Region                    string `yaml:"region"`
+		Endpoint                  string `yaml:"endpoint"`
+		Project                   string `yaml:"project"`
+		RawLogstore               string `yaml:"raw_logstore"`
+		StartupDiagnosticLogstore string `yaml:"startup_diagnostic_logstore"`
+		AggregateLogstore         string `yaml:"aggregate_logstore"`
+		TimeoutMS                 int    `yaml:"timeout_ms"`
+	} `yaml:"sls"`
 	Redis struct {
 		Rec     redisSceneCfg `yaml:"rec"`
 		General redisSceneCfg `yaml:"general"`
@@ -124,6 +133,29 @@ func applyEnvOverrides(cfg *config) {
 	if v := strings.TrimSpace(os.Getenv("POSTGRES_DSN")); v != "" {
 		cfg.Postgres.DSN = v
 	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_SLS_REGION")); v != "" {
+		cfg.SLS.Region = v
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_SLS_ENDPOINT")); v != "" {
+		cfg.SLS.Endpoint = v
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_SLS_PROJECT")); v != "" {
+		cfg.SLS.Project = v
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_SLS_RAW_LOGSTORE")); v != "" {
+		cfg.SLS.RawLogstore = v
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_SLS_STARTUP_DIAGNOSTIC_LOGSTORE")); v != "" {
+		cfg.SLS.StartupDiagnosticLogstore = v
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_SLS_AGGREGATE_LOGSTORE")); v != "" {
+		cfg.SLS.AggregateLogstore = v
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_SLS_TIMEOUT_MS")); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil {
+			cfg.SLS.TimeoutMS = parsed
+		}
+	}
 	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_REDIS_GENERAL_ADDR")); v != "" {
 		cfg.Redis.General.Addr = v
 	}
@@ -141,6 +173,15 @@ func applyEnvOverrides(cfg *config) {
 	}
 	if strings.HasPrefix(strings.TrimSpace(cfg.Postgres.DSN), "${") {
 		cfg.Postgres.DSN = ""
+	}
+	if strings.HasPrefix(strings.TrimSpace(cfg.SLS.Endpoint), "${") {
+		cfg.SLS.Endpoint = ""
+	}
+	if strings.HasPrefix(strings.TrimSpace(cfg.SLS.Region), "${") {
+		cfg.SLS.Region = ""
+	}
+	if strings.HasPrefix(strings.TrimSpace(cfg.SLS.Project), "${") {
+		cfg.SLS.Project = ""
 	}
 }
 
@@ -193,6 +234,21 @@ func validateRequiredRuntimeConfig(cfg config) error {
 	}
 	if strings.TrimSpace(cfg.Postgres.DSN) == "" {
 		return fmt.Errorf("postgres.dsn is required")
+	}
+	for name, value := range map[string]string{
+		"region":                      cfg.SLS.Region,
+		"endpoint":                    cfg.SLS.Endpoint,
+		"project":                     cfg.SLS.Project,
+		"raw_logstore":                cfg.SLS.RawLogstore,
+		"startup_diagnostic_logstore": cfg.SLS.StartupDiagnosticLogstore,
+		"aggregate_logstore":          cfg.SLS.AggregateLogstore,
+	} {
+		if strings.TrimSpace(value) == "" {
+			return fmt.Errorf("sls.%s is required", name)
+		}
+	}
+	if cfg.SLS.TimeoutMS <= 0 || cfg.SLS.TimeoutMS > 10000 {
+		return fmt.Errorf("sls.timeout_ms must be within 1..10000")
 	}
 	if _, err := buildRedisSceneConfig("rec", cfg.Redis.Rec); err != nil {
 		return err

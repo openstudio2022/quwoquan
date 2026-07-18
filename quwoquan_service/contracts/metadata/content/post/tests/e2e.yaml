@@ -1,4 +1,3 @@
-version: 1
 aggregate: Post
 layer: e2e
 
@@ -23,13 +22,14 @@ execution:
 # ── 核心用户旅程 ──────────────────────────────────────────────────────
 scenarios:
   - name: discovery_feed_load_and_render
+    source: discovery_feed_load_and_render
     description: 发现页加载 → 渲染内容卡片（全链路）
     test_type: ui_journey
     patrol_flow: test/user_acceptance/patrol/discovery/feed_load__user_acceptance_test.dart
     actors:
       app: lib/ui/discovery/pages/discovery_page.dart
-      gateway: /v1/content/feed
-      service: content-service GET /v1/content/feed
+      gateway: /content/feed
+      service: content-service GET /content/feed
       storage: MongoDB rm_discovery_feed collection
     steps:
       - app opens discovery photo tab
@@ -49,17 +49,18 @@ scenarios:
       - pagination echoes the server feedRequestId and behavior events reuse the same id
 
   - name: like_post_realtime
+    source: like_post_realtime
     description: 点赞 → 计数实时更新 → 错误 UI 正确展示
     test_type: ui_journey
     patrol_flow: test/user_acceptance/patrol/content/like_post__user_acceptance_test.dart
     actors:
       app: post card like button
-      service: content-service POST /v1/content/posts/{postId}/like
+      service: content-service POST /content/posts/{postId}/like
       storage: MongoDB content_reaction_aggregates + command receipt + outbox + Post.likeCount projection
     steps:
       - user taps like button
       - app optimistically increments like count (ContentUIConfig.interaction_config.like.optimistic_update=true)
-      - app calls POST /v1/content/posts/{postId}/like
+      - app calls POST /content/posts/{postId}/like
       - service commits ContentReaction + receipt + outbox in one Mongo transaction
       - durable projection relay recomputes Post.likeCount from active relationships
       - service returns typed reactionId/version/liked/changed/replayed result
@@ -73,17 +74,18 @@ scenarios:
       - "on 429 response: optimistic update rolled back"
 
   - name: behavior_batch_report_reaches_service
+    source: behavior_batch_report_reaches_service
     description: 行为事件批量上报从端侧到达服务
     test_type: api_contract
     actors:
       app: ContentBehaviorTracker
-      service: content-service POST /v1/content/behaviors
+      service: content-service POST /content/behaviors
     steps:
       - user scrolls feed → impression events buffered
       - user dwells on photo > 10s → dwell event buffered
       - user clicks post → click event fires immediately (batch=false)
       - batch flush triggered on scroll stop
-      - POST /v1/content/behaviors with events array
+      - POST /content/behaviors with events array
     assertions:
       - click event reaches service within 200ms
       - batch payload type field matches behaviors.yaml behavior_events types
@@ -91,6 +93,7 @@ scenarios:
       - service returns 204
 
   - name: error_state_displayed_correctly
+    source: error_state_displayed_correctly
     description: 服务返回错误码 → 端侧显示正确 i18n 提示
     test_type: api_contract
     # 协议层/语义层由 L3 api_contract 覆盖；UI 渲染层（empty_state）由对应 ui_journey 覆盖
@@ -103,13 +106,14 @@ scenarios:
       - post_not_found empty state rendered (from ContentUIConfig.empty_states)  # → covered by error_empty_state_ui ui_journey
 
   - name: error_empty_state_ui
+    source: error_empty_state_ui
     description: 帖子不存在错误 → 端侧空状态 Widget 正确渲染
     test_type: ui_journey
     patrol_flow: test/user_acceptance/patrol/content/error_empty_state__user_acceptance_test.dart
     # 补充 L3 error_state_displayed_correctly 中无法通过 HTTP 验证的 UI 渲染层
     actors:
       app: lib/ui/content/pages/work_browser_entry_page.dart
-      service: content-service GET /v1/content/posts/{nonExistentId}
+      service: content-service GET /content/posts/{nonExistentId}
     steps:
       - app direct-opens work browser with nonexistent postId
       - service returns 404 CONTENT.USER.post_not_found
@@ -121,6 +125,7 @@ scenarios:
       - no crash, no infinite loading spinner
 
   - name: feed_cursor_pagination_end_to_end
+    source: feed_cursor_pagination_end_to_end
     description: 游标分页端到端（翻页加载更多）
     test_type: api_contract
     steps:
@@ -133,6 +138,7 @@ scenarios:
       - total items loaded == seeded count
 
   - name: media_not_ready_graceful_error
+    source: media_not_ready_graceful_error
     description: 媒体处理中发布 → 端侧友好提示 + 稍后重试
     test_type: api_contract
     # 注：UI 断言（toast 渲染）需配套 ui_journey 场景覆盖
@@ -145,19 +151,20 @@ scenarios:
       - "recovery_action: retry → UI shows retry option"
 
   - name: comment_on_post_journey
+    source: comment_on_post_journey
     description: 评论内容旅程：发表评论 → 评论数更新 → 行为信号到达推荐服务
     test_type: ui_journey
     patrol_flow: test/user_acceptance/patrol/content/comment_post__user_acceptance_test.dart
     actors:
       app: lib/ui/content/pages/unified_media_viewer_page.dart
-      service: content-service POST /v1/content/posts/{postId}/comments
+      service: content-service POST /content/posts/{postId}/comments
       storage: MongoDB comments collection + posts.commentCount
     steps:
       - user opens work browser (photo)
       - user taps comment input bar
       - user types comment text
       - user submits comment
-      - app calls POST /v1/content/posts/{postId}/comments
+      - app calls POST /content/posts/{postId}/comments
       - service creates comment + increments commentCount
       - app receives response → updates comment list + counter
     assertions:

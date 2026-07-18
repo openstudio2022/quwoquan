@@ -94,15 +94,15 @@ def _entity_homepage_agent_run_id(
         if run_id and not run_id.startswith("build-homepage:"):
             return run_id
     try:
-        from content.execution.context import load_workflow_state
-        state = load_workflow_state(execution_id)
+        from content.execution.context import load_execution_state
+        state = load_execution_state(execution_id)
     except (ImportError, OSError, ValueError, TypeError):
         return ""
     rows: list[Any] = []
-    history = state.get("agentRunHistory")
+    history = state.agent_run_history
     if isinstance(history, list):
         rows.extend(history)
-    last = state.get("lastAgentRun")
+    last = state.last_agent_run
     if isinstance(last, dict):
         rows.append(last)
     for run in reversed(rows):
@@ -227,7 +227,7 @@ def _write_entity_review_sidecars(
     )
     finalization.update(
         {
-            "schemaVersion": "quwoquan_data.finalization/1",
+            "schema": "quwoquan_data.finalization",
             "stage": "5.review",
             **execution,
             "draftRef": str(finalization.get("draftArticleRef") or "4.draft/page.md"),
@@ -263,7 +263,7 @@ def _write_entity_review_sidecars(
         if str(item).strip()
     ]
     deterministic_gate = {
-        "schemaVersion": "quwoquan_data.deterministic_gate/1",
+        "schema": "quwoquan_data.deterministic_gate",
         "stage": "5.review",
         "executionId": execution["executionId"],
         "objectRef": object_ref,
@@ -272,7 +272,7 @@ def _write_entity_review_sidecars(
         "checks": deterministic_checks,
     }
     media_ref_review = {
-        "schemaVersion": "quwoquan_data.media_ref_review/1",
+        "schema": "quwoquan_data.media_ref_review",
         "stage": "5.review",
         "executionId": execution["executionId"],
         "objectRef": object_ref,
@@ -287,7 +287,7 @@ def _write_entity_review_sidecars(
     )
     reviewer_status = str(reviewer.get("status") or "pending")
     attestation = {
-        "schemaVersion": "quwoquan_data.review_attestation/1",
+        "schema": "quwoquan_data.review_attestation",
         "stage": "5.review",
         **execution,
         "objectRef": object_ref,
@@ -359,7 +359,7 @@ def _write_entity_review_sidecars(
         ("finalization", finalization_path),
     )
     evidence_index = {
-        "schemaVersion": "quwoquan_data.evidence_index/1",
+        "schema": "quwoquan_data.evidence_index",
         "stage": "5.review",
         "executionId": execution["executionId"],
         "objectRef": object_ref,
@@ -442,7 +442,7 @@ def apply_independent_homepage_review(
         return [f"{review_dir}: independent reviewer findings missing"]
     passed = decision == "approved" and not issues
     reviewer_result = {
-        "schemaVersion": "quwoquan_data.reviewer_result/1",
+        "schema": "quwoquan_data.reviewer_result",
         "stage": "5.review",
         "executionId": str(result_payload.get("executionId") or ""),
         "executionBinding": "frozen",

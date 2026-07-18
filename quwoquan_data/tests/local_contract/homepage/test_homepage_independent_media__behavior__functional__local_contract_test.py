@@ -13,7 +13,7 @@ if str(SCRIPTS_ROOT) not in sys.path:
 from core.paths import ensure_execution_command_layout, ensure_execution_layout  # noqa: E402
 from content.source.source_unit import resolve_entity_object_dir, write_source_unit  # noqa: E402
 from core.asset_identity import compute_post_asset_id  # noqa: E402
-from content.post.draft_io import is_placeholder  # noqa: E402
+from content.post.article.draft_io import is_placeholder  # noqa: E402
 from content.homepage.homepage_assets import select_homepage_assets  # noqa: E402
 from content.homepage.homepage_materialization import _homepage_source_figure_issues  # noqa: E402
 from content.homepage.homepage_prompt import (  # noqa: E402
@@ -21,6 +21,7 @@ from content.homepage.homepage_prompt import (  # noqa: E402
     _write_entity_page_prompt_and_placeholder,
 )
 from content.homepage.homepage_validation import _asset_closure_issues  # noqa: E402
+from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
 
 
 def test_homepage_assets_fall_back_to_independent_rights_cleared_media_unit():
@@ -44,7 +45,7 @@ def test_homepage_assets_fall_back_to_independent_rights_cleared_media_unit():
         source_category="encyclopedia",
         source_kind="toutiao_baike",
         extractor="toutiao_baike_html",
-        policy_revision="encyclopedia-primary-v2",
+        policy_revision="encyclopedia-primary",
         source_use_mode="factual_reference_only",
         research_lane="homepage",
         url="https://www.baike.com/wikiid/123",
@@ -139,6 +140,10 @@ def test_homepage_asset_closure_allows_independent_media_source(tmp_path: Path):
 def test_changed_homepage_base_source_invalidates_stale_draft_and_failure():
     execution_id = "20260712--travel-homepage-source-refresh--cn-zhejiang--canary-001"
     entity = "来源刷新景区"
+    build_execution_fixture(
+        execution_id,
+        targets=[{"name": entity, "entityType": "地点/景区"}],
+    )
     ensure_execution_layout(execution_id)
     ensure_execution_command_layout(execution_id, "homepage")
     obj = resolve_entity_object_dir(

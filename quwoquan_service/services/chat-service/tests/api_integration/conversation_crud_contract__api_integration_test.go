@@ -9,7 +9,7 @@ func TestCreateConversation(t *testing.T) {
 
 	result := createConversation(t, `{"type":"group","title":"测试群聊","maxGroupSize":500}`)
 
-	if result["_id"] == nil {
+	if result["id"] == nil {
 		t.Error("response missing _id")
 	}
 	if result["type"] != "group" {
@@ -30,14 +30,14 @@ func TestGetConversation(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	created := createConversation(t, `{"type":"direct","title":"私聊","initialMemberIds":["user_test_002"]}`)
-	convId := created["_id"].(string)
+	convId := created["id"].(string)
 
-	code, result := doGet(t, "/v1/chat/conversations/"+convId, "user_test_001")
+	code, result := doGet(t, "/chat/conversations/"+convId, "user_test_001")
 	if code != 200 {
 		t.Fatalf("expected 200, got %d", code)
 	}
-	if result["_id"] != convId {
-		t.Errorf("expected _id=%s, got %v", convId, result["_id"])
+	if result["id"] != convId {
+		t.Errorf("expected _id=%s, got %v", convId, result["id"])
 	}
 }
 
@@ -47,7 +47,7 @@ func TestListConversations(t *testing.T) {
 	createConversation(t, `{"type":"group","title":"群聊1"}`)
 	createConversation(t, `{"type":"group","title":"群聊2"}`)
 
-	code, result := doGet(t, "/v1/chat/conversations?limit=10", "user_test_001")
+	code, result := doGet(t, "/chat/conversations?limit=10", "user_test_001")
 	if code != 200 {
 		t.Fatalf("expected 200, got %d", code)
 	}
@@ -63,7 +63,7 @@ func TestListConversations(t *testing.T) {
 func TestGetConversation_NotFound(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
-	code, _ := doGet(t, "/v1/chat/conversations/nonexistent_id_xyz", "user_test_001")
+	code, _ := doGet(t, "/chat/conversations/nonexistent_id_xyz", "user_test_001")
 	if code != 404 {
 		t.Fatalf("expected 404, got %d", code)
 	}

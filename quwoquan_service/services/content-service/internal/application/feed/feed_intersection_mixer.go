@@ -31,9 +31,6 @@ func attachFeedIntersections(views []FeedItemView, reasons []intersection.Inters
 	for i := range views {
 		postID := strings.TrimSpace(views[i].PostID)
 		if postID == "" {
-			postID = strings.TrimSpace(views[i].ID)
-		}
-		if postID == "" {
 			continue
 		}
 		lightPool, heavyPool := feedReasonPoolsForPost(reasons, postID)

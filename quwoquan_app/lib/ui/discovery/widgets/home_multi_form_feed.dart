@@ -44,6 +44,7 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/core/media/content_media_url.dart';
+import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/core/media/media_aspect_ratio.dart';
 import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
@@ -55,6 +56,7 @@ import 'package:quwoquan_app/ui/content/share/content_share_sheet.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_template.dart';
 import 'package:quwoquan_app/ui/discovery/services/discovery_share_template.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
+import 'package:quwoquan_app/core/widgets/app_request_feedback.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/components/media/video/player/video_player_widget.dart';
 import 'package:quwoquan_app/ui/discovery/models/home_feed_layout_policy.dart';
@@ -103,6 +105,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
     this.disableImageViewerOnTap = false,
     this.onPostTap,
     this.onMoreTap,
+    this.onInitialContentPainted,
   });
 
   final bool isDark;
@@ -126,6 +129,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
   })?
   onPostTap;
   final void Function(PostBaseDto post)? onMoreTap;
+  final VoidCallback? onInitialContentPainted;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -176,9 +180,22 @@ class HomeMultiFormFeed extends ConsumerWidget {
     final staleDataError = feedAsync.value?.staleDataError;
     final hasBlockingError = blockingError != null;
 
-    if (feedAsync.isLoading && feedPosts.isEmpty && !hasBlockingError) {
+    final isFeedLoading =
+        feedAsync.isLoading || (feedAsync.value?.isLoading ?? false);
+    if (isFeedLoading && feedPosts.isEmpty && !hasBlockingError) {
       // 任务 A · 加载态：用占位渐显的骨架屏代替裸 spinner，避免白屏并提示版式。
-      return _HomeFeedSkeleton(isDark: isDark);
+      return Column(
+        children: <Widget>[
+          Expanded(child: _HomeFeedSkeleton(isDark: isDark)),
+          if (feedAsync.value?.isSlow ?? false)
+            AppRequestFeedback.inline(
+              key: const ValueKey<String>('home_feed_slow_hint'),
+              showSlowHint: true,
+              showIndicator: false,
+              slowLabel: UITextConstants.requestWaitSlow,
+            ),
+        ],
+      );
     }
 
     if (hasBlockingError && feedPosts.isEmpty) {
@@ -206,7 +223,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
       );
     }
 
-    if (feedPosts.isEmpty && !feedAsync.isLoading && !hasBlockingError) {
+    if (feedPosts.isEmpty && !isFeedLoading && !hasBlockingError) {
       // 任务 A · 空态：加载完成但无内容时给运营兜底文案 + 再试，禁止落到空白滚动视图。
       return _HomeFeedEmptyState(
         isDark: isDark,
@@ -219,9 +236,13 @@ class HomeMultiFormFeed extends ConsumerWidget {
     // 任务 B · 首屏 TTI：内容首帧落地时上报首屏可交互耗时（每 channel 一次）。
     final firstScreenItemCount = feedPosts.length;
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!context.mounted) {
+        return;
+      }
       ref
           .read(feedPerformanceObservabilityProvider)
           .markFirstContentReady(channelId, itemCount: firstScreenItemCount);
+      onInitialContentPainted?.call();
     });
 
     final pageBackground =

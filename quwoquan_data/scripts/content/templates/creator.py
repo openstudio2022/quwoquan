@@ -23,7 +23,6 @@ _CARRIER_KEYS = ("article", "image", "video")
 SYS_CREATOR_ID_RE = re.compile(r"^sys_(travel|photo|travelphoto)_[0-9]{4}$")
 PUBLISHED_INTEREST_TAGS = frozenset((*TRAVEL_TOPIC_REFS, *PHOTOGRAPHY_TOPIC_REFS))
 FORBIDDEN_SYS_CREATOR_FIELDS = (
-    "legacyAliases",
     "archiveAliases",
     "avatarObjectKey",
     "backgroundObjectKey",

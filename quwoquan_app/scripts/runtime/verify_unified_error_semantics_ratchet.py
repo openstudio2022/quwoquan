@@ -12,6 +12,7 @@ Blocks new occurrences of:
    `Center/Padding/Text/...` instead of unified error semantics components.
 5) generic error UI that uses alarming icons, old "加载失败/重试" titles, or
    routes list append failures through section cards instead of footer.
+6) circular exclamation icons outside the shared inline error primitive.
 
 Uses a baseline file so existing debt is tolerated while preventing regressions.
 """
@@ -24,6 +25,9 @@ import sys
 BASELINE_FILE = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
     ".verify_unified_error_semantics_ratchet_baseline.txt",
+)
+CANONICAL_INLINE_ERROR_ICON = (
+    "quwoquan_app/lib/core/widgets/error_states/app_error_states.dart"
 )
 
 LINE_RULES = [
@@ -147,6 +151,21 @@ def collect_violations(target_root: str, repo_root: str) -> list[tuple[str, int,
             try:
                 with open(path, encoding="utf-8") as handle:
                     content = handle.read()
+                if (
+                    "CupertinoIcons.exclamationmark_circle" in content
+                    and rel != CANONICAL_INLINE_ERROR_ICON
+                ):
+                    for line_no, line in enumerate(content.splitlines(), 1):
+                        if "CupertinoIcons.exclamationmark_circle" in line:
+                            results.append(
+                                (
+                                    rel,
+                                    line_no,
+                                    line.rstrip(),
+                                    "圆形感叹号仅允许由共享 AppInlineFieldError / "
+                                    "AppFormErrorCard 原语渲染",
+                                )
+                            )
                 for line_no, line in enumerate(content.splitlines(), 1):
                     stripped = line.strip()
                     if stripped.startswith("//"):

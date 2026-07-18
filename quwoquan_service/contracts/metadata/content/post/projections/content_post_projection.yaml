@@ -1,4 +1,3 @@
-version: 1
 read_model: ContentPostProjection
 description: |
   ListUserPosts 分页结果的单项内容读模型。它是 Post 的只读投影，

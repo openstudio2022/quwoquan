@@ -5,7 +5,7 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "schemaVersion",
+    "schema",
     "auditId",
     "candidateId",
     "action",
@@ -15,9 +15,6 @@
     "version"
   ],
   "properties": {
-    "schemaVersion": {
-      "const": "quwoquan_data.governance_audit/1"
-    },
     "auditId": {
       "type": "string",
       "pattern": "^audit_[0-9a-f]{24}$"
@@ -28,7 +25,11 @@
     },
     "action": {
       "type": "string",
-      "enum": ["candidate.intake", "candidate.intake_updated", "candidate.reviewed"]
+      "enum": [
+        "candidate.intake",
+        "candidate.intake_updated",
+        "candidate.reviewed"
+      ]
     },
     "actor": {
       "type": "string",
@@ -40,7 +41,12 @@
     },
     "status": {
       "type": "string",
-      "enum": ["published", "pending_review", "rejected", "offline"]
+      "enum": [
+        "published",
+        "pending_review",
+        "rejected",
+        "offline"
+      ]
     },
     "version": {
       "type": "integer",
@@ -48,6 +54,9 @@
     },
     "details": {
       "type": "object"
+    },
+    "schema": {
+      "const": "quwoquan_data.governance_audit"
     }
   }
 }

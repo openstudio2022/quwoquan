@@ -1,4 +1,3 @@
-version: 1
 read_model: IntersectionReason
 description: |
   交集理由（B1 契约，跨会话基建真相源）。
@@ -74,222 +73,185 @@ client_projection:
       dart_type: String
       nullable: false
       source: kind
-      aliases: [kind, intersectionKind]
       default: "''"
     - name: vertical
       dart_type: String
       nullable: false
       source: vertical
-      aliases: [vertical]
       default: "'general'"
     - name: dimension
       dart_type: String
       nullable: false
       source: dimension
-      aliases: [dimension]
       default: "''"
     - name: tagRefs
       dart_type: List<String>
       nullable: false
       source: tagRefs
-      aliases: [tagRefs]
     - name: relationKind
       dart_type: String
       nullable: false
       source: relationKind
-      aliases: [relationKind]
       default: "''"
     - name: objectKind
       dart_type: String
       nullable: false
       source: objectKind
-      aliases: [objectKind]
       default: "''"
     - name: relationObjectId
       dart_type: String
       nullable: false
       source: relationObjectId
-      aliases: [relationObjectId]
       default: "''"
     - name: strength
       dart_type: double
       nullable: false
       source: strength
-      aliases: [strength, strengthScore, strength_score]
       default: "0.0"
     - name: primaryText
       dart_type: String
       nullable: false
       source: primaryText
-      aliases: [primaryText]
       default: "''"
     - name: displayBinding
       dart_type: String
       nullable: false
       source: displayBinding
-      aliases: [displayBinding]
       default: "'explicit_link'"
     - name: secondaryText
       dart_type: String
       nullable: false
       source: secondaryText
-      aliases: [secondaryText]
       default: "''"
     - name: weightTier
       dart_type: String
       nullable: false
       source: weightTier
-      aliases: [weightTier]
       default: "''"
     - name: actionType
       dart_type: String
       nullable: false
       source: actionType
-      aliases: [actionType]
       default: "''"
     - name: actionTargetId
       dart_type: String
       nullable: false
       source: actionTargetId
-      aliases: [actionTargetId]
       default: "''"
     - name: source
       dart_type: String
       nullable: false
       source: source
-      aliases: [source, sourceRef]
       default: "''"
     - name: intersectionId
       dart_type: String
       nullable: false
       source: intersectionId
-      aliases: [intersectionId]
       default: "''"
     - name: intersectionClass
       dart_type: String
       nullable: false
       source: intersectionClass
-      aliases: [intersectionClass]
       default: "'fact'"
     - name: avatarUrl
       dart_type: String
       nullable: false
       source: avatarUrl
-      aliases: [avatarUrl]
       default: "''"
     - name: displayName
       dart_type: String
       nullable: false
       source: displayName
-      aliases: [displayName]
       default: "''"
     - name: confidenceLabel
       dart_type: String
       nullable: false
       source: confidenceLabel
-      aliases: [confidenceLabel]
       default: "''"
     - name: modelReasonBucket
       dart_type: String
       nullable: false
       source: modelReasonBucket
-      aliases: [modelReasonBucket]
       default: "''"
     - name: freshAt
       dart_type: String
       nullable: false
       source: freshAt
-      aliases: [freshAt]
       default: "''"
     - name: expiresAt
       dart_type: String
       nullable: false
       source: expiresAt
-      aliases: [expiresAt]
       default: "''"
     - name: intersectionPoints
       dart_type: List<IntersectionPoint>
       nullable: false
       source: intersectionPoints
-      aliases: [intersectionPoints, evidenceItems]
       list_element_dart_class: IntersectionPoint
     - name: pointSummarySnapshotId
       dart_type: String
       nullable: false
       source: pointSummarySnapshotId
-      aliases: [pointSummarySnapshotId]
       default: "''"
     - name: actorEvidenceTotalCount
       dart_type: int
       nullable: false
       source: actorEvidenceTotalCount
-      aliases: [actorEvidenceTotalCount]
       default: "0"
     - name: actorEvidenceCompleteness
       dart_type: String
       nullable: false
       source: actorEvidenceCompleteness
-      aliases: [actorEvidenceCompleteness]
       default: "'unknown'"
     - name: actorEvidence
       dart_type: List<IntersectionActorEvidence>
       nullable: false
       source: actorEvidence
-      aliases: [actorEvidence, actorEvidences, actorEvidenceItems]
       list_element_dart_class: IntersectionActorEvidence
     - name: factPointCount
       dart_type: int
       nullable: false
       source: factPointCount
-      aliases: [factPointCount]
       default: "0"
     - name: recommendedPointCount
       dart_type: int
       nullable: false
       source: recommendedPointCount
-      aliases: [recommendedPointCount]
       default: "0"
     - name: totalPointCount
       dart_type: int
       nullable: false
       source: totalPointCount
-      aliases: [totalPointCount, totalCount, total_count]
       default: "0"
     - name: dimensionPointSummary
       dart_type: List<IntersectionDimensionTally>
       nullable: false
       source: dimensionPointSummary
-      aliases: [dimensionPointSummary]
       list_element_dart_class: IntersectionDimensionTally
     - name: pointClassLabel
       dart_type: String
       nullable: false
       source: pointClassLabel
-      aliases: [pointClassLabel]
       default: "''"
     - name: connectionSummary
       dart_type: String
       nullable: false
       source: connectionSummary
-      aliases: [connectionSummary]
       default: "''"
     - name: lastRecommendedAt
       dart_type: String
       nullable: false
       source: lastRecommendedAt
-      aliases: [lastRecommendedAt]
       default: "''"
     - name: seenAt
       dart_type: String
       nullable: false
       source: seenAt
-      aliases: [seenAt]
       default: "''"
     - name: rankState
       dart_type: String
       nullable: false
       source: rankState
-      aliases: [rankState]
       default: "'fresh'"
     # 统一交互子契约（§20.7，只附加；不重排已冻结字段）：
     #   primarySpans 是 primaryText 的结构化富文本切分，join(spans.text)==primaryText（契约不变量）；
@@ -298,13 +260,11 @@ client_projection:
       dart_type: List<IntersectionTextSpan>
       nullable: false
       source: primarySpans
-      aliases: [primarySpans]
       list_element_dart_class: IntersectionTextSpan
     - name: sampleVisuals
       dart_type: List<IntersectionVisual>
       nullable: false
       source: sampleVisuals
-      aliases: [sampleVisuals]
       list_element_dart_class: IntersectionVisual
     # 代表人锚点 + 行动建议（§17.1.1 / §21.5.3）：
     #   representativeActor 是人数句数字前的人物锚点，必须来自同一 pointSummarySnapshotId。
@@ -313,13 +273,11 @@ client_projection:
       dart_type: IntersectionRepresentativeActor
       nullable: true
       source: representativeActor
-      aliases: [representativeActor]
       map_from_string_key_class: IntersectionRepresentativeActor
     - name: actionHints
       dart_type: List<IntersectionActionHint>
       nullable: false
       source: actionHints
-      aliases: [actionHints]
       list_element_dart_class: IntersectionActionHint
     # 架构基线 v2（§21）：以下字段由 content-service 交集异步物化投影真算填充
     #   （ReadModelIntersectionSource 写/刷新路径 + intersection_graph_materializer，
@@ -334,37 +292,31 @@ client_projection:
       dart_type: String
       nullable: false
       source: lifecycleState
-      aliases: [lifecycleState]
       default: "''"
     - name: previousStrength
       dart_type: double
       nullable: false
       source: previousStrength
-      aliases: [previousStrength]
       default: "0.0"
     - name: strengthDelta
       dart_type: double
       nullable: false
       source: strengthDelta
-      aliases: [strengthDelta]
       default: "0.0"
     - name: edgeWeight
       dart_type: double
       nullable: false
       source: edgeWeight
-      aliases: [edgeWeight]
       default: "0.0"
     - name: iconKey
       dart_type: String
       nullable: false
       source: iconKey
-      aliases: [iconKey]
       default: "''"
     - name: objectVisual
       dart_type: IntersectionVisual
       nullable: true
       source: objectVisual
-      aliases: [objectVisual]
       map_from_string_key_class: IntersectionVisual
     # 我的交集高保重构（主页/详情页事实 item 排序与分组，只读字段）：
     #   timeBucket 为服务端归桶结果（today|yesterday|last7Days|thisMonth|lastMonth），
@@ -374,25 +326,21 @@ client_projection:
       dart_type: String
       nullable: false
       source: timeBucket
-      aliases: [timeBucket, time_bucket]
       default: "''"
     - name: dedupeKey
       dart_type: String
       nullable: false
       source: dedupeKey
-      aliases: [dedupeKey, dedup_key, dedupe_key]
       default: "''"
     - name: anchorUserWeight
       dart_type: double
       nullable: false
       source: anchorUserWeight
-      aliases: [anchorUserWeight, anchorUserScore, anchor_user_score]
       default: "0.0"
     - name: mutualCount
       dart_type: int
       nullable: false
       source: mutualCount
-      aliases: [mutualCount, mutual_count]
       default: "0"
     # §24 v3 可行动交集实例硬化（M0.2 moment 意图时态 + M0.4 subject 显式主体）：
     #   moment 表交集指向过去/当下/未来（registry.moments 闭集，缺省 current），端据此调整语气与可行动性；
@@ -403,17 +351,14 @@ client_projection:
       dart_type: String
       nullable: false
       source: moment
-      aliases: [moment]
       default: "'current'"
     - name: subjectId
       dart_type: String
       nullable: false
       source: subjectId
-      aliases: [subjectId]
       default: "''"
     - name: subjectContext
       dart_type: String
       nullable: false
       source: subjectContext
-      aliases: [subjectContext]
       default: "''"

@@ -27,7 +27,7 @@ func TestCreateReportPersistsPendingAggregateAndOutbox(t *testing.T) {
 
 	reportRepo, handler := newReportTestHandler(t, suite.PG)
 
-	createReq := httptest.NewRequest(http.MethodPost, "/v1/content/reports", strings.NewReader(`{
+	createReq := httptest.NewRequest(http.MethodPost, "/content/reports", strings.NewReader(`{
 	  "targetType":"post",
 	  "targetId":"post_123",
 	  "reason":"spam",
@@ -98,7 +98,7 @@ func TestCreateReportRejectsForgedIdentityHeadersWithoutPersistence(t *testing.T
 	protected := newAuthenticatedReportHandler(t, handler)
 	request := httptest.NewRequest(
 		http.MethodPost,
-		"/v1/content/reports",
+		"/content/reports",
 		strings.NewReader(`{
 		  "targetType":"post",
 		  "targetId":"post_unauthorized",
@@ -155,7 +155,7 @@ func TestCreateReportPersistsVerifiedPersonaInsteadOfClientHeaders(t *testing.T)
 	)
 	request := httptest.NewRequest(
 		http.MethodPost,
-		"/v1/content/reports",
+		"/content/reports",
 		strings.NewReader(`{
 		  "targetType":"post",
 		  "targetId":"post_trusted_actor",
@@ -207,7 +207,7 @@ func TestCreateReportIdempotencyReplaysWithoutDuplicatePersistence(t *testing.T)
 	for attempt := 0; attempt < 2; attempt++ {
 		request := httptest.NewRequest(
 			http.MethodPost,
-			"/v1/content/reports",
+			"/content/reports",
 			strings.NewReader(`{
 			  "targetType":"post",
 			  "targetId":"post_idempotency_replay",

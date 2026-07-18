@@ -25,8 +25,8 @@ class ChatConversationMemberDto {
   factory ChatConversationMemberDto.fromMap(Map<String, dynamic> m) {
     return ChatConversationMemberDto(
       userId: m['userId']?.toString() ?? '',
-      displayName: m['displayName']?.toString() ?? m['name']?.toString() ?? '',
-      avatarUrl: m['avatarUrl']?.toString() ?? m['avatar']?.toString() ?? '',
+      displayName: m['displayName']?.toString() ?? '',
+      avatarUrl: m['avatarUrl']?.toString() ?? '',
       role: m['role']?.toString() ?? 'member',
       memberType: m['memberType']?.toString() ?? 'user',
       assistantSkillId: m['assistantSkillId']?.toString() ?? null,

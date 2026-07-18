@@ -119,8 +119,8 @@ class CloudErrorMapper {
     String functionModule = 'cloud_response_decoder',
   }) {
     final failure = RuntimeFailure(
-      code: 'APP.CONTRACT.invalid_response',
-      origin: RuntimeFailureOrigin.localClient,
+      code: RuntimeFailureCodes.appContractInvalidResponse,
+      origin: RuntimeFailureOrigin.remoteDependency,
       kind: RuntimeFailureKind.contract,
       nature: RuntimeFailureNature.bug,
       location: RuntimeFailureLocation(
@@ -165,7 +165,8 @@ class CloudErrorMapper {
     }
     if (error is TimeoutException) {
       return _localFailure(
-        code: 'APP.TIMEOUT.request_timeout',
+        code: RuntimeFailureCodes.appTimeoutRequestTimeout,
+        origin: RuntimeFailureOrigin.environment,
         kind: RuntimeFailureKind.timeout,
         nature: RuntimeFailureNature.transient,
         requestPath: requestPath,
@@ -177,7 +178,8 @@ class CloudErrorMapper {
     }
     if (error is CloudOperationCancelledException) {
       return _localFailure(
-        code: 'APP.CANCELLED.operation_cancelled',
+        code: RuntimeFailureCodes.appCancelledOperationCancelled,
+        origin: RuntimeFailureOrigin.user,
         kind: RuntimeFailureKind.cancelled,
         nature: RuntimeFailureNature.permanent,
         requestPath: requestPath,
@@ -189,15 +191,36 @@ class CloudErrorMapper {
     }
     if (error is http.ClientException) {
       return _localFailure(
-        code: 'APP.NETWORK.offline',
+        code: RuntimeFailureCodes.appNetworkOffline,
+        origin: RuntimeFailureOrigin.environment,
         kind: RuntimeFailureKind.network,
         nature: RuntimeFailureNature.transient,
         requestPath: requestPath,
       );
     }
+    if (error is ArgumentError || error is StateError) {
+      return _localFailure(
+        code: RuntimeFailureCodes.appContractInvalidResponse,
+        origin: RuntimeFailureOrigin.developer,
+        kind: RuntimeFailureKind.contract,
+        nature: RuntimeFailureNature.bug,
+        requestPath: requestPath,
+        attributes: <RuntimeContextAttribute>[
+          RuntimeContextAttribute(
+            key: 'errorType',
+            value: error.runtimeType.toString(),
+          ),
+        ],
+        recovery: const RuntimeRecoveryDirective(
+          action: 'surface',
+          disruptionLevel: 'inlineCard',
+        ),
+      );
+    }
     if (error is FormatException) {
       return _localFailure(
-        code: 'APP.CONTRACT.invalid_json',
+        code: RuntimeFailureCodes.appContractInvalidJson,
+        origin: RuntimeFailureOrigin.remoteDependency,
         kind: RuntimeFailureKind.parsing,
         nature: RuntimeFailureNature.bug,
         requestPath: requestPath,
@@ -208,7 +231,7 @@ class CloudErrorMapper {
       );
     }
     return _localFailure(
-      code: 'APP.SYSTEM.unknown_error',
+      code: RuntimeFailureCodes.appSystemUnknownError,
       kind: RuntimeFailureKind.internal,
       nature: RuntimeFailureNature.bug,
       requestPath: requestPath,
@@ -391,6 +414,7 @@ String? _firstNonEmptyString(Map<String, dynamic> map, List<String> keys) {
 
 RuntimeFailure _localFailure({
   required String code,
+  RuntimeFailureOrigin origin = RuntimeFailureOrigin.localClient,
   required RuntimeFailureKind kind,
   required RuntimeFailureNature nature,
   String? requestPath,
@@ -399,7 +423,7 @@ RuntimeFailure _localFailure({
 }) {
   return RuntimeFailure(
     code: code,
-    origin: RuntimeFailureOrigin.localClient,
+    origin: origin,
     kind: kind,
     nature: nature,
     location: const RuntimeFailureLocation(
@@ -434,11 +458,11 @@ CloudErrorType _cloudTypeFromFailure(RuntimeFailureBase failure) {
 }
 
 String _codeFromStatus(int statusCode) {
-  if (statusCode == 401) return 'APP.USER.unauthorized';
-  if (statusCode == 403) return 'APP.USER.forbidden';
-  if (statusCode == 404) return 'APP.USER.not_found';
-  if (statusCode >= 500) return 'CLOUD.SYSTEM.unavailable';
-  return 'CLOUD.SYSTEM.unknown_error';
+  if (statusCode == 401) return RuntimeFailureCodes.appUserUnauthorized;
+  if (statusCode == 403) return RuntimeFailureCodes.appUserForbidden;
+  if (statusCode == 404) return RuntimeFailureCodes.appUserNotFound;
+  if (statusCode >= 500) return RuntimeFailureCodes.cloudSystemUnavailable;
+  return RuntimeFailureCodes.cloudSystemUnknownError;
 }
 
 RuntimeFailureKind _kindFromStatus(int statusCode) {

@@ -57,8 +57,8 @@
 ### F5 会话列表数据源统一
 
 20. **统一 ChatRepository**：ChatPage 的会话列表数据全部来自 `ChatRepository.listConversations()`，移除对 `appContentRepository` 的混合调用
-21. **InboxService HTTP 暴露**：云侧 `InboxService` 挂载 `GET /v1/chat/inbox` HTTP 路由，返回 per-user inbox 投影结果
-22. **端侧接入 Inbox**：`ChatRepository.listConversations()` 切换到调用 `/v1/chat/inbox`（替代当前基于 UserState 的查询），提升大量会话场景性能
+21. **InboxService HTTP 暴露**：云侧 `InboxService` 挂载 `GET /chat/inbox` HTTP 路由，返回 per-user inbox 投影结果
+22. **端侧接入 Inbox**：`ChatRepository.listConversations()` 切换到调用 `/chat/inbox`（替代当前基于 UserState 的查询），提升大量会话场景性能
 23. **排序一致性**：会话列表按 `lastMessage.timestamp` 降序排列，置顶会话优先
 
 ## 不做什么（Out of Scope）

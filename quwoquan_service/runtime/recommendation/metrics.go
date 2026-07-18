@@ -131,48 +131,51 @@ type EngagementMetrics struct {
 // GlobalEngagementMetrics holds real-time engagement counters.
 var GlobalEngagementMetrics EngagementMetrics
 
-// resolveContentType returns the content type from the signal, falling back
-// to tag inference for backward compatibility with events lacking ContentType.
+// resolveContentType returns the canonical content type from the signal.
 func resolveContentType(signal BehaviorSignal) string {
-	if signal.ContentType != "" {
-		return strings.ToLower(signal.ContentType)
+	contentType := strings.ToLower(strings.TrimSpace(signal.ContentType))
+	switch contentType {
+	case "image", "video", "micro", "article":
+		return contentType
+	default:
+		return ""
 	}
-	return inferContentTypeFromTags(signal.Tags)
 }
 
 // RecordBehaviorMetric updates engagement metrics from a behavior signal.
 // Both atomic counters (for JSON snapshot) and Prometheus counters are updated.
 func RecordBehaviorMetric(signal BehaviorSignal) {
 	ct := resolveContentType(signal)
-	if ct == "" {
-		ct = "unknown"
-	}
 
 	switch signal.Action {
 	case "impression":
-		recordImpressionByType(signal.Tags)
-		engImpressionTotal.WithLabelValues(ct).Inc()
+		if ct != "" {
+			recordImpressionByType(ct)
+			engImpressionTotal.WithLabelValues(ct).Inc()
+		}
 	case "click":
 		GlobalEngagementMetrics.ClickTotal.Add(1)
-		recordClickByType(signal.Tags)
-		engClickTotal.WithLabelValues(ct).Inc()
+		if ct != "" {
+			recordClickByType(ct)
+			engClickTotal.WithLabelValues(ct).Inc()
+		}
 		engInteractionTotal.WithLabelValues("click").Inc()
 	case "content_depth":
-		if signal.EngagementDepth >= 2 {
-			recordDeepEngageByType(signal.Tags)
+		if signal.EngagementDepth >= 2 && ct != "" {
+			recordDeepEngageByType(ct)
 			engDeepEngageTotal.WithLabelValues(ct).Inc()
 		}
 	case "like":
 		GlobalEngagementMetrics.LikeTotal.Add(1)
-		recordLikeByType(signal.Tags)
+		recordLikeByType(ct)
 		engInteractionTotal.WithLabelValues("like").Inc()
 	case "share":
 		GlobalEngagementMetrics.ShareTotal.Add(1)
-		recordShareByType(signal.Tags)
+		recordShareByType(ct)
 		engInteractionTotal.WithLabelValues("share").Inc()
 	case "comment":
 		GlobalEngagementMetrics.CommentTotal.Add(1)
-		recordCommentByType(signal.Tags)
+		recordCommentByType(ct)
 		engInteractionTotal.WithLabelValues("comment").Inc()
 	case "dislike":
 		GlobalEngagementMetrics.DislikeTotal.Add(1)
@@ -203,103 +206,81 @@ func RecordBehaviorMetric(signal BehaviorSignal) {
 	}
 }
 
-func inferContentTypeFromTags(tags []string) string {
-	for _, t := range tags {
-		dim := ClassifyTagDimension(t)
-		if dim == DimensionFormat {
-			parts := strings.SplitN(t, "/", 3)
-			if len(parts) >= 2 {
-				switch strings.ToLower(parts[1]) {
-				case "photo", "图片":
-					return "photo"
-				case "video", "视频":
-					return "video"
-				case "article", "文章":
-					return "article"
-				case "moment", "点滴":
-					return "moment"
-				}
-			}
-		}
-	}
-	return ""
-}
-
-func recordImpressionByType(tags []string) {
-	switch inferContentTypeFromTags(tags) {
+func recordImpressionByType(contentType string) {
+	switch contentType {
+	case "image":
+		GlobalEngagementMetrics.ImpressionPhoto.Add(1)
 	case "video":
 		GlobalEngagementMetrics.ImpressionVideo.Add(1)
 	case "article":
 		GlobalEngagementMetrics.ImpressionArticle.Add(1)
-	case "moment":
+	case "micro":
 		GlobalEngagementMetrics.ImpressionMoment.Add(1)
-	default:
-		GlobalEngagementMetrics.ImpressionPhoto.Add(1)
 	}
 }
 
-func recordDeepEngageByType(tags []string) {
-	switch inferContentTypeFromTags(tags) {
+func recordDeepEngageByType(contentType string) {
+	switch contentType {
+	case "image":
+		GlobalEngagementMetrics.DeepEngagePhoto.Add(1)
 	case "video":
 		GlobalEngagementMetrics.DeepEngageVideo.Add(1)
 	case "article":
 		GlobalEngagementMetrics.DeepEngageArticle.Add(1)
-	case "moment":
+	case "micro":
 		GlobalEngagementMetrics.DeepEngageMoment.Add(1)
-	default:
-		GlobalEngagementMetrics.DeepEngagePhoto.Add(1)
 	}
 }
 
-func recordClickByType(tags []string) {
-	switch inferContentTypeFromTags(tags) {
+func recordClickByType(contentType string) {
+	switch contentType {
+	case "image":
+		GlobalEngagementMetrics.ClickPhoto.Add(1)
 	case "video":
 		GlobalEngagementMetrics.ClickVideo.Add(1)
 	case "article":
 		GlobalEngagementMetrics.ClickArticle.Add(1)
-	case "moment":
+	case "micro":
 		GlobalEngagementMetrics.ClickMoment.Add(1)
-	default:
-		GlobalEngagementMetrics.ClickPhoto.Add(1)
 	}
 }
 
-func recordLikeByType(tags []string) {
-	switch inferContentTypeFromTags(tags) {
+func recordLikeByType(contentType string) {
+	switch contentType {
+	case "image":
+		GlobalEngagementMetrics.LikePhoto.Add(1)
 	case "video":
 		GlobalEngagementMetrics.LikeVideo.Add(1)
 	case "article":
 		GlobalEngagementMetrics.LikeArticle.Add(1)
-	case "moment":
+	case "micro":
 		GlobalEngagementMetrics.LikeMoment.Add(1)
-	default:
-		GlobalEngagementMetrics.LikePhoto.Add(1)
 	}
 }
 
-func recordShareByType(tags []string) {
-	switch inferContentTypeFromTags(tags) {
+func recordShareByType(contentType string) {
+	switch contentType {
+	case "image":
+		GlobalEngagementMetrics.SharePhoto.Add(1)
 	case "video":
 		GlobalEngagementMetrics.ShareVideo.Add(1)
 	case "article":
 		GlobalEngagementMetrics.ShareArticle.Add(1)
-	case "moment":
+	case "micro":
 		GlobalEngagementMetrics.ShareMoment.Add(1)
-	default:
-		GlobalEngagementMetrics.SharePhoto.Add(1)
 	}
 }
 
-func recordCommentByType(tags []string) {
-	switch inferContentTypeFromTags(tags) {
+func recordCommentByType(contentType string) {
+	switch contentType {
+	case "image":
+		GlobalEngagementMetrics.CommentPhoto.Add(1)
 	case "video":
 		GlobalEngagementMetrics.CommentVideo.Add(1)
 	case "article":
 		GlobalEngagementMetrics.CommentArticle.Add(1)
-	case "moment":
+	case "micro":
 		GlobalEngagementMetrics.CommentMoment.Add(1)
-	default:
-		GlobalEngagementMetrics.CommentPhoto.Add(1)
 	}
 }
 

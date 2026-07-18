@@ -19,18 +19,14 @@ List<Map<String, dynamic>> aggregateDiscoveryWireSlices({
   ];
 }
 
-/// 在已聚合的 wire 行中按 postId 查找（支持 postId / _id / id）。
+/// 在已聚合的公共 wire 行中按帖子 id 查找。
 Map<String, dynamic>? findDiscoveryWireRowByPostId(
   String postId,
   List<Map<String, dynamic>> aggregatedRows,
 ) {
   if (postId.isEmpty) return null;
   for (final item in aggregatedRows) {
-    final itemId =
-        item['postId']?.toString() ??
-        item['_id']?.toString() ??
-        item['id']?.toString() ??
-        '';
+    final itemId = item['id']?.toString() ?? '';
     if (itemId == postId) {
       return item;
     }
@@ -50,7 +46,7 @@ Map<String, dynamic>? lookupCanonicalDiscoveryWireRowByPostId(String postId) {
       showcase: ContentMockData.seededShowcaseFeedItems,
     ),
   );
-  if ((row?['contentType']?.toString() ?? '') == 'article') {
+  if ((row?['type']?.toString() ?? '') == 'article') {
     return ContentMockData.articleWireByPostId(postId) ?? row;
   }
   return row;

@@ -32,15 +32,23 @@ void main() {
   });
 
   group('PostEngagementCounters.fromMap', () {
-    test('parses counts with aliases', () {
-      final c = PostEngagementCounters.fromMap(<String, dynamic>{
+    test('只解析 canonical 计数字段并拒绝 aliases', () {
+      final canonical = PostEngagementCounters.fromMap(<String, dynamic>{
         'likeCount': 3,
         'commentCount': 7,
         'shareCount': 2,
       });
-      expect(c.likeCount, 3);
-      expect(c.commentCount, 7);
-      expect(c.shareCount, 2);
+      final retired = PostEngagementCounters.fromMap(<String, dynamic>{
+        'likesCount': 30,
+        'commentsCount': 70,
+        'shares': 20,
+      });
+      expect(canonical.likeCount, 3);
+      expect(canonical.commentCount, 7);
+      expect(canonical.shareCount, 2);
+      expect(retired.likeCount, 0);
+      expect(retired.commentCount, 0);
+      expect(retired.shareCount, 0);
     });
   });
 }

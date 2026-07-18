@@ -1,4 +1,3 @@
-version: 1
 read_model: ObjectPageRolloutContext
 
 description: |
@@ -20,59 +19,49 @@ client_projection:
       dart_type: bool
       nullable: false
       source: enabled
-      aliases: [enabled]
       default: "false"
     - name: cohort
       dart_type: String
       nullable: false
       source: cohort
-      aliases: [cohort]
       default: "''"
     - name: region
       dart_type: String
       nullable: false
       source: region
-      aliases: [region]
       default: "''"
     - name: city
       dart_type: String
       nullable: false
       source: city
-      aliases: [city]
       default: "''"
     - name: campus
       dart_type: String
       nullable: false
       source: campus
-      aliases: [campus]
       default: "''"
     - name: appVersion
       dart_type: String
       nullable: false
       source: appVersion
-      aliases: [appVersion]
       default: "''"
     - name: experimentBucket
       dart_type: String
       nullable: false
       source: experimentBucket
-      aliases: [experimentBucket]
       default: "''"
     - name: objectType
       dart_type: String
       nullable: false
       source: objectType
-      aliases: [objectType]
       default: "''"
     - name: assistantProactiveEnabled
       dart_type: bool
       nullable: false
       source: assistantProactiveEnabled
-      aliases: [assistantProactiveEnabled]
       default: "false"
     - name: relationEvidenceEnabled
       dart_type: bool
       nullable: false
       source: relationEvidenceEnabled
-      aliases: [relationEvidenceEnabled]
       default: "false"

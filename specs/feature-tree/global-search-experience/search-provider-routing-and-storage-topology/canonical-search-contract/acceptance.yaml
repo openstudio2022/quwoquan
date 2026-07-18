@@ -70,7 +70,7 @@ gwt_acceptance:
     - appDataSourceModeProvider=remote 时 searchRepositoryProvider 返回 RemoteSearchRepository。
     - RetrieveRequest.fromSearchRequest() 单源映射 targets 并剔除 chat 本地命名空间对象。
     when:
-    - result 阶段 POST /v1/search（CloudHttpClient + codegen path），解析 RetrieveResponse。
+    - result 阶段 POST /search（CloudHttpClient + codegen path），解析 RetrieveResponse。
     then:
     - App 透传 rankReasons/rankPosition/coverWidth/coverHeight/connectionState/intersectionReason/relatedTerms，不再消费分域搜索接口。
     - 错误经 CloudException/runtimeFailure 结构化，不吞异常、不暴露原始异常字符串。

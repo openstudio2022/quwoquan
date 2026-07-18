@@ -1,0 +1,30 @@
+{
+  "description": "跨环境媒体交付 parity 的逻辑资产清单；publicSliceKey、version 与 sha256 不随环境变化，只有由 topology 注入的 authority 可以变化。",
+  "assets": [
+    {
+      "logicalAssetId": "profile-avatar-primary",
+      "mediaType": "avatar",
+      "publicSliceKey": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
+      "version": 1,
+      "sha256": "sha256:a46dcf5bfd715a61572f6867446d1acb0d3054fc6c235d75413729c96b883650",
+      "mimeType": "image/png"
+    },
+    {
+      "logicalAssetId": "content-cover-primary",
+      "mediaType": "image",
+      "publicSliceKey": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+      "version": 1,
+      "sha256": "sha256:8fec33d77873f1c94559ccf64b13a919a70662fa4b983aacb3934497f96d44b5",
+      "mimeType": "image/png"
+    },
+    {
+      "logicalAssetId": "content-video-primary",
+      "mediaType": "video",
+      "publicSliceKey": "media/video/s/video-primary-0001/post/video-content-0001/source.mp4",
+      "version": 1,
+      "sha256": "sha256:0cd83d944a6ca7822b4a8306cecc60a36e859b041f6702c6a1ad9ead78924451",
+      "mimeType": "video/mp4"
+    }
+  ],
+  "schema": "media-delivery-manifest"
+}

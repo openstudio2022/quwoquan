@@ -1,8 +1,8 @@
-version: 1
 entity: PostModerationCase
 
 fields:
   - name: id
+    source: id
     type: string
     constraints: [PK]
     classification: INTERNAL
@@ -11,6 +11,7 @@ fields:
     ops_exposure: read
 
   - name: version
+    source: version
     type: int
     constraints: [NOT_NULL, DEFAULT_1]
     classification: INTERNAL
@@ -19,6 +20,7 @@ fields:
     ops_exposure: read
 
   - name: postId
+    source: postId
     type: string
     constraints: [NOT_NULL]
     classification: PUBLIC
@@ -27,6 +29,7 @@ fields:
     ops_exposure: read
 
   - name: postVersion
+    source: postVersion
     type: int
     constraints: [NOT_NULL]
     classification: INTERNAL
@@ -35,6 +38,7 @@ fields:
     ops_exposure: read
 
   - name: contentDigest
+    source: contentDigest
     type: string
     constraints: [NOT_NULL]
     classification: INTERNAL
@@ -43,6 +47,7 @@ fields:
     ops_exposure: read
 
   - name: status
+    source: status
     type: enum
     enum_ref: PostModerationCaseStatus
     constraints: [NOT_NULL]
@@ -52,6 +57,7 @@ fields:
     ops_exposure: read_write
 
   - name: reviewerId
+    source: reviewerId
     type: string
     constraints: [NULLABLE]
     classification: INTERNAL
@@ -60,6 +66,7 @@ fields:
     ops_exposure: read
 
   - name: decisionReason
+    source: decisionReason
     type: string
     constraints: [NULLABLE]
     classification: INTERNAL
@@ -68,6 +75,7 @@ fields:
     ops_exposure: read_write
 
   - name: createdAt
+    source: createdAt
     type: timestamp
     constraints: [NOT_NULL]
     classification: INTERNAL
@@ -76,6 +84,7 @@ fields:
     ops_exposure: read
 
   - name: updatedAt
+    source: updatedAt
     type: timestamp
     constraints: [NOT_NULL]
     classification: INTERNAL
@@ -84,6 +93,7 @@ fields:
     ops_exposure: read
 
   - name: decidedAt
+    source: decidedAt
     type: timestamp
     constraints: [NULLABLE]
     classification: INTERNAL

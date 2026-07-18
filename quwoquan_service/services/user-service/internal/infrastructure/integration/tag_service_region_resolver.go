@@ -43,7 +43,7 @@ func (r *TagServiceRegionResolver) ResolveRegionTag(ctx context.Context, regionT
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodGet,
-		r.baseURL+"/v1/tag/children?"+query.Encode(),
+		r.baseURL+"/tag/children?"+query.Encode(),
 		nil,
 	)
 	if err != nil {

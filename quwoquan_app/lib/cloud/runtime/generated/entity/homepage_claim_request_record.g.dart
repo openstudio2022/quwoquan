@@ -24,7 +24,7 @@ class HomepageClaimRequestRecord {
 
   factory HomepageClaimRequestRecord.fromMap(Map<String, dynamic> m) {
     return HomepageClaimRequestRecord(
-      id: m['_id']?.toString() ?? m['id']?.toString() ?? '',
+      id: m['id']?.toString() ?? '',
       homepageId: m['homepageId']?.toString() ?? '',
       requesterUserId: m['requesterUserId']?.toString() ?? '',
       claimTier: m['claimTier']?.toString() ?? '',

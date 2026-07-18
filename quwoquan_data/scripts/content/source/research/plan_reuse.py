@@ -11,17 +11,19 @@ from content.execution.workspace import relative_execution_ref
 from content.source.source_unit import resolve_entity_object_dir
 from core.qunar_template import is_qunar_url
 from content.source.research.plan_state import (
+    _hydrate_mediawiki_same_source_images,
+)
+from content.source.research.reject_memory import (
     _execution_dirs,
     _execution_root,
-    _hydrate_mediawiki_same_source_images,
-    _url_in_memory,
 )
+from content.source.research.reject_memory import _url_in_memory
 from content.source.research.source_quality import (
     _ARTICLE_BASE_CATEGORIES,
     _candidate_gate,
     _source_category,
 )
-from content.source.research.homepage_source_policy import _HOMEPAGE_CORE_SOURCE_LIMIT
+from core.content_source_registry import homepage_core_source_limit
 from content.source.research.homepage_text_quality import _homepage_text_quality_issue
 from content.source.research.text_match import _normalized_title, _text_mentions_entity
 
@@ -64,15 +66,17 @@ def _verified_homepage_sources_from_source_units(
     *,
     entity_type: str,
     rejected_source_urls: set[str] | None = None,
-    limit: int = _HOMEPAGE_CORE_SOURCE_LIMIT,
+    limit: int | None = None,
 ) -> list[dict[str, Any]]:
     """Reuse homepage source units that already passed source_screen.
 
-    Source repair should not discard a working four-encyclopedia source while
-    retrying a failed Baidu/Sogou candidate. This keeps the repair loop
+    Source repair should not discard a working closed-set encyclopedia source
+    while retrying another candidate. This keeps the repair loop
     monotonic and prevents the planner from cycling over known-bad URLs.
     """
     from content.source.source_unit import iter_source_units
+
+    resolved_limit = limit if limit is not None else homepage_core_source_limit()
 
     obj = resolve_entity_object_dir(execution_id, entity_id, etype_hint=entity_type)
     sources: list[dict[str, Any]] = []
@@ -157,23 +161,17 @@ def _verified_homepage_sources_from_source_units(
             )
         )
         seen_urls.add(url)
-        if len(sources) >= limit:
+        if len(sources) >= resolved_limit:
             break
     return sources
 
-def _qunar_reused_article_mentions_entity(
+def _qunar_article_mentions_entity(
     source: Mapping[str, Any],
     *,
     entity_id: str,
     entity_aliases: list[str] | tuple[str, ...] = (),
 ) -> bool:
-    """Current-template guard for legacy Qunar source-pool reuse.
-
-    Older plans may have accepted same-author Qunar rows whose evidenceReason
-    names the target entity while the actual travelogue title is unrelated.
-    Reuse must therefore inspect only source-owned anchor fields, not the old
-    generated reason text.
-    """
+    """Require Qunar source-owned anchors to mention the target entity."""
 
     url = str(source.get("url") or "").strip()
     if not is_qunar_url(url):
@@ -229,7 +227,7 @@ def _verified_article_sources_from_prior_plans(
                 source["sourceRole"] = "base"
             if not source.get("matchConfidence"):
                 source["matchConfidence"] = (gate.get("matchConfidence") if gate else 0.86) or 0.86
-            if not _qunar_reused_article_mentions_entity(
+            if not _qunar_article_mentions_entity(
                 source,
                 entity_id=entity_id,
                 entity_aliases=entity_aliases,

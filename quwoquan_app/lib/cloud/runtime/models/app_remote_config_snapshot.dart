@@ -7,7 +7,7 @@ enum AppRemoteConfigSource { defaults, diskCache, networkFresh, staleDiskCache }
 
 class AppRemoteConfigSnapshot {
   const AppRemoteConfigSnapshot({
-    required this.schemaVersion,
+    required this.schema,
     required this.packageVersion,
     required this.configHash,
     required this.fetchedAt,
@@ -17,11 +17,11 @@ class AppRemoteConfigSnapshot {
     required this.source,
   });
 
-  static const String fallbackSchemaVersion = 'app_remote_config.v1';
+  static const String fallbackSchema = 'app_remote_config';
   static const String fallbackPackageVersion = 'embedded-defaults';
   static const Duration fallbackMaxAge = Duration(hours: 6);
 
-  final String schemaVersion;
+  final String schema;
   final String packageVersion;
   final String configHash;
   final DateTime fetchedAt;
@@ -43,7 +43,7 @@ class AppRemoteConfigSnapshot {
   }) {
     final nextRoot = wireRoot ?? this.wireRoot;
     return AppRemoteConfigSnapshot(
-      schemaVersion: schemaVersion,
+      schema: schema,
       packageVersion: packageVersion,
       configHash: configHash,
       fetchedAt: fetchedAt,
@@ -57,7 +57,7 @@ class AppRemoteConfigSnapshot {
   factory AppRemoteConfigSnapshot.defaults(ContentAppConfigWire wire) {
     final root = wire.wireRoot;
     return AppRemoteConfigSnapshot(
-      schemaVersion: fallbackSchemaVersion,
+      schema: fallbackSchema,
       packageVersion: fallbackPackageVersion,
       configHash: _hashRoot(root),
       fetchedAt: DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
@@ -85,14 +85,10 @@ class AppRemoteConfigSnapshot {
     final metadata = _metadataFromRoot(root);
     final fetchedAt =
         _parseDate(metadata['fetchedAt']) ?? DateTime.now().toUtc();
-    final maxAgeSec =
-        _parsePositiveInt(metadata['maxAgeSec']) ??
-        _parsePositiveInt(metadata['ttlSec']);
-    final hash = (metadata['configHash'] ?? metadata['hash'] ?? '')
-        .toString()
-        .trim();
+    final maxAgeSec = _parsePositiveInt(metadata['maxAgeSec']);
+    final hash = (metadata['configHash'] ?? '').toString().trim();
     return AppRemoteConfigSnapshot(
-      schemaVersion: (metadata['schemaVersion'] ?? fallbackSchemaVersion)
+      schema: (metadata['schema'] ?? fallbackSchema)
           .toString()
           .trim(),
       packageVersion: (metadata['packageVersion'] ?? fallbackPackageVersion)
@@ -109,7 +105,7 @@ class AppRemoteConfigSnapshot {
 
   Map<String, dynamic> toPersistedMap() {
     return <String, dynamic>{
-      'schemaVersion': schemaVersion,
+      'schema': schema,
       'packageVersion': packageVersion,
       'configHash': configHash,
       'fetchedAt': fetchedAt.toUtc().toIso8601String(),
@@ -128,7 +124,7 @@ class AppRemoteConfigSnapshot {
       throw const FormatException('missing wireRoot');
     }
     return AppRemoteConfigSnapshot(
-      schemaVersion: (map['schemaVersion'] ?? fallbackSchemaVersion)
+      schema: (map['schema'] ?? fallbackSchema)
           .toString()
           .trim(),
       packageVersion: (map['packageVersion'] ?? fallbackPackageVersion)
@@ -153,8 +149,8 @@ class AppRemoteConfigSnapshot {
     if (bootstrap != null) {
       return <String, Object?>{
         ...bootstrap,
-        if (root['schemaVersion'] != null)
-          'schemaVersion': root['schemaVersion'],
+        if (root['schema'] != null)
+          'schema': root['schema'],
         if (root['packageVersion'] != null)
           'packageVersion': root['packageVersion'],
         if (root['configHash'] != null) 'configHash': root['configHash'],

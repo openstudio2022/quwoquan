@@ -4,7 +4,6 @@
 package api_integration
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -15,18 +14,18 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
-// TestPost_ResponseShape_NoPrivateFields verifies that GET /v1/content/posts/:id
+// TestPost_ResponseShape_NoPrivateFields verifies that GET /content/posts/:id
 // does not expose internal fields (embedding, moderationStatus).
 // Fields classified privacy:never_expose must never appear in public responses.
 func TestPost_ResponseShape_NoPrivateFields(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
-	created := createPost(t, `{"contentType":"image","title":"Privacy check","body":"public content","mediaUrls":["https://example.com/img.jpg"]}`)
-	postID, _ := created["_id"].(string)
+	created := submitPublishedPost(t, `{"contentType":"image","title":"Privacy check","body":"public content"}`)
+	postID, _ := created["postId"].(string)
 	if postID == "" {
 		t.Fatal("created post has no _id")
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/content/posts/"+postID, nil)
+	req := httptest.NewRequest(http.MethodGet, "/content/posts/"+postID, nil)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 
@@ -45,16 +44,15 @@ func TestPost_ResponseShape_NoPrivateFields(t *testing.T) {
 	}
 }
 
-// TestPost_WritableFields_UnknownFieldRejected verifies that POST /v1/content/posts
+// TestPost_WritableFields_UnknownFieldRejected verifies that POST /content/posts
 // rejects requests with unknown fields, returning 400 with structured error.
 // This protects against field injection attacks and enforces the field contract.
 func TestPost_WritableFields_UnknownFieldRejected(t *testing.T) {
-	req := httptest.NewRequest(
-		http.MethodPost,
-		"/v1/content/posts",
-		bytes.NewBufferString(`{"unknownField":"x","contentType":"image","mediaUrls":["https://example.com/img.jpg"]}`),
+	req := newPostPublicationRequestForTest(
+		t,
+		"unknown-field-author",
+		`{"unknownField":"x","contentType":"micro","body":"field injection"}`,
 	)
-	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 
@@ -71,16 +69,16 @@ func TestPost_WritableFields_UnknownFieldRejected(t *testing.T) {
 }
 
 // TestPost_MinimalCurrentRecordRemainsReadable verifies that a minimal payload
-// still receives every server-owned default during the current CreatePost command.
+// still receives every server-owned default during SubmitPostPublication.
 func TestPost_MinimalCurrentRecordRemainsReadable(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
-	created := createPost(t, `{"contentType":"micro","body":"minimal post"}`)
-	postID, _ := created["_id"].(string)
+	created := submitPublishedPost(t, `{"contentType":"micro","body":"minimal post"}`)
+	postID, _ := created["postId"].(string)
 	if postID == "" {
 		t.Fatal("no _id in created post")
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/content/posts/"+postID, nil)
+	req := httptest.NewRequest(http.MethodGet, "/content/posts/"+postID, nil)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 
@@ -91,8 +89,8 @@ func TestPost_MinimalCurrentRecordRemainsReadable(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if result["_id"] != postID {
-		t.Errorf("expected _id=%s, got %v", postID, result["_id"])
+	if result["postId"] != postID {
+		t.Errorf("expected postId=%s, got %v", postID, result["postId"])
 	}
 }
 
@@ -118,7 +116,7 @@ func TestPostSearch_DerivesCategoriesFromTopicTagRefs(t *testing.T) {
 		t.Fatalf("insert search post: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/content/posts/search?query=%E6%97%85%E8%A1%8C", nil)
+	req := httptest.NewRequest(http.MethodGet, "/content/posts/search?query=%E6%97%85%E8%A1%8C", nil)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 

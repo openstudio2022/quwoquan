@@ -11,7 +11,7 @@ import (
 func TestVerifiedTelemetryActorHashUsesOnlyVerifiedBusinessActor(t *testing.T) {
 	t.Parallel()
 
-	request := httptest.NewRequest("POST", "/v1/ops/events", nil)
+	request := httptest.NewRequest("POST", "/ops/events", nil)
 	request.Header.Set("X-Client-User-Id", "attacker-controlled")
 	if _, ok := verifiedTelemetryActorHash(request); ok {
 		t.Fatal("unverified request must not yield telemetry actor")

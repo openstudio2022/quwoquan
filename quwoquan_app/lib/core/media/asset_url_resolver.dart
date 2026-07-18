@@ -99,7 +99,7 @@ class AssetUrlResolver {
         continue;
       }
       final row = Map<String, Object?>.from(raw.cast<String, Object?>());
-      final assetId = (row['assetId'] ?? row['id'] ?? '').toString().trim();
+      final assetId = (row['assetId'] ?? '').toString().trim();
       if (assetId.isEmpty) {
         continue;
       }
@@ -124,7 +124,7 @@ class AssetUrlResolver {
         continue;
       }
       final row = Map<String, Object?>.from(raw.cast<String, Object?>());
-      final assetId = (row['assetId'] ?? row['id'] ?? '').toString().trim();
+      final assetId = (row['assetId'] ?? '').toString().trim();
       if (assetId.isEmpty) {
         continue;
       }
@@ -187,9 +187,7 @@ class AssetUrlResolver {
         url: url,
         objectKey: (variant['objectKey'] ?? '').toString().trim(),
         requiresAccess: requiresAccess,
-        sourceSha256: (variant['sourceSha256'] ?? variant['sha256'] ?? '')
-            .toString()
-            .trim(),
+        sourceSha256: (variant['sourceSha256'] ?? '').toString().trim(),
         mimeType: (variant['mimeType'] ?? '').toString().trim(),
         format: (variant['format'] ?? '').toString().trim(),
         width: _intValue(variant['width']),

@@ -1,4 +1,3 @@
-version: 1
 read_model: HomepageContentPreview
 
 description: |
@@ -21,46 +20,36 @@ client_projection:
       dart_type: String
       nullable: false
       source: postId
-      aliases: [postId]
       default: "''"
 
     - name: title
       dart_type: String
       nullable: false
       source: title
-      aliases: [title]
       default: "''"
 
     - name: summary
       dart_type: String
       nullable: true
       source: summary
-      aliases: [summary]
-
     - name: contentType
       dart_type: String
       nullable: true
       source: contentType
-      aliases: [contentType]
-
     - name: coverUrl
       dart_type: String
       nullable: true
       source: coverUrl
-      aliases: [coverUrl]
-
     - name: authorName
       dart_type: String
       nullable: true
       source: authorName
-      aliases: [authorName]
       description: "记录卡 footer 作者名（端只读展示；与圈子记录卡 footer 同范式）"
 
     - name: likeCount
       dart_type: int
       nullable: false
       source: likeCount
-      aliases: [likeCount]
       default: "0"
       description: "记录卡 footer 点赞数（端只读展示；与圈子记录卡 footer 同范式）"
 
@@ -68,7 +57,6 @@ client_projection:
       dart_type: List<IntersectionReason>
       nullable: true
       source: intersectionReasons
-      aliases: [intersectionReasons]
       list_element_dart_class: IntersectionReason
       default: "null"
       description: "记录卡卡内交集句（云侧推荐管线预生成；端只读展示，无来源时为 null 不占位）"

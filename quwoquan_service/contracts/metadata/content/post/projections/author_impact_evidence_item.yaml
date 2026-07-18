@@ -1,4 +1,3 @@
-version: 1
 read_model: AuthorImpactEvidenceItem
 description: |
   创作者影响力单条证据明细（「我的影响力 / TA的影响」数字下钻明细行真相源，
@@ -31,68 +30,57 @@ client_projection:
       dart_type: String
       nullable: false
       source: evidenceId
-      aliases: [evidenceId]
       default: "''"
     - name: impactId
       dart_type: String
       nullable: false
       source: impactId
-      aliases: [impactId]
       default: "''"
     - name: helpType
       dart_type: String
       nullable: false
       source: helpType
-      aliases: [helpType]
       default: "''"
     - name: action
       dart_type: String
       nullable: false
       source: action
-      aliases: [action]
       default: "''"
     - name: intersectionDimension
       dart_type: String
       nullable: false
       source: intersectionDimension
-      aliases: [intersectionDimension]
       default: "''"
     - name: occurredAt
       dart_type: String
       nullable: false
       source: occurredAt
-      aliases: [occurredAt]
       default: "''"
     # summaryText：云侧实例化结论句（如「有人收藏了你的《城市漫步》」），端只读直出。
     - name: summaryText
       dart_type: String
       nullable: false
       source: summaryText
-      aliases: [summaryText]
       default: "''"
     # sampleVisual：被影响内容的样本视觉（封面 + 标题），点击经 target 跳内容详情。
     - name: sampleVisual
       dart_type: IntersectionVisual
       nullable: true
       source: sampleVisual
-      aliases: [sampleVisual]
       map_from_string_key_class: IntersectionVisual
     - name: representativeActor
       dart_type: IntersectionRepresentativeActor
       nullable: true
       source: representativeActor
-      aliases: [representativeActor]
       map_from_string_key_class: IntersectionRepresentativeActor
     - name: actionHints
       dart_type: List<IntersectionActionHint>
       nullable: false
       source: actionHints
-      aliases: [actionHints]
       list_element_dart_class: IntersectionActionHint
     # contentTarget：明细行点击下钻目标（被影响内容），可空表示暂不可下钻。
     - name: contentTarget
       dart_type: IntersectionTarget
       nullable: true
       source: contentTarget
-      aliases: [contentTarget]
       map_from_string_key_class: IntersectionTarget

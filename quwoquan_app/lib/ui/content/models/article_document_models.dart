@@ -71,7 +71,7 @@ class ArticleDocumentNode {
       type: type,
       text: (map['text'] ?? '').toString(),
       assetId: (map['assetId'] ?? '').toString(),
-      imageUrl: (map['imageUrl'] ?? map['imagePath'] ?? '').toString(),
+      imageUrl: (map['imageUrl'] ?? '').toString(),
       imageLayout: (map['imageLayout'] ?? 'fullWidth').toString(),
       caption: (map['caption'] ?? '').toString(),
       textAlign: (map['textAlign'] ?? '').toString(),
@@ -345,7 +345,7 @@ class ArticleDocumentBlock {
       type: type,
       offset: (map['offset'] as num?)?.toInt() ?? 0,
       text: (map['text'] ?? '').toString(),
-      imageUrl: (map['imageUrl'] ?? map['imagePath'] ?? '').toString(),
+      imageUrl: (map['imageUrl'] ?? '').toString(),
       imageLayout: (map['imageLayout'] ?? 'fullWidth').toString(),
       caption: (map['caption'] ?? '').toString(),
       orderedIndex: (map['orderedIndex'] as num?)?.toInt(),
@@ -437,7 +437,7 @@ class ArticleDocumentAsset {
     return ArticleDocumentAsset(
       id: (map['id'] ?? '').toString(),
       offset: (map['offset'] as num?)?.toInt() ?? 0,
-      imageUrl: (map['imageUrl'] ?? map['imagePath'] ?? '').toString(),
+      imageUrl: (map['imageUrl'] ?? '').toString(),
       imageLayout: (map['imageLayout'] ?? 'fullWidth').toString(),
       caption: (map['caption'] ?? '').toString(),
     );

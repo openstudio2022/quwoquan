@@ -3,7 +3,6 @@ dart_class: AssistantRunStructuredBundle
 library_path: assistant/contracts/assistant_run_structured_bundle.dart
 output_path: assistant/contracts/assistant_run_structured_bundle.dart
 contract: assistant_run_structured_bundle
-version: v1
 kind: runtime_wire_contract
 fields:
   - { name: structuredResponseRoot, type: map, required: true }

@@ -45,9 +45,12 @@ FAMILIES = (
 
 # scripts 中允许出现 prompt 渲染调用、但禁止硬编码 prompt 正文的迁移函数（必须经 render()）。
 RENDER_CALLERS = {
-    "quwoquan_data/scripts/content/post/writing_pack.py": ("render_prompt_md", "_render_image_task_prompt"),
+    "quwoquan_data/scripts/content/post/article/prompt_renderer.py": (
+        "render_prompt_md",
+        "_render_image_task_prompt",
+    ),
     "quwoquan_data/scripts/content/homepage/homepage_prompt.py": ("_render_entity_page_prompt",),
-    "quwoquan_data/scripts/content/execution/agent/agent_checkpoint.py": ("_checkpoint_prompts",),
+    "quwoquan_data/scripts/content/execution/agent/checkpoint_prompts.py": ("_checkpoint_prompts",),
 }
 
 

@@ -2,25 +2,77 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "quwoquan_data/schema/release/homepage_import_report.schema.json",
   "title": "Homepage import report (entity-service homepage-import 回执)",
-  "description": "entity-service cmd/homepage-import 产出的 import-homepage-<env>.json 契约。v3 将写入模式、来源所有者和 sync 下线清单绑定到 immutable release。",
+  "description": "entity-service cmd/homepage-import 产出的 import-homepage-<env>.json 单一契约，将写入模式、来源所有者和 sync 下线清单绑定到 immutable release。",
   "type": "object",
-  "required": ["schemaVersion", "releaseId", "env", "dryRun", "mode", "sourceOwner", "projected", "created", "updated", "offlined", "skipped", "entityRefToHomepageId", "issues", "finishedAt"],
+  "required": [
+    "schema",
+    "releaseId",
+    "env",
+    "dryRun",
+    "mode",
+    "sourceOwner",
+    "projected",
+    "created",
+    "updated",
+    "offlined",
+    "skipped",
+    "entityRefToHomepageId",
+    "issues",
+    "finishedAt"
+  ],
   "additionalProperties": false,
   "properties": {
-    "schemaVersion": { "const": "quwoquan_service.homepage_import_report/3" },
-    "releaseId": { "type": "string", "minLength": 1 },
-    "env": { "type": "string", "minLength": 1 },
-    "dryRun": { "type": "boolean" },
-    "mode": { "enum": ["upsert", "sync"] },
-    "sourceOwner": { "const": "qwq_data" },
-    "projected": { "type": "integer", "minimum": 0 },
-    "created": { "type": "array" },
-    "updated": { "type": "array" },
-    "offlined": { "type": "array" },
-    "skipped": { "type": "array" },
-    "entityRefToHomepageId": { "type": "object" },
-    "issues": { "type": "array" },
-    "finishedAt": { "type": "string", "minLength": 1 },
-    "sourceReportPath": { "type": "string" }
+    "releaseId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "env": {
+      "type": "string",
+      "minLength": 1
+    },
+    "dryRun": {
+      "type": "boolean"
+    },
+    "mode": {
+      "enum": [
+        "upsert",
+        "sync"
+      ]
+    },
+    "sourceOwner": {
+      "const": "qwq_data"
+    },
+    "projected": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "created": {
+      "type": "array"
+    },
+    "updated": {
+      "type": "array"
+    },
+    "offlined": {
+      "type": "array"
+    },
+    "skipped": {
+      "type": "array"
+    },
+    "entityRefToHomepageId": {
+      "type": "object"
+    },
+    "issues": {
+      "type": "array"
+    },
+    "finishedAt": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceReportPath": {
+      "type": "string"
+    },
+    "schema": {
+      "const": "quwoquan_service.homepage_import_report"
+    }
   }
 }

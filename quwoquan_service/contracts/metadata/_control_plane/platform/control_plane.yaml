@@ -1,4 +1,3 @@
-version: 1
 plane: platform-control-plane
 domain: platform
 dashboard:
@@ -19,7 +18,7 @@ object_types:
     operations:
       - operation: ListServiceCatalogEntries
         method: GET
-        path: /v1/control-plane/platform/catalog/services
+        path: /control-plane/platform/catalog/services
         scopes: [ops.platform.catalog.read]
 
   - object_type: plane_binding
@@ -32,11 +31,11 @@ object_types:
     operations:
       - operation: ListPlaneBindings
         method: GET
-        path: /v1/control-plane/platform/topology/planes
+        path: /control-plane/platform/topology/planes
         scopes: [ops.platform.catalog.read]
       - operation: UpdatePlaneBinding
         method: POST
-        path: /v1/control-plane/platform/topology/planes/{bindingId}:update
+        path: /control-plane/platform/topology/planes/{bindingId}:update
         scopes: [ops.platform.catalog.write]
         danger_level: high
         approval_mode: dual
@@ -79,7 +78,7 @@ object_types:
     operations:
       - operation: ListConfigPackages
         method: GET
-        path: /v1/control-plane/platform/configs/packages
+        path: /control-plane/platform/configs/packages
         scopes: [ops.platform.config.read]
 
   - object_type: config_instance_report
@@ -92,11 +91,11 @@ object_types:
     operations:
       - operation: ListConfigInstanceReports
         method: GET
-        path: /v1/control-plane/platform/configs/instances
+        path: /control-plane/platform/configs/instances
         scopes: [ops.platform.config.read]
       - operation: ReportConfigInstance
         method: POST
-        path: /v1/control-plane/platform/configs/instances/{instanceId}:report
+        path: /control-plane/platform/configs/instances/{instanceId}:report
         scopes: [ops.platform.config.write]
 
   - object_type: governance_policy_template
@@ -109,7 +108,7 @@ object_types:
     operations:
       - operation: ListGovernancePolicyTemplates
         method: GET
-        path: /v1/control-plane/platform/governance/templates
+        path: /control-plane/platform/governance/templates
         scopes: [ops.platform.governance.read]
 
   - object_type: governance_policy_binding
@@ -122,11 +121,11 @@ object_types:
     operations:
       - operation: ListGovernancePolicyBindings
         method: GET
-        path: /v1/control-plane/platform/governance/bindings
+        path: /control-plane/platform/governance/bindings
         scopes: [ops.platform.governance.read]
       - operation: UpdateGovernancePolicyBinding
         method: POST
-        path: /v1/control-plane/platform/governance/bindings/{bindingId}:update
+        path: /control-plane/platform/governance/bindings/{bindingId}:update
         scopes: [ops.platform.governance.write]
         danger_level: high
         approval_mode: single
@@ -141,17 +140,17 @@ object_types:
     operations:
       - operation: ListConfigReleases
         method: GET
-        path: /v1/control-plane/platform/releases
+        path: /control-plane/platform/releases
         scopes: [ops.platform.rollout.read]
       - operation: ApplyConfigRelease
         method: POST
-        path: /v1/control-plane/platform/releases/{releaseId}:apply
+        path: /control-plane/platform/releases/{releaseId}:apply
         scopes: [ops.platform.rollout.write]
         danger_level: critical
         approval_mode: dual
       - operation: RollbackConfigRelease
         method: POST
-        path: /v1/control-plane/platform/releases/{releaseId}:rollback
+        path: /control-plane/platform/releases/{releaseId}:rollback
         scopes: [ops.platform.rollout.write]
         danger_level: critical
         approval_mode: dual
@@ -170,7 +169,7 @@ object_types:
     operations:
       - operation: ListEnvironmentTopologies
         method: GET
-        path: /v1/control-plane/platform/topology/environments
+        path: /control-plane/platform/topology/environments
         scopes: [ops.platform.dependency.read]
 
   - object_type: runtime_cluster
@@ -183,7 +182,7 @@ object_types:
     operations:
       - operation: ListRuntimeClusters
         method: GET
-        path: /v1/control-plane/platform/topology/clusters
+        path: /control-plane/platform/topology/clusters
         scopes: [ops.platform.dependency.read]
 
   - object_type: runtime_service
@@ -196,7 +195,7 @@ object_types:
     operations:
       - operation: ListRuntimeServices
         method: GET
-        path: /v1/control-plane/platform/topology/services
+        path: /control-plane/platform/topology/services
         scopes: [ops.platform.dependency.read]
 
   - object_type: runtime_instance
@@ -209,7 +208,7 @@ object_types:
     operations:
       - operation: ListRuntimeInstances
         method: GET
-        path: /v1/control-plane/platform/topology/instances
+        path: /control-plane/platform/topology/instances
         scopes: [ops.platform.dependency.read]
 
   - object_type: dependency_profile
@@ -222,7 +221,7 @@ object_types:
     operations:
       - operation: ListDependencyProfiles
         method: GET
-        path: /v1/control-plane/platform/topology/dependencies
+        path: /control-plane/platform/topology/dependencies
         scopes: [ops.platform.dependency.read]
 
   - object_type: capacity_profile
@@ -235,7 +234,7 @@ object_types:
     operations:
       - operation: ListCapacityProfiles
         method: GET
-        path: /v1/control-plane/platform/topology/capacity
+        path: /control-plane/platform/topology/capacity
         scopes: [ops.platform.dependency.read]
 
   - object_type: slo_policy
@@ -248,7 +247,7 @@ object_types:
     operations:
       - operation: ListSLOPolicies
         method: GET
-        path: /v1/control-plane/platform/observability/slos
+        path: /control-plane/platform/observability/slos
         scopes: [ops.platform.observability.read]
 
   - object_type: alert_template
@@ -261,7 +260,7 @@ object_types:
     operations:
       - operation: ListAlertTemplates
         method: GET
-        path: /v1/control-plane/platform/observability/alerts
+        path: /control-plane/platform/observability/alerts
         scopes: [ops.platform.observability.read]
 
   - object_type: dashboard_card
@@ -274,7 +273,7 @@ object_types:
     operations:
       - operation: ListDashboardCards
         method: GET
-        path: /v1/control-plane/platform/observability/dashboards/cards
+        path: /control-plane/platform/observability/dashboards/cards
         scopes: [ops.platform.observability.read]
 
   - object_type: runbook
@@ -287,11 +286,11 @@ object_types:
     operations:
       - operation: ListRunbooks
         method: GET
-        path: /v1/control-plane/platform/runbooks
+        path: /control-plane/platform/runbooks
         scopes: [ops.platform.runbook.read]
       - operation: RunDrill
         method: POST
-        path: /v1/control-plane/platform/runbooks/{runbookId}:runDrill
+        path: /control-plane/platform/runbooks/{runbookId}:runDrill
         scopes: [ops.platform.runbook.write]
         danger_level: medium
         approval_mode: single
@@ -306,11 +305,11 @@ object_types:
     operations:
       - operation: ListGateRules
         method: GET
-        path: /v1/control-plane/platform/gates
+        path: /control-plane/platform/gates
         scopes: [ops.platform.gate.read]
       - operation: OverrideGateRule
         method: POST
-        path: /v1/control-plane/platform/gates/{gateId}:override
+        path: /control-plane/platform/gates/{gateId}:override
         scopes: [ops.platform.gate.write]
         danger_level: high
         approval_mode: dual
@@ -328,5 +327,5 @@ object_types:
     operations:
       - operation: ListProdPlaneAccessIsolation
         method: GET
-        path: /v1/control-plane/platform/topology/prod-plane-access-isolation
+        path: /control-plane/platform/topology/prod-plane-access-isolation
         scopes: [ops.platform.dependency.read]

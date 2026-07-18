@@ -2,7 +2,6 @@ dart_class: AggregationStateDto
 library_path: assistant/contracts/aggregation_state.dart
 output_path: assistant/generated/contracts/aggregation_state.g.dart
 contract: aggregation_state
-version: v1
 kind: runtime_policy_contract
 fields:
   - { name: allSkillsReady, type: bool, default: false }

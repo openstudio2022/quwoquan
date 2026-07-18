@@ -1,4 +1,3 @@
-version: 1
 read_model: MarkFollowingSubjectVisitedRequest
 
 description: |
@@ -19,26 +18,22 @@ client_projection:
       dart_type: String
       nullable: false
       source: subjectId
-      aliases: [subjectId]
       default: "''"
 
     - name: subjectType
       dart_type: String
       nullable: false
       source: subjectType
-      aliases: [subjectType]
       default: "''"
 
     - name: visitedAt
       dart_type: String
       nullable: false
       source: visitedAt
-      aliases: [visitedAt]
       default: "''"
 
     - name: clientRequestId
       dart_type: String
       nullable: false
       source: clientRequestId
-      aliases: [clientRequestId]
       default: "''"

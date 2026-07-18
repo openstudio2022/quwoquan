@@ -9,36 +9,36 @@
 ### 1. Mock / 本地 gateway 缺少轻量只读接口
 
 - `alpha-local`
-  - 已补 `GET /v1/chat/inbox`
-  - 已补 `GET /v1/chat/conversations`
-  - 已补 `POST /v1/user/sync`
-  - 已补 `POST /v1/ops/events`
-  - 已补 `GET /v1/ops/events/summary`
-  - 已补 `GET /v1/ops/events/drilldown`
-  - 已补 `POST /v1/ops/visits`
-  - 已补 `GET /v1/ops/visits/stats`
-  - 已补 `GET|POST /v1/ops/experiments/*`
+  - 已补 `GET /chat/inbox`
+  - 已补 `GET /chat/conversations`
+  - 已补 `POST /user/sync`
+  - 已补 `POST /ops/events`
+  - 已补 `GET /ops/events/summary`
+  - 已补 `GET /ops/events/drilldown`
+  - 已补 `POST /ops/visits`
+  - 已补 `GET /ops/visits/stats`
+  - 已补 `GET|POST /ops/experiments/*`
 
 - `beta-local`
-  - 已补 `GET /v1/app-messages/unread-count`
-  - 已补 `GET /v1/notifications/unread-count`
-  - 已补 `GET /v1/content/feed/intersections`
-  - 已补 `GET /v1/content/intersections/summary`
-  - 已补 `GET /v1/content/intersections`
-  - 已补 `POST /v1/content/intersections/visit`
-  - 已补 `POST /v1/content/intersections/exposure`
-  - 已补 `GET /v1/app-messages/{messageId}`
-  - 已补 `POST /v1/app-messages/{messageId}/ack`
-  - 已补 `POST /v1/app-messages/{messageId}/read`
+  - 已补 `GET /app-messages/unread-count`
+  - 已补 `GET /notifications/unread-count`
+  - 已补 `GET /content/feed/intersections`
+  - 已补 `GET /content/intersections/summary`
+  - 已补 `GET /content/intersections`
+  - 已补 `POST /content/intersections/visit`
+  - 已补 `POST /content/intersections/exposure`
+  - 已补 `GET /app-messages/{messageId}`
+  - 已补 `POST /app-messages/{messageId}/ack`
+  - 已补 `POST /app-messages/{messageId}/read`
 
 验证结果：
 
 - `python3 quwoquan_ops/cli/stackctl.py health --target beta-local --scope full` 通过
 - `python3 quwoquan_ops/cli/stackctl.py health --target gamma-local --scope full` 通过
 - beta 当前手动 smoke 已验证：
-  - `/v1/app-messages/unread-count`
-  - `/v1/notifications/unread-count`
-  - `/v1/content/feed/intersections?limit=2&channel=recommend`
+  - `/app-messages/unread-count`
+  - `/notifications/unread-count`
+  - `/content/feed/intersections?limit=2&channel=recommend`
 
 ### 2. 日志追加导致过往 404/501 污染当前排查
 
@@ -185,6 +185,6 @@
 - `python3 quwoquan_ops/cli/stackctl.py health --target gamma-local --scope full`
 - beta 手工 HTTP smoke：
   - `/healthz`
-  - `/v1/app-messages/unread-count`
-  - `/v1/notifications/unread-count`
-  - `/v1/content/feed/intersections?limit=2&channel=recommend`
+  - `/app-messages/unread-count`
+  - `/notifications/unread-count`
+  - `/content/feed/intersections?limit=2&channel=recommend`

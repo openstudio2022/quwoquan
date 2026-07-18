@@ -1,0 +1,75 @@
+id: CR-20260717-115-startup-safe-handoff-telemetry
+title: 冷启动安全交接、恢复终态与受限遥测闭环
+slug: startup-safe-handoff-telemetry
+revision: 1
+status: in_progress
+
+affected_nodes:
+  - specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance
+  - specs/feature-tree/product-ops-growth/event-ingestion-and-analytics
+
+entries:
+  - timestamp: "2026-07-17T18:45:00+08:00"
+    summary: |
+      将启动路径从欢迎页定时退出收敛为原生首帧、Flutter bootstrap、Welcome、Router 与
+      安全 Shell 的单向终态机。新增独立 StartupAttempt journal 与受限匿名启动遥测接收，
+      用于关联 native、Dart、Router、Shell、recovery 和最终摘要，且不改变通用事件入口
+      的已验证主体要求。
+    reason: |
+      缺运行时定义会在 runApp 前抛错并永久停留原生 LaunchScreen；Welcome/Router 的异步
+      回调、native 首帧和现有 Analytics/AppLog 链路也无法共同保证用户可恢复和云端可诊断。
+    change_type:
+      - specification
+      - metadata
+      - codegen
+      - app
+      - service
+      - ops
+      - local_contract
+      - api_integration
+      - user_acceptance
+    changed_documents:
+      - path: specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/spec.md
+        sections:
+          - 启动故障终态合同
+          - 启动遥测与隐私
+      - path: specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/acceptance.yaml
+        sections:
+          - GWT4
+          - GWT6
+      - path: quwoquan_ops/observability/monitoring/dashboards/l1_user_experience.json
+        sections:
+          - 启动阶段时长与启动漏斗
+      - path: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+        sections:
+          - quwoquan_l1_startup_welcome
+      - path: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md
+        sections:
+          - 启动可靠性受限子集
+      - path: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/acceptance.yaml
+        sections:
+          - SIT2
+      - path: specs/feature-tree/journey_scenario_registry.yaml
+        sections:
+          - cold-start-safe-handoff
+    tests:
+      - layer: local_contract
+        intent: GWT
+        evidence:
+          - quwoquan_app/test/local_contract/app/bootstrap_recovery__local_contract_test.dart
+          - quwoquan_app/test/local_contract/app/startup_state_machine__local_contract_test.dart
+          - quwoquan_app/test/local_contract/app/startup_telemetry__local_contract_test.dart
+      - layer: api_integration
+        intent: SIT
+        evidence:
+          - quwoquan_service/services/product-ops-service/tests/api_integration/startup_telemetry__api_integration_test.go
+      - layer: user_acceptance
+        intent: UAT
+        evidence:
+          - quwoquan_app/scripts/device/verify_startup_first_frame.py
+    gates:
+      - make verify-metadata
+      - make codegen-app
+      - dart quwoquan_ops/tools/runtime_error_codegen/bin/check_runtime_error_cutover.dart
+      - make verify-app-startup-ttid
+      - make verify-app-page-horizontal-quality

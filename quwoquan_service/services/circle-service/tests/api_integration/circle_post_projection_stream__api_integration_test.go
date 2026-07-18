@@ -67,13 +67,13 @@ func TestContentPostStreamToPlacementAndPlacementOutboxConvergeOnRealStores(t *t
 		[]rtauth.OperationSecurityDescriptor{{
 			CanonicalOperationID: "circle.circle_post_placement.PlacePostInCircle",
 			ContractGraphSHA256:  "circle-placement-stream-api-integration",
-			Method:               http.MethodPost, PathTemplate: "/v1/circles/{circleId}/post-placements",
+			Method:               http.MethodPost, PathTemplate: "/circles/{circleId}/post-placements",
 			OperationKind: "command", MutationTarget: "CirclePostPlacement", InvariantTarget: "CirclePostPlacement",
 			AuthMode: "required", ActorRequirement: "persona", Principal: "persona",
 			CommercialStatus: "ready", TimeoutMilliseconds: 1500,
 		}},
 		http.MethodPost,
-		"/v1/circles/{circleId}/post-placements",
+		"/circles/{circleId}/post-placements",
 	)(testHandler)
 	placementGuard.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusCreated {
@@ -129,6 +129,6 @@ func TestContentPostStreamToPlacementAndPlacementOutboxConvergeOnRealStores(t *t
 func placementRequestForCircle(t *testing.T, circleID, postID, idempotencyKey string) *http.Request {
 	t.Helper()
 	request := placementRequest(t, postID, idempotencyKey)
-	request.URL.Path = "/v1/circles/" + circleID + "/post-placements"
+	request.URL.Path = "/circles/" + circleID + "/post-placements"
 	return request
 }

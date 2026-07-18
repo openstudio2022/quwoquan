@@ -189,19 +189,25 @@ hash(top9UserIdsInOrder + top9AvatarVersions + layoutVersion)
 - 避免重复重算
 - 允许任务天然幂等
 
-### KD-5：URL 与 objectKey 统一由 runtime 构建
+### KD-5：公开交付 URI 由注入端点 + public slice key 构建
 
-统一规则：
+统一规则（环境无关 path/query，仅 authority 随配置变化）：
 
 ```text
-https://{cdnDomain}/{objectKey}?v={version}
+{injectedHttpsMediaBase}/{publicSliceKey}?v={version}
 ```
 
-业务服务禁止：
+双平面：
 
-- 自己拼 objectKey
-- 自己拼 OSS/COS URL
+- 内部 CAS / `objectKey`：仅存储与处理链路使用，禁止跨服务 JSON 或 UI 透传
+- 公开 `publicSliceKey` / `DeliveryReference.deliveryUri`：唯一对外交付引用
+
+业务服务与 App 禁止：
+
+- 自己拼 objectKey / CAS key
+- 自己拼 OSS/COS URL、按环境名分支改写 host
 - 在数据库主字段中保存签名 URL
+- 播放器/图片组件接收未经验证的原始媒体引用
 
 ### KD-6：头像变化进入统一 sync patch
 
@@ -271,20 +277,15 @@ make codegen-app
 - 移除旧群头像 URL 填充链路，并保留 `avatarCompositeUrls` 降级评估记录
 - 生产端先写新字段
 
-### 阶段 2：双读
+### 阶段 2：单轨切换（破坏性）
 
-客户端优先：
+客户端只认：
 
 1. `avatarUrl`
 
-迁移期若需要观察兼容性，可短期保留旧字段，但不再作为主逻辑输入。
+禁止旧字段双读、别名解码或「短期兼容」窗口；旧列表拼图语义一次性退出。
 
-### 阶段 3：单读
-
-- 客户端只读新字段
-- 服务端停止依赖旧列表拼图语义
-
-### 阶段 4：清理
+### 阶段 3：清理
 
 - 评估移除或降级旧群头像 URL / `avatarCompositeUrls`
 
@@ -393,3 +394,54 @@ make codegen-app
 2. 媒体审核与转码管线
 3. 内容媒体全面接入统一资产模型
 4. 更细粒度的多云/多 CDN 策略
+
+## KD-9：内容 VOD 权威描述符与 storyboard
+
+### 处理所有权与发布门
+
+内容视频是 `content-service` 的业务对象；`runtime/media` 提供受控的对象交付、处理任务端口、
+存储和可观测基础设施。上传或导入完成后，content-service 以
+`{assetId, assetVersion, processorProfile}` 提交幂等处理任务，处理状态固定为
+`processing -> ready | rejected`，不引入协议版本或兼容分支。
+
+处理成功的唯一权威输出是 generated `VideoPlaybackDescriptor` 所需的数据：
+
+- `assetId`、`assetVersion`、processing status、访问策略；
+- `verifiedDurationMs`、宽高、codec/container；
+- canonical video/cover `publicSliceKey`；
+- 可选、版本绑定的 `previewTrack` manifest 与 track version。
+
+Post publish、Feed、Post detail 与 WorkBrowser 只投影 `ready` asset 的 descriptor。上传端宣称的
+时长、客户端 `VideoPlayerController` 时长和临时 URL 都不能作为权威字段；native duration
+只供 session seek 边界和一次性数据质量比对。无 verified/native duration 时，App 禁用可拖动
+时间轴，不伪造 `0:00` 或播放失败。
+
+### storyboard 交付与缓存
+
+storyboard 是处理阶段产出的受控派生资源，不是 UI 现场抽帧：
+
+1. 处理器在 asset/version ready 后生成固定采样/尺寸 profile 的 manifest 和帧 slice；
+2. manifest 通过 `MediaDeliveryReference` 交付，禁止 objectKey、上传 URL、任意 host 进入 App；
+3. 缓存 key 固定为 asset/version/track/profile/access policy；私有资源按账号隔离，登出清除；
+4. 控件拖动时只请求 target 对应帧；相邻预取、并发与内存有上限，切集、不可见或 generation
+   变化立即取消；
+5. 缺轨或请求失败仅降级为时间浮标，不得影响视频播放状态或显示重试 CTA。
+
+### QoE、推荐信号与回滚
+
+QoE 是 Ops 产品遥测，单独使用强类型 `video_playback_qoe` 事件，记录 ready、真实 TTFF（仅平台可
+取得时）、rebuffer、seek、时长偏差和受限播放模式。事件不得带 postId、feedRequestId、tag、
+ranking 归因或播放器异常栈，且不得进入 recommendation hot path。
+
+推荐只接收 metadata 定义的 `effective_play`：服务端按真实累计播放、连续会话与 seek 排除校验后，
+每播放会话/内容最多一次进入 `BehaviorSignal` 和兴趣更新。`play_progress` 不再将“跳至末尾”的
+位置比误记为完整消费。
+
+首期不新增端侧 `AppRemoteConfig` 播放门槛：有效播放阈值由服务端 policy 作为唯一准入权威。回滚
+顺序是关闭 storyboard → 关闭新 controls → 回滚 image/config；已发布内容的 video/cover
+canonical slice 和播放主链路必须持续可用。
+
+SLS raw QoE 保留 3 天、去身份 hourly 聚合保留 90 天。看板和告警按低基数 playback mode 聚合
+P50/P95 ready、TTFF、rebuffer incidents per ready 与 duration mismatch rate；告警必须包含
+最小样本量和连续窗口抑制。任何 beta/gamma/prod 真机 readback 缺失时，商用矩阵继续为
+`GATE_BLOCK`。

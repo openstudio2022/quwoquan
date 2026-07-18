@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-const contentServiceObjectIntersectionsPath = "/v1/content/intersections/object"
+const contentServiceObjectIntersectionsPath = "/content/intersections/object"
 
 var contentServiceObjectIntersectionsHTTPClient = &http.Client{Timeout: 3 * time.Second}
 

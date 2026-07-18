@@ -118,48 +118,36 @@ objects:
   event_consumers: []
   field_roles:
     append_only_fact:
-    - id
-    - eventId
+    - logType
     - eventType
-    - eventName
-    - eventVersion
-    - priority
-    - producer
-    - source
-    - userIdHash
     - sessionId
-    - pageVisitId
-    - surfaceId
-    - routeId
-    - operationId
-    - requestId
-    - traceId
     - pageName
-    - targetType
-    - targetKey
-    - entityType
-    - entityId
-    - experimentBucket
-    - errorCode
-    - errorModule
-    - errorKind
-    - errorReason
-    - origin
-    - nature
-    - failurePoint
-    - stackHash
-    - businessObject
-    - functionModule
-    - appRuntimeEnv
-    - appVersion
-    - platform
-    - networkClass
     - occurredAt
-    - clientSentAt
-    - ingestedAt
-    - eventDate
-    - payload
-    - metrics
+    - deviceManufacturer
+    - deviceModel
+    - appVersion
+    - networkClass
+    - durationMs
+    - result
+    - failReasonCode
+    - errorCode
+    - operationId
+    - httpStatus
+    - callStack
+    - tClickToFirstFrameMs
+    - tFirstFrameToShellMs
+    - tShellToContentMs
+    - tClickToContentMs
+    - hasError
+    - readyMs
+    - ttffMs
+    - rebufferCount
+    - rebufferMs
+    - seekCount
+    - declaredDurationMs
+    - observedDurationMs
+    - durationMismatch
+    - playbackMode
     authoritative_state: []
     owned_value: []
     projection: []
@@ -167,29 +155,24 @@ objects:
     transport_only: []
   identity:
     fields:
-    - id
+    - sessionId
+    - eventType
+    - occurredAt
     version_source: immutable
   invariant_refs: []
   lifecycle_refs: []
   member_bounds: {}
   mutation_entrypoints:
   - ReportEventBatch
+  - ReportStartupEventBatch
   object_kind: append_only_fact
   relationships: []
   source_document: ops/event_record/fields.yaml
   source_entity: EventRecord
-  storage_backend: mongodb
+  storage_backend: aliyun_sls
   storage_role: append_only
   local_identity_reasons:
-    entityId: telemetry entity dimension normalized at ingestion; domain access is forbidden from EventRecord
-    eventId: immutable correlation or idempotency key scoped to this fact or command; it is not a business-object reference
     operationId: generated route, surface, or operation registry key used only for navigation or telemetry attribution
-    pageVisitId: generated route, surface, or operation registry key used only for navigation or telemetry attribution
-    requestId: immutable correlation or idempotency key scoped to this fact or command; it is not a business-object reference
-    routeId: generated route, surface, or operation registry key used only for navigation or telemetry attribution
-    sessionId: runtime session correlation key injected by OperationInvocationContext, not an aggregate reference
-    surfaceId: generated route, surface, or operation registry key used only for navigation or telemetry attribution
-    traceId: immutable correlation or idempotency key scoped to this fact or command; it is not a business-object reference
 - access:
     commands: append_only_sink
     cross_context: event_only

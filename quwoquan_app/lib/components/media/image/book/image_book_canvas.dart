@@ -5,11 +5,11 @@ import 'dart:ui' as ui;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show listEquals;
-import 'package:flutter/material.dart' show Icons;
 import 'package:quwoquan_app/cloud/media/cdn_image_url_builder.dart';
 import 'package:quwoquan_app/components/media/image/book/image_book_page_surface.dart';
 import 'package:quwoquan_app/components/media/shared/gesture/immersive_gesture_intent_controller.dart';
 import 'package:quwoquan_app/components/media/shared/pageflip/media_page_flip_book.dart';
+import 'package:quwoquan_app/components/media/shared/viewer/immersive_media_failure_content.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
@@ -709,41 +709,12 @@ class _ImageBookFailureOverlay extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       key: const ValueKey<String>('image-book-failure-overlay'),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Icon(
-            Icons.image_not_supported_outlined,
-            color: AppColors.white.withValues(alpha: 0.46),
-            size: AppSpacing.iconLarge,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            UITextConstants.imageLoadFailed,
-            style: TextStyle(
-              color: AppColors.white.withValues(alpha: 0.68),
-              fontSize: 14,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          CupertinoButton(
-            key: const ValueKey<String>('image-book-retry'),
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md,
-              vertical: AppSpacing.sm,
-            ),
-            minimumSize: const Size.square(AppSpacing.smallButtonSize),
-            onPressed: onRetry,
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Icon(CupertinoIcons.refresh, size: AppSpacing.iconSmall),
-                SizedBox(width: AppSpacing.sm),
-                Text(UITextConstants.retry),
-              ],
-            ),
-          ),
-        ],
+      child: ImmersiveMediaFailureContent(
+        presentation: const MediaFailurePresentation(
+          title: UITextConstants.imageLoadFailed,
+        ),
+        onRetry: onRetry,
+        retryKey: const ValueKey<String>('image-book-retry'),
       ),
     );
   }
@@ -773,7 +744,7 @@ class _ImageBookReadabilityOverlay extends StatelessWidget {
           alignment: Alignment.bottomCenter,
           child: SizedBox(
             height: AppSpacing.hairline,
-            child: ColoredBox(color: Color(0x2E000000)),
+            child: ColoredBox(color: AppColors.imageBookReadabilityHairline),
           ),
         ),
       ],

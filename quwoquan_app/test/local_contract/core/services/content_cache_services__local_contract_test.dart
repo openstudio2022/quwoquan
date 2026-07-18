@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
@@ -106,6 +107,37 @@ void main() {
 
       expect(first.post.id, 'post_1');
       expect(second.post.id, 'post_1');
+      expect(delegate.detailRequestCount, 1);
+    });
+
+    test('视频详情缓存保留播放 canary 的规范媒体字段', () async {
+      const videoUrl =
+          'media/video/s/video-primary-0001/post/video-content-0001/source.mp4';
+      const thumbnailUrl =
+          'media/image/s/archived-image/post/fixture_video_001/v1/cover.png';
+      final delegate = _CountingContentRepository(
+        post: _videoPostDto(
+          'fixture_video_001',
+          videoUrl: videoUrl,
+          thumbnailUrl: thumbnailUrl,
+        ),
+      );
+      final repo = _cachedContentRepository(
+        delegate: delegate,
+        postCache: PostObjectCacheService(),
+        querySnapshotStore: ContentQuerySnapshotStore(),
+      );
+
+      final first = await repo.getPost(postId: 'fixture_video_001');
+      final second = await repo.getPost(postId: 'fixture_video_001');
+
+      expect(first.post.type, 'video');
+      expect(first.post.identity, 'work');
+      expect(first.post.mediaVideoUrl, videoUrl);
+      expect(first.post.mediaThumbnailUrl, thumbnailUrl);
+      expect(first.post.durationMs, 45000);
+      expect(first.post.isVideoLike, isTrue);
+      expect(second.post.mediaVideoUrl, videoUrl);
       expect(delegate.detailRequestCount, 1);
     });
 
@@ -352,6 +384,8 @@ class _CountingContentRepository extends Fake implements ContentReadRepository {
     String sort = kFeedSortRecommend,
     String? sessionId,
     String? feedRequestId,
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
   }) async {
     feedRequestCount += 1;
     if (failFeedRequests) {
@@ -394,17 +428,41 @@ class _CountingContentRepository extends Fake implements ContentReadRepository {
 
 PostBaseDto _postDto(String id, {String avatarUrl = ''}) {
   return postBaseDtoFromMap(<String, dynamic>{
-    'postId': id,
     'id': id,
-    '_id': id,
-    'contentType': 'micro',
-    'contentIdentity': 'moment',
+    'type': 'micro',
     'identity': 'moment',
     'authorId': 'user_1',
     'displayName': '用户一',
     'avatarUrl': avatarUrl,
     'body': '缓存内容',
-    'mediaUrls': <String>[],
+    'imageUrls': <String>[],
+    'likeCount': 0,
+    'commentCount': 0,
+    'shareCount': 0,
+    'createdAt': '2026-05-19T00:00:00.000Z',
+    'updatedAt': '2026-05-19T00:00:00.000Z',
+  });
+}
+
+PostBaseDto _videoPostDto(
+  String id, {
+  required String videoUrl,
+  required String thumbnailUrl,
+}) {
+  return postBaseDtoFromMap(<String, dynamic>{
+    'id': id,
+    'type': 'video',
+    'identity': 'work',
+    'authorId': 'user_1',
+    'displayName': '用户一',
+    'avatarUrl': '',
+    'body': '播放 canary',
+    'videoUrl': videoUrl,
+    'thumbnailUrl': thumbnailUrl,
+    'coverUrl': thumbnailUrl,
+    'width': 1280,
+    'height': 720,
+    'durationMs': 45000,
     'likeCount': 0,
     'commentCount': 0,
     'shareCount': 0,
@@ -414,10 +472,26 @@ PostBaseDto _postDto(String id, {String avatarUrl = ''}) {
 }
 
 ContentPostDetailPayload _detailPayload(String id, {PostBaseDto? post}) {
+  final resolvedPost = post ?? _postDto(id);
   return ContentPostDetailPayload.fromWire(<String, dynamic>{
-    ...(post ?? _postDto(id)).toMap(),
-    'postId': id,
-    '_id': id,
+    'id': id,
+    'type': resolvedPost.type,
+    'identity': resolvedPost.identity,
+    'assistantUsePolicy': resolvedPost.assistantUsePolicy,
+    'authorId': resolvedPost.authorId,
+    'displayName': resolvedPost.displayName,
+    'avatarUrl': resolvedPost.avatarUrl,
+    'body': resolvedPost.body,
+    'imageUrls': resolvedPost.mediaImageUrls,
+    'coverUrl': resolvedPost.coverUrl,
+    'videoUrl': resolvedPost.videoUrl,
+    'thumbnailUrl': resolvedPost.thumbnailUrl,
+    'durationMs': resolvedPost.durationMs,
+    'likeCount': resolvedPost.likeCount,
+    'commentCount': resolvedPost.commentCount,
+    'shareCount': resolvedPost.shareCount,
+    'createdAt': resolvedPost.createdAt.toIso8601String(),
+    'updatedAt': resolvedPost.updatedAt?.toIso8601String(),
     'cards': <Map<String, dynamic>>[],
     'circleSummaries': <Map<String, dynamic>>[],
   });

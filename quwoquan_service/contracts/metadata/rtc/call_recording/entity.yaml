@@ -1,4 +1,3 @@
-version: 1
 domain: rtc
 entity: CallRecording
 object_kind: aggregate_root

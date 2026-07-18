@@ -17,8 +17,8 @@ func TestAssistantMentionedWritesReliableStream(t *testing.T) {
 		t.Fatalf("create stream group: %v", err)
 	}
 	conv := createConversation(t, `{"type":"group","title":"assistant stream"}`)
-	convId := conv["_id"].(string)
-	doPost(t, "/v1/chat/conversations/"+convId+"/assistant", `{"skillId":"general"}`, "user_test_001", http.StatusOK)
+	convId := conv["id"].(string)
+	doPost(t, "/chat/conversations/"+convId+"/assistant", `{"skillId":"general"}`, "user_test_001", http.StatusOK)
 
 	sendMessage(t, convId, `{"type":"text","content":"@小趣 帮忙总结","mentions":["assistant"],"clientMsgId":"stream-assistant-mentioned-1"}`)
 
@@ -64,8 +64,8 @@ func TestAssistantGeneratedMessageDoesNotWriteMentionStream(t *testing.T) {
 		t.Fatalf("create stream group: %v", err)
 	}
 	conv := createConversation(t, `{"type":"group","title":"assistant loop guard"}`)
-	convId := conv["_id"].(string)
-	doPost(t, "/v1/chat/conversations/"+convId+"/assistant", `{"skillId":"general"}`, "user_test_001", http.StatusOK)
+	convId := conv["id"].(string)
+	doPost(t, "/chat/conversations/"+convId+"/assistant", `{"skillId":"general"}`, "user_test_001", http.StatusOK)
 
 	sendMessageAs(t, "assistant", convId, `{"type":"text","content":"我是小趣回复","mentions":["assistant"],"clientMsgId":"assistant-loop-1"}`)
 

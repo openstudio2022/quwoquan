@@ -73,7 +73,7 @@ class CallSessionState {
       identical(this, other) ||
       other is CallSessionState &&
           runtimeType == other.runtimeType &&
-          session?.id == other.session?.id &&
+          session?.callId == other.session?.callId &&
           status == other.status &&
           isMuted == other.isMuted &&
           isCameraOn == other.isCameraOn &&
@@ -85,7 +85,7 @@ class CallSessionState {
 
   @override
   int get hashCode => Object.hash(
-    session?.id,
+    session?.callId,
     status,
     isMuted,
     isCameraOn,
@@ -154,7 +154,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       ref
           .read(activeCallProvider.notifier)
           .startCall(
-            callId: session.id,
+            callId: session.callId,
             callType: callTypeStr,
             participants: session.participants,
           );
@@ -165,7 +165,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       }
 
       _startTimeoutTimer();
-      return session.id;
+      return session.callId;
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
@@ -207,7 +207,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       ref
           .read(activeCallProvider.notifier)
           .startCall(
-            callId: session.id,
+            callId: session.callId,
             callType: session.callType,
             participants: session.participants,
           );
@@ -235,7 +235,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
   }
 
   Future<void> cancelCall() async {
-    final callId = state.session?.id;
+    final callId = state.session?.callId;
     if (callId == null) return;
     try {
       _cancelTimeoutTimer();
@@ -248,7 +248,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
   }
 
   Future<void> hangupCall() async {
-    final callId = state.session?.id;
+    final callId = state.session?.callId;
     if (callId == null) return;
     try {
       _cancelTimeoutTimer();
@@ -281,7 +281,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       ref
           .read(activeCallProvider.notifier)
           .startCall(
-            callId: session.id,
+            callId: session.callId,
             callType: session.callType,
             participants: session.participants,
           );
@@ -298,7 +298,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
   }
 
   Future<void> leaveCall() async {
-    final callId = state.session?.id;
+    final callId = state.session?.callId;
     if (callId == null) return;
     try {
       await _repo.hangUp(callId);
@@ -310,7 +310,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
   }
 
   Future<void> inviteToCall(List<String> inviteeIds) async {
-    final callId = state.session?.id;
+    final callId = state.session?.callId;
     if (callId == null) return;
     try {
       await _repo.inviteToCall(callId: callId, inviteeIds: inviteeIds);
@@ -329,7 +329,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
   }) {
     if (!_usesLocalRtcSimulation) return;
     final session = CallSessionDto(
-      id: callId,
+      callId: callId,
       callType: callType,
       status: 'ringing',
       initiatorId: callerName,
@@ -376,7 +376,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
     ref
         .read(activeCallProvider.notifier)
         .startCall(
-          callId: answered.id,
+          callId: answered.callId,
           callType: answered.callType,
           participants: answered.participants,
         );
@@ -404,7 +404,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
   }
 
   Future<void> toggleMute() async {
-    final callId = state.session?.id;
+    final callId = state.session?.callId;
     if (callId == null) return;
     final newMuted = !state.isMuted;
     state = state.copyWith(isMuted: newMuted);
@@ -420,7 +420,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
   }
 
   Future<void> toggleCamera() async {
-    final callId = state.session?.id;
+    final callId = state.session?.callId;
     if (callId == null) return;
     final newCameraOn = !state.isCameraOn;
     state = state.copyWith(isCameraOn: newCameraOn);
@@ -436,7 +436,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
   }
 
   Future<void> startRecording() async {
-    final callId = state.session?.id;
+    final callId = state.session?.callId;
     if (callId == null) return;
     try {
       _recordingId = await _repo.startRecording(callId);
@@ -459,7 +459,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
   }
 
   Future<void> startScreenShare() async {
-    final callId = state.session?.id;
+    final callId = state.session?.callId;
     if (callId == null) return;
     try {
       await _lkRoom.startScreenShare();
@@ -471,7 +471,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
   }
 
   Future<void> stopScreenShare() async {
-    final callId = state.session?.id;
+    final callId = state.session?.callId;
     if (callId == null) return;
     try {
       await _lkRoom.stopScreenShare();
@@ -512,10 +512,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       );
 
       // 媒体连通：进入通话态并清除重连标记。
-      state = state.copyWith(
-        status: CallStatus.inCall,
-        isReconnecting: false,
-      );
+      state = state.copyWith(status: CallStatus.inCall, isReconnecting: false);
 
       _lkRoom.connectionState.addListener(_onConnectionStateChanged);
       _connectionListenerRoom = _lkRoom;
@@ -524,8 +521,9 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
 
       // Initial sync once connected, then on every room participant/track event.
       _onParticipantsChanged();
-      _participantsSub =
-          _lkRoom.onParticipantsChanged.listen((_) => _onParticipantsChanged());
+      _participantsSub = _lkRoom.onParticipantsChanged.listen(
+        (_) => _onParticipantsChanged(),
+      );
 
       _disconnectSub = _lkRoom.onDisconnected.listen((reason) {
         if (reason != null) {
@@ -559,8 +557,9 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
     _cancelTimeoutTimer();
     _participantsSub?.cancel();
     _disconnectSub?.cancel();
-    _connectionListenerRoom?.connectionState
-        .removeListener(_onConnectionStateChanged);
+    _connectionListenerRoom?.connectionState.removeListener(
+      _onConnectionStateChanged,
+    );
     _connectionListenerRoom = null;
     _lkRoom.connectionQuality.removeListener(_onQualityChanged);
     _lkRoom.activeSpeaker.removeListener(_onParticipantsChanged);

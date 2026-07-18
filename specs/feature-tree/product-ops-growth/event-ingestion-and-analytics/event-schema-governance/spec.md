@@ -1,93 +1,59 @@
-# L3 特性：event-schema-governance
+# L3 Story：event-schema-governance
 
 ## 功能说明
 
-定义统一事件 envelope、字段分级、版本兼容、幂等/去重、采样与背压规则，作为全链路埋点与反馈基础设施的 schema 真相源。
+冻结产品事件与异常的九字段公共信封、强类型扩展目录、页面身份目录、批次幂等、采样、背压、
+隐私和留存规则。唯一真相源为：
 
-## EventEnvelope 规范
+- `quwoquan_service/contracts/metadata/ops/event_record/event_catalog.yaml`
+- `quwoquan_service/contracts/metadata/_shared/app_pages.yaml`
+- `quwoquan_service/contracts/metadata/ops/event_record/fields.yaml`
 
-### 必填字段
-- `eventId`
-- `eventType`
-- `eventName`
-- `eventVersion`
-- `occurredAt`
-- `producer`
-- `priority`
-- `context`
-- `payload`
+## 公共信封
 
-### context 必须支持的公共字段
-- `sessionId`
-- `pageVisitId`
-- `traceId`
-- `requestId`
-- `surfaceId`
-- `routeId`
-- `operationId`
-- `requestId`
-- `experimentBucket`
-- `userIdHash`
-- `appVersion`
-- `platform`
-- `networkClass`
+`logType,eventType,sessionId,pageName,occurredAt,deviceManufacturer,deviceModel,appVersion,networkClass`
+九字段全部必填。`logType` 只允许 `event/error`，`networkClass` 只允许
+`wifi/ethernet/5g/4g/mobile/other/none` 七枚举，`eventType` 是唯一语义键。
 
-### business / feedback 扩展字段
-- `contentId / contentType / authorId / circleId`
-- `conversationId / messageId / rtcSessionId`
-- `entityType / entityId / bindPosition`
-- `runId / traceId / scorecardType / trainingEligible / labelSource`
+`vpn` 不属于 wire 枚举：它是覆盖于 Wi‑Fi、有线或蜂窝之上的隧道。端侧必须忽略
+`ConnectivityResult.vpn` 并上报底层接入；仅报告 VPN 而没有底层接入时使用 `other`。
+蜂窝只有在原生 probe 明确返回 NR 或 LTE 时才写 `5g` 或 `4g`；未授权、2G/3G、未知和
+不支持平台统一写 `mobile`。服务端、App codegen、Portal codegen 与 SLS 查询筛选必须拒绝
+`vpn/lte/nr/offline` 等非 canonical 值。
 
-## 字段分级
+不允许 `eventId/eventName/eventVersion/priority/producer/userIdHash/surfaceId/properties/payload/metrics`
+等公共或自由字段。每个 eventType 必须在目录声明 required/optional 强类型扩展、正常采样率、慢阈值和
+端侧内部优先级。
 
-- `PUBLIC_AGGREGATE`：可进入聚合报表与常规 dashboard。
-- `INTERNAL_OPERATIONAL`：仅供内部排障、审计或高权限分析使用。
-- `SENSITIVE`：需脱敏、限制保留或禁止进入训练。
-- `PII_RESTRICTED`：不得直接进入公开分析宽表，仅可在受控链路中使用。
+`app_startup` 当前固定 `normal_sample_rate: 1.0`，正常、慢启动和 `hasError=true` 均全量采集；
+`slow_threshold_ms: 3000` 仅作为聚合、看板和告警分类阈值，不得影响是否入队。
 
-## 幂等与去重
+## 幂等与时间
 
-- `eventId + eventVersion` 为统一幂等键。
-- 客户端重试不得改写 `eventId`。
-- 曝光等高频事件允许同时存在：
-  - 客户端轻量去重（session/window 级）；
-  - 服务端 event 级幂等；
-  - Redis 状态级去重。
-- `learning` 事件与 `scorecard` 必须具备明确的 `feedbackTarget` 与判重键。
+- 事件不生成逐条 ID；每个密封批次以 canonical JSON SHA-256 作为 `Idempotency-Key`。
+- 重试期间 body、顺序和 digest 不得变化；服务端重算摘要并全批校验。
+- 内部 `_batchKey/_batchIndex` 只用于 SLS 完整性确认和查询/聚合去重，不进入公共 API。
+- `occurredAt` 只接受过去 72h 至未来 5min；SLS `__time__` 使用服务端 ingestedAt。
 
-## 版本兼容
+## 隐私与生命周期
 
-- 同一事件语义升级时，只允许：
-  1. 向后兼容新增字段；
-  2. 保持旧字段语义不变；
-  3. 通过 `eventVersion` 与消费兼容策略共存。
-- 不允许直接复用旧 `eventName` 改写字段含义。
-- schema 变更必须同步更新指标字典、acceptance 与 CR。
+- sessionId 为可逆账号用户键会话标识，必须按 `SENSITIVE` 管理：raw 3d、Portal 默认掩码、完整查询审计。
+- callStack 只允许方法名数组，最多十层、单层 256 字符；禁止路径、token、用户输入，且不建全文索引。
+- raw 产品/异常与启动诊断保留 3d；无身份小时聚合保留 90d；不做对象存储长期归档。
+- 本地 AppLog/debug/cache/success HTTP 不自动上云。
 
-## 采样、优先级与背压
+## 单轨约束
 
-- `P0`：关键交易、关键学习、关键错误与回滚事件；全量保留。
-- `P1`：核心体验与行为事件；默认全量或低采样。
-- `P2`：探索性、诊断性或高频细粒度事件；允许采样与优先丢弃。
-- 背压时保序原则：优先保 `P0`，再保 `P1`，最后舍弃 `P2`。
-
-## 生命周期与保留
-
-- 明细在线可查：默认 `7~90d`，按事件域配置。
-- 聚合结果：默认 `1~3y`。
-- 冷归档：对象存储长期保留，受法务与成本策略约束。
-- `SENSITIVE/PII_RESTRICTED` 字段保留期不得高于同域普通字段。
-
-## 约束
-
-- 所有进入统一反馈应用、运营分析、实验评估与训练的事件，必须符合本 schema。
-- 不允许 page access、behavior、Assistant learning、visit、analytics 继续长期维护独立 envelope。
-- surface/route/operation/experiment 等上下文必须与 metadata 驱动语义保持一致。
+- product-ops 日志只写 SLS，不写 Mongo、不镜像 Elasticsearch、不发推荐/Assistant 领域事件。
+- 推荐反馈只走 behaviors.yaml、`/content/behaviors` 或专用业务命令的事务 outbox。
+- 不提供 eventVersion 兼容、旧键双读、双写、fallback 或 warn-only 逃逸。
 
 ## 验收标准
 
-- A1：统一 envelope、字段分级、优先级、保留策略可覆盖全域事件。
-- A5：灰度、回滚、兼容升级规则明确。
-- A6：PII/SENSITIVE 分级与脱敏规则明确。
-- A7：事件版本、幂等与 schema 演进规则形成单一真相源。
-- A8：为 baseline 与后续 `/dev` 提供可验证的 schema 基线。
+- App/Go/Portal 目录产物由同一 metadata 生成且二次 codegen 无漂移。
+- App 本地和服务端都拒绝未知事件、未知扩展、非法枚举、越界时间与超限批次。
+- `wifi+vpn`、`ethernet+vpn` 与 `mobile+vpn` 分别归一为底层 `wifi`、`ethernet` 与
+  `5g/4g/mobile`；仅 VPN 为 `other`，`vpn` 入站必须被拒绝。
+- 相同 canonical batch 重放只形成一批 raw 事实并返回 duplicateBatch。
+- `/ops/startup-events` 拒绝产品/身份字段，且匿名 `/ops/events` 始终 401。
+- 缺真实 SLS/gamma/真机证据时状态保持 partial。

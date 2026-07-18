@@ -25,7 +25,7 @@ class RtcInitiateCallResultDto {
   }
 }
 
-/// [RtcRepository.answerCall]：rtc-service 为 `{ session, token, roomId }`；兼容扁平存量。
+/// [RtcRepository.answerCall]：rtc-service 为 `{ session, token, roomId }`。
 class RtcAnswerCallResultDto {
   const RtcAnswerCallResultDto({this.token, this.roomId, this.session});
 
@@ -42,8 +42,8 @@ class RtcAnswerCallResultDto {
         session: CallSessionDto.fromMap(nested),
       );
     }
-    final id = map['id'] ?? map['_id'] ?? map['callId'];
-    final hasSessionId = id != null && id.toString().isNotEmpty;
+    final callId = map['callId'];
+    final hasSessionId = callId != null && callId.toString().isNotEmpty;
     return RtcAnswerCallResultDto(
       token: map['token'] as String?,
       roomId: map['roomId'] as String?,
@@ -67,23 +67,10 @@ class RtcJoinCredentialsDto {
   factory RtcJoinCredentialsDto.fromMap(Map<String, dynamic> map) {
     final token = map['token'] as String? ?? '';
     final nested = _sessionNestedFromMap(map);
-    if (nested != null) {
-      final roomId =
-          map['roomId'] as String? ?? nested['roomId'] as String? ?? '';
-      final callId =
-          nested['callId'] as String? ??
-          nested['_id'] as String? ??
-          nested['id'] as String?;
-      return RtcJoinCredentialsDto(
-        token: token,
-        roomId: roomId,
-        callId: callId,
-      );
-    }
     return RtcJoinCredentialsDto(
       token: token,
-      roomId: map['roomId'] as String? ?? '',
-      callId: map['callId'] as String?,
+      roomId: nested?['roomId'] as String? ?? '',
+      callId: nested?['callId'] as String?,
     );
   }
 }

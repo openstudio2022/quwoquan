@@ -24,10 +24,10 @@ class ContactDiscoveryMatchWireDto {
 
   factory ContactDiscoveryMatchWireDto.fromMap(Map<String, dynamic> m) {
     return ContactDiscoveryMatchWireDto(
-      hashedPhone: m['hashedPhone']?.toString() ?? m['phoneHash']?.toString() ?? '',
-      subAccountId: _firstNonEmptyWireString(m, <String>['subAccountId', 'userId']) ?? '',
-      userHandle: m['userHandle']?.toString() ?? m['username']?.toString() ?? m['subAccountId']?.toString() ?? '',
-      displayName: m['displayName']?.toString() ?? m['nickname']?.toString() ?? '',
+      hashedPhone: m['hashedPhone']?.toString() ?? '',
+      subAccountId: m['subAccountId']?.toString() ?? '',
+      userHandle: m['userHandle']?.toString() ?? '',
+      displayName: m['displayName']?.toString() ?? '',
       avatarUrl: m['avatarUrl']?.toString() ?? null,
       avatarVersion: (m['avatarVersion'] as num?)?.toInt() ?? 0,
       region: m['region']?.toString() ?? null,
@@ -69,14 +69,6 @@ class ContactDiscoveryMatchWireDto {
       relationshipCapability: relationshipCapability ?? this.relationshipCapability,
     );
   }
-}
-
-String? _firstNonEmptyWireString(Map<String, dynamic> m, List<String> keys) {
-  for (final k in keys) {
-    final v = m[k]?.toString();
-    if (v != null && v.isNotEmpty) return v;
-  }
-  return null;
 }
 
 

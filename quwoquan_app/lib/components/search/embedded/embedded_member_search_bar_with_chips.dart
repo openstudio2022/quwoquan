@@ -257,10 +257,8 @@ class _MemberChipAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final avatar =
-        member['avatarUrl'] as String? ?? member['avatar'] as String? ?? '';
-    final name =
-        member['displayName'] as String? ?? member['name'] as String? ?? '';
+    final avatar = member['avatarUrl'] as String? ?? '';
+    final name = member['displayName'] as String? ?? '';
     final userId = member['userId'] as String? ?? '';
 
     return CupertinoButton(

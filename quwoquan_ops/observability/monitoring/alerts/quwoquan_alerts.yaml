@@ -1,15 +1,14 @@
-# L1 — ClientAPILatencyHigh（占位，非 Prom 直采）
-# 端侧 API 延迟来自 AppLog → OpsEvent（参见 L1 大盘 histogram app_api_latency_ms / ops pipeline），
-# 不在此文件用 expr 实现 stable 阈值告警。生产建议：在日志平台（Loki / Elasticsearch）对 api_latency
-# 或结构化 OpsEvent 做 log-based alerting，或将聚合写入 Prometheus recording rule 后再挂 Alertmanager。
+# 产品事件原始明细与小时聚合以阿里云 SLS 为单一事实源；本文件只消费
+# product-ops-service 的有界传输指标。Scheduled SQL freshness/失败告警在
+# environments/cloud-providers/aliyun/sls/product_telemetry.yaml 定义。
 
 groups:
   - name: quwoquan_l2_auth_login
     rules:
       - alert: AuthProviderErrorRateHigh
         expr: |
-          sum(rate(http_server_requests_total{service="user-service", route=~"/v1/auth/(authorization/alipay|login/(wechat|alipay|qq|one-tap.*))", status!~"2.."}[5m])) by (route)
-          / (sum(rate(http_server_requests_total{service="user-service", route=~"/v1/auth/(authorization/alipay|login/(wechat|alipay|qq|one-tap.*))"}[5m])) by (route) + 0.001) > 0.02
+          sum(rate(http_server_requests_total{service="user-service", route=~"/auth/(authorization/alipay|login/(wechat|alipay|qq|one-tap.*))", status!~"2.."}[5m])) by (route)
+          / (sum(rate(http_server_requests_total{service="user-service", route=~"/auth/(authorization/alipay|login/(wechat|alipay|qq|one-tap.*))"}[5m])) by (route) + 0.001) > 0.02
         for: 10m
         labels:
           severity: critical
@@ -22,7 +21,7 @@ groups:
       - alert: AuthChallengeLatencyHigh
         expr: |
           histogram_quantile(0.95,
-            sum(rate(http_server_duration_seconds_bucket{service="user-service", route=~"/v1/auth/(otp/send|authorization/alipay|login/one-tap/hint)"}[5m])) by (le, route)
+            sum(rate(http_server_duration_seconds_bucket{service="user-service", route=~"/auth/(otp/send|authorization/alipay|login/one-tap/hint)"}[5m])) by (le, route)
           ) > 1.2
         for: 10m
         labels:
@@ -36,7 +35,7 @@ groups:
       - alert: AuthLoginLatencyHigh
         expr: |
           histogram_quantile(0.95,
-            sum(rate(http_server_duration_seconds_bucket{service="user-service", route=~"/v1/auth/login/(phone|wechat|alipay|qq|one-tap)"}[5m])) by (le, route)
+            sum(rate(http_server_duration_seconds_bucket{service="user-service", route=~"/auth/login/(phone|wechat|alipay|qq|one-tap)"}[5m])) by (le, route)
           ) > 1.5
         for: 10m
         labels:
@@ -61,89 +60,116 @@ groups:
 
   - name: quwoquan_l1_ops_pipeline
     rules:
-      - alert: OpsEventUploadDrop
-        expr: sum(rate(http_server_requests_total{route=~".*(/v1/ops/events|/api/v1/ops/events).*",method="POST"}[10m])) < 0.1
-        for: 15m
+      - alert: ProductTelemetryIngestUnavailableRateHigh
+        expr: |
+          sum(rate(ops_telemetry_ingest_batches_total{result="unavailable"}[10m]))
+          / (sum(rate(ops_telemetry_ingest_batches_total[10m])) + 0.001) > 0.01
+        for: 10m
+        labels:
+          severity: critical
+          layer: l1
+          domain: product-telemetry
+        annotations:
+          summary: "产品遥测不可用批次比例超过 1%"
+          description: "检查 product-ops SLS health、VPC endpoint、RAM 与 1200ms 写入超时；App 会保留加密 outbox。"
+
+      - alert: ProductTelemetrySLSWriteErrors
+        expr: sum(increase(ops_telemetry_logstore_operation_duration_seconds_count{operation=~"put_event_batch|put_startup_diagnostic",result="error"}[10m])) > 0
+        for: 2m
+        labels:
+          severity: critical
+          layer: l1
+          domain: product-telemetry
+        annotations:
+          summary: "SLS 产品遥测写入出现错误"
+          description: "按 operation 检查 raw/startup Logstore；指标不携带 session、batch 或用户标识。"
+
+      - alert: ProductTelemetrySLSWriteP95High
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(ops_telemetry_logstore_operation_duration_seconds_bucket{operation="put_event_batch",result="success"}[10m])) by (le)
+          ) > 1
+        for: 10m
         labels:
           severity: warning
           layer: l1
+          domain: product-telemetry
         annotations:
-          summary: "OpsEvent upload rate dropped to near-zero"
-          description: "Client app_log uploads have stopped, indicating AppLogUploader or OpsEvent pipeline failure"
+          summary: "SLS 产品遥测写入 P95 超过 1 秒"
+          description: "接近 1200ms 服务端超时预算；检查 VPC 网络、SLS 配额与批量大小。"
 
   - name: quwoquan_l1_startup_welcome
-    # startup_welcome_sequence 由 App Analytics/AppLog 上传并投影为 OpsEvent labels/metrics。
+    # 以下规则只消费 product-ops-service 的受限匿名启动阶段事实。
+    # 产品 app_startup 分位数与错误率由 SLS 小时聚合提供，不复制到 Prometheus label。
     rules:
-      - alert: StartupWelcomeReplay1RateHigh
+      - alert: StartupFlutterFirstFrameP95High
         expr: |
-          sum(rate(ops_events_total{event_name="startup_welcome_sequence",phase="finished",replay_count=~"1|2"}[10m]))
-          / (sum(rate(ops_events_total{event_name="startup_welcome_sequence",phase="finished"}[10m])) + 0.001) > 0.05
+          histogram_quantile(0.95,
+            sum(rate(ops_startup_phase_duration_seconds_bucket{phase="flutter_first_frame"}[10m])) by (le, platform, runtime_env)
+          ) > 2
         for: 10m
         labels:
           severity: warning
           layer: l1
           domain: startup
         annotations:
-          summary: "启动欢迎 replay 1 比例 > 5%"
+          summary: "Flutter 首帧 P95 超过 2 秒"
+          description: "检查 native plugin、Dart bootstrap 与 runtime define 注入；按 platform/runtime_env 下钻。"
 
-      - alert: StartupWelcomeReplay2RateHigh
+      - alert: StartupShellFirstPaintP95High
         expr: |
-          sum(rate(ops_events_total{event_name="startup_welcome_sequence",phase="finished",replay_count="2"}[10m]))
-          / (sum(rate(ops_events_total{event_name="startup_welcome_sequence",phase="finished"}[10m])) + 0.001) > 0.005
+          histogram_quantile(0.95,
+            sum(rate(ops_startup_phase_duration_seconds_bucket{phase="shell_first_paint"}[10m])) by (le, platform, runtime_env)
+          ) > 3
         for: 10m
         labels:
           severity: warning
           layer: l1
           domain: startup
         annotations:
-          summary: "启动欢迎 replay 2 比例 > 0.5%"
+          summary: "启动 Shell 首帧 P95 超过 3 秒"
+          description: "检查 Router deferred load、安全 Shell 与启动任务是否争用首帧预算。"
 
-      - alert: StartupWelcomeDegradedRateHigh
+      - alert: StartupRecoveryRateHigh
         expr: |
-          sum(rate(ops_events_total{event_name="startup_welcome_sequence",phase="finished",exit_reason=~"degraded|deadline"}[10m]))
-          / (sum(rate(ops_events_total{event_name="startup_welcome_sequence",phase="finished"}[10m])) + 0.001) > 0.001
+          sum(rate(ops_startup_phase_total{phase="recovery"}[10m])) by (platform, runtime_env)
+          / (sum(rate(ops_startup_phase_total{phase="native_pre_flutter"}[10m])) by (platform, runtime_env) + 0.001) > 0.001
         for: 5m
         labels:
           severity: critical
           layer: l1
           domain: startup
         annotations:
-          summary: "启动降级或 deadline 比例 > 0.1%"
+          summary: "启动恢复面比例超过 0.1%"
+          description: "按 recovery_surface 和 failure code 查询受限启动遥测，确认是 bootstrap、Router 还是 native watchdog。"
 
-      - alert: StartupWelcomeExitOverDeadline
+      - alert: StartupTerminalFunnelIncomplete
         expr: |
-          sum(rate(ops_event_metrics_count{event_name="startup_welcome_sequence",metric="welcomeExitMs"}[5m]))
-          - sum(rate(ops_event_metrics_bucket{event_name="startup_welcome_sequence",metric="welcomeExitMs",le="6000"}[5m])) > 0
-        for: 1m
-        labels:
-          severity: critical
-          layer: l1
-          domain: startup
-        annotations:
-          summary: "发现 welcomeExitMs > 6000 的启动"
-
-      - alert: StartupWelcomeOverlayRemovalOverDeadline
-        expr: |
-          sum(rate(ops_event_metrics_count{event_name="startup_welcome_sequence",metric="overlayRemovedMs"}[5m]))
-          - sum(rate(ops_event_metrics_bucket{event_name="startup_welcome_sequence",metric="overlayRemovedMs",le="6000"}[5m])) > 0
-        for: 1m
-        labels:
-          severity: critical
-          layer: l1
-          domain: startup
-        annotations:
-          summary: "发现 overlayRemovedMs > 6000 的启动"
-
-      - alert: StartupWelcomeConsecutiveSlowFrames
-        expr: |
-          sum(rate(ops_events_total{event_name="startup_welcome_sequence",phase="finished",slow_frame_streak_detected="true"}[5m])) > 0
-        for: 2m
+          1 -
+          (
+            sum(rate(ops_startup_phase_total{phase="terminal"}[15m])) by (platform, runtime_env)
+            / (sum(rate(ops_startup_phase_total{phase="native_pre_flutter"}[15m])) by (platform, runtime_env) + 0.001)
+          ) > 0.01
+        for: 15m
         labels:
           severity: warning
           layer: l1
           domain: startup
         annotations:
-          summary: "欢迎动效连续两帧超过 32ms"
+          summary: "超过 1% 启动未观测到 terminal"
+          description: "检查 native/Web journal、补传 drain 与受限 startup endpoint 的可用性。"
+
+      - alert: StartupTelemetryJournalDrop
+        expr: |
+          sum(rate(ops_startup_phase_total{phase="terminal",outcome="journal_drop"}[10m])) by (platform, runtime_env) > 0
+        for: 5m
+        labels:
+          severity: warning
+          layer: l1
+          domain: startup
+        annotations:
+          summary: "启动 journal 发生容量淘汰"
+          description: "离线或 endpoint 故障导致启动记录超过本地容量；检查补传延迟与网络可用性。"
 
   - name: quwoquan_l3_mongo
     rules:
@@ -538,7 +564,7 @@ groups:
           layer: l2
         annotations:
           summary: "搜索检索 P99 延迟 > 400ms"
-          description: "search-service /v1/search P99 = {{ $value | humanizeDuration }}，超出 SLO（p99_ms=400）。"
+          description: "search-service /search P99 = {{ $value | humanizeDuration }}，超出 SLO（p99_ms=400）。"
 
       - alert: SearchZeroResultRateHigh
         expr: |
@@ -612,7 +638,7 @@ groups:
       - alert: IntersectionApiLatencyHigh
         expr: |
           histogram_quantile(0.95,
-            sum(rate(http_server_duration_seconds_bucket{service="content-service", route=~"/v1/content/intersections.*|/v1/content/feed/intersections"}[5m])) by (le)
+            sum(rate(http_server_duration_seconds_bucket{service="content-service", route=~"/content/intersections.*|/content/feed/intersections"}[5m])) by (le)
           ) > 0.3
         for: 5m
         labels:
@@ -745,7 +771,7 @@ groups:
       - alert: HomepageReadLatencyHigh
         expr: |
           histogram_quantile(0.95,
-            sum(rate(http_server_duration_seconds_bucket{service="entity-service", route=~"/v1/homepages.*"}[5m])) by (le)
+            sum(rate(http_server_duration_seconds_bucket{service="entity-service", route=~"/homepages.*"}[5m])) by (le)
           ) > 0.3
         for: 5m
         labels:
@@ -753,19 +779,19 @@ groups:
           layer: l2
         annotations:
           summary: "实体主页读路由 P95 延迟 > 300ms"
-          description: "entity-service /v1/homepages* 路由 P95 = {{ $value | humanizeDuration }}，超出 SLO（p95_ms=300）；homepage_state 单文档读模型不应出现请求期聚合。"
+          description: "entity-service /homepages* 路由 P95 = {{ $value | humanizeDuration }}，超出 SLO（p95_ms=300）；homepage_state 单文档读模型不应出现请求期聚合。"
 
       - alert: HomepageReadAvailabilityLow
         expr: |
-          sum(rate(http_server_requests_total{service="entity-service", route=~"/v1/homepages.*", status=~"5.."}[5m]))
-          / (sum(rate(http_server_requests_total{service="entity-service", route=~"/v1/homepages.*"}[5m])) + 0.001) > 0.005
+          sum(rate(http_server_requests_total{service="entity-service", route=~"/homepages.*", status=~"5.."}[5m]))
+          / (sum(rate(http_server_requests_total{service="entity-service", route=~"/homepages.*"}[5m])) + 0.001) > 0.005
         for: 10m
         labels:
           severity: critical
           layer: l2
         annotations:
           summary: "实体主页读路由 5xx 错误率 > 0.5%"
-          description: "entity-service /v1/homepages* 5xx 比率 {{ $value | humanizePercentage }}，低于可用性 SLO（0.995）。优先检查 Mongo homepage_state 连接与最近一次 homepage-import。"
+          description: "entity-service /homepages* 5xx 比率 {{ $value | humanizePercentage }}，低于可用性 SLO（0.995）。优先检查 Mongo homepage_state 连接与最近一次 homepage-import。"
 
       - alert: HomepageImportIssuesPresent
         expr: |

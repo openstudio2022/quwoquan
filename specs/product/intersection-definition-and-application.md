@@ -316,7 +316,7 @@ flowchart LR
 >
 > **工程五栏说明**（每条必填，是「确保可落地」的强制口径）：
 >
-> - `展示入口`：spotlight（首页频道交集模块 `intersection_spotlight_module.dart`，消费 `GET /v1/content/feed/intersections`）/ feed 理由位（`feed_intersection_mixer.go` 70/20/10 附着 → `intersection_reason_chip.dart`）/ 收件箱（我的交集 `my_intersection_inbox_page.dart`，summary+list API）/ 对象页交集卡（`object_intersection_card.dart` + entity bundle 预附着）。
+> - `展示入口`：spotlight（首页频道交集模块 `intersection_spotlight_module.dart`，消费 `GET /content/feed/intersections`）/ feed 理由位（`feed_intersection_mixer.go` 70/20/10 附着 → `intersection_reason_chip.dart`）/ 收件箱（我的交集 `my_intersection_inbox_page.dart`，summary+list API）/ 对象页交集卡（`object_intersection_card.dart` + entity bundle 预附着）。
 > - `契约承载`：`IntersectionPoint.sourceRef` 取标准 kind；reason 级 `dimension/objectKind/relationKind/actionType` 按条目注明。
 > - `数据源`：Mongo 读模型边表（`follow_edges` / `circle_members` / `rm_behavior_events` 行为边真相源 / `rec_learning_events` 推荐学习投影 / `rm_entity_tags` 对象标签 / 通讯录映射）。
 >   - **分层口径**：用户行为写入 `rm_behavior_events`（content-service 行为边唯一写侧）；推荐管线消费后投影到 `rec_learning_events` 供排序/特征；交集事实计算优先读 `rm_behavior_events` 与关系边，禁止把两集合混称为同一真相源。
@@ -1058,7 +1058,7 @@ flowchart LR
 
 ### 14A.4 我的足迹（替代承载）
 
-- 只读契约：`GET /v1/content/footprint?type&cursor`（type=viewed|liked|commented|shared），数据源=既有行为边，**无新写路径**。
+- 只读契约：`GET /content/footprint?type&cursor`（type=viewed|liked|commented|shared），数据源=既有行为边，**无新写路径**。
 - route/surface：`myFootprint`（`_shared/ui_surfaces.yaml` + app_routes 登记）。
 - 端侧：`lib/ui/user/pages/my_footprint_page.dart` 只读列表，仅本人可见。
 - 约束：足迹不产生交集与影响（测试断言）；前台不出现「收藏 / 稍后看」文案。
@@ -1413,10 +1413,10 @@ affinity 必须分通道（intersectionClass=affinity + confidenceLabel），不
 
 | operation | path | surface |
 |---|---|---|
-| `GetMyIntersectionSummary` | `GET /v1/content/intersections/summary` | 我的主页聚合卡（A） |
-| `ListMyIntersections` | `GET /v1/content/intersections` | 我的交集分维度列表（A） |
-| `MarkIntersectionsVisited` | `POST /v1/content/intersections/visit` | 推进已读水位清红点（A） |
-| `GetObjectIntersections` | `GET /v1/content/intersections/object` | 对象页交集卡（B/C/D） |
+| `GetMyIntersectionSummary` | `GET /content/intersections/summary` | 我的主页聚合卡（A） |
+| `ListMyIntersections` | `GET /content/intersections` | 我的交集分维度列表（A） |
+| `MarkIntersectionsVisited` | `POST /content/intersections/visit` | 推进已读水位清红点（A） |
+| `GetObjectIntersections` | `GET /content/intersections/object` | 对象页交集卡（B/C/D） |
 
 ### 20.2 kind 全集（valueTier × computability，机读真相源见 §5.4）
 

@@ -1,4 +1,3 @@
-version: 1
 read_model: CircleImpactItem
 description: |
   圈子影响单条事实（「圈子影响」模块行真相源）。
@@ -27,43 +26,36 @@ client_projection:
       dart_type: String
       nullable: false
       source: helpType
-      aliases: [helpType]
       default: "''"
     - name: action
       dart_type: String
       nullable: false
       source: action
-      aliases: [action]
       default: "''"
     - name: intersectionDimension
       dart_type: String
       nullable: false
       source: intersectionDimension
-      aliases: [intersectionDimension]
       default: "''"
     - name: tagRef
       dart_type: String
       nullable: false
       source: tagRef
-      aliases: [tagRef]
       default: "''"
     - name: source
       dart_type: String
       nullable: false
       source: source
-      aliases: [source]
       default: "''"
     - name: count
       dart_type: int
       nullable: false
       source: count
-      aliases: [count]
       default: "0"
     - name: primaryText
       dart_type: String
       nullable: false
       source: primaryText
-      aliases: [primaryText]
       default: "''"
     # 架构基线 v2（§21.8 解决 G4：补统一交互子契约，与 AuthorImpactItem 同源）：
     #   subtitleText 影响来源摘要（端只读直出）；impactId 稳定 id；
@@ -75,65 +67,54 @@ client_projection:
       dart_type: String
       nullable: false
       source: subtitleText
-      aliases: [subtitleText]
       default: "''"
     - name: impactId
       dart_type: String
       nullable: false
       source: impactId
-      aliases: [impactId]
       default: "''"
     - name: primarySpans
       dart_type: List<IntersectionTextSpan>
       nullable: false
       source: primarySpans
-      aliases: [primarySpans]
       list_element_dart_class: IntersectionTextSpan
     - name: sampleVisuals
       dart_type: List<IntersectionVisual>
       nullable: false
       source: sampleVisuals
-      aliases: [sampleVisuals]
       list_element_dart_class: IntersectionVisual
     - name: representativeActor
       dart_type: IntersectionRepresentativeActor
       nullable: true
       source: representativeActor
-      aliases: [representativeActor]
       map_from_string_key_class: IntersectionRepresentativeActor
     - name: actionHints
       dart_type: List<IntersectionActionHint>
       nullable: false
       source: actionHints
-      aliases: [actionHints]
       list_element_dart_class: IntersectionActionHint
     - name: countTarget
       dart_type: IntersectionTarget
       nullable: true
       source: countTarget
-      aliases: [countTarget]
       map_from_string_key_class: IntersectionTarget
     - name: evidenceSnapshotId
       dart_type: String
       nullable: false
       source: evidenceSnapshotId
-      aliases: [evidenceSnapshotId]
       default: "''"
     - name: countObjectKind
       dart_type: String
       nullable: false
       source: countObjectKind
-      aliases: [countObjectKind]
       default: "''"
     - name: propagationPath
       dart_type: IntersectionPropagationPath
       nullable: true
       source: propagationPath
-      aliases: [propagationPath]
       map_from_string_key_class: IntersectionPropagationPath
     - name: iconKey
       dart_type: String
       nullable: false
       source: iconKey
-      aliases: [iconKey]
       default: "''"

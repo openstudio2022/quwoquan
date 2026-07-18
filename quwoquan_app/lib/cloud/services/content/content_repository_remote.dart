@@ -38,6 +38,8 @@ class RemoteContentRepository
     String sort = kFeedSortRecommend,
     String? sessionId,
     String? feedRequestId,
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
   }) async {
     final resolvedIdentity = identity ?? _mapCategoryToIdentity(category);
     final resolvedType = _normalizeFeedType(
@@ -75,10 +77,17 @@ class RemoteContentRepository
       query['feedRequestId'] = feedRequestId!;
     }
     final uri = _uri(ContentApiMetadata.getFeedPath, queryParameters: query);
-    final decoded = await _httpClient.getJson(
-      uri,
-      headers: CloudRequestHeaders.forPage(ContentRequestPageIds.getFeed),
-    );
+    final decoded = cancellation == null
+        ? await _httpClient.getJson(
+            uri,
+            headers: CloudRequestHeaders.forPage(ContentRequestPageIds.getFeed),
+          )
+        : await _httpClient.getJsonAbortable(
+            uri,
+            gatewayOrigin: Uri.parse(_baseUrl),
+            headers: CloudRequestHeaders.forPage(ContentRequestPageIds.getFeed),
+            cancellation: cancellation,
+          );
     final obj = CloudResponseDecoder.asObject(
       decoded,
       context: ContentRequestPageIds.getFeed,
@@ -184,24 +193,6 @@ class RemoteContentRepository
       context: ContentRequestPageIds.getCounters,
     );
     return PostEngagementCounters.fromMap(obj);
-  }
-
-  @override
-  Future<PostBaseDto> updatePost({
-    required String postId,
-    required UpdatePostRequestWire body,
-  }) async {
-    final uri = _uri(ContentApiMetadata.updatePostPath(postId: postId));
-    final decoded = await _httpClient.patchJson(
-      uri,
-      headers: CloudRequestHeaders.forPage(ContentRequestPageIds.updatePost),
-      body: body.toWire(),
-    );
-    final obj = CloudResponseDecoder.asObject(
-      decoded,
-      context: ContentRequestPageIds.updatePost,
-    );
-    return _postBaseDtoFromContentWire(obj);
   }
 
   @override

@@ -1,11 +1,11 @@
-version: 2
 aggregate: Conversation
 
 entities:
   Conversation:
-    description: 会话（聚合根，v2 轻量化）
+    description: 会话聚合根
     fields:
-      - name: _id
+      - name: id
+        source: _id
         type: ObjectId
         constraints: [PK]
         classification: PUBLIC
@@ -14,6 +14,7 @@ entities:
         ops_exposure: read
 
       - name: type
+        source: type
         type: enum
         enum_ref: ConversationType
         constraints: [NOT_NULL]
@@ -24,6 +25,7 @@ entities:
         description: direct/group/encrypted（既有 circle 输入与存量记录按 group 主语义解析；assistant 不再是独立会话类型，小趣通过成员邀请参与任意会话）
 
       - name: title
+        source: title
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -33,6 +35,7 @@ entities:
         search_field: true
 
       - name: avatarUrl
+        source: avatarUrl
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -41,6 +44,7 @@ entities:
         ops_exposure: read
 
       - name: groupAvatarAssetId
+        source: groupAvatarAssetId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -50,6 +54,7 @@ entities:
         description: 群头像预合成结果资产 ID；仅群聊会话使用
 
       - name: groupAvatarVersion
+        source: groupAvatarVersion
         type: int64
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -59,6 +64,7 @@ entities:
         description: 群头像版本号；服务端每次预合成成功后单调递增
 
       - name: groupAvatarSourceHash
+        source: groupAvatarSourceHash
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -68,6 +74,7 @@ entities:
         description: 基于 top9 成员与头像版本计算的输入哈希；未变化则可跳过重算
 
       - name: creatorId
+        source: creatorId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -76,6 +83,7 @@ entities:
         ops_exposure: read
 
       - name: initialMemberIds
+        source: initialMemberIds
         type: "[]string"
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -85,6 +93,7 @@ entities:
         description: 建群时一次性写入的初始成员 ID 列表（不包含创建者）
 
       - name: circleId
+        source: circleId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -94,6 +103,7 @@ entities:
         description: 关联圈子；有值时表示该会话为圈子发起/绑定的默认群，但会话主类型仍为 group
 
       - name: circleGroupId
+        source: circleGroupId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -103,6 +113,7 @@ entities:
         description: 关联 CircleGroup（默认公共群 / 自建群 / 组织节点）
 
       - name: entityId
+        source: entityId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -112,6 +123,7 @@ entities:
         description: 关联共享实体 / Homepage；仅作为群来源快照，主页仍通过 relatedGroups 间接进入群会话，不直接拥有 conversation
 
       - name: originType
+        source: originType
         type: enum
         enum_ref: ConversationOriginType
         constraints: [NOT_NULL, DEFAULT_DIRECT_INIT]
@@ -122,6 +134,7 @@ entities:
         description: 会话创建来源；用于区分直接私信、打招呼升级、临时群、圈子默认群、圈子自建群、组织节点群、主页相关群和助手邀请等来源语义
 
       - name: bindingType
+        source: bindingType
         type: enum
         enum_ref: ConversationBindingType
         constraints: [NOT_NULL, DEFAULT_NONE]
@@ -132,6 +145,7 @@ entities:
         description: 会话绑定对象类型；主页仅通过 related groups 间接进入群会话，不直接拥有 conversation
 
       - name: lifecyclePolicy
+        source: lifecyclePolicy
         type: enum
         enum_ref: ConversationLifecyclePolicy
         constraints: [NOT_NULL, DEFAULT_PERSISTENT]
@@ -142,6 +156,7 @@ entities:
         description: 会话生命周期策略；临时群、自建群、圈子绑定群和组织节点群通过该字段表达生命周期差异
 
       - name: maxSeq
+        source: maxSeq
         type: int64
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -151,6 +166,7 @@ entities:
         description: 当前会话最大消息 seq（冗余，加速 gap 判定）
 
       - name: memberCount
+        source: memberCount
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -160,6 +176,7 @@ entities:
         description: 当前成员数（冗余，避免 count 查询）
 
       - name: membersRosterRevision
+        source: membersRosterRevision
         type: int64
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -172,6 +189,7 @@ entities:
           客户端用其与本地缓存比对，决定重拉 GetConversation / ListMembers / 群设置。
 
       - name: maxGroupSize
+        source: maxGroupSize
         type: int
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -181,6 +199,7 @@ entities:
         description: 群上限（默认 1000，可配置）
 
       - name: receiptEnabled
+        source: receiptEnabled
         type: bool
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -190,6 +209,7 @@ entities:
         description: 是否启用已读回执（≤50 人默认 true，>50 默认 false，可配置覆盖）
 
       - name: lastMessageId
+        source: lastMessageId
         type: ObjectId
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -198,6 +218,7 @@ entities:
         ops_exposure: read
 
       - name: lastMessagePreview
+        source: lastMessagePreview
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -206,6 +227,7 @@ entities:
         ops_exposure: read
 
       - name: lastMessageTime
+        source: lastMessageTime
         type: timestamp
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -214,6 +236,7 @@ entities:
         ops_exposure: read
 
       - name: messageCount
+        source: messageCount
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -222,6 +245,7 @@ entities:
         ops_exposure: read
 
       - name: status
+        source: status
         type: enum
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -231,6 +255,7 @@ entities:
         description: active/archived/deleted
 
       - name: originRequestId
+        source: originRequestId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -240,6 +265,7 @@ entities:
         description: 升级来源的 GreetingRequest.id（originType=greeting_reply 时有值）
 
       - name: createdAt
+        source: createdAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -248,6 +274,7 @@ entities:
         ops_exposure: read
 
       - name: updatedAt
+        source: updatedAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -259,6 +286,7 @@ entities:
     description: 用户聊天收件箱视图（用于聊天首页列表，基于 per-user 投影）
     fields:
       - name: conversationId
+        source: conversationId
         type: ObjectId
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -267,6 +295,7 @@ entities:
         ops_exposure: read
 
       - name: type
+        source: type
         type: enum
         enum_ref: ConversationType
         constraints: [NOT_NULL]
@@ -276,6 +305,7 @@ entities:
         ops_exposure: read
 
       - name: title
+        source: title
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -284,6 +314,7 @@ entities:
         ops_exposure: read
 
       - name: avatarUrl
+        source: avatarUrl
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -292,6 +323,7 @@ entities:
         ops_exposure: read
 
       - name: groupAvatarVersion
+        source: groupAvatarVersion
         type: int64
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -300,6 +332,7 @@ entities:
         ops_exposure: read
 
       - name: avatarCompositeUrls
+        source: avatarCompositeUrls
         type: "[]string"
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -309,6 +342,7 @@ entities:
         description: "DEPRECATED: 旧端侧九宫格拼图源；客户端不得用于会话头像主渲染"
 
       - name: lastMessagePreview
+        source: lastMessagePreview
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -317,6 +351,7 @@ entities:
         ops_exposure: read
 
       - name: lastMessageType
+        source: lastMessageType
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -326,6 +361,7 @@ entities:
         description: 最近一条消息类型，端侧据此决定预览图标与文案
 
       - name: lastMessageTime
+        source: lastMessageTime
         type: timestamp
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -334,6 +370,7 @@ entities:
         ops_exposure: read
 
       - name: lastSeq
+        source: lastSeq
         type: int64
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -342,6 +379,7 @@ entities:
         ops_exposure: read
 
       - name: unreadCount
+        source: unreadCount
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -350,6 +388,7 @@ entities:
         ops_exposure: read
 
       - name: mentionUnreadCount
+        source: mentionUnreadCount
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -358,6 +397,7 @@ entities:
         ops_exposure: read
 
       - name: muted
+        source: muted
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -366,6 +406,7 @@ entities:
         ops_exposure: read
 
       - name: pinned
+        source: pinned
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -377,6 +418,7 @@ entities:
     description: 联系人搜索结果项视图，用于全局搜索“联系人”联想分组
     fields:
       - name: contactId
+        source: contactId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -385,6 +427,7 @@ entities:
         ops_exposure: read
 
       - name: displayName
+        source: displayName
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -393,6 +436,7 @@ entities:
         ops_exposure: read
 
       - name: avatarUrl
+        source: avatarUrl
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -401,6 +445,7 @@ entities:
         ops_exposure: read
 
       - name: conversationId
+        source: conversationId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -410,6 +455,7 @@ entities:
         description: 可直接打开的既有会话 ID；若为空，由 App 进入建联/创建会话流程
 
       - name: conversationType
+        source: conversationType
         type: enum
         enum_ref: ConversationType
         constraints: [NULLABLE]
@@ -419,6 +465,7 @@ entities:
         ops_exposure: read
 
       - name: source
+        source: source
         type: enum
         enum_ref: ContactSource
         constraints: [NULLABLE]
@@ -428,6 +475,7 @@ entities:
         ops_exposure: read
 
       - name: subtitle
+        source: subtitle
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -436,6 +484,7 @@ entities:
         ops_exposure: read
 
       - name: highlightText
+        source: highlightText
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -444,6 +493,7 @@ entities:
         ops_exposure: read
 
       - name: matchedField
+        source: matchedField
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -455,6 +505,7 @@ entities:
     description: 会话搜索结果项视图，用于全局搜索消息分组中的会话命中
     fields:
       - name: conversationId
+        source: conversationId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -463,6 +514,7 @@ entities:
         ops_exposure: read
 
       - name: type
+        source: type
         type: enum
         enum_ref: ConversationType
         constraints: [NOT_NULL]
@@ -472,6 +524,7 @@ entities:
         ops_exposure: read
 
       - name: title
+        source: title
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -480,6 +533,7 @@ entities:
         ops_exposure: read
 
       - name: avatarUrl
+        source: avatarUrl
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -488,6 +542,7 @@ entities:
         ops_exposure: read
 
       - name: groupAvatarVersion
+        source: groupAvatarVersion
         type: int64
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -496,6 +551,7 @@ entities:
         ops_exposure: read
 
       - name: avatarCompositeUrls
+        source: avatarCompositeUrls
         type: "[]string"
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -505,6 +561,7 @@ entities:
         description: "DEPRECATED: 旧端侧九宫格拼图源；搜索 UI 不得消费"
 
       - name: lastMessagePreview
+        source: lastMessagePreview
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -513,6 +570,7 @@ entities:
         ops_exposure: read
 
       - name: lastMessageTime
+        source: lastMessageTime
         type: timestamp
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -521,6 +579,7 @@ entities:
         ops_exposure: read
 
       - name: memberCount
+        source: memberCount
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -529,6 +588,7 @@ entities:
         ops_exposure: read
 
       - name: circleId
+        source: circleId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -537,6 +597,7 @@ entities:
         ops_exposure: read
 
       - name: circleGroupId
+        source: circleGroupId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -545,6 +606,7 @@ entities:
         ops_exposure: read
 
       - name: highlightText
+        source: highlightText
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -553,6 +615,7 @@ entities:
         ops_exposure: read
 
       - name: matchedField
+        source: matchedField
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -564,6 +627,7 @@ entities:
     description: 消息搜索结果项视图，用于全局搜索消息分组中的消息命中
     fields:
       - name: messageId
+        source: messageId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -572,6 +636,7 @@ entities:
         ops_exposure: read
 
       - name: conversationId
+        source: conversationId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -580,6 +645,7 @@ entities:
         ops_exposure: read
 
       - name: conversationTitle
+        source: conversationTitle
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -588,6 +654,7 @@ entities:
         ops_exposure: read
 
       - name: conversationAvatarUrl
+        source: conversationAvatarUrl
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -596,6 +663,7 @@ entities:
         ops_exposure: read
 
       - name: senderPersonaId
+        source: senderPersonaId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -604,6 +672,7 @@ entities:
         ops_exposure: read
 
       - name: senderDisplayName
+        source: senderDisplayName
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -612,6 +681,7 @@ entities:
         ops_exposure: read
 
       - name: senderAvatarUrl
+        source: senderAvatarUrl
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -620,6 +690,7 @@ entities:
         ops_exposure: read
 
       - name: messageType
+        source: messageType
         type: enum
         enum_ref: MessageType
         constraints: [NOT_NULL]
@@ -629,6 +700,7 @@ entities:
         ops_exposure: read
 
       - name: contentPreview
+        source: contentPreview
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -637,6 +709,7 @@ entities:
         ops_exposure: read
 
       - name: seq
+        source: seq
         type: int64
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -645,6 +718,7 @@ entities:
         ops_exposure: read
 
       - name: timestamp
+        source: timestamp
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -653,6 +727,7 @@ entities:
         ops_exposure: read
 
       - name: highlightText
+        source: highlightText
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -661,6 +736,7 @@ entities:
         ops_exposure: read
 
       - name: matchedField
+        source: matchedField
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -672,6 +748,7 @@ entities:
     description: 消息已读回执（仅 receiptEnabled 会话启用）
     fields:
       - name: _id
+        source: _id
         type: ObjectId
         constraints: [PK]
         classification: PUBLIC
@@ -680,6 +757,7 @@ entities:
         ops_exposure: read
 
       - name: messageId
+        source: messageId
         type: ObjectId
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -688,6 +766,7 @@ entities:
         ops_exposure: read
 
       - name: conversationId
+        source: conversationId
         type: ObjectId
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -696,6 +775,7 @@ entities:
         ops_exposure: read
 
       - name: userId
+        source: userId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -704,6 +784,7 @@ entities:
         ops_exposure: read
 
       - name: readAt
+        source: readAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC

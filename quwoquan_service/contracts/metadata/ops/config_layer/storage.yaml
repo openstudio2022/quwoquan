@@ -1,4 +1,3 @@
-version: 1
 aggregate: ConfigLayer
 backend: postgres
 tables:

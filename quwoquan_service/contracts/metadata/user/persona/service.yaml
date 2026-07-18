@@ -1,4 +1,3 @@
-version: 1
 service:
   name: user-service
   domain: user
@@ -11,7 +10,8 @@ service:
     target_story: app-cloud-business-object-commercial-closure
 api_routes:
   - method: POST
-    path: /v1/user/personas
+    path: /user/personas
+
     operation: CreatePersona
     actor: account
     application:
@@ -34,7 +34,8 @@ api_routes:
     response_fields: [subAccountId, displayName, userHandle, phone, email, avatarUrl, backgroundUrl, bio, isolationLevel, isActive, isPrimary, status, retiredAt, inheritsProfileFromOwner, overriddenProfileFields, lastProfileSyncAt, lastProfileSyncSource, profileVisibility, purposeHint, hasAttributedHistory, updatedAt, lastActivatedAt]
 
   - method: PATCH
-    path: /v1/user/personas/{subAccountId}
+    path: /user/personas/{subAccountId}
+
     operation: UpdatePersona
     actor: account
     application:
@@ -57,7 +58,8 @@ api_routes:
     response_fields: [subAccountId, displayName, userHandle, phone, email, avatarUrl, backgroundUrl, bio, isolationLevel, isActive, isPrimary, status, retiredAt, inheritsProfileFromOwner, overriddenProfileFields, lastProfileSyncAt, lastProfileSyncSource, profileVisibility, purposeHint, hasAttributedHistory, updatedAt, lastActivatedAt]
 
   - method: POST
-    path: /v1/user/personas/{subAccountId}/profile-sync
+    path: /user/personas/{subAccountId}/profile-sync
+
     operation: ApplyPersonaProfileSync
     actor: account
     application:
@@ -78,7 +80,8 @@ api_routes:
       visibility: private
 
   - method: POST
-    path: /v1/user/personas/{subAccountId}/retire
+    path: /user/personas/{subAccountId}/retire
+
     operation: RetirePersona
     actor: account
     application:
@@ -99,7 +102,8 @@ api_routes:
     response_fields: [subAccountId, requestedAction, allowed, reason, hasAttributedHistory, requiresSuccessor]
 
   - method: DELETE
-    path: /v1/user/personas/{subAccountId}/delete-empty
+    path: /user/personas/{subAccountId}/delete-empty
+
     operation: DeleteEmptyPersona
     actor: account
     application:
@@ -118,7 +122,8 @@ api_routes:
       visibility: private
 
   - method: POST
-    path: /v1/user/personas/{subAccountId}/activate
+    path: /user/personas/{subAccountId}/activate
+
     operation: ActivatePersona
     actor: account
     application:
@@ -141,7 +146,8 @@ api_routes:
   # ── 用户主页（公开身份视图） ─────────────────────────────────────────────
 
   - method: PATCH
-    path: /v1/user/profile
+    path: /user/profile
+
     operation: UpdateUserProfile
     actor: persona
     application:

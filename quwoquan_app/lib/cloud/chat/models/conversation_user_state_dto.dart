@@ -25,7 +25,7 @@ class ConversationUserStateDto {
 
   factory ConversationUserStateDto.fromMap(Map<String, dynamic> map) {
     return ConversationUserStateDto(
-      id: (map['_id'] ?? map['id'] ?? '') as String,
+      id: (map['id'] ?? '') as String,
       userId: (map['userId'] ?? '') as String,
       conversationId: (map['conversationId'] ?? '') as String,
       readSeq: (map['readSeq'] as num?)?.toInt() ?? 0,
@@ -35,20 +35,21 @@ class ConversationUserStateDto {
       lastReadAt: map['lastReadAt'] != null
           ? DateTime.tryParse(map['lastReadAt'] as String)
           : null,
-      updatedAt: DateTime.tryParse((map['updatedAt'] ?? '') as String) ??
+      updatedAt:
+          DateTime.tryParse((map['updatedAt'] ?? '') as String) ??
           DateTime.now(),
     );
   }
 
   Map<String, dynamic> toMap() => {
-        'id': id,
-        'userId': userId,
-        'conversationId': conversationId,
-        'readSeq': readSeq,
-        'unreadCount': unreadCount,
-        'muted': muted,
-        'pinned': pinned,
-        if (lastReadAt != null) 'lastReadAt': lastReadAt!.toIso8601String(),
-        'updatedAt': updatedAt.toIso8601String(),
-      };
+    'id': id,
+    'userId': userId,
+    'conversationId': conversationId,
+    'readSeq': readSeq,
+    'unreadCount': unreadCount,
+    'muted': muted,
+    'pinned': pinned,
+    if (lastReadAt != null) 'lastReadAt': lastReadAt!.toIso8601String(),
+    'updatedAt': updatedAt.toIso8601String(),
+  };
 }

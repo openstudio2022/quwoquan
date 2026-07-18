@@ -12,6 +12,7 @@ import 'package:quwoquan_app/cloud/runtime/observability/cloud_operation_telemet
 import 'package:quwoquan_app/cloud/services/chat/remote/chat_repository_remote.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
+import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
 import 'package:quwoquan_app/cloud/services/content/remote/post_reader_remote.dart';
 import 'package:quwoquan_app/cloud/services/user/user_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
@@ -245,17 +246,14 @@ void main() {
         'fixture_user_photo',
       );
       expect(userWorks.map((item) => item.id), contains('fixture_photo_001'));
-      final userProfiles = await _getJsonList(
-        '$baseUrl/v1/user/profile',
-        'items',
-      );
+      final userProfiles = await _getJsonList('$baseUrl/user/profile', 'items');
       expect(
         userProfiles.map((item) => item['userId']),
         contains('fixture_user_current'),
       );
 
       final homepages = await _getJsonList(
-        '$baseUrl/v1/entity/homepages',
+        '$baseUrl/homepages/search',
         'items',
       );
       expect(
@@ -264,7 +262,7 @@ void main() {
       );
 
       final pois = await _getJsonList(
-        '$baseUrl/v1/integration/locations/pois',
+        '$baseUrl/integration/locations/pois',
         'items',
       );
       expect(
@@ -272,16 +270,13 @@ void main() {
         contains('fixture_poi_west_lake'),
       );
 
-      final appMessages = await _getJsonList(
-        '$baseUrl/v1/app-messages',
-        'items',
-      );
+      final appMessages = await _getJsonList('$baseUrl/app-messages', 'items');
       expect(
         appMessages.map((item) => item['messageId']),
         contains('fixture_app_message_assistant_stock'),
       );
 
-      final calls = await _getJsonList('$baseUrl/v1/rtc/calls', 'items');
+      final calls = await _getJsonList('$baseUrl/rtc/calls', 'items');
       expect(
         calls.map((item) => item['sessionId']),
         contains('fixture_call_voice'),
@@ -433,105 +428,109 @@ class _ContractSeedHttpServer {
         }, statusCode: HttpStatus.badRequest);
         return;
       }
-      if (path == '/v1/content/feed') {
+      if (path == '/content/feed') {
         _writeJson(request, {
           'items': _filteredFeed(request.uri.queryParameters),
         });
         return;
       }
-      if (path.startsWith('/v1/content/sub-accounts/') &&
+      if (path.startsWith('/content/sub-accounts/') &&
           path.endsWith('/posts')) {
-        final userId = path.split('/')[4];
+        final userId = request.uri.pathSegments[2];
         final selectedIds = userId == 'fixture_user_current'
             ? _fixtures.userFeedSeed['myPostIds'] as List<dynamic>
             : _fixtures.userFeedSeed['authorPostIds'] as List<dynamic>;
         _writeJson(request, {'items': _contentPostsByIds(selectedIds)});
         return;
       }
-      if (path == '/v1/content/posts/fixture_photo_001') {
+      if (path == '/content/posts/fixture_photo_001') {
         _writeJson(request, _contentPost('fixture_photo_001'));
         return;
       }
-      if (path == '/v1/chat/inbox') {
-        _writeJson(request, {'items': _fixtures.chatSeed['conversations']});
+      if (path == '/chat/inbox') {
+        _writeJson(request, {'items': _inboxRows()});
         return;
       }
-      if (path == '/v1/chat/conversations') {
-        _writeJson(request, {'items': _fixtures.chatSeed['conversations']});
+      if (path == '/chat/conversations') {
+        _writeJson(request, {'items': _inboxRows()});
         return;
       }
-      if (path == '/v1/chat/contacts') {
+      if (path == '/chat/contacts') {
         _writeJson(request, {'items': _fixtures.chatContactsSeed['contacts']});
         return;
       }
-      if (path == '/v1/chat/message-home') {
+      if (path == '/chat/message-home') {
         _writeJson(request, {
           'items': _messageHomeRows(request.uri.queryParameters),
         });
         return;
       }
-      if (path == '/v1/chat/contact-home') {
+      if (path == '/chat/contact-home') {
         _writeJson(request, {
           'items': _contactHomeRows(request.uri.queryParameters),
         });
         return;
       }
-      if (path.startsWith('/v1/chat/conversations/') &&
+      if (path.startsWith('/chat/conversations/') &&
           path.endsWith('/messages')) {
-        final convId = path.split('/')[4];
+        // /chat/conversations/{conversationId}/messages
+        final convId = path.split('/')[3];
         final messages =
-            (_fixtures.chatSeed['messages'] as Map<String, dynamic>)[convId];
+            (_fixtures.chatSeed['messages'] as Map<String, dynamic>)[convId] ??
+            const <dynamic>[];
         _writeJson(request, {'items': messages});
         return;
       }
-      if (path.startsWith('/v1/chat/conversations/') &&
+      if (path.startsWith('/chat/conversations/') &&
           path.endsWith('/members')) {
-        final convId = path.split('/')[4];
+        // /chat/conversations/{conversationId}/members
+        final convId = path.split('/')[3];
         final members =
-            (_fixtures.chatSeed['members'] as Map<String, dynamic>)[convId];
+            (_fixtures.chatSeed['members'] as Map<String, dynamic>)[convId] ??
+            const <dynamic>[];
         _writeJson(request, {'items': members});
         return;
       }
-      if (path == '/v1/circles') {
+      if (path == '/circles') {
         _writeJson(request, {'items': _fixtures.circleSeed['circles']});
         return;
       }
-      if (path == '/v1/circles/fixture_circle_photo') {
+      if (path == '/circles/fixture_circle_photo') {
         _writeJson(request, {'data': _circle('fixture_circle_photo')});
         return;
       }
-      if (path.startsWith('/v1/circles/') && path.endsWith('/feed')) {
+      if (path.startsWith('/circles/') && path.endsWith('/feed')) {
         _writeJson(request, {
           'items': _contentPostsByIds(
             _fixtures.circleHomeSeed['groupFeedPostIds'] as List<dynamic>,
-          ),
+          ).map(contentPostWireFromReadModelMap).toList(growable: false),
         });
         return;
       }
-      if (path == '/v1/circles/fixture_circle_photo/groups') {
+      if (path == '/circles/fixture_circle_photo/groups') {
         final groups =
             (_fixtures.circleSeed['groups']
                 as Map<String, dynamic>)['fixture_circle_photo'];
         _writeJson(request, {'items': groups});
         return;
       }
-      if (path == '/v1/user/profile') {
+      if (path == '/user/profile') {
         _writeJson(request, {'items': _fixtures.userSeed['profiles']});
         return;
       }
-      if (path == '/v1/user/personas/active') {
+      if (path == '/user/personas/active') {
         _writeJson(request, _activePersonaContext('fixture_user_current'));
         return;
       }
-      if (path == '/v1/me') {
+      if (path == '/me') {
         _writeJson(request, _profileWire(_profile('fixture_user_current')));
         return;
       }
-      if (path == '/v1/user/fixture_user_current') {
+      if (path == '/user/fixture_user_current') {
         _writeJson(request, _profileWire(_profile('fixture_user_current')));
         return;
       }
-      if (path == '/v1/users/fixture_user_current/works') {
+      if (path == '/users/fixture_user_current/works') {
         _writeJson(request, {
           'items': _contentPostsByIds(
             _fixtures.userFeedSeed['myPostIds'] as List<dynamic>,
@@ -539,7 +538,7 @@ class _ContractSeedHttpServer {
         });
         return;
       }
-      if (path == '/v1/users/fixture_user_photo/works') {
+      if (path == '/users/fixture_user_photo/works') {
         _writeJson(request, {
           'items': _contentPostsByIds(
             _fixtures.userFeedSeed['authorPostIds'] as List<dynamic>,
@@ -547,32 +546,32 @@ class _ContractSeedHttpServer {
         });
         return;
       }
-      if (path == '/v1/users/fixture_user_current/life-items' ||
-          path == '/v1/users/fixture_user_photo/life-items') {
+      if (path == '/users/fixture_user_current/life-items' ||
+          path == '/users/fixture_user_photo/life-items') {
         _writeJson(request, {'items': <Map<String, dynamic>>[]});
         return;
       }
-      if (path == '/v1/users/fixture_user_current/circles' ||
-          path == '/v1/users/fixture_user_photo/circles') {
+      if (path == '/users/fixture_user_current/circles' ||
+          path == '/users/fixture_user_photo/circles') {
         _writeJson(request, {'items': _fixtures.circleSeed['circles']});
         return;
       }
-      if (path == '/v1/entity/homepages') {
+      if (path == '/homepages/search') {
         _writeJson(request, {'items': _fixtures.entitySeed['homepages']});
         return;
       }
-      if (path == '/v1/integration/locations/pois') {
+      if (path == '/integration/locations/pois') {
         _writeJson(request, {'items': _fixtures.integrationSeed['pois']});
         return;
       }
-      if (path == '/v1/app-messages') {
+      if (path == '/app-messages') {
         _writeJson(request, {
           'items': _fixtures.notificationSeed['appMessages'],
           'unreadCount': _fixtures.notificationSeed['unreadCount'],
         });
         return;
       }
-      if (path == '/v1/rtc/calls') {
+      if (path == '/rtc/calls') {
         _writeJson(request, {
           'items': _fixtures.rtcSeed['sessions'],
           'participants': _fixtures.rtcSeed['participants'],
@@ -588,7 +587,7 @@ class _ContractSeedHttpServer {
   Map<String, dynamic> _contentPost(String id) {
     return ((_fixtures.contentSeed['posts'] as List<dynamic>)
             .cast<Map<String, dynamic>>())
-        .firstWhere((item) => item['id'] == id || item['postId'] == id);
+        .firstWhere((item) => item['postId'] == id);
   }
 
   List<Map<String, dynamic>> _filteredFeed(Map<String, String> query) {
@@ -601,27 +600,25 @@ class _ContractSeedHttpServer {
     final limit = int.tryParse(query['limit'] ?? '');
     if (identity != null && identity.isNotEmpty) {
       items = items
-          .where(
-            (item) => (item['identity'] ?? item['contentIdentity']) == identity,
-          )
+          .where((item) => item['contentIdentity'] == identity)
           .toList(growable: false);
     }
     if (type != null && type.isNotEmpty) {
       items = items
-          .where((item) => (item['type'] ?? item['contentType']) == type)
+          .where((item) => item['contentType'] == type)
           .toList(growable: false);
     }
     if (limit != null) {
       items = items.take(limit).toList(growable: false);
     }
-    return items;
+    return items.map(contentPostWireFromReadModelMap).toList(growable: false);
   }
 
   List<Map<String, dynamic>> _contentPostsByIds(List<dynamic> ids) {
     final wanted = ids.map((id) => id.toString()).toSet();
     return ((_fixtures.contentSeed['posts'] as List<dynamic>)
             .cast<Map<String, dynamic>>())
-        .where((item) => wanted.contains(item['id'] ?? item['postId']))
+        .where((item) => wanted.contains(item['postId']))
         .toList(growable: false);
   }
 
@@ -630,9 +627,7 @@ class _ContractSeedHttpServer {
     if (filter == 'notification') {
       return const <Map<String, dynamic>>[];
     }
-    final conversations = (_fixtures.chatSeed['conversations'] as List<dynamic>)
-        .cast<Map<String, dynamic>>();
-    final rows = conversations
+    final rows = _inboxRows()
         .where((item) {
           switch (filter) {
             case 'unread':
@@ -647,9 +642,9 @@ class _ContractSeedHttpServer {
         })
         .map(
           (item) => <String, dynamic>{
-            'id': item['id'] ?? item['_id'],
+            'id': item['id'],
             'kind': 'conversation',
-            'conversationId': item['id'] ?? item['_id'],
+            'conversationId': item['id'],
             'conversationType': item['type'],
             'title': item['title'],
             'summary': item['lastMessagePreview'],
@@ -657,12 +652,7 @@ class _ContractSeedHttpServer {
             'groupAvatarVersion': item['groupAvatarVersion'] ?? 1,
             'lastActiveAt': item['lastMessageTime'],
             'unreadCount': item['unreadCount'] ?? 0,
-            'mentionUnreadCount':
-                item['mentionUnreadCount'] ??
-                (item['id'] == 'fixture_conv_group' ||
-                        item['_id'] == 'fixture_conv_group'
-                    ? 1
-                    : 0),
+            'mentionUnreadCount': item['mentionUnreadCount'] ?? 0,
             'muted': item['muted'] ?? false,
             'pinned': item['pinned'] ?? false,
             'read': (item['unreadCount'] as num? ?? 0) == 0,
@@ -676,6 +666,37 @@ class _ContractSeedHttpServer {
     return rows;
   }
 
+  List<Map<String, dynamic>> _inboxRows() {
+    final states = (_fixtures.chatSeed['userStates'] as List<dynamic>)
+        .cast<Map<String, dynamic>>();
+    final stateByConversationId = <String, Map<String, dynamic>>{
+      for (final state in states) state['conversationId'].toString(): state,
+    };
+    return (_fixtures.chatSeed['conversations'] as List<dynamic>)
+        .cast<Map<String, dynamic>>()
+        .map((conversation) {
+          final id = conversation['id'].toString();
+          final state = stateByConversationId[id] ?? const <String, dynamic>{};
+          return <String, dynamic>{
+            'id': id,
+            'type': conversation['type'],
+            'title': conversation['title'],
+            'avatarUrl': conversation['avatarUrl'],
+            'groupAvatarVersion': conversation['groupAvatarVersion'] ?? 0,
+            'lastMessagePreview': conversation['lastMessagePreview'],
+            'lastMessageType': 'text',
+            'lastMessageTime': conversation['lastMessageTime'],
+            'lastSeq': conversation['maxSeq'] ?? 0,
+            'unreadCount': state['unreadCount'] ?? 0,
+            'mentionUnreadCount': state['mentionUnreadCount'] ?? 0,
+            'muted': state['muted'] ?? false,
+            'pinned': state['pinned'] ?? false,
+            'circleId': conversation['circleId'] ?? '',
+          };
+        })
+        .toList(growable: false);
+  }
+
   List<Map<String, dynamic>> _contactHomeRows(Map<String, String> query) {
     final filter = query['filter'] ?? 'all';
     final rows = <Map<String, dynamic>>[];
@@ -687,12 +708,12 @@ class _ContractSeedHttpServer {
           continue;
         }
         rows.add(<String, dynamic>{
-          'id': contact['userId'] ?? contact['contactId'],
+          'id': contact['userId'],
           'kind': 'user',
-          'objectId': contact['userId'] ?? contact['contactId'],
-          'userId': contact['userId'] ?? contact['contactId'],
+          'objectId': contact['userId'],
+          'userId': contact['userId'],
           'title': contact['displayName'],
-          'subtitle': contact['bio'] ?? contact['metFrom'],
+          'subtitle': contact['bio'],
           'avatarUrl': contact['avatarUrl'],
           'relationState': contact['relationState'],
         });
@@ -703,13 +724,13 @@ class _ContractSeedHttpServer {
           in (_fixtures.circleSeed['circles'] as List<dynamic>)
               .cast<Map<String, dynamic>>()) {
         rows.add(<String, dynamic>{
-          'id': circle['circleId'] ?? circle['id'] ?? circle['_id'],
+          'id': circle['id'],
           'kind': 'circle',
-          'objectId': circle['circleId'] ?? circle['id'] ?? circle['_id'],
-          'circleId': circle['circleId'] ?? circle['id'] ?? circle['_id'],
-          'title': circle['displayName'] ?? circle['name'],
+          'objectId': circle['id'],
+          'circleId': circle['id'],
+          'title': circle['name'],
           'subtitle': circle['description'],
-          'avatarUrl': circle['avatarUrl'] ?? circle['coverUrl'],
+          'avatarUrl': circle['avatarUrl'],
         });
       }
     }
@@ -723,7 +744,7 @@ class _ContractSeedHttpServer {
   Map<String, dynamic> _circle(String id) {
     return ((_fixtures.circleSeed['circles'] as List<dynamic>)
             .cast<Map<String, dynamic>>())
-        .firstWhere((item) => item['id'] == id || item['_id'] == id);
+        .firstWhere((item) => item['id'] == id);
   }
 
   Map<String, dynamic> _profile(String id) {
@@ -770,13 +791,13 @@ class _ContractSeedHttpServer {
 
   Map<String, dynamic> _workItem(Map<String, dynamic> post) {
     return <String, dynamic>{
-      'id': post['id'] ?? post['postId'],
-      'type': post['type'] ?? post['contentType'],
-      'title': post['title'] ?? post['body'] ?? post['summary'],
-      'coverUrl': post['coverUrl'] ?? post['thumbnailUrl'],
+      'id': post['postId'],
+      'type': post['contentType'],
+      'title': post['title'] ?? '',
+      'coverUrl': post['coverUrl'] ?? '',
       'likeCount': post['likeCount'] ?? 0,
-      'date': post['createdAt'] ?? post['publishedAt'] ?? '',
-      'desc': post['summary'] ?? post['body'] ?? '',
+      'date': post['createdAt'] ?? '',
+      'desc': post['summary'] ?? '',
     };
   }
 
@@ -793,7 +814,7 @@ class _ContractSeedHttpServer {
   }
 
   bool _requiresClientUserId(String path) {
-    return path.startsWith('/v1/chat') || path == '/v1/user/personas/active';
+    return path.startsWith('/chat') || path == '/user/personas/active';
   }
 
   bool _hasClientUserId(HttpRequest request) {

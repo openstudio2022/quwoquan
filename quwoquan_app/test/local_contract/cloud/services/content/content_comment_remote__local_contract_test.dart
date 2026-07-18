@@ -33,7 +33,7 @@ void main() {
       final page = await adapter.listComments(postId: 'post-1');
 
       expect(captured.method, 'GET');
-      expect(captured.url.path, '/v1/content/posts/post-1/comments');
+      expect(captured.url.path, '/content/posts/post-1/comments');
       expect(
         captured.url.queryParameters['limit'],
         '${CloudApiDefaults.pageLimit}',

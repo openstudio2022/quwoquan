@@ -380,13 +380,13 @@ def test_homepage_seed_source_four_encyclopedia_closed_set():
         "sourceKind": "wikipedia",
         "extractor": "wikipedia_api",
         "canonicalUrl": "https://zh.wikipedia.org/wiki/example",
-        "policyRevision": "encyclopedia-primary-v2",
+        "policyRevision": "encyclopedia-primary",
     })
     assert _homepage_can_seed_base_draft({
         "sourceKind": "toutiao_baike",
         "extractor": "toutiao_baike_html",
         "canonicalUrl": "https://www.baike.com/wiki/example",
-        "policyRevision": "encyclopedia-primary-v2",
+        "policyRevision": "encyclopedia-primary",
     })
     assert not _homepage_can_seed_base_draft({
         "platform": "维基导游",
@@ -656,16 +656,6 @@ def test_homepage_core_sources_only_keep_four_encyclopedia_closed_set():
             match_confidence=0.86,
         ),
         _source(
-            source_id="home_sogou",
-            platform="搜狗百科",
-            url="https://baike.sogou.com/v?query=九寨沟",
-            source_kind="sogou_baike",
-            source_title="九寨沟",
-            category="encyclopedia",
-            discovery_provider="test",
-            match_confidence=0.78,
-        ),
-        _source(
             source_id="home_toutiao",
             platform="今日头条百科",
             url="https://www.baike.com/wiki/九寨沟",
@@ -693,9 +683,9 @@ def test_homepage_core_sources_only_keep_four_encyclopedia_closed_set():
         ),
     ]
     selected = _homepage_core_sources(sources)
-    assert len(selected) == 4
+    assert len(selected) == 3
     selected_ids = {source["source_id"] for source in selected}
-    assert selected_ids == {"home_wikipedia", "home_baidu", "home_sogou", "home_toutiao"}
+    assert selected_ids == {"home_wikipedia", "home_baidu", "home_toutiao"}
     assert selected[0]["source_id"] == "home_wikipedia"
     assert "home_media" not in selected_ids
     assert "home_official" not in selected_ids

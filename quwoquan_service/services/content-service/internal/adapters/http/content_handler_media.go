@@ -43,7 +43,7 @@ func (h *ContentHandler) handleInitMediaUpload(w http.ResponseWriter, r *http.Re
 }
 
 func (h *ContentHandler) handleCompleteMediaUpload(w http.ResponseWriter, r *http.Request) {
-	sessionID := pathParamAfter(r.URL.Path, "/v1/content/media/uploads/", ":complete")
+	sessionID := pathParamAfter(r.URL.Path, "/content/media/uploads/", ":complete")
 	if h.mediaService == nil {
 		writeHTTPError(w, r, rterr.NewUnavailable(rterr.ModuleContent, "媒体服务未配置", "Media Facade is required"))
 		return
@@ -73,7 +73,7 @@ func (h *ContentHandler) handleCompleteMediaUpload(w http.ResponseWriter, r *htt
 }
 
 func (h *ContentHandler) handleAbortMediaUpload(w http.ResponseWriter, r *http.Request) {
-	sessionID := pathParamAfter(r.URL.Path, "/v1/content/media/uploads/", ":abort")
+	sessionID := pathParamAfter(r.URL.Path, "/content/media/uploads/", ":abort")
 	if h.mediaService == nil {
 		writeHTTPError(w, r, rterr.NewUnavailable(rterr.ModuleContent, "媒体服务未配置", "Media Facade is required"))
 		return
@@ -92,7 +92,7 @@ func (h *ContentHandler) handleAbortMediaUpload(w http.ResponseWriter, r *http.R
 }
 
 func (h *ContentHandler) handleGetMediaAsset(w http.ResponseWriter, r *http.Request) {
-	mediaID := pathParamAfter(r.URL.Path, "/v1/content/media/", "")
+	mediaID := pathParamAfter(r.URL.Path, "/content/media/", "")
 	if idx := strings.Index(mediaID, "/"); idx > 0 {
 		mediaID = mediaID[:idx]
 	}
@@ -109,7 +109,7 @@ func (h *ContentHandler) handleGetMediaAsset(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *ContentHandler) handleGetOwnedMediaAsset(w http.ResponseWriter, r *http.Request) {
-	mediaID := pathParamAfter(r.URL.Path, "/internal/v1/content/media/", "")
+	mediaID := pathParamAfter(r.URL.Path, "/internal/content/media/", "")
 	asset, err := h.mediaService.GetMediaAsset(r.Context(), mediaapp.GetMediaAssetQuery{AssetID: mediaID, OwnerID: operationActorID(r)})
 	if err != nil {
 		writeHTTPError(w, r, err)
@@ -119,7 +119,7 @@ func (h *ContentHandler) handleGetOwnedMediaAsset(w http.ResponseWriter, r *http
 }
 
 func (h *ContentHandler) handleGetMediaAssetReference(w http.ResponseWriter, r *http.Request) {
-	mediaID := pathParamAfter(r.URL.Path, "/internal/v1/content/media/", ":reference")
+	mediaID := pathParamAfter(r.URL.Path, "/internal/content/media/", ":reference")
 	ownerPersonaID := strings.TrimSpace(r.URL.Query().Get("ownerPersonaId"))
 	if mediaID == "" || ownerPersonaID == "" {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "请求参数无效", "mediaId and ownerPersonaId are required"))
@@ -136,7 +136,7 @@ func (h *ContentHandler) handleGetMediaAssetReference(w http.ResponseWriter, r *
 }
 
 func (h *ContentHandler) handleGetMediaAssetDeliveryReference(w http.ResponseWriter, r *http.Request) {
-	mediaID := pathParamAfter(r.URL.Path, "/internal/v1/content/media/", ":delivery-reference")
+	mediaID := pathParamAfter(r.URL.Path, "/internal/content/media/", ":delivery-reference")
 	ownerPersonaID := strings.TrimSpace(r.URL.Query().Get("ownerPersonaId"))
 	if mediaID == "" || ownerPersonaID == "" {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "请求参数无效", "mediaId and ownerPersonaId are required"))
@@ -153,7 +153,7 @@ func (h *ContentHandler) handleGetMediaAssetDeliveryReference(w http.ResponseWri
 }
 
 func (h *ContentHandler) handleGetMediaUploadSession(w http.ResponseWriter, r *http.Request) {
-	sessionID := pathParamAfter(r.URL.Path, "/v1/content/media/uploads/", "")
+	sessionID := pathParamAfter(r.URL.Path, "/content/media/uploads/", "")
 	session, err := h.mediaService.GetMediaUploadSession(r.Context(), mediaapp.GetMediaUploadSessionQuery{SessionID: sessionID, OwnerID: operationActorID(r)})
 	if err != nil {
 		writeHTTPError(w, r, err)
@@ -163,10 +163,20 @@ func (h *ContentHandler) handleGetMediaUploadSession(w http.ResponseWriter, r *h
 }
 
 func (h *ContentHandler) handleRecordMediaProcessingResult(w http.ResponseWriter, r *http.Request) {
-	mediaID := pathParamAfter(r.URL.Path, "/internal/v1/content/media/", ":processing-result")
+	mediaID := pathParamAfter(r.URL.Path, "/internal/content/media/", ":processing-result")
 	var body struct {
-		Processing    mediamodel.ProcessingStatus `json:"processingStatus"`
-		FailureReason string                      `json:"failureReason"`
+		Processing                   mediamodel.ProcessingStatus `json:"processingStatus"`
+		FailureReason                string                      `json:"failureReason"`
+		ProcessorProfile             string                      `json:"processorProfile"`
+		VerifiedDurationMs           int64                       `json:"verifiedDurationMs"`
+		VideoWidth                   int                         `json:"videoWidth"`
+		VideoHeight                  int                         `json:"videoHeight"`
+		VideoCodec                   string                      `json:"videoCodec"`
+		VideoContainer               string                      `json:"videoContainer"`
+		VideoPublicSliceKey          string                      `json:"videoPublicSliceKey"`
+		CoverPublicSliceKey          string                      `json:"coverPublicSliceKey"`
+		PreviewTrackVersion          int                         `json:"previewTrackVersion"`
+		PreviewTrackManifestSliceKey string                      `json:"previewTrackManifestSliceKey"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
@@ -174,6 +184,18 @@ func (h *ContentHandler) handleRecordMediaProcessingResult(w http.ResponseWriter
 	}
 	result, err := h.mediaService.RecordMediaProcessingResult(r.Context(), mediaapp.RecordMediaProcessingResultCommand{
 		AssetID: mediaID, Processing: body.Processing, FailureReason: body.FailureReason,
+		Descriptor: mediamodel.VideoProcessingDescriptor{
+			ProcessorProfile:             body.ProcessorProfile,
+			VerifiedDurationMs:           body.VerifiedDurationMs,
+			VideoWidth:                   body.VideoWidth,
+			VideoHeight:                  body.VideoHeight,
+			VideoCodec:                   body.VideoCodec,
+			VideoContainer:               body.VideoContainer,
+			VideoPublicSliceKey:          body.VideoPublicSliceKey,
+			CoverPublicSliceKey:          body.CoverPublicSliceKey,
+			PreviewTrackVersion:          body.PreviewTrackVersion,
+			PreviewTrackManifestSliceKey: body.PreviewTrackManifestSliceKey,
+		},
 	})
 	if err != nil {
 		writeHTTPError(w, r, err)
@@ -183,7 +205,7 @@ func (h *ContentHandler) handleRecordMediaProcessingResult(w http.ResponseWriter
 }
 
 func (h *ContentHandler) handleUpdateMediaAssetAccessPolicy(w http.ResponseWriter, r *http.Request) {
-	mediaID := pathParamAfter(r.URL.Path, "/internal/v1/content/media/", ":access-policy")
+	mediaID := pathParamAfter(r.URL.Path, "/internal/content/media/", ":access-policy")
 	var body struct {
 		AccessPolicy mediamodel.AccessPolicy `json:"accessPolicy"`
 	}
@@ -232,29 +254,8 @@ func mediaAssetHTTPResponseFromSlice(asset mediaapp.MediaAssetSlice) mediaAssetH
 	}
 }
 
-func (h *ContentHandler) handleBindMediaAssetsToPost(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		AssetIDs []string `json:"assetIds"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
-		return
-	}
-	resp, err := h.postService.BindMediaAssetsToPost(
-		r.Context(),
-		postIDFromPath(r.URL.Path),
-		operationActorID(r),
-		body.AssetIDs,
-	)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, resp)
-}
-
 func (h *ContentHandler) handleRequestOriginalImageAccess(w http.ResponseWriter, r *http.Request) {
-	mediaID := pathParamAfter(r.URL.Path, "/v1/content/media/", "/original:access")
+	mediaID := pathParamAfter(r.URL.Path, "/content/media/", "/original:access")
 	if strings.TrimSpace(mediaID) == "" {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "mediaId 不能为空", "missing mediaId"))
 		return
@@ -284,7 +285,7 @@ func (h *ContentHandler) handleRequestOriginalImageAccess(w http.ResponseWriter,
 }
 
 func (h *ContentHandler) handleSelectAutoVideoCover(w http.ResponseWriter, r *http.Request) {
-	mediaID := pathParamAfter(r.URL.Path, "/v1/content/media/", "/cover:auto")
+	mediaID := pathParamAfter(r.URL.Path, "/content/media/", "/cover:auto")
 	result, err := h.mediaService.SelectAutoMediaCover(r.Context(), mediaapp.SelectAutoMediaCoverCommand{
 		AssetID: mediaID, OwnerID: operationActorID(r),
 	})
@@ -296,7 +297,7 @@ func (h *ContentHandler) handleSelectAutoVideoCover(w http.ResponseWriter, r *ht
 }
 
 func (h *ContentHandler) handleSelectManualVideoCover(w http.ResponseWriter, r *http.Request) {
-	mediaID := pathParamAfter(r.URL.Path, "/v1/content/media/", "/cover:manual")
+	mediaID := pathParamAfter(r.URL.Path, "/content/media/", "/cover:manual")
 	var body struct {
 		CoverAssetID     string `json:"coverAssetId"`
 		CoverFrameTimeMs int64  `json:"coverFrameTimeMs"`

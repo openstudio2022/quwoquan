@@ -3,18 +3,45 @@
   "description": "execution 工作包内的可恢复进度。",
   "type": "object",
   "properties": {
-    "schemaVersion": { "const": "quwoquan.content.execution_progress" },
-    "executionId": { "type": "string", "minLength": 1 },
-    "updatedAt": { "type": "string", "minLength": 1 },
-    "coverage": { "type": "object" },
-    "anglesByEntity": { "type": "object" },
-    "openGaps": { "type": "array" },
-    "counts": { "type": "object" },
-    "lastRunId": { "type": ["string", "null"] }
+    "executionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "updatedAt": {
+      "type": "string",
+      "minLength": 1
+    },
+    "coverage": {
+      "type": "object"
+    },
+    "anglesByEntity": {
+      "type": "object"
+    },
+    "openGaps": {
+      "type": "array"
+    },
+    "counts": {
+      "type": "object"
+    },
+    "lastRunId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "schema": {
+      "const": "quwoquan.content.execution_progress"
+    }
   },
   "required": [
-    "schemaVersion", "executionId", "updatedAt", "coverage", "anglesByEntity",
-    "openGaps", "counts", "lastRunId"
+    "schema",
+    "executionId",
+    "updatedAt",
+    "coverage",
+    "anglesByEntity",
+    "openGaps",
+    "counts",
+    "lastRunId"
   ],
   "additionalProperties": false
 }

@@ -1,5 +1,4 @@
 # UI-only：圈子发现维度 Tab（App 以 asset 加载本文件为运行时 SSOT）。
-version: 1
 description: 维度 id → 展示 label / 子频道文案 / 描述
 tabs:
   - id: campus

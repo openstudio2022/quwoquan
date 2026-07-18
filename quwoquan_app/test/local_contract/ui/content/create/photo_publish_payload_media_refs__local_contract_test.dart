@@ -8,7 +8,7 @@ import '../../../../support/recording_content_media_facet.dart';
 
 void main() {
   group('photo publish payload media refs', () {
-    test('图片发布先上传本地图片并用远端引用替换 mediaUrls 和 coverUrl', () async {
+    test('图片发布只把 MediaAsset ID 交给后续服务端绑定', () async {
       final media = RecordingContentMediaFacet();
       final fileStorage = _MemoryFileStorageGateway(<String, List<int>>{
         '/tmp/a.jpg': <int>[1, 2, 3],
@@ -20,15 +20,11 @@ void main() {
             editorKind: CreateEditorKind.media,
           ).copyWith(
             mediaKind: CreateMediaKind.images,
-            imagePaths: <String>[
-              '/tmp/a.jpg',
-              'https://cdn.quwoquan.test/existing.jpg',
-              '/tmp/b.png',
-            ],
+            imagePaths: <String>['/tmp/a.jpg', '/tmp/b.png'],
             title: '图片作品',
           );
 
-      final prepared = await buildCreatePostPayloadWithRemoteImageMedia(
+      final prepared = await buildPostPublicationPayloadWithRemoteMedia(
         media: media,
         fileStorageGateway: fileStorage,
         state: state,
@@ -67,18 +63,16 @@ void main() {
         'image_asset_1',
         'image_asset_2',
       ]);
-      expect(prepared.payload['mediaUrls'], <String>[
-        'https://cdn.quwoquan.test/image_asset_1.jpg',
-        'https://cdn.quwoquan.test/existing.jpg',
-        'https://cdn.quwoquan.test/image_asset_2.jpg',
+      expect(prepared.payload, isNot(contains('mediaUrls')));
+      expect(prepared.payload, isNot(contains('coverUrl')));
+      expect(prepared.payload['mediaItems'], <Map<String, Object?>>[
+        <String, Object?>{'kind': 'image', 'mediaId': 'image_asset_1'},
+        <String, Object?>{'kind': 'image', 'mediaId': 'image_asset_2'},
       ]);
+      expect(prepared.payload.values.toString(), isNot(contains('/tmp/')));
       expect(
-        prepared.payload['coverUrl'],
-        'https://cdn.quwoquan.test/image_asset_1.jpg',
-      );
-      expect(
-        (prepared.payload['mediaUrls'] as List<String>).join('|'),
-        isNot(contains('/tmp/')),
+        prepared.payload.values.toString(),
+        isNot(contains('cdn.quwoquan.test')),
       );
     });
 
@@ -96,7 +90,7 @@ void main() {
           );
 
       await expectLater(
-        buildCreatePostPayloadWithRemoteImageMedia(
+        buildPostPublicationPayloadWithRemoteMedia(
           media: media,
           fileStorageGateway: fileStorage,
           state: state,

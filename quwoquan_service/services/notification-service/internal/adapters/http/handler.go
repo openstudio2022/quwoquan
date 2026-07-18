@@ -49,16 +49,16 @@ func NewHandler(dependencies HandlerDependencies) (*Handler, error) {
 
 func (h *Handler) Routes() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /internal/v1/app-messages", h.handleCreateAppMessage)
-	mux.HandleFunc("GET /v1/app-messages", h.handleListAppMessages)
-	mux.HandleFunc("GET /v1/app-messages/unread-count", h.handleUnreadCount)
-	mux.HandleFunc("GET /v1/app-messages/{messageId}", h.handleGetAppMessage)
-	mux.HandleFunc("POST /v1/app-messages/{messageId}/ack", h.handleAckAppMessage)
-	mux.HandleFunc("POST /v1/app-messages/{messageId}/read", h.handleReadAppMessage)
-	mux.HandleFunc("GET /internal/v1/notifications/delivery-jobs/metrics", h.handleMetrics)
-	mux.HandleFunc("GET /internal/v1/notifications/delivery-jobs/dead-letters", h.handleListDeadLetters)
+	mux.HandleFunc("POST /internal/app-messages", h.handleCreateAppMessage)
+	mux.HandleFunc("GET /app-messages", h.handleListAppMessages)
+	mux.HandleFunc("GET /app-messages/unread-count", h.handleUnreadCount)
+	mux.HandleFunc("GET /app-messages/{messageId}", h.handleGetAppMessage)
+	mux.HandleFunc("POST /app-messages/{messageId}/ack", h.handleAckAppMessage)
+	mux.HandleFunc("POST /app-messages/{messageId}/read", h.handleReadAppMessage)
+	mux.HandleFunc("GET /internal/notifications/delivery-jobs/metrics", h.handleMetrics)
+	mux.HandleFunc("GET /internal/notifications/delivery-jobs/dead-letters", h.handleListDeadLetters)
 	mux.HandleFunc(
-		"POST /internal/v1/notifications/delivery-jobs/{jobAction}",
+		"POST /internal/notifications/delivery-jobs/{jobAction}",
 		h.handleRecoverDeliveryJob,
 	)
 	return mux

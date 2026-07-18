@@ -12,7 +12,7 @@ export 'src/circle/alpha_group_membership_facets.dart';
 export 'src/circle/alpha_file_facets.dart';
 export 'src/content/alpha_comment_facets.dart';
 export 'src/content/alpha_post_reaction_facets.dart';
-export 'src/content/alpha_post_lifecycle_writer.dart';
+export 'src/content/alpha_post_publication_writer.dart';
 export 'src/generated/alpha_fixture_bundle.g.dart';
 export 'src/integration/alpha_location_query.dart';
 export 'src/notification/alpha_app_message_facets.dart';

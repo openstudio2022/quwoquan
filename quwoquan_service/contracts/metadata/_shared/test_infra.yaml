@@ -326,4 +326,3 @@ go_dependencies:
   - description: 外部依赖 mock（仅用于 cross-service / AI API）
     package: github.com/golang/mock/gomock
     scope: test
-version: 1

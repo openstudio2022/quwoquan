@@ -17,12 +17,17 @@ from core.content_source_registry import (  # noqa: E402
     resolve_homepage_source_role,
     verify_content_source_registry,
 )
+from core.baike_source_contract import (  # noqa: E402
+    BAIDU_BAIKE_API_POLICY,
+    TOUTIAO_BAIKE_CANONICAL_RESOLUTION,
+    source_contract_issues,
+)
 
 
 def test_content_source_registry_is_valid_and_covers_all_lanes():
     assert verify_content_source_registry() == []
     guidance = build_content_source_guidance("travel")
-    assert guidance["schemaVersion"] == "quwoquan.content_source_registry.v2"
+    assert guidance["schema"] == "quwoquan.content_source_registry"
     assert guidance["version"] == 2
     assert set(guidance["lanes"]) == {"homepage", "article", "image", "video"}
     homepage = guidance["lanes"]["homepage"]["sources"]
@@ -32,7 +37,6 @@ def test_content_source_registry_is_valid_and_covers_all_lanes():
     assert {row["sourceKind"] for row in homepage} == {
         "wikipedia",
         "baidu_baike",
-        "sogou_baike",
         "toutiao_baike",
     }
     assert not any(row["platform"] == "维基导游" for row in homepage)
@@ -43,43 +47,49 @@ def test_content_source_registry_is_valid_and_covers_all_lanes():
     assert not any(row["sourceClass"] in {"official_site", "government_tourism"} for row in homepage)
 
 
-def test_homepage_role_four_encyclopedia_closed_set_resolution():
+def test_homepage_role_three_encyclopedia_closed_set_resolution():
     assert resolve_homepage_source_role(
         source_kind="wikipedia",
         url="https://zh.wikipedia.org/wiki/西湖",
         extractor="wikipedia_api",
-        policy_revision="encyclopedia-primary-v2",
+        policy_revision="encyclopedia-primary",
     ) == "primary"
     assert resolve_homepage_source_role(
         source_kind="toutiao_baike",
         url="https://www.baike.com/wiki/西湖",
         extractor="toutiao_baike_html",
-        policy_revision="encyclopedia-primary-v2",
+        policy_revision="encyclopedia-primary",
     ) == "primary"
-    assert resolve_homepage_source_role(
-        source_kind="sogou_baike",
-        url="https://www.baike.com/wiki/西湖",
-        extractor="sogou_baike_html",
-        policy_revision="encyclopedia-primary-v2",
-    ) == "other"
     assert resolve_homepage_source_role(
         source_kind="official_site",
         url="https://wlt.sc.gov.cn/x",
         extractor="static_official_html",
-        policy_revision="encyclopedia-primary-v2",
+        policy_revision="encyclopedia-primary",
     ) == "other"
     assert resolve_homepage_source_role(
         source_kind="",
         url="https://zh.wikipedia.org/wiki/西湖",
         extractor="wikipedia_api",
-        policy_revision="encyclopedia-primary-v2",
+        policy_revision="encyclopedia-primary",
     ) == "other", "禁止仅凭 host 猜 sourceKind"
     assert homepage_source_can_seed_base_draft({
         "sourceKind": "baidu_baike",
         "url": "https://baike.baidu.com/item/西湖",
-        "extractor": "baidu_baike_html",
-        "policyRevision": "encyclopedia-primary-v2",
+        "extractor": "baidu_baike_openapi",
+        "policyRevision": "encyclopedia-primary",
     })
+
+
+def test_baike_sources_expose_canonical_resolution_policies():
+    assert source_contract_issues({
+        "wikipedia_api",
+        "baidu_baike_openapi",
+        "toutiao_baike_html",
+    }) == []
+    assert TOUTIAO_BAIKE_CANONICAL_RESOLUTION.base_url == "https://www.baike.com/wiki/"
+    assert TOUTIAO_BAIKE_CANONICAL_RESOLUTION.candidate_limit > 0
+    assert BAIDU_BAIKE_API_POLICY.base_url.endswith("/BaikeLemmaCardApi")
+    assert BAIDU_BAIKE_API_POLICY.candidate_limit > 0
 
 
 def test_lane_prompt_is_rendered_from_registry_policy():

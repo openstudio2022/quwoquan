@@ -1,5 +1,4 @@
 # 推荐曝光与反馈不可变事实；评分 transport DTO 归属 model_release packet。
-version: 1
 # 本文件不登记聚合根。
 
 entities:

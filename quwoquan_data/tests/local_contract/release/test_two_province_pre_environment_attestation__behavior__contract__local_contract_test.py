@@ -47,9 +47,8 @@ def _write_execution(root: Path, execution_id: str, entity_type: str, name: str)
     _write_json(
         root / "sources/qualification/result.json",
         {
-            "contractVersion": "execution-source-qualification-v1",
             "executionId": execution_id,
-            "policyRevision": "encyclopedia-primary-v2",
+            "policyRevision": "encyclopedia-primary",
             "verifiedAt": "2026-07-14T00:00:00Z",
             "passed": True,
             "targets": [
@@ -82,7 +81,7 @@ def _fixture(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     _write_json(
         payload_file(release, "release.json"),
         {
-            "schemaVersion": "quwoquan_data.release/3",
+            "schema": "quwoquan_data.release",
             "releaseId": RELEASE_ID,
             "executionIds": [ZHEJIANG_EXECUTION, SICHUAN_EXECUTION],
         },
@@ -90,7 +89,7 @@ def _fixture(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     _write_json(
         payload_file(release, "desired_state.json"),
         {
-            "schemaVersion": "quwoquan_data.release_desired_state/1",
+            "schema": "quwoquan_data.release_desired_state",
             "releaseId": RELEASE_ID,
             "desiredRefs": {
                 "creators": [],

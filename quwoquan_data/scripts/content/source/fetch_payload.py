@@ -11,20 +11,28 @@ from core.runtime_policy import active_runtime_policy
 from content.source.fetch_http import _http_get_bytes
 from content.source.fetch_text import (
     _USER_AGENT,
-    _baike_layout_and_text,
     _toutiao_baike_layout_and_text,
-    _wikipedia_api_extract_payload,
-    _wikipedia_title_from_url,
     extract_page_text,
     extract_page_text_with_inline_images,
 )
-from content.source.fetch_wikitext import fetch_wikipedia_wikitext
+from content.source.research.baidu_baike import (
+    baidu_baike_api_url,
+    decode_baidu_baike_payload,
+)
+from content.source.mediawiki_page import fetch_mediawiki_page_bundle_for_url
+from core.data_issue import (
+    DataIssueCode,
+    DataIssueError,
+    DataIssueStage,
+    DataRecoveryAction,
+    data_issue,
+)
+from core.source_fidelity import assess_source_content_fidelity
 from governance.coverage.source_registry import resolve_travel_source_runtime
 
 _RUNTIME_POLICY = active_runtime_policy()
 _DIRECT_FETCH_TIMEOUT_SECONDS = _RUNTIME_POLICY.direct_fetch_timeout_seconds
 _SOURCE_FETCH_TIMEOUT_SECONDS = _RUNTIME_POLICY.source_fetch_timeout_seconds
-_SOURCE_FETCH_MAX_RETRIES = _RUNTIME_POLICY.source_fetch_max_retries
 
 def fetch_source(url: str, output_dir: Path) -> dict:
     """Fetch a URL and extract text content. Returns metadata dict."""
@@ -93,73 +101,109 @@ def fetch_source_payload(url: str, *, source: Mapping[str, Any] | None = None) -
     if source_extractor:
         runtime = {**runtime, "extractor": source_extractor, "sourceExtractorOverride": True}
     extractor = str(runtime.get("extractor") or "generic_html")
+    if extractor == "baidu_baike_openapi":
+        parsed = urllib.parse.urlparse(url)
+        source_title = str((source or {}).get("sourceTitle") or "").strip()
+        if not source_title:
+            source_title = urllib.parse.unquote(parsed.path.rsplit("/", 1)[-1]).strip()
+        if not source_title:
+            raise RuntimeError("Baidu Baike API adapter requires a resolved source title")
+        api_url = baidu_baike_api_url(source_title)
+        status, body, _ = _http_get_bytes(
+            api_url,
+            timeout=_SOURCE_FETCH_TIMEOUT_SECONDS,
+        )
+        if status != 200 or not body:
+            raise RuntimeError(f"fetch failed for {url} (status={status})")
+        page = decode_baidu_baike_payload(body)
+        if page is None:
+            raise RuntimeError("Baidu Baike API returned no readable exact page")
+        return {
+            "url": url,
+            "statusCode": status,
+            "htmlBytes": body,
+            "text": page.text,
+            "inlineImages": [],
+            "sha256": hashlib.sha256(body).hexdigest(),
+            "runtime": {
+                **runtime,
+                "rawFormat": "baidu_baike_openapi_json",
+                "resolvedTitle": page.title,
+            },
+        }
     if extractor == "wikipedia_api":
-        wiki_payload = _wikipedia_api_extract_payload(url)
-        text = wiki_payload.text
-        body = wiki_payload.raw.encode("utf-8")
-        if not body:
-            raise RuntimeError(f"fetch failed for {url} (wikipedia_api empty response)")
-        # 统一结构化 IR：wikitext 前端产出 source.layout.json 真相源
-        # （表格降维列表项 + 行图/宫格连续 figure 占位，infobox factRow + 封面候选）。
-        layout: dict[str, Any] | None = None
-        wikitext = fetch_wikipedia_wikitext(url)
-        if wikitext:
-            from core.source_layout import render_source_markdown
-            from core.wiki_wikitext import parse_wikitext_layout
-
-            _host, wiki_title = _wikipedia_title_from_url(url)
-            layout = parse_wikitext_layout(
-                wikitext,
-                source_kind="home_wikivoyage" if "wikivoyage" in (_host or "") else "home_wikipedia",
-                title=wiki_payload.resolved_title or wiki_title,
+        bundle = fetch_mediawiki_page_bundle_for_url(url)
+        if bundle is None or not bundle.rendered_text or not bundle.wikitext:
+            raise DataIssueError(
+                (
+                    data_issue(
+                        DataIssueCode.SOURCE_CONTENT_INCOMPLETE,
+                        stage=DataIssueStage.DOWNLOAD_FETCH,
+                        ref=url,
+                        recovery=DataRecoveryAction.REPLACE_SOURCE,
+                        message="MediaWiki page bundle is missing rendered prose or revision wikitext",
+                    ),
+                )
             )
-            if layout.get("parseStatus") == "ok":
-                # source.md 底稿忠实还原：章节结构 + 图片原位 :::figure 占位（仅原图注）。
-                # 占位编号与 plan imageUrls 的 placeholderId 同口径，下载成功后由
-                # write_source_unit 绑定为真实 sourceAssetId，失败占位整块剥离。
-                structured_text = render_source_markdown(layout)
-                if structured_text:
-                    text = structured_text
+        from core.source_layout import merge_rendered_text_layout, render_source_markdown
+        from core.wiki_wikitext import parse_wikitext_layout
+
+        host = urllib.parse.urlparse(url).hostname or ""
+        parsed_layout = parse_wikitext_layout(
+            bundle.wikitext,
+            source_kind="home_wikivoyage" if "wikivoyage" in host else "home_wikipedia",
+            title=bundle.resolved_title,
+        )
+        layout = merge_rendered_text_layout(parsed_layout, bundle.rendered_text)
+        text = render_source_markdown(layout)
+        fidelity = assess_source_content_fidelity(bundle.rendered_text, text)
+        if not fidelity.complete:
+            raise DataIssueError(
+                (
+                    data_issue(
+                        DataIssueCode.SOURCE_CONTENT_INCOMPLETE,
+                        stage=DataIssueStage.DOWNLOAD_FETCH,
+                        ref=url,
+                        recovery=DataRecoveryAction.REPLACE_SOURCE,
+                        message="MediaWiki rendered prose was not preserved by the source layout",
+                        attributes={
+                            "authoritativeParagraphCount": fidelity.authoritative_paragraph_count,
+                            "matchedParagraphCount": fidelity.matched_paragraph_count,
+                            "missingPreview": fidelity.missing_paragraphs[0][:240],
+                        },
+                    ),
+                )
+            )
+        body = bundle.raw.encode("utf-8")
         return {
             "url": url,
             "statusCode": 200,
             "htmlBytes": body,
             "text": text[:50000],
+            "renderedText": bundle.rendered_text,
             "inlineImages": [],
             "layout": layout,
             "sha256": hashlib.sha256(body).hexdigest(),
             "runtime": {
                 **runtime,
                 "rawFormat": "mediawiki_api_json",
-                "requestedTitle": wiki_payload.requested_title,
-                "resolvedTitle": wiki_payload.resolved_title,
-                "redirectChain": list(wiki_payload.redirect_chain),
+                "requestedTitle": bundle.requested_title,
+                "resolvedTitle": bundle.resolved_title,
+                "redirectChain": list(bundle.redirect_chain),
+                "pageId": bundle.page_id,
+                "pageRevisionId": bundle.revision_id,
+                "pageContentSha256": bundle.content_sha256,
+                "renderedImageCount": len(bundle.rendered_image_titles),
             },
         }
     status, body, _ = _http_get_bytes(
         url,
         timeout=_SOURCE_FETCH_TIMEOUT_SECONDS,
-        max_redirects=4,
-        max_retries=_SOURCE_FETCH_MAX_RETRIES,
     )
     if status != 200 or not body:
         raise RuntimeError(f"fetch failed for {url} (status={status})")
     if extractor == "toutiao_baike_html":
         text, layout = _toutiao_baike_layout_and_text(body, url)
-        return {
-            "url": url,
-            "statusCode": status,
-            "htmlBytes": body,
-            "text": text,
-            "inlineImages": [],
-            "layout": layout,
-            "sha256": hashlib.sha256(body).hexdigest(),
-            "runtime": runtime,
-        }
-    if extractor in {"baidu_baike_html", "sogou_baike_html"}:
-        # 百科结构前端：HTML → 统一 IR + IR 渲染正文；解析失败落结构化 reject，
-        # 禁止静默降级纯文本（rejected IR 仍随 payload 落盘可审计）。
-        text, layout = _baike_layout_and_text(body, url, extractor=extractor)
         return {
             "url": url,
             "statusCode": status,

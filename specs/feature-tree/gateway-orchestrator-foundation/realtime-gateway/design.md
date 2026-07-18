@@ -76,7 +76,7 @@ services/realtime-gateway/
 │   ├── adapters/
 │   │   ├── http/
 │   │   │   ├── ws_handler.go     # WebSocket Upgrade + 帧读写
-│   │   │   ├── poll_handler.go   # Long-polling 端点 GET /v1/realtime/poll
+│   │   │   ├── poll_handler.go   # Long-polling 端点 GET /realtime/poll
 │   │   │   └── channel_webhook_handler.go  # 外部渠道 Webhook 入口
 │   │   └── mq/
 │   │       └── redis_subscriber.go  # Redis Pub/Sub 消费 → Hub.Broadcast

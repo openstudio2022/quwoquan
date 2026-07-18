@@ -1,8 +1,8 @@
-version: 1
 entity: GreetingRequest
 
 fields:
   - name: id
+    source: id
     type: string
     constraints: [PK, NOT_NULL]
     classification: PUBLIC
@@ -11,6 +11,7 @@ fields:
     ops_exposure: read
 
   - name: requesterSubAccountId
+    source: requesterSubAccountId
     type: string
     constraints: [NOT_NULL]
     classification: PUBLIC
@@ -20,6 +21,7 @@ fields:
     description: 发起方子账号 ID
 
   - name: targetSubAccountId
+    source: targetSubAccountId
     type: string
     constraints: [NOT_NULL]
     classification: PUBLIC
@@ -29,6 +31,7 @@ fields:
     description: 接收方子账号 ID
 
   - name: requestMessage
+    source: requestMessage
     type: string
     constraints: [NULLABLE]
     classification: SENSITIVE
@@ -38,6 +41,7 @@ fields:
     description: 打招呼自定义内容，最长 200 字
 
   - name: status
+    source: status
     type: enum
     enum_ref: GreetingRequestStatus
     constraints: [NOT_NULL]
@@ -54,6 +58,7 @@ fields:
       expired    - 超期未处理（expireAt 触发）
 
   - name: source
+    source: source
     type: enum
     enum_ref: GreetingRequestSource
     constraints: [NOT_NULL]
@@ -64,6 +69,7 @@ fields:
     description: profile/recommendation/group_member/invite（请求来源，用于漏斗分析）
 
   - name: promotedConversationId
+    source: promotedConversationId
     type: string
     constraints: [NULLABLE]
     classification: PUBLIC
@@ -73,6 +79,7 @@ fields:
     description: 升级后的正式会话 ID（status=replied 时写入）
 
   - name: expireAt
+    source: expireAt
     type: timestamp
     constraints: [NULLABLE]
     classification: PUBLIC
@@ -82,6 +89,7 @@ fields:
     description: 请求过期时间（默认 30 天）
 
   - name: decisionAt
+    source: decisionAt
     type: timestamp
     constraints: [NULLABLE]
     classification: PUBLIC
@@ -91,6 +99,7 @@ fields:
     description: 接收方作出决策的时间（replied/ignored/blocked）
 
   - name: createdAt
+    source: createdAt
     type: timestamp
     constraints: [NOT_NULL]
     classification: PUBLIC
@@ -99,6 +108,7 @@ fields:
     ops_exposure: read
 
   - name: updatedAt
+    source: updatedAt
     type: timestamp
     constraints: [NOT_NULL]
     classification: PUBLIC

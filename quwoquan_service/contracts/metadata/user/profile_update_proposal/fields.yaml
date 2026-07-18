@@ -1,4 +1,3 @@
-version: 1
 aggregate: ProfileUpdateProposal
 
 entities:
@@ -6,6 +5,7 @@ entities:
     description: 资料修改提案（状态机 + 乐观锁）
     fields:
       - name: id
+        source: id
         type: string
         constraints: [PK]
         classification: PUBLIC
@@ -14,6 +14,7 @@ entities:
         ops_exposure: read
 
       - name: personaId
+        source: personaId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -22,6 +23,7 @@ entities:
         ops_exposure: read
 
       - name: source
+        source: source
         type: enum
         enum_ref: ProposalSource
         constraints: [NOT_NULL]
@@ -31,6 +33,7 @@ entities:
         ops_exposure: read
 
       - name: proposedChanges
+        source: proposedChanges
         type: jsonb
         constraints: [NOT_NULL]
         classification: SENSITIVE
@@ -40,6 +43,7 @@ entities:
         description: ProfileChangeSet typed value object 的持久化编码；领域层禁止动态 Map。
 
       - name: status
+        source: status
         type: enum
         enum_ref: ProposalStatus
         constraints: [NOT_NULL]
@@ -49,6 +53,7 @@ entities:
         ops_exposure: read_write
 
       - name: reviewedBy
+        source: reviewedBy
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -57,15 +62,17 @@ entities:
         ops_exposure: read
 
       - name: targetPersonaExpectedVersion
+        source: targetPersonaExpectedVersion
         type: int
         constraints: [NULLABLE]
-        classification: PUBLIC
+        classification: INTERNAL
         log_policy: allow
         api_exposure: drop
         ops_exposure: read
         description: apply 时调用 Persona Command Facade 的乐观锁版本。
 
       - name: version
+        source: version
         type: int
         constraints: [NOT_NULL, DEFAULT_1]
         classification: PUBLIC
@@ -75,6 +82,7 @@ entities:
         description: 乐观锁版本号
 
       - name: createdAt
+        source: createdAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -83,6 +91,7 @@ entities:
         ops_exposure: read
 
       - name: updatedAt
+        source: updatedAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -91,6 +100,7 @@ entities:
         ops_exposure: read
 
       - name: resolvedAt
+        source: resolvedAt
         type: timestamp
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -100,7 +110,7 @@ entities:
 
     indexes:
       - columns: [personaId, status]
-        condition: "status IN ('pending', 'confirmed')"
+        condition: "status IN ('pending', 'confirmed', 'applying')"
         description: 活跃提案快速查询
 
     state_machine:
@@ -109,6 +119,8 @@ entities:
         - from: pending
           to: [confirmed, rejected]
         - from: confirmed
-          to: [applied, rejected]
+          to: [applying, rejected]
+        - from: applying
+          to: [applied, expired]
       concurrency: optimistic_lock
       lock_field: version

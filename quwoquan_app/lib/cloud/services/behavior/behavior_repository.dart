@@ -4,11 +4,8 @@ import 'dart:developer' as developer;
 import 'dart:io';
 import 'dart:math' as math;
 
-import 'package:crypto/crypto.dart';
 import 'package:flutter/widgets.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:quwoquan_app/assistant/observability/logging/app_trace_context_store.dart';
-import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/context/actor_queue_partition.dart';
@@ -347,11 +344,17 @@ class BehaviorEvent {
   };
 }
 
+/// 推荐反馈唯一网络出口。Tracker 只依赖本端口，不直接依赖存储/HTTP Repository。
+abstract interface class BehaviorReporter {
+  Future<void> reportEvents({required List<BehaviorEvent> events});
+}
+
 /// Behavior Repository (三层模式: Abstract → Mock → Remote)
 ///
-/// 端侧行为上报，对接云侧 POST /v1/content/behaviors。
+/// 端侧行为上报，对接云侧 POST /content/behaviors。
 /// sessionId 通过 CloudRequestHeaders 自动注入。
-abstract class BehaviorRepository {
+abstract class BehaviorRepository implements BehaviorReporter {
+  @override
   Future<void> reportEvents({required List<BehaviorEvent> events});
 
   Future<void> clearPendingForLogout();
@@ -412,7 +415,7 @@ class MockBehaviorRepository extends BehaviorRepository {
   }
 }
 
-/// Remote 实现：对接云侧 POST /v1/content/behaviors。
+/// Remote 实现：对接云侧 POST /content/behaviors。
 const String kBehaviorPendingQueueBoxName = 'behavior_pending_queue';
 const int _maxRetries = 3;
 const int _gzipThreshold = 512;
@@ -420,26 +423,18 @@ const int _gzipThreshold = 512;
 class RemoteBehaviorRepository extends BehaviorRepository
     with WidgetsBindingObserver {
   RemoteBehaviorRepository({
-    this._eventRepository,
-    String currentUserId = '',
-    String experimentBucket = '',
     required this._httpClient,
     String? baseUrl,
     this._feedSessionIdProvider,
     required this._queuePartition,
     ActorQueueStorage? queueStorage,
   }) : _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim(),
-       _currentUserId = currentUserId.trim(),
-       _experimentBucket = experimentBucket.trim(),
        _queueStorage = queueStorage ?? ActorQueueStorage() {
     _bindLifecycle();
   }
 
   final CloudHttpClient _httpClient;
   final String _baseUrl;
-  final OpsEventRepository? _eventRepository;
-  final String _currentUserId;
-  final String _experimentBucket;
   final String Function()? _feedSessionIdProvider;
   final ActorQueuePartition _queuePartition;
   final ActorQueueStorage _queueStorage;
@@ -533,57 +528,6 @@ class RemoteBehaviorRepository extends BehaviorRepository
       await _enqueue(events);
     }
 
-    final eventRepository = _eventRepository;
-    if (eventRepository != null) {
-      final now = DateTime.now().toUtc();
-      final traceCtx = AppTraceContextStore.instance;
-      final batchTraceId =
-          'behavior:${traceCtx.sessionId}:${now.microsecondsSinceEpoch}';
-      unawaited(
-        eventRepository.reportEventBatch(
-          events: events
-              .asMap()
-              .entries
-              .map((entry) {
-                final event = entry.value;
-                return OpsEventRecordInput(
-                  eventId:
-                      'behavior:${event.contentId}:${event.action}:${now.microsecondsSinceEpoch}:${entry.key}',
-                  eventType: 'behavior',
-                  eventName: 'content_${event.action}',
-                  eventVersion: 'v1',
-                  priority: 'P1',
-                  producer: 'app.content_behavior',
-                  source: 'content_behavior',
-                  userIdHash: _hashUserId(_currentUserId),
-                  sessionId: _resolvedSessionId,
-                  traceId: batchTraceId,
-                  pageVisitId: event.pageVisitId ?? '',
-                  targetType: 'content',
-                  targetKey: event.contentId,
-                  entityType: 'post',
-                  entityId: event.contentId,
-                  experimentBucket: _experimentBucket,
-                  occurredAt: now.toIso8601String(),
-                  clientSentAt: now.toIso8601String(),
-                  payload: event.toJson(),
-                  metrics: <String, dynamic>{
-                    if (event.duration != null) 'duration': event.duration,
-                  },
-                );
-              })
-              .toList(growable: false),
-        ),
-      );
-    }
-  }
-
-  String _hashUserId(String raw) {
-    final trimmed = raw.trim();
-    if (trimmed.isEmpty || trimmed == 'anonymous') {
-      return '';
-    }
-    return sha256.convert(utf8.encode(trimmed)).toString().substring(0, 16);
   }
 
   Future<void> _flushPending() async {

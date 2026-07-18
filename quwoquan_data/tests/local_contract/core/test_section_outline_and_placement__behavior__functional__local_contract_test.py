@@ -28,6 +28,7 @@ from core.section_outline import (  # noqa: E402
     section_titles,
 )
 from content.homepage.homepage_validation import _asset_closure_issues  # noqa: E402
+from core.asset_identity import compute_post_asset_id  # noqa: E402
 
 # 都江堰式 wiki source.md 片段（含 ==/=== 多级标题与尾节）。
 _WIKI_SOURCE = """---
@@ -178,11 +179,20 @@ def test_homepage_validation_allows_text_only_and_inline_figures() -> None:
 
     with tempfile.TemporaryDirectory() as tmp:
         entity_dir = Path(tmp)
+        asset_id = compute_post_asset_id(
+            entity_name="都江堰",
+            role="cover",
+            execution_sequence=2,
+            ref="entities/x/1.download/sources/01.wiki/assets/001.jpg",
+            caption="都江堰鸟瞰实景",
+            ordinal=1,
+        )
+        file_name = f"{asset_id}.jpg"
         manifest = {
             "assets": [
                 {
-                    "assetId": "都江堰_cover_2_a1b2c3d4",
-                    "fileName": "都江堰_cover_2_a1b2c3d4.jpg",
+                    "assetId": asset_id,
+                    "fileName": file_name,
                     "role": "cover",
                     "sourceRef": "entities/x/1.download/sources/01.wiki/source.md",
                     "sourceAssetRef": "entities/x/1.download/sources/01.wiki/assets/001.jpg",
@@ -194,22 +204,22 @@ def test_homepage_validation_allows_text_only_and_inline_figures() -> None:
         }
         # 纯文字 page.md + manifest 有图 → 合法（finalize 前 Agent 草稿态）。
         (entity_dir / "assets").mkdir()
-        (entity_dir / "assets" / "都江堰_cover_2_a1b2c3d4.jpg").write_bytes(b"fake")
+        (entity_dir / "assets" / file_name).write_bytes(b"fake")
         (entity_dir / "page.md").write_text("# 标题\n\n纯文字正文。\n", encoding="utf-8")
         assert not _asset_closure_issues(entity_dir, manifest, "pure-text")
 
         inline_page = (
             "# 标题\n\n"
             ':::figure id="cover" layout="fullWidth" caption="封面"\n'
-            "asset://都江堰_cover_2_a1b2c3d4\n"
+            f"asset://{asset_id}\n"
             ":::\n"
         )
         (entity_dir / "page.md").write_text(inline_page, encoding="utf-8")
         (entity_dir / "assets").mkdir(exist_ok=True)
-        (entity_dir / "assets" / "都江堰_cover_2_a1b2c3d4.jpg").write_bytes(b"fake")
+        (entity_dir / "assets" / file_name).write_bytes(b"fake")
         assert not _asset_closure_issues(entity_dir, manifest, "inline-ok")
 
-        broken = inline_page.replace("都江堰_cover_2_a1b2c3d4", "missing_asset")
+        broken = inline_page.replace(asset_id, "missing_asset")
         (entity_dir / "page.md").write_text(broken, encoding="utf-8")
         issues = _asset_closure_issues(entity_dir, manifest, "inline-broken")
         assert any("不在 manifest" in i for i in issues)

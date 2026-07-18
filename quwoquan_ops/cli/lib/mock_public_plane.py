@@ -56,7 +56,7 @@ class MockPublicPlaneHandler(BaseHTTPRequestHandler):
                 }
             )
             return
-        if self.mode == "api" and path == "/v1/config/app":
+        if self.mode == "api" and path == "/config/app":
             self._send_json(
                 {
                     "appRuntimeEnv": self.runtime_env,
@@ -74,19 +74,22 @@ class MockPublicPlaneHandler(BaseHTTPRequestHandler):
         if self.mode == "api" and path.startswith("/legal/"):
             self._handle_legal_static(path, include_body=True)
             return
-        if self.mode == "api" and path.startswith("/v1/content/feed"):
+        if self.mode == "api" and path.startswith("/content/feed"):
             self._send_json({"items": [], "nextCursor": None, "mockBoundary": True})
             return
-        if self.mode == "api" and path.startswith("/v1/chat/contacts"):
+        if self.mode == "api" and path == "/homepages/search":
             self._send_json({"items": [], "nextCursor": None, "mockBoundary": True})
             return
-        if self.mode == "api" and path.startswith("/v1/chat/inbox"):
+        if self.mode == "api" and path.startswith("/chat/contacts"):
             self._send_json({"items": [], "nextCursor": None, "mockBoundary": True})
             return
-        if self.mode == "api" and path.startswith("/v1/chat/conversations"):
+        if self.mode == "api" and path.startswith("/chat/inbox"):
             self._send_json({"items": [], "nextCursor": None, "mockBoundary": True})
             return
-        if self._supports_ops() and path.startswith("/v1/ops/"):
+        if self.mode == "api" and path.startswith("/chat/conversations"):
+            self._send_json({"items": [], "nextCursor": None, "mockBoundary": True})
+            return
+        if self._supports_ops() and path.startswith("/ops/"):
             if self._handle_ops_get(path, query_params):
                 return
         self.send_error(404, f"{self.mode} mock route is not ready")
@@ -102,7 +105,7 @@ class MockPublicPlaneHandler(BaseHTTPRequestHandler):
         path, _query = self._split_path()
         if self.mode == "api" and self._handle_auth_post(path):
             return
-        if self.mode == "api" and path == "/v1/user/sync":
+        if self.mode == "api" and path == "/user/sync":
             self._send_json(
                 {
                     "patches": [],
@@ -113,16 +116,16 @@ class MockPublicPlaneHandler(BaseHTTPRequestHandler):
                 }
             )
             return
-        if self._supports_ops() and path.startswith("/v1/ops/"):
+        if self._supports_ops() and path.startswith("/ops/"):
             if self._handle_ops_post(path):
                 return
         self.send_error(404, f"{self.mode} mock route is not ready")
 
     def _handle_auth_post(self, path: str) -> bool:
-        if path not in {"/v1/auth/otp/send", "/v1/auth/login/phone"}:
+        if path not in {"/auth/otp/send", "/auth/login/phone"}:
             return False
         payload = self._read_json_body()
-        if path == "/v1/auth/otp/send":
+        if path == "/auth/otp/send":
             status, response, headers = self._create_otp_challenge(payload)
         else:
             status, response, headers = self._consume_otp_challenge(payload)
@@ -410,13 +413,13 @@ class MockPublicPlaneHandler(BaseHTTPRequestHandler):
         path: str,
         query_params: dict[str, list[str]],
     ) -> bool:
-        if path == "/v1/ops/events/summary":
+        if path == "/ops/events/summary":
             self._send_json(self._build_ops_event_summary(query_params))
             return True
-        if path == "/v1/ops/events/drilldown":
+        if path == "/ops/events/drilldown":
             self._send_json(self._build_ops_event_drilldown(query_params))
             return True
-        if path == "/v1/ops/visits/stats":
+        if path == "/ops/visits/stats":
             self._send_json(self._build_ops_visit_stats(query_params))
             return True
 
@@ -438,10 +441,10 @@ class MockPublicPlaneHandler(BaseHTTPRequestHandler):
 
     def _handle_ops_post(self, path: str) -> bool:
         payload = self._read_json_body()
-        if path == "/v1/ops/events":
+        if path == "/ops/events":
             self._send_json(self._record_ops_events(payload))
             return True
-        if path == "/v1/ops/visits":
+        if path == "/ops/visits":
             self._send_json(self._record_ops_visit(payload))
             return True
 
@@ -704,7 +707,7 @@ class MockPublicPlaneHandler(BaseHTTPRequestHandler):
         }
 
     def _match_experiment_path(self, path: str, suffix: str) -> str | None:
-        prefix = "/v1/ops/experiments/"
+        prefix = "/ops/experiments/"
         if not path.startswith(prefix) or not path.endswith(suffix):
             return None
         experiment_id = path[len(prefix) : -len(suffix)].strip("/")

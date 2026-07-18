@@ -15,10 +15,31 @@ func rtcDartPublicFieldName(f fieldDef) string {
 }
 
 func rtcToJsonKey(f fieldDef) string {
-	if strings.TrimSpace(f.ClientDartName) != "" {
-		return strings.TrimSpace(f.ClientDartName)
+	// Storage `_id` must never appear as a client wire key. Metadata must name the
+	// canonical business identity explicitly; codegen does not invent an alias.
+	if strings.TrimSpace(f.Source) == "_id" || strings.TrimSpace(f.Name) == "_id" {
+		if name := strings.TrimSpace(f.ClientDartName); name != "" {
+			return name
+		}
+		panic("rtc: storage _id requires client_dart_name")
+	}
+	if strings.TrimSpace(f.Source) != "" {
+		return strings.TrimSpace(f.Source)
 	}
 	return f.Name
+}
+
+func rtcIdentityDartName(fields []fieldDef) string {
+	for _, f := range fields {
+		if rtcHasNotNull(f) {
+			for _, constraint := range f.Constraints {
+				if constraint == "PK" {
+					return rtcDartPublicFieldName(f)
+				}
+			}
+		}
+	}
+	panic("rtc: CallSession requires a PK field")
 }
 
 func rtcFieldNullable(f fieldDef) bool {
@@ -123,20 +144,9 @@ func rtcDartDefaultLiteral(f fieldDef) (string, bool) {
 }
 
 func rtcFromMapReadKey(f fieldDef) string {
-	if len(f.JsonKeys) > 0 {
-		var parts []string
-		for _, k := range f.JsonKeys {
-			parts = append(parts, fmt.Sprintf("map['%s']", k))
-		}
-		s := strings.Join(parts, " ?? ")
-		if f.Type == "string" || f.Type == "ObjectId" || f.Type == "enum" {
-			if !rtcFieldNullable(f) {
-				return s + " ?? ''"
-			}
-		}
-		return s
-	}
-	return fmt.Sprintf("map['%s']", f.Name)
+	// Single-track: metadata source is the wire key; client_dart_name only names
+	// the public Dart property.
+	return fmt.Sprintf("map['%s']", rtcToJsonKey(f))
 }
 
 func rtcFromMapExpr(f fieldDef) string {
@@ -177,10 +187,8 @@ func rtcFromMapExpr(f fieldDef) string {
 		return fmt.Sprintf("      %s: %s as bool? ?? %s,\n", dart, read, fb)
 	case "datetime":
 		if rtcFieldNullable(f) {
-			// read is single-key style; coalesce keys not typical for optional datetimes
-			single := fmt.Sprintf("map['%s']", f.Name)
 			return fmt.Sprintf("      %s: %s != null\n          ? DateTime.tryParse(%s as String)\n          : null,\n",
-				dart, single, single)
+				dart, read, read)
 		}
 		if f.Name == "createdAt" || f.Name == "updatedAt" {
 			return fmt.Sprintf("      %s: DateTime.tryParse((%s as String?) ?? '') ??\n          DateTime.now(),\n", dart, read)
@@ -313,12 +321,13 @@ func rtcEmitDtoClass(
 	b.WriteString("  }\n\n")
 
 	if entityName == "CallSession" {
+		identity := rtcIdentityDartName(fields)
 		b.WriteString("  @override\n")
 		b.WriteString("  bool operator ==(Object other) =>\n")
 		b.WriteString("      identical(this, other) ||\n")
 		b.WriteString("      other is " + dtoName + " &&\n")
 		b.WriteString("          runtimeType == other.runtimeType &&\n")
-		b.WriteString("          id == other.id &&\n")
+		b.WriteString(fmt.Sprintf("          %s == other.%s &&\n", identity, identity))
 		b.WriteString("          status == other.status &&\n")
 		b.WriteString("          participantCount == other.participantCount &&\n")
 		b.WriteString("          isRecording == other.isRecording &&\n")
@@ -326,7 +335,7 @@ func rtcEmitDtoClass(
 		b.WriteString("          updatedAt == other.updatedAt;\n\n")
 		b.WriteString("  @override\n")
 		b.WriteString("  int get hashCode => Object.hash(\n")
-		b.WriteString("        id,\n")
+		b.WriteString("        " + identity + ",\n")
 		b.WriteString("        status,\n")
 		b.WriteString("        participantCount,\n")
 		b.WriteString("        isRecording,\n")
@@ -374,7 +383,8 @@ func renderRtcCallSessionDtosDartFromFields(sourcePath string, ff *fieldsFile) s
 	b.WriteString(rtcEmitDtoClass("CallParticipant", cp.Fields, "Dto",
 		"通话参与者（与 metadata `CallParticipant` 对齐，JSON 枚举值为 string）。"))
 	b.WriteString("\n")
+	identity := rtcIdentityDartName(cs.Fields)
 	b.WriteString(rtcEmitDtoClass("CallSession", cs.Fields, "Dto",
-		"通话会话（与 metadata `CallSession` 对齐；`id` 对应存储 `_id`，并兼容 wire `id`/`callId`）。"))
+		fmt.Sprintf("通话会话（与 metadata `CallSession` 对齐；`%s` 为唯一 wire 键）。", identity)))
 	return b.String()
 }

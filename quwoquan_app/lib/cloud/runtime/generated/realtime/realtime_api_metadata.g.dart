@@ -8,18 +8,19 @@ class RealtimeApiMetadata {
 
   static const String domain = 'realtime';
   static const List<String> apiPrefixes = <String>[
-    '/v1/channel',
-    '/v1/config',
-    '/v1/realtime',
+    '/channel/{channelType}',
+    '/config/realtime',
+    '/realtime/poll',
+    '/realtime/ws',
   ];
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
-    'ChannelWebhook': '/v1/channel/{channelType}/webhook',
-    'GetRealtimeConfig': '/v1/config/realtime',
+    'ChannelWebhook': '/channel/{channelType}/webhook',
+    'GetRealtimeConfig': '/config/realtime',
     'HealthCheck': '/healthz',
-    'LongPoll': '/v1/realtime/poll',
+    'LongPoll': '/realtime/poll',
     'Metrics': '/metrics',
-    'WebSocketUpgrade': '/v1/realtime/ws',
+    'WebSocketUpgrade': '/realtime/ws',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
@@ -56,17 +57,17 @@ class RealtimeApiMetadata {
   static const String metricsOperation = 'Metrics';
   static const String webSocketUpgradeOperation = 'WebSocketUpgrade';
 
-  static const String channelWebhookPathTemplate = '/v1/channel/{channelType}/webhook';
+  static const String channelWebhookPathTemplate = '/channel/{channelType}/webhook';
   static String channelWebhookPath({required String channelType}) {
     return _fillPath(channelWebhookPathTemplate, <String, String>{
       'channelType': channelType,
     });
   }
-  static const String getRealtimeConfigPath = '/v1/config/realtime';
+  static const String getRealtimeConfigPath = '/config/realtime';
   static const String healthCheckPath = '/healthz';
-  static const String longPollPath = '/v1/realtime/poll';
+  static const String longPollPath = '/realtime/poll';
   static const String metricsPath = '/metrics';
-  static const String webSocketUpgradePath = '/v1/realtime/ws';
+  static const String webSocketUpgradePath = '/realtime/ws';
 
   static String _fillPath(String template, Map<String, String> params) {
     var path = template;

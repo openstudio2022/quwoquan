@@ -14,9 +14,9 @@ class PersonaManagementSummaryWireDto {
 
   factory PersonaManagementSummaryWireDto.fromMap(Map<String, dynamic> m) {
     return PersonaManagementSummaryWireDto(
-      items: _firstNonEmptyMapList(m, <String>['items', 'subAccounts', 'personas']),
+      items: _parseMapList(m['items']),
       quota: _parseStringKeyMap(m['quota']) ?? null,
-      activeContext: _parseStringKeyMap(m['activeContext']) ?? _parseStringKeyMap(m['activePersonaContext']) ?? null,
+      activeContext: _parseStringKeyMap(m['activeContext']) ?? null,
     );
   }
 
@@ -51,14 +51,6 @@ List<Map<String, dynamic>> _parseMapList(Object? v) {
     }
   }
   return out;
-}
-
-List<Map<String, dynamic>> _firstNonEmptyMapList(Map<String, dynamic> m, List<String> keys) {
-  for (final k in keys) {
-    final parsed = _parseMapList(m[k]);
-    if (parsed.isNotEmpty) return parsed;
-  }
-  return const <Map<String, dynamic>>[];
 }
 
 

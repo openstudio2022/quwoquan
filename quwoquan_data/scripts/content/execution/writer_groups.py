@@ -12,7 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from content.post.draft_io import (
+from content.post.article.draft_io import (
     draft_article_path,
     is_placeholder,
     prompt_path,
@@ -23,7 +23,7 @@ from content.post.draft_io import (
 from core.io import write_json
 from core.paths import execution_command_root, execution_root
 
-WRITER_GROUP_PACK_SCHEMA = "quwoquan_data.execution_writer_group/1"
+WRITER_GROUP_PACK_SCHEMA = "quwoquan_data.execution_writer_group"
 
 
 def _ref_rel(execution_id: str, ref: str, path: Path) -> str:
@@ -64,7 +64,7 @@ def build_writer_group_pack(execution_id: str, seq: int, group_refs: Sequence[st
             }
         )
     return {
-        "schemaVersion": WRITER_GROUP_PACK_SCHEMA,
+        "schema": WRITER_GROUP_PACK_SCHEMA,
         "writerGroupSequence": seq,
         "refCount": len(items),
         "items": items,

@@ -28,10 +28,10 @@ extension _SearchNetworkResultsPageStateHelpers
         ),
         SizedBox(height: AppSpacing.containerMd),
         if (_isLoading)
-          _StatusMessage(
-            text: UITextConstants.searchXiaoquLoading,
-            isDark: isDark,
-            loading: true,
+          AppRequestFeedback.section(
+            loadingLabel: UITextConstants.searchXiaoquLoading,
+            showSlowHint: true,
+            slowLabel: UITextConstants.searchXiaoquLoading,
           )
         else if ((_xiaoquResult?.citations?.length ?? 0) == 0)
           _StatusMessage(
@@ -68,10 +68,10 @@ extension _SearchNetworkResultsPageStateHelpers
     final contentItems = _contentItemsForActiveTab();
     return withDegradeBanner(<Widget>[
       if (_isLoading)
-        _StatusMessage(
-          text: UITextConstants.pageLoadingA11y('${activeTab.label}结果'),
-          isDark: isDark,
-          loading: true,
+        AppRequestFeedback.page(
+          showSlowHint: _isSlow,
+          loadingLabel: UITextConstants.pageLoadingA11y('${activeTab.label}结果'),
+          slowLabel: UITextConstants.searchWaitSlow,
         )
       else if (contentItems.isEmpty)
         _StatusMessage(text: UITextConstants.searchEmptyResult, isDark: isDark)
@@ -92,10 +92,10 @@ extension _SearchNetworkResultsPageStateHelpers
   }) {
     if (_isLoading) {
       return <Widget>[
-        _StatusMessage(
-          text: UITextConstants.pageLoadingA11y('应用内结果'),
-          isDark: isDark,
-          loading: true,
+        AppRequestFeedback.page(
+          showSlowHint: _isSlow,
+          loadingLabel: UITextConstants.pageLoadingA11y('应用内结果'),
+          slowLabel: UITextConstants.searchWaitSlow,
         ),
       ];
     }
@@ -148,7 +148,11 @@ extension _SearchNetworkResultsPageStateHelpers
   }) {
     if (_isLoading) {
       return <Widget>[
-        _StatusMessage(text: '正在整理与你的交集', isDark: isDark, loading: true),
+        AppRequestFeedback.page(
+          showSlowHint: _isSlow,
+          loadingLabel: '正在整理与你的交集',
+          slowLabel: UITextConstants.searchWaitSlow,
+        ),
       ];
     }
 
@@ -362,6 +366,7 @@ extension _SearchNetworkResultsPageStateHelpers
     final token = ++_requestToken;
     final stopwatch = Stopwatch()..start();
     final trimmedQuery = _query.trim();
+    final activeTabId = _activeTabId;
     ref
         .read(pageLifecycleObservabilityProvider)
         .recordPageState(
@@ -370,9 +375,13 @@ extension _SearchNetworkResultsPageStateHelpers
           surface: _activeTabId,
           phase: 'onlineLoading',
           copyKey: 'pageLoadingA11y',
+          waitMode: _activeTabId == _SearchNetworkResultsPageState._tabXiaoqu
+              ? 'long_task'
+              : 'foreground',
         );
     _setMountedState(() {
       _isLoading = true;
+      _isSlow = false;
       _errorSemantic = null;
       _degradeSignals = const <SearchDegradeSignal>[];
       if (_activeTabId == _SearchNetworkResultsPageState._tabXiaoqu) {
@@ -385,18 +394,25 @@ extension _SearchNetworkResultsPageStateHelpers
         _relatedTerms = const <String>[];
       }
     });
+    late final int generation;
     try {
       if (_activeTabId == _SearchNetworkResultsPageState._tabXiaoqu) {
+        generation = _waitController.start(
+          mode: AppRequestWaitMode.longTask,
+          showSlowHint: false,
+        );
         final result = await ref
             .read(assistantRepositoryProvider)
             .searchXiaoquResults(query: trimmedQuery);
-        if (!mounted || token != _requestToken) {
+        if (!_isCurrentRequest(token, generation, activeTabId)) {
           return;
         }
         _setMountedState(() {
           _xiaoquResult = result;
           _isLoading = false;
+          _isSlow = false;
         });
+        _waitController.complete(generation);
         ref
             .read(pageLifecycleObservabilityProvider)
             .recordPageState(
@@ -410,160 +426,121 @@ extension _SearchNetworkResultsPageStateHelpers
         return;
       }
 
-      if (_activeTabId == _SearchNetworkResultsPageState._tabAll ||
-          _activeTabId == _SearchNetworkResultsPageState._tabIntersection) {
-        if (trimmedQuery.isEmpty) {
-          if (!mounted || token != _requestToken) {
+      final cancellation = CloudOperationCancellationSignal();
+      generation = _waitController.start(
+        mode: AppRequestWaitMode.foreground,
+        cancellation: cancellation,
+        onSlow: (_) {
+          if (!_isCurrentRequest(token, generation, activeTabId)) return;
+          _setMountedState(() => _isSlow = true);
+        },
+        onTimeout: (_) {
+          if (!mounted ||
+              token != _requestToken ||
+              _activeTabId != activeTabId) {
             return;
           }
+          final error = TimeoutException(
+            'Canonical search exceeded the 6 second foreground budget.',
+          );
           _setMountedState(() {
+            _errorSemantic = _searchFailureSemantic(error);
             _isLoading = false;
+            _isSlow = false;
           });
+        },
+        observer: (phase, durationMilliseconds) {
+          if (phase == 'complete') return;
           ref
               .read(pageLifecycleObservabilityProvider)
               .recordPageState(
                 pageName: 'search_network_results',
                 route: AppRoutePaths.globalSearch,
-                surface: _activeTabId,
-                phase: 'emptySuccess',
-                durationMs: stopwatch.elapsedMilliseconds,
-                itemCount: 0,
+                surface: activeTabId,
+                phase: phase,
+                durationMs: durationMilliseconds,
+                waitMode: 'foreground',
               );
-          return;
-        }
-        if (_activeTabId == _SearchNetworkResultsPageState._tabAll) {
-          final locationResponse = await _guardedSearchResponse(
-            _loadLocationResponse(trimmedQuery),
-          );
-          final contentResponse = await _guardedSearchResponse(
-            _loadContentResponse(trimmedQuery),
-          );
-          if (!mounted || token != _requestToken) {
-            return;
-          }
-          _setMountedState(() {
-            _locationResults = _locationHitsFromResponse(locationResponse);
-            _contentResults = _contentItemsFromResponse(contentResponse);
-            _relatedTerms = contentResponse.relatedTerms;
-            _degradeSignals = _mergeDegradeSignals(<SearchResponse>[
-              locationResponse,
-              contentResponse,
-            ]);
-            _isLoading = false;
-          });
-          ref
-              .read(pageLifecycleObservabilityProvider)
-              .recordPageState(
-                pageName: 'search_network_results',
-                route: AppRoutePaths.globalSearch,
-                surface: _activeTabId,
-                phase: _contentResults.isEmpty && _locationResults.isEmpty
-                    ? 'emptySuccess'
-                    : 'onlineSuccess',
-                durationMs: stopwatch.elapsedMilliseconds,
-                itemCount: _contentResults.length + _locationResults.length,
-              );
-          return;
-        }
-        final groupResponse = await _guardedSearchResponse(
-          _loadGroupResponse(trimmedQuery),
-        );
-        final locationResponse = await _guardedSearchResponse(
-          _loadLocationResponse(trimmedQuery),
-        );
-        final contentResponse = await _guardedSearchResponse(
-          _loadContentResponse(trimmedQuery),
-        );
-        if (!mounted || token != _requestToken) {
-          return;
-        }
+        },
+      );
+      if (trimmedQuery.isEmpty) {
+        if (!_isCurrentRequest(token, generation, activeTabId)) return;
         _setMountedState(() {
-          _groupResults = _groupHitsFromResponse(groupResponse);
-          _locationResults = _locationHitsFromResponse(locationResponse);
-          _contentResults = _contentItemsFromResponse(contentResponse);
-          _degradeSignals = _mergeDegradeSignals(<SearchResponse>[
-            groupResponse,
-            locationResponse,
-            contentResponse,
-          ]);
           _isLoading = false;
+          _isSlow = false;
         });
+        _waitController.complete(generation);
         ref
             .read(pageLifecycleObservabilityProvider)
             .recordPageState(
               pageName: 'search_network_results',
               route: AppRoutePaths.globalSearch,
-              surface: _activeTabId,
-              phase:
-                  _contentResults.isEmpty &&
-                      _locationResults.isEmpty &&
-                      _groupResults.isEmpty
-                  ? 'emptySuccess'
-                  : 'onlineSuccess',
+              surface: activeTabId,
+              phase: 'emptySuccess',
               durationMs: stopwatch.elapsedMilliseconds,
-              itemCount:
-                  _contentResults.length +
-                  _locationResults.length +
-                  _groupResults.length,
+              itemCount: 0,
+              waitMode: 'foreground',
             );
         return;
       }
 
-      final response = trimmedQuery.isEmpty
-          ? null
-          : await _guardedSearchResponse(_loadContentResponse(trimmedQuery));
-      final items = response == null
-          ? const <PostSearchItemView>[]
-          : _contentItemsFromResponse(response);
-      if (!mounted || token != _requestToken) {
+      // 正式结果页只调用 canonical POST /search 一次；云侧负责跨域 fan-out。
+      final response = await ref
+          .read(searchRepositoryProvider)
+          .search(
+            SearchRequest(
+              query: trimmedQuery,
+              mode: SearchMode.result,
+              objectTypes: _canonicalObjectTypes(activeTabId),
+              contentTypes: _canonicalContentTypes(activeTabId),
+              limit: 12,
+            ),
+            cancellation: cancellation,
+            deadlineAt: DateTime.now().add(
+              AppRequestWaitTimings.foregroundReadDeadline,
+            ),
+          );
+      if (!_isCurrentRequest(token, generation, activeTabId)) {
         return;
       }
       _setMountedState(() {
-        _contentResults = items;
-        _relatedTerms = response?.relatedTerms ?? const <String>[];
-        _degradeSignals =
-            response?.degradeSignals ?? const <SearchDegradeSignal>[];
+        _groupResults = _groupHitsFromResponse(response);
+        _locationResults = _locationHitsFromResponse(response);
+        _contentResults = _contentItemsFromResponse(response);
+        _relatedTerms = response.relatedTerms;
+        _degradeSignals = response.degradeSignals;
         _isLoading = false;
+        _isSlow = false;
       });
+      _waitController.complete(generation);
+      final itemCount =
+          _contentResults.length +
+          _locationResults.length +
+          _groupResults.length;
       ref
           .read(pageLifecycleObservabilityProvider)
           .recordPageState(
             pageName: 'search_network_results',
             route: AppRoutePaths.globalSearch,
-            surface: _activeTabId,
-            phase: items.isEmpty ? 'emptySuccess' : 'onlineSuccess',
+            surface: activeTabId,
+            phase: response.degradeSignals.isNotEmpty
+                ? 'partial'
+                : (itemCount == 0 ? 'emptySuccess' : 'onlineSuccess'),
             durationMs: stopwatch.elapsedMilliseconds,
-            itemCount: items.length,
+            itemCount: itemCount,
+            waitMode: 'foreground',
           );
     } catch (error) {
-      if (!mounted || token != _requestToken) {
+      if (!mounted || token != _requestToken || _activeTabId != activeTabId) {
         return;
       }
-      final resolved = runtimeErrorSemantic(
-        context,
-        error: error,
-        category: UiErrorCategory.pageLoad,
-        scope: UiErrorScope.page,
-      );
+      if (!_waitController.isCurrent(generation)) return;
       _setMountedState(() {
-        _errorSemantic = UiErrorSemantic(
-          category: resolved.category,
-          scope: resolved.scope,
-          title: UITextConstants.searchUnavailableTitle,
-          message: UITextConstants.searchUnavailableMessage,
-          secondaryMessage: resolved.secondaryMessage,
-          primaryAction: resolved.primaryAction,
-          secondaryAction: resolved.secondaryAction,
-          dismissible: resolved.dismissible,
-          sourceCode: resolved.sourceCode,
-          failureKind: resolved.failureKind,
-          copyKey: 'searchUnavailableTitle',
-          recoveryAction: resolved.recoveryAction,
-          presentation: resolved.presentation,
-          tone: resolved.tone,
-        );
+        _errorSemantic = _searchFailureSemantic(error);
         _isLoading = false;
+        _isSlow = false;
       });
+      _waitController.complete(generation);
       ref
           .read(pageLifecycleObservabilityProvider)
           .recordPageState(
@@ -574,8 +551,75 @@ extension _SearchNetworkResultsPageStateHelpers
             copyKey: 'searchUnavailableTitle',
             error: error,
             durationMs: stopwatch.elapsedMilliseconds,
+            waitMode: activeTabId == _SearchNetworkResultsPageState._tabXiaoqu
+                ? 'long_task'
+                : 'foreground',
           );
     }
+  }
+
+  bool _isCurrentRequest(int token, int generation, String activeTabId) {
+    return mounted &&
+        token == _requestToken &&
+        _activeTabId == activeTabId &&
+        _waitController.isCurrent(generation);
+  }
+
+  Set<SearchObjectType> _canonicalObjectTypes(String activeTabId) {
+    if (activeTabId == _SearchNetworkResultsPageState._tabIntersection) {
+      return const <SearchObjectType>{
+        SearchObjectType.contentPost,
+        SearchObjectType.entityHomepage,
+        SearchObjectType.locationPlace,
+        SearchObjectType.circleGroup,
+        SearchObjectType.circleCircle,
+      };
+    }
+    if (activeTabId == _SearchNetworkResultsPageState._tabAll) {
+      return const <SearchObjectType>{
+        SearchObjectType.contentPost,
+        SearchObjectType.entityHomepage,
+        SearchObjectType.locationPlace,
+      };
+    }
+    return const <SearchObjectType>{SearchObjectType.contentPost};
+  }
+
+  Set<SearchContentTypeFilter> _canonicalContentTypes(String activeTabId) {
+    return switch (activeTabId) {
+      _SearchNetworkResultsPageState._tabVideo =>
+        const <SearchContentTypeFilter>{SearchContentTypeFilter.video},
+      _SearchNetworkResultsPageState._tabImage =>
+        const <SearchContentTypeFilter>{SearchContentTypeFilter.image},
+      _SearchNetworkResultsPageState._tabArticle =>
+        const <SearchContentTypeFilter>{SearchContentTypeFilter.article},
+      _ => widget.launchContext.searchObjectSelection.normalized().contentTypes,
+    };
+  }
+
+  UiErrorSemantic _searchFailureSemantic(Object error) {
+    final resolved = runtimeErrorSemantic(
+      context,
+      error: error,
+      category: UiErrorCategory.pageLoad,
+      scope: UiErrorScope.page,
+    );
+    return UiErrorSemantic(
+      category: resolved.category,
+      scope: resolved.scope,
+      title: UITextConstants.searchUnavailableTitle,
+      message: UITextConstants.searchUnavailableMessage,
+      secondaryMessage: resolved.secondaryMessage,
+      primaryAction: resolved.primaryAction,
+      secondaryAction: resolved.secondaryAction,
+      dismissible: resolved.dismissible,
+      sourceCode: resolved.sourceCode,
+      failureKind: resolved.failureKind,
+      copyKey: 'searchUnavailableTitle',
+      recoveryAction: resolved.recoveryAction,
+      presentation: resolved.presentation,
+      tone: resolved.tone,
+    );
   }
 
   List<PostSearchItemView> _contentItemsFromResponse(SearchResponse response) {

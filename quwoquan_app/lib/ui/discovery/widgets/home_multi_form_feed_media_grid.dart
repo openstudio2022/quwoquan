@@ -407,8 +407,20 @@ class _HomeFeedVideoCard extends ConsumerWidget {
       isDark,
       ColorType.surfaceMuted,
     );
-    final videoUrl = dto.mediaVideoUrl.trim();
-    final videoUrlCandidates = resolveContentVideoUrlCandidates(videoUrl);
+    final resolver = MediaDeliveryResolver.fromRuntimeConfig();
+    final videoReference = resolver.tryResolve(
+      dto.mediaVideoUrl,
+      kind: MediaDeliveryKind.video,
+      assetId: dto.id,
+    );
+    final coverRaw = dto.mediaVideoCoverUrl.isNotEmpty
+        ? dto.mediaVideoCoverUrl
+        : dto.primaryVisualUrl;
+    final coverReference = resolver.tryResolve(
+      coverRaw,
+      kind: MediaDeliveryKind.image,
+      assetId: dto.id,
+    );
     return GestureDetector(
       onTap: onTap,
       child: ClipRRect(
@@ -419,17 +431,18 @@ class _HomeFeedVideoCard extends ConsumerWidget {
           fit: StackFit.expand,
           children: [
             DecoratedBox(decoration: BoxDecoration(color: surfaceMuted)),
-            if (videoUrlCandidates.isNotEmpty)
+            if (videoReference != null)
               VideoPlayerWidget(
                 key: ValueKey<String>('home-video-player-${dto.id}'),
-                videoUrl: videoUrl,
-                videoUrlCandidates: videoUrlCandidates,
-                thumbnailUrl: dto.mediaVideoCoverUrl.isNotEmpty
-                    ? dto.mediaVideoCoverUrl
-                    : dto.primaryVisualUrl,
+                deliveryReference: videoReference,
+                thumbnailReference: coverReference,
                 initialize: initialize,
                 autoPlay: autoPlay,
                 showControls: false,
+                overlayMode: VideoPlaybackOverlayMode.inlineFeed,
+                verifiedDuration: dto.durationMs == null
+                    ? null
+                    : Duration(milliseconds: dto.durationMs!),
                 aspectRatio: _mediaAspectRatio(dto),
                 onTap: onTap,
                 onPlaybackStarted: (startupLatency, candidateIndex) {
@@ -439,14 +452,19 @@ class _HomeFeedVideoCard extends ConsumerWidget {
                         contentId: dto.id,
                         startupMs: startupLatency.inMilliseconds,
                         candidateIndex: candidateIndex,
+                        autoPlay: autoPlay,
                       );
                 },
-                onPlaybackFailed: (candidatesTried) {
+                onPlaybackFailed: (failure) {
                   ref
                       .read(feedPerformanceObservabilityProvider)
                       .recordVideoPlaybackFailed(
                         contentId: dto.id,
-                        candidatesTried: candidatesTried,
+                        candidatesTried: failure.candidatesTried,
+                        failureKind: failure.kind.name,
+                        userScene: failure.userScene.name,
+                        retryable: failure.isRetryable,
+                        autoPlay: autoPlay,
                       );
                 },
               )
@@ -483,46 +501,10 @@ class _HomeFeedVideoCard extends ConsumerWidget {
                   ),
                 ),
               ),
-            // 时长
-            if (dto.durationMs != null)
-              Positioned(
-                right: AppSpacing.intraGroupMd,
-                bottom: AppSpacing.intraGroupSm,
-                child: Container(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: AppSpacing.intraGroupSm,
-                    vertical: AppSpacing.xs / 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.overlayStrong,
-                    borderRadius: BorderRadius.circular(
-                      AppSpacing.smallBorderRadius,
-                    ),
-                  ),
-                  child: Text(
-                    _formatDuration(dto.durationMs!),
-                    style: TextStyle(
-                      fontSize: AppTypography.xs,
-                      color: AppColorsFunctional.getColor(
-                        isDark,
-                        ColorType.mediaThumbnailOverlayForeground,
-                      ),
-                      fontWeight: AppTypography.semiBold,
-                    ),
-                  ),
-                ),
-              ),
           ],
         ),
       ),
     );
-  }
-
-  static String _formatDuration(int ms) {
-    final s = ms ~/ 1000;
-    final m = s ~/ 60;
-    final sec = s % 60;
-    return '${m.toString().padLeft(2, '0')}:${sec.toString().padLeft(2, '0')}';
   }
 }
 

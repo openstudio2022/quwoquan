@@ -35,7 +35,7 @@ type chatFixtureSeedSet struct {
 }
 
 type chatFixtureConversation struct {
-	ID                     string   `json:"_id"`
+	ID                     string   `json:"id"`
 	Type                   string   `json:"type"`
 	Title                  string   `json:"title"`
 	AvatarURL              string   `json:"avatarUrl"`
@@ -78,7 +78,7 @@ type chatFixtureMember struct {
 }
 
 type chatFixtureConversationUserState struct {
-	ID             string `json:"_id"`
+	ID             string `json:"id"`
 	UserID         string `json:"userId"`
 	ConversationID string `json:"conversationId"`
 	ReadSeq        int64  `json:"readSeq"`
@@ -150,10 +150,10 @@ func seedChatContractFixture(t *testing.T, seedRef string) contractSeedEvidence 
 		TargetStore:   "mongodb:chat_test",
 		InsertedCount: inserted,
 		VerifiedEndpoints: []string{
-			"/v1/chat/inbox",
-			"/v1/chat/conversations/fixture_conv_direct",
-			"/v1/chat/conversations/fixture_conv_direct/messages",
-			"/v1/chat/conversations/fixture_conv_direct/members",
+			"/chat/inbox",
+			"/chat/conversations/fixture_conv_direct",
+			"/chat/conversations/fixture_conv_direct/messages",
+			"/chat/conversations/fixture_conv_direct/members",
 		},
 	}
 }

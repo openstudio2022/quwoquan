@@ -50,7 +50,7 @@ content-service 已完成契约基础层（`content-service-contract-foundation`
    - 媒体上传：`initMediaUpload`、`completeMediaUpload`、`abortMediaUpload`、`getMediaAsset`
    - 视频封面：`selectAutoVideoCover`、`selectManualVideoCover`
    - 文章摘要：`generateArticleSummary`
-   - 推荐：经 `listDiscoveryFeedPage`（`GET /v1/content/feed?sort=recommend`）唯一主链路，已退役 `getRecommendation` 旁路
+   - 推荐：经 `listDiscoveryFeedPage`（`GET /content/feed?sort=recommend`）唯一主链路，已退役 `getRecommendation` 旁路
    - 用户创作列表：`listUserPosts`
 8. **FeedItemDto 兼容层清理**：移除 `listDiscoveryFeedPageCurrent`，所有调用方迁移到 `PostBaseDto` 子类。
 

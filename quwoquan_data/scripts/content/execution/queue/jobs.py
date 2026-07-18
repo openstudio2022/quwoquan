@@ -84,7 +84,7 @@ def enqueue_ref_job(
         else None
     )
     payload = {
-        "schemaVersion": OBJECT_JOB_SCHEMA,
+        "schema": OBJECT_JOB_SCHEMA,
         "jobId": job_id,
         "executionId": execution_id,
         "ref": ref,

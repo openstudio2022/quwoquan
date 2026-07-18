@@ -7,7 +7,7 @@ import 'package:quwoquan_app/cloud/services/content/mock/content_mock_data.dart'
 ///
 /// 三维度覆盖：
 ///   常规契约  — 正常输入 → 正确输出（字段解析、计算属性、类型分发）
-///   兼容性契约 — alias 字段/旧字段名仍正确解析；round-trip 稳定
+///   单轨契约 — 拒绝旧字段/alias；round-trip 只输出 canonical 字段
 ///   异常/边界契约 — 缺字段/null 安全、全字段缺失不崩溃
 void main() {
   // ──────────────────────────────────────────────────────────────────
@@ -17,13 +17,13 @@ void main() {
     group('PhotoPostDto', () {
       test('fromMap parses canonical photo data including width/height', () {
         const raw = <String, dynamic>{
-          'postId': 'p1',
-          'contentType': 'image',
+          'id': 'p1',
+          'type': 'image',
           'authorId': 'auth1',
-          'authorNickname': '摄影师',
-          'authorAvatarUrl': 'https://example.com/avatar.jpg',
+          'displayName': '摄影师',
+          'avatarUrl': 'https://example.com/avatar.jpg',
           'coverUrl': 'https://example.com/cover.jpg',
-          'mediaUrls': [
+          'imageUrls': [
             'https://example.com/img1.jpg',
             'https://example.com/img2.jpg',
           ],
@@ -51,11 +51,11 @@ void main() {
 
       test('aspectRatio computed from width/height', () {
         const raw = <String, dynamic>{
-          'postId': 'p2',
-          'contentType': 'image',
+          'id': 'p2',
+          'type': 'image',
           'authorId': 'a',
           'displayName': 'A',
-          'authorAvatarUrl': '',
+          'avatarUrl': '',
           'coverUrl': '',
           'width': 1920,
           'height': 1080,
@@ -95,11 +95,11 @@ void main() {
     group('VideoPostDto', () {
       test('fromMap parses canonical video data including width/height', () {
         const raw = <String, dynamic>{
-          'postId': 'v1',
-          'contentType': 'video',
+          'id': 'v1',
+          'type': 'video',
           'authorId': 'auth2',
-          'authorNickname': '视频创作者',
-          'authorAvatarUrl': 'https://example.com/avatar2.jpg',
+          'displayName': '视频创作者',
+          'avatarUrl': 'https://example.com/avatar2.jpg',
           'videoUrl': 'https://example.com/video.mp4',
           'thumbnailUrl': 'https://example.com/thumb.jpg',
           'width': 1080,
@@ -125,11 +125,11 @@ void main() {
 
       test('aspectRatio for portrait video is less than 1', () {
         const raw = <String, dynamic>{
-          'postId': 'v2',
-          'contentType': 'video',
+          'id': 'v2',
+          'type': 'video',
           'authorId': 'a',
           'displayName': 'A',
-          'authorAvatarUrl': '',
+          'avatarUrl': '',
           'videoUrl': '',
           'thumbnailUrl': '',
           'width': 1080,
@@ -163,11 +163,11 @@ void main() {
     group('ArticlePostDto', () {
       test('fromMap parses canonical article data', () {
         const raw = <String, dynamic>{
-          'postId': 'art1',
-          'contentType': 'article',
+          'id': 'art1',
+          'type': 'article',
           'authorId': 'writer',
           'displayName': 'Tech Writer',
-          'authorAvatarUrl': 'https://example.com/avatar3.jpg',
+          'avatarUrl': 'https://example.com/avatar3.jpg',
           'title': '2026年AI趋势',
           'body': '文章摘要内容',
           'coverUrl': 'https://example.com/cover3.jpg',
@@ -188,11 +188,11 @@ void main() {
 
       test('fromMap parses article presentation fields', () {
         const raw = <String, dynamic>{
-          'postId': 'art_doc',
-          'contentType': 'article',
+          'id': 'art_doc',
+          'type': 'article',
           'authorId': 'writer',
           'displayName': 'Tech Writer',
-          'authorAvatarUrl': 'https://example.com/avatar3.jpg',
+          'avatarUrl': 'https://example.com/avatar3.jpg',
           'title': '连续文档标题',
           'body': '文章摘要内容',
           'articleTemplate': 'journal',
@@ -284,11 +284,11 @@ void main() {
     group('MicroPostDto', () {
       test('fromMap parses text-only moment', () {
         const raw = <String, dynamic>{
-          'postId': 'm1',
-          'contentType': 'micro',
+          'id': 'm1',
+          'type': 'micro',
           'authorId': 'user1',
           'displayName': '用户A',
-          'authorAvatarUrl': '',
+          'avatarUrl': '',
           'body': '一条微趣文字',
           'publishedAt': '2026-01-14T10:00:00Z',
         };
@@ -306,13 +306,13 @@ void main() {
 
       test('fromMap parses image moment', () {
         const raw = <String, dynamic>{
-          'postId': 'm2',
-          'contentType': 'micro',
+          'id': 'm2',
+          'type': 'micro',
           'authorId': 'user2',
           'displayName': '用户B',
-          'authorAvatarUrl': '',
+          'avatarUrl': '',
           'body': '图文微趣',
-          'mediaUrls': [
+          'imageUrls': [
             'https://example.com/img1.jpg',
             'https://example.com/img2.jpg',
           ],
@@ -327,11 +327,11 @@ void main() {
 
       test('fromMap parses video moment', () {
         const raw = <String, dynamic>{
-          'postId': 'm3',
-          'contentType': 'micro',
+          'id': 'm3',
+          'type': 'micro',
           'authorId': 'user3',
           'displayName': '用户C',
-          'authorAvatarUrl': '',
+          'avatarUrl': '',
           'body': '视频微趣',
           'videoUrl': 'https://example.com/video.mp4',
           'durationMs': 15000,
@@ -348,8 +348,8 @@ void main() {
     group('PostBaseDto polymorphism & postBaseDtoFromMap dispatch', () {
       test('dispatches image contentType to PhotoPostDto', () {
         final dto = postBaseDtoFromMap({
-          'postId': 'x',
-          'contentType': 'image',
+          'id': 'x',
+          'type': 'image',
           'publishedAt': '2025-01-01T00:00:00Z',
         });
         expect(dto, isA<PhotoPostDto>());
@@ -357,8 +357,8 @@ void main() {
 
       test('dispatches video contentType to VideoPostDto', () {
         final dto = postBaseDtoFromMap({
-          'postId': 'x',
-          'contentType': 'video',
+          'id': 'x',
+          'type': 'video',
           'videoUrl': '',
           'thumbnailUrl': '',
           'publishedAt': '2025-01-01T00:00:00Z',
@@ -368,8 +368,8 @@ void main() {
 
       test('dispatches article contentType to ArticlePostDto', () {
         final dto = postBaseDtoFromMap({
-          'postId': 'x',
-          'contentType': 'article',
+          'id': 'x',
+          'type': 'article',
           'publishedAt': '2025-01-01T00:00:00Z',
         });
         expect(dto, isA<ArticlePostDto>());
@@ -377,8 +377,8 @@ void main() {
 
       test('dispatches micro contentType to MicroPostDto', () {
         final dto = postBaseDtoFromMap({
-          'postId': 'x',
-          'contentType': 'micro',
+          'id': 'x',
+          'type': 'micro',
           'publishedAt': '2025-01-01T00:00:00Z',
         });
         expect(dto, isA<MicroPostDto>());
@@ -433,36 +433,33 @@ void main() {
   });
 
   // ──────────────────────────────────────────────────────────────────
-  // 兼容性契约：旧字段名/alias 仍正确解析；round-trip 稳定
+  // 单轨契约：拒旧 alias 键；round-trip 只认 canonical
   // ──────────────────────────────────────────────────────────────────
-  group('PostDto — 兼容性契约', () {
-    test(
-      'PhotoPostDto: alias imageWidth/imageHeight alternate field names',
-      () {
-        const raw = <String, dynamic>{
-          'postId': 'p4',
-          'contentType': 'image',
-          'authorId': 'a',
-          'displayName': 'A',
-          'authorAvatarUrl': '',
-          'coverUrl': '',
-          'imageWidth': 800,
-          'imageHeight': 600,
-          'publishedAt': '2025-01-01T00:00:00Z',
-        };
-        final dto = PhotoPostDto.fromMap(raw);
-        expect(dto.width, equals(800));
-        expect(dto.height, equals(600));
-      },
-    );
+  group('PostDto — 单轨契约', () {
+    test('PhotoPostDto: rejects imageWidth/imageHeight alias keys', () {
+      const raw = <String, dynamic>{
+        'id': 'p4',
+        'type': 'image',
+        'authorId': 'a',
+        'displayName': 'A',
+        'avatarUrl': '',
+        'coverUrl': '',
+        'imageWidth': 800,
+        'imageHeight': 600,
+        'publishedAt': '2025-01-01T00:00:00Z',
+      };
+      final dto = PhotoPostDto.fromMap(raw);
+      expect(dto.width, isNull);
+      expect(dto.height, isNull);
+    });
 
     test('PhotoPostDto: toMap round-trip preserves width/height', () {
       const raw = <String, dynamic>{
-        'postId': 'p5',
-        'contentType': 'image',
+        'id': 'p5',
+        'type': 'image',
         'authorId': 'a',
         'displayName': 'A',
-        'authorAvatarUrl': '',
+        'avatarUrl': '',
         'coverUrl': '',
         'width': 1080,
         'height': 720,
@@ -476,11 +473,11 @@ void main() {
 
     test('PhotoPostDto: copyWith updates width/height while preserving id', () {
       const raw = <String, dynamic>{
-        'postId': 'p6',
-        'contentType': 'image',
+        'id': 'p6',
+        'type': 'image',
         'authorId': 'a',
         'displayName': 'A',
-        'authorAvatarUrl': '',
+        'avatarUrl': '',
         'coverUrl': '',
         'width': 800,
         'height': 600,
@@ -493,35 +490,37 @@ void main() {
       expect(updated.id, equals(original.id));
     });
 
+    test('VideoPostDto: rejects videoWidth/videoHeight alias keys', () {
+      const raw = <String, dynamic>{
+        'id': 'v3',
+        'type': 'video',
+        'authorId': 'a',
+        'displayName': 'A',
+        'avatarUrl': '',
+        'videoUrl': '',
+        'thumbnailUrl': '',
+        'videoWidth': 1920,
+        'videoHeight': 1080,
+        'publishedAt': '2026-01-01T00:00:00Z',
+      };
+      final dto = VideoPostDto.fromMap(raw);
+      expect(dto.width, isNull);
+      expect(dto.height, isNull);
+    });
+
     test(
-      'VideoPostDto: alias videoWidth/videoHeight alternate field names',
+      'PostBaseDto: rejects photo contentType alias (canonical is image)',
       () {
-        const raw = <String, dynamic>{
-          'postId': 'v3',
-          'contentType': 'video',
-          'authorId': 'a',
-          'displayName': 'A',
-          'authorAvatarUrl': '',
-          'videoUrl': '',
-          'thumbnailUrl': '',
-          'videoWidth': 1920,
-          'videoHeight': 1080,
-          'publishedAt': '2026-01-01T00:00:00Z',
-        };
-        final dto = VideoPostDto.fromMap(raw);
-        expect(dto.width, equals(1920));
-        expect(dto.height, equals(1080));
+        expect(
+          () => postBaseDtoFromMap({
+            'id': 'x',
+            'type': 'photo',
+            'publishedAt': '2025-01-01T00:00:00Z',
+          }),
+          throwsA(isA<ArgumentError>()),
+        );
       },
     );
-
-    test('PostBaseDto: dispatches photo contentType alias to PhotoPostDto', () {
-      final dto = postBaseDtoFromMap({
-        'postId': 'x',
-        'contentType': 'photo',
-        'publishedAt': '2025-01-01T00:00:00Z',
-      });
-      expect(dto, isA<PhotoPostDto>());
-    });
   });
 
   // ──────────────────────────────────────────────────────────────────
@@ -530,11 +529,11 @@ void main() {
   group('PostDto — 异常/边界契约', () {
     test('PhotoPostDto: aspectRatio is null when width/height missing', () {
       const raw = <String, dynamic>{
-        'postId': 'p3',
-        'contentType': 'image',
+        'id': 'p3',
+        'type': 'image',
         'authorId': 'a',
         'displayName': 'A',
-        'authorAvatarUrl': '',
+        'avatarUrl': '',
         'coverUrl': '',
         'publishedAt': '2025-01-01T00:00:00Z',
       };
@@ -569,11 +568,11 @@ void main() {
       'MicroPostDto: no images or video → hasImages and hasVideo are false',
       () {
         const raw = <String, dynamic>{
-          'postId': 'mx',
-          'contentType': 'micro',
+          'id': 'mx',
+          'type': 'micro',
           'authorId': 'u',
           'displayName': 'U',
-          'authorAvatarUrl': '',
+          'avatarUrl': '',
           'body': '纯文字',
           'publishedAt': '2026-01-01T00:00:00Z',
         };
@@ -585,14 +584,14 @@ void main() {
       },
     );
 
-    test('postBaseDtoFromMap: unknown contentType falls back gracefully', () {
+    test('postBaseDtoFromMap: unknown contentType is rejected explicitly', () {
       expect(
         () => postBaseDtoFromMap({
-          'postId': 'x',
-          'contentType': 'unknown_type',
+          'id': 'x',
+          'type': 'unknown_type',
           'publishedAt': '2025-01-01T00:00:00Z',
         }),
-        returnsNormally,
+        throwsArgumentError,
       );
     });
   });

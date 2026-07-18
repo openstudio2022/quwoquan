@@ -12,6 +12,7 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 from core.release_layout import payload_digest
+from core.source_digest import current_source_digest
 from content.release.canonical.baseline_release import build_empty_baseline_release
 from verify import verify_release_lifecycle as lifecycle
 
@@ -33,18 +34,19 @@ def _fixture(tmp_path: Path) -> Path:
     _write_json(
         release / "payload/release.json",
         {
-            "schemaVersion": "quwoquan_data.release/3",
+            "schema": "quwoquan_data.release",
             "releaseId": RELEASE_ID,
             "releaseKind": "content",
             "canonicalMerkle": "sha256:" + "a" * 64,
             "executionIds": EXECUTION_IDS,
             "rolloutMilestone": "canary",
+            "sourceDigest": current_source_digest().to_document(),
         },
     )
     _write_json(
         release / "payload/desired_state.json",
         {
-            "schemaVersion": "quwoquan_data.release_desired_state/1",
+            "schema": "quwoquan_data.release_desired_state",
             "releaseId": RELEASE_ID,
             "desiredRefs": {
                 "creators": [],
@@ -57,14 +59,17 @@ def _fixture(tmp_path: Path) -> Path:
     _write_json(
         release / "attestations/aggregate.json",
         {
-            "schemaVersion": "quwoquan_data.aggregate_release_attestation/2",
+            "schema": "quwoquan_data.aggregate_release_attestation",
             "releaseId": RELEASE_ID,
             "releaseKind": "content",
             "executionIds": EXECUTION_IDS,
             "rolloutMilestone": "canary",
             "entityCount": 1,
+            "postCount": 0,
+            "creatorCount": 0,
             "tagCount": 1,
             "canonicalMerkle": "sha256:" + "a" * 64,
+            "sourceDigest": current_source_digest().to_document(),
             "payloadSha256": payload_digest(release),
             "recordedAt": "2026-07-15T00:00:00Z",
         },

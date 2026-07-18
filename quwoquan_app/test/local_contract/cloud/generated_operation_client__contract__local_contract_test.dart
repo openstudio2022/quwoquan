@@ -241,102 +241,69 @@ void main() {
     expect(result.totalCount, 8);
   });
 
-  test(
-    'generated CreatePost encodes typed command and decodes result',
-    () async {
-      final executor = _RecordingExecutor(
-        response: <String, Object?>{
-          'postId': 'post-created',
-          'contentType': 'article',
-          'contentIdentity': 'work',
-          'title': '对象闭环',
-        },
-      );
-      final client = GeneratedCloudOperationClient(executor);
-
-      final result = await client.contentPostCreatePost(
-        CreateContentPostCommand(
-          contentType: ContentPostType.article,
-          contentIdentity: ContentPostIdentity.work,
-          title: '对象闭环',
-          articleMarkdown: '# 对象闭环',
-          articleAssetManifest:
-              ContentPostStructuredObject(<String, ContentPostStructuredValue>{
-                'schemaVersion': const ContentPostStructuredNumber(1),
-                'assets': ContentPostStructuredArray(
-                  const <ContentPostStructuredValue>[],
-                ),
-              }),
-          visibility: ContentPostVisibility.public,
-        ),
-        context: const CloudOperationInvocationContext(
-          surfaceId: 'createWorkspace',
-          clientPageId: 'content.post.create',
-          actor: CloudOperationActorContext(personaId: 'persona-1'),
-          idempotencyKey: 'create-post-1',
-        ),
-      );
-
-      expect(
-        executor.operation?.canonicalOperationId,
-        AppCloudOperationIds.contentPostCreatePost,
-      );
-      expect(executor.body, <String, Object?>{
-        'contentType': 'article',
-        'contentIdentity': 'work',
-        'title': '对象闭环',
-        'articleMarkdown': '# 对象闭环',
-        'articleAssetManifest': <String, Object?>{
-          'schemaVersion': 1,
-          'assets': <Object?>[],
-        },
-        'visibility': 'public',
-      });
-      expect(result.post.postId, 'post-created');
-    },
-  );
-
-  test(
-    'generated PublishPost owns path/body without raw request parts',
-    () async {
-      final executor = _RecordingExecutor(
-        response: <String, Object?>{
-          'postId': 'post-created',
-          'contentType': 'article',
-          'contentIdentity': 'work',
-          'publishedAt': '2026-07-13T10:00:00Z',
-        },
-      );
-      final client = GeneratedCloudOperationClient(executor);
-
-      final result = await client.contentPostPublishPost(
-        PublishContentPostCommand(
-          postId: 'post-created',
-          visibility: ContentPostVisibility.public,
-          assistantUsePolicy: ContentPostAssistantUsePolicy.inherit,
-        ),
-        context: const CloudOperationInvocationContext(
-          surfaceId: 'createWorkspace',
-          clientPageId: 'content.post.publish',
-          actor: CloudOperationActorContext(personaId: 'persona-1'),
-          idempotencyKey: 'publish-post-1',
-        ),
-      );
-
-      expect(
-        executor.operation?.canonicalOperationId,
-        AppCloudOperationIds.contentPostPublishPost,
-      );
-      expect(executor.pathParameters, <String, String>{
+  test('generated SubmitPostPublication is one typed atomic command', () async {
+    final executor = _RecordingExecutor(
+      response: <String, Object?>{
+        'publishIntentId': 'publish-draft-1',
+        'localDraftId': 'draft-1',
         'postId': 'post-created',
-      });
-      expect(executor.body, <String, Object?>{
-        'visibility': 'public',
-        'assistantUsePolicy': 'inherit',
-      });
-      expect(result.post.publishedAt, DateTime.utc(2026, 7, 13, 10));
-    },
-  );
+        'state': 'published',
+        'committedVersion': 1,
+        'acceptedAt': '2026-07-13T10:00:00Z',
+      },
+    );
+    final client = GeneratedCloudOperationClient(executor);
+
+    final result = await client.contentPostSubmitPostPublication(
+      SubmitContentPostPublicationCommand(
+        publishIntentId: 'publish-draft-1',
+        localDraftId: 'draft-1',
+        contentType: ContentPostType.article,
+        contentIdentity: ContentPostIdentity.work,
+        title: '对象闭环',
+        articleMarkdown: '# 对象闭环',
+        articleAssetManifest:
+            ContentPostStructuredObject(<String, ContentPostStructuredValue>{
+              'schema': const ContentPostStructuredText(
+                'article-asset-manifest',
+              ),
+              'assets': ContentPostStructuredArray(
+                const <ContentPostStructuredValue>[],
+              ),
+            }),
+        mediaAssetIds: const <String>['asset-1'],
+        visibility: ContentPostVisibility.public,
+      ),
+      context: const CloudOperationInvocationContext(
+        surfaceId: 'createWorkspace',
+        clientPageId: 'content.post.publish',
+        actor: CloudOperationActorContext(personaId: 'persona-1'),
+        idempotencyKey: 'publish-draft-1',
+      ),
+    );
+
+    expect(
+      executor.operation?.canonicalOperationId,
+      AppCloudOperationIds.contentPostSubmitPostPublication,
+    );
+    expect(executor.pathParameters, isEmpty);
+    expect(executor.body, <String, Object?>{
+      'publishIntentId': 'publish-draft-1',
+      'localDraftId': 'draft-1',
+      'contentType': 'article',
+      'contentIdentity': 'work',
+      'title': '对象闭环',
+      'mediaAssetIds': <String>['asset-1'],
+      'articleMarkdown': '# 对象闭环',
+      'articleAssetManifest': <String, Object?>{
+        'schema': 'article-asset-manifest',
+        'assets': <Object?>[],
+      },
+      'visibility': 'public',
+    });
+    expect(result.postId, 'post-created');
+    expect(result.acceptedAt, DateTime.utc(2026, 7, 13, 10));
+  });
 
   test(
     'generated OutboundShare appends only confirmed immutable fact',

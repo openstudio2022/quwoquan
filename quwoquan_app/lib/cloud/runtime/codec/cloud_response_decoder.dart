@@ -38,7 +38,7 @@ class CloudResponseDecoder {
       items.add(Map<String, dynamic>.from(raw));
     }
     final nextCursor = obj['nextCursor']?.toString();
-    final rawTotalCount = obj['totalCount'] ?? obj['total'];
+    final rawTotalCount = obj['totalCount'];
     final totalCount = rawTotalCount is num
         ? rawTotalCount.toInt()
         : int.tryParse(rawTotalCount?.toString() ?? '');
@@ -82,36 +82,6 @@ class CloudResponseDecoder {
       }
     }
     return out;
-  }
-
-  /// 按顺序查找 `keys` 中第一个存在于 `obj` 的键，解析为 [List<Map<String, dynamic>>]。
-  /// 若均不存在则返回空列表；存在但不是 List 时视为 wire contract 违例。
-  static List<CloudJsonMap> mapListFirstPresent(
-    CloudJsonMap obj,
-    List<String> keys, {
-    String? context,
-  }) {
-    for (final key in keys) {
-      if (obj.containsKey(key)) {
-        return mapList(obj, key, context: context);
-      }
-    }
-    return const <Map<String, dynamic>>[];
-  }
-
-  /// 按顺序尝试 `keys`，返回首个 **非空** 的 `List<Map>`（与 persona summary 等多键列表别名一致）。
-  static List<CloudJsonMap> mapListFirstNonEmpty(
-    CloudJsonMap obj,
-    List<String> keys, {
-    String? context,
-  }) {
-    for (final key in keys) {
-      final list = mapList(obj, key, context: context);
-      if (list.isNotEmpty) {
-        return list;
-      }
-    }
-    return const <Map<String, dynamic>>[];
   }
 
   static CloudException _invalidListElement({

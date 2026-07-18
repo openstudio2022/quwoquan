@@ -19,7 +19,6 @@ import shutil
 from typing import Any, Mapping
 
 from core.article_package import (
-    MARKDOWN_VERSION,
     build_markdown_frontmatter,
     compute_asset_manifest_sha256,
     compute_document_sha256,
@@ -30,7 +29,7 @@ from content.execution.runtime_state import load_execution_runtime_state
 from core.paths import RUNTIME_ROOT, execution_root, relative_execution_ref
 from core.io import read_json, write_json
 from content.review.ledger import entities_path
-from content.post.draft_io import is_placeholder, read_draft_article, read_draft_meta, read_writing_pack
+from content.post.article.draft_io import is_placeholder, read_draft_article, read_draft_meta, read_writing_pack
 from core.post_evidence_chain import (
     SOURCE_REFS_SCHEMA,
     build_finalization_report,
@@ -319,22 +318,14 @@ def _publication_story_spine(compose_payload: dict) -> dict | list:
     }
 
 
-_IMAGE_SOURCE_ALIASES = {
-    "sourceCollectionId": ("sourceCollectionId", "collectionId", "sourceId"),
-    "creator": ("creator", "credit", "sourceAuthor"),
-    "collectionPageUrl": (
-        "collectionPageUrl",
-        "page",
-        "sourcePage",
-        "sourcePageUrl",
-        "sourceUrl",
-        "url",
-        "sourceRef",
-    ),
-    "license": ("license",),
-    "termsUrl": ("termsUrl",),
-    "authorizationProof": ("authorizationProof", "licenseProof", "licenseSnapshot"),
-}
+_IMAGE_SOURCE_FIELDS = (
+    "sourceCollectionId",
+    "creator",
+    "collectionPageUrl",
+    "license",
+    "termsUrl",
+    "authorizationProof",
+)
 
 
 def _source_fact(value: Any) -> Any:
@@ -349,23 +340,8 @@ def _source_fact_key(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
-def _aliased_source_fact(payload: Mapping[str, Any], field: str) -> Any:
-    for alias in _IMAGE_SOURCE_ALIASES[field]:
-        value = _source_fact(payload.get(alias))
-        if value not in (None, "", {}):
-            return value
-    legacy_proof = payload.get("licenseProof")
-    if isinstance(legacy_proof, Mapping):
-        legacy_key = {
-            "license": "license",
-            "termsUrl": "termsUrl",
-            "authorizationProof": "proofUrl",
-        }.get(field)
-        if legacy_key:
-            value = _source_fact(legacy_proof.get(legacy_key))
-            if value not in (None, "", {}):
-                return value
-    return None
+def _canonical_source_fact(payload: Mapping[str, Any], field: str) -> Any:
+    return _source_fact(payload.get(field))
 
 
 def _image_source_contract(
@@ -377,9 +353,9 @@ def _image_source_contract(
     """Resolve one work-level source identity and reject mixed-source image sets."""
     resolved: dict[str, Any] = {}
     required_fields = {"sourceCollectionId", "creator", "collectionPageUrl", "license"}
-    for field in _IMAGE_SOURCE_ALIASES:
-        work_value = _aliased_source_fact(compose_payload, field)
-        per_asset_values = [_aliased_source_fact(asset, field) for asset in assets]
+    for field in _IMAGE_SOURCE_FIELDS:
+        work_value = _canonical_source_fact(compose_payload, field)
+        per_asset_values = [_canonical_source_fact(asset, field) for asset in assets]
         asset_values = [value for value in per_asset_values if value is not None]
         distinct = {_source_fact_key(value): value for value in asset_values}
         if len(distinct) > 1:
@@ -399,14 +375,14 @@ def _image_source_contract(
         if value is not None:
             resolved[field] = value
 
-    work_has_proof = _aliased_source_fact(
+    work_has_proof = _canonical_source_fact(
         compose_payload, "termsUrl"
-    ) is not None or _aliased_source_fact(compose_payload, "authorizationProof") is not None
+    ) is not None or _canonical_source_fact(compose_payload, "authorizationProof") is not None
     if not work_has_proof:
         proof_keys: set[str] = set()
         for asset in assets:
-            terms = _aliased_source_fact(asset, "termsUrl")
-            authorization = _aliased_source_fact(asset, "authorizationProof")
+            terms = _canonical_source_fact(asset, "termsUrl")
+            authorization = _canonical_source_fact(asset, "authorizationProof")
             if terms is None and authorization is None:
                 raise RuntimeError(f"{ref}: every image asset must declare license proof")
             proof_keys.add(_source_fact_key({"termsUrl": terms, "authorizationProof": authorization}))
@@ -417,11 +393,6 @@ def _image_source_contract(
         urls = [str(url).strip() for url in (compose_payload.get("sourceUrls") or []) if str(url).strip()]
         if len(set(urls)) == 1:
             resolved["collectionPageUrl"] = urls[0]
-    if "sourceCollectionId" not in resolved and resolved.get("collectionPageUrl") is not None:
-        page_key = _source_fact_key(resolved["collectionPageUrl"])
-        digest = hashlib.sha256(page_key.encode("utf-8")).hexdigest()[:16]
-        resolved["sourceCollectionId"] = f"legacy:{digest}"
-
     missing = [
         field
         for field in ("sourceCollectionId", "creator", "collectionPageUrl", "license")
@@ -434,33 +405,6 @@ def _image_source_contract(
     return resolved
 
 
-def _image_source_import_aliases(image_source: Mapping[str, Any]) -> dict[str, Any]:
-    """Write the same rights facts under publish-gate and service-importer keys."""
-
-    page = image_source.get("collectionPageUrl")
-    terms_url = image_source.get("termsUrl")
-    proof_url = image_source.get("authorizationProof")
-    license_value = image_source.get("license")
-    aliases: dict[str, Any] = {}
-    if page not in (None, "", {}):
-        aliases["page"] = page
-        if isinstance(page, str):
-            aliases["sourceCollectionUrl"] = page
-    proof: dict[str, Any] = {}
-    if license_value not in (None, "", {}):
-        proof["license"] = license_value
-    if terms_url not in (None, "", {}):
-        proof["termsUrl"] = terms_url
-    if proof_url not in (None, "", {}):
-        proof["proofUrl"] = proof_url
-    if proof:
-        aliases["licenseProof"] = proof
-        ref_value = proof_url if proof_url not in (None, "", {}) else terms_url
-        if isinstance(ref_value, str) and ref_value.strip():
-            aliases["licenseProofRef"] = ref_value.strip()
-    return aliases
-
-
 def _materialized_source_refs_snapshot(
     execution_id: str,
     *,
@@ -470,7 +414,7 @@ def _materialized_source_refs_snapshot(
     """Build the final object's single-base-source reference snapshot."""
     if not str(base_source_ref or "").strip():
         return {
-            "schemaVersion": SOURCE_REFS_SCHEMA,
+            "schema": SOURCE_REFS_SCHEMA,
             "baseSourceRef": None,
             "sources": [],
             "note": "no single base source unit (multi-entity route or external image collection)",
@@ -484,7 +428,7 @@ def _materialized_source_refs_snapshot(
         if not is_image:
             raise
         return {
-            "schemaVersion": SOURCE_REFS_SCHEMA,
+            "schema": SOURCE_REFS_SCHEMA,
             "baseSourceRef": None,
             "sources": [],
             "note": f"image evidence ref unresolved, indexed without mirror: {exc}",

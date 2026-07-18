@@ -1245,18 +1245,18 @@ entries:
         不提供 alias、fallback 或兼容 loader。
     verification:
       completed:
-        - Data/Ops 全量 local-contract 1185 passed / 0 failed
+        - Data/Ops 全量 local-contract 1190 passed / 0 failed
         - App 定向 ImageBookCanvas 9 passed / 0 failed
         - App 定向登录页 58 passed / 0 failed
         - App 独占全量 local-contract 3053 passed / 0 failed
         - OTP seal 定向与 Service 全量 Go 测试通过
       failed_then_fixed:
-        - Data/Ops 首轮 74 failed / 1104 passed；修正 manifest 装配、单 content type 和发布物化后全量复验为 1185 / 0
+        - Data/Ops 首轮 74 failed / 1104 passed；修正 manifest 装配、单 content type 和发布物化后全量复验为 1190 / 0
         - App 总门一度报告 ImageBookCanvas 和登录页 2 项失败；两项定向与同一工作树独占全量均通过，未改弱断言
       blocked:
         - Gamma-local 缺少真实外部身份与 provider 凭据，stackctl up 在 WECHAT_OAUTH_APP_ID 前 fail-closed
         - Gamma T3 的 unexpected accepted、contract_blocked 与 not_ready 尚未清零
         - compiler-derived commercial readiness、十条 Journey、四环境工件与 clean checkout 尚未闭合
     notes:
-      - 当前唯一 Graph hash 为 `c44b4e94abd5840f86ab7e803c852cab4d6e8fec5d89980808d6122a31b36c19`；343 operations、156 App exposures、27 typed-ready。
+      - 当前唯一 Graph hash 为 `635a57032f8a0923914f505c4bdc6fd6faa6cbd6de6f20a32a881cf8a0d1c470`；343 operations、156 App exposures、27 typed-ready。
       - 代码测试门恢复不等于商用准出；本条不提升 GWT/SIT，整体继续 GATE_BLOCK / NO-GO。

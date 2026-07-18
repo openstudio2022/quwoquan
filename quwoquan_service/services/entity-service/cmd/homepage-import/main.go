@@ -1,4 +1,4 @@
-// Command homepage-import 按 immutable release desired state 把 canonical entity package 投影进 homepage_state
+// Command homepage-import 按 immutable release payload 把 entity snapshot 投影进 homepage_state
 // （introductionMarkdown / introductionAssets），与 content-service cmd/import 平级：
 // content importer 负责 posts/entities 运行库，本命令负责主页读模型快照。
 //
@@ -9,7 +9,7 @@
 // Usage:
 //
 //	go run ./services/entity-service/cmd/homepage-import \
-//	  --publish-root /path/to/publish --release-root /path/to/release/<releaseId> \
+//	  --release-root /path/to/release/<releaseId> \
 //	  --mongo-uri mongodb://localhost:27017 --entity-db quwoquan_entity \
 //	  --media-base-url http://media.local:9080 --env gamma --report import-homepage-gamma.json
 package main
@@ -32,15 +32,14 @@ import (
 )
 
 type releaseDesiredState struct {
-	SchemaVersion string `json:"schemaVersion"`
-	ReleaseID     string `json:"releaseId"`
-	DesiredRefs   struct {
+	Schema      string `json:"schema"`
+	ReleaseID   string `json:"releaseId"`
+	DesiredRefs struct {
 		Entities []string `json:"entities"`
 	} `json:"desiredRefs"`
 }
 
 func main() {
-	publishRoot := flag.String("publish-root", "", "publish mainline root (required)")
 	releaseRoot := flag.String("release-root", "", "immutable release root with payload/desired_state.json (required)")
 	mongoURI := flag.String("mongo-uri", "", "mongo connection uri (required unless --dry-run)")
 	entityDB := flag.String("entity-db", "quwoquan_entity", "entity database name")
@@ -53,9 +52,6 @@ func main() {
 	dryRun := flag.Bool("dry-run", false, "load + project only; do not write mongo")
 	flag.Parse()
 
-	if *publishRoot == "" {
-		log.Fatalf("[homepage-import] --publish-root is required")
-	}
 	if *releaseRoot == "" {
 		log.Fatalf("[homepage-import] --release-root is required; full-tree import and sample bundle fallback are forbidden")
 	}
@@ -67,8 +63,8 @@ func main() {
 	if err := json.Unmarshal(raw, &desired); err != nil {
 		log.Fatalf("[homepage-import] parse desired state: %v", err)
 	}
-	if desired.SchemaVersion != "quwoquan_data.release_desired_state/1" || desired.ReleaseID == "" {
-		log.Fatalf("[homepage-import] unsupported desired state; retired dual-read is forbidden")
+	if desired.Schema != "quwoquan_data.release_desired_state" || desired.ReleaseID == "" {
+		log.Fatalf("[homepage-import] unsupported desired state schema=%q releaseId=%q", desired.Schema, desired.ReleaseID)
 	}
 	importMode := application.HomepageImportMode(*mode)
 	if importMode != application.HomepageImportModeUpsert && importMode != application.HomepageImportModeSync {
@@ -79,7 +75,12 @@ func main() {
 		filter[ref] = true
 	}
 
-	inputs, issues, err := homepageimport.LoadHomepageProjections(*publishRoot, filter, *mediaBase)
+	objectRoot := filepath.Join(*releaseRoot, "payload", "objects")
+	objectInfo, err := os.Stat(objectRoot)
+	if err != nil || !objectInfo.IsDir() {
+		log.Fatalf("[homepage-import] release object closure unavailable: %s: %v", objectRoot, err)
+	}
+	inputs, issues, err := homepageimport.LoadHomepageProjections(objectRoot, filter, *mediaBase)
 	if err != nil {
 		log.Fatalf("[homepage-import] load projections: %v", err)
 	}
@@ -131,7 +132,7 @@ func main() {
 
 	if *reportPath != "" {
 		payload := map[string]any{
-			"schemaVersion":         "quwoquan_service.homepage_import_report/3",
+			"schema":                "quwoquan_service.homepage_import_report",
 			"releaseId":             desired.ReleaseID,
 			"env":                   *env,
 			"dryRun":                *dryRun,

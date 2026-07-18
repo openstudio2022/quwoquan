@@ -29,7 +29,7 @@
 
 ```json
 {
-  "schemaVersion": "quwoquan_data.homepage_source_judge/1",
+  "schema": "quwoquan_data.homepage_source_judge",
   "targetEntity": "<请求中的目标实体名，原样带回>",
   "sourcePageType": "entity_homepage | entity_detail_supporting | portal_home | listing | admin_notice | parent_region_overview | other_entity | insufficient_content",
   "entityMatch": "exact | alias | partial | mismatch | uncertain",

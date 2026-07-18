@@ -58,21 +58,12 @@ def tag_at(root: Path, rel_path: str, label: str, label_en: str, desc: str,
     created += 1
 
 
-def tag(rel_path: str, label: str, label_en: str, desc: str,
-        aliases: list[str] | None = None):
-    tag_at(TAGS_ROOT, rel_path, label, label_en, desc, aliases)
-
-
 def tags_list_at(root: Path, prefix: str, items: list):
     for item in items:
         cn, en, desc = item[0], item[1], item[2]
         aliases = item[3] if len(item) > 3 else None
         rel_path = f"{prefix}/{cn}" if prefix else cn
         tag_at(root, rel_path, cn, en, desc, aliases)
-
-
-def tags_list(prefix: str, items: list):
-    tags_list_at(TAGS_ROOT, prefix, items)
 
 
 def gen():

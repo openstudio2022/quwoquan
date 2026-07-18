@@ -1,4 +1,3 @@
-version: 1
 aggregate: Experiment
 entities:
   Experiment:
@@ -27,7 +26,6 @@ entities:
   UpdateExperimentRolloutRequest:
     description: 更新 Experiment 状态和 draft 期变体权重的强类型命令
     fields:
-      - { name: expectedVersion, type: int, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: write }
       - { name: status, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: write }
       - { name: variants, type: array, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: drop, ops_exposure: write }
   UpdateExperimentRolloutResult:

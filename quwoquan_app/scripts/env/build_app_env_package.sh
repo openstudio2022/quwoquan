@@ -184,7 +184,7 @@ report = {
     "uploadBaseUrl": upload_base,
     "currentUserId": current_user_id,
     "seedManifest": seed_manifest,
-    "topologySchemaVersion": topology.get("schemaVersion"),
+    "topologySchemaVersion": topology.get("schema"),
     "artifactPolicy": artifact_policy,
     "publicBases": expected_urls,
     "provenance": {

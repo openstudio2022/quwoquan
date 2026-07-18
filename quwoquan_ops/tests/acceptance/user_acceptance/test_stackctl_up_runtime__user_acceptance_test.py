@@ -3,8 +3,8 @@ from __future__ import annotations
 import argparse
 import builtins
 import io
-import importlib.util
 import json
+import runpy
 import subprocess
 import tempfile
 import unittest
@@ -240,7 +240,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             manifest = load_json_yaml(legal_static.DEFAULT_MANIFEST)
             payload = legal_static.build_package("alpha", output_root=Path(tmp_dir))
 
-        self.assertEqual(manifest["schemaVersion"], "legal-static/v1")
+        self.assertEqual(manifest["schema"], "legal-static")
         self.assertEqual(manifest["owner"]["appName"], "趣我圈")
         self.assertEqual(payload["status"], "ok")
         self.assertEqual(
@@ -452,7 +452,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         self.assertNotIn("chat_inbox", by_name)
         self.assertEqual(
             by_name["entity_homepage_search"]["url"],
-            "https://gamma.example/v1/homepages/search?query=%E8%A5%BF%E6%B9%96&limit=1",
+            "https://gamma.example/homepages/search?query=%E8%A5%BF%E6%B9%96&limit=1",
         )
 
     def test_local_gamma_print_env_exits_before_runtime_preparation(self) -> None:
@@ -509,6 +509,104 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         self.assertIn("storedCount !== docs.length", seed_script)
         self.assertIn("quit(1);", seed_script)
 
+    def test_local_gamma_video_seed_preserves_work_browser_projection_fields(
+        self,
+    ) -> None:
+        doc = local_gamma_t3.fixture_post_to_doc(
+            {
+                "postId": "fixture_video_001",
+                "contentType": "video",
+                "coverUrl": "media/image/s/post/fixture_video_001/v1/cover.png",
+                "thumbnailUrl": "media/image/s/post/fixture_video_001/v1/cover.png",
+                "videoUrl": "media/video/s/post/fixture_video_001/v1/source.mp4",
+                "durationMs": 45000,
+                "width": 1280,
+                "height": 720,
+            },
+        )
+
+        self.assertEqual(doc["postId"], "fixture_video_001")
+        self.assertEqual(
+            doc["thumbnailUrl"],
+            "media/image/s/post/fixture_video_001/v1/cover.png",
+        )
+        self.assertEqual(doc["durationMs"], 45000)
+        self.assertEqual(doc["deviceInfo"]["durationMs"], 45000)
+        self.assertEqual(
+            doc["mediaItems"],
+            [
+                {
+                    "kind": "video",
+                    "url": "media/video/s/post/fixture_video_001/v1/source.mp4",
+                    "coverUrl": "media/image/s/post/fixture_video_001/v1/cover.png",
+                    "durationMs": 45000,
+                    "width": 1280,
+                    "height": 720,
+                },
+            ],
+        )
+
+    def test_local_gamma_t3_uses_shared_target_isolated_acceptance_session(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            report_path = Path(tmp_dir) / "t3-report.json"
+            session = local_gamma_t3.LocalGammaAcceptanceSession(
+                owner_id="fixture_owner",
+                persona_id="fixture_persona",
+                access_token="test-token",
+            )
+            with (
+                mock.patch.object(
+                    local_gamma_t3,
+                    "wait_url",
+                    return_value={"status": "passed"},
+                ),
+                mock.patch.object(
+                    local_gamma_t3,
+                    "open_local_acceptance_session",
+                    return_value=session,
+                ) as open_session,
+                mock.patch.object(
+                    local_gamma_t3,
+                    "setup_runtime_fixtures",
+                    return_value={"status": "passed"},
+                ),
+                mock.patch.object(local_gamma_t3, "endpoint_checks", return_value=[]),
+                mock.patch.object(
+                    local_gamma_t3,
+                    "strict_endpoint_checks",
+                    return_value=[],
+                ),
+                mock.patch.object(local_gamma_t3, "_ACTIVE_SESSION", None),
+                mock.patch.object(
+                    local_gamma_t3.sys,
+                    "argv",
+                    [
+                        "run_local_gamma_t3.py",
+                        "--base-url",
+                        "https://gamma-api.quwoquan-env.test:19000",
+                        "--product-ops-base-url",
+                        "https://gamma-product-ops.quwoquan-env.test:19010",
+                        "--skip-seed",
+                        "--skip-flutter-contracts",
+                        "--report",
+                        str(report_path),
+                    ],
+                ),
+            ):
+                self.assertEqual(local_gamma_t3.main(), 0)
+
+            open_session.assert_called_once_with(
+                "https://gamma-api.quwoquan-env.test:19000",
+                environment="gamma",
+                target_name="gamma-local",
+            )
+            self.assertEqual(
+                json.loads(report_path.read_text(encoding="utf-8"))["auth"],
+                {"status": "passed", "principal": "seeded_persona"},
+            )
+
     def test_local_gamma_seed_failures_block_startup(self) -> None:
         script = (
             Path(__file__).resolve().parents[4]
@@ -556,10 +654,10 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         methods = local_gamma_t3.content_route_methods()
 
         self.assertIn(
-            "POST", methods["/v1/content/comments/{commentId}/reaction"]
+            "POST", methods["/content/comments/{commentId}/reaction"]
         )
         self.assertIn(
-            "POST", methods["/v1/content/comments/{commentId}/media:bind"]
+            "POST", methods["/content/comments/{commentId}/media:bind"]
         )
 
     def test_local_gamma_blocked_operation_requires_metadata_enforced_403(self) -> None:
@@ -567,12 +665,12 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             "seedRefs": [
                 {
                     "domain": "assistant",
-                    "verifiedEndpoints": ["/v1/assistant/conversations/fixture"],
+                    "verifiedEndpoints": ["/assistant/conversations/fixture"],
                 },
             ]
         }
         forbidden = local_gamma_t3.urllib.error.HTTPError(
-            "https://gamma.example/v1/assistant/conversations/fixture",
+            "https://gamma.example/assistant/conversations/fixture",
             403,
             "Forbidden",
             {},
@@ -595,7 +693,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             "seedRefs": [
                 {
                     "domain": "assistant",
-                    "verifiedEndpoints": ["/v1/assistant/conversations/fixture"],
+                    "verifiedEndpoints": ["/assistant/conversations/fixture"],
                 },
             ]
         }
@@ -616,12 +714,12 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 {
                     "domain": "content",
                     "verifiedEndpoints": [
-                        "/v1/content/sub-accounts/{activePersonaId}/interactions/received?type=share"
+                        "/content/sub-accounts/{activePersonaId}/interactions/received?type=share"
                     ],
                 },
                 {
                     "domain": "user",
-                    "verifiedEndpoints": ["/v1/user/profile/fixture_user_current"],
+                    "verifiedEndpoints": ["/user/profile/fixture_user_current"],
                 },
             ]
         }
@@ -638,10 +736,10 @@ class StackctlUpRuntimeTest(unittest.TestCase):
 
         self.assertEqual(
             checks[0]["resolvedPath"],
-            "/v1/content/sub-accounts/persona-runtime/interactions/received?type=share",
+            "/content/sub-accounts/persona-runtime/interactions/received?type=share",
         )
         self.assertNotIn("resolvedPath", checks[1])
-        self.assertEqual(checks[1]["path"], "/v1/user/profile/fixture_user_current")
+        self.assertEqual(checks[1]["path"], "/user/profile/fixture_user_current")
 
     def test_local_gamma_comment_setup_uses_current_command_contract(self) -> None:
         responses = [
@@ -693,15 +791,9 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             root
             / "quwoquan_service/contracts/metadata/_shared/test_fixtures/content_recommendation_social_graph.gamma_seed.json"
         )
-        spec = importlib.util.spec_from_file_location("content_social_graph_seed", script_path)
-        self.assertIsNotNone(spec)
-        self.assertIsNotNone(spec.loader if spec else None)
-        module = importlib.util.module_from_spec(spec)
-        assert spec is not None and spec.loader is not None
-        spec.loader.exec_module(module)
-
+        module = runpy.run_path(str(script_path))
         fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
-        mongo_script = module.build_mongo_script(fixture, "persona-runtime")
+        mongo_script = module["build_mongo_script"](fixture, "persona-runtime")
 
         self.assertIn('sourcePersonaId:"persona-runtime"', mongo_script)
         self.assertIn('userId:"persona-runtime"', mongo_script)
@@ -720,6 +812,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         topology = {"targets": []}
         target = {
             "env": "gamma",
+            "backend": "local",
             "publicBases": {
                 "api": "http://gamma.example",
                 "productOps": "http://ops.example",
@@ -748,10 +841,73 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         self.assertEqual(kwargs["env"]["TEST_AUTH_TOKEN"], "-starts-with-dash")
         self.assertEqual(kwargs["env"]["GAMMA_TEST_AUTH_TOKEN"], "-starts-with-dash")
 
+    def test_run_environment_integration_probe_resolves_every_local_target(self) -> None:
+        topology = {"targets": []}
+        target = {
+            "env": "beta",
+            "backend": "local",
+            "publicBases": {
+                "api": "https://beta-api.quwoquan-env.test:18000",
+                "productOps": "https://beta-product-ops.quwoquan-env.test:18010",
+            },
+        }
+
+        with (
+            mock.patch("quwoquan_ops.cli.stackctl.get_target", return_value=target),
+            mock.patch(
+                "quwoquan_ops.cli.stackctl._resolve_test_auth_token",
+                return_value="beta-bearer",
+            ),
+            mock.patch(
+                "quwoquan_ops.cli.stackctl._run_script_probe",
+                return_value=({}, "", []),
+            ) as run_probe,
+        ):
+            stackctl._run_environment_integration_probe(
+                topology,
+                "beta-local",
+                Path("/tmp/report"),
+            )
+
+        kwargs = run_probe.call_args.kwargs
+        self.assertEqual(kwargs["argv"][-2:], ["--resolve-host", "127.0.0.1"])
+        self.assertEqual(kwargs["env"]["BETA_TEST_AUTH_TOKEN"], "beta-bearer")
+
+    def test_run_environment_integration_probe_does_not_override_hosted_dns(self) -> None:
+        topology = {"targets": []}
+        target = {
+            "env": "prod",
+            "backend": "ssh-hosted",
+            "publicBases": {
+                "api": "https://api.quwoquan.com",
+                "productOps": "https://product-ops.quwoquan.com",
+            },
+        }
+
+        with (
+            mock.patch("quwoquan_ops.cli.stackctl.get_target", return_value=target),
+            mock.patch(
+                "quwoquan_ops.cli.stackctl._resolve_test_auth_token",
+                return_value="prod-bearer",
+            ),
+            mock.patch(
+                "quwoquan_ops.cli.stackctl._run_script_probe",
+                return_value=({}, "", []),
+            ) as run_probe,
+        ):
+            stackctl._run_environment_integration_probe(
+                topology,
+                "prod-hosted",
+                Path("/tmp/report"),
+            )
+
+        self.assertNotIn("--resolve-host", run_probe.call_args.kwargs["argv"])
+
     def test_run_environment_integration_probe_mints_local_gamma_session(self) -> None:
         topology = {"targets": []}
         target = {
             "env": "gamma",
+            "backend": "local",
             "publicBases": {
                 "api": "https://gamma-api.quwoquan-env.test:19000",
                 "productOps": "http://ops.example",
@@ -766,7 +922,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 return_value="",
             ),
             mock.patch(
-                "quwoquan_ops.cli.stackctl.open_local_gamma_acceptance_session",
+                "quwoquan_ops.cli.stackctl.open_local_acceptance_session",
                 return_value=session,
             ) as login,
             mock.patch(
@@ -782,6 +938,8 @@ class StackctlUpRuntimeTest(unittest.TestCase):
 
         login.assert_called_once_with(
             "https://gamma-api.quwoquan-env.test:19000",
+            environment="gamma",
+            target_name="gamma-local",
             resolve_host="127.0.0.1",
         )
         kwargs = run_probe.call_args.kwargs
@@ -850,11 +1008,11 @@ class StackctlUpRuntimeTest(unittest.TestCase):
     def test_local_gamma_t3_endpoint_checks_marks_scope_externals_out_of_scope(self) -> None:
         manifest = {
             "seedRefs": [
-                {"domain": "assistant", "verifiedEndpoints": ["/v1/assistant/conversations"]},
+                {"domain": "assistant", "verifiedEndpoints": ["/assistant/conversations"]},
                 {
                     "domain": "content",
                     "verificationScopes": ["object-homepage-gamma-real-data-closure"],
-                    "verifiedEndpoints": ["/v1/content/feed"],
+                    "verifiedEndpoints": ["/content/feed"],
                 },
             ]
         }
@@ -880,7 +1038,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             "strictEndpoints": [
                 {
                     "domain": "content",
-                    "path": "/v1/content/intersections/object?objectType=circle&objectId={circleId}",
+                    "path": "/content/intersections/object?objectType=circle&objectId={circleId}",
                     "assertion": "object_intersections_circle",
                 }
             ],
@@ -900,7 +1058,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             )
         self.assertEqual(
             checks[0]["resolvedPath"],
-            "/v1/content/intersections/object?objectType=circle&objectId=fixture_circle_photo",
+            "/content/intersections/object?objectType=circle&objectId=fixture_circle_photo",
         )
         self.assertEqual(checks[0]["status"], "failed")
         self.assertIn("items must be non-empty", checks[0]["error"])
@@ -965,6 +1123,60 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             self.assertEqual(result["exitCode"], 0)
             self.assertTrue(
                 any("prod rollout release-state is missing" in item for item in result["details"])
+            )
+
+    def test_doctor_reports_missing_beta_deployment_prerequisite(self) -> None:
+        topology = {
+            "targets": {
+                "beta-local": {
+                    "env": "beta",
+                    "backend": "local",
+                    "portProfile": None,
+                }
+            }
+        }
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            args = mock.Mock(target="beta-local", report_dir=tmp_dir)
+            health_payload = {
+                "exitCode": 1,
+                "summary": "stackctl health beta-local: failed",
+                "details": [],
+                "reportDir": "tmp",
+            }
+            with (
+                mock.patch(
+                    "quwoquan_ops.cli.stackctl.load_environment_topology",
+                    return_value=topology,
+                ),
+                mock.patch(
+                    "quwoquan_ops.cli.stackctl.get_target",
+                    return_value=topology["targets"]["beta-local"],
+                ),
+                mock.patch(
+                    "quwoquan_ops.cli.stackctl.load_product_telemetry_sls",
+                    side_effect=RuntimeError(
+                        "product telemetry SLS deployment secret is missing: /external/beta.env"
+                    ),
+                ),
+                mock.patch(
+                    "quwoquan_ops.cli.stackctl.command_health",
+                    return_value=health_payload,
+                ),
+            ):
+                result = stackctl.command_doctor(args)
+
+            self.assertEqual(result["exitCode"], 1)
+            self.assertTrue(
+                any("deployment prerequisite failed" in item for item in result["details"])
+            )
+            repair_plan = json.loads(
+                (Path(tmp_dir) / "repair_plan.json").read_text(encoding="utf-8")
+            )
+            self.assertTrue(
+                any("external product telemetry SLS" in item for item in repair_plan["actions"])
+            )
+            self.assertFalse(
+                any("restart-stack" in item for item in repair_plan["actions"])
             )
 
 

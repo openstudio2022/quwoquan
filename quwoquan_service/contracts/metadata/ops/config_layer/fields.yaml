@@ -1,4 +1,3 @@
-version: 1
 aggregate: ConfigLayer
 entities:
   ConfigLayer:
@@ -28,7 +27,6 @@ entities:
     description: ConfigLayer 的强类型设置命令
     fields:
       - { name: layerId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: write }
-      - { name: expectedVersion, type: int, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: write }
       - { name: scopeLevel, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: write }
       - { name: scopeId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: write }
       - { name: environment, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: write }

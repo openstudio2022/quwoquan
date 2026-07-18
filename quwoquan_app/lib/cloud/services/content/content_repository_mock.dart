@@ -40,7 +40,10 @@ class MockContentRepository
     String sort = kFeedSortRecommend,
     String? sessionId,
     String? feedRequestId,
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
   }) async {
+    cancellation?.throwIfCancelled();
     final items = await _resolveDiscoveryPosts(
       category: category,
       identity: identity,
@@ -56,6 +59,7 @@ class MockContentRepository
     final resolvedFeedRequestId = (feedRequestId?.trim().isNotEmpty == true)
         ? feedRequestId!.trim()
         : 'frq_mock_${DateTime.now().microsecondsSinceEpoch}';
+    cancellation?.throwIfCancelled();
     return DiscoveryFeedPage(
       items: pageItems,
       nextCursor: nextCursor,
@@ -172,17 +176,6 @@ class MockContentRepository
   }
 
   @override
-  Future<PostBaseDto> updatePost({
-    required String postId,
-    required UpdatePostRequestWire body,
-  }) async {
-    return _mockPostDto(
-      postId,
-      payloadMerge: {...body.toWire(), 'postId': postId},
-    );
-  }
-
-  @override
   Future<void> deletePost({required String postId}) async {
     if (postId.trim().isEmpty) {
       return;
@@ -195,10 +188,7 @@ class MockContentRepository
     required String postId,
     required UpdatePostSettingsRequestWire body,
   }) async {
-    return _mockPostDto(
-      postId,
-      payloadMerge: {...body.toWire(), 'postId': postId},
-    );
+    return _mockPostDto(postId, payloadMerge: body.toWire());
   }
 
   @override
@@ -210,8 +200,6 @@ class MockContentRepository
       postId,
       payloadMerge: {
         ...body.toWire(),
-        'postId': postId,
-        'contentIdentity': 'work',
         'identity': 'work',
         'status': 'published',
       },

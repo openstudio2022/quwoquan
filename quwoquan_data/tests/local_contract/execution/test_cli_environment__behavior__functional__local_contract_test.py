@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-import io
 import json
 import os
 import shutil
@@ -41,7 +40,7 @@ def test_cli_exposes_only_durable_task_facades():
     )
     assert task.returncode == 0, task.stderr
     command_rows = [line.strip().split(maxsplit=1)[0] for line in task.stdout.splitlines() if line.startswith("    ")]
-    assert command_rows == ["preflight", "geo-homepages"]
+    assert command_rows == ["preflight", "execute"]
 
     preflight = subprocess.run(
         [sys.executable, str(CLI), "task", "preflight", "--help"],
@@ -50,8 +49,17 @@ def test_cli_exposes_only_durable_task_facades():
         check=False,
     )
     assert preflight.returncode == 0, preflight.stderr
-    for name in ("--json", "--timeout-seconds", "--report-out"):
+    for name in ("--json", "--no-network", "--no-cursor-key", "--report-out"):
         assert name in preflight.stdout
+    for name in (
+        "--python",
+        "--requirements",
+        "--timeout-seconds",
+        "--model",
+        "--runtime",
+        "--startup-timeout-seconds",
+    ):
+        assert name not in preflight.stdout
 
 
 def test_python_runtime_prefers_data_venv_when_current_lacks_cursor_sdk(monkeypatch):
@@ -142,14 +150,14 @@ def test_environment_preflight_reads_fresh_key_for_each_probe(monkeypatch, tmp_p
     )
     seen: list[str] = []
 
-    def cloud_probe(**kwargs):
+    def startup_probe(**kwargs):
         seen.append(os.environ.get("CURSOR_API_KEY", ""))
-        return {"checked": True, "ready": True, "status": 200, "issues": []}
+        return {"checked": True, "ready": True, "started": True, "issues": []}
 
-    monkeypatch.setattr(python_runtime, "_cursor_cloud_api_probe", cloud_probe)
-    first = python_runtime.environment_preflight(check_network=True)
+    monkeypatch.setattr(python_runtime, "cached_cursor_startup_probe", startup_probe)
+    first = python_runtime.environment_preflight(check_network=True, check_cursor_startup=True)
     key_file.write_text("crsr_" + "b" * 32, encoding="utf-8")
-    second = python_runtime.environment_preflight(check_network=True)
+    second = python_runtime.environment_preflight(check_network=True, check_cursor_startup=True)
 
     assert first["ready"] is True and second["ready"] is True
     assert seen == ["crsr_" + "a" * 32, "crsr_" + "b" * 32]
@@ -159,33 +167,6 @@ def test_environment_preflight_reads_fresh_key_for_each_probe(monkeypatch, tmp_p
         "valid": True,
         "issues": [],
     }
-
-
-def test_cursor_cloud_probe_reports_plan_required_without_leaking_key(monkeypatch, tmp_path):
-    key = "crsr_" + "x" * 32
-    _key_file(tmp_path, monkeypatch, key)
-    from core.cursor_credentials import resolve_cursor_api_key
-
-    resolve_cursor_api_key()
-
-    def fail(_request, timeout):  # noqa: ARG001
-        raise python_network.urlerror.HTTPError(
-            python_network.CURSOR_CLOUD_API_ME_URL,
-            403,
-            "Forbidden",
-            hdrs=None,
-            fp=io.BytesIO(
-                json.dumps({"error": {"code": "plan_required", "message": f"blocked {key}"}}).encode()
-            ),
-        )
-
-    monkeypatch.setattr(python_network.urlrequest, "urlopen", fail)
-    report = python_network._cursor_cloud_api_probe(timeout_seconds=1)
-    assert report["ready"] is False
-    assert report["errorCode"] == "plan_required"
-    assert key not in json.dumps(report)
-    assert "<redacted-cursor-key>" in json.dumps(report)
-
 
 def test_cursor_key_redaction_covers_hyphen_and_underscore_suffixes():
     value = "cursor crsr_fake-key_value failed"
@@ -219,11 +200,21 @@ def test_cursor_startup_probe_preserves_redacted_diagnostics(monkeypatch, tmp_pa
             }
         )
 
-    monkeypatch.setattr(cursor_startup_probe.subprocess, "run", lambda *args, **kwargs: Completed())
+    calls: list[int] = []
+
+    def run(*_args, **_kwargs):
+        calls.append(1)
+        return Completed()
+
+    monkeypatch.setattr(cursor_startup_probe.subprocess, "run", run)
+    monkeypatch.setattr(cursor_startup_probe.time, "sleep", lambda _seconds: None)
     report = cursor_startup_probe.cursor_startup_probe(timeout_seconds=1)
     assert report["ready"] is False
     assert report["probeType"] == "agent_prompt_smoke"
     assert report["errorClass"] == "InternalServerError"
+    assert report["retryable"] is True
+    assert report["attemptCount"] == len(calls)
+    assert len(calls) > 1
     assert key not in json.dumps(report)
 
 

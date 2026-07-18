@@ -24,6 +24,9 @@ import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_point.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/services/entity/mock/homepage_mock_data.dart';
+import 'package:quwoquan_app/cloud/services/entity/homepage_contract_projection.dart';
+import 'package:quwoquan_app/cloud/services/entity/remote/homepage_query_remote.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 part 'entity_object_page_bundle_mock.dart';
 part 'entity_introduction_repository.dart';
@@ -37,6 +40,8 @@ abstract class HomepageRepository {
     String? city,
     String? status,
     int limit = CloudApiDefaults.pageLimit,
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
   });
 
   Future<HomepageDetail> getHomepageDetail(String homepageId);
@@ -125,8 +130,6 @@ class MockHomepageRepository implements HomepageRepository {
           final map = item.cast<String, dynamic>();
           final homepage = HomepageDetail.fromMap(<String, dynamic>{
             ...map,
-            'id': map['id'] ?? map['homepageId'],
-            'homepageType': map['homepageType'] ?? map['type'],
             'status': map['status'] ?? 'published',
             'sourceType': map['sourceType'] ?? 'contract_fixture',
             'claimStatus': map['claimStatus'] ?? 'unclaimed',
@@ -210,7 +213,10 @@ class MockHomepageRepository implements HomepageRepository {
     String? city,
     String? status,
     int limit = CloudApiDefaults.pageLimit,
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
   }) async {
+    cancellation?.throwIfCancelled();
     final normalizedQuery = _normalize(query);
     final normalizedType = _normalize(homepageType);
     final normalizedCity = _normalize(city);
@@ -248,6 +254,7 @@ class MockHomepageRepository implements HomepageRepository {
         })
         .take(limit)
         .toList(growable: false);
+    cancellation?.throwIfCancelled();
     return items.map(HomepageSummary.fromDetail).toList(growable: false);
   }
 

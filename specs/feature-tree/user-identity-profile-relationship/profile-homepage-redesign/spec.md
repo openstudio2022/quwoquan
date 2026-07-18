@@ -98,7 +98,7 @@
 - V5 收敛：历史「生活」一级 Tab（`[足迹 | 书影音 | 味蕾 | 爱物]` 基于 `UserLifeItem`）在 V5 **废止为 profile 一级 Tab**；`足迹`提升为独立一级 Tab，承载**浏览历史**（只读消费轨迹），不再依赖 `UserLifeItem`。
 - 一级 Tab `footprint` 由 codegen `profile_tabs`（`user/user_profile/ui_config.yaml`）驱动，端侧不得硬编码 Tab id/文案。
 - 隐私门控：`modes: [mine]`，**仅本人主页可见**；他人主页一级 Tab 仅 `记录 / 互动`，不出现足迹（浏览历史不对他人下发）。`ProfileShell` 按 `mode` 过滤一级 Tab，由 `UserProfileTabConfig.visibleInMode(mode)` 强约束。
-- 数据源：复用既有浏览历史能力（`GET /v1/content/footprint`），**不新增后端 API、不读取 `UserLifeItem`**。
+- 数据源：复用既有浏览历史能力（`GET /content/footprint`），**不新增后端 API、不读取 `UserLifeItem`**。
 - 列表视图；所有文案语义化（`UITextConstants`/l10n），零硬编码中文。
 - 废止历史孤儿 `ProfileLifestyleTab` 手写模型与脱离 ui_config 的 `LifestyleSubTab` 实现；`UserProfileUIConfig.lifestyleSubTabs` 在 V5 为空。
 - 说明：`user/user_life_item`（书影音/味蕾/爱物）**保留为独立后端能力域**，但在 V5 **不作为 profile 一级 Tab 暴露**，避免在主页制造第二套 Tab 真相源。
@@ -142,7 +142,7 @@
 
 ### F12: 我与TA的交集卡（真闭环）
 
-- `ProfileShell` other 模式渲染 `ObjectIntersectionCard`，数据经 `objectSharedReasonsProvider` → `TagRepository.sharedTags`（真打 `/v1/tag/shared-tags`）→ `IntersectionReason`。
+- `ProfileShell` other 模式渲染 `ObjectIntersectionCard`，数据经 `objectSharedReasonsProvider` → `TagRepository.sharedTags`（真打 `/tag/shared-tags`）→ `IntersectionReason`。
 - 云侧打通 `object_tag_index` 对象打标管道（tag-service 新增 `ObjectTagIndexWriter` + Mongo upsert + 离线批量导入工具），数据源为 `content/post.tagRefs`、`social/circle.tags`、`user/user_profile.interestTags`，使 gamma/prod 对真实对象出非空交集。
 - 交集卡 `onReasonTap` 上报 `BehaviorEvent.intersectionDimension/intersectionTagRefs`（统一归因，废止旧 `reasonType` 闭集）。
 - 无可解析交集时展示稳定空态（不造假、不隐藏模块）。
@@ -158,7 +158,7 @@
 
 - 在“编辑资料”中新增独立 `职业与兴趣` 页面，路径 `/profile/career-interests`，页面结构固定为 `职业身份 / 我的标签 / 全部兴趣`，不再展示推荐标签。
 - 职业与兴趣标签均以 `quwoquan_data/control_plane/governance/taxonomy` 为唯一真相源：职业使用 `Audience/用户/职业`，兴趣使用 `Audience/用户/兴趣偏好`；端侧通过 tag-service `ListTagChildren / ResolveTag / ValidateTagRefs` 查询 serving projection，不维护第二套枚举。
-- 保存接口复用 `GET /v1/user/profile/edit-snapshot` 与 `PATCH /v1/user/profile`，字段为单选 `occupationTagRef` 与有序 `interestTagRefs`；兴趣最多 30 个、允许 0 个，重复输入去重保序。
+- 保存接口复用 `GET /user/profile/edit-snapshot` 与 `PATCH /user/profile`，字段为单选 `occupationTagRef` 与有序 `interestTagRefs`；兴趣最多 30 个、允许 0 个，重复输入去重保序。
 - UX 对齐个人资料页 iOS 列表风格：顶部 `< 职业与兴趣 保存`，职业单行入口；职业选择采用“大类列表 -> 二级职业列表”的两级导航；我的标签默认可编辑但不展示操作说明文案，支持右上角 `×` 删除、长按拖拽排序与轻微摇曳；全部兴趣为轻量分类胶囊 Tab + 4 列文字标签网格，添加符号与文字必须有独立避让空间，添加后从全部兴趣隐藏。
 - 保存成功后 user-service 将职业与兴趣 tagRefs 投影到 tag-service 约定的 `object_tag_index` `user` 对象索引，供 `shared-tags`、推荐解释与小趣助手偏好理解使用。
 - 环境集成：alpha 使用同源 contract/mock fixture；beta/gamma 通过 tag import 与 object index import/backfill 灌入；prod 发布包包含同一标签树与幂等导入/回填入口。
@@ -199,7 +199,7 @@
 - **不适用情形**：
   - Go 云侧 Handler 实现不在本 spec 范围
   - 端侧 Web/Desktop 适配（仅 mobile）
-  - 足迹 Tab 复用既有浏览历史 API（`GET /v1/content/footprint`），不新增后端 API
+  - 足迹 Tab 复用既有浏览历史 API（`GET /content/footprint`），不新增后端 API
 
 ## 对标输入与吸收结论
 

@@ -2,13 +2,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/platform/file_storage_gateway.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/services/create_page_remote_helpers.dart';
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../support/recording_content_media_facet.dart';
+import '../../../../support/recording_content_post_publication_writer.dart';
 
 void main() {
-  test('图片创作发布旅程保持选图顺序、远端引用、首图封面与 bind 顺序', () async {
+  test('图片创作发布旅程保持选图顺序并原子提交 MediaAsset ID', () async {
     final media = RecordingContentMediaFacet();
+    final publication = RecordingContentPostPublicationWriter();
     final fileStorage = _JourneyFileStorageGateway(<String, List<int>>{
       '/tmp/first.jpg': <int>[1],
       '/tmp/second.jpg': <int>[2],
@@ -25,7 +26,7 @@ void main() {
           body: '按用户拖动后的顺序发布。',
         );
 
-    final prepared = await buildCreatePostPayloadWithRemoteImageMedia(
+    final prepared = await buildPostPublicationPayloadWithRemoteMedia(
       media: media,
       fileStorageGateway: fileStorage,
       state: state,
@@ -37,24 +38,22 @@ void main() {
             required expectedSha256,
           }) async {},
     );
-    await media.bindPostMediaAssets(
-      BindContentPostMediaAssetsCommand(
-        postId: 'post_photo_roundtrip',
-        assetIds: prepared.mediaAssetIds,
-      ),
+    final command = submitContentPostPublicationCommandFromPreparedPayload(
+      prepared.payload,
+      localDraftId: 'draft-photo-roundtrip',
+      mediaAssetIds: prepared.mediaAssetIds,
     );
+    await publication.submitPostPublication(command);
 
     expect(prepared.payload['contentType'], 'image');
-    expect(prepared.payload['mediaUrls'], <String>[
-      'https://cdn.quwoquan.test/image_asset_1.jpg',
-      'https://cdn.quwoquan.test/image_asset_2.jpg',
-      'https://cdn.quwoquan.test/image_asset_3.jpg',
+    expect(prepared.payload, isNot(contains('mediaUrls')));
+    expect(prepared.payload, isNot(contains('coverUrl')));
+    expect(prepared.payload['mediaItems'], <Map<String, Object?>>[
+      <String, Object?>{'kind': 'image', 'mediaId': 'image_asset_1'},
+      <String, Object?>{'kind': 'image', 'mediaId': 'image_asset_2'},
+      <String, Object?>{'kind': 'image', 'mediaId': 'image_asset_3'},
     ]);
-    expect(
-      prepared.payload['coverUrl'],
-      'https://cdn.quwoquan.test/image_asset_1.jpg',
-    );
-    expect(media.boundAssetIds, <String>[
+    expect(publication.submitCommands.single.mediaAssetIds, <String>[
       'image_asset_1',
       'image_asset_2',
       'image_asset_3',

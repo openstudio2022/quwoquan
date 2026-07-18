@@ -16,10 +16,10 @@ from __future__ import annotations
 
 import hashlib
 import io
-import os
 from typing import Any
 
 from core.media_asset_url import IMAGE_VARIANT_PROFILES
+from core.media_processing_policy import MEDIA_PROCESSING_POLICY
 
 try:  # pragma: no cover - 依赖探测
     from PIL import Image  # type: ignore
@@ -30,7 +30,7 @@ except Exception:  # pragma: no cover
 
 # 仅这些 profile 在 download 阶段物理落地（original 单列；video 的 adaptive 不在此）。
 LOCAL_VARIANT_PROFILES = ("thumbnail", "display", "cover", "full")
-WEBP_METHOD = max(0, min(6, int(os.environ.get("QWQ_IMAGE_WEBP_METHOD", "4"))))
+WEBP_METHOD = MEDIA_PROCESSING_POLICY.webp_method
 
 
 def pil_available() -> bool:

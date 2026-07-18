@@ -1,8 +1,8 @@
-version: 1
 entity: Notification
 
 fields:
   - name: _id
+    source: _id
     type: string
     constraints: [PK, NOT_NULL]
     classification: PII
@@ -12,6 +12,7 @@ fields:
     description: app message stable ID，HTTP 响应字段为 messageId。
 
   - name: idempotencyKey
+    source: idempotencyKey
     type: string
     constraints: [NOT_NULL, UNIQUE]
     classification: SECRET
@@ -20,6 +21,7 @@ fields:
     ops_exposure: drop
 
   - name: userId
+    source: userId
     type: string
     constraints: [NOT_NULL]
     classification: PII
@@ -28,6 +30,7 @@ fields:
     ops_exposure: read
 
   - name: messageType
+    source: messageType
     type: enum
     enum_ref: NotificationType
     constraints: [NOT_NULL]
@@ -37,6 +40,7 @@ fields:
     ops_exposure: read
 
   - name: source
+    source: source
     type: string
     constraints: [NOT_NULL]
     classification: INTERNAL
@@ -45,6 +49,7 @@ fields:
     ops_exposure: read
 
   - name: sourceId
+    source: sourceId
     type: string
     constraints: [NOT_NULL]
     classification: PII
@@ -53,6 +58,7 @@ fields:
     ops_exposure: read
 
   - name: destination
+    source: destination
     type: object
     constraints: [NOT_NULL]
     classification: PII
@@ -61,6 +67,7 @@ fields:
     ops_exposure: read
 
   - name: title
+    source: title
     type: string
     constraints: [NOT_NULL]
     classification: PII
@@ -69,6 +76,7 @@ fields:
     ops_exposure: read
 
   - name: summary
+    source: summary
     type: string
     constraints: [NOT_NULL]
     classification: PII
@@ -77,6 +85,7 @@ fields:
     ops_exposure: read
 
   - name: target
+    source: target
     type: object
     constraints: [NOT_NULL]
     classification: PII
@@ -85,6 +94,7 @@ fields:
     ops_exposure: read
 
   - name: provenance
+    source: provenance
     type: object
     constraints: [NOT_NULL]
     classification: INTERNAL
@@ -94,6 +104,7 @@ fields:
     description: Assistant 等 producer 提交的个性化归因；只用于审计与行为回流，不向 App 暴露。
 
   - name: read
+    source: read
     type: bool
     constraints: [NOT_NULL, DEFAULT_FALSE]
     classification: INTERNAL
@@ -102,6 +113,7 @@ fields:
     ops_exposure: read
 
   - name: createdAt
+    source: createdAt
     type: timestamp
     constraints: [NOT_NULL]
     classification: INTERNAL
@@ -110,6 +122,7 @@ fields:
     ops_exposure: read
 
   - name: deliveredAt
+    source: deliveredAt
     type: timestamp
     constraints: [NULLABLE]
     classification: INTERNAL
@@ -118,6 +131,7 @@ fields:
     ops_exposure: read
 
   - name: ackedAt
+    source: ackedAt
     type: timestamp
     constraints: [NULLABLE]
     classification: INTERNAL
@@ -126,6 +140,7 @@ fields:
     ops_exposure: read
 
   - name: readAt
+    source: readAt
     type: timestamp
     constraints: [NULLABLE]
     classification: INTERNAL

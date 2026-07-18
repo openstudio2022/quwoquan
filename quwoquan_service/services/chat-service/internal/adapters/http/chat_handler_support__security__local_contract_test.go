@@ -11,7 +11,7 @@ import (
 func TestMessageActorUsesVerifiedPersonaWithoutOwnerFallback(t *testing.T) {
 	t.Parallel()
 
-	request := httptest.NewRequest("POST", "/v1/chat/conversations/c1/messages", nil)
+	request := httptest.NewRequest("POST", "/chat/conversations/c1/messages", nil)
 	request.Header.Set("X-Client-User-Id", "owner-1")
 	if got := resolvePersonaID(request); got != "" {
 		t.Fatalf("persona actor fell back to owner ID: %q", got)

@@ -5,12 +5,11 @@ import urllib.parse
 from typing import Any, Mapping
 
 from core.content_source_registry import (
+    homepage_core_source_limit,
     homepage_primary_authority_rank,
     homepage_source_can_seed_base_draft,
 )
 from content.source.research.source_registry import _travel_registry_url_fetchable
-
-_HOMEPAGE_CORE_SOURCE_LIMIT = 5
 
 def _homepage_plan_sort_key(source: Mapping[str, Any]) -> tuple[int, int, str]:
     platform = str(source.get("platform") or "")
@@ -24,9 +23,9 @@ def _homepage_plan_sort_key(source: Mapping[str, Any]) -> tuple[int, int, str]:
     return (bucket, confidence, platform)
 
 def _homepage_core_sources(sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """主页正文来源必须先经过 registry 四百科闭集准入。"""
+    """主页正文来源必须先经过 registry 三百科闭集准入。"""
     admitted = [source for source in sources if homepage_source_can_seed_base_draft(source)]
-    return sorted(admitted, key=_homepage_plan_sort_key)[:_HOMEPAGE_CORE_SOURCE_LIMIT]
+    return sorted(admitted, key=_homepage_plan_sort_key)[:homepage_core_source_limit()]
 
 _HOMEPAGE_SUPPORT_ONLY_SOURCE_MARKERS = (
     "权威媒体",
@@ -37,7 +36,6 @@ _HOMEPAGE_NON_HOMEPAGE_SOURCE_MARKERS = ("攻略", "游记", "评论", "点评",
 
 _HOMEPAGE_TEXT_EVIDENCE_REQUIRED_DOMAINS = (
     "baike.baidu.com",
-    "baike.sogou.com",
     "baike.com",
 )
 

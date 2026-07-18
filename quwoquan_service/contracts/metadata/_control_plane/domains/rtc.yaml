@@ -1,4 +1,3 @@
-version: 1
 domain: rtc
 display_name: RTC
 template_role: backlog_candidate

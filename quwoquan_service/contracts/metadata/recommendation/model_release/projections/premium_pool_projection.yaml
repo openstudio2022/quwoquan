@@ -1,11 +1,10 @@
-version: 1
 read_model: PremiumPoolProjection
 
 description: |
   Product-ops global premium pool projected into the content-service
   recommendation read model. The feed read path consumes this projection only;
   it must not synchronously call product-ops, quality scoring, data-engineering
-  jobs, or /v1/score.
+  jobs, or /score.
 
 storage_backend: mongodb
 collection: rm_premium_pool

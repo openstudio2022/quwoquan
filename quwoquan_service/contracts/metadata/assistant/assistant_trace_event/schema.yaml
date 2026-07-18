@@ -2,7 +2,6 @@ dart_class: AssistantTraceEventWire
 library_path: assistant/generated/contracts/assistant_trace_event.g.dart
 output_path: assistant/generated/contracts/assistant_trace_event.g.dart
 contract: assistant_trace_event
-version: assistant_trace_event.m5
 kind: shared_wire_contract
 imports:
   - package:quwoquan_app/assistant/generated/contracts/runtime_failure.g.dart

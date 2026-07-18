@@ -66,12 +66,14 @@ var homepageSourceKinds = map[string]bool{
 	"wikipedia": true, "baidu_baike": true, "sogou_baike": true, "toutiao_baike": true,
 }
 
+const homepageSourcePolicy = "encyclopedia-primary"
+
 func validatePublicHomepageSources(header entityHeader) error {
 	if header.PrimarySource == nil || !homepageSourceKinds[strings.TrimSpace(header.PrimarySource.SourceKind)] {
 		return fmt.Errorf("primarySource.sourceKind 不在四百科闭集")
 	}
-	if header.PrimarySource.PolicyRevision != "encyclopedia-primary-v2" {
-		return fmt.Errorf("primarySource.policyRevision 非 v2")
+	if header.PrimarySource.PolicyRevision != homepageSourcePolicy {
+		return fmt.Errorf("primarySource.policyRevision 与当前合同不一致")
 	}
 	if len(header.SourceURLs) == 0 || strings.TrimSpace(header.PrimarySource.SourceURL) != strings.TrimSpace(header.SourceURLs[0]) {
 		return fmt.Errorf("sourceUrls 与 primarySource.sourceUrl 不一致")

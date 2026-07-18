@@ -1,4 +1,3 @@
-version: 1
 read_model: WorkBrowserMediaItem
 description: |
   Work Browser 统一媒体序列单元（Post.mediaItems 元素的端侧投影）。
@@ -17,41 +16,59 @@ client_projection:
       dart_type: String
       nullable: false
       source: kind
-      aliases: [kind, type]
       default: "''"
     - name: url
       dart_type: String
       nullable: false
       source: url
-      aliases: [url, videoUrl, imageUrl]
       default: "''"
     - name: coverUrl
       dart_type: String
       nullable: true
       source: coverUrl
-      aliases: [coverUrl, thumbnailUrl]
       default: "null"
     - name: durationMs
       dart_type: int
       nullable: true
       source: durationMs
-      aliases: [durationMs, duration_ms]
       default: "null"
+      description: "ready MediaAsset 服务端探测的权威视频时长（毫秒）"
+    - name: mediaAssetId
+      dart_type: String
+      nullable: true
+      source: mediaAssetId
+      default: "null"
+      description: "ready MediaAsset 业务 ID；视频分集 descriptor 版本绑定锚点"
+    - name: mediaAssetVersion
+      dart_type: int
+      nullable: true
+      source: mediaAssetVersion
+      default: "null"
+      description: "ready MediaAsset 版本"
+    - name: previewTrackManifestUrl
+      dart_type: String
+      nullable: true
+      source: previewTrackManifestUrl
+      default: "null"
+      description: "asset/version 绑定的 storyboard manifest 公开交付 URL"
+    - name: previewTrackVersion
+      dart_type: int
+      nullable: true
+      source: previewTrackVersion
+      default: "null"
+      description: "storyboard 预览轨版本"
     - name: width
       dart_type: int
       nullable: true
       source: width
-      aliases: [width]
       default: "null"
     - name: height
       dart_type: int
       nullable: true
       source: height
-      aliases: [height]
       default: "null"
     - name: title
       dart_type: String
       nullable: true
       source: title
-      aliases: [title]
       default: "null"

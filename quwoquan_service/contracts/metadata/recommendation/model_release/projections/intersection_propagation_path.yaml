@@ -1,4 +1,3 @@
-version: 1
 read_model: IntersectionPropagationPath
 description: |
   交集传播链值对象（架构基线 v2 §21.4 · 统一交互子契约延伸；草案/未冻结）。
@@ -32,35 +31,29 @@ client_projection:
       dart_type: String
       nullable: false
       source: pathKind
-      aliases: [pathKind]
       default: "''"
     - name: hopCount
       dart_type: int
       nullable: false
       source: hopCount
-      aliases: [hopCount]
       default: "0"
     - name: secondarySpreadCount
       dart_type: int
       nullable: false
       source: secondarySpreadCount
-      aliases: [secondarySpreadCount]
       default: "0"
     - name: summaryText
       dart_type: String
       nullable: false
       source: summaryText
-      aliases: [summaryText]
       default: "''"
     - name: summaryTarget
       dart_type: IntersectionTarget
       nullable: true
       source: summaryTarget
-      aliases: [summaryTarget]
       map_from_string_key_class: IntersectionTarget
     - name: nodes
       dart_type: List<IntersectionVisual>
       nullable: false
       source: nodes
-      aliases: [nodes]
       list_element_dart_class: IntersectionVisual

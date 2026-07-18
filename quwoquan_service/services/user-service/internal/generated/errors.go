@@ -259,7 +259,7 @@ func AppErrorFromInvalidAppearanceScope(debugMessage string) *rerrors.AppError {
 // AppErrorFromInternalError returns *AppError for USER.SYSTEM.internal_error (user_message from errors.yaml).
 func AppErrorFromInternalError(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInternalError.Error()))
-	return rerrors.NewAppError(code, "服务异常，请稍后重试", debugMessage).WithMetadata("internal_error", 500).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "登录服务暂不可用，请使用其他方式登录", debugMessage).WithMetadata("internal_error", 500).WithRecovery("surface", 0)
 }
 
 // AppErrorFromOtpExpired returns *AppError for USER.AUTH.otp_expired (user_message from errors.yaml).
@@ -283,13 +283,13 @@ func AppErrorFromOtpAttemptsExceeded(debugMessage string) *rerrors.AppError {
 // AppErrorFromOtpRateLimited returns *AppError for USER.AUTH.otp_rate_limited (user_message from errors.yaml).
 func AppErrorFromOtpRateLimited(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrOtpRateLimited.Error()))
-	return rerrors.NewAppError(code, "发送过于频繁，请稍后再试", debugMessage).WithMetadata("rate_limited", 429).WithRecoveryDirective("retry", "inlineCard", 60)
+	return rerrors.NewAppError(code, "操作过于频繁，请稍后重试", debugMessage).WithMetadata("rate_limited", 429).WithRecoveryDirective("retry", "inlineCard", 60)
 }
 
 // AppErrorFromOtpProviderFailed returns *AppError for USER.AUTH.otp_provider_failed (user_message from errors.yaml).
 func AppErrorFromOtpProviderFailed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrOtpProviderFailed.Error()))
-	return rerrors.NewAppError(code, "验证码发送失败，请重试或换其它方式", debugMessage).WithMetadata("third_party_failure", 502).WithRecoveryDirective("retry", "inlineCard", 0)
+	return rerrors.NewAppError(code, "验证码发送失败，请稍后重试", debugMessage).WithMetadata("third_party_failure", 502).WithRecoveryDirective("retry", "inlineCard", 0)
 }
 
 // AppErrorFromCredentialConflict returns *AppError for USER.AUTH.credential_conflict (user_message from errors.yaml).
@@ -337,7 +337,7 @@ func AppErrorFromSocialProviderCancelled(debugMessage string) *rerrors.AppError 
 // AppErrorFromSocialProviderUnavailable returns *AppError for USER.AUTH.social_provider_unavailable (user_message from errors.yaml).
 func AppErrorFromSocialProviderUnavailable(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrSocialProviderUnavailable.Error()))
-	return rerrors.NewAppError(code, "第三方登录暂不可用，请改用其他方式", debugMessage).WithMetadata("third_party_unavailable", 503).WithRecoveryDirective("fallback", "inlineCard", 0)
+	return rerrors.NewAppError(code, "第三方登录暂不可用，请使用其他方式登录", debugMessage).WithMetadata("third_party_unavailable", 503).WithRecoveryDirective("fallback", "inlineCard", 0)
 }
 
 // AppErrorFromAppleAuthFailed returns *AppError for USER.AUTH.apple_auth_failed (user_message from errors.yaml).
@@ -361,19 +361,19 @@ func AppErrorFromTokenExpired(debugMessage string) *rerrors.AppError {
 // AppErrorFromCarrierUnavailable returns *AppError for USER.AUTH.carrier_unavailable (user_message from errors.yaml).
 func AppErrorFromCarrierUnavailable(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrCarrierUnavailable.Error()))
-	return rerrors.NewAppError(code, "本机号码登录暂不可用，请使用短信验证码", debugMessage).WithMetadata("third_party_unavailable", 503).WithRecoveryDirective("fallback", "inlineCard", 0)
+	return rerrors.NewAppError(code, "本机号码登录暂不可用，请使用其他方式登录", debugMessage).WithMetadata("third_party_unavailable", 503).WithRecoveryDirective("fallback", "inlineCard", 0)
 }
 
 // AppErrorFromCarrierTokenInvalid returns *AppError for USER.AUTH.carrier_token_invalid (user_message from errors.yaml).
 func AppErrorFromCarrierTokenInvalid(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrCarrierTokenInvalid.Error()))
-	return rerrors.NewAppError(code, "本机号码授权已失效，请使用短信验证码", debugMessage).WithMetadata("invalid_token", 400).WithRecoveryDirective("fallback", "inlineCard", 0)
+	return rerrors.NewAppError(code, "本机号码授权已失效，请使用其他方式登录", debugMessage).WithMetadata("invalid_token", 400).WithRecoveryDirective("fallback", "inlineCard", 0)
 }
 
 // AppErrorFromCarrierProviderTimeout returns *AppError for USER.AUTH.carrier_provider_timeout (user_message from errors.yaml).
 func AppErrorFromCarrierProviderTimeout(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrCarrierProviderTimeout.Error()))
-	return rerrors.NewAppError(code, "本机号码校验超时，请使用短信验证码", debugMessage).WithMetadata("upstream_timeout", 504).WithRecoveryDirective("retry", "inlineCard", 0)
+	return rerrors.NewAppError(code, "本机号码校验超时，请使用其他方式登录", debugMessage).WithMetadata("upstream_timeout", 504).WithRecoveryDirective("retry", "inlineCard", 0)
 }
 
 // AppErrorFromCarrierPhoneMismatch returns *AppError for USER.AUTH.carrier_phone_mismatch (user_message from errors.yaml).
@@ -391,13 +391,13 @@ func AppErrorFromConsentRequired(debugMessage string) *rerrors.AppError {
 // AppErrorFromAccountSuspended returns *AppError for USER.AUTH.account_suspended (user_message from errors.yaml).
 func AppErrorFromAccountSuspended(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrAccountSuspended.Error()))
-	return rerrors.NewAppError(code, "账号已被限制登录，请按页面提示处理", debugMessage).WithMetadata("suspended", 403).WithRecoveryDirective("escalate", "inlineCard", 0)
+	return rerrors.NewAppError(code, "账号已被限制登录，请更换手机号或联系支持", debugMessage).WithMetadata("suspended", 403).WithRecoveryDirective("escalate", "inlineCard", 0)
 }
 
 // AppErrorFromAccountDeleted returns *AppError for USER.AUTH.account_deleted (user_message from errors.yaml).
 func AppErrorFromAccountDeleted(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrAccountDeleted.Error()))
-	return rerrors.NewAppError(code, "账号已注销或进入删除流程，无法直接登录", debugMessage).WithMetadata("deleted", 410).WithRecoveryDirective("escalate", "inlineCard", 0)
+	return rerrors.NewAppError(code, "账号已注销或进入删除流程，请更换手机号登录", debugMessage).WithMetadata("deleted", 410).WithRecoveryDirective("escalate", "inlineCard", 0)
 }
 
 // AppErrorFromSubAccountNotFound returns *AppError for USER.SUB_ACCOUNT.not_found (user_message from errors.yaml).

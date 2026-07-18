@@ -13,6 +13,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	rtrec "quwoquan_service/runtime/recommendation"
+	postevent "quwoquan_service/services/content-service/internal/domain/post/event"
 )
 
 // RecommendFeatureProjector maintains the rm_recommend_feature read model.
@@ -55,16 +56,16 @@ func (p *RecommendFeatureProjector) Name() string { return "RecommendFeatureProj
 
 func (p *RecommendFeatureProjector) EventTypes() []string {
 	return []string{
-		"PostCreated", "EventBatchReported",
+		postevent.PostPublished, "BehaviorBatchReported",
 		"PersonaFollowStateChanged", "CircleMemberJoined", "SearchRecommendationSignalPublished",
 	}
 }
 
 func (p *RecommendFeatureProjector) Project(ctx context.Context, event ProjectorEvent) error {
 	switch event.Type {
-	case "PostCreated":
-		return p.onPostCreated(ctx, event)
-	case "EventBatchReported":
+	case postevent.PostPublished:
+		return p.onPostPublished(ctx, event)
+	case "BehaviorBatchReported":
 		return p.onBehaviorBatch(ctx, event)
 	case "PersonaFollowStateChanged":
 		return p.onPersonaFollowStateChanged(ctx, event)
@@ -135,7 +136,7 @@ func (p *RecommendFeatureProjector) onSearchRecommendationSignal(ctx context.Con
 	return nil
 }
 
-func (p *RecommendFeatureProjector) onPostCreated(ctx context.Context, event ProjectorEvent) error {
+func (p *RecommendFeatureProjector) onPostPublished(ctx context.Context, event ProjectorEvent) error {
 	userID := strVal(event.Payload, "authorId")
 	if userID == "" {
 		userID = strVal(event.Payload, "userId")
@@ -488,7 +489,6 @@ func (p *RecommendFeatureProjector) injectSignal(ctx context.Context, userID, co
 		Timestamp: time.Now().UTC(),
 	}})
 }
-
 
 func (p *RecommendFeatureProjector) onPersonaFollowStateChanged(ctx context.Context, event ProjectorEvent) error {
 	userID := strVal(event.Payload, "sourcePersonaId")

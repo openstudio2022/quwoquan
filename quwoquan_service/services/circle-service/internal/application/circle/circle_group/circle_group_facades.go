@@ -45,9 +45,8 @@ type UpdateCommand struct {
 }
 
 type ArchiveCommand struct {
-	CircleID        string
-	GroupID         string
-	ExpectedVersion int64
+	CircleID string
+	GroupID  string
 }
 
 type CommandResult struct {
@@ -133,12 +132,16 @@ func (facade *CommandFacade) Archive(ctx context.Context, command ArchiveCommand
 	if err != nil {
 		return CommandResult{}, err
 	}
-	if command.ExpectedVersion <= 0 {
-		return CommandResult{}, generated.AppErrorFromInvalidArgument("If-Match version is required")
+	if group.Status == groupmodel.CircleGroupStatusArchived {
+		return CommandResult{
+			GroupID: group.ID,
+			Version: group.Version,
+			Status:  string(group.Status),
+		}, nil
 	}
 	return facade.commit(ctx, current, actorID, groupmodel.ChangeSet{
 		Kind: groupmodel.ChangeArchive, GroupID: group.ID, CircleID: group.CircleID,
-		ExpectedVersion: command.ExpectedVersion, OccurredAt: facade.now().UTC(),
+		ExpectedVersion: group.Version, OccurredAt: facade.now().UTC(),
 	})
 }
 
@@ -208,14 +211,36 @@ func (facade *CommandFacade) commit(ctx context.Context, current operation.Conte
 	if err != nil {
 		return CommandResult{}, generated.AppErrorFromGroupStorageWriteFailed(err.Error())
 	}
-	receipt, err := facade.store.Commit(ctx, groupports.CommitRequest{
-		Change: change, ReceiptKey: groupReceiptKey(actorID, current.IdempotencyKey),
-		CommandDigest: digest, ReceiptExpiresAt: facade.now().UTC().Add(groupReceiptRetention),
-	})
-	if err != nil {
-		return CommandResult{}, mapGroupCommitError(err)
+	for attempt := 0; attempt < 3; attempt++ {
+		receipt, commitErr := facade.store.Commit(ctx, groupports.CommitRequest{
+			Change: change, ReceiptKey: groupReceiptKey(actorID, current.IdempotencyKey),
+			CommandDigest: digest, ReceiptExpiresAt: facade.now().UTC().Add(groupReceiptRetention),
+		})
+		if commitErr == nil {
+			return CommandResult{GroupID: receipt.GroupID, Version: receipt.Version, Status: string(receipt.Status), IdempotentReplay: receipt.Replayed}, nil
+		}
+		if change.Kind != groupmodel.ChangeArchive ||
+			!errors.Is(commitErr, groupmodel.ErrVersionConflict) ||
+			attempt == 2 {
+			return CommandResult{}, mapGroupCommitError(commitErr)
+		}
+		latest, found, loadErr := facade.store.Load(ctx, change.GroupID)
+		if loadErr != nil {
+			return CommandResult{}, generated.AppErrorFromGroupStorageWriteFailed(loadErr.Error())
+		}
+		if !found {
+			return CommandResult{}, mapGroupCommitError(groupmodel.ErrNotFound)
+		}
+		if latest.Status == groupmodel.CircleGroupStatusArchived {
+			return CommandResult{
+				GroupID: latest.ID,
+				Version: latest.Version,
+				Status:  string(latest.Status),
+			}, nil
+		}
+		change.ExpectedVersion = latest.Version
 	}
-	return CommandResult{GroupID: receipt.GroupID, Version: receipt.Version, Status: string(receipt.Status), IdempotentReplay: receipt.Replayed}, nil
+	panic("unreachable CircleGroup commit retry")
 }
 
 func trustedGroupCommandContext(ctx context.Context) (operation.Context, string, error) {
@@ -229,6 +254,9 @@ func trustedGroupCommandContext(ctx context.Context) (operation.Context, string,
 func groupCommandDigest(actorID string, change groupmodel.ChangeSet) (string, error) {
 	copy := change
 	copy.OccurredAt = time.Time{}
+	if copy.Kind == groupmodel.ChangeArchive {
+		copy.ExpectedVersion = 0
+	}
 	payload, err := json.Marshal(struct {
 		ActorID string               `json:"actorId"`
 		Change  groupmodel.ChangeSet `json:"change"`

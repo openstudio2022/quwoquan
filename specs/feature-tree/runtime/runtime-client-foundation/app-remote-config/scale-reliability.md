@@ -1,4 +1,4 @@
-# /v1/config/app 高并发与可靠性
+# /config/app 高并发与可靠性
 
 ## 冷启动请求模型
 
@@ -24,7 +24,7 @@ App 冷启动会在首帧后触发远程配置刷新。接口必须按“少个�
 
 - 发布时预计算快照，运行时只读快照。
 - 单实例内对 miss 使用 singleflight。
-- 控制面不可用时不阻塞 `/v1/config/app`，继续返回最近快照或 embedded fallback。
+- 控制面不可用时不阻塞 `/config/app`，继续返回最近快照或 embedded fallback。
 - 高并发冷启动场景下，匿名/低个性化配置允许 CDN/边缘缓存。
 
 ## SLO

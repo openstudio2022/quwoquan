@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """可重复的搜索高并发压测工具（stdlib-only，无外部依赖）。
 
-驱动 search-service 的 /v1/search 与 /v1/search/feedback，按 search_slo.yaml#load_model
+驱动 search-service 的 /search 与 /search/feedback，按 search_slo.yaml#load_model
 冻结的负载模型计算分位数/错误率/降级率，并对照 target 给出每场景 GO/NO-GO。
 
 设计要点（吸收业界搜索压测实践）：
@@ -88,7 +88,7 @@ def _cold_query(rng: random.Random) -> str:
 def _build_request(scenario: str, rng: random.Random) -> tuple[str, dict]:
     """返回 (path, json_body)。"""
     if scenario == "feedback":
-        return "/v1/search/feedback", {
+        return "/search/feedback", {
             "searchRequestId": f"load-{rng.randint(0, 1 << 30)}",
             "eventType": rng.choice(["impression", "click", "dwell"]),
             "objectId": "posts/article/index/load/1",
@@ -100,7 +100,7 @@ def _build_request(scenario: str, rng: random.Random) -> tuple[str, dict]:
         query = _cold_query(rng)
     mode = "suggest" if scenario.startswith("suggest") else "result"
     limit = 12 if mode == "suggest" else 20
-    return "/v1/search", {"query": query, "mode": mode, "limit": limit}
+    return "/search", {"query": query, "mode": mode, "limit": limit}
 
 
 def _pick_mixed(rng: random.Random) -> str:

@@ -30,6 +30,7 @@ void main() {
     'user_acceptance.page.userProfile.empty_permission_error',
     'user_acceptance.page.userProfile.primary_cta',
     'user_acceptance.page.userProfile.trace_context',
+    'user_acceptance.page.userProfile.request_wait_recovery',
   ];
 
     expect(surfaceId, isNotEmpty);
@@ -42,6 +43,7 @@ void main() {
       'user_acceptance.page.$surfaceId.empty_permission_error',
       'user_acceptance.page.$surfaceId.primary_cta',
       'user_acceptance.page.$surfaceId.trace_context',
+      'user_acceptance.page.$surfaceId.request_wait_recovery',
     ]));
 
     for (final path in <String>[...sourceEvidence, ...apiEvidence]) {

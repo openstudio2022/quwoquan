@@ -1,4 +1,3 @@
-version: 1
 read_model: PersonaManagementSummaryWire
 
 description: |
@@ -19,19 +18,16 @@ client_projection:
       dart_type: List<Map<String, dynamic>>
       nullable: false
       source: items
-      aliases: [items, subAccounts, personas]
       default: "const <Map<String, dynamic>>[]"
 
     - name: quota
       dart_type: Map<String, dynamic>
       nullable: true
       source: quota
-      aliases: [quota]
       default: "null"
 
     - name: activeContext
       dart_type: Map<String, dynamic>
       nullable: true
       source: activeContext
-      aliases: [activeContext, activePersonaContext]
       default: "null"

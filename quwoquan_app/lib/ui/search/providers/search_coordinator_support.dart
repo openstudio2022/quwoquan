@@ -1,5 +1,19 @@
 part of 'search_coordinator.dart';
 
+class _SuggestionDomainOutcome {
+  const _SuggestionDomainOutcome({this.error});
+
+  final Object? error;
+  bool get failed => error != null;
+}
+
+class _LocalSuggestionResult {
+  const _LocalSuggestionResult({required this.sections, this.error});
+
+  final List<SearchSuggestionSection> sections;
+  final Object? error;
+}
+
 String _historyKeyForEntry(RecentSearchEntryView entry) {
   return '${entry.scope.wireValue}|${entry.facet ?? ''}|${entry.query.toLowerCase()}';
 }

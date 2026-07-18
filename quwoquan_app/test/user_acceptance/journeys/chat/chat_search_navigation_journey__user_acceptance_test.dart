@@ -18,12 +18,12 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_conversation_page.dart';
-import 'package:quwoquan_app/ui/chat/pages/chat_conversation_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
 import 'package:quwoquan_app/ui/chat/providers/voice_offline_queue.dart';
 import 'package:quwoquan_app/ui/chat/providers/voice_send_provider.dart';
 import 'package:quwoquan_app/ui/search/pages/global_search_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../support/fixtures/chat/chat_mock_seed_refs.dart';
 
@@ -255,7 +255,11 @@ final class _MockModeNotifier extends AppDataSourceModeNotifier {
 
 class _FakeSearchRepository implements SearchRepository {
   @override
-  Future<SearchResponse> search(SearchRequest request) async {
+  Future<SearchResponse> search(
+    SearchRequest request, {
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  }) async {
     final normalized = request.normalized();
     if (normalized.mode != SearchMode.suggest || normalized.query != '群') {
       return SearchResponse(

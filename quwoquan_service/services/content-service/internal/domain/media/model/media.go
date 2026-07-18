@@ -329,24 +329,51 @@ func (s *MediaUploadSession) advance(now time.Time) error {
 
 // MediaAssetSnapshot is the persistence boundary for MediaAsset.
 type MediaAssetSnapshot struct {
-	ID                      string
-	Version                 int64
-	OwnerID                 string
-	SourceSessionID         string
-	ObjectKey               string
-	SHA256                  string
-	MediaType               string
-	ContentType             string
-	FileSize                int64
-	AccessPolicy            AccessPolicy
-	ProcessingStatus        ProcessingStatus
-	ProcessingFailureReason string
-	CoverStrategy           string
-	ManualCoverAssetID      string
-	CoverFrameTimeMs        int64
-	CreatedAt               time.Time
-	UpdatedAt               time.Time
-	ProcessedAt             *time.Time
+	ID                           string
+	Version                      int64
+	OwnerID                      string
+	SourceSessionID              string
+	ObjectKey                    string
+	SHA256                       string
+	MediaType                    string
+	ContentType                  string
+	FileSize                     int64
+	AccessPolicy                 AccessPolicy
+	ProcessingStatus             ProcessingStatus
+	ProcessingFailureReason      string
+	ProcessorProfile             string
+	VerifiedDurationMs           int64
+	VideoWidth                   int
+	VideoHeight                  int
+	VideoCodec                   string
+	VideoContainer               string
+	VideoPublicSliceKey          string
+	CoverPublicSliceKey          string
+	PreviewTrackVersion          int
+	PreviewTrackManifestSliceKey string
+	CoverStrategy                string
+	ManualCoverAssetID           string
+	CoverFrameTimeMs             int64
+	CreatedAt                    time.Time
+	UpdatedAt                    time.Time
+	ProcessedAt                  *time.Time
+}
+
+// VideoProcessingDescriptor is the trusted output produced by the VOD worker.
+// It is bound to a MediaAsset version by the processing-result command, never
+// accepted from a publishing client, and deliberately contains slice keys rather
+// than directly consumable URLs.
+type VideoProcessingDescriptor struct {
+	ProcessorProfile             string
+	VerifiedDurationMs           int64
+	VideoWidth                   int
+	VideoHeight                  int
+	VideoCodec                   string
+	VideoContainer               string
+	VideoPublicSliceKey          string
+	CoverPublicSliceKey          string
+	PreviewTrackVersion          int
+	PreviewTrackManifestSliceKey string
 }
 
 type CreateMediaAssetParams struct {
@@ -366,24 +393,34 @@ type CreateMediaAssetParams struct {
 // MediaAsset is a durable, independently authorized media object. It never
 // derives its owner or processing state from PostService process-local maps.
 type MediaAsset struct {
-	id                      string
-	version                 int64
-	ownerID                 string
-	sourceSessionID         string
-	objectKey               string
-	sha256                  string
-	mediaType               string
-	contentType             string
-	fileSize                int64
-	accessPolicy            AccessPolicy
-	processingStatus        ProcessingStatus
-	processingFailureReason string
-	coverStrategy           string
-	manualCoverAssetID      string
-	coverFrameTimeMs        int64
-	createdAt               time.Time
-	updatedAt               time.Time
-	processedAt             *time.Time
+	id                           string
+	version                      int64
+	ownerID                      string
+	sourceSessionID              string
+	objectKey                    string
+	sha256                       string
+	mediaType                    string
+	contentType                  string
+	fileSize                     int64
+	accessPolicy                 AccessPolicy
+	processingStatus             ProcessingStatus
+	processingFailureReason      string
+	processorProfile             string
+	verifiedDurationMs           int64
+	videoWidth                   int
+	videoHeight                  int
+	videoCodec                   string
+	videoContainer               string
+	videoPublicSliceKey          string
+	coverPublicSliceKey          string
+	previewTrackVersion          int
+	previewTrackManifestSliceKey string
+	coverStrategy                string
+	manualCoverAssetID           string
+	coverFrameTimeMs             int64
+	createdAt                    time.Time
+	updatedAt                    time.Time
+	processedAt                  *time.Time
 }
 
 func CreateMediaAsset(params CreateMediaAssetParams) (*MediaAsset, error) {
@@ -418,24 +455,34 @@ func CreateMediaAsset(params CreateMediaAssetParams) (*MediaAsset, error) {
 
 func RestoreMediaAsset(snapshot MediaAssetSnapshot) (*MediaAsset, error) {
 	asset := &MediaAsset{
-		id:                      strings.TrimSpace(snapshot.ID),
-		version:                 snapshot.Version,
-		ownerID:                 strings.TrimSpace(snapshot.OwnerID),
-		sourceSessionID:         strings.TrimSpace(snapshot.SourceSessionID),
-		objectKey:               strings.TrimSpace(snapshot.ObjectKey),
-		sha256:                  normalizeDigest(snapshot.SHA256),
-		mediaType:               strings.TrimSpace(snapshot.MediaType),
-		contentType:             strings.TrimSpace(snapshot.ContentType),
-		fileSize:                snapshot.FileSize,
-		accessPolicy:            snapshot.AccessPolicy,
-		processingStatus:        snapshot.ProcessingStatus,
-		processingFailureReason: strings.TrimSpace(snapshot.ProcessingFailureReason),
-		coverStrategy:           strings.TrimSpace(snapshot.CoverStrategy),
-		manualCoverAssetID:      strings.TrimSpace(snapshot.ManualCoverAssetID),
-		coverFrameTimeMs:        snapshot.CoverFrameTimeMs,
-		createdAt:               snapshot.CreatedAt.UTC(),
-		updatedAt:               snapshot.UpdatedAt.UTC(),
-		processedAt:             cloneTime(snapshot.ProcessedAt),
+		id:                           strings.TrimSpace(snapshot.ID),
+		version:                      snapshot.Version,
+		ownerID:                      strings.TrimSpace(snapshot.OwnerID),
+		sourceSessionID:              strings.TrimSpace(snapshot.SourceSessionID),
+		objectKey:                    strings.TrimSpace(snapshot.ObjectKey),
+		sha256:                       normalizeDigest(snapshot.SHA256),
+		mediaType:                    strings.TrimSpace(snapshot.MediaType),
+		contentType:                  strings.TrimSpace(snapshot.ContentType),
+		fileSize:                     snapshot.FileSize,
+		accessPolicy:                 snapshot.AccessPolicy,
+		processingStatus:             snapshot.ProcessingStatus,
+		processingFailureReason:      strings.TrimSpace(snapshot.ProcessingFailureReason),
+		processorProfile:             strings.TrimSpace(snapshot.ProcessorProfile),
+		verifiedDurationMs:           snapshot.VerifiedDurationMs,
+		videoWidth:                   snapshot.VideoWidth,
+		videoHeight:                  snapshot.VideoHeight,
+		videoCodec:                   strings.TrimSpace(snapshot.VideoCodec),
+		videoContainer:               strings.TrimSpace(snapshot.VideoContainer),
+		videoPublicSliceKey:          strings.TrimSpace(snapshot.VideoPublicSliceKey),
+		coverPublicSliceKey:          strings.TrimSpace(snapshot.CoverPublicSliceKey),
+		previewTrackVersion:          snapshot.PreviewTrackVersion,
+		previewTrackManifestSliceKey: strings.TrimSpace(snapshot.PreviewTrackManifestSliceKey),
+		coverStrategy:                strings.TrimSpace(snapshot.CoverStrategy),
+		manualCoverAssetID:           strings.TrimSpace(snapshot.ManualCoverAssetID),
+		coverFrameTimeMs:             snapshot.CoverFrameTimeMs,
+		createdAt:                    snapshot.CreatedAt.UTC(),
+		updatedAt:                    snapshot.UpdatedAt.UTC(),
+		processedAt:                  cloneTime(snapshot.ProcessedAt),
 	}
 	if err := asset.validate(); err != nil {
 		return nil, err
@@ -446,6 +493,7 @@ func RestoreMediaAsset(snapshot MediaAssetSnapshot) (*MediaAsset, error) {
 func (a *MediaAsset) RecordProcessingResult(
 	status ProcessingStatus,
 	failureReason string,
+	descriptor VideoProcessingDescriptor,
 	now time.Time,
 ) error {
 	if a == nil || a.processingStatus != ProcessingStatusProcessing {
@@ -460,13 +508,62 @@ func (a *MediaAsset) RecordProcessingResult(
 	if status == ProcessingStatusReady && strings.TrimSpace(failureReason) != "" {
 		return fmt.Errorf("%w: ready asset cannot carry failure reason", ErrInvalidMediaAsset)
 	}
+	if err := a.validateProcessingDescriptor(status, descriptor); err != nil {
+		return err
+	}
 	if err := a.advance(now); err != nil {
 		return err
 	}
 	processedAt := a.updatedAt
 	a.processingStatus = status
 	a.processingFailureReason = strings.TrimSpace(failureReason)
+	if status == ProcessingStatusReady {
+		a.processorProfile = strings.TrimSpace(descriptor.ProcessorProfile)
+		a.verifiedDurationMs = descriptor.VerifiedDurationMs
+		a.videoWidth = descriptor.VideoWidth
+		a.videoHeight = descriptor.VideoHeight
+		a.videoCodec = strings.TrimSpace(descriptor.VideoCodec)
+		a.videoContainer = strings.TrimSpace(descriptor.VideoContainer)
+		a.videoPublicSliceKey = strings.TrimSpace(descriptor.VideoPublicSliceKey)
+		a.coverPublicSliceKey = strings.TrimSpace(descriptor.CoverPublicSliceKey)
+		a.previewTrackVersion = descriptor.PreviewTrackVersion
+		a.previewTrackManifestSliceKey = strings.TrimSpace(descriptor.PreviewTrackManifestSliceKey)
+	}
 	a.processedAt = &processedAt
+	return nil
+}
+
+func (a *MediaAsset) validateProcessingDescriptor(
+	status ProcessingStatus,
+	descriptor VideoProcessingDescriptor,
+) error {
+	if a.mediaType != "video" {
+		if descriptor != (VideoProcessingDescriptor{}) {
+			return fmt.Errorf("%w: non-video processing result carries video descriptor", ErrInvalidMediaAsset)
+		}
+		return nil
+	}
+	if status == ProcessingStatusRejected {
+		if descriptor != (VideoProcessingDescriptor{}) {
+			return fmt.Errorf("%w: rejected video carries descriptor", ErrInvalidMediaAsset)
+		}
+		return nil
+	}
+	if strings.TrimSpace(descriptor.ProcessorProfile) == "" ||
+		descriptor.VerifiedDurationMs <= 0 ||
+		descriptor.VideoWidth <= 0 ||
+		descriptor.VideoHeight <= 0 ||
+		strings.TrimSpace(descriptor.VideoCodec) == "" ||
+		strings.TrimSpace(descriptor.VideoContainer) == "" ||
+		strings.TrimSpace(descriptor.VideoPublicSliceKey) == "" ||
+		strings.TrimSpace(descriptor.CoverPublicSliceKey) == "" {
+		return fmt.Errorf("%w: ready video requires a complete VOD descriptor", ErrInvalidMediaAsset)
+	}
+	if descriptor.PreviewTrackVersion < 0 ||
+		(descriptor.PreviewTrackVersion == 0 && strings.TrimSpace(descriptor.PreviewTrackManifestSliceKey) != "") ||
+		(descriptor.PreviewTrackVersion > 0 && strings.TrimSpace(descriptor.PreviewTrackManifestSliceKey) == "") {
+		return fmt.Errorf("%w: preview track version and manifest must be paired", ErrInvalidMediaAsset)
+	}
 	return nil
 }
 
@@ -644,29 +741,57 @@ func (a *MediaAsset) CoverFrameTimeMs() int64 {
 	return a.coverFrameTimeMs
 }
 
+func (a *MediaAsset) VideoProcessingDescriptor() VideoProcessingDescriptor {
+	if a == nil {
+		return VideoProcessingDescriptor{}
+	}
+	return VideoProcessingDescriptor{
+		ProcessorProfile:             a.processorProfile,
+		VerifiedDurationMs:           a.verifiedDurationMs,
+		VideoWidth:                   a.videoWidth,
+		VideoHeight:                  a.videoHeight,
+		VideoCodec:                   a.videoCodec,
+		VideoContainer:               a.videoContainer,
+		VideoPublicSliceKey:          a.videoPublicSliceKey,
+		CoverPublicSliceKey:          a.coverPublicSliceKey,
+		PreviewTrackVersion:          a.previewTrackVersion,
+		PreviewTrackManifestSliceKey: a.previewTrackManifestSliceKey,
+	}
+}
+
 func (a *MediaAsset) Snapshot() MediaAssetSnapshot {
 	if a == nil {
 		return MediaAssetSnapshot{}
 	}
 	return MediaAssetSnapshot{
-		ID:                      a.id,
-		Version:                 a.version,
-		OwnerID:                 a.ownerID,
-		SourceSessionID:         a.sourceSessionID,
-		ObjectKey:               a.objectKey,
-		SHA256:                  a.sha256,
-		MediaType:               a.mediaType,
-		ContentType:             a.contentType,
-		FileSize:                a.fileSize,
-		AccessPolicy:            a.accessPolicy,
-		ProcessingStatus:        a.processingStatus,
-		ProcessingFailureReason: a.processingFailureReason,
-		CoverStrategy:           a.coverStrategy,
-		ManualCoverAssetID:      a.manualCoverAssetID,
-		CoverFrameTimeMs:        a.coverFrameTimeMs,
-		CreatedAt:               a.createdAt,
-		UpdatedAt:               a.updatedAt,
-		ProcessedAt:             cloneTime(a.processedAt),
+		ID:                           a.id,
+		Version:                      a.version,
+		OwnerID:                      a.ownerID,
+		SourceSessionID:              a.sourceSessionID,
+		ObjectKey:                    a.objectKey,
+		SHA256:                       a.sha256,
+		MediaType:                    a.mediaType,
+		ContentType:                  a.contentType,
+		FileSize:                     a.fileSize,
+		AccessPolicy:                 a.accessPolicy,
+		ProcessingStatus:             a.processingStatus,
+		ProcessingFailureReason:      a.processingFailureReason,
+		ProcessorProfile:             a.processorProfile,
+		VerifiedDurationMs:           a.verifiedDurationMs,
+		VideoWidth:                   a.videoWidth,
+		VideoHeight:                  a.videoHeight,
+		VideoCodec:                   a.videoCodec,
+		VideoContainer:               a.videoContainer,
+		VideoPublicSliceKey:          a.videoPublicSliceKey,
+		CoverPublicSliceKey:          a.coverPublicSliceKey,
+		PreviewTrackVersion:          a.previewTrackVersion,
+		PreviewTrackManifestSliceKey: a.previewTrackManifestSliceKey,
+		CoverStrategy:                a.coverStrategy,
+		ManualCoverAssetID:           a.manualCoverAssetID,
+		CoverFrameTimeMs:             a.coverFrameTimeMs,
+		CreatedAt:                    a.createdAt,
+		UpdatedAt:                    a.updatedAt,
+		ProcessedAt:                  cloneTime(a.processedAt),
 	}
 }
 
@@ -699,9 +824,21 @@ func (a *MediaAsset) validate() error {
 		if a.processedAt == nil || a.processingFailureReason != "" {
 			return fmt.Errorf("%w: ready asset state is inconsistent", ErrInvalidMediaAsset)
 		}
+		if err := a.validateProcessingDescriptor(
+			ProcessingStatusReady,
+			a.VideoProcessingDescriptor(),
+		); err != nil {
+			return err
+		}
 	case ProcessingStatusRejected:
 		if a.processedAt == nil || a.processingFailureReason == "" {
 			return fmt.Errorf("%w: rejected asset state is inconsistent", ErrInvalidMediaAsset)
+		}
+		if err := a.validateProcessingDescriptor(
+			ProcessingStatusRejected,
+			a.VideoProcessingDescriptor(),
+		); err != nil {
+			return err
 		}
 	case ProcessingStatusDeleted:
 		if a.processingFailureReason != "" {

@@ -119,6 +119,46 @@ void main() {
     },
   );
 
+  patrolTest(
+    'home_rec_visible_video_autoplays_and_recovers_after_scroll',
+    tags: ['t4', 'home-rec', 'discovery', 'video-playback'],
+    skip: !kRunPatrolT4,
+    config: PatrolTesterConfig(visibleTimeout: const Duration(seconds: 12)),
+    ($) async {
+      await launchPatrolAppOnce($);
+      await _recoverToHomeFeed($);
+
+      final initiallyReady = await _waitForHomeVideoReady($);
+      expect(initiallyReady, isTrue, reason: '首页稳定可见的视频卡必须完成原生播放器初始化');
+      expect(
+        _existsInTree(
+          $,
+          find.byKey(const ValueKey<String>('video-player-error')),
+        ),
+        isFalse,
+        reason: '首页自动播放不得进入显式错误态',
+      );
+
+      // 快滑期间焦点仲裁会暂停/释放当前卡；滚动稳定后新可见卡必须重新初始化，
+      // 不能因旧控制器槽未释放而永久停在封面占位态。
+      for (var i = 0; i < 3; i++) {
+        await _dragFeedDown($);
+      }
+      final recovered = await _waitForHomeVideoReady($);
+      expect(recovered, isTrue, reason: '快滑结束后的首页视频必须恢复为 ready');
+      expect(
+        _existsInTree(
+          $,
+          find.byKey(const ValueKey<String>('video-player-error')),
+        ),
+        isFalse,
+        reason: '焦点交接后不得因控制器槽位或原生错误展示失败覆盖层',
+      );
+
+      await _settleFeedToTopForHandoff($);
+    },
+  );
+
   // 负反馈用例放在多形态深滚用例「之前」：多形态用例会重度初始化多个视频播放器
   // （真机资源敏感），若先跑会令本用例点击「不感兴趣」后的降级提示 SnackBar 渲染
   // 时序退化而 flaky（实测：video 重压后本用例耗时 28~37s 且超时，未重压时 10s 通过）。
@@ -348,6 +388,22 @@ Future<bool> _waitForFinderInTree(
     await $.pump(const Duration(milliseconds: 500));
   }
   return false;
+}
+
+Future<bool> _waitForHomeVideoReady(PatrolIntegrationTester $) async {
+  const readyKey = ValueKey<String>('video-player-ready');
+  const errorKey = ValueKey<String>('video-player-error');
+  for (var i = 0; i < 12; i++) {
+    if (_existsInTree($, find.byKey(readyKey))) {
+      return true;
+    }
+    if (_existsInTree($, find.byKey(errorKey))) {
+      return false;
+    }
+    await _dragFeedDown($);
+    await $.pump(const Duration(seconds: 1));
+  }
+  return _existsInTree($, find.byKey(readyKey));
 }
 
 Future<bool> _waitUntil(

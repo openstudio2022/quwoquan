@@ -26,13 +26,13 @@ class SocialRelationSearchItemWireDto {
 
   factory SocialRelationSearchItemWireDto.fromMap(Map<String, dynamic> m) {
     return SocialRelationSearchItemWireDto(
-      subAccountId: _firstNonEmptyWireString(m, <String>['subAccountId', 'userId']) ?? '',
-      username: m['username']?.toString() ?? m['userHandle']?.toString() ?? m['subAccountId']?.toString() ?? '',
-      userHandle: m['userHandle']?.toString() ?? m['username']?.toString() ?? m['subAccountId']?.toString() ?? '',
-      displayName: m['displayName']?.toString() ?? m['nickname']?.toString() ?? '',
+      subAccountId: m['subAccountId']?.toString() ?? '',
+      username: m['username']?.toString() ?? '',
+      userHandle: m['userHandle']?.toString() ?? '',
+      displayName: m['displayName']?.toString() ?? '',
       avatarUrl: m['avatarUrl']?.toString() ?? null,
       avatarVersion: (m['avatarVersion'] as num?)?.toInt() ?? 0,
-      headline: m['headline']?.toString() ?? m['bio']?.toString() ?? null,
+      headline: m['headline']?.toString() ?? null,
       chatAvailable: m['chatAvailable'] as bool? ?? false,
       relationshipCapability: _parseStringKeyMap(m['relationshipCapability']) ?? null,
     );
@@ -75,14 +75,6 @@ class SocialRelationSearchItemWireDto {
       relationshipCapability: relationshipCapability ?? this.relationshipCapability,
     );
   }
-}
-
-String? _firstNonEmptyWireString(Map<String, dynamic> m, List<String> keys) {
-  for (final k in keys) {
-    final v = m[k]?.toString();
-    if (v != null && v.isNotEmpty) return v;
-  }
-  return null;
 }
 
 

@@ -1,8 +1,7 @@
-version: 1
 read_model: UserWork
 
 description: |
-  GET /v1/users/{userId}/works 分页列表元素。该读模型来自 user/user_work
+  GET /users/{userId}/works 分页列表元素。该读模型来自 user/user_work
   独立 aggregate，供 user_profile 主页创作 Tab 作为跨 metadata 响应模型引用。
 
 client_projection:

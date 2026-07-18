@@ -1,4 +1,3 @@
-version: 1
 aggregate: Post
 layer: app_side
 
@@ -18,21 +17,25 @@ description: |
 # ── DTO 解析场景 ─────────────────────────────────────────────────────
 dto_scenarios:
   - name: dispatch_photo_by_content_type
+    source: dispatch_photo_by_content_type
     description: image contentType → PhotoPostDto
     input: { contentType: image }
     expected_type: PhotoPostDto
 
   - name: dispatch_video_by_content_type
+    source: dispatch_video_by_content_type
     description: video contentType → VideoPostDto
     input: { contentType: video }
     expected_type: VideoPostDto
 
   - name: dispatch_article_by_content_type
+    source: dispatch_article_by_content_type
     description: article contentType → ArticlePostDto
     input: { contentType: article }
     expected_type: ArticlePostDto
 
   - name: dispatch_micro_by_content_type
+    source: dispatch_micro_by_content_type
     description: micro contentType → MicroPostDto
     input: { contentType: micro }
     expected_type: MicroPostDto
@@ -49,17 +52,17 @@ dto_scenarios:
     assertions:
       - aspectRatio == null
 
-  - name: alias_resolution_postId
-    description: postId 别名解析为 id
+  - name: canonical_postId_wire
+    description: 只认 canonical wire 键 postId
     input: { postId: "abc123", contentType: image }
     assertions:
       - id == "abc123"
 
-  - name: alias_resolution_mongodb_id
-    description: _id 别名解析为 id（MongoDB 原始字段）
+  - name: reject_mongodb_id_wire_key
+    description: 拒绝 _id 旧键，不得解析为 id
     input: { _id: "abc123", contentType: image }
     assertions:
-      - id == "abc123"
+      - id.isEmpty
 
   - name: required_fields_non_empty_from_mock_data
     description: mock 数据中所有 NOT_NULL 字段非空
@@ -136,6 +139,36 @@ error_scenarios:
     input_status: 404
     expected_dart_const: mediaNotFound
     expected_recovery_action: surface
+
+  - name: parse_media_playback_network_unavailable
+    input_code: "CONTENT.SYSTEM.media_playback_network_unavailable"
+    input_status: 503
+    expected_dart_const: mediaPlaybackNetworkUnavailable
+    expected_recovery_action: retry
+
+  - name: parse_media_playback_temporarily_unavailable
+    input_code: "CONTENT.SYSTEM.media_playback_temporarily_unavailable"
+    input_status: 503
+    expected_dart_const: mediaPlaybackTemporarilyUnavailable
+    expected_recovery_action: retry
+
+  - name: parse_media_playback_service_busy
+    input_code: "CONTENT.SYSTEM.media_playback_service_busy"
+    input_status: 503
+    expected_dart_const: mediaPlaybackServiceBusy
+    expected_recovery_action: retry
+
+  - name: parse_media_playback_unavailable
+    input_code: "CONTENT.USER.media_playback_unavailable"
+    input_status: 404
+    expected_dart_const: mediaPlaybackUnavailable
+    expected_recovery_action: surface
+
+  - name: parse_media_playback_unsupported
+    input_code: "CONTENT.SYSTEM.media_playback_unsupported"
+    input_status: 422
+    expected_dart_const: mediaPlaybackUnsupported
+    expected_recovery_action: retry
 
   - name: parse_original_access_denied
     input_code: "CONTENT.USER.original_access_denied"
@@ -314,6 +347,7 @@ error_scenarios:
 # ── 行为上报格式场景 ─────────────────────────────────────────────────
 behavior_scenarios:
   - name: impression_goes_to_batch
+    source: impression_goes_to_batch
     description: trackImpression 写入批量缓冲，不立即发网络请求
     action: ContentBehaviorTracker.trackImpression("post1")
     assertions:
@@ -328,6 +362,7 @@ behavior_scenarios:
       - payload.events[0].type == click
 
   - name: dwell_includes_ms
+    source: dwell_includes_ms
     description: trackDwell 包含 dwellMs 字段
     action: ContentBehaviorTracker.trackDwell("post1", 15000)
     assertions:
@@ -339,9 +374,9 @@ behavior_scenarios:
       - ContentBehaviorTracker has no trackLike method
 
   - name: batch_route_matches_service_yaml
-    description: 批量路由 == POST /v1/content/behaviors
+    description: 批量路由 == POST /content/behaviors
     assertions:
-      - ContentBehaviorTracker.batchRoute == "/v1/content/behaviors"
+      - ContentBehaviorTracker.batchRoute == "/content/behaviors"
 
 # ── UI 配置完整性场景 ─────────────────────────────────────────────────
 ui_config_scenarios:

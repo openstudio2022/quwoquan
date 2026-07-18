@@ -16,10 +16,10 @@ class HomepageIntroductionAsset {
 
   factory HomepageIntroductionAsset.fromMap(Map<String, dynamic> m) {
     return HomepageIntroductionAsset(
-      assetId: m['assetId']?.toString() ?? m['id']?.toString() ?? '',
-      url: m['url']?.toString() ?? m['imageUrl']?.toString() ?? '',
+      assetId: m['assetId']?.toString() ?? '',
+      url: m['url']?.toString() ?? '',
       caption: m['caption']?.toString() ?? null,
-      role: m['role']?.toString() ?? m['assetRole']?.toString() ?? 'related',
+      role: m['role']?.toString() ?? 'related',
     );
   }
 

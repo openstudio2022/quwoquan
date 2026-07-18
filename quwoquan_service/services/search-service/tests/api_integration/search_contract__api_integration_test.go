@@ -59,7 +59,7 @@ func newServer(t *testing.T, cfg searchbackend.ESConfig, fallback rtsearch.Recal
 
 func postSearch(t *testing.T, handler http.Handler, body string) (*httptest.ResponseRecorder, map[string]any) {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodPost, "/v1/search", bytes.NewBufferString(body))
+	req := httptest.NewRequest(http.MethodPost, "/search", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	var parsed map[string]any
@@ -229,7 +229,7 @@ func TestSearchEndpointRejectsEmptyQuery(t *testing.T) {
 
 func TestFeedbackEndpointAcceptsEvent(t *testing.T) {
 	handler := newServer(t, searchbackend.ESConfig{Enabled: false}, rtsearch.NewSliceBackend(nil))
-	req := httptest.NewRequest(http.MethodPost, "/v1/search/feedback",
+	req := httptest.NewRequest(http.MethodPost, "/search/feedback",
 		bytes.NewBufferString(`{"searchRequestId":"req_1","eventType":"click","objectId":"post_es","rankPosition":2}`))
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
@@ -240,7 +240,7 @@ func TestFeedbackEndpointAcceptsEvent(t *testing.T) {
 
 func TestFeedbackEndpointRejectsMissingFields(t *testing.T) {
 	handler := newServer(t, searchbackend.ESConfig{Enabled: false}, rtsearch.NewSliceBackend(nil))
-	req := httptest.NewRequest(http.MethodPost, "/v1/search/feedback", bytes.NewBufferString(`{"eventType":"click"}`))
+	req := httptest.NewRequest(http.MethodPost, "/search/feedback", bytes.NewBufferString(`{"eventType":"click"}`))
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadRequest {

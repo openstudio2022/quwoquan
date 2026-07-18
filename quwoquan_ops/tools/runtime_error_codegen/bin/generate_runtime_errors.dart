@@ -7,8 +7,14 @@ import '../lib/src/typescript_generator.dart';
 
 void main(List<String> args) {
   final repoRoot = Directory.current;
-  final contractDir = Directory('${repoRoot.path}/quwoquan_service/contracts/runtime_errors/errors');
-  final failures = _validateContracts(contractDir);
+  final contractDir = Directory(
+    '${repoRoot.path}/quwoquan_service/contracts/runtime_errors/errors',
+  );
+  final checkMode = args.contains('--check');
+  final failures = _validateContracts(
+    contractDir,
+    verifyGeneratedArtifacts: checkMode,
+  );
   if (failures.isNotEmpty) {
     for (final failure in failures) {
       stderr.writeln(failure);
@@ -16,7 +22,7 @@ void main(List<String> args) {
     exitCode = 1;
     return;
   }
-  if (args.contains('--check')) {
+  if (checkMode) {
     stdout.writeln('runtime error contracts validated');
     return;
   }
@@ -27,10 +33,15 @@ void main(List<String> args) {
   const PythonRuntimeErrorGenerator().generate();
 }
 
-List<String> _validateContracts(Directory contractDir) {
+List<String> _validateContracts(
+  Directory contractDir, {
+  required bool verifyGeneratedArtifacts,
+}) {
   final failures = <String>[];
   if (!contractDir.existsSync()) {
-    return <String>['missing quwoquan_service/contracts/runtime_errors/errors directory'];
+    return <String>[
+      'missing quwoquan_service/contracts/runtime_errors/errors directory',
+    ];
   }
   final requiredFiles = <String>[
     'runtime_failure.schema.yaml',
@@ -66,6 +77,12 @@ List<String> _validateContracts(Directory contractDir) {
     failures.addAll(_validateRuntimeFailureCodes(codesFile, schemaFile));
   }
   failures.addAll(_validateLanguagePackages(Directory.current));
+  if (verifyGeneratedArtifacts &&
+      !const DartRuntimeErrorGenerator().isCurrent(Directory.current)) {
+    failures.add(
+      'runtime_failure_codes.g.dart is stale; run runtime error codegen',
+    );
+  }
   return failures;
 }
 

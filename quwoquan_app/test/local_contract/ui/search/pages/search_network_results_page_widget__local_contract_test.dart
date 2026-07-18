@@ -8,6 +8,7 @@ import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dar
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
 import 'package:quwoquan_app/ui/search/pages/search_network_results_page.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 Widget _buildApp({
   SearchLaunchContext launchContext = const SearchLaunchContext(
@@ -98,6 +99,33 @@ void main() {
       find.byKey(const ValueKey<String>('search_network_submit_button')),
       findsOneWidget,
     );
+  });
+
+  testWidgets('正式结果页每个 generation 只调用一次 canonical search', (tester) async {
+    final repository = _RecordingCanonicalSearchRepository();
+    await pumpSearchResultsPage(
+      tester,
+      _buildAppWithSearchRepository(
+        launchContext: const SearchLaunchContext(
+          entrySurfaceId: '/search',
+          prefilledQuery: '影',
+          initialNetworkTabId: 'all',
+        ),
+        repository: repository,
+      ),
+    );
+    await tester.pump();
+    await _pumpUntil(
+      tester,
+      condition: () => find.text('相关搜索').evaluate().isNotEmpty,
+    );
+
+    expect(repository.requests, hasLength(1));
+    expect(repository.requests.single.objectTypes, <SearchObjectType>{
+      SearchObjectType.contentPost,
+      SearchObjectType.entityHomepage,
+      SearchObjectType.locationPlace,
+    });
   });
 
   testWidgets('结果页搜索按钮可按新关键词重新加载', (tester) async {
@@ -350,7 +378,7 @@ void main() {
     await tester.pump();
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('部分结果已降级'), findsNothing);
+    expect(find.text(UITextConstants.searchPartialGroupFailed), findsOneWidget);
     expect(find.text('街头摄影'), findsWidgets);
   });
 
@@ -414,8 +442,39 @@ Future<void> _pumpUntil(
 
 class _FakeNetworkSearchRepository implements SearchRepository {
   @override
-  Future<SearchResponse> search(SearchRequest request) async {
+  Future<SearchResponse> search(
+    SearchRequest request, {
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  }) async {
     final normalized = request.normalized();
+    if (normalized.objectTypes.length > 1) {
+      final responses = await Future.wait<SearchResponse>(
+        normalized.objectTypes.map(
+          (objectType) => search(
+            SearchRequest(
+              query: normalized.query,
+              mode: normalized.mode,
+              objectTypes: <SearchObjectType>{objectType},
+              limit: normalized.limit,
+              contentTypes: normalized.contentTypes,
+              categoryId: normalized.categoryId,
+              subCategory: normalized.subCategory,
+            ),
+            cancellation: cancellation,
+            deadlineAt: deadlineAt,
+          ),
+        ),
+      );
+      final sections = <SearchSection>[];
+      final sectionIds = <String>{};
+      for (final response in responses) {
+        for (final section in response.sections) {
+          if (sectionIds.add(section.id)) sections.add(section);
+        }
+      }
+      return SearchResponse(request: normalized, sections: sections);
+    }
     if (normalized.objectTypes.contains(SearchObjectType.contentPost)) {
       final wantsArticle = normalized.contentTypes.contains(
         SearchContentTypeFilter.article,
@@ -643,12 +702,35 @@ class _FakeNetworkSearchRepository implements SearchRepository {
   }
 }
 
+class _RecordingCanonicalSearchRepository implements SearchRepository {
+  final List<SearchRequest> requests = <SearchRequest>[];
+  final _FakeNetworkSearchRepository _delegate = _FakeNetworkSearchRepository();
+
+  @override
+  Future<SearchResponse> search(
+    SearchRequest request, {
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  }) {
+    requests.add(request.normalized());
+    return _delegate.search(
+      request,
+      cancellation: cancellation,
+      deadlineAt: deadlineAt,
+    );
+  }
+}
+
 /// 交集消费契约 fake：内容命中携带云侧 connectionState 闭集与 intersectionReason
 /// 子集（primaryText），用于验证端只读 primaryText、按 connectionState 分组、
 /// 无 primaryText 不拼装交集句。
 class _IntersectionContractSearchRepository implements SearchRepository {
   @override
-  Future<SearchResponse> search(SearchRequest request) async {
+  Future<SearchResponse> search(
+    SearchRequest request, {
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  }) async {
     final normalized = request.normalized();
     if (!normalized.objectTypes.contains(SearchObjectType.contentPost)) {
       return SearchResponse(
@@ -728,7 +810,11 @@ class _IntersectionContractSearchRepository implements SearchRepository {
 
 class _DegradedNetworkSearchRepository extends _FakeNetworkSearchRepository {
   @override
-  Future<SearchResponse> search(SearchRequest request) async {
+  Future<SearchResponse> search(
+    SearchRequest request, {
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  }) async {
     final base = await super.search(request);
     return SearchResponse(
       request: base.request,
@@ -746,7 +832,11 @@ class _DegradedNetworkSearchRepository extends _FakeNetworkSearchRepository {
 
 class _EmptyDegradedNetworkSearchRepository implements SearchRepository {
   @override
-  Future<SearchResponse> search(SearchRequest request) async {
+  Future<SearchResponse> search(
+    SearchRequest request, {
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  }) async {
     return SearchResponse(
       request: request,
       sections: const <SearchSection>[],

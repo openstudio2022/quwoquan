@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:patrol/patrol.dart';
 import 'package:quwoquan_app/app/navigation/app_router_module.dart';
+import 'package:quwoquan_app/app/providers/startup_auth_restore_gate_provider.dart';
 import 'package:quwoquan_app/app/providers/welcome_state_provider.dart';
 import 'package:quwoquan_app/app_bootstrap.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
@@ -40,6 +41,10 @@ Completer<void>? _runtimeAnonymousSessionReady;
 
 bool get _usesRuntimeAnonymousSession =>
     _patrolSessionMode == 'local_gamma_anonymous';
+
+bool get _usesAnonymousPublicVideoSession =>
+    _patrolSessionMode == 'beta_local_anonymous_public_video' ||
+    _patrolSessionMode == 'gamma_local_anonymous_public_video';
 
 Completer<void> _runtimeAnonymousSessionGate() =>
     _runtimeAnonymousSessionReady ??= Completer<void>();
@@ -141,17 +146,26 @@ AuthSessionState buildPatrolAcceptanceSession({
   );
 }
 
+AuthSessionState buildPatrolAnonymousPublicVideoSession() =>
+    const AuthSessionState(status: AuthSessionStatus.guest);
+
 final class _PatrolAuthSessionController extends AuthSessionController {
   bool _runtimeAnonymousLoginStarted = false;
 
   @override
   AuthSessionState build() {
     if (_usesRuntimeAnonymousSession) {
-      if (!_runtimeAnonymousLoginStarted) {
+      final startupPrerequisitesReady = ref.watch(
+        startupAuthRestoreGateProvider,
+      );
+      if (startupPrerequisitesReady && !_runtimeAnonymousLoginStarted) {
         _runtimeAnonymousLoginStarted = true;
         unawaited(_authenticateLocalGammaAnonymously());
       }
       return const AuthSessionState.restoring();
+    }
+    if (_usesAnonymousPublicVideoSession) {
+      return buildPatrolAnonymousPublicVideoSession();
     }
     return buildPatrolAcceptanceSession(
       accessToken: _patrolT4AuthToken,

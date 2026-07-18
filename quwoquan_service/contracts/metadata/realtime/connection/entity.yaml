@@ -1,4 +1,3 @@
-version: 1
 domain: realtime
 entity: Connection
 object_kind: runtime_session

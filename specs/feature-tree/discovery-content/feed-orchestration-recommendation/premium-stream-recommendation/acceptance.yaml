@@ -76,7 +76,7 @@ gwt_acceptance:
     - content-service 只读本地精品池推荐投影，装配 RecallPath=premium_pool 候选并交给 Engine 统一过滤、排序和曝光治理。
     done_when:
     - product-ops 写入、回滚、过期、下架状态可投影到 content-service 推荐读模型。
-    - PremiumPoolSource 不同步调用 product-ops、质量模型、数据工程任务或 /v1/score。
+    - PremiumPoolSource 不同步调用 product-ops、质量模型、数据工程任务或 /score。
     - premium_pool 候选与其他召回源共享负反馈、下架、过期、频控、near-dup、作者屏蔽和类型屏蔽过滤。
     - disable_premium_pool_source 回滚开关生效时，精品流退回 premium preset + 通用候选，不退回圈内精选。
     - premium_pool 分桶进入 replay、AB、看板和告警归因。
@@ -126,7 +126,7 @@ gwt_acceptance:
     notes:
     - 2026-06-25 continue-dev 裁决：下一轮主切片为 P1d-2 精品池读路径闭环，且已进入开发。
     - 已完成 local_contract 基座：rm_premium_pool projection metadata、fail-closed 投影字段、product-ops PremiumPoolEntry* 事件发布、content-service PremiumPoolProjector/PremiumPoolEventConsumer、PremiumPoolSource premium_stream/similar 场景门控、RecallPath=premium_pool、content-service 接线和 disable_premium_pool_source 回滚开关。
-    - 仍不能宣称 GWT2 完成：真实 product-ops API -> Redis events.ops -> content-service Mongo rm_premium_pool -> /v1/content/feed 的 api_integration、user_acceptance 和 Gamma/UAT 仍为 planned。
+    - 仍不能宣称 GWT2 完成：真实 product-ops API -> Redis events.ops -> content-service Mongo rm_premium_pool -> /content/feed 的 api_integration、user_acceptance 和 Gamma/UAT 仍为 planned。
 execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh

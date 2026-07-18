@@ -1,11 +1,11 @@
-version: 1
 aggregate: ConversationMembership
 
 entities:
   ConversationMember:
-    description: 会话成员（v2 独立 collection，支撑 1,000 人群）
+    description: 会话成员（独立 collection，支撑 1,000 人群）
     fields:
       - name: _id
+        source: _id
         type: ObjectId
         constraints: [PK]
         classification: PUBLIC
@@ -14,6 +14,7 @@ entities:
         ops_exposure: read
 
       - name: conversationId
+        source: conversationId
         type: ObjectId
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -22,6 +23,7 @@ entities:
         ops_exposure: read
 
       - name: userId
+        source: userId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -30,6 +32,7 @@ entities:
         ops_exposure: read
 
       - name: displayName
+        source: displayName
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -39,6 +42,7 @@ entities:
         description: 群内显示名（可覆盖用户昵称）
 
       - name: avatarUrl
+        source: avatarUrl
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -47,6 +51,7 @@ entities:
         ops_exposure: read
 
       - name: avatarAssetId
+        source: avatarAssetId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -55,6 +60,7 @@ entities:
         ops_exposure: read
 
       - name: avatarVersion
+        source: avatarVersion
         type: int64
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -63,6 +69,7 @@ entities:
         ops_exposure: read
 
       - name: groupAvatarVersion
+        source: groupAvatarVersion
         type: int64
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -72,6 +79,7 @@ entities:
         description: 群头像版本号；用于端侧缓存失效与 patch 幂等
 
       - name: memberType
+        source: memberType
         type: enum
         enum_ref: MemberType
         constraints: [NOT_NULL]
@@ -82,6 +90,7 @@ entities:
         description: user（真人用户）/ assistant（小趣助手，可被邀请到任何会话中协助处理信息）
 
       - name: role
+        source: role
         type: enum
         enum_ref: MemberRole
         constraints: [NOT_NULL]
@@ -92,6 +101,7 @@ entities:
         description: owner/admin/member（assistant 成员固定为 member）
 
       - name: assistantSkillId
+        source: assistantSkillId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -101,6 +111,7 @@ entities:
         description: 仅 memberType=assistant 时有效，绑定的 Skill ID（不同会话可邀请不同能力的助手）
 
       - name: invitedBy
+        source: invitedBy
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -110,6 +121,7 @@ entities:
         description: 邀请人 userId
 
       - name: joinedAt
+        source: joinedAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC

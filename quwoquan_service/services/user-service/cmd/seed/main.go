@@ -1,6 +1,6 @@
 // Command seed loads user contract profile fixtures into the live PostgreSQL
 // store so the local-gamma mirror can serve real "用户主页 / 我的主页" reads
-// (GET /v1/user/profile/{userId} and GET /v1/me) for T3.
+// (GET /user/profile/{userId} and GET /me) for T3.
 //
 // User profiles live in PostgreSQL (table user_profiles), unlike circle data
 // which lives in MongoDB. This seeder reuses the shared contract fixture loader

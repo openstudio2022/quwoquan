@@ -1,4 +1,3 @@
-version: 1
 read_model: IntersectionDimensionTally
 description: |
   「我的交集」单个维度的计数与未读统计（B1 契约）。
@@ -25,37 +24,31 @@ client_projection:
       dart_type: String
       nullable: false
       source: dimension
-      aliases: [dimension]
       default: "''"
     - name: label
       dart_type: String
       nullable: false
       source: label
-      aliases: [label]
       default: "''"
     - name: count
       dart_type: int
       nullable: false
       source: count
-      aliases: [count]
       default: "0"
     - name: newCount
       dart_type: int
       nullable: false
       source: newCount
-      aliases: [newCount]
       default: "0"
     - name: briefText
       dart_type: String
       nullable: false
       source: briefText
-      aliases: [briefText]
       default: "''"
     - name: subtitleText
       dart_type: String
       nullable: false
       source: subtitleText
-      aliases: [subtitleText]
       default: "''"
     # 统一交互子契约（§20.7，只附加）：
     #   briefSpans 是 briefText 的结构化富文本切分，join(spans.text)==briefText（契约不变量）；
@@ -66,25 +59,21 @@ client_projection:
       dart_type: List<IntersectionTextSpan>
       nullable: false
       source: briefSpans
-      aliases: [briefSpans]
       list_element_dart_class: IntersectionTextSpan
     - name: sampleVisuals
       dart_type: List<IntersectionVisual>
       nullable: false
       source: sampleVisuals
-      aliases: [sampleVisuals]
       list_element_dart_class: IntersectionVisual
     - name: sourceRef
       dart_type: String
       nullable: false
       source: sourceRef
-      aliases: [sourceRef]
       default: "''"
     - name: countObjectKind
       dart_type: String
       nullable: false
       source: countObjectKind
-      aliases: [countObjectKind]
       default: "''"
     # 架构基线 v2（§21.3 lifecycle 分桶 + §21.5.2 iconKey，草案/未冻结）：
     #   strengthenedCount/reactivatedCount 为该维度内「增强 / 重新活跃」态计数（弱标分桶，不进 briefText）；
@@ -93,17 +82,14 @@ client_projection:
       dart_type: int
       nullable: false
       source: strengthenedCount
-      aliases: [strengthenedCount]
       default: "0"
     - name: reactivatedCount
       dart_type: int
       nullable: false
       source: reactivatedCount
-      aliases: [reactivatedCount]
       default: "0"
     - name: iconKey
       dart_type: String
       nullable: false
       source: iconKey
-      aliases: [iconKey]
       default: "''"

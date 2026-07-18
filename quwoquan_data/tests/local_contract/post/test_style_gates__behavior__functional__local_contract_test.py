@@ -27,11 +27,11 @@ from pathlib import Path
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
 
-from content.post.draft_io import write_agent_draft  # noqa: E402
+from content.post.article.draft_io import write_agent_draft  # noqa: E402
 from content.post.object_index import register_content_object  # noqa: E402
 from content.post.content_review import check_narrative_quality  # noqa: E402
 from core.paths import ensure_execution_command_layout, ensure_execution_layout  # noqa: E402
-from content.post.route_review_checks import (  # noqa: E402
+from content.post.article.route_review_checks import (  # noqa: E402
     _check_cross_article_similarity,
     _check_travelogue_density,
 )
@@ -150,7 +150,7 @@ def test_cross_article_similarity_ignores_frontmatter_only_overlap():
         "title: 峨眉山·攻略\n"
         "template: journal\n"
         "fontPreset: clean\n"
-        "articleMarkdownVersion: qwq-rich-md/1\n"
+        "markdownDialect: qwq-rich-md\n"
         "---\n\n"
         "先说结论：报国寺到清音阁适合作为第一天，金顶放到第二天清晨更稳妥。\n\n"
         "## 正文\n"
@@ -161,7 +161,7 @@ def test_cross_article_similarity_ignores_frontmatter_only_overlap():
         "title: 峨眉山·金顶图集\n"
         "template: journal\n"
         "fontPreset: clean\n"
-        "articleMarkdownVersion: qwq-rich-md/1\n"
+        "markdownDialect: qwq-rich-md\n"
         "---\n\n"
         "站上金顶时，先撞进视线的是华藏寺、普贤像和被风推开的云海。\n\n"
         "## 正文\n"

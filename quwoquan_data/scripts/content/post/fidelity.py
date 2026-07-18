@@ -4,15 +4,15 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping
 
-from content.post.base_draft import (
+from content.post.article.base_draft_analysis import (
     FIDELITY_MAX,
     FIDELITY_MIN,
     _NGRAM,
     _normalize_embedded_newlines,
     _readable_body,
     _strip_source_meta,
-    base_draft_is_adaptable,
 )
+from content.post.article.base_draft import base_draft_is_adaptable
 
 OUT_OF_DRAFT_MAX_RATIO = 0.78
 CROSS_SOURCE_OVERLAP_MIN_RUN = 80

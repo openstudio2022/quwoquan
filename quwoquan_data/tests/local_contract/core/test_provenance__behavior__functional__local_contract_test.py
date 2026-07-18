@@ -29,7 +29,7 @@ sys.path.insert(0, str(SCRIPTS_ROOT))
 
 
 from content.post.object_index import register_content_object  # noqa: E402
-from content.post.draft_io import _source_bundle_sha256, write_prompt, write_writing_pack  # noqa: E402
+from content.post.article.draft_io import _source_bundle_sha256, write_prompt, write_writing_pack  # noqa: E402
 from core.io import read_json, write_json  # noqa: E402
 from core.paths import (  # noqa: E402
     execution_command_root,
@@ -159,7 +159,7 @@ def _seed_post(post_root: Path, ref: str, title: str) -> None:
             "evidenceBundle": {"routeNodes": [{"entityName": "九寨沟"}]},
         },
     )
-    from content.post.draft_io import write_agent_draft
+    from content.post.article.draft_io import write_agent_draft
 
     write_agent_draft(
         TASK,
@@ -203,7 +203,7 @@ def test_materialize_writes_complete_provenance():
 def test_provenance_minimal_partitions_present():
     post_dir = _materialize_one()
     data = read_json(post_dir / "5.review" / "provenance.json")
-    assert data["schemaVersion"] == PROVENANCE_SCHEMA
+    assert data["schema"] == PROVENANCE_SCHEMA
     for section in ("final", "agentInput", "originalSources", "gateResults", "citedSourcePaths"):
         assert section in data, section
     for dropped in ("evidenceSources", "intermediate"):
@@ -217,8 +217,8 @@ def test_provenance_minimal_partitions_present():
 def test_materialize_writes_source_refs_snapshot_and_finalization_report():
     post_dir = _materialize_one()
     source_refs = read_json(post_dir / "1.download" / "source_refs.json")
-    # 单底稿零参考 v2：sources 长度恒为 1，仅唯一底稿来源单元，无内联原文镜像。
-    assert source_refs["schemaVersion"] == "quwoquan_data.source_refs/2"
+    # sources 长度恒为 1，仅唯一底稿来源单元，无内联原文镜像。
+    assert source_refs["schema"] == "quwoquan_data.source_refs"
     assert source_refs["baseSourceRef"].startswith("sources/")
     assert source_refs["baseSourceRef"].endswith("/source.md")
     assert len(source_refs["sources"]) == 1
@@ -239,7 +239,7 @@ def test_materialize_writes_source_refs_snapshot_and_finalization_report():
 
 
 def test_source_refs_snapshot_is_single_base_without_inline_mirror():
-    """单底稿零参考 v2：snapshot 只登记唯一底稿来源单元，不内联原文镜像。"""
+    """Snapshot 只登记唯一底稿来源单元，不内联原文镜像。"""
     ensure_execution_layout(TASK)
     ensure_execution_command_layout(TASK, "post")
     obj = execution_entity_object_dir(TASK, "地点", "景区", "九寨沟")
@@ -264,7 +264,7 @@ def test_source_refs_snapshot_is_single_base_without_inline_mirror():
         base_source_ref=source_md,
     )
 
-    assert source_refs["schemaVersion"] == "quwoquan_data.source_refs/2"
+    assert source_refs["schema"] == "quwoquan_data.source_refs"
     assert source_refs["baseSourceRef"] == source_md
     assert len(source_refs["sources"]) == 1
     base_entry = source_refs["sources"][0]
@@ -352,7 +352,7 @@ def test_materialize_relativizes_repo_absolute_runtime_paths():
             "storySpine": {"beats": ["b1"]},
         },
     )
-    from content.post.draft_io import write_agent_draft
+    from content.post.article.draft_io import write_agent_draft
 
     source_abs = execution_root(task) / source_ref
     write_agent_draft(
@@ -383,7 +383,7 @@ def test_missing_file_flagged():
 
 def _write_provenance(post_dir: Path, *, digest: str, generator: str, originals, cited, decision):
     payload = {
-        "schemaVersion": PROVENANCE_SCHEMA,
+        "schema": PROVENANCE_SCHEMA,
         "ref": "r",
         "final": {"generator": generator, "articleDigest": digest, "agentRunId": "run-1"},
         "agentInput": {

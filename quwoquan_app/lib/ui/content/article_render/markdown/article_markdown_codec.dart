@@ -32,7 +32,7 @@ class ArticleMarkdownCodec {
       ..writeln('template: ${document.template}')
       ..writeln('fontPreset: ${document.fontPreset}')
       ..writeln('titleStyle: ${document.titleStyle.name}')
-      ..writeln('articleMarkdownVersion: $qwqRichMarkdownVersion');
+      ..writeln('markdownDialect: $qwqRichMarkdownVersion');
     if (coverAssetId.trim().isNotEmpty) {
       buffer.writeln('coverImage: asset://${coverAssetId.trim()}');
     }

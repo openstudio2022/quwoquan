@@ -1,4 +1,3 @@
-version: 1
 entity: TagNodeView
 
 entities:
@@ -6,6 +5,7 @@ entities:
     description: 路径制标签节点只读投影（源自 control_plane/governance/taxonomy 的发布导入）
     fields:
       - name: tagRef
+        source: tagRef
         type: string
         constraints: [PK]
         classification: PUBLIC
@@ -15,6 +15,7 @@ entities:
         tag_ref: true
         description: 路径制 id，以 Topic/Audience/Format/Entity 开头
       - name: group
+        source: group
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -23,6 +24,7 @@ entities:
         ops_exposure: read
         description: 分组 Topic/Audience/Format/Entity
       - name: label
+        source: label
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -30,6 +32,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: displayLabel
+        source: displayLabel
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -38,6 +41,7 @@ entities:
         ops_exposure: read
         description: 面向端侧展示的短名，例如 广东省 -> 广东、深圳市 -> 深圳
       - name: labelEn
+        source: labelEn
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -45,6 +49,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: aliases
+        source: aliases
         type: "[]string"
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -52,6 +57,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: ancestors
+        source: ancestors
         type: "[]string"
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -60,6 +66,7 @@ entities:
         ops_exposure: read
         description: 祖先 tagRef 路径（自顶向下）
       - name: parentTagRef
+        source: parentTagRef
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -69,6 +76,7 @@ entities:
         tag_ref: true
         description: 直接父节点 tagRef，用于 children 查询
       - name: depth
+        source: depth
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -76,6 +84,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: releaseId
+        source: releaseId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -84,6 +93,7 @@ entities:
         ops_exposure: read
         description: 导入该标签节点的数据发布批次
       - name: lifecycleStatus
+        source: lifecycleStatus
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -92,6 +102,7 @@ entities:
         ops_exposure: read
         description: active | deprecated；children 只返回 active 节点
       - name: createdAt
+        source: createdAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -99,6 +110,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: updatedAt
+        source: updatedAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -113,6 +125,7 @@ entities:
     description: 对象→tagRef 反向索引只读投影（供 inverted / shared-tags）
     fields:
       - name: objectId
+        source: objectId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -120,6 +133,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: objectType
+        source: objectType
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -128,6 +142,7 @@ entities:
         ops_exposure: read
         description: post / circle / entity / user
       - name: tagRefs
+        source: tagRefs
         type: "string[]"
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -136,6 +151,7 @@ entities:
         ops_exposure: read
         tag_ref: true
       - name: createdAt
+        source: createdAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -143,6 +159,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: updatedAt
+        source: updatedAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -157,6 +174,7 @@ entities:
     description: resolve(tagRef) 返回视图
     fields:
       - name: tagRef
+        source: tagRef
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -164,6 +182,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: group
+        source: group
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -171,6 +190,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: label
+        source: label
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -178,6 +198,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: labelEn
+        source: labelEn
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -185,6 +206,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: aliases
+        source: aliases
         type: "[]string"
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -192,6 +214,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: ancestors
+        source: ancestors
         type: "[]string"
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -216,6 +239,7 @@ entities:
     description: shared-tags 结果项（交集锚点）
     fields:
       - name: tagRef
+        source: tagRef
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -223,6 +247,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: label
+        source: label
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -230,6 +255,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: strength
+        source: strength
         type: float64
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -238,6 +264,7 @@ entities:
         ops_exposure: read
         description: 共享强度/置信（仅排序用，端不展示）
       - name: source
+        source: source
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -250,6 +277,7 @@ entities:
     description: inverted(tagRef) 结果视图
     fields:
       - name: tagRef
+        source: tagRef
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -257,6 +285,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: objectCount
+        source: objectCount
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -264,6 +293,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: objectIds
+        source: objectIds
         type: "[]string"
         constraints: [NULLABLE]
         classification: PUBLIC

@@ -106,7 +106,7 @@ class CommentNotifier extends Notifier<CommentState>
       }
       final failure = CloudErrorMapper.runtimeFailureFromException(
         e,
-        requestPath: '/v1/content/posts/$postId/comments',
+        requestPath: '/content/posts/$postId/comments',
       );
       final hasRetainedComments = state.comments.isNotEmpty;
       state = state.copyWith(
@@ -184,7 +184,7 @@ class CommentNotifier extends Notifier<CommentState>
       }
       final failure = CloudErrorMapper.runtimeFailureFromException(
         e,
-        requestPath: '/v1/content/posts/$postId/comments',
+        requestPath: '/content/posts/$postId/comments',
       );
       state = state.copyWith(
         status: CommentListStatus.idle,
@@ -367,11 +367,7 @@ class CommentNotifier extends Notifier<CommentState>
         );
     try {
       await _repo.deleteComment(
-        DeleteContentCommentCommand(
-          postId: postId,
-          commentId: commentId,
-          version: current.version,
-        ),
+        DeleteContentCommentCommand(postId: postId, commentId: commentId),
       );
       if (!ref.mounted) {
         return;
@@ -499,7 +495,6 @@ class CommentNotifier extends Notifier<CommentState>
       final command = ChangeContentCommentPinCommand(
         postId: postId,
         commentId: commentId,
-        version: current.version,
       );
       final confirmed = nextPinned
           ? await _repo.pinComment(command)

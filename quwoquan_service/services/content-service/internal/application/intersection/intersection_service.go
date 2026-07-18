@@ -20,7 +20,7 @@ import (
 
 // IntersectionSource 提供事实与概率两通道的交集理由。
 // 事实通道（FactReasons）为可向用户说明的真实交集（请求期查询/读模型，不打分）；
-// 概率通道（AffinityReasons）为算法推荐（/v1/score 产出 RecommendationAffinity）。
+// 概率通道（AffinityReasons）为算法推荐（/score 产出 RecommendationAffinity）。
 // 默认实现返回空（事实数据由环境 seed 驱动，不在服务端伪造）。
 type IntersectionSource interface {
 	FactReasons(ctx context.Context, userID, channel string) ([]IntersectionReasonView, error)

@@ -78,7 +78,7 @@ D0 设计冻结
 - `quwoquan_ops/environments/workload_topology_inventory.yaml`：workload 三态、prod wiring、split candidates。
 - `quwoquan_ops/environments/module_package_mapping.yaml`：部署包到 runtime module 的映射。
 - `quwoquan_ops/environments/reliable_task_module_catalog.yaml`：runtime module 能力、队列、store 与 one-box/standalone 约束。
-- `quwoquan_service/contracts/metadata/**/service.yaml`：API path、operation、domain 的唯一真相源。
+- `quwoquan_service/contracts/metadata/**/service.yaml`：API path、operation、domain 的唯一真相源。HTTP 资源路径不得携带 `/vN`、`/internal/vN`、`/callbacks/vN` 协议版本段；平面（可选）+ 域 + 资源 + 操作即为完整 path。
 - `specs/feature-tree/tree_index.yaml`：特性树索引。
 
 ## 运行输出边界
@@ -111,9 +111,9 @@ provenance 的 workload 必须阻断，不能靠目录名推断。
 - application plane：`seed-box` 是 deployment package/workload；实际成员只能从
   `process_domain_mapping` 与 `module_package_mapping` 推导，并必须与 Docker build
   列表和 supervisor `SERVICE_SPECS` 完全一致。
-- management / product-ops plane：`product-ops-service` 独立 workload/package，承载 `ops` domain、`/v1/ops*` 与 `/v1/control-plane/product*`，不再作为 `seed-box` 子进程。
+- management / product-ops plane：`product-ops-service` 独立 workload/package，承载 `ops` domain、`/ops*` 与 `/control-plane/product*`，不再作为 `seed-box` 子进程。
 - recommendation：保留独立 `recommendation-service`（Python 打分），但可在冷启动关闭；规则推荐与交集在 `content-service` 进程内运行。
-- search：保留独立 `search-service` 作为 ES 读模型与 `/v1/search*` 上游；冷启动可按 ES 是否可用决定启用。
+- search：保留独立 `search-service` 作为 ES 读模型与 `/search*` 上游；冷启动可按 ES 是否可用决定启用。
 - edge-media：`realtime-gateway`、`rtc-service`、`livekit-sfu`、`coturn` 从第一天独立，不并入 `seed-box`。
 - 数据面：MongoDB、Redis scenes、Postgres、ES/OpenSearch 外置，通过 env/config 注入，允许共享或按域拆分。
 - prod-hosted 运行时四平面继续以 `edge`、`media`、`service`、`data` 为访问隔离真相源；其中 `service` 平面内的发布工作负载必须至少包含 `seed-box`、`recommendation-service`、`product-ops-service` 三个独立 release unit。
@@ -124,7 +124,7 @@ provenance 的 workload 必须阻断，不能靠目录名推断。
 |---|---|---|---|---|
 | 内容工程冷启动生产 | `quwoquan_data` + metadata fixtures + seed manifests | 部分 | 数据工程脚本实现深度需继续按真实文件与产物核验；锚点到内容/实体/用户的灌数链需完整 T3 证据 | data CLI gate、content seed manifest、gamma seed 报告 |
 | 内容入库与展示 | `content-service`、App content/discovery UI | 部分 | 大规模内容入库、媒体安全、search/location/tag 回填需持续验证 | content local_contract/api_integration、App user_acceptance |
-| 标签/实体锚点 | `tag-service`、`entity-service`、`search-service` | 部分 | 需在 one-box 中真实承载 tag/entity，并保证 `/v1/homepages`、`/v1/tag` 路由可达 | tag/entity contract、search projection tests |
+| 标签/实体锚点 | `tag-service`、`entity-service`、`search-service` | 部分 | 需在 one-box 中真实承载 tag/entity，并保证 `/homepages`、`/tag` 路由可达 | tag/entity contract、search projection tests |
 | 推荐与交集生成 | `content-service` 进程内 `runtime/recommendation` + `IntersectionService` | 部分 | 交集到行动闭环需持续补行为回流与行动完成证据 | intersection local_contract + content-service tests |
 | 行动承接 | App object page / companion action / chat/user/circle | 部分 | 约伴、关注、私信、群/圈加入等行动链路需按 CDE 分批补 UAT | App widget/user_acceptance |
 | 回流与观测 | behavior、recommend feature、`product-ops-service` metrics | 部分 | 行动完成数/关系形成数 North Star 的统一指标与 dashboard 仍需接 product-ops | runtime/ops acceptance + metrics gate |

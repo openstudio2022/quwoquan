@@ -4,7 +4,7 @@ info:
     title: quwoquan tag API
     version: v1
 paths:
-    /internal/v1/tag/taxonomy-releases:
+    /internal/tag/taxonomy-releases:
         post:
             operationId: StageTagTaxonomyRelease
             x-contract-operation-id: tag.taxonomy_release.StageTagTaxonomyRelease
@@ -36,7 +36,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /internal/v1/tag/taxonomy-releases/{releaseId}:activate:
+    /internal/tag/taxonomy-releases/{releaseId}:activate:
         post:
             operationId: ActivateTagTaxonomyRelease
             x-contract-operation-id: tag.taxonomy_release.ActivateTagTaxonomyRelease
@@ -74,7 +74,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/tag/children:
+    /tag/children:
         get:
             operationId: ListTagChildren
             x-contract-operation-id: tag.tag.ListTagChildren
@@ -99,7 +99,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-    /v1/tag/dimensions:
+    /tag/dimensions:
         get:
             operationId: ListDimensions
             x-contract-operation-id: tag.tag.ListDimensions
@@ -124,7 +124,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-    /v1/tag/graph/cooccurrence:
+    /tag/graph/cooccurrence:
         get:
             operationId: TagCooccurrence
             x-contract-operation-id: tag.tag.TagCooccurrence
@@ -149,7 +149,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-    /v1/tag/inverted:
+    /tag/inverted:
         get:
             operationId: InvertedObjects
             x-contract-operation-id: tag.tag.InvertedObjects
@@ -174,7 +174,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-    /v1/tag/related:
+    /tag/related:
         get:
             operationId: RelatedTags
             x-contract-operation-id: tag.tag.RelatedTags
@@ -199,7 +199,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-    /v1/tag/related-objects:
+    /tag/related-objects:
         get:
             operationId: RelatedObjects
             x-contract-operation-id: tag.tag.RelatedObjects
@@ -224,7 +224,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-    /v1/tag/resolve:
+    /tag/resolve:
         get:
             operationId: ResolveTag
             x-contract-operation-id: tag.tag.ResolveTag
@@ -249,7 +249,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-    /v1/tag/search:
+    /tag/search:
         get:
             operationId: SearchTags
             x-contract-operation-id: tag.tag.SearchTags
@@ -274,7 +274,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-    /v1/tag/search-by-tags:
+    /tag/search-by-tags:
         post:
             operationId: SearchByTags
             x-contract-operation-id: tag.tag.SearchByTags
@@ -305,7 +305,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-    /v1/tag/shared-tags:
+    /tag/shared-tags:
         get:
             operationId: SharedTags
             x-contract-operation-id: tag.tag.SharedTags
@@ -330,7 +330,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-    /v1/tag/suggest:
+    /tag/suggest:
         get:
             operationId: SuggestTags
             x-contract-operation-id: tag.tag.SuggestTags
@@ -355,7 +355,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-    /v1/tag/validate:
+    /tag/validate:
         post:
             operationId: ValidateTagRefs
             x-contract-operation-id: tag.tag.ValidateTagRefs

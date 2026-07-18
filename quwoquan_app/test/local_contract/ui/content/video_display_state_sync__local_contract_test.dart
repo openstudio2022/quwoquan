@@ -7,12 +7,12 @@ void main() {
   test('feed/card/viewer 视频状态同源消费 videoUrl 与 video cover', () {
     final wire = <String, dynamic>{
       '_id': 'video-sync',
-      'postId': 'video-sync',
-      'contentType': 'video',
+      'id': 'video-sync',
+      'type': 'video',
       'identity': 'work',
       'authorId': 'author',
       'displayName': '作者',
-      'authorAvatarUrl': '',
+      'avatarUrl': '',
       'videoUrl': 'media/video/s/fixture/video-sync/v1/clip.mp4',
       'thumbnailUrl': 'media/image/s/fixture/video-sync/v1/thumb.jpg',
       'coverUrl': 'media/image/s/fixture/video-sync/v1/thumb.jpg',

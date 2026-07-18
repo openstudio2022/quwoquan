@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/content/generated/content_error_code_ext.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
 
 /// L1a 契约测试：ContentErrorCode — 覆盖 mock.yaml error_scenarios
@@ -191,7 +190,7 @@ void main() {
   // ──────────────────────────────────────────────────────────────────
   // 演进契约：未知 code → unknown 降级；enum 与字符串映射完整
   // ──────────────────────────────────────────────────────────────────
-  group('ContentErrorCode — 兼容性契约', () {
+  group('ContentErrorCode — 单轨契约', () {
     test('fallback_unknown_code → unknown', () {
       final code = ContentErrorCode.fromCode('UNKNOWN.UNKNOWN.random');
       expect(code, ContentErrorCode.unknown);

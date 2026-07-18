@@ -1,4 +1,3 @@
-version: 1
 read_model: CircleMemberRosterRow
 
 description: |
@@ -10,56 +9,69 @@ consumer: app
 # 逻辑字段 → JSON 键（首个匹配即采用，与 fromMap 一致）
 fields:
   - name: membershipId
+    source: membershipId
     type: string
     source_keys: [_id, id, userId]
 
   - name: circleId
+    source: circleId
     type: ObjectId
 
   - name: userId
+    source: userId
     type: string
     source_keys: [userId, id, _id]
 
   - name: role
+    source: role
     type: string
     default_wire: member
 
   - name: joinedAt
+    source: joinedAt
     type: timestamp
 
   - name: displayName
+    source: displayName
     type: string
     source_keys: [displayName, name]
     nullable: true
 
   - name: avatarUrl
+    source: avatarUrl
     type: string
     source_keys: [avatarUrl, avatar]
     nullable: true
 
   - name: worksCountLabel
+    source: worksCountLabel
     type: string
     source_keys: [worksCountLabel, worksCount]
     nullable: true
 
   - name: fansCountLabel
+    source: fansCountLabel
     type: string
     source_keys: [fansCountLabel, fansCount]
     nullable: true
 
   - name: likesCountLabel
+    source: likesCountLabel
     type: string
     source_keys: [likesCountLabel, likesCount]
     nullable: true
 
   - name: isFollowed
+    source: isFollowed
     type: boolean
     default_wire: false
 
   - name: lastActiveAt
+    source: lastActiveAt
     type: timestamp
     nullable: true
 
   - name: contribution
+    source: contribution
     type: int
     default_wire: 0

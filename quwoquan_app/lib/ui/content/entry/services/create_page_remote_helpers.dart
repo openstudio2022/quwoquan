@@ -215,7 +215,7 @@ Map<String, dynamic> buildArticleAssetManifestForPayload(
     assets.add(_assetManifestRow(assetId, imagePath, role: 'figure'));
   }
   return <String, dynamic>{
-    'schemaVersion': 1,
+    'schema': 'article-asset-manifest',
     'markdownVersion': qwqRichMarkdownVersion,
     'assets': assets,
   };
@@ -265,9 +265,8 @@ Map<String, Object?> _assetManifestRow(
   };
 }
 
-/// 创作编辑器 → 云端发帖的**唯一 wire 出口**：先 [buildCreatePostPayloadMap]，
-/// 再 [attachActivePersonaToCreatePayload]，最后 [repositoryCreatePost] 内 [CreatePostRequestWire.fromMap]。
-Map<String, Object?> buildCreatePostPayloadMap(CreateEditorState state) {
+/// 创作编辑器到原子发布命令的唯一 payload 出口。
+Map<String, Object?> buildPostPublicationPayloadMap(CreateEditorState state) {
   final settings = state.settings.toPayloadFields();
   final summary = state.settings.summary.trim().isNotEmpty
       ? state.settings.summary.trim()
@@ -350,7 +349,7 @@ Map<String, Object?> buildCreatePostPayloadMap(CreateEditorState state) {
       'summary': summary,
       'coverUrl': coverAssetPath,
       'articleMarkdown': buildArticleMarkdownForPayload(state),
-      'articleMarkdownVersion': qwqRichMarkdownVersion,
+      'markdownDialect': qwqRichMarkdownVersion,
       'articleAssetManifest': buildArticleAssetManifestForPayload(state),
       'articleRenderProfile': buildArticleRenderProfileForPayload(state),
       ...settings,
@@ -375,8 +374,8 @@ typedef CreateMediaObjectUploader =
       required String expectedSha256,
     });
 
-class PreparedCreatePostPayload {
-  const PreparedCreatePostPayload({
+class PreparedPostPublicationPayload {
+  const PreparedPostPublicationPayload({
     required this.payload,
     required this.mediaAssetIds,
   });
@@ -385,23 +384,31 @@ class PreparedCreatePostPayload {
   final List<String> mediaAssetIds;
 }
 
-Future<PreparedCreatePostPayload> buildCreatePostPayloadWithRemoteImageMedia({
+Future<PreparedPostPublicationPayload>
+buildPostPublicationPayloadWithRemoteMedia({
   required ContentMediaFacet media,
   required FileStorageGateway fileStorageGateway,
   required CreateEditorState state,
   CreateMediaObjectUploader? uploadObject,
 }) async {
   final basePayload = Map<String, Object?>.from(
-    buildCreatePostPayloadMap(state),
+    buildPostPublicationPayloadMap(state),
   );
   if (state.editorKind != CreateEditorKind.media) {
-    return PreparedCreatePostPayload(
+    return PreparedPostPublicationPayload(
       payload: basePayload,
       mediaAssetIds: const <String>[],
     );
   }
+  // 上传服务的 cdnUrl 只用于本次上传协议，绝不能进入 Post 写入 payload。
+  // 发布时由 SubmitPostPublication 原子绑定并投影 canonical publicSliceKey。
+  basePayload
+    ..remove('mediaUrls')
+    ..remove('videoUrl')
+    ..remove('coverUrl')
+    ..remove('thumbnailUrl');
   if (state.hasVideo) {
-    return _buildCreatePostPayloadWithRemoteVideoMedia(
+    return _buildPostPublicationPayloadWithRemoteVideoMedia(
       media: media,
       fileStorageGateway: fileStorageGateway,
       state: state,
@@ -410,14 +417,13 @@ Future<PreparedCreatePostPayload> buildCreatePostPayloadWithRemoteImageMedia({
     );
   }
   if (state.imagePaths.isEmpty) {
-    return PreparedCreatePostPayload(
+    return PreparedPostPublicationPayload(
       payload: basePayload,
       mediaAssetIds: const <String>[],
     );
   }
 
   final uploader = uploadObject ?? _defaultUploadMediaObject;
-  final remoteUrls = <String>[];
   final assetIds = <String>[];
   for (final path in state.imagePaths) {
     final resolved = await _resolveMediaReference(
@@ -427,20 +433,24 @@ Future<PreparedCreatePostPayload> buildCreatePostPayloadWithRemoteImageMedia({
       mediaType: ContentMediaType.image,
       uploadObject: uploader,
     );
-    remoteUrls.add(resolved.url);
     if (resolved.assetId.isNotEmpty) {
       assetIds.add(resolved.assetId);
     }
   }
-  basePayload['mediaUrls'] = remoteUrls;
-  basePayload['coverUrl'] = remoteUrls.first;
-  return PreparedCreatePostPayload(
+  if (assetIds.isEmpty) {
+    throw StateError('image publish requires uploaded media asset ids');
+  }
+  basePayload['mediaItems'] = assetIds
+      .map((assetId) => <String, Object?>{'kind': 'image', 'mediaId': assetId})
+      .toList(growable: false);
+  return PreparedPostPublicationPayload(
     payload: basePayload,
     mediaAssetIds: assetIds,
   );
 }
 
-Future<PreparedCreatePostPayload> _buildCreatePostPayloadWithRemoteVideoMedia({
+Future<PreparedPostPublicationPayload>
+_buildPostPublicationPayloadWithRemoteVideoMedia({
   required ContentMediaFacet media,
   required FileStorageGateway fileStorageGateway,
   required CreateEditorState state,
@@ -454,6 +464,9 @@ Future<PreparedCreatePostPayload> _buildCreatePostPayloadWithRemoteVideoMedia({
     mediaType: ContentMediaType.video,
     uploadObject: uploadObject,
   );
+  if (video.assetId.isEmpty) {
+    throw StateError('video publish requires an uploaded MediaAsset id');
+  }
   final assetIds = <String>[if (video.assetId.isNotEmpty) video.assetId];
 
   final cover = await _resolveRemoteVideoCover(
@@ -469,10 +482,6 @@ Future<PreparedCreatePostPayload> _buildCreatePostPayloadWithRemoteVideoMedia({
     assetIds.add(cover.assetId);
   }
 
-  basePayload['videoUrl'] = video.url;
-  basePayload['mediaUrls'] = <String>[video.url];
-  basePayload['thumbnailUrl'] = cover.thumbnailUrl;
-  basePayload['coverUrl'] = cover.coverUrl;
   basePayload['coverStrategy'] = cover.coverStrategy;
   basePayload['coverFrameTimeMs'] = state.videoCoverTimeMs;
   if (state.videoDurationMs > 0) {
@@ -487,9 +496,6 @@ Future<PreparedCreatePostPayload> _buildCreatePostPayloadWithRemoteVideoMedia({
   basePayload['mediaItems'] = <Map<String, Object?>>[
     <String, Object?>{
       'kind': 'video',
-      'url': video.url,
-      'thumbnailUrl': cover.thumbnailUrl,
-      'coverUrl': cover.coverUrl,
       'coverStrategy': cover.coverStrategy,
       'coverFrameTimeMs': state.videoCoverTimeMs,
       if (state.videoDurationMs > 0) 'durationMs': state.videoDurationMs,
@@ -500,29 +506,24 @@ Future<PreparedCreatePostPayload> _buildCreatePostPayloadWithRemoteVideoMedia({
     },
   ];
 
-  return PreparedCreatePostPayload(
+  return PreparedPostPublicationPayload(
     payload: basePayload,
     mediaAssetIds: assetIds,
   );
 }
 
 class _ResolvedMediaReference {
-  const _ResolvedMediaReference({required this.url, this.assetId = ''});
+  const _ResolvedMediaReference({this.assetId = ''});
 
-  final String url;
   final String assetId;
 }
 
 class _ResolvedVideoCoverReference {
   const _ResolvedVideoCoverReference({
-    required this.thumbnailUrl,
-    required this.coverUrl,
     required this.coverStrategy,
     this.assetId = '',
   });
 
-  final String thumbnailUrl;
-  final String coverUrl;
   final String coverStrategy;
   final String assetId;
 }
@@ -539,22 +540,24 @@ Future<_ResolvedMediaReference> _resolveMediaReference({
     throw StateError('empty media path');
   }
   if (_isRemoteMediaReference(path)) {
-    return _ResolvedMediaReference(
-      url: path,
-      assetId: path.startsWith('media://')
-          ? path.substring('media://'.length)
-          : '',
-    );
+    final assetId = _mediaAssetIdFromReference(path);
+    if (assetId.isEmpty) {
+      throw StateError(
+        'media publish requires a MediaAsset reference, not a delivery URL',
+      );
+    }
+    return _ResolvedMediaReference(assetId: assetId);
   }
   final uploaded = await ContentMediaUploadCoordinator(
     media: media,
     fileStorage: fileStorageGateway,
     uploadObject: uploadObject,
   ).uploadLocalPath(localPath: path, mediaType: mediaType);
-  return _ResolvedMediaReference(
-    url: uploaded.cdnUrl?.toString() ?? 'media://${uploaded.assetId}',
-    assetId: uploaded.assetId,
-  );
+  final assetId = uploaded.assetId.trim();
+  if (assetId.isEmpty) {
+    throw StateError('uploaded media is missing its MediaAsset id');
+  }
+  return _ResolvedMediaReference(assetId: assetId);
 }
 
 Future<_ResolvedVideoCoverReference> _resolveRemoteVideoCover({
@@ -575,8 +578,6 @@ Future<_ResolvedVideoCoverReference> _resolveRemoteVideoCover({
       mediaType: ContentMediaType.image,
       uploadObject: uploadObject,
     );
-    var thumbnailUrl = cover.url;
-    var coverUrl = cover.url;
     var resolvedStrategy = coverStrategy == 'manual' ? 'manual' : 'first_frame';
     if (videoAssetId.isNotEmpty && cover.assetId.isNotEmpty) {
       final selected = await media.selectManualCover(
@@ -585,19 +586,11 @@ Future<_ResolvedVideoCoverReference> _resolveRemoteVideoCover({
           coverAssetId: cover.assetId,
         ),
       );
-      thumbnailUrl = selected.thumbnailUrl.toString().trim().isNotEmpty
-          ? selected.thumbnailUrl.toString().trim()
-          : thumbnailUrl;
-      coverUrl = selected.coverUrl.toString().trim().isNotEmpty
-          ? selected.coverUrl.toString().trim()
-          : coverUrl;
       resolvedStrategy = selected.coverStrategy.trim().isNotEmpty
           ? selected.coverStrategy.trim()
           : resolvedStrategy;
     }
     return _ResolvedVideoCoverReference(
-      thumbnailUrl: thumbnailUrl,
-      coverUrl: coverUrl,
       coverStrategy: resolvedStrategy,
       assetId: cover.assetId,
     );
@@ -616,16 +609,7 @@ Future<_ResolvedVideoCoverReference> _resolveRemoteVideoCover({
       : await media.selectAutoCover(
           SelectAutoContentMediaCoverCommand(mediaId: videoAssetId),
         );
-  final thumbnailUrl = selected.thumbnailUrl.toString().trim();
-  final coverUrl = selected.coverUrl.toString().trim().isNotEmpty
-      ? selected.coverUrl.toString().trim()
-      : thumbnailUrl;
-  if (thumbnailUrl.isEmpty && coverUrl.isEmpty) {
-    throw StateError('video cover selection is missing remote url');
-  }
   return _ResolvedVideoCoverReference(
-    thumbnailUrl: thumbnailUrl.isNotEmpty ? thumbnailUrl : coverUrl,
-    coverUrl: coverUrl,
     coverStrategy: selected.coverStrategy.trim().isNotEmpty
         ? selected.coverStrategy.trim()
         : 'first_frame',
@@ -638,6 +622,17 @@ bool _isRemoteMediaReference(String value) {
       lower.startsWith('https://') ||
       lower.startsWith('media://') ||
       lower.startsWith('asset://');
+}
+
+String _mediaAssetIdFromReference(String value) {
+  final source = value.trim();
+  if (source.startsWith('media://')) {
+    return source.substring('media://'.length).trim();
+  }
+  if (source.startsWith('asset://')) {
+    return source.substring('asset://'.length).trim();
+  }
+  return '';
 }
 
 String _videoCoverStrategyForPayload(CreateEditorState state) {
@@ -685,12 +680,17 @@ List<CreateDraft> decodeCreateDraftsList(Object? decoded) {
       .toList(growable: false);
 }
 
-CreateContentPostCommand createContentPostCommandFromPreparedPayload(
+SubmitContentPostPublicationCommand
+submitContentPostPublicationCommandFromPreparedPayload(
   Map<String, Object?> payload, {
+  required String localDraftId,
+  required Iterable<String> mediaAssetIds,
   String? authorDisplayNameSnapshot,
   String? authorAvatarUrlSnapshot,
   int? personaContextVersion,
-}) => CreateContentPostCommand(
+}) => SubmitContentPostPublicationCommand(
+  publishIntentId: postPublicationIntentIdForLocalDraft(localDraftId),
+  localDraftId: localDraftId,
   contentType: _requiredPostType(payload['contentType']),
   contentIdentity: _optionalPostIdentity(payload['contentIdentity']),
   title: _optionalPayloadText(payload['title']),
@@ -700,14 +700,10 @@ CreateContentPostCommand createContentPostCommandFromPreparedPayload(
     payload['semanticMentions'],
     'semanticMentions',
   ),
-  mediaUrls: _stringList(payload['mediaUrls'], 'mediaUrls'),
+  mediaAssetIds: mediaAssetIds,
   mediaItems: _structuredObjectList(payload['mediaItems'], 'mediaItems'),
-  coverUrl: _optionalPayloadText(payload['coverUrl']),
-  thumbnailUrl: _optionalPayloadText(payload['thumbnailUrl']),
   articleMarkdown: _optionalPayloadText(payload['articleMarkdown']),
-  articleMarkdownVersion: _optionalPayloadText(
-    payload['articleMarkdownVersion'],
-  ),
+  markdownDialect: _optionalPayloadText(payload['markdownDialect']),
   articleAssetManifest: _optionalStructuredObject(
     payload['articleAssetManifest'],
     'articleAssetManifest',
@@ -716,7 +712,6 @@ CreateContentPostCommand createContentPostCommandFromPreparedPayload(
     payload['articleRenderProfile'],
     'articleRenderProfile',
   ),
-  videoUrl: _optionalPayloadText(payload['videoUrl']),
   coverStrategy: _optionalPayloadText(payload['coverStrategy']),
   coverFrameTimeMs: _optionalPayloadInt(
     payload['coverFrameTimeMs'],
@@ -776,29 +771,10 @@ Map<String, Object?> createEditorSurfaceExtrasVideoEdited({
   'trimEndMs': trimEndMs,
 };
 
-/// 与 [buildCreatePostPayloadMap] 写入的 `contentType` 一致，供发布成功打点使用。
+/// 与 [buildPostPublicationPayloadMap] 写入的 `contentType` 一致，供发布成功打点使用。
 Map<String, Object?> createEditorSurfaceExtrasPublishSuccess(
   Map<String, Object?> payload,
 ) => <String, Object?>{'contentType': payload['contentType']};
-
-PublishContentPostCommand publishContentPostCommandFromSettings({
-  required String postId,
-  required PublishSettings settings,
-}) => PublishContentPostCommand(
-  postId: postId,
-  primaryHomepageId: settings.homepage?.id,
-  primaryHomepageType: settings.homepage?.homepageType,
-  primaryHomepageSnapshot: settings.homepage == null
-      ? null
-      : _optionalStructuredObject(
-          settings.homepage!.toPayloadFields()['primaryHomepageSnapshot'],
-          'primaryHomepageSnapshot',
-        ),
-  visibility: settings.isPublic
-      ? ContentPostVisibility.public
-      : ContentPostVisibility.private,
-  assistantUsePolicy: _optionalAssistantUsePolicy(settings.assistantUsePolicy),
-);
 
 ContentPostType _requiredPostType(Object? raw) => switch ('$raw'.trim()) {
   'image' => ContentPostType.image,
@@ -870,20 +846,6 @@ int? _optionalPayloadInt(Object? raw, String field) {
     throw ArgumentError.value(raw, field, 'must be an integer');
   }
   return parsed;
-}
-
-List<String> _stringList(Object? raw, String field) {
-  if (raw == null) return const <String>[];
-  if (raw is! List) throw ArgumentError.value(raw, field, 'must be a list');
-  return raw
-      .map((value) {
-        final text = _optionalPayloadText(value);
-        if (text == null) {
-          throw ArgumentError.value(value, field, 'items must not be empty');
-        }
-        return text;
-      })
-      .toList(growable: false);
 }
 
 List<ContentPostStructuredObject> _structuredObjectList(

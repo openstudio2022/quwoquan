@@ -24,24 +24,28 @@ func TestExperimentControlPlaneUsesGeneratedOperatorGuardAndAtomicPostgres(t *te
 	experimentID := seedRealExperiment(t, "draft")
 
 	unauthorized := performExperimentRequest(
-		guarded, http.MethodGet, "/v1/control-plane/product/experiments", "", "", false,
+		guarded, http.MethodGet, "/control-plane/product/experiments", experimentRequestOptions{},
 	)
 	assertExperimentError(t, unauthorized, http.StatusUnauthorized, "GATEWAY.USER.unauthorized")
 
 	wrongScope := performExperimentRequest(
 		guarded,
 		http.MethodPost,
-		"/v1/control-plane/product/experiments/"+experimentID+":rollout",
-		`{"expectedVersion":1,"status":"running","variants":[{"key":"control","allocationBasisPoints":4000},{"key":"treatment","allocationBasisPoints":6000}]}`,
-		experimentAccessToken(t, "operator-1", "", []string{"operator"}),
-		false,
+		"/control-plane/product/experiments/"+experimentID+":rollout",
+		experimentRequestOptions{
+			Body:       `{"status":"running","variants":[{"key":"control","allocationBasisPoints":4000},{"key":"treatment","allocationBasisPoints":6000}]}`,
+			Credential: experimentAccessToken(t, "operator-1", "", []string{"operator"}),
+			Headers:    experimentRolloutHeaders(),
+		},
 	)
 	assertExperimentError(t, wrongScope, http.StatusForbidden, "GATEWAY.USER.forbidden")
 
-	rolloutPath := "/v1/control-plane/product/experiments/" + experimentID + ":rollout"
-	rolloutBody := `{"expectedVersion":1,"status":"running","variants":[{"key":"control","allocationBasisPoints":4000},{"key":"treatment","allocationBasisPoints":6000}]}`
+	rolloutPath := "/control-plane/product/experiments/" + experimentID + ":rollout"
+	rolloutBody := `{"status":"running","variants":[{"key":"control","allocationBasisPoints":4000},{"key":"treatment","allocationBasisPoints":6000}]}`
 	writeToken := experimentAccessToken(t, "operator-1", "ops.experiment.write", []string{"operator"})
-	created := performExperimentRequest(guarded, http.MethodPost, rolloutPath, rolloutBody, writeToken, false)
+	created := performExperimentRequest(guarded, http.MethodPost, rolloutPath, experimentRequestOptions{
+		Body: rolloutBody, Credential: writeToken, Headers: experimentRolloutHeaders(),
+	})
 	if created.Code != http.StatusOK {
 		t.Fatalf("rollout status=%d body=%s", created.Code, created.Body.String())
 	}
@@ -51,7 +55,9 @@ func TestExperimentControlPlaneUsesGeneratedOperatorGuardAndAtomicPostgres(t *te
 		t.Fatalf("unexpected rollout result: %+v", result)
 	}
 
-	replayed := performExperimentRequest(guarded, http.MethodPost, rolloutPath, rolloutBody, writeToken, false)
+	replayed := performExperimentRequest(guarded, http.MethodPost, rolloutPath, experimentRequestOptions{
+		Body: rolloutBody, Credential: writeToken, Headers: experimentRolloutHeaders(),
+	})
 	if replayed.Code != http.StatusOK {
 		t.Fatalf("rollout replay status=%d body=%s", replayed.Code, replayed.Body.String())
 	}
@@ -60,15 +66,18 @@ func TestExperimentControlPlaneUsesGeneratedOperatorGuardAndAtomicPostgres(t *te
 		guarded,
 		http.MethodPost,
 		rolloutPath,
-		`{"expectedVersion":2,"status":"ended","variants":[{"key":"control","allocationBasisPoints":4000},{"key":"treatment","allocationBasisPoints":6000}]}`,
-		writeToken,
-		false,
+		experimentRequestOptions{
+			Body:       `{"status":"ended","variants":[{"key":"control","allocationBasisPoints":4000},{"key":"treatment","allocationBasisPoints":6000}]}`,
+			Credential: writeToken,
+			Headers:    experimentRolloutHeaders(),
+		},
 	)
 	assertExperimentError(t, conflict, http.StatusConflict, "OPS.USER.idempotency_conflict")
 
 	readToken := experimentAccessToken(t, "operator-1", "ops.experiment.read", []string{"operator"})
 	listed := performExperimentRequest(
-		guarded, http.MethodGet, "/v1/control-plane/product/experiments", "", readToken, false,
+		guarded, http.MethodGet, "/control-plane/product/experiments",
+		experimentRequestOptions{Credential: readToken},
 	)
 	if listed.Code != http.StatusOK || !strings.Contains(listed.Body.String(), experimentID) {
 		t.Fatalf("experiment catalog status=%d body=%s", listed.Code, listed.Body.String())
@@ -92,16 +101,20 @@ func TestExperimentAssignmentDerivesSubjectAndRemainsCommerciallyBlocked(t *test
 	authenticated := realExperimentAuthenticatedHandler(t, false, handler)
 	guarded := realExperimentAuthenticatedHandler(t, true, handler)
 	experimentID := seedRealExperiment(t, "running")
-	assignmentPath := "/v1/ops/experiments/" + experimentID + "/assignment"
+	assignmentPath := "/ops/experiments/" + experimentID + "/assignment"
 	personaToken := experimentAccessToken(t, "account-1", "", nil, "persona-1")
 
 	spoofedBody := performExperimentRequest(
 		authenticated, http.MethodPost, assignmentPath,
-		`{"subjectKey":"persona:victim"}`, personaToken, false,
+		experimentRequestOptions{
+			Body: `{"subjectKey":"persona:victim"}`, Credential: personaToken,
+		},
 	)
 	assertExperimentError(t, spoofedBody, http.StatusBadRequest, "OPS.USER.invalid_argument")
 
-	assigned := performExperimentRequest(authenticated, http.MethodPost, assignmentPath, "", personaToken, false)
+	assigned := performExperimentRequest(authenticated, http.MethodPost, assignmentPath, experimentRequestOptions{
+		Credential: personaToken,
+	})
 	if assigned.Code != http.StatusCreated {
 		t.Fatalf("assign status=%d body=%s", assigned.Code, assigned.Body.String())
 	}
@@ -114,21 +127,27 @@ func TestExperimentAssignmentDerivesSubjectAndRemainsCommerciallyBlocked(t *test
 		t.Fatalf("assignment did not derive verified persona: %+v", assignedFact)
 	}
 
-	blocked := performExperimentRequest(guarded, http.MethodPost, assignmentPath, "", personaToken, false)
+	blocked := performExperimentRequest(guarded, http.MethodPost, assignmentPath, experimentRequestOptions{
+		Credential: personaToken,
+	})
 	assertExperimentError(t, blocked, http.StatusForbidden, "GATEWAY.USER.forbidden")
 
-	readOwn := performExperimentRequest(authenticated, http.MethodGet, assignmentPath, "", personaToken, false)
+	readOwn := performExperimentRequest(authenticated, http.MethodGet, assignmentPath, experimentRequestOptions{
+		Credential: personaToken,
+	})
 	if readOwn.Code != http.StatusOK || !strings.Contains(readOwn.Body.String(), `"subjectKey":"persona:persona-1"`) {
 		t.Fatalf("read own assignment status=%d body=%s", readOwn.Code, readOwn.Body.String())
 	}
 
 	deviceTicket := experimentDeviceTicket(t, "device-1")
-	assignedDevice := performExperimentRequest(authenticated, http.MethodPost, assignmentPath, "", deviceTicket, true)
+	assignedDevice := performExperimentRequest(authenticated, http.MethodPost, assignmentPath, experimentRequestOptions{
+		Credential: deviceTicket, UseDeviceTicket: true,
+	})
 	if assignedDevice.Code != http.StatusCreated || !strings.Contains(assignedDevice.Body.String(), `"subjectKey":"device:device-1"`) {
 		t.Fatalf("device assignment status=%d body=%s", assignedDevice.Code, assignedDevice.Body.String())
 	}
 
-	unauthorized := performExperimentRequest(authenticated, http.MethodPost, assignmentPath, "", "", false)
+	unauthorized := performExperimentRequest(authenticated, http.MethodPost, assignmentPath, experimentRequestOptions{})
 	assertExperimentError(t, unauthorized, http.StatusUnauthorized, "OPS.USER.unauthorized")
 
 	var subjects []string
@@ -249,21 +268,39 @@ func experimentTokenConfig(tokenType rtauth.TokenType) rtauth.TokenConfig {
 	}
 }
 
+type experimentRequestOptions struct {
+	Body            string
+	Credential      string
+	UseDeviceTicket bool
+	Headers         http.Header
+}
+
+func experimentRolloutHeaders() http.Header {
+	return http.Header{
+		"Idempotency-Key": []string{"experiment-http-idempotency"},
+		"If-Match":        []string{`"1"`},
+	}
+}
+
 func performExperimentRequest(
 	handler http.Handler,
-	method, path, body, credential string,
-	device bool,
+	method, path string,
+	options experimentRequestOptions,
 ) *httptest.ResponseRecorder {
-	request := httptest.NewRequest(method, path, strings.NewReader(body))
+	request := httptest.NewRequest(method, path, strings.NewReader(options.Body))
 	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Idempotency-Key", "experiment-http-idempotency")
+	for key, values := range options.Headers {
+		for _, value := range values {
+			request.Header.Add(key, value)
+		}
+	}
 	request.Header.Set("X-Client-Persona-Id", "victim")
 	request.Header.Set("X-User-Id", "victim")
-	if credential != "" {
-		if device {
-			request.Header.Set(rtauth.DeviceTicketHeader, credential)
+	if options.Credential != "" {
+		if options.UseDeviceTicket {
+			request.Header.Set(rtauth.DeviceTicketHeader, options.Credential)
 		} else {
-			request.Header.Set("Authorization", "Bearer "+credential)
+			request.Header.Set("Authorization", "Bearer "+options.Credential)
 		}
 	}
 	recorder := httptest.NewRecorder()

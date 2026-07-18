@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	homepagesPrefix = "/v1/homepages/"
+	homepagesPrefix = "/homepages/"
 	defaultUserID   = "mock-user"
 )
 
@@ -30,10 +30,10 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
 	})
-	mux.HandleFunc("/v1/homepages/search", h.handleSearchHomepages)
-	mux.HandleFunc("/v1/homepages/candidates", h.handleCandidates)
-	mux.HandleFunc("/v1/homepages/candidates/suggest", h.handleSuggestCandidate)
-	mux.HandleFunc("/v1/homepages:reload", h.handleReloadState)
+	mux.HandleFunc("/homepages/search", h.handleSearchHomepages)
+	mux.HandleFunc("/homepages/candidates", h.handleCandidates)
+	mux.HandleFunc("/homepages/candidates/suggest", h.handleSuggestCandidate)
+	mux.HandleFunc("/homepages:reload", h.handleReloadState)
 	mux.HandleFunc(homepagesPrefix, h.handleHomepageRoute)
 	return mux
 }
@@ -74,7 +74,7 @@ func (h *Handler) handleSearchHomepages(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *Handler) handleCandidates(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost || r.URL.Path != "/v1/homepages/candidates" {
+	if r.Method != http.MethodPost || r.URL.Path != "/homepages/candidates" {
 		writeRuntimeNotFound(w, r)
 		return
 	}
@@ -271,7 +271,6 @@ func (h *Handler) handleHomepageRoute(w http.ResponseWriter, r *http.Request) {
 		h.handleStatusReports(w, r, homepageID, segments)
 	default:
 		if strings.HasSuffix(segments[0], ":publish") && r.Method == http.MethodPost {
-			// Unreachable for current routes, retained for forward compatibility.
 			writeRuntimeNotFound(w, r)
 			return
 		}

@@ -3,7 +3,7 @@
 ## 功能说明
 
 - **契约**：ModelPredictRequest 增加 Scenario 字段（或 Context 中携带）；Go 与 Python 双端一致。
-- **Go 客户端**：HTTPModelServiceClient 实现 ModelServiceClient；请求 /v1/score 时传入 scenario（content-service 传 content_feed）；超时与重试可配置。
+- **Go 客户端**：HTTPModelServiceClient 实现 ModelServiceClient；请求 /score 时传入 scenario（content-service 传 content_feed）；超时与重试可配置。
 - **兜底**：CascadeScorer 在模型服务不可用或超时时回退到 RuleScorer；content-service 通过配置启用/禁用模型调用。
 
 ## 实现要点

@@ -55,4 +55,3 @@ field_visibility:
   visibility:
   - self
   - platform-ops
-version: 1

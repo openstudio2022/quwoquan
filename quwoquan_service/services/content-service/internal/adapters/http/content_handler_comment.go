@@ -79,11 +79,14 @@ func (h *ContentHandler) handleListComments(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusOK, page)
 }
 
-func (h *ContentHandler) handleListCommentReplies(w http.ResponseWriter, r *http.Request) {
-	path := strings.Trim(r.URL.Path, "/")
-	parts := strings.Split(path, "/")
-	// /v1/content/posts/{postId}/comments/{commentId}/replies
-	if len(parts) < 7 {
+func (h *ContentHandler) handleListCommentReplies(
+	w http.ResponseWriter,
+	r *http.Request,
+	postID string,
+	commentID string,
+) {
+	// /content/posts/{postId}/comments/{commentId}/replies
+	if postID == "" || commentID == "" {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid path", "missing postId/commentId"))
 		return
 	}
@@ -95,8 +98,8 @@ func (h *ContentHandler) handleListCommentReplies(w http.ResponseWriter, r *http
 		}
 	}
 	page, err := h.commentService.ListReplies(r.Context(), commentapp.ListCommentRepliesQuery{
-		PostID:          parts[3],
-		ParentCommentID: parts[5],
+		PostID:          postID,
+		ParentCommentID: commentID,
 		ActorID:         optionalCommentPersona(r),
 		Cursor:          cursor,
 		Limit:           limit,
@@ -108,21 +111,15 @@ func (h *ContentHandler) handleListCommentReplies(w http.ResponseWriter, r *http
 	writeJSON(w, http.StatusOK, page)
 }
 
-func (h *ContentHandler) handleDeleteComment(w http.ResponseWriter, r *http.Request) {
-	path := strings.Trim(r.URL.Path, "/")
-	parts := strings.Split(path, "/")
-	// /v1/content/posts/{postId}/comments/{commentId}
-	if len(parts) < 6 {
+func (h *ContentHandler) handleDeleteComment(
+	w http.ResponseWriter,
+	r *http.Request,
+	postID string,
+	commentID string,
+) {
+	// /content/posts/{postId}/comments/{commentId}
+	if postID == "" || commentID == "" {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid path", "missing commentId"))
-		return
-	}
-	postID := parts[3]
-	commentID := parts[5]
-	var body struct {
-		Version int64 `json:"version"`
-	}
-	if err := decodeRequiredJSONBody(r, &body); err != nil {
-		writeHTTPError(w, r, err)
 		return
 	}
 	actorID, err := requiredCommentPersona(r)
@@ -131,7 +128,7 @@ func (h *ContentHandler) handleDeleteComment(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	result, err := h.commentService.DeleteComment(r.Context(), commentapp.DeleteCommentCommand{
-		PostID: postID, CommentID: commentID, ActorID: actorID, ExpectedVersion: body.Version,
+		PostID: postID, CommentID: commentID, ActorID: actorID,
 	})
 	if err != nil {
 		writeHTTPError(w, r, err)
@@ -140,21 +137,16 @@ func (h *ContentHandler) handleDeleteComment(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusOK, result)
 }
 
-func (h *ContentHandler) handleSetCommentPinned(w http.ResponseWriter, r *http.Request, pinned bool) {
-	path := strings.Trim(r.URL.Path, "/")
-	parts := strings.Split(path, "/")
-	// /v1/content/posts/{postId}/comments/{commentId}/pin
-	if len(parts) < 7 {
+func (h *ContentHandler) handleSetCommentPinned(
+	w http.ResponseWriter,
+	r *http.Request,
+	postID string,
+	commentID string,
+	pinned bool,
+) {
+	// /content/posts/{postId}/comments/{commentId}/pin
+	if postID == "" || commentID == "" {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid path", "missing commentId for pin"))
-		return
-	}
-	postID := parts[3]
-	commentID := parts[5]
-	var body struct {
-		Version int64 `json:"version"`
-	}
-	if err := decodeRequiredJSONBody(r, &body); err != nil {
-		writeHTTPError(w, r, err)
 		return
 	}
 	actorID, err := requiredCommentPersona(r)
@@ -164,7 +156,7 @@ func (h *ContentHandler) handleSetCommentPinned(w http.ResponseWriter, r *http.R
 	}
 	command := commentapp.ChangeCommentPinCommand{
 		PostID: postID, CommentID: commentID, ActorID: actorID,
-		ExpectedVersion: body.Version, Pinned: pinned,
+		Pinned: pinned,
 	}
 	var result commentapp.CommentCommandResult
 	if pinned {
@@ -219,7 +211,6 @@ func (h *ContentHandler) handleReactToComment(w http.ResponseWriter, r *http.Req
 
 func (h *ContentHandler) handleBindMediaAssetsToComment(w http.ResponseWriter, r *http.Request, commentID string) {
 	var body struct {
-		Version            int64    `json:"version"`
 		AttachmentMediaIDs []string `json:"attachmentMediaIds"`
 	}
 	if err := decodeRequiredJSONBody(r, &body); err != nil {
@@ -232,7 +223,7 @@ func (h *ContentHandler) handleBindMediaAssetsToComment(w http.ResponseWriter, r
 		return
 	}
 	result, err := h.commentService.BindAttachments(r.Context(), commentapp.BindCommentAttachmentsCommand{
-		CommentID: commentID, ActorID: actorID, ExpectedVersion: body.Version,
+		CommentID: commentID, ActorID: actorID,
 		AttachmentMediaIDs: body.AttachmentMediaIDs,
 	})
 	if err != nil {

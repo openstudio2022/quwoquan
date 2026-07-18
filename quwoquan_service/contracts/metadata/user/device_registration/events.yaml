@@ -1,4 +1,3 @@
-version: 1
 aggregate: DeviceRegistration
 events:
   - name: DeviceRegistered

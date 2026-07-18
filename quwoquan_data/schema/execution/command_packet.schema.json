@@ -5,7 +5,7 @@
   "description": "命令 packet 唯一字段定义（写入口 core/command_packet.write_packet）。每个 stage/命令的输入输出、停机条件与交接对象必须走本契约。",
   "type": "object",
   "required": [
-    "schemaVersion",
+    "schema",
     "executionId",
     "command",
     "objectKind",
@@ -21,19 +21,60 @@
   ],
   "additionalProperties": false,
   "properties": {
-    "schemaVersion": { "const": "quwoquan.data.packet" },
-    "executionId": { "type": "string", "minLength": 1 },
-    "command": { "type": "string", "minLength": 1 },
-    "objectKind": { "type": "string", "minLength": 1 },
-    "objectRef": { "type": "string" },
-    "stage": { "type": "string", "minLength": 1 },
-    "readPolicy": { "type": "array", "items": { "type": "string" } },
-    "stopIf": { "type": "array", "items": { "type": "string" } },
-    "outputPolicy": { "type": "array", "items": { "type": "string" } },
-    "inputs": { "type": "object" },
-    "outputs": { "type": "object" },
-    "handoffTo": { "type": "string" },
-    "evidence": { "type": "object" },
-    "summary": { "type": "object" }
+    "executionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "command": {
+      "type": "string",
+      "minLength": 1
+    },
+    "objectKind": {
+      "type": "string",
+      "minLength": 1
+    },
+    "objectRef": {
+      "type": "string"
+    },
+    "stage": {
+      "type": "string",
+      "minLength": 1
+    },
+    "readPolicy": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "stopIf": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "outputPolicy": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "inputs": {
+      "type": "object"
+    },
+    "outputs": {
+      "type": "object"
+    },
+    "handoffTo": {
+      "type": "string"
+    },
+    "evidence": {
+      "type": "object"
+    },
+    "summary": {
+      "type": "object"
+    },
+    "schema": {
+      "const": "quwoquan.data.packet"
+    }
   }
 }

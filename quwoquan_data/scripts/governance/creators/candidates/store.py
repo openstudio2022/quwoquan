@@ -158,7 +158,7 @@ class CandidateRepository:
             return existing
 
         candidate = {
-            "schemaVersion": "quwoquan_data.governance_candidate/1",
+            "schema": "quwoquan_data.governance_candidate",
             "candidateId": candidate_id,
             "kind": str(kind).strip(),
             "naturalKey": str(natural_key).strip(),
@@ -244,7 +244,7 @@ class CandidateRepository:
         target_status = transition_target(previous_status, str(decision).strip())
         timestamp = reviewed_at or self.now()
         review_record = {
-            "schemaVersion": "quwoquan_data.governance_review/1",
+            "schema": "quwoquan_data.governance_review",
             "decisionId": decision_id_value,
             "candidateId": candidate_id,
             "decision": str(decision).strip(),
@@ -308,7 +308,7 @@ class CandidateRepository:
         )
         event_id = "audit_" + hashlib.sha256(event_identity.encode("utf-8")).hexdigest()[:24]
         row: dict[str, Any] = {
-            "schemaVersion": "quwoquan_data.governance_audit/1",
+            "schema": "quwoquan_data.governance_audit",
             "auditId": event_id,
             "candidateId": candidate.get("candidateId"),
             "action": action,
@@ -337,7 +337,7 @@ class CandidateRepository:
         _append_ndjson(
             self.backfill_path,
             {
-                "schemaVersion": "quwoquan_data.governance_backfill_event/1",
+                "schema": "quwoquan_data.governance_backfill_event",
                 "eventId": event_id,
                 "eventType": "governance.candidate.backfill_requested",
                 "candidateId": candidate.get("candidateId"),

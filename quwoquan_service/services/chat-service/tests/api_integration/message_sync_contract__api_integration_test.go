@@ -9,13 +9,13 @@ func TestSyncMessagesGapFill(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"group","title":"sync test"}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 
 	for i := 0; i < 10; i++ {
 		sendMessage(t, convId, fmt.Sprintf(`{"type":"text","content":"sync msg %d","clientMsgId":"sync-uuid-%d"}`, i, i))
 	}
 
-	result := doPost(t, "/v1/chat/conversations/"+convId+"/sync",
+	result := doPost(t, "/chat/conversations/"+convId+"/sync",
 		`{"lastSeq":5,"limit":100}`, "user_test_001", 200)
 
 	msgs, ok := result["messages"].([]any)
@@ -37,13 +37,13 @@ func TestSyncMessagesFromZero(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"group","title":"sync zero test"}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 
 	for i := 0; i < 3; i++ {
 		sendMessage(t, convId, fmt.Sprintf(`{"type":"text","content":"msg %d","clientMsgId":"sync0-uuid-%d"}`, i, i))
 	}
 
-	result := doPost(t, "/v1/chat/conversations/"+convId+"/sync",
+	result := doPost(t, "/chat/conversations/"+convId+"/sync",
 		`{"lastSeq":0,"limit":500}`, "user_test_001", 200)
 
 	msgs, ok := result["messages"].([]any)

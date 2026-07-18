@@ -22,7 +22,7 @@ func TestAssistantMentionedConsumerGroundsAndRepliesThroughChatHTTP(t *testing.T
 
 	chatHTTP := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/v1/chat/conversations/conv-e2e/messages":
+		case "/chat/conversations/conv-e2e/messages":
 			if r.Method == http.MethodGet {
 				if r.URL.Query().Get("beforeSeq") != "12" {
 					t.Fatalf("beforeSeq=%s, want 12", r.URL.Query().Get("beforeSeq"))
@@ -58,7 +58,7 @@ func TestAssistantMentionedConsumerGroundsAndRepliesThroughChatHTTP(t *testing.T
 				_ = json.NewEncoder(w).Encode(map[string]any{"messageId": "assistant-reply-1", "seq": 13})
 				return
 			}
-		case "/v1/chat/conversations/conv-e2e/members":
+		case "/chat/conversations/conv-e2e/members":
 			_ = json.NewEncoder(w).Encode(map[string]any{"items": []map[string]any{
 				{
 					"userId":      "user-a",

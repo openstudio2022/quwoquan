@@ -8,7 +8,7 @@
 
 | 序号 | 环境 | 含义 | 证据形态 |
 |------|------|------|----------|
-| E1 | **beta** | 对接真实 beta 网关与 chat/media/user-sync；双端（Android + iOS）Patrol | `schemaVersion=1`、`status=passed`、非 dry-run、`environment.env=beta` |
+| E1 | **beta** | 对接真实 beta 网关与 chat/media/user-sync；双端（Android + iOS）Patrol | `schema=chat_group_avatar_e2e`、`status=passed`、非 dry-run、`environment.env=beta` |
 | E2 | **local-gamma** | `start_local_gamma_mirror` + api_integration/user_acceptance + Patrol；与镜像拓扑一致 | `environment.env=local-gamma`（或与脚本约定等价字段） |
 | E3 | **cloud-gamma-pre** | ECS pre + API probe + self-hosted Patrol（chat-avatar matrix） | run id / artifact URL；probe + device JSON |
 | E4 | **cloud-gamma-prod-smoke** | prod 变更后 smoke：probe + self-hosted Patrol | 同上，`environment` 标明 prod-smoke |

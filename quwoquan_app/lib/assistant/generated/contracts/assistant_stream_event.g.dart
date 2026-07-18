@@ -6,7 +6,7 @@ import 'package:quwoquan_app/assistant/generated/contracts/runtime_failure.g.dar
 
 class AssistantStreamEventWire {
   const AssistantStreamEventWire({
-    this.schemaVersion = "assistant_stream_event.m5",
+    required this.schema,
     required this.eventId,
     required this.conversationId,
     required this.turnId,
@@ -18,7 +18,7 @@ class AssistantStreamEventWire {
     required this.createdAt,
   });
 
-  final String schemaVersion;
+  final String schema;
   final String eventId;
   final String conversationId;
   final String turnId;
@@ -30,7 +30,7 @@ class AssistantStreamEventWire {
   final String createdAt;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'schemaVersion': schemaVersion,
+        'schema': schema,
         'eventId': eventId,
         'conversationId': conversationId,
         'turnId': turnId,
@@ -44,7 +44,7 @@ class AssistantStreamEventWire {
 
   factory AssistantStreamEventWire.fromJson(Map<String, dynamic> json) {
     return AssistantStreamEventWire(
-      schemaVersion: (json['schemaVersion'] as String?)?.trim() ?? "assistant_stream_event.m5",
+      schema: (json['schema'] as String?)?.trim() ?? "",
       eventId: (json['eventId'] as String?)?.trim() ?? "",
       conversationId: (json['conversationId'] as String?)?.trim() ?? "",
       turnId: (json['turnId'] as String?)?.trim() ?? "",
@@ -60,7 +60,7 @@ class AssistantStreamEventWire {
 }
 
 class AssistantStreamEventWireFields {
-  static const String schemaVersion = 'schemaVersion';
+  static const String schema = 'schema';
   static const String eventId = 'eventId';
   static const String conversationId = 'conversationId';
   static const String turnId = 'turnId';

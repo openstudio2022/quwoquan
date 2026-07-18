@@ -23,7 +23,7 @@ func TestMediaAssetReferenceUsesRealStoreAndServiceScopedAuthorization(t *testin
 
 	initRequest := httptest.NewRequest(
 		http.MethodPost,
-		"/v1/content/media/uploads:init",
+		"/content/media/uploads:init",
 		strings.NewReader(`{"mediaType":"image","contentType":"image/png","fileSize":2048,"expectedSha256":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`),
 	)
 	initRequest.Header.Set("Content-Type", "application/json")
@@ -46,7 +46,7 @@ func TestMediaAssetReferenceUsesRealStoreAndServiceScopedAuthorization(t *testin
 
 	completeRequest := httptest.NewRequest(
 		http.MethodPost,
-		"/v1/content/media/uploads/"+sessionID+":complete",
+		"/content/media/uploads/"+sessionID+":complete",
 		strings.NewReader(`{"accessPolicy":"owner_only"}`),
 	)
 	completeRequest.Header.Set("Content-Type", "application/json")
@@ -79,11 +79,11 @@ func TestMediaAssetReferenceUsesRealStoreAndServiceScopedAuthorization(t *testin
 		t.Fatalf("persisted MediaAsset owner/status drift: %#v", persisted)
 	}
 
-	secured := mediaReferenceSecuredHandler(t)
+	secured := contentSecuredHandler(t)
 	serviceToken := mediaReferenceServiceToken(t, []string{"content.media.reference.read"})
 	request := httptest.NewRequest(
 		http.MethodGet,
-		"/internal/v1/content/media/"+assetID+":reference?ownerPersonaId="+ownerPersonaID,
+		"/internal/content/media/"+assetID+":reference?ownerPersonaId="+ownerPersonaID,
 		nil,
 	)
 	request.Header.Set("Authorization", "Bearer "+serviceToken)
@@ -110,7 +110,7 @@ func TestMediaAssetReferenceUsesRealStoreAndServiceScopedAuthorization(t *testin
 	deliveryToken := mediaReferenceServiceToken(t, []string{"content.media.delivery.read"})
 	deliveryRequest := httptest.NewRequest(
 		http.MethodGet,
-		"/internal/v1/content/media/"+assetID+":delivery-reference?ownerPersonaId="+ownerPersonaID,
+		"/internal/content/media/"+assetID+":delivery-reference?ownerPersonaId="+ownerPersonaID,
 		nil,
 	)
 	deliveryRequest.Header.Set("Authorization", "Bearer "+deliveryToken)
@@ -136,7 +136,7 @@ func TestMediaAssetReferenceUsesRealStoreAndServiceScopedAuthorization(t *testin
 	}
 	deliveryWrongScope := httptest.NewRequest(
 		http.MethodGet,
-		"/internal/v1/content/media/"+assetID+":delivery-reference?ownerPersonaId="+ownerPersonaID,
+		"/internal/content/media/"+assetID+":delivery-reference?ownerPersonaId="+ownerPersonaID,
 		nil,
 	)
 	deliveryWrongScope.Header.Set("Authorization", "Bearer "+serviceToken)
@@ -148,7 +148,7 @@ func TestMediaAssetReferenceUsesRealStoreAndServiceScopedAuthorization(t *testin
 
 	wrongOwner := httptest.NewRequest(
 		http.MethodGet,
-		"/internal/v1/content/media/"+assetID+":reference?ownerPersonaId=persona-other",
+		"/internal/content/media/"+assetID+":reference?ownerPersonaId=persona-other",
 		nil,
 	)
 	wrongOwner.Header.Set("Authorization", "Bearer "+serviceToken)
@@ -160,7 +160,7 @@ func TestMediaAssetReferenceUsesRealStoreAndServiceScopedAuthorization(t *testin
 
 	withoutCredential := httptest.NewRequest(
 		http.MethodGet,
-		"/internal/v1/content/media/"+assetID+":reference?ownerPersonaId="+ownerPersonaID,
+		"/internal/content/media/"+assetID+":reference?ownerPersonaId="+ownerPersonaID,
 		nil,
 	)
 	withoutCredentialRecorder := httptest.NewRecorder()
@@ -171,7 +171,7 @@ func TestMediaAssetReferenceUsesRealStoreAndServiceScopedAuthorization(t *testin
 
 	wrongScope := httptest.NewRequest(
 		http.MethodGet,
-		"/internal/v1/content/media/"+assetID+":reference?ownerPersonaId="+ownerPersonaID,
+		"/internal/content/media/"+assetID+":reference?ownerPersonaId="+ownerPersonaID,
 		nil,
 	)
 	wrongScope.Header.Set("Authorization", "Bearer "+mediaReferenceServiceToken(t, []string{"content.media.process"}))
@@ -182,7 +182,7 @@ func TestMediaAssetReferenceUsesRealStoreAndServiceScopedAuthorization(t *testin
 	}
 }
 
-func mediaReferenceSecuredHandler(t *testing.T) http.Handler {
+func contentSecuredHandler(t *testing.T) http.Handler {
 	t.Helper()
 	verifier, err := rtauth.NewHS256Verifier(reportAccessTokenConfig())
 	if err != nil {

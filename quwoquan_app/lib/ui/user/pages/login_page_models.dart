@@ -101,9 +101,7 @@ enum LoginEntryKind {
   returningAccount,
   carrierPhone,
   phoneOtp,
-  unavailable,
   submitting,
-  error,
 }
 
 enum LoginPrimaryAction {
@@ -136,11 +134,6 @@ enum LoginPhoneOtpPhase {
   accountDeleted,
 }
 
-/// 登录提示语气分级：红色（destructive）仅保留真正阻断态（账号被锁定/封禁/注销），
-/// 其余可恢复异常（验证码错误/过期、发送失败、降级提示）用中性，频繁限流用琥珀，
-/// 避免用非阻断红字吓阻用户、误导其"无法继续使用"。
-enum LoginMessageTone { neutral, warning, blocking }
-
 enum LoginErrorSurface {
   phoneField,
   otpField,
@@ -153,24 +146,6 @@ enum LoginErrorSurface {
 }
 
 enum LoginFailureOrigin { otpSend, otpLogin, oneTap, returningSession, social }
-
-LoginMessageTone loginMessageToneForPhase(LoginPhoneOtpPhase phase) {
-  return switch (phase) {
-    LoginPhoneOtpPhase.loginLocked ||
-    LoginPhoneOtpPhase.accountSuspended ||
-    LoginPhoneOtpPhase.accountDeleted => LoginMessageTone.blocking,
-    LoginPhoneOtpPhase.rateLimited => LoginMessageTone.warning,
-    _ => LoginMessageTone.neutral,
-  };
-}
-
-Color loginMessageToneColor(BuildContext context, LoginMessageTone tone) {
-  return switch (tone) {
-    LoginMessageTone.blocking => AppColors.iosDestructive(context),
-    LoginMessageTone.warning => AppColors.warning,
-    LoginMessageTone.neutral => AppColors.iosSecondaryLabel(context),
-  };
-}
 
 class LoginPhoneOtpState {
   const LoginPhoneOtpState({
@@ -614,6 +589,15 @@ String resolveLoginErrorMessage(
   final fallback = fallbackMessage?.trim() ?? '';
   if (fallback.isNotEmpty) {
     return fallback;
+  }
+  final failureKind = error?.runtimeFailure.kind;
+  if (failureKind == RuntimeFailureKind.network ||
+      failureKind == RuntimeFailureKind.timeout) {
+    return UITextConstants.loginNetworkUnavailable;
+  }
+  if (failureKind == RuntimeFailureKind.unavailable ||
+      failureKind == RuntimeFailureKind.internal) {
+    return UITextConstants.loginServiceUnavailable;
   }
   return sending
       ? UITextConstants.loginOtpSendFailed

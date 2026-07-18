@@ -157,7 +157,7 @@ object_types:
     operations:
       - operation: UpdateServiceConfig
         method: POST
-        path: /v1/control-plane/platform/configs/{configKey}:update
+        path: /control-plane/platform/configs/{configKey}:update
         scopes: [ops.platform.config.write]
         danger_level: high
         approval_mode: dual
@@ -238,7 +238,7 @@ configs:
 	if err != nil {
 		t.Fatalf("read generated python module: %v", err)
 	}
-	if !strings.Contains(string(pyText), "PLATFORM_CONTROL_PLANE") || !strings.Contains(string(pyText), `"/v1/control-plane/platform/configs/{configKey}:update"`) {
+	if !strings.Contains(string(pyText), "PLATFORM_CONTROL_PLANE") || !strings.Contains(string(pyText), `"/control-plane/platform/configs/{configKey}:update"`) {
 		t.Fatalf("generated python file missing expected content: %s", string(pyText))
 	}
 

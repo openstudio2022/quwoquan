@@ -1,4 +1,3 @@
-version: 1
 read_model: SubAccountProfileWire
 
 description: |
@@ -20,107 +19,87 @@ client_projection:
       dart_type: String
       nullable: false
       source: subAccountId
-      aliases: [subAccountId, userId]
       default: "''"
-      skip_empty_string_aliases: true
-
     - name: ownerUserId
       dart_type: String
       nullable: false
       source: ownerUserId
-      aliases: [ownerUserId]
       default: "''"
-      skip_empty_string_aliases: true
-
     - name: userHandle
       dart_type: String
       nullable: false
       source: userHandle
-      aliases: [userHandle, username, nickname]
       default: "''"
 
     - name: nickname
       dart_type: String
       nullable: false
       source: nickname
-      aliases: [nickname]
       default: "''"
 
     - name: displayName
       dart_type: String
       nullable: false
       source: displayName
-      aliases: [displayName, nickname]
       default: "''"
 
     - name: username
       dart_type: String
       nullable: false
       source: username
-      aliases: [username, userHandle, nickname]
       default: "''"
 
     - name: subjectType
       dart_type: String
       nullable: false
       source: subjectType
-      aliases: [subjectType]
       default: "''"
 
     - name: nicknameCustomized
       dart_type: bool
       nullable: false
       source: nicknameCustomized
-      aliases: [nicknameCustomized]
       default: "false"
 
     - name: avatarUrl
       dart_type: String
       nullable: false
       source: avatarUrl
-      aliases: [avatarUrl]
       default: "''"
 
     - name: avatarVersion
       dart_type: int
       nullable: false
       source: avatarVersion
-      aliases: [avatarVersion]
       default: "0"
 
     - name: backgroundUrl
       dart_type: String
       nullable: false
       source: backgroundUrl
-      aliases: [backgroundUrl, backgroundImage]
       default: "''"
 
     - name: bio
       dart_type: String
       nullable: false
       source: bio
-      aliases: [bio]
       default: "''"
 
     - name: identityTags
       dart_type: List<String>
       nullable: false
       source: identityTags
-      aliases: [identityTags]
-
     # 认证标识（蓝勾）。本期云侧未实现，契约预留，alpha mock 提供；端只读展示。
     - name: verified
       dart_type: bool
       nullable: false
       source: verified
-      aliases: [verified, isVerified]
       default: "false"
 
     - name: followerCount
       dart_type: int
       nullable: false
       source: followerCount
-      aliases: [followerCount]
       default: "0"
       # 人页统计前台展示为「粉丝」；见 specs/00_GLOBAL_TERMINOLOGY.md
 
@@ -128,28 +107,24 @@ client_projection:
       dart_type: int
       nullable: false
       source: followingCount
-      aliases: [followingCount]
       default: "0"
 
     - name: postCount
       dart_type: int
       nullable: false
       source: postCount
-      aliases: [postCount]
       default: "0"
 
     - name: circleCount
       dart_type: int
       nullable: false
       source: circleCount
-      aliases: [circleCount]
       default: "0"
 
     - name: likeCount
       dart_type: int
       nullable: false
       source: likeCount
-      aliases: [likeCount]
       default: "0"
 
     # 主页完善度（0-100）。本期 alpha seed 驱动，端只读展示「完善主页」提示。
@@ -157,7 +132,6 @@ client_projection:
       dart_type: int
       nullable: false
       source: profileCompleteness
-      aliases: [profileCompleteness]
       default: "100"
 
     # 主页待补全项（avatar / tags / circles / entities 等开放字符串），端用于引导补全。
@@ -165,39 +139,32 @@ client_projection:
       dart_type: List<String>
       nullable: false
       source: profileCompletenessMissingItems
-      aliases: [profileCompletenessMissingItems]
-
     - name: profileVisibility
       dart_type: String
       nullable: false
       source: profileVisibility
-      aliases: [profileVisibility]
       default: "'public'"
 
     - name: isolationLevel
       dart_type: String
       nullable: false
       source: isolationLevel
-      aliases: [isolationLevel]
       default: "'open'"
 
     - name: inheritsFromOwner
       dart_type: bool
       nullable: false
       source: inheritsFromOwner
-      aliases: [inheritsFromOwner]
       default: "false"
 
     - name: overriddenFields
       dart_type: List<String>
       nullable: true
       source: overriddenFields
-      aliases: [overriddenFields]
       default: "null"
 
     - name: updatedAt
       dart_type: DateTime
       nullable: true
       source: updatedAt
-      aliases: [updatedAt]
       default: "null"

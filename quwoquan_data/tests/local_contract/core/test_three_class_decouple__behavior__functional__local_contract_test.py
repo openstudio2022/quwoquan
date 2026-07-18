@@ -1,7 +1,7 @@
-"""P3 三类解耦契约：主页四百科闭集 + 文章【含视频则放弃】检测。
+"""P3 三类解耦契约：主页三百科闭集 + 文章【含视频则放弃】检测。
 
-- 实体主页 base draft 主源闭集 = Wikipedia / 百度 / 搜狗 / 今日头条百科。
-- 排序权威 rank = 0 / 1 / 2 / 2。
+- 实体主页 base draft 主源闭集 = Wikipedia / 百度 / 今日头条百科。
+- 排序权威 rank = 0 / 1 / 2。
 - 文章来源含内联视频（原生 <video> / 主流视频站嵌入）即标记 hasVideo，内容计划据此弃稿。
 
 可直接运行：python3 quwoquan_data/tests/local_contract/core/test_three_class_decouple__behavior__functional__local_contract_test.py
@@ -22,10 +22,11 @@ import os  # noqa: E402
 import pytest  # noqa: E402
 
 
-from content.source.fetch_text import html_has_inline_video  # noqa: E402
+from content.source.html_text import html_has_inline_video  # noqa: E402
 from content.homepage.homepage_text import _homepage_source_priority  # noqa: E402
 from content.source.research.homepage_source_policy import _homepage_can_seed_base_draft  # noqa: E402
-from content.source.source_inputs import content_type_for_lane, LANE_CONTENT_TYPE  # noqa: E402
+from content.source.source_inputs import content_type_for_lane  # noqa: E402
+from core.carrier_contract import CARRIER_LANES  # noqa: E402
 
 
 def test_article_video_detection_positive_and_negative():
@@ -44,13 +45,12 @@ def test_article_video_detection_positive_and_negative():
     assert not html_has_inline_video("")
 
 
-def test_homepage_primary_source_four_encyclopedia_closed_set():
+def test_homepage_primary_source_three_encyclopedia_closed_set():
     encyclopedia_priorities = []
     for meta in (
-        {"researchLane": "homepage", "sourceKind": "wikipedia", "extractor": "wikipedia_api", "canonicalUrl": "https://zh.wikipedia.org/wiki/西湖", "policyRevision": "encyclopedia-primary-v2"},
-        {"researchLane": "homepage", "sourceKind": "baidu_baike", "extractor": "baidu_baike_html", "canonicalUrl": "https://baike.baidu.com/item/西湖", "policyRevision": "encyclopedia-primary-v2"},
-        {"researchLane": "homepage", "sourceKind": "sogou_baike", "extractor": "sogou_baike_html", "canonicalUrl": "https://baike.sogou.com/v西湖", "policyRevision": "encyclopedia-primary-v2"},
-        {"researchLane": "homepage", "sourceKind": "toutiao_baike", "extractor": "toutiao_baike_html", "canonicalUrl": "https://www.baike.com/wiki/西湖", "policyRevision": "encyclopedia-primary-v2"},
+        {"researchLane": "homepage", "sourceKind": "wikipedia", "extractor": "wikipedia_api", "canonicalUrl": "https://zh.wikipedia.org/wiki/西湖", "policyRevision": "encyclopedia-primary"},
+        {"researchLane": "homepage", "sourceKind": "baidu_baike", "extractor": "baidu_baike_openapi", "canonicalUrl": "https://baike.baidu.com/item/西湖", "policyRevision": "encyclopedia-primary"},
+        {"researchLane": "homepage", "sourceKind": "toutiao_baike", "extractor": "toutiao_baike_html", "canonicalUrl": "https://www.baike.com/wiki/西湖", "policyRevision": "encyclopedia-primary"},
     ):
         priority = _homepage_source_priority(meta)
         assert priority > 0, meta
@@ -68,11 +68,10 @@ def test_homepage_primary_source_four_encyclopedia_closed_set():
     assert _homepage_source_priority(media) <= 0, media
 
 
-def test_homepage_base_draft_seed_four_encyclopedia_closed_set():
+def test_homepage_base_draft_seed_three_encyclopedia_closed_set():
     identities = [
         ("wikipedia", "wikipedia_api", "https://zh.wikipedia.org/wiki/西湖"),
-        ("baidu_baike", "baidu_baike_html", "https://baike.baidu.com/item/西湖"),
-        ("sogou_baike", "sogou_baike_html", "https://baike.sogou.com/v西湖"),
+        ("baidu_baike", "baidu_baike_openapi", "https://baike.baidu.com/item/西湖"),
         ("toutiao_baike", "toutiao_baike_html", "https://www.baike.com/wiki/西湖"),
     ]
     for source_kind, extractor, url in identities:
@@ -80,7 +79,7 @@ def test_homepage_base_draft_seed_four_encyclopedia_closed_set():
             "sourceKind": source_kind,
             "extractor": extractor,
             "canonicalUrl": url,
-            "policyRevision": "encyclopedia-primary-v2",
+            "policyRevision": "encyclopedia-primary",
         })
     assert not _homepage_can_seed_base_draft(
         {"platform": "维基百科", "category": "encyclopedia"}
@@ -96,7 +95,6 @@ def test_non_open_encyclopedia_requires_factual_compression():
     from content.source.handler_fetch import _requires_factual_compression
 
     assert _requires_factual_compression({"sourceKind": "baidu_baike"})
-    assert _requires_factual_compression({"sourceKind": "sogou_baike"})
     assert _requires_factual_compression({"sourceKind": "toutiao_baike"})
     # 第一权威维基（开放许可）不压缩。
     assert not _requires_factual_compression(
@@ -156,19 +154,20 @@ def test_homepage_source_unit_rejects_forbidden_source():
         )
         raise AssertionError("官网不得进入 homepage source unit")
     except ValueError as exc:
-        assert "encyclopedia-primary-v2" in str(exc)
+        assert "encyclopedia-primary" in str(exc)
 
 
 def test_content_type_routing_by_lane():
-    # P3 三类解耦：lane → 内容类型路由真相源（homepage=entity/article=article/image=image）。
+    # lane → 内容类型路由真相源（homepage=entity，其余 lane 与 carrier 同名）。
     assert content_type_for_lane("homepage") == "entity"
     assert content_type_for_lane("article") == "article"
     assert content_type_for_lane("image") == "image"
+    assert content_type_for_lane("video") == "video"
     for invalid in ("", "legacy", "unknown_lane"):
         with pytest.raises(ValueError):
             content_type_for_lane(invalid)
-    # 三类不串味：每个 lane 路由唯一确定。
-    assert set(LANE_CONTENT_TYPE.values()) == {"entity", "article", "image"}
+    # 四载体不串味：每个 lane 由 CarrierContract 唯一声明。
+    assert set(CARRIER_LANES) == {"homepage", "article", "image", "video"}
 
 
 def _run_all() -> None:

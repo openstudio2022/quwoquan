@@ -1,5 +1,4 @@
 # 模型注册表：训练/导出写入版本元信息，推理服务按 production 标记加载
-version: 1
 read_model: ModelRegistry
 
 description: |

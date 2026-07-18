@@ -11,6 +11,7 @@ import (
 	"time"
 
 	rterr "quwoquan_service/runtime/errors"
+	runtimemedia "quwoquan_service/runtime/media"
 	mediamodel "quwoquan_service/services/content-service/internal/domain/media/model"
 	mediaports "quwoquan_service/services/content-service/internal/domain/media/ports"
 	contentgenerated "quwoquan_service/services/content-service/internal/generated"
@@ -343,7 +344,12 @@ func (s *MediaService) RecordMediaProcessingResult(
 	}
 	expectedVersion := asset.Version()
 	now := s.now().UTC()
-	if err := asset.RecordProcessingResult(command.Processing, command.FailureReason, now); err != nil {
+	if err := asset.RecordProcessingResult(
+		command.Processing,
+		command.FailureReason,
+		command.Descriptor,
+		now,
+	); err != nil {
 		return MediaAssetCommandResult{}, mapMediaDomainError(err)
 	}
 	payload, err := json.Marshal(mediaAssetProcessingUpdatedPayload{
@@ -654,7 +660,11 @@ func (s *MediaService) GetMediaAsset(
 	if !found {
 		return MediaAssetSlice{}, mediaNotFound(query.AssetID)
 	}
-	deliveryURL, err := s.objects.DeliveryURL(ctx, slice.ObjectKey)
+	deliveryKey := slice.ObjectKey
+	if slice.MediaType == "video" && strings.TrimSpace(slice.VideoPublicSliceKey) != "" {
+		deliveryKey = slice.VideoPublicSliceKey
+	}
+	deliveryURL, err := s.objects.DeliveryURL(ctx, deliveryKey)
 	if err != nil {
 		return MediaAssetSlice{}, unavailable(err)
 	}
@@ -711,11 +721,33 @@ func (s *MediaService) GetOwnedReadyMediaAssetDeliveryReference(
 		slice.FileSize <= 0 || strings.TrimSpace(slice.DeliveryURL) == "" {
 		return MediaAssetDeliveryReferenceSlice{}, unavailable(errors.New("MediaAsset delivery projection is incomplete"))
 	}
+	publicSliceKey := slice.VideoPublicSliceKey
+	if slice.MediaType != "video" {
+		publicSliceKey = runtimemedia.BuildContentMediaPublicSliceKey(
+			slice.MediaType,
+			slice.AssetID,
+			slice.Version,
+			slice.ContentType,
+		)
+	}
+	if publicSliceKey == "" {
+		return MediaAssetDeliveryReferenceSlice{}, unavailable(
+			errors.New("MediaAsset delivery projection has no canonical public slice key"),
+		)
+	}
 	return MediaAssetDeliveryReferenceSlice{
 		AssetID: slice.AssetID, OwnerPersonaID: slice.OwnerID,
 		ProcessingStatus: slice.ProcessingStatus, MediaType: slice.MediaType,
 		ContentType: slice.ContentType, FileSize: slice.FileSize,
-		DeliveryURL: slice.DeliveryURL,
+		PublicSliceKey: publicSliceKey,
+		DeliveryURL:    slice.DeliveryURL,
+		VerifiedDurationMs: slice.VerifiedDurationMs,
+		VideoWidth: slice.VideoWidth,
+		VideoHeight: slice.VideoHeight,
+		VideoPublicSliceKey: slice.VideoPublicSliceKey,
+		CoverPublicSliceKey: slice.CoverPublicSliceKey,
+		PreviewTrackVersion: slice.PreviewTrackVersion,
+		PreviewTrackManifestSliceKey: slice.PreviewTrackManifestSliceKey,
 	}, nil
 }
 
@@ -730,7 +762,11 @@ func (s *MediaService) GetPublicMediaAsset(
 	if !found {
 		return MediaAssetSlice{}, mediaNotFound(query.AssetID)
 	}
-	deliveryURL, err := s.objects.DeliveryURL(ctx, slice.ObjectKey)
+	deliveryKey := slice.ObjectKey
+	if slice.MediaType == "video" && strings.TrimSpace(slice.VideoPublicSliceKey) != "" {
+		deliveryKey = slice.VideoPublicSliceKey
+	}
+	deliveryURL, err := s.objects.DeliveryURL(ctx, deliveryKey)
 	if err != nil {
 		return MediaAssetSlice{}, unavailable(err)
 	}

@@ -1,4 +1,3 @@
-version: 1
 domain: content
 entity: PostModerationCase
 object_kind: aggregate_root

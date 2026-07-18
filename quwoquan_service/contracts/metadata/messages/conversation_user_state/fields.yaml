@@ -1,11 +1,11 @@
-version: 1
 aggregate: ConversationUserState
 
 entities:
   ConversationUserState:
-    description: 用户级会话状态（v2 独立 collection，消除写放大）
+    description: 用户级会话状态（独立 collection，消除写放大）
     fields:
       - name: _id
+        source: _id
         type: ObjectId
         constraints: [PK]
         classification: PUBLIC
@@ -14,6 +14,7 @@ entities:
         ops_exposure: read
 
       - name: userId
+        source: userId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -22,6 +23,7 @@ entities:
         ops_exposure: read
 
       - name: conversationId
+        source: conversationId
         type: ObjectId
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -30,6 +32,7 @@ entities:
         ops_exposure: read
 
       - name: readSeq
+        source: readSeq
         type: int64
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -39,6 +42,7 @@ entities:
         description: 用户已读到的 seq
 
       - name: unreadCount
+        source: unreadCount
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -47,6 +51,7 @@ entities:
         ops_exposure: read
 
       - name: mentionUnreadCount
+        source: mentionUnreadCount
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -56,6 +61,7 @@ entities:
         description: "@我且未读的消息数"
 
       - name: muted
+        source: muted
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -64,6 +70,7 @@ entities:
         ops_exposure: read
 
       - name: pinned
+        source: pinned
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -72,6 +79,7 @@ entities:
         ops_exposure: read
 
       - name: lastReadAt
+        source: lastReadAt
         type: timestamp
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -80,6 +88,7 @@ entities:
         ops_exposure: read
 
       - name: updatedAt
+        source: updatedAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC

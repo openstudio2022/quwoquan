@@ -1,4 +1,3 @@
-version: 1
 realtime_contract: RecommendationFeedPatch
 
 description: |
@@ -22,7 +21,6 @@ description: |
 
 # 端侧消费通道：per-user 瞬时 pub/sub（复用 runtime/redis realtime scene）。
 realtime_channel_template: "rt:rec:feed:user:{userId}"
-schema_version: feed_patch_v1
 
 # App 端 codegen 产物（DO NOT EDIT），由 codegen_app_metadata 读取生成强类型 DTO + 枚举 + 解析器。
 client_codegen:
@@ -66,7 +64,6 @@ removal_dimensions:
 #   enum_ref: 当 type=enum 时引用 patch_type|reason_code|removal_dimension
 #   dart_type / nullable / default 驱动 App DTO codegen；Go struct json tag 必须同名。
 envelope_fields:
-  - { name: schemaVersion,           type: string,   dart_type: String,                    nullable: false, required: true,  default: "''",          description: 契约版本（= schema_version），端侧据此判定可解析性 }
   - { name: patchId,                 type: string,   dart_type: String,                    nullable: false, required: true,  default: "''",          description: 幂等去重 id，端侧据此去重已应用 patch }
   - { name: patchType,               type: enum,     dart_type: FeedRealtimePatchType,     enum_ref: patch_type,       nullable: false, required: true, description: patch 类型 }
   - { name: userId,                  type: string,   dart_type: String,                    nullable: false, required: true,  default: "''",          description: 目标用户（per-user 通道；游客不发） }

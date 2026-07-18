@@ -3,25 +3,39 @@
   "$id": "https://quwoquan.local/contracts/metadata/_shared/test_fixtures/scenario_fixture.schema.json",
   "title": "Quwoquan Contract Scenario Fixture",
   "type": "object",
-  "required": ["schemaVersion", "repositoryExpectations", "seedSets", "scenarios"],
+  "required": [
+    "schema",
+    "repositoryExpectations",
+    "seedSets",
+    "scenarios"
+  ],
   "properties": {
-    "schemaVersion": {
-      "type": "string",
-      "pattern": "^[a-z0-9_.-]+\\.scenario-fixtures\\.v[0-9]+$"
-    },
     "description": {
       "type": "string"
     },
     "repositoryExpectations": {
       "type": "object",
-      "required": ["alpha", "beta", "gamma"],
+      "required": [
+        "alpha",
+        "beta",
+        "gamma"
+      ],
       "properties": {
-        "alpha": { "const": "mock" },
-        "beta": { "const": "remote" },
-        "gamma": { "const": "remote" }
+        "alpha": {
+          "const": "mock"
+        },
+        "beta": {
+          "const": "remote"
+        },
+        "gamma": {
+          "const": "remote"
+        }
       },
       "additionalProperties": {
-        "enum": ["mock", "remote"]
+        "enum": [
+          "mock",
+          "remote"
+        ]
       }
     },
     "seedSets": {
@@ -35,39 +49,65 @@
       "items": {
         "$ref": "#/$defs/scenario"
       }
+    },
+    "schema": {
+      "type": "string",
+      "pattern": "^[a-z0-9_.-]+\\.scenario-fixtures\\.v[0-9]+$"
     }
   },
   "$defs": {
     "seedSet": {
       "type": "object",
-      "required": ["description"],
+      "required": [
+        "description"
+      ],
       "properties": {
-        "description": { "type": "string" }
+        "description": {
+          "type": "string"
+        }
       },
       "additionalProperties": true
     },
     "scenario": {
       "type": "object",
-      "required": ["id", "title", "type", "seedRefs", "environments"],
+      "required": [
+        "id",
+        "title",
+        "type",
+        "seedRefs",
+        "environments"
+      ],
       "properties": {
         "id": {
           "type": "string",
           "pattern": "^[a-z0-9_:-]+$"
         },
-        "title": { "type": "string" },
-        "type": { "type": "string" },
-        "domainId": { "type": "string" },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "domainId": {
+          "type": "string"
+        },
         "seedRefs": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         },
         "expectedAnswerFragments": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         },
         "expectedEvents": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         },
         "remoteExpectations": {
           "type": "object",
@@ -79,11 +119,21 @@
         },
         "environments": {
           "type": "object",
-          "required": ["alpha", "beta", "gamma"],
+          "required": [
+            "alpha",
+            "beta",
+            "gamma"
+          ],
           "properties": {
-            "alpha": { "$ref": "#/$defs/environment" },
-            "beta": { "$ref": "#/$defs/environment" },
-            "gamma": { "$ref": "#/$defs/environment" }
+            "alpha": {
+              "$ref": "#/$defs/environment"
+            },
+            "beta": {
+              "$ref": "#/$defs/environment"
+            },
+            "gamma": {
+              "$ref": "#/$defs/environment"
+            }
           },
           "additionalProperties": {
             "$ref": "#/$defs/environment"
@@ -94,13 +144,23 @@
     },
     "environment": {
       "type": "object",
-      "required": ["enabled", "repository"],
+      "required": [
+        "enabled",
+        "repository"
+      ],
       "properties": {
-        "enabled": { "type": "boolean" },
-        "repository": {
-          "enum": ["mock", "remote"]
+        "enabled": {
+          "type": "boolean"
         },
-        "requiresSeedReset": { "type": "boolean" }
+        "repository": {
+          "enum": [
+            "mock",
+            "remote"
+          ]
+        },
+        "requiresSeedReset": {
+          "type": "boolean"
+        }
       },
       "additionalProperties": true
     }

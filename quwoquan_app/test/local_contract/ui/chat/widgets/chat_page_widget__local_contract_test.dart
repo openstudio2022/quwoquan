@@ -27,6 +27,8 @@ import 'package:quwoquan_app/core/services/visit_recorder_service.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
 import 'package:quwoquan_app/ui/chat/widgets/chat_conversation_avatar_tokens.dart';
 
+import '../../../../support/fixtures/chat/chat_inbox_fixture_builder.dart';
+
 Widget _scopedApp({
   ChatRepository? mock,
   GreetingRepository? greetingRepository,
@@ -703,7 +705,7 @@ class _NavigationChatRepository extends MockChatRepository {
   @override
   Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
     return <ChatInboxDto>[
-      ChatInboxDto(
+      chatInboxFixture(
         id: 'conv_navigation_test',
         type: 'direct',
         title: '产品共创群',
@@ -808,7 +810,7 @@ class _XiaoquDeliveryChatRepository extends MockChatRepository {
   Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
     final now = DateTime.utc(2026, 5, 1, 12);
     return <ChatInboxDto>[
-      ChatInboxDto(
+      chatInboxFixture(
         id: 'conv_xiaoqu_comment_reply',
         type: 'group',
         title: '小趣评论回复',
@@ -817,7 +819,7 @@ class _XiaoquDeliveryChatRepository extends MockChatRepository {
         unreadCount: 1,
         mentionUnreadCount: 1,
       ),
-      ChatInboxDto(
+      chatInboxFixture(
         id: 'conv_homepage_reminder',
         type: 'group',
         title: '主页更新提醒',
@@ -825,7 +827,7 @@ class _XiaoquDeliveryChatRepository extends MockChatRepository {
         lastMessageTime: now.subtract(const Duration(minutes: 1)),
         unreadCount: 1,
       ),
-      ChatInboxDto(
+      chatInboxFixture(
         id: 'conv_regular_group',
         type: 'group',
         title: '圈子普通聊天',
@@ -896,7 +898,7 @@ class _UnreadBadgeConsistencyChatRepository extends MockChatRepository {
   @override
   Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
     return <ChatInboxDto>[
-      ChatInboxDto(
+      chatInboxFixture(
         id: 'conv_direct_mismatch_seed',
         type: 'direct',
         title: '陈倩',
@@ -922,7 +924,7 @@ class _GroupAvatarFallbackChatRepository extends MockChatRepository {
   @override
   Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
     return <ChatInboxDto>[
-      ChatInboxDto(
+      chatInboxFixture(
         id: 'conv_fallback_group',
         type: 'group',
         title: '默认群头像兜底',
@@ -967,7 +969,7 @@ class _RenderedGroupAvatarChatRepository extends MockChatRepository {
   @override
   Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
     return <ChatInboxDto>[
-      ChatInboxDto(
+      chatInboxFixture(
         id: 'conv_rendered_group',
         type: 'group',
         title: '预渲染群头像',
@@ -993,7 +995,7 @@ class _ConvGrid12GroupAvatarChatRepository extends MockChatRepository {
   @override
   Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
     return <ChatInboxDto>[
-      ChatInboxDto(
+      chatInboxFixture(
         id: 'conv_grid_12',
         type: 'group',
         title: '12人测试群',
@@ -1031,7 +1033,7 @@ class _NonAuthoritativeGroupAvatarChatRepository extends MockChatRepository {
   @override
   Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
     return <ChatInboxDto>[
-      ChatInboxDto(
+      chatInboxFixture(
         id: 'conv_wrong_group_avatar',
         type: 'group',
         title: '非权威群头像',
@@ -1085,7 +1087,7 @@ class _GroupAvatarCompositeChatRepository extends MockChatRepository {
   @override
   Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
     return <ChatInboxDto>[
-      ChatInboxDto(
+      chatInboxFixture(
         id: 'conv_composite_group',
         type: 'group',
         title: '组合群头像兜底',
@@ -1135,7 +1137,7 @@ class _DirectAvatarFallbackChatRepository extends MockChatRepository {
   @override
   Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
     return <ChatInboxDto>[
-      ChatInboxDto(
+      chatInboxFixture(
         id: 'conv_direct_fallback',
         type: 'direct',
         title: '契约撰稿人',
@@ -1180,7 +1182,7 @@ class _DirectAvatarConsistencyChatRepository extends MockChatRepository {
   @override
   Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
     return <ChatInboxDto>[
-      ChatInboxDto(
+      chatInboxFixture(
         id: 'conv_direct_consistency',
         type: 'direct',
         title: '手机端头像一致性',
@@ -1229,7 +1231,7 @@ class _PrefetchedGroupAvatarChatRepository extends MockChatRepository {
   Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
     return List<ChatInboxDto>.generate(10, (index) {
       final number = index + 1;
-      return ChatInboxDto(
+      return chatInboxFixture(
         id: 'conv_prefetch_$number',
         type: 'group',
         title: '预取群$number',

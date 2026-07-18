@@ -3,7 +3,16 @@
   "title": "WorksClassificationVerdict",
   "description": "作品 vs 随记判定裁决：判定一个内容对象是否属于可生产的『作品』(work)，还是即时碎片『随记』(moment) 或证据不足应丢弃 (abandoned)。商用主线只生产作品；随记/丢弃不进入 content_plan/post。判定融合『来源专业度先验 (sourceTier)』与『内容实测信号 (质量分/结构/事实密度/叙事量/图片数)』。",
   "type": "object",
-  "required": ["schemaVersion", "ref", "decision", "score", "sourceTier", "signals", "thresholdsVersion", "decidedAt"],
+  "required": [
+    "schema",
+    "ref",
+    "decision",
+    "score",
+    "sourceTier",
+    "signals",
+    "thresholdsVersion",
+    "decidedAt"
+  ],
   "additionalProperties": false,
   "$defs": {
     "tier": {
@@ -19,44 +28,141 @@
     }
   },
   "properties": {
-    "schemaVersion": { "const": "quwoquan_data.works_classification.v1" },
-    "ref": { "type": "string", "minLength": 1 },
+    "ref": {
+      "type": "string",
+      "minLength": 1
+    },
     "decision": {
       "type": "string",
-      "enum": ["work", "moment", "abandoned"],
+      "enum": [
+        "work",
+        "moment",
+        "abandoned"
+      ],
       "description": "work=可生产作品 · moment=即时随记(不生产) · abandoned=证据不足/权利受阻(不生产)"
     },
     "carrier": {
-      "type": ["string", "null"],
-      "enum": ["article", "image", "video", "homepage", null],
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "article",
+        "image",
+        "video",
+        "homepage",
+        null
+      ],
       "description": "decision=work 时给出建议载体；moment/abandoned 时为 null"
     },
-    "score": { "type": "number", "description": "综合作品度得分（来源先验 + 内容实测加权）" },
-    "sourceTier": { "$ref": "#/$defs/tier" },
+    "score": {
+      "type": "number",
+      "description": "综合作品度得分（来源先验 + 内容实测加权）"
+    },
+    "sourceTier": {
+      "$ref": "#/$defs/tier"
+    },
     "signals": {
       "type": "object",
       "additionalProperties": true,
-      "required": ["sourceClass", "sourceQualityTier", "sourceQualityScore", "worksAffinity"],
+      "required": [
+        "sourceClass",
+        "sourceQualityTier",
+        "sourceQualityScore",
+        "worksAffinity"
+      ],
       "properties": {
-        "sourceClass": { "type": "string", "description": "来源类别（content_source_registry）" },
-        "sourceQualityTier": { "type": "string", "enum": ["A-story", "B-fact", "C-context", "Reject"], "description": "score_source_markdown 文本质量等级" },
-        "sourceQualityScore": { "type": "integer", "minimum": 0 },
-        "worksAffinity": { "type": "string", "enum": ["work_strong", "work", "neutral", "moment", "reject"], "description": "来源类别的作品倾向先验" },
-        "baseTier": { "$ref": "#/$defs/tier" },
-        "structureScore": { "type": "number", "description": "结构完整度（段落/小节/图文编排）0..1" },
-        "factDensity": { "type": "number", "description": "事实密度（带单位事实/可核验事实占比）0..1" },
-        "narrativeVolume": { "type": "integer", "minimum": 0, "description": "叙事证据量（routeNodes 证据点计数）" },
-        "imageCount": { "type": "integer", "minimum": 0, "description": "可发布候选图片数" },
-        "casualSignals": { "type": "array", "items": { "type": "string" }, "description": "命中的随记特征（短文/单段/无小节/强即时性等）" }
+        "sourceClass": {
+          "type": "string",
+          "description": "来源类别（content_source_registry）"
+        },
+        "sourceQualityTier": {
+          "type": "string",
+          "enum": [
+            "A-story",
+            "B-fact",
+            "C-context",
+            "Reject"
+          ],
+          "description": "score_source_markdown 文本质量等级"
+        },
+        "sourceQualityScore": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "worksAffinity": {
+          "type": "string",
+          "enum": [
+            "work_strong",
+            "work",
+            "neutral",
+            "moment",
+            "reject"
+          ],
+          "description": "来源类别的作品倾向先验"
+        },
+        "baseTier": {
+          "$ref": "#/$defs/tier"
+        },
+        "structureScore": {
+          "type": "number",
+          "description": "结构完整度（段落/小节/图文编排）0..1"
+        },
+        "factDensity": {
+          "type": "number",
+          "description": "事实密度（带单位事实/可核验事实占比）0..1"
+        },
+        "narrativeVolume": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "叙事证据量（routeNodes 证据点计数）"
+        },
+        "imageCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "可发布候选图片数"
+        },
+        "casualSignals": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "命中的随记特征（短文/单段/无小节/强即时性等）"
+        }
       }
     },
-    "reasons": { "type": "array", "items": { "type": "string" }, "description": "判定依据（可读）" },
+    "reasons": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "判定依据（可读）"
+    },
     "abandonReason": {
-      "type": ["string", "null"],
-      "enum": ["low_professionalism", "casual_moment", "insufficient_evidence", "rights_blocked", null],
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "low_professionalism",
+        "casual_moment",
+        "insufficient_evidence",
+        "rights_blocked",
+        null
+      ],
       "description": "decision!=work 时的结构化丢弃原因"
     },
-    "thresholdsVersion": { "type": "integer", "minimum": 1, "description": "判定所用 works_classification 配置版本（可审计可回滚）" },
-    "decidedAt": { "type": "string", "format": "date-time" }
+    "thresholdsVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "判定所用 works_classification 配置版本（可审计可回滚）"
+    },
+    "decidedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "schema": {
+      "const": "quwoquan_data.works_classification"
+    }
   }
 }

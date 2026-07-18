@@ -3,31 +3,260 @@
   "description": "一个 content execution 的不可变计划。运行身份只允许 executionId。",
   "type": "object",
   "properties": {
-    "schemaVersion": { "const": "quwoquan.content.execution_spec" },
     "executionId": {
       "type": "string",
       "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(canary|m1|m2|m3)-[0-9]{3,}$"
     },
-    "title": { "type": "string", "minLength": 1 },
-    "intentLabel": { "type": "string", "minLength": 1 },
-    "executionArchetype": { "type": "string", "minLength": 1 },
-    "vertical": { "type": "string", "minLength": 1 },
-    "organizeBy": { "type": "string", "minLength": 1 },
-    "key": { "type": "string", "minLength": 1 },
-    "entityCategory": { "type": ["string", "null"] },
-    "status": { "enum": ["draft", "active"] },
-    "scope": { "type": "object" },
-    "provenance": { "type": "object" },
-    "presetRef": { "type": "string", "minLength": 1 },
-    "content": { "type": "object" },
-    "acceptance": { "type": "object" },
-    "workflowPolicy": { "type": "object" },
-    "queuePolicy": { "type": "object" }
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "intentLabel": {
+      "type": "string",
+      "minLength": 1
+    },
+    "executionArchetype": {
+      "type": "string",
+      "minLength": 1
+    },
+    "vertical": {
+      "type": "string",
+      "minLength": 1
+    },
+    "organizeBy": {
+      "type": "string",
+      "minLength": 1
+    },
+    "key": {
+      "type": "string",
+      "minLength": 1
+    },
+    "entityCategory": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "status": {
+      "enum": [
+        "draft",
+        "active"
+      ]
+    },
+    "scope": {
+      "type": "object",
+      "required": ["region", "entityTypes", "coverageTargets"],
+      "additionalProperties": false,
+      "properties": {
+        "region": {"type": "string", "minLength": 1},
+        "entityTypes": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "coverageTargets": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["name", "entityType"],
+            "additionalProperties": false,
+            "properties": {
+              "name": {"type": "string", "minLength": 1},
+              "entityType": {"type": "string", "minLength": 1},
+              "geoTagRef": {"type": "string", "minLength": 1},
+              "geoTagRefs": {
+                "type": "array",
+                "items": {"type": "string", "minLength": 1},
+                "uniqueItems": true
+              },
+              "typeTagRefs": {
+                "type": "array",
+                "items": {"type": "string", "minLength": 1},
+                "uniqueItems": true
+              },
+              "aliases": {
+                "type": "array",
+                "items": {"type": "string", "minLength": 1},
+                "uniqueItems": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["createdAt", "createdBy"],
+      "additionalProperties": false,
+      "properties": {
+        "createdAt": {"type": "string", "minLength": 1},
+        "createdBy": {"type": "string", "minLength": 1}
+      }
+    },
+    "presetRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "content": {
+      "type": "object",
+      "required": ["modalityContract", "research", "carriers", "quotas"],
+      "additionalProperties": false,
+      "properties": {
+        "modalityContract": {"const": "separated_research"},
+        "angles": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        },
+        "audiences": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        },
+        "carriers": {
+          "type": "array",
+          "items": {"enum": ["homepage", "article", "image", "video"]},
+          "minItems": 1,
+          "maxItems": 1,
+          "uniqueItems": true
+        },
+        "research": {
+          "type": "object",
+          "required": ["lanes"],
+          "additionalProperties": false,
+          "properties": {
+            "lanes": {
+              "type": "array",
+              "items": {"enum": ["homepage", "article", "image", "video"]},
+              "minItems": 1,
+              "maxItems": 1,
+              "uniqueItems": true
+            },
+            "maxConcurrency": {"type": "integer", "minimum": 1},
+            "laneConcurrency": {
+              "type": "object",
+              "propertyNames": {"enum": ["homepage", "article", "image", "video"]},
+              "additionalProperties": {"type": "integer", "minimum": 1}
+            },
+            "imageAssetStrategy": {
+              "enum": [
+                "open_license_publish",
+                "licensed_provider_publish",
+                "ai_generated_original",
+                "reference_only_no_image_release"
+              ]
+            },
+            "imageCountPolicy": {"enum": ["score_bonus", "hard_quota"]},
+            "minimumPublishableImagesPerTarget": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "allowAiImages": {"type": "boolean"}
+          }
+        },
+        "quotas": {
+          "type": "object",
+          "required": [
+            "entityHomepagesPerTarget",
+            "entityArticlesPerTarget",
+            "imageWorksPerTarget",
+            "videoWorksPerTarget",
+            "routeArticles"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "entityHomepagesPerTarget": {"type": "integer", "minimum": 0},
+            "entityArticlesPerTarget": {"type": "integer", "minimum": 0},
+            "imageWorksPerTarget": {"type": "integer", "minimum": 0},
+            "videoWorksPerTarget": {"type": "integer", "minimum": 0},
+            "routeArticles": {"type": "integer", "minimum": 0}
+          }
+        }
+      }
+    },
+    "acceptance": {
+      "type": "object",
+      "required": ["minEntities", "minPostsPerEntity", "requiredAngles"],
+      "additionalProperties": false,
+      "properties": {
+        "minEntities": {"type": "integer", "minimum": 0},
+        "minPostsPerEntity": {"type": "integer", "minimum": 0},
+        "requiredAngles": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        },
+        "scoredAngles": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "executionPolicy": {
+      "type": "object",
+      "required": [
+        "selectionPolicy",
+        "targetEntityCount",
+        "targetObjectCount",
+        "executionBranch",
+        "gitCommitSha"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "selectionPolicy": {"const": "frozen"},
+        "targetEntityCount": {"type": "integer", "minimum": 0},
+        "targetObjectCount": {"type": "integer", "minimum": 0},
+        "executionBranch": {"type": "string", "minLength": 1},
+        "gitCommitSha": {"type": "string", "minLength": 1}
+      }
+    },
+    "queuePolicy": {
+      "type": "object",
+      "required": [
+        "backend",
+        "reliableTask",
+        "leaseSeconds",
+        "heartbeatSeconds",
+        "deadLetterAfterAttempts"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "backend": {"const": "reliabletask"},
+        "reliableTask": {
+          "type": "object",
+          "required": ["taskType", "queue", "store", "readyIndex"],
+          "additionalProperties": false,
+          "properties": {
+            "taskType": {"const": "data.content_object.execute"},
+            "queue": {"const": "reliabletask.data.content_supply"},
+            "store": {"const": "MongoStore"},
+            "readyIndex": {"const": "RedisReadyIndex"}
+          }
+        },
+        "leaseSeconds": {"type": "integer", "minimum": 1},
+        "heartbeatSeconds": {"type": "integer", "minimum": 1},
+        "deadLetterAfterAttempts": {"type": "integer", "minimum": 1}
+      }
+    },
+    "schema": {
+      "const": "quwoquan.content.execution_spec"
+    }
   },
   "required": [
-    "schemaVersion", "executionId", "title", "intentLabel", "executionArchetype",
-    "vertical", "organizeBy", "key", "status", "scope", "provenance", "presetRef",
-    "content", "acceptance", "workflowPolicy", "queuePolicy"
+    "schema",
+    "executionId",
+    "title",
+    "intentLabel",
+    "executionArchetype",
+    "vertical",
+    "organizeBy",
+    "key",
+    "status",
+    "scope",
+    "provenance",
+    "presetRef",
+    "content",
+    "acceptance",
+    "executionPolicy",
+    "queuePolicy"
   ],
   "additionalProperties": false
 }

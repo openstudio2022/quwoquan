@@ -4,7 +4,7 @@ info:
     title: quwoquan entity API
     version: v1
 paths:
-    /v1/homepage-reviews/{reviewId}:
+    /homepage-reviews/{reviewId}:
         patch:
             operationId: UpdateHomepageReview
             x-contract-operation-id: entity.homepage_review.UpdateHomepageReview
@@ -69,7 +69,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/homepages/{homepageId}:
+    /homepages/{homepageId}:
         get:
             operationId: GetHomepageDetail
             x-contract-operation-id: entity.homepage.GetHomepageDetail
@@ -100,7 +100,10 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-    /v1/homepages/{homepageId}/claim-requests:
+            security:
+                - bearerAuth: []
+                - {}
+    /homepages/{homepageId}/claim-requests:
         post:
             operationId: CreateHomepageClaimRequest
             x-contract-operation-id: entity.homepage_claim_request.CreateHomepageClaimRequest
@@ -134,7 +137,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/homepages/{homepageId}/claim-requests/{claimRequestId}:review:
+    /homepages/{homepageId}/claim-requests/{claimRequestId}:review:
         post:
             operationId: ReviewHomepageClaimRequest
             x-contract-operation-id: entity.homepage_claim_request.ReviewHomepageClaimRequest
@@ -173,7 +176,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/homepages/{homepageId}/claimed-basics:
+    /homepages/{homepageId}/claimed-basics:
         patch:
             operationId: UpdateClaimedHomepageBasics
             x-contract-operation-id: entity.homepage.UpdateClaimedHomepageBasics
@@ -207,7 +210,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/homepages/{homepageId}/follow:
+    /homepages/{homepageId}/follow:
         post:
             operationId: FollowHomepage
             x-contract-operation-id: entity.homepage.FollowHomepage
@@ -276,7 +279,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/homepages/{homepageId}/impact:
+    /homepages/{homepageId}/impact:
         get:
             operationId: GetEntityImpact
             x-contract-operation-id: entity.homepage.GetEntityImpact
@@ -309,7 +312,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/homepages/{homepageId}/introduction:
+    /homepages/{homepageId}/introduction:
         get:
             operationId: GetHomepageIntroduction
             x-contract-operation-id: entity.homepage.GetHomepageIntroduction
@@ -343,7 +346,7 @@ paths:
             security:
                 - bearerAuth: []
                 - {}
-    /v1/homepages/{homepageId}/object-page-bundle:
+    /homepages/{homepageId}/object-page-bundle:
         get:
             operationId: GetObjectPageBundle
             x-contract-operation-id: entity.homepage.GetObjectPageBundle
@@ -377,7 +380,7 @@ paths:
             security:
                 - bearerAuth: []
                 - {}
-    /v1/homepages/{homepageId}/related-groups:
+    /homepages/{homepageId}/related-groups:
         get:
             operationId: GetHomepageRelatedGroups
             x-contract-operation-id: entity.homepage.GetHomepageRelatedGroups
@@ -408,7 +411,10 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-    /v1/homepages/{homepageId}/review-summary:
+            security:
+                - bearerAuth: []
+                - {}
+    /homepages/{homepageId}/review-summary:
         get:
             operationId: GetHomepageReviewSummary
             x-contract-operation-id: entity.homepage.GetHomepageReviewSummary
@@ -439,7 +445,10 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-    /v1/homepages/{homepageId}/reviews:
+            security:
+                - bearerAuth: []
+                - {}
+    /homepages/{homepageId}/reviews:
         post:
             operationId: CreateHomepageReview
             x-contract-operation-id: entity.homepage_review.CreateHomepageReview
@@ -477,7 +486,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/homepages/{homepageId}/shell:
+    /homepages/{homepageId}/shell:
         get:
             operationId: GetHomepageShell
             x-contract-operation-id: entity.homepage.GetHomepageShell
@@ -508,7 +517,10 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-    /v1/homepages/{homepageId}/status-reports:
+            security:
+                - bearerAuth: []
+                - {}
+    /homepages/{homepageId}/status-reports:
         post:
             operationId: CreateHomepageStatusReport
             x-contract-operation-id: entity.homepage_status_report.CreateHomepageStatusReport
@@ -542,7 +554,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/homepages/{homepageId}/status-reports/{reportId}:review:
+    /homepages/{homepageId}/status-reports/{reportId}:review:
         post:
             operationId: ReviewHomepageStatusReport
             x-contract-operation-id: entity.homepage_status_report.ReviewHomepageStatusReport
@@ -581,7 +593,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/homepages/candidates:
+    /homepages/candidates:
         post:
             operationId: IntakeHomepageCandidate
             x-contract-operation-id: entity.homepage.IntakeHomepageCandidate
@@ -609,7 +621,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/homepages/candidates/{homepageId}:publish:
+    /homepages/candidates/{homepageId}:publish:
         post:
             operationId: PublishHomepageCandidate
             x-contract-operation-id: entity.homepage.PublishHomepageCandidate
@@ -643,7 +655,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/homepages/candidates/suggest:
+    /homepages/candidates/suggest:
         post:
             operationId: SuggestHomepageCandidate
             x-contract-operation-id: entity.homepage.SuggestHomepageCandidate
@@ -671,7 +683,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/homepages/search:
+    /homepages/search:
         get:
             operationId: SearchHomepages
             x-contract-operation-id: entity.homepage.SearchHomepages
@@ -683,6 +695,13 @@ paths:
                 method: search
                 reader: HomepageSearchReader
                 slice: HomepageSearchSlice
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: false
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -699,7 +718,7 @@ paths:
             security:
                 - bearerAuth: []
                 - {}
-    /v1/homepages:reload:
+    /homepages:reload:
         post:
             operationId: ReloadHomepageState
             x-contract-operation-id: entity.homepage.ReloadHomepageState

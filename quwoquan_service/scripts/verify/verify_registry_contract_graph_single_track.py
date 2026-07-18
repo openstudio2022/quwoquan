@@ -14,7 +14,7 @@ SERVICE = Path(__file__).resolve().parents[2]
 ROOT = SERVICE.parent
 METADATA = SERVICE / "contracts/metadata"
 SCHEMAS = METADATA / "_schemas"
-FORBIDDEN_FIELDS = {"version", "schemaVersion", "registryRevision"}
+FORBIDDEN_FIELDS = {"version", "schema", "registryRevision"}
 TOP_LEVEL_VERSION = re.compile(r"^(version|schemaVersion|registryRevision):", re.MULTILINE)
 VERSIONED_SCHEMA_PATH = re.compile(r'["\']_schemas["\']\s*,\s*["\']v\d+["\']')
 
@@ -109,10 +109,10 @@ def main() -> int:
 
     code_expectations = {
         SERVICE / "internal/metadata/graph/graph.go": (
-            'json:"schemaVersion"',
+            'json:"schema"',
             'json:"registryRevision"',
             "const RegistryRevision",
-            "const SchemaVersion",
+            "const Schema",
         ),
         SERVICE / "internal/metadata/validate/schema.go": (
             '"_schemas", "v',

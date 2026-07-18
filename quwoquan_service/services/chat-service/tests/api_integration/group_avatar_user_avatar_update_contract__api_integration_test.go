@@ -20,7 +20,7 @@ func TestGroupAvatar_UserAvatarUpdatedRecomputesWhenMemberIsTopNine(t *testing.T
 			"user_test_007","user_test_008","user_test_009","user_test_010"
 		]
 	}`)
-	convID := conv["_id"].(string)
+	convID := conv["id"].(string)
 	beforeVersion := int(mustConversationAvatarVersion(t, convID))
 	syncService := runtimesync.NewService(redisRouter.Scene("general"), redisRouter.Scene("realtime"))
 	beforeSeq := latestSyncSeq(t, syncService, "user_test_001")
@@ -60,7 +60,7 @@ func TestGroupAvatar_UserAvatarUpdatedSkipsWhenMemberIsOutsideTopNine(t *testing
 			"user_test_007","user_test_008","user_test_009","user_test_010"
 		]
 	}`)
-	convID := conv["_id"].(string)
+	convID := conv["id"].(string)
 	beforeVersion := int(mustConversationAvatarVersion(t, convID))
 	syncService := runtimesync.NewService(redisRouter.Scene("general"), redisRouter.Scene("realtime"))
 	beforeSeq := latestSyncSeq(t, syncService, "user_test_001")
@@ -93,7 +93,7 @@ func TestGroupAvatar_UserAvatarUpdatedDoesNotBumpWhenSourceHashUnchanged(t *test
 			"user_test_007","user_test_008","user_test_009"
 		]
 	}`)
-	convID := conv["_id"].(string)
+	convID := conv["id"].(string)
 	beforeVersion := int(mustConversationAvatarVersion(t, convID))
 	syncService := runtimesync.NewService(redisRouter.Scene("general"), redisRouter.Scene("realtime"))
 
@@ -168,7 +168,7 @@ func waitForConversationAvatarVersionFromBackground(t *testing.T, conversationID
 
 func mustConversationAvatarVersion(t *testing.T, conversationID string) float64 {
 	t.Helper()
-	code, detail := doGet(t, "/v1/chat/conversations/"+conversationID, "user_test_001")
+	code, detail := doGet(t, "/chat/conversations/"+conversationID, "user_test_001")
 	if code != 200 {
 		t.Fatalf("get conversation %s: expected 200 got %d", conversationID, code)
 	}

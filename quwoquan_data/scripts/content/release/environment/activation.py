@@ -28,7 +28,7 @@ def write_activation_smoke_report(
     if out.exists():
         raise FileExistsError(f"append-only activation evidence exists: {out}")
     payload = {
-        "schemaVersion": "quwoquan.data_release_activation_smoke.v1",
+        "schema": "quwoquan.data_release_activation_smoke",
         "releaseId": release_id,
         "environment": environment,
         "activeReleaseId": active_release_id,

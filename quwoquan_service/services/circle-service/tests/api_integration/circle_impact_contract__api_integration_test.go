@@ -11,7 +11,7 @@ func TestCircleImpactUsesPersistedOwnerEvidenceSnapshot(t *testing.T) {
 	defer cleanCollections(t)
 	seedCircleContractFixture(t, "circle_core")
 
-	rec := doRequest(t, http.MethodGet, "/v1/circles/fixture_circle_photo/impact", nil)
+	rec := doRequest(t, http.MethodGet, "/circles/fixture_circle_photo/impact", nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}

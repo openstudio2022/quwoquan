@@ -2,7 +2,7 @@
 
 ## 功能说明
 
-- **入口**：POST /v1/score，请求体含 scenario、userId、sessionId、userFeatures、sessionSignals、candidates、context；响应体含 scores 数组（id、score、detail）。
+- **入口**：POST /score，请求体含 scenario、userId、sessionId、userFeatures、sessionSignals、candidates、context；响应体含 scores 数组（id、score、detail）。
 - **路由**：按 scenario（content_feed、circle_discovery、friend_suggestion）选择模型与特征解析器；id 对应 contentId、circleId 或 userId。
 - **模型加载**：从 ModelRegistry 或本地/OSS 加载各 scenario 的 production 模型；支持热加载或定期同步。
 - **推理**：LightGBM 批量预测；特征转换与 feature_registry 对齐。
@@ -20,7 +20,7 @@
 
 ## 验收标准
 
-- A1：POST /v1/score scenario=content_feed 返回正确 scores。
+- A1：POST /score scenario=content_feed 返回正确 scores。
 - A2：推理延迟满足约定。
 - A7：契约与 Go scorer 一致。
 - A8：推理 API 有接口测试。

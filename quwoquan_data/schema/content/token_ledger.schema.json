@@ -3,7 +3,7 @@
   "description": "Token and cost ledger entry scoped by one execution, job, creator and content type.",
   "type": "object",
   "required": [
-    "schemaVersion",
+    "schema",
     "executionId",
     "jobId",
     "runId",
@@ -16,19 +16,63 @@
     "budgetExceeded"
   ],
   "properties": {
-    "schemaVersion": { "const": "quwoquan.token_ledger" },
-    "executionId": { "type": "string", "minLength": 1 },
-    "jobId": { "type": "string", "minLength": 1 },
-    "runId": { "type": "string", "minLength": 1, "description": "P4 补强：用量必须关联到具体 agent run（无真实 run 的估算条目用 artifact:<ref> 合成关联）" },
-    "provider": { "type": "string" },
-    "model": { "type": "string" },
-    "creatorProfileId": { "type": "string", "minLength": 1 },
-    "contentType": { "type": "string", "minLength": 1 },
-    "budgetTokens": { "type": "integer", "minimum": 0 },
-    "usedTokens": { "type": "integer", "minimum": 0 },
-    "costUsd": { "type": "number", "minimum": 0 },
-    "cacheHits": { "type": "object", "additionalProperties": { "type": "boolean" } },
-    "budgetExceeded": { "type": "boolean" },
-    "unitPassedCostUsd": { "type": ["number", "null"], "minimum": 0 }
+    "executionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "jobId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "runId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "P4 补强：用量必须关联到具体 agent run（无真实 run 的估算条目用 artifact:<ref> 合成关联）"
+    },
+    "provider": {
+      "type": "string"
+    },
+    "model": {
+      "type": "string"
+    },
+    "creatorProfileId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "contentType": {
+      "type": "string",
+      "minLength": 1
+    },
+    "budgetTokens": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "usedTokens": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "costUsd": {
+      "type": "number",
+      "minimum": 0
+    },
+    "cacheHits": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "boolean"
+      }
+    },
+    "budgetExceeded": {
+      "type": "boolean"
+    },
+    "unitPassedCostUsd": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "schema": {
+      "const": "quwoquan.token_ledger"
+    }
   }
 }

@@ -1,4 +1,3 @@
-version: 1
 
 service:
   name: content-service
@@ -13,7 +12,8 @@ service:
 
 api_routes:
   - method: POST
-    path: /v1/content/media/uploads:init
+    path: /content/media/uploads:init
+
     operation: InitMediaUpload
     actor: persona
     application:
@@ -68,7 +68,8 @@ api_routes:
     description: 初始化媒体上传会话；owner Persona、objectKey、期望 SHA-256 和 expiresAt 一次固化。
 
   - method: POST
-    path: /v1/content/media/uploads/{sessionId}:complete
+    path: /content/media/uploads/{sessionId}:complete
+
     operation: CompleteMediaUpload
     actor: persona
     application:
@@ -125,7 +126,8 @@ api_routes:
     description: 校验 owner、过期时间和 SHA-256 后，原子完成会话并物化独立 MediaAsset。
 
   - method: POST
-    path: /v1/content/media/uploads/{sessionId}:abort
+    path: /content/media/uploads/{sessionId}:abort
+
     operation: AbortMediaUpload
     actor: persona
     application:
@@ -182,7 +184,8 @@ api_routes:
     description: owner 中止待上传会话；已完成或已中止的会话拒绝新的状态迁移。
 
   - method: GET
-    path: /v1/content/media/uploads/{sessionId}
+    path: /content/media/uploads/{sessionId}
+
     operation: GetMediaUploadSession
     actor: persona
     application:

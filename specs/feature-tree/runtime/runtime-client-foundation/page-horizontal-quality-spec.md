@@ -1,11 +1,11 @@
 # 客户端页面「横向质量维度」规格（跨会话统一验收 · 可扩展）
 
 > **用途**：按 **横向合规项**（非「支柱」命名，避免与后续新增维度绑定死「7」）逐页打勾：**`✓` 已落实**、**`—` 本页不涉及**、**`○` 待审计**；**禁止留空**。  
-> **扩展**：后续若有新的横向要求（如无障碍、性能预算），在矩阵中 **追加 P9、P10…**，**不得**与既有维度合并表述。  
+> **扩展**：后续若有新的横向要求，在矩阵中 **追加 P10、P11…**，**不得**与既有维度合并表述。
 > **全量清单**：[`page-horizontal-quality-matrix.md`](./page-horizontal-quality-matrix.md)（按 **领域 × 页面类型** 分列）。  
 > **L3 索引**：[`page-horizontal-quality/spec.md`](./page-horizontal-quality/spec.md)。  
 > **新增页面**：合入前必须 **新增一行** 并核对 **P1–Pn 当前列**；详见 [`page_horizontal_quality_pr_checklist.md`](../../../gates/page_horizontal_quality_pr_checklist.md)。  
-> **全量横向补齐**：按 **9 个独立会话** 执行（S1–S8 各对应 **P1–P8** 之一，**S9** 收口），见 [`page-horizontal-quality/nine-session-rollout-content.execution.planning.md`](./page-horizontal-quality/nine-session-rollout-content.execution.planning.md)。  
+> **既有横向补齐**：历史九会话覆盖 P1–P8 与 S9 收口；P9 于 2026-07-16 作为独立增量追加，不重写既有会话口径。
 > **S8（P8）子 L3 /baseline**：[`s8-p8-semantic-token/spec.md`](./s8-p8-semantic-token/spec.md) · [`CR-20260330-012`](../../../changelog/CR-20260330-012-s8-p8-semantic-token-baseline.yaml)（W0–W5 代码波次见该目录 `树内计划文档`）。
 
 ## 页面类型（与矩阵列「类型」一致）
@@ -20,7 +20,7 @@
 | **T6** | **`components/`** 内全屏页或 **跨路由复用骨架**（非业务 `ui/*/pages` 独占） |
 | **T7** | **壳内子视图**或 **当前未挂路由的存量页面文件**（须标记后续处理） |
 
-## 横向维度定义（当前 P1–P8）
+## 横向维度定义（当前 P1–P9）
 
 > **P7 与 P8 分属不同合规面**：**禁止**在规格或 PR 说明里把「断点/多屏布局」与「设计系统语义 token」写成同一项。
 
@@ -34,6 +34,7 @@
 | **P6** | **深色 / 浅色** | `dual-theme-page-coverage`（S6）：主表面与字色 **双色可用** 或 **登记豁免** | 产品强制单模式（须备注） |
 | **P7** | **多屏断点与响应式布局** | 在 **`compact` / `regular` / `expanded`**（及项目登记断点）下 **版式不断裂、可读可点**；优先 **`AppSpacing.responsiveValue`**、**`feedMaxContentWidth`** 等与 **布局/断点** 直接相关的 API；**禁止**为布局再维护一套私有断点 map | 固定纵横比全屏取景（如相机预览）可对 **纯取景区** 标 **—**，**外围壳与控件行**仍须满足 P7 |
 | **P8** | **设计系统 · 语义 token** | **间距、字阶、圆角、色、分割线**等须走已登记的 **语义常量 / Theme 扩展 / 组件 token**（如 `AppSpacing.*`、`AppTypography.*`、`CupertinoTheme` 衍生、`settings_semantic_constants` 等）；**禁止**魔法数与「随手 `EdgeInsets.all(13)`」式非语义混用（与 `verify_dart_semantic` 等门禁同向） | 与 UI 无关的纯逻辑页可 **—**；**凡渲染控件的页面极少整体 —** |
+| **P9** | **异步等待与恢复** | 页面只使用 `foreground`、`action`、`long_task` 三种等待模式；同一请求范围只有一个主进度，1.5/3/6 秒阶段按模式解释，pending 必须在成功、空态、部分、失败、取消、supersede 或 dispose 时结算；刷新/翻页失败保留正文，reduced-motion 与 Semantics 可用。页面证据登记在 `user_acceptance_page_inventory.yaml` 的 `wait_modes` / `request_wait_tests`。 | 无异步读取、提交或长任务的纯静态页可标 **—**，并在备注说明。 |
 
 **S7 / P7 落实策略（默认 B）**：三档断点均需验收；在 **`expanded`** 下优先使用 **`feedMaxContentWidth`**、`AppSpacing.responsiveValue` 等已登记语义 **约束内容最大可读宽度**，避免平板端无限拉宽单列文本。**默认 A**（仅保证 compact 不断裂）不作为发布口径，除非页面在矩阵备注中登记豁免。
 
@@ -49,6 +50,7 @@
 | 双色模式 S6 | **P6** |
 | 响应式布局 / 断点 | **P7**（**不含** token 口径） |
 | 语义 token / 设计系统 | **P8**（**不含**断点策略） |
+| 异步等待、取消、慢提示与恢复 | **P9** |
 
 ## 商用基线、权限与 NFR（本 L3）
 
@@ -64,11 +66,12 @@
 | 阶段 | 要求 |
 |------|------|
 | **v1** | 每个涉及页面的 PR **必须** 更新 `page-horizontal-quality-matrix.md` 对应行的 **当前 P 列**；使用 `specs/gates/page_horizontal_quality_pr_checklist.md` 自检 |
-| **v2** | `quwoquan_app/scripts/runtime/verify_page_horizontal_quality_matrix.py`（路径存在性 + **P1–P8** 符号）+ `quwoquan_app/scripts/runtime/verify_page_matrix_scan_complete.py`（磁盘↔矩阵↔缺口清单 **无漏页**）；已接入 `make gate` 的 app 段；本地快检 **`make verify-app-page-horizontal-quality`**；列数扩展时同步改脚本 |
+| **v2** | `quwoquan_app/scripts/runtime/verify_page_horizontal_quality_matrix.py`（路径存在性 + **P1–P9** 符号）+ `quwoquan_app/scripts/runtime/verify_page_matrix_scan_complete.py`（磁盘↔矩阵↔缺口清单 **无漏页**）；已接入 `make gate` 的 app 段；本地快检 **`make verify-app-page-horizontal-quality`**；列数扩展时同步改脚本 |
 
 ## 验收（总会话）
 
-- 矩阵 **每一行** 当前 **P1–P8** 均为 **`✓` / `—` / `○`**（`○` 仅作待审计基线，**发布前**应收敛为 `✓` 或 `—`）；`—` 须有备注或指向豁免条款。  
+- 矩阵每一行 P1–P8 均为 `✓` / `—` / `○`；P9 只能为 `✓` / `—`，且 `—` 须有备注或指向豁免条款。
 - 新增页面 **无漏登记**。  
 - **P7** 与 `specs/02_IOS_NATIVE_FRONTEND_UX_SPEC.md` §2.7 **一致**（布局/断点面）。  
 - **P8** 与既有 Dart 语义 / 设置语义门禁 **同向**，不得在页面内引入新的魔法数体系。
+- **P9** 不得留 `○`：有异步行为的页面必须登记模式与真实 `request_wait_tests`，纯静态页面明确 `—`；`make verify-test-coverage-map` 负责看护。

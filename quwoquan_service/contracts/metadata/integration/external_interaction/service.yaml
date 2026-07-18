@@ -1,4 +1,3 @@
-version: 1
 
 response_list_key: items
 
@@ -15,7 +14,8 @@ service:
 
 api_routes:
   - method: POST
-    path: /v1/integrations/external-requests
+    path: /integrations/external-requests
+
     operation: SubmitExternalInteractionRequest
     actor: none
     application:
@@ -65,7 +65,8 @@ api_routes:
       visibility: internal
 
   - method: GET
-    path: /v1/integrations/external-requests/{requestId}
+    path: /integrations/external-requests/{requestId}
+
     operation: GetExternalInteractionRequest
     actor: none
     application:
@@ -79,7 +80,8 @@ api_routes:
     response_entity: ExternalInteractionRequest
 
   - method: GET
-    path: /v1/integrations/external-requests/{requestId}/attempts
+    path: /integrations/external-requests/{requestId}/attempts
+
     operation: ListExternalInteractionAttempts
     actor: none
     application:
@@ -93,7 +95,8 @@ api_routes:
     response_entity: ExternalInteractionAttempt
 
   - method: GET
-    path: /v1/integrations/external-requests/dead-letters
+    path: /integrations/external-requests/dead-letters
+
     operation: ListExternalInteractionDeadLetters
     actor: none
     application:
@@ -107,7 +110,8 @@ api_routes:
     response_entity: ExternalInteractionDeadLetter
 
   - method: POST
-    path: /v1/integrations/push-deliveries
+    path: /integrations/push-deliveries
+
     operation: SubmitPushDelivery
     actor: none
     application:
@@ -123,7 +127,8 @@ api_routes:
     success_status: 202
 
   - method: POST
-    path: /v1/integrations/push-deliveries:callback
+    path: /integrations/push-deliveries:callback
+
     operation: PushDeliveryProviderCallback
     actor: none
     application:
@@ -139,7 +144,8 @@ api_routes:
     success_status: 202
 
   - method: POST
-    path: /v1/integrations/sms-otp:send
+    path: /integrations/sms-otp:send
+
     operation: SendSmsOtp
     actor: persona_or_device
     application:
@@ -149,13 +155,14 @@ api_routes:
       aggregate_owner: ExternalInteraction
       mutation_target: ExternalInteraction
       invariant_target: ExternalInteraction
-    description: 内部接口，提交验证码短信发送请求；外部公开入口应使用 /v1/integrations/external-requests。
+    description: 内部接口，提交验证码短信发送请求；外部公开入口应使用 /integrations/external-requests。
     request_entity: SmsOtpSendPayload
     response_entity: SmsOtpAccepted
     success_status: 202
 
   - method: POST
-    path: /v1/integrations/sms-otp:callback
+    path: /integrations/sms-otp:callback
+
     operation: SmsOtpProviderCallback
     actor: none
     application:

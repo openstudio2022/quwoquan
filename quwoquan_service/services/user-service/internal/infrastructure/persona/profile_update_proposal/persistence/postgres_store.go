@@ -92,6 +92,71 @@ func (s *PostgresStore) Replay(
 	return replayReceipt(ctx, s.pool, proposalID, idempotencyKey, commandDigest)
 }
 
+func (s *PostgresStore) RecordNoopReceipt(
+	ctx context.Context,
+	proposal model.ProfileUpdateProposal,
+	idempotencyKey string,
+	commandDigest string,
+) (ports.CommitReceipt, error) {
+	if err := proposal.Validate(); err != nil {
+		return ports.CommitReceipt{}, err
+	}
+	idempotencyKey = strings.TrimSpace(idempotencyKey)
+	commandDigest = strings.TrimSpace(commandDigest)
+	if idempotencyKey == "" || len(idempotencyKey) > 160 || commandDigest == "" {
+		return ports.CommitReceipt{}, errors.New(
+			"profile proposal no-op receipt requires idempotency key and command digest",
+		)
+	}
+	if replayed, found, err := s.Replay(
+		ctx,
+		proposal.ID,
+		idempotencyKey,
+		commandDigest,
+	); err != nil || found {
+		return replayed, err
+	}
+	receipt := ports.CommitReceipt{
+		ProposalID: proposal.ID,
+		Version:    proposal.Version,
+		Status:     string(proposal.Status),
+	}
+	resultJSON, err := json.Marshal(receipt)
+	if err != nil {
+		return ports.CommitReceipt{}, err
+	}
+	result, err := s.pool.Exec(ctx, `
+INSERT INTO profile_update_proposals_command_receipts(
+  receipt_id, proposal_id, idempotency_key, command_digest,
+  aggregate_version, result_json
+) VALUES ($1,$2,$3,$4,$5,$6)
+ON CONFLICT (proposal_id, idempotency_key) DO NOTHING`,
+		receiptID(proposal.ID, idempotencyKey), proposal.ID, idempotencyKey,
+		commandDigest, proposal.Version, resultJSON,
+	)
+	if err != nil {
+		return ports.CommitReceipt{}, err
+	}
+	if result.RowsAffected() == 1 {
+		return receipt, nil
+	}
+	replayed, found, err := s.Replay(
+		ctx,
+		proposal.ID,
+		idempotencyKey,
+		commandDigest,
+	)
+	if err != nil {
+		return ports.CommitReceipt{}, err
+	}
+	if !found {
+		return ports.CommitReceipt{}, errors.New(
+			"profile proposal no-op receipt lost a concurrent insert",
+		)
+	}
+	return replayed, nil
+}
+
 func (s *PostgresStore) Commit(
 	ctx context.Context,
 	expectedVersion int64,

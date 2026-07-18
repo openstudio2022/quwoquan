@@ -4,6 +4,7 @@ from __future__ import annotations
 from core.data_issue import DataIssueCode, DataIssueStage, DataRecoveryAction, data_issues
 from core.image_safety import assess_asset_sources
 from core.io import read_json
+from core.paths import execution_root
 from content.execution.stage_reports import (
     iter_stage_envelopes,
     read_stage_envelope,
@@ -20,6 +21,18 @@ def _collect_assets_for_ref(execution_id: str, ref: str) -> list[dict]:
         assets = payload.get("assets") or []
         if assets:
             return list(assets)
+        source_frames = payload.get("sourceFrames") or []
+        if source_frames:
+            root = execution_root(execution_id)
+            return [
+                {
+                    "sourcePath": str(root / str(frame.get("assetRef") or "")),
+                    "caption": str(frame.get("caption") or ""),
+                    "sourceUrl": str(frame.get("sourceUrl") or ""),
+                }
+                for frame in source_frames
+                if isinstance(frame, dict)
+            ]
     # 回退：经路由定位内容对象成品 manifest（对象根 posts/{type}/{angle}/{title}/{seq}）。
     from content.post import object_index as content_object
 

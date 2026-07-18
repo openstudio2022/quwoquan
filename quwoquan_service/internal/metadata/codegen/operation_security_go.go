@@ -130,6 +130,16 @@ func RenderOperationSecurityGo(
 			)
 			writeGoStringField(
 				&output,
+				"Idempotency",
+				operation.Reliability.Idempotency,
+			)
+			writeGoStringField(
+				&output,
+				"VersionPrecondition",
+				string(operation.Concurrency.VersionPrecondition),
+			)
+			writeGoStringField(
+				&output,
 				"CommercialStatus",
 				operation.Commercial.Status,
 			)

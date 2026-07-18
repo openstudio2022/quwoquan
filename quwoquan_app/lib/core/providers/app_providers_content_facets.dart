@@ -111,17 +111,21 @@ final contentPostReactionFacetProvider = Provider<ContentPostReactionFacet>(
   _productionPostReactionFacet,
 );
 
-final createContentPostLifecycleCommandWriterProvider =
-    Provider<ContentPostLifecycleCommandWriter>((ref) {
+final createContentPostPublicationWriterProvider =
+    Provider<ContentPostPublicationWriter>((ref) {
       if (ref.watch(appDataSourceModeProvider) != AppDataSourceMode.remote) {
         throw StateError(
-          'ContentPostLifecycleCommandWriter is Remote-only in production composition; alpha must override the typed writer from quwoquan_cloud_mock',
+          'ContentPostPublicationWriter is Remote-only in production composition; alpha must override the typed writer from quwoquan_cloud_mock',
         );
       }
-      return RemoteContentPostLifecycleCommandWriter(
+      return RemoteContentPostPublicationWriter(
         client: ref.watch(generatedCloudOperationClientProvider),
-        invocationContext: (clientPageId) =>
-            _contentCommandInvocationContext(ref, clientPageId: clientPageId),
+        invocationContext: (clientPageId, idempotencyKey) =>
+            _contentCommandInvocationContext(
+              ref,
+              clientPageId: clientPageId,
+              idempotencyKey: idempotencyKey,
+            ),
       );
     });
 
@@ -309,7 +313,7 @@ CirclePostPlacementCommandWriter _productionCirclePostPlacementWriter(
   }
   return RemoteCirclePostPlacementCommandWriter(
     client: ref.watch(generatedCloudOperationClientProvider),
-    invocationContext: (clientPageId) {
+    invocationContext: (clientPageId, idempotencyKey) {
       final base = _contentQueryInvocationContext(
         ref,
         surface: surface,
@@ -320,7 +324,7 @@ CirclePostPlacementCommandWriter _productionCirclePostPlacementWriter(
         clientPageId: base.clientPageId,
         routeId: base.routeId,
         actor: base.actor,
-        idempotencyKey: AppTraceContextStore.instance.newRequestId(),
+        idempotencyKey: idempotencyKey,
       );
     },
   );

@@ -1,4 +1,3 @@
-version: 1
 read_model: FollowingSubjectVisitResult
 
 description: |
@@ -19,26 +18,22 @@ client_projection:
       dart_type: String
       nullable: false
       source: subjectId
-      aliases: [subjectId]
       default: "''"
 
     - name: subjectType
       dart_type: String
       nullable: false
       source: subjectType
-      aliases: [subjectType]
       default: "''"
 
     - name: lastVisitedAt
       dart_type: String
       nullable: false
       source: lastVisitedAt
-      aliases: [lastVisitedAt]
       default: "''"
 
     - name: hasUnreadChanges
       dart_type: bool
       nullable: false
       source: hasUnreadChanges
-      aliases: [hasUnreadChanges]
       default: "false"

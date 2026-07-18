@@ -1,4 +1,3 @@
-version: 1
 service:
   name: notification-service
   domain: notification
@@ -11,7 +10,8 @@ service:
     target_story: app-cloud-business-object-commercial-closure
 api_routes:
   - method: GET
-    path: /internal/v1/notifications/delivery-jobs/metrics
+    path: /internal/notifications/delivery-jobs/metrics
+
     operation: GetNotificationDeliveryJobMetrics
     actor: account
     application:
@@ -61,7 +61,8 @@ api_routes:
       visibility: internal
 
   - method: GET
-    path: /internal/v1/notifications/delivery-jobs/dead-letters
+    path: /internal/notifications/delivery-jobs/dead-letters
+
     operation: ListNotificationDeliveryJobDeadLetters
     actor: account
     application:
@@ -113,7 +114,8 @@ api_routes:
       visibility: internal
 
   - method: POST
-    path: /internal/v1/notifications/delivery-jobs/{jobId}:recover
+    path: /internal/notifications/delivery-jobs/{jobId}:recover
+
     operation: RecoverNotificationDeliveryJob
     actor: account
     application:
@@ -193,4 +195,4 @@ contract_test:
           - state receipt and NotificationDeliveryJobRecovered outbox event commit atomically
       - name: removed_delivery_route_unavailable
         assertions:
-          - POST /internal/v1/notifications/dead-letters/{id}/recovery returns 404
+          - POST /internal/notifications/dead-letters/{id}/recovery returns 404

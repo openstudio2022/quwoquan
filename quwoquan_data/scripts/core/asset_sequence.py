@@ -10,7 +10,7 @@ from typing import Iterator
 from core.io import read_json, write_json
 from core.paths import execution_sequence_lock_path, execution_sequence_path
 
-EXECUTION_SEQUENCE_SCHEMA = "quwoquan_data.execution_sequence/1"
+EXECUTION_SEQUENCE_SCHEMA = "quwoquan_data.execution_sequence"
 
 
 def _now_iso() -> str:
@@ -51,7 +51,7 @@ def allocate_execution_sequence() -> int:
         write_json(
             path,
             {
-                "schemaVersion": EXECUTION_SEQUENCE_SCHEMA,
+                "schema": EXECUTION_SEQUENCE_SCHEMA,
                 "latestSeq": next_seq,
                 "updatedAt": _now_iso(),
             },

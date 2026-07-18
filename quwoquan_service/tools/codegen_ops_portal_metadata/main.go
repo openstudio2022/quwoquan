@@ -227,6 +227,19 @@ func main() {
 
 	sort.Strings(indexExports)
 	writeFile(filepath.Join(outDir, "index.ts"), strings.Join(indexExports, "\n")+"\n")
+
+	if source.Has("ops/event_record/event_catalog.yaml") && source.Has("_shared/app_pages.yaml") {
+		telemetryOutDir := filepath.Join(portalDir, "src", "generated", "telemetry")
+		must(os.MkdirAll(telemetryOutDir, 0o755))
+		eventCatalog := readYAML[map[string]any](source, "ops/event_record/event_catalog.yaml")
+		appPages := readYAML[map[string]any](source, "_shared/app_pages.yaml")
+		writeTSModule(filepath.Join(telemetryOutDir, "eventCatalog.generated.ts"), "eventCatalog", eventCatalog)
+		writeTSModule(filepath.Join(telemetryOutDir, "appPages.generated.ts"), "appPages", appPages)
+		writeFile(
+			filepath.Join(telemetryOutDir, "index.ts"),
+			"export * from './appPages.generated.js';\nexport * from './eventCatalog.generated.js';\n",
+		)
+	}
 }
 
 func readResolvedControlPlane(source *contractcodegen.Source, path string) map[string]any {

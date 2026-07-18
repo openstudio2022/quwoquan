@@ -1,4 +1,3 @@
-version: 1
 
 service:
   name: entity-service
@@ -13,7 +12,8 @@ service:
 
 api_routes:
   - method: POST
-    path: /v1/homepages/{homepageId}/claim-requests
+    path: /homepages/{homepageId}/claim-requests
+
     operation: CreateHomepageClaimRequest
     actor: persona
     application:
@@ -26,10 +26,11 @@ api_routes:
     description: 发起主页认领申请
     request_entity: HomepageClaimRequest
     writable_fields: [claimTier, businessLicenseUrl, contactPhone, identityCardFrontUrl, identityCardBackUrl, note]
-    auth: required
-
+    security:
+      auth_mode: required
   - method: POST
-    path: /v1/homepages/{homepageId}/claim-requests/{claimRequestId}:review
+    path: /homepages/{homepageId}/claim-requests/{claimRequestId}:review
+
     operation: ReviewHomepageClaimRequest
     actor: account
     application:
@@ -41,8 +42,8 @@ api_routes:
       invariant_target: HomepageClaimRequest
     description: 审核主页认领申请
     writable_fields: [status, reviewNote]
-    auth: required
-
+    security:
+      auth_mode: required
 consumers:
   - name: app
     capabilities: [create_homepage_claim_request]

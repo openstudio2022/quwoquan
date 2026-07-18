@@ -74,7 +74,10 @@ final class AlphaCircleGroupFacet
     ArchiveCircleGroupCommand command,
   ) async {
     final key = _key(command.circleId, command.groupId);
-    final current = _required(key, command.expectedVersion);
+    final current = _required(key);
+    if (current.status == CircleGroupStatus.archived) {
+      return _result(current);
+    }
     final archived = _copy(
       current,
       version: current.version + 1,

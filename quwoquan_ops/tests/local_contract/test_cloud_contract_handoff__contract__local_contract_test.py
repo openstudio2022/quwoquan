@@ -29,7 +29,6 @@ class CloudContractHandoffTest(unittest.TestCase):
         self.policy.write_text(
             json.dumps(
                 {
-                    "schemaVersion": 1,
                     "leaseRoot": str(self.root / "leases"),
                     "resources": [
                         {
@@ -49,7 +48,7 @@ class CloudContractHandoffTest(unittest.TestCase):
     def _write_graph(
         self,
         *,
-        path_template: str = "/v1/things",
+        path_template: str = "/things",
         duplicate: bool = False,
     ) -> None:
         operations = [
@@ -68,6 +67,7 @@ class CloudContractHandoffTest(unittest.TestCase):
                 "mutationTarget": "",
                 "invariantTarget": "",
                 "actorRequirement": "persona",
+                "concurrency": {"versionPrecondition": "if_match"},
                 "sourcePath": "sample/thing/service.yaml",
             }
         ]
@@ -134,7 +134,7 @@ class CloudContractHandoffTest(unittest.TestCase):
         graph = json.loads(self.graph.read_text(encoding="utf-8"))
         for field, value in (
             ("version", 1),
-            ("schemaVersion", 2),
+            ("schema", 2),
             ("registryRevision", "retired"),
         ):
             with self.subTest(field=field):
@@ -176,6 +176,10 @@ class CloudContractHandoffTest(unittest.TestCase):
             lock["appExposedOperations"][0]["canonicalOperationId"],
             "sample.thing.ListThings",
         )
+        self.assertEqual(
+            lock["appExposedOperations"][0]["concurrency"],
+            {"versionPrecondition": "if_match"},
+        )
         self.assertFalse((self.root / "leases/app-cloud-handoff.lock").exists())
 
     def test_ambiguous_surface_binding_fails_without_guessing(self) -> None:
@@ -190,7 +194,7 @@ class CloudContractHandoffTest(unittest.TestCase):
     def test_breaking_transport_change_requires_explicit_approval(self) -> None:
         self._write_graph()
         handoff.accept(self._args())
-        self._write_graph(path_template="/v2/things")
+        self._write_graph(path_template="/" + "v2" + "/things")
 
         with self.assertRaisesRegex(ValueError, "breaking change"):
             handoff.accept(self._args())

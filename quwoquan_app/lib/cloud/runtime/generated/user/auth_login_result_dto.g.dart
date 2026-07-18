@@ -32,14 +32,14 @@ class AuthLoginResultDto {
     return AuthLoginResultDto(
       accessToken: m['accessToken']?.toString() ?? '',
       refreshToken: m['refreshToken']?.toString() ?? '',
-      ownerId: m['ownerId']?.toString() ?? m['ownerAccountId']?.toString() ?? '',
+      ownerId: m['ownerId']?.toString() ?? '',
       accountState: m['accountState']?.toString() ?? '',
       identityOrigin: m['identityOrigin']?.toString() ?? '',
       logicalShard: (m['logicalShard'] as num?)?.toInt() ?? 0,
       anonymousRetentionPolicy: m['anonymousRetentionPolicy']?.toString() ?? '',
       activeSub: _parseStringKeyMap(m['activeSub']) ?? null,
       subAccountCount: (m['subAccountCount'] as num?)?.toInt() ?? 0,
-      sessionRememberTtlSeconds: (m['sessionRememberTtlSeconds'] as num?)?.toInt() ?? (m['rememberTtlSeconds'] as num?)?.toInt() ?? 0,
+      sessionRememberTtlSeconds: (m['sessionRememberTtlSeconds'] as num?)?.toInt() ?? 0,
       accountHint: _parseStringKeyMap(m['accountHint']) ?? null,
     );
   }

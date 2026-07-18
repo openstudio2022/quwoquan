@@ -93,10 +93,10 @@ class PreferenceFactService {
       ...seedFacts,
       ...emergedTagMaps.map(
         (item) => PreferenceFact(
-          factId: 'long_term_${item['tag'] ?? item['key'] ?? now}_$now',
+          factId: 'long_term_${item['key'] ?? now}_$now',
           scope: 'long_term',
-          key: (item['tag'] ?? item['key'] ?? '').toString(),
-          value: (item['value'] ?? item['label'] ?? '').toString(),
+          key: (item['key'] ?? '').toString(),
+          value: (item['value'] ?? '').toString(),
           source: 'diagnostics.emergedTags',
           createdAt: now,
         ),

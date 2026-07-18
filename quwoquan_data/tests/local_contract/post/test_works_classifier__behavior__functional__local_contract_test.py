@@ -6,7 +6,7 @@ T2 行为：专业长文→work/article、社交碎片→moment、探针/推广�
 """
 from __future__ import annotations
 
-from content.post.works_classifier import classify_works, load_works_classification_config
+from content.post.image.works_classifier import classify_works, load_works_classification_config
 
 _AUTHORITATIVE = """# 九寨沟旅游全攻略
 
@@ -148,7 +148,7 @@ def test_verdict_conforms_contract():
         "art_pro", source_class="vertical_professional", source_text=_AUTHORITATIVE,
         entity_name="九寨沟", narrative_volume=4, image_count=2,
     )
-    assert v["schemaVersion"] == "quwoquan_data.works_classification.v1"
+    assert v["schema"] == "quwoquan_data.works_classification"
     assert v["decision"] in _VALID_DECISIONS
     assert v["sourceTier"] in _VALID_TIERS
     assert v["thresholdsVersion"] == int(cfg["version"])

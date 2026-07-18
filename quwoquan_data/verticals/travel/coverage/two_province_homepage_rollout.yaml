@@ -1,4 +1,4 @@
-schemaVersion: quwoquan.travel.homepage_rollout/3
+schema: quwoquan.travel.homepage_rollout
 rolloutId: travel-homepage-coverage
 vertical: travel
 contentType: homepage
@@ -8,6 +8,14 @@ selectionPolicy: frozen
 replacementPolicy: forbidden
 verification:
   appUatShardSize: 100
+capacity:
+  soakJobs: 30
+  minimumSafeConcurrency: 3
+  maximumUnrecoveredBridgeFailures: 0
+  minimumProbeJobsPerHour: 18
+  maximumProbeJobP95Seconds: 720
+  minimumApprovedHomepagesPerHour: 18
+  maximumHomepageObjectP95Seconds: 720
 provinces:
   - province: 浙江省
     scope: cn-zhejiang

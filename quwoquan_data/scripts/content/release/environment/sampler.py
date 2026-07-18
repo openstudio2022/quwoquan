@@ -209,7 +209,7 @@ def build_sample_bundle(
                 required_entities.add(known_entity_by_ref[ref])
     entity_refs = sorted(set(entity_refs) | required_entities)
     return {
-        "schemaVersion": "quwoquan.content_sample_bundle",
+        "schema": "quwoquan.content_sample_bundle",
         "environment": env,
         "sampleRatio": ratio,
         "salt": salt,
@@ -238,7 +238,7 @@ def write_sample_bundle(
 
     out = payload_file(root, "sample_bundle.json")
     payload = {
-        "schemaVersion": "quwoquan_data.release_sample/1",
+        "schema": "quwoquan_data.release_sample",
         "releaseId": release_id,
         "posts": sorted({str(ref) for ref in bundle.get("posts") or []}),
         "entities": sorted({str(ref) for ref in bundle.get("entities") or []}),

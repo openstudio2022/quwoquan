@@ -52,7 +52,7 @@ class HomepageCanonicalReference {
 
   factory HomepageCanonicalReference.fromMap(Map<String, dynamic> map) {
     return HomepageCanonicalReference(
-      id: (map['_id'] ?? map['homepageId'] ?? map['id'] ?? '')
+      id: (map['homepageId'] ?? '')
           .toString()
           .trim(),
       homepageType: (map['homepageType'] ?? '').toString().trim(),
@@ -134,7 +134,7 @@ class HomepageSummary extends HomepageCanonicalReference {
 
   factory HomepageSummary.fromMap(Map<String, dynamic> map) {
     return HomepageSummary(
-      id: (map['homepageId'] ?? map['_id'] ?? map['id'] ?? '')
+      id: (map['homepageId'] ?? '')
           .toString()
           .trim(),
       homepageType: (map['homepageType'] ?? '').toString().trim(),
@@ -232,7 +232,7 @@ class HomepageDetail extends HomepageCanonicalReference {
 
   factory HomepageDetail.fromMap(Map<String, dynamic> map) {
     return HomepageDetail(
-      id: (map['_id'] ?? map['homepageId'] ?? map['id'] ?? '')
+      id: (map['homepageId'] ?? '')
           .toString()
           .trim(),
       homepageType: (map['homepageType'] ?? '').toString().trim(),

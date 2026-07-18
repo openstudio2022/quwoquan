@@ -1,5 +1,4 @@
 templateId: 线路_枢纽到达
-version: 1
 subject: { kind: topic, type: 旅行/线路, minEntityRefs: 2, subjectTagRef: Topic/旅行/出行方式/高铁铁路 }
 vertical: travel
 category: travel

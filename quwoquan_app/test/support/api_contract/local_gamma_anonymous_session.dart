@@ -27,7 +27,7 @@ class LocalGammaAnonymousSession {
     final response = await client
         .post(
           Uri.parse(
-            '${baseUrl.replaceFirst(RegExp(r'/$'), '')}/v1/auth/login/anonymous',
+            '${baseUrl.replaceFirst(RegExp(r'/$'), '')}/auth/login/anonymous',
           ),
           headers: const {
             'Content-Type': 'application/json',

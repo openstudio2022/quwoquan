@@ -1,5 +1,4 @@
 templateId: 主题_城市漫步
-version: 1
 subject: { kind: topic, type: 旅行/主题, minEntityRefs: 3, subjectTagRef: Topic/旅行/旅行主题/城市漫步 }
 vertical: travel
 category: travel

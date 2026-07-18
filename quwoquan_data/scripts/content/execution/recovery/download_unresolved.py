@@ -1,7 +1,7 @@
-"""Workflow service extracted from the retired monolithic runner."""
+"""Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
 from content.execution.coverage import coverage_entity_type
-from content.execution.support import Any, DataIssue, DataIssueCode, DataIssueStage, DataIssueLane, DataRecoveryAction, ExecutionContext, MAX_REACT_REWINDS, Mapping, Path, _active_spec, _download_repair_lanes, data_issue, execution_root, issue_messages, load_workflow_state, re, read_json, require_domain_etype, store, write_json
+from content.execution.support import Any, DataIssue, DataIssueCode, DataIssueStage, DataIssueLane, DataRecoveryAction, ExecutionContext, MAX_REACT_REWINDS, Mapping, Path, _active_spec, _download_repair_lanes, data_issue, execution_root, issue_messages, load_execution_state, re, read_json, require_domain_etype, store, write_json
 from content.execution.target_integrity import frozen_target_names
 
 def _download_plan_unresolved_entities(ctx: ExecutionContext) -> dict[str, dict[str, list[str]]]:
@@ -31,11 +31,11 @@ def _download_plan_repair_exhausted_unresolved(
     unresolved: Mapping[str, Mapping[str, list[str]]],
 ) -> dict[str, dict[str, list[str]]]:
     """Return unresolved rows after the bounded automatic repair budget."""
-    state = load_workflow_state(ctx.execution_id)
-    react_rewinds = state.get("reactRewinds") if isinstance(state.get("reactRewinds"), Mapping) else {}
+    state = load_execution_state(ctx.execution_id)
+    react_rewinds = state.react_rewinds if isinstance(state.react_rewinds, Mapping) else {}
     download_fetch_rewinds = int((react_rewinds or {}).get("download_fetch") or 0)
     build_prepare_rewinds = int((react_rewinds or {}).get("build_prepare") or 0)
-    retry_counts = state.get("retryCounts") if isinstance(state.get("retryCounts"), Mapping) else {}
+    retry_counts = state.retry_counts if isinstance(state.retry_counts, Mapping) else {}
     download_plan_retries = int((retry_counts or {}).get("download_plan") or 0)
     repaired_once = max(
         download_fetch_rewinds,
@@ -94,20 +94,20 @@ def _build_prepare_homepage_unresolved_entities(ctx: ExecutionContext) -> dict[s
     homepage source units and decide whether the chosen primary authority
     base draft has enough usable facts. When it fails, the next download_plan
     pass must repair the homepage lane for only those entities; otherwise the
-    workflow can claim the source plan is ready and loop back into the same
+    execution can claim the source plan is ready and loop back into the same
     downstream gate.
     """
-    from content.execution.recovery.download_gate import _workflow_repair_report_issues
-    state = load_workflow_state(ctx.execution_id)
+    from content.execution.recovery.download_gate import _execution_repair_report_issues
+    state = load_execution_state(ctx.execution_id)
     records: list[DataIssue] = []
-    for raw in state.get("failedIssueRecords") or []:
+    for raw in state.failed_issue_records or []:
         if not isinstance(raw, Mapping):
             continue
         try:
             records.append(DataIssue.from_dict(raw))
         except (TypeError, ValueError):
             continue
-    records.extend(_workflow_repair_report_issues(ctx, "build_prepare"))
+    records.extend(_execution_repair_report_issues(ctx, "build_prepare"))
     relevant_codes = {
         DataIssueCode.CONTRACT_INVALID,
         DataIssueCode.SOURCE_MISSING,
@@ -139,7 +139,7 @@ def _build_prepare_homepage_unresolved_entities(ctx: ExecutionContext) -> dict[s
 
 def _homepage_source_failure_entities(ctx: ExecutionContext) -> dict[str, dict[str, list[str]]]:
     """Return typed Agent source failures that must rewind before another author attempt."""
-    from core.homepage_source_judge import (
+    from core.homepage_source_failure import (
         SOURCE_RECOVERY_FAILURE_KINDS,
         entity_page_failure_issues,
         entity_page_failure_kind,
@@ -181,11 +181,30 @@ def _homepage_source_failure_entities(ctx: ExecutionContext) -> dict[str, dict[s
         }
     return failures
 
-def _write_download_plan_availability(
+def _download_artifact_issues(ctx: ExecutionContext) -> dict[str, tuple[DataIssue, ...]]:
+    """Return the full frozen-target verdict from persisted download artifacts."""
+    from content.source.gate import gate_download
+
+    active = tuple(frozen_target_names(ctx))
+    active_set = set(active)
+    grouped: dict[str, list[DataIssue]] = {entity_id: [] for entity_id in active}
+    for issue in gate_download(ctx.execution_id, target_entities=active_set):
+        targets = (issue.ref,) if issue.ref in active_set else active
+        for entity_id in targets:
+            if issue not in grouped[entity_id]:
+                grouped[entity_id].append(issue)
+    return {
+        entity_id: tuple(issues)
+        for entity_id, issues in grouped.items()
+        if issues
+    }
+
+
+def _write_download_availability(
     ctx: ExecutionContext,
     unresolved: Mapping[str, Mapping[str, list[str]]],
     *,
-    source: str = "lane_verdict",
+    source: str = "artifact_gate",
 ) -> dict[str, Any]:
     from content.execution.agent.auto_research import _sync_auto_research_availability
     active = list(frozen_target_names(ctx))
@@ -205,6 +224,7 @@ def _write_download_plan_availability(
                 text = str(issue or "").strip()
                 if text and text not in entity_lanes[lane]:
                     entity_lanes[lane].append(text)
+    artifact_issues = _download_artifact_issues(ctx)
     ineligible: list[dict[str, Any]] = []
     deterministic: dict[str, dict[str, list[str]]] = {}
     exhausted = _download_plan_repair_exhausted_unresolved(ctx, merged_unresolved)
@@ -217,9 +237,11 @@ def _write_download_plan_availability(
                     rows.append(issue)
     for entity_id in active:
         lanes = merged_unresolved.get(entity_id) or {}
-        if not lanes:
+        entity_artifact_issues = artifact_issues.get(entity_id) or ()
+        if not lanes and not entity_artifact_issues:
             continue
         issues = _flatten_download_plan_issues(lanes)
+        issues.extend(issue_messages(entity_artifact_issues))
         deterministic_lanes = deterministic.get(entity_id) or {}
         blocker_recovery = (
             DataRecoveryAction.STOP
@@ -240,19 +262,34 @@ def _write_download_plan_availability(
             for issue in lane_issues
             if str(issue).strip()
         ]
+        for issue in entity_artifact_issues:
+            payload = issue.as_dict()
+            if payload not in blockers:
+                blockers.append(payload)
+        all_lanes = {
+            str(lane)
+            for lane in lanes
+        }
+        all_lanes.update(
+            issue.lane.value
+            for issue in entity_artifact_issues
+            if issue.lane is not DataIssueLane.ALL
+        )
+        recoveries = {blocker_recovery.value}
+        recoveries.update(issue.recovery.value for issue in entity_artifact_issues)
         ineligible.append(
             {
                 "entityId": entity_id,
-                "lanes": sorted(str(lane) for lane in lanes),
+                "lanes": sorted(all_lanes),
                 "issues": issues,
                 "blockers": blockers,
-                "recoveries": sorted({blocker_recovery.value}),
+                "recoveries": sorted(recoveries),
             }
         )
     ineligible_ids = {str(item.get("entityId") or "") for item in ineligible}
     ready = [entity for entity in active if entity not in ineligible_ids]
     report = {
-        "schemaVersion": "quwoquan.content.source.source_availability",
+        "schema": "quwoquan.content.source.source_availability",
         "executionId": ctx.execution_id,
         "source": source,
         "updatedAt": store.now_iso(),
@@ -261,6 +298,8 @@ def _write_download_plan_availability(
         "ineligibleTargets": ineligible,
         "ineligibleTargetCount": len(ineligible),
     }
+    if set(ready) & ineligible_ids or len(ready) + len(ineligible) != len(active):
+        raise RuntimeError("download availability must partition the frozen target set")
     write_json(
         execution_root(ctx.execution_id) / "_shared" / "source_unavailable_targets.json",
         report,

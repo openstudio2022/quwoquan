@@ -55,7 +55,7 @@ gwt_acceptance:
       tab 按云侧 connectionState 分组并只读 primaryText」：交集句严格只读 intersectionReason.primaryText，无
       primaryText 不展示，无 displayText/label 回退与端侧拼装，2026-06-16 green）'
     - '[migrated_from_recorded] PARTIAL api_integration（2026-06-16 gamma-local，已迁移 canonical run evidence：search_intersection_smoke.json
-      + backlog R-S06-S）：经网关 `POST /v1/search` 200、provider=elasticsearch、rankingVersion=search-v1、返回真实
+      + backlog R-S06-S）：经网关 `POST /search` 200、provider=elasticsearch、rankingVersion=search-v1、返回真实
       seeded location（杭州西湖）。BLOCKED：hit 上 populated connectionState/intersectionReason.primaryText
       需网关可识别 token + seed viewer 关系，匿名探测为 null。'
   GWT2:
@@ -95,7 +95,7 @@ gwt_acceptance:
       connected / unconnected / intersection_lead 命中：connected 进「已形成的连接」、其余进「发现更多交集」，connected
       区不展示交集句，端基于 connectionState 闭集一次性归类，2026-06-16 green）'
     - '[migrated_from_recorded] PENDING api_integration：gamma 真实 connectionState 闭集分组需
-      seed viewer 关系后经 `/v1/search` 返回 populated connectionState，见 backlog R-IX05
+      seed viewer 关系后经 `/search` 返回 populated connectionState，见 backlog R-IX05
       衍生待办与 R-S06-S。'
 execution:
   local_gate:

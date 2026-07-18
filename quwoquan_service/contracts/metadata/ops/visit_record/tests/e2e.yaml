@@ -1,4 +1,3 @@
-version: 1
 entity: VisitRecord
 layer: e2e
 
@@ -10,7 +9,7 @@ scenarios:
   - name: portal_onboarding_page_records_visit
     steps:
       - operator opens platform onboarding page
-      - app reports visit to /v1/ops/visits
+      - app reports visit to /ops/visits
       - product ops reads aggregated visit stats
     assertions:
       - visit_record_created

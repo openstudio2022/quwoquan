@@ -89,7 +89,7 @@ _LoginInputDecorationSpec _loginInputDecorationForState(
   bool enabled = true,
 }) {
   final border = hasError
-      ? AppColors.iosDestructive(context)
+      ? AppColors.errorBorder(context)
       : focused
       ? AppColors.loginInputFocusedBorder(context)
       : AppColors.loginInputBorder(context);
@@ -403,36 +403,6 @@ class _OtpCodeBoxesBodyState extends State<_OtpCodeBoxesBody> {
   }
 }
 
-class UnavailablePanel extends StatelessWidget {
-  const UnavailablePanel({super.key, required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      key: const ValueKey<String>('unavailable'),
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: <Widget>[
-        Icon(
-          CupertinoIcons.device_phone_portrait,
-          size: AppSpacing.forty,
-          color: AppColors.iosSecondaryLabel(context),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Text(
-          message.isEmpty ? UITextConstants.loginCarrierUnavailable : message,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: AppTypography.iosCallout,
-            color: AppColors.iosSecondaryLabel(context),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _ResolvingPanel extends StatelessWidget {
   const _ResolvingPanel();
 
@@ -647,16 +617,9 @@ class LoginAgreementRow extends StatelessWidget {
         if (showError)
           Padding(
             padding: const EdgeInsets.only(left: AppSpacing.minInteractiveSize),
-            child: Semantics(
-              liveRegion: true,
-              child: Text(
-                UITextConstants.loginAgreementRequired,
-                key: const ValueKey<String>('loginAgreementError'),
-                style: TextStyle(
-                  fontSize: AppTypography.iosCaption1,
-                  color: AppColors.iosDestructive(context),
-                ),
-              ),
+            child: AppInlineFieldError(
+              key: const ValueKey<String>('loginAgreementError'),
+              message: UITextConstants.loginAgreementRequired,
             ),
           ),
       ],

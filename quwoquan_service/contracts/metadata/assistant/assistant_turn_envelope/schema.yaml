@@ -2,7 +2,6 @@ dart_class: AssistantTurnEnvelopeWire
 library_path: assistant/generated/contracts/assistant_turn_envelope.g.dart
 output_path: assistant/generated/contracts/assistant_turn_envelope.g.dart
 contract: assistant_turn_envelope
-version: assistant_turn_envelope.m2
 kind: entity_wire_contract
 imports:
   - package:quwoquan_app/assistant/generated/contracts/runtime_failure.g.dart

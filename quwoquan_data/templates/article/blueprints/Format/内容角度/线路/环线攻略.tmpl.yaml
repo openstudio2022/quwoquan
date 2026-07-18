@@ -1,5 +1,4 @@
 templateId: 线路_环线攻略
-version: 1
 subject: { kind: topic, type: 旅行/线路, minEntityRefs: 4, subjectTagRef: Topic/旅行/行程形态/自由行 }
 vertical: travel
 category: travel

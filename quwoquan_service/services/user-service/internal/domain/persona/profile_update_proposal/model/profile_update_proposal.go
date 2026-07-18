@@ -24,6 +24,7 @@ type Status string
 const (
 	StatusPending   Status = "pending"
 	StatusConfirmed Status = "confirmed"
+	StatusApplying  Status = "applying"
 	StatusApplied   Status = "applied"
 	StatusRejected  Status = "rejected"
 	StatusExpired   Status = "expired"
@@ -89,7 +90,7 @@ func (p ProfileUpdateProposal) Validate() error {
 		return fmt.Errorf("%w: unknown proposal source %q", ErrInvalidArgument, p.Source)
 	}
 	switch p.Status {
-	case StatusPending, StatusConfirmed, StatusApplied, StatusRejected, StatusExpired:
+	case StatusPending, StatusConfirmed, StatusApplying, StatusApplied, StatusRejected, StatusExpired:
 	default:
 		return fmt.Errorf("%w: unknown proposal status %q", ErrInvalidArgument, p.Status)
 	}
@@ -107,10 +108,10 @@ func (p ProfileUpdateProposal) Validate() error {
 		if p.ReviewedBy != "" || p.TargetPersonaExpectedVersion != nil || p.ResolvedAt != nil {
 			return fmt.Errorf("%w: pending proposal cannot contain review or resolution state", ErrInvalidArgument)
 		}
-	case StatusConfirmed:
+	case StatusConfirmed, StatusApplying:
 		if strings.TrimSpace(p.ReviewedBy) == "" || p.TargetPersonaExpectedVersion == nil ||
 			*p.TargetPersonaExpectedVersion <= 0 || p.ResolvedAt != nil {
-			return fmt.Errorf("%w: confirmed proposal requires reviewer and target version without resolution", ErrInvalidArgument)
+			return fmt.Errorf("%w: confirmed or applying proposal requires reviewer and target version without resolution", ErrInvalidArgument)
 		}
 	case StatusApplied:
 		if strings.TrimSpace(p.ReviewedBy) == "" || p.TargetPersonaExpectedVersion == nil ||
@@ -145,8 +146,19 @@ func (p ProfileUpdateProposal) Confirm(
 	return next, []Event{next.event("ProfileUpdateProposalConfirmed", now)}, nil
 }
 
-func (p ProfileUpdateProposal) MarkApplied(now time.Time) (ProfileUpdateProposal, []Event, error) {
+func (p ProfileUpdateProposal) BeginApply(now time.Time) (ProfileUpdateProposal, []Event, error) {
 	if p.Status != StatusConfirmed || p.TargetPersonaExpectedVersion == nil {
+		return ProfileUpdateProposal{}, nil, ErrInvalidTransition
+	}
+	next := p
+	next.Status = StatusApplying
+	next.Version++
+	next.UpdatedAt = now.UTC()
+	return next, []Event{next.event("ProfileUpdateProposalApplyStarted", now)}, next.Validate()
+}
+
+func (p ProfileUpdateProposal) MarkApplied(now time.Time) (ProfileUpdateProposal, []Event, error) {
+	if p.Status != StatusApplying || p.TargetPersonaExpectedVersion == nil {
 		return ProfileUpdateProposal{}, nil, ErrInvalidTransition
 	}
 	next := p
@@ -156,6 +168,19 @@ func (p ProfileUpdateProposal) MarkApplied(now time.Time) (ProfileUpdateProposal
 	resolvedAt := now.UTC()
 	next.ResolvedAt = &resolvedAt
 	return next, []Event{next.event("ProfileUpdateProposalApplied", now)}, next.Validate()
+}
+
+func (p ProfileUpdateProposal) ExpireApply(now time.Time) (ProfileUpdateProposal, []Event, error) {
+	if p.Status != StatusApplying {
+		return ProfileUpdateProposal{}, nil, ErrInvalidTransition
+	}
+	next := p
+	next.Status = StatusExpired
+	next.Version++
+	next.UpdatedAt = now.UTC()
+	resolvedAt := now.UTC()
+	next.ResolvedAt = &resolvedAt
+	return next, []Event{next.event("ProfileUpdateProposalExpired", now)}, next.Validate()
 }
 
 func (p ProfileUpdateProposal) Reject(reviewerPersonaID string, now time.Time) (ProfileUpdateProposal, []Event, error) {

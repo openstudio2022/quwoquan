@@ -68,7 +68,7 @@ void main() {
   });
 
   group('ops_event_ingestion_end_to_end', () {
-    test('POST /v1/ops/events 仅接受已验证主体并返回写入回执', () async {
+    test('POST /ops/events 仅接受已验证主体并返回写入回执', () async {
       final pageName = 'contract_page_${DateTime.now().millisecondsSinceEpoch}';
       final eventId = 'evt_${DateTime.now().microsecondsSinceEpoch}';
       final body = <String, dynamic>{
@@ -95,7 +95,7 @@ void main() {
 
       final postResp = await _client
           .post(
-            Uri.parse('$_productOpsBase/v1/ops/events'),
+            Uri.parse('$_productOpsBase/ops/events'),
             headers: _headers('ops.contract.events.report'),
             body: jsonEncode(body),
           )
@@ -107,7 +107,7 @@ void main() {
   });
 
   group('ops_visit_record_end_to_end', () {
-    test('POST /v1/ops/visits 从已验证主体派生访问 actor', () async {
+    test('POST /ops/visits 从已验证主体派生访问 actor', () async {
       final targetKey =
           'page_contract_${DateTime.now().millisecondsSinceEpoch}';
       final payload = <String, dynamic>{
@@ -119,7 +119,7 @@ void main() {
 
       final postResp = await _client
           .post(
-            Uri.parse('$_productOpsBase/v1/ops/visits'),
+            Uri.parse('$_productOpsBase/ops/visits'),
             headers: _headers('ops.contract.visit.record'),
             body: jsonEncode(payload),
           )

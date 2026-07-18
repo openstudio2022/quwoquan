@@ -1,4 +1,3 @@
-version: 1
 
 service:
   name: integration-service
@@ -12,7 +11,7 @@ service:
   description: |
     PushDelivery 是 ExternalInteraction 的类型化外部引用，不拥有 transport operation。
     提交与回调统一由 integration/external_interaction/service.yaml 声明，禁止恢复
-    /v1/integrations/push-deliveries 兼容路由。
+    /integrations/push-deliveries 兼容路由。
 
 api_routes: []
 

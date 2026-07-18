@@ -1,9 +1,9 @@
 part of 'local_chat_search_store.dart';
 
 extension LocalChatSearchStoreQueries on LocalChatSearchStore {
-  Future<void> upsertConversations({
+  Future<void> upsertConversationRecords({
     required LocalSearchNamespace namespace,
-    required List<LocalChatSearchConversationWire> conversations,
+    required List<ConversationCacheRecord> conversations,
   }) async {
     if (conversations.isEmpty) {
       return;
@@ -13,57 +13,42 @@ extension LocalChatSearchStoreQueries on LocalChatSearchStore {
     final now = DateTime.now().toIso8601String();
     _upsertNamespace(batch, namespace, updatedAt: now);
     for (final conversation in conversations) {
-      final conversationId = _conversationId(
-        Map<String, Object?>.from(conversation),
-      );
+      final conversationId = conversation.id.trim();
       if (conversationId.isEmpty) {
-        continue;
+        throw ArgumentError.value(
+          conversation.id,
+          'conversation.id',
+          'conversation id must not be empty',
+        );
       }
-      final type = _string(conversation['type']).isNotEmpty
-          ? _string(conversation['type'])
+      final type = conversation.type.trim().isNotEmpty
+          ? conversation.type.trim()
           : 'direct';
-      final title = _firstNonEmpty(<Object?>[
-        conversation['title'],
-        conversation['conversationTitle'],
-        conversationId,
-      ]);
-      final avatarUrl = _string(conversation['avatarUrl']);
-      final lastMessagePreview = _firstNonEmpty(<Object?>[
-        conversation['lastMessagePreview'],
-        conversation['highlightText'],
-      ]);
-      final lastMessageAt = _firstNonEmpty(<Object?>[
-        conversation['lastMessageAt'],
-        conversation['lastMessageTime'],
-      ]);
-      final circleId = _string(conversation['circleId']);
-      final circleGroupId = _string(conversation['circleGroupId']);
-      final settingsUpdatedAt = _firstNonEmpty(<Object?>[
-        conversation['settingsUpdatedAt'],
-        conversation['updatedAt'],
-        now,
-      ]);
-      final payload = <String, dynamic>{
-        ...conversation,
-        'conversationId': conversationId,
-        'id': conversationId,
-        '_id': conversationId,
-        'title': title,
-        'type': type,
-        'avatarUrl': avatarUrl,
-        'lastMessagePreview': lastMessagePreview,
-        'lastMessageAt': lastMessageAt,
-        'lastMessageTime': lastMessageAt,
-        'settingsUpdatedAt': settingsUpdatedAt,
-        if (circleId.isNotEmpty) 'circleId': circleId,
-        if (circleGroupId.isNotEmpty) 'circleGroupId': circleGroupId,
-      };
+      final titleRaw = conversation.title.trim();
+      final title = titleRaw.isNotEmpty ? titleRaw : conversationId;
+      final avatarUrl = conversation.avatarUrl.trim();
+      final lastMessagePreview = conversation.lastMessagePreview.trim();
+      final lastMessageAt = conversation.lastMessageAt.trim();
+      final circleId = conversation.circleId.trim();
+      final circleGroupId = conversation.circleGroupId?.trim() ?? '';
+      final settingsUpdatedAtRaw = conversation.settingsTimestamp.trim();
+      final settingsUpdatedAt =
+          settingsUpdatedAtRaw.isNotEmpty ? settingsUpdatedAtRaw : now;
+      final payload = conversation
+          .copyWith(
+            title: title,
+            type: type,
+            settingsUpdatedAt: settingsUpdatedAt,
+          )
+          .toCacheMap();
       final searchableText = _searchableText(<Object?>[
         title,
         lastMessagePreview,
         circleId,
         circleGroupId,
       ]);
+      final updatedAtRaw = conversation.updatedAt.trim();
+      final updatedAt = updatedAtRaw.isNotEmpty ? updatedAtRaw : now;
       batch.insert('chat_conversations', <String, Object?>{
         'namespace_key': namespace.key,
         'conversation_id': conversationId,
@@ -73,17 +58,13 @@ extension LocalChatSearchStoreQueries on LocalChatSearchStore {
         'avatar_composite_urls_json': jsonEncode(const <String>[]),
         'last_message_preview': lastMessagePreview,
         'last_message_at': lastMessageAt,
-        'member_count': (conversation['memberCount'] as num?)?.toInt() ?? 0,
+        'member_count': conversation.memberCount,
         'circle_id': circleId,
         'circle_group_id': circleGroupId,
         'settings_updated_at': settingsUpdatedAt,
         'searchable_text': searchableText,
         'payload_json': jsonEncode(payload),
-        'updated_at': _firstNonEmpty(<Object?>[
-          conversation['updatedAt'],
-          settingsUpdatedAt,
-          now,
-        ]),
+        'updated_at': updatedAt,
       }, conflictAlgorithm: ConflictAlgorithm.replace);
       batch.delete(
         'chat_conversations_fts',

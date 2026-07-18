@@ -1,4 +1,3 @@
-version: 1
 read_model: AssistantStreamEvent
 description: |
   Assistant Run 的流式事件是由独立共享 wire contract 承载的短生命周期读模型。

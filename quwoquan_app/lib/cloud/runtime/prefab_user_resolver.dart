@@ -1,26 +1,26 @@
 import 'package:quwoquan_app/cloud/runtime/contract_fixture_runtime_loader.dart';
 import 'package:quwoquan_app/cloud/user/generated/prefab_user_metadata.g.dart';
 
-/// 创作者规模 fixture 身份解析器。
+/// 共享场景 fixture 身份解析器。
 class PrefabUserResolver {
   PrefabUserResolver._();
 
-  static Map<String, dynamic>? _creatorSliceCache;
+  static Map<String, dynamic>? _userPoolCache;
 
   static String resolveUserId(String userId) {
     final normalized = userId;
-    final creator = _creatorIndex();
-    if (creator.containsKey(normalized)) {
-      return creator[normalized]!['userId'] as String? ?? normalized;
+    final users = _userIndex();
+    if (users.containsKey(normalized)) {
+      return users[normalized]!['userId'] as String? ?? normalized;
     }
     return normalized;
   }
 
   static String resolveSubAccountId(String subAccountId) {
     final normalized = subAccountId;
-    final creator = _creatorIndex();
-    if (creator.containsKey(normalized)) {
-      return creator[normalized]!['subAccountId'] as String? ?? normalized;
+    final users = _userIndex();
+    if (users.containsKey(normalized)) {
+      return users[normalized]!['subAccountId'] as String? ?? normalized;
     }
     return subAccountId;
   }
@@ -33,17 +33,14 @@ class PrefabUserResolver {
     return PrefabUserMetadata.currentUserId;
   }
 
-  static Map<String, dynamic>? creatorProfileWireFor(String id) {
+  static Map<String, dynamic>? profileWireFor(String id) {
     final normalized = id;
-    final entry = _creatorIndex()[normalized] ?? _creatorIndex()[id];
+    final entry = _userIndex()[normalized] ?? _userIndex()[id];
     if (entry == null) {
       return null;
     }
     final userId = entry['userId']?.toString() ?? normalized;
-    final subAccountId =
-        entry['subAccountId']?.toString() ??
-        ((entry['subAccountRefs'] as List<dynamic>?)?.first?.toString()) ??
-        userId;
+    final subAccountId = _subAccountId(entry) ?? userId;
     final avatarKey = _mediaObjectKey(entry, 'avatar');
     final backgroundKey = _mediaObjectKey(entry, 'cover');
     return <String, dynamic>{
@@ -85,19 +82,32 @@ class PrefabUserResolver {
     return isCurrentUserVariantId(subAccountId);
   }
 
-  static Map<String, Map<String, dynamic>> _creatorIndex() {
-    final users = (_creatorSlice()['users'] as List<dynamic>? ?? const []);
+  static Map<String, Map<String, dynamic>> _userIndex() {
+    final users = (_userPool()['users'] as List<dynamic>? ?? const []);
     final index = <String, Map<String, dynamic>>{};
     for (final raw in users) {
       if (raw is! Map<String, dynamic>) continue;
       final userId = raw['userId']?.toString();
-      final subAccountId =
-          raw['subAccountId']?.toString() ??
-          ((raw['subAccountRefs'] as List<dynamic>?)?.first?.toString());
+      final subAccountId = _subAccountId(raw);
       if (userId != null) index[userId] = raw;
       if (subAccountId != null) index[subAccountId] = raw;
     }
     return index;
+  }
+
+  static String? _subAccountId(Map<String, dynamic> entry) {
+    final explicitId = entry['subAccountId']?.toString();
+    if (explicitId != null && explicitId.isNotEmpty) {
+      return explicitId;
+    }
+    final refs = entry['subAccountRefs'];
+    if (refs is List && refs.isNotEmpty) {
+      final firstRef = refs.first.toString();
+      if (firstRef.isNotEmpty) {
+        return firstRef;
+      }
+    }
+    return null;
   }
 
   static String _mediaObjectKey(Map<String, dynamic> entry, String kind) {
@@ -119,9 +129,9 @@ class PrefabUserResolver {
     return '';
   }
 
-  static Map<String, dynamic> _creatorSlice() {
-    return _creatorSliceCache ??= _readRequiredFixtureJson(
-      '_shared/test_fixtures/user_pool.creator_pool.travel_photo_1k_v1.json',
+  static Map<String, dynamic> _userPool() {
+    return _userPoolCache ??= _readRequiredFixtureJson(
+      '_shared/test_fixtures/user_pool.json',
     );
   }
 

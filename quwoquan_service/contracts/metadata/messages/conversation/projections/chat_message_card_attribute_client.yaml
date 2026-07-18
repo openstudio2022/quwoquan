@@ -1,4 +1,3 @@
-version: 1
 read_model: ChatMessageCardAttributeClient
 description: MessageCard 内的强类型属性投影；只随 MessageCard 嵌入返回。
 

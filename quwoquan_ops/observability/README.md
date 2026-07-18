@@ -17,7 +17,7 @@
 `.qwq_output/env/<env>/runs/data-release/<releaseId>/<runId>/links.json` 关联。
 
 `manifest.json` 持有 env、runId、releaseId、dataReleaseId、gitSha 和
-contractVersion。日志行不重复这些上下文。
+schema。日志行不重复这些上下文。
 
 ## 日志类型
 

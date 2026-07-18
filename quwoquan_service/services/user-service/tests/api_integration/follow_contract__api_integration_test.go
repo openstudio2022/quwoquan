@@ -24,7 +24,7 @@ func TestFollow_Success(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/sub-accounts/ps_followee_1/follow",
+		"/user/sub-accounts/ps_followee_1/follow",
 		"",
 		authHeadersForPersona("follower_1", "ps_follower_1"),
 	)
@@ -78,14 +78,14 @@ func TestFollow_Idempotent(t *testing.T) {
 	doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/sub-accounts/ps_followee_2/follow",
+		"/user/sub-accounts/ps_followee_2/follow",
 		"",
 		authHeadersForPersona("follower_2", "ps_follower_2"),
 	)
 	rec := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/sub-accounts/ps_followee_2/follow",
+		"/user/sub-accounts/ps_followee_2/follow",
 		"",
 		authHeadersForPersona("follower_2", "ps_follower_2"),
 	)
@@ -124,7 +124,7 @@ func TestFollow_ReconcilesDriftedCounters(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/sub-accounts/ps_followee_reconcile/follow",
+		"/user/sub-accounts/ps_followee_reconcile/follow",
 		"",
 		authHeadersForPersona("follower_reconcile", "ps_follower_reconcile"),
 	)
@@ -174,7 +174,7 @@ func TestUnfollow_Success(t *testing.T) {
 	doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/sub-accounts/ps_followee_3/follow",
+		"/user/sub-accounts/ps_followee_3/follow",
 		"",
 		authHeadersForPersona("follower_3", "ps_follower_3"),
 	)
@@ -186,7 +186,7 @@ func TestUnfollow_Success(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodDelete,
-		"/v1/user/sub-accounts/ps_followee_3/follow",
+		"/user/sub-accounts/ps_followee_3/follow",
 		"",
 		authHeadersForPersona("follower_3", "ps_follower_3"),
 	)
@@ -225,7 +225,7 @@ func TestUnfollowWithoutExistingRelationshipReturnsIdempotentReceipt(t *testing.
 	rec := doRequest(
 		t,
 		http.MethodDelete,
-		"/v1/user/sub-accounts/ps_unfollow_missing_target/follow",
+		"/user/sub-accounts/ps_unfollow_missing_target/follow",
 		`{"clientRequestId":"unfollow-missing-001"}`,
 		authHeadersForPersona("unfollow_missing_owner", "ps_unfollow_missing_owner"),
 	)
@@ -249,14 +249,14 @@ func TestGetRelationship_Mutual(t *testing.T) {
 	doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/sub-accounts/ps_user_b/follow",
+		"/user/sub-accounts/ps_user_b/follow",
 		"",
 		authHeadersForPersona("user_a", "ps_user_a"),
 	)
 	doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/sub-accounts/ps_user_a/follow",
+		"/user/sub-accounts/ps_user_a/follow",
 		"",
 		authHeadersForPersona("user_b", "ps_user_b"),
 	)
@@ -264,7 +264,7 @@ func TestGetRelationship_Mutual(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodGet,
-		"/v1/user/sub-accounts/ps_user_b/relationship",
+		"/user/sub-accounts/ps_user_b/relationship",
 		"",
 		authHeadersForPersona("user_a", "ps_user_a"),
 	)
@@ -290,7 +290,7 @@ func TestListFollowing_Pagination(t *testing.T) {
 		doRequest(
 			t,
 			http.MethodPost,
-			"/v1/user/sub-accounts/"+subAccountID+"/follow",
+			"/user/sub-accounts/"+subAccountID+"/follow",
 			"",
 			authHeadersForPersona("paginator", "ps_paginator"),
 		)
@@ -299,7 +299,7 @@ func TestListFollowing_Pagination(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodGet,
-		"/v1/user/sub-accounts/ps_paginator/following?limit=3",
+		"/user/sub-accounts/ps_paginator/following?limit=3",
 		"",
 		authHeadersForPersona("paginator", "ps_paginator"),
 	)
@@ -333,7 +333,7 @@ func TestListFollowing_PaginationFillsVisibleItemsAfterFiltering(t *testing.T) {
 		doRequest(
 			t,
 			http.MethodPost,
-			"/v1/user/sub-accounts/"+subjectID+"/follow",
+			"/user/sub-accounts/"+subjectID+"/follow",
 			"",
 			authHeadersForPersona("paginator_filtered", "ps_paginator_filtered"),
 		)
@@ -348,7 +348,7 @@ func TestListFollowing_PaginationFillsVisibleItemsAfterFiltering(t *testing.T) {
 	blockRec := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/sub-accounts/ps_paginator_filtered/block",
+		"/user/sub-accounts/ps_paginator_filtered/block",
 		"",
 		authHeadersForPersona("filtered_target_c", "ps_filtered_target_c"),
 	)
@@ -359,7 +359,7 @@ func TestListFollowing_PaginationFillsVisibleItemsAfterFiltering(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodGet,
-		"/v1/user/sub-accounts/ps_paginator_filtered/following?limit=3",
+		"/user/sub-accounts/ps_paginator_filtered/following?limit=3",
 		"",
 		authHeadersForPersona("paginator_filtered", "ps_paginator_filtered"),
 	)
@@ -421,14 +421,14 @@ func TestListFollowers_DoesNotExposeOwnerMapping(t *testing.T) {
 	doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/sub-accounts/ps_target_owner_graph/follow",
+		"/user/sub-accounts/ps_target_owner_graph/follow",
 		"",
 		authHeadersForPersona("shared_owner_graph", "ps_shared_owner_graph_1"),
 	)
 	doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/sub-accounts/ps_target_owner_graph/follow",
+		"/user/sub-accounts/ps_target_owner_graph/follow",
 		"",
 		authHeadersForPersona("shared_owner_graph", "ps_shared_owner_graph_2"),
 	)
@@ -436,7 +436,7 @@ func TestListFollowers_DoesNotExposeOwnerMapping(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodGet,
-		"/v1/user/sub-accounts/ps_target_owner_graph/followers?limit=10",
+		"/user/sub-accounts/ps_target_owner_graph/followers?limit=10",
 		"",
 		authHeadersForPersona("viewer_owner_graph", "ps_viewer_owner_graph"),
 	)
@@ -481,7 +481,7 @@ func TestFollow_BlockGateRejectsBothDirections(t *testing.T) {
 	blockRec := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/sub-accounts/ps_block_owner_b/block",
+		"/user/sub-accounts/ps_block_owner_b/block",
 		"",
 		authHeadersForPersona("block_owner_a", "ps_block_owner_a"),
 	)
@@ -492,7 +492,7 @@ func TestFollow_BlockGateRejectsBothDirections(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/sub-accounts/ps_block_owner_b/follow",
+		"/user/sub-accounts/ps_block_owner_b/follow",
 		"",
 		authHeadersForPersona("block_owner_a", "ps_block_owner_a"),
 	)
@@ -502,7 +502,7 @@ func TestFollow_BlockGateRejectsBothDirections(t *testing.T) {
 	rec = doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/sub-accounts/ps_block_owner_a/follow",
+		"/user/sub-accounts/ps_block_owner_a/follow",
 		"",
 		authHeadersForPersona("block_owner_b", "ps_block_owner_b"),
 	)

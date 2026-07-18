@@ -1,8 +1,7 @@
-version: 1
 read_model: ContentMediaInitUploadResponse
 
 description: |
-  POST /v1/content/media/uploads:init 响应 wire（端侧 Mock/Remote 与 MediaUploadManager 对齐）。
+  POST /content/media/uploads:init 响应 wire（端侧 Mock/Remote 与 MediaUploadManager 对齐）。
 
 source_entities:
   - MediaAsset
@@ -19,23 +18,17 @@ client_projection:
       dart_type: String
       nullable: false
       source: sessionId
-      aliases: [sessionId]
       default: "''"
 
     - name: mediaId
       dart_type: String
       nullable: true
       source: mediaId
-      aliases: [mediaId, assetId, id]
-
     - name: uploadUrl
       dart_type: String
       nullable: true
       source: uploadUrl
-      aliases: [uploadUrl]
-
     - name: presignUrl
       dart_type: String
       nullable: true
       source: presignUrl
-      aliases: [presignUrl, uploadUrl]

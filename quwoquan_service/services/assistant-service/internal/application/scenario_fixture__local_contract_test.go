@@ -12,8 +12,8 @@ func TestAssistantScenarioFixtureContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load assistant scenario fixture: %v", err)
 	}
-	if strings.TrimSpace(pack.SchemaVersion) == "" {
-		t.Fatal("assistant scenario fixture schemaVersion is empty")
+	if strings.TrimSpace(pack.Schema) == "" {
+		t.Fatal("assistant scenario fixture schema is empty")
 	}
 	if len(pack.SeedSets) == 0 || len(pack.Scenarios) == 0 {
 		t.Fatal("assistant scenario fixture must declare seed sets and scenarios")
@@ -23,7 +23,7 @@ func TestAssistantScenarioFixtureContract(t *testing.T) {
 const assistantScenarioFixtureRelativePath = "assistant/test_fixtures/scenarios/assistant_scenarios.json"
 
 type AssistantScenarioPack struct {
-	SchemaVersion          string                      `json:"schemaVersion"`
+	Schema          string                      `json:"schema"`
 	RepositoryExpectations map[string]string           `json:"repositoryExpectations"`
 	SeedSets               map[string]AssistantSeedSet `json:"seedSets"`
 	Scenarios              []AssistantScenarioFixture  `json:"scenarios"`

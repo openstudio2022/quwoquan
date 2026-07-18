@@ -1,5 +1,5 @@
 // Package http adapts the search-service use cases to the canonical HTTP
-// contract: POST /v1/search and POST /v1/search/feedback.
+// contract: POST /search and POST /search/feedback.
 package http
 
 import (
@@ -45,8 +45,8 @@ func NewHandler(
 // Routes registers the canonical search routes (method-scoped patterns).
 func (h *Handler) Routes() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /v1/search", h.handleSearch)
-	mux.HandleFunc("POST /v1/search/feedback", h.handleFeedback)
+	mux.HandleFunc("POST /search", h.handleSearch)
+	mux.HandleFunc("POST /search/feedback", h.handleFeedback)
 	return mux
 }
 

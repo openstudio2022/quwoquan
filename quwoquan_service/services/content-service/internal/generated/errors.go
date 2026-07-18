@@ -38,6 +38,11 @@ var (
 	ErrInvalidMomentPayload                = errors.New("CONTENT.USER.invalid_moment_payload")
 	ErrMediaNotFound                       = errors.New("CONTENT.USER.media_not_found")
 	ErrMediaNotReady                       = errors.New("CONTENT.USER.media_not_ready")
+	ErrMediaPlaybackNetworkUnavailable     = errors.New("CONTENT.SYSTEM.media_playback_network_unavailable")
+	ErrMediaPlaybackServiceBusy            = errors.New("CONTENT.SYSTEM.media_playback_service_busy")
+	ErrMediaPlaybackTemporarilyUnavailable = errors.New("CONTENT.SYSTEM.media_playback_temporarily_unavailable")
+	ErrMediaPlaybackUnavailable            = errors.New("CONTENT.USER.media_playback_unavailable")
+	ErrMediaPlaybackUnsupported            = errors.New("CONTENT.SYSTEM.media_playback_unsupported")
 	ErrModerationApprovalRequired          = errors.New("CONTENT.USER.moderation_approval_required")
 	ErrModerationDecisionStale             = errors.New("CONTENT.USER.moderation_decision_stale")
 	ErrOriginalAccessDenied                = errors.New("CONTENT.USER.original_access_denied")
@@ -215,6 +220,36 @@ func AppErrorFromMediaNotFound(debugMessage string) *rterr.AppError {
 func AppErrorFromMediaNotReady(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.media_not_ready")
 	return rterr.NewAppError(code, "媒体文件正在处理中，请稍后发布", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("retry", 3)
+}
+
+// AppErrorFromMediaPlaybackNetworkUnavailable returns *AppError for CONTENT.SYSTEM.media_playback_network_unavailable (user_message from errors.yaml).
+func AppErrorFromMediaPlaybackNetworkUnavailable(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("CONTENT.SYSTEM.media_playback_network_unavailable")
+	return rterr.NewAppError(code, "网络不太稳定", debugMessage).WithMetadata("media_playback_network_unavailable", 503).WithRecovery("retry", 0)
+}
+
+// AppErrorFromMediaPlaybackServiceBusy returns *AppError for CONTENT.SYSTEM.media_playback_service_busy (user_message from errors.yaml).
+func AppErrorFromMediaPlaybackServiceBusy(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("CONTENT.SYSTEM.media_playback_service_busy")
+	return rterr.NewAppError(code, "暂时无法播放", debugMessage).WithMetadata("media_playback_service_busy", 503).WithRecovery("retry", 0)
+}
+
+// AppErrorFromMediaPlaybackTemporarilyUnavailable returns *AppError for CONTENT.SYSTEM.media_playback_temporarily_unavailable (user_message from errors.yaml).
+func AppErrorFromMediaPlaybackTemporarilyUnavailable(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("CONTENT.SYSTEM.media_playback_temporarily_unavailable")
+	return rterr.NewAppError(code, "暂时无法播放", debugMessage).WithMetadata("media_playback_temporarily_unavailable", 503).WithRecovery("retry", 0)
+}
+
+// AppErrorFromMediaPlaybackUnavailable returns *AppError for CONTENT.USER.media_playback_unavailable (user_message from errors.yaml).
+func AppErrorFromMediaPlaybackUnavailable(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("CONTENT.USER.media_playback_unavailable")
+	return rterr.NewAppError(code, "这条视频暂时无法观看，可以先看看别的内容", debugMessage).WithMetadata("media_playback_unavailable", 404).WithRecovery("surface", 0)
+}
+
+// AppErrorFromMediaPlaybackUnsupported returns *AppError for CONTENT.SYSTEM.media_playback_unsupported (user_message from errors.yaml).
+func AppErrorFromMediaPlaybackUnsupported(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("CONTENT.SYSTEM.media_playback_unsupported")
+	return rterr.NewAppError(code, "这条视频暂不支持播放，可以先看看别的内容", debugMessage).WithMetadata("media_playback_unsupported", 422).WithRecovery("surface", 0)
 }
 
 // AppErrorFromModerationApprovalRequired returns *AppError for CONTENT.USER.moderation_approval_required (user_message from errors.yaml).

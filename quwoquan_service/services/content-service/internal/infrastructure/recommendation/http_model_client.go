@@ -78,7 +78,7 @@ func NewHTTPModelServiceClient(
 	}, nil
 }
 
-// Predict sends the request to rec-model-service /v1/score and returns the response.
+// Predict sends the request to rec-model-service /score and returns the response.
 func (c *HTTPModelServiceClient) Predict(ctx context.Context, req *rtrec.ModelPredictRequest) (*rtrec.ModelPredictResponse, error) {
 	if !c.cb.Allow() {
 		return nil, fmt.Errorf("model client: circuit breaker open")

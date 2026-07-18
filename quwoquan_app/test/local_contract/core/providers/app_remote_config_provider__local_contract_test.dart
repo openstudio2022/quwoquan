@@ -33,7 +33,7 @@ void main() {
       overrides: [
         ...mockContentFacetOverrides(
           _ConfigRepo({
-            'schemaVersion': 'app_remote_config.v1',
+            'schema': 'app_remote_config',
             'packageVersion': 'cfg_test_1',
             'configHash': 'sha256:test1',
             'maxAgeSec': 60,
@@ -72,7 +72,7 @@ void main() {
         overrides: [
           ...mockContentFacetOverrides(
             _ConfigRepo({
-              'schemaVersion': 'app_remote_config.v1',
+              'schema': 'app_remote_config',
               'packageVersion': 'cfg_kill_switch',
               'configHash': 'sha256:kill',
               'activationPolicy': {'default': 'immediate'},

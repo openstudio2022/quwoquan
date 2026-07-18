@@ -18,7 +18,7 @@ import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
 
 /// user_001（chat mock 当前用户 id）档案昵称。
 /// 真相源：`resolveMockUserProfileWire('user_001')`。user_001 不在 contract seed
-/// 与 user_pool.creator_pool（当前体验槽位是 fixture_sub_current / 小趣体验号），
+/// 与共享 user_pool（当前体验槽位是 fixture_persona_daily），
 /// 解析按顺序回退到 `_defaultProfile('user_001')` 兜底，displayName == 趣我圈用户。
 const String _profileDisplayName = '趣我圈用户';
 

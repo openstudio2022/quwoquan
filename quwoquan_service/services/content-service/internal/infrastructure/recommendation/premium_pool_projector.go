@@ -72,7 +72,6 @@ func (p *PremiumPoolProjector) Project(ctx context.Context, event ProjectorEvent
 		return p.writer.UpsertPremiumProjection(ctx, fields)
 	case "PostDeleted", "PostTakedown":
 		contentID := firstNonEmpty(
-			strVal(event.Payload, "_id"),
 			strVal(event.Payload, "postId"),
 			strVal(event.Payload, "contentId"),
 			event.AggregateID,

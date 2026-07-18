@@ -6,7 +6,7 @@ import 'package:quwoquan_app/cloud/rtc/models/rtc_repository_result_dtos.dart';
 /// 典型会话列表（强类型；需要 Map 时可用 [CallSessionDto.toMap]）。
 final List<CallSessionDto> kMockCallSessions = [
   CallSessionDto.fromMap(<String, dynamic>{
-    '_id': 'call_001',
+    'callId': 'call_001',
     'callType': 'video',
     'status': 'in_call',
     'initiatorId': 'user_001',
@@ -48,7 +48,7 @@ final List<CallSessionDto> kMockCallSessions = [
     'startedAt': '2026-03-07T10:00:00Z',
   }),
   CallSessionDto.fromMap(<String, dynamic>{
-    '_id': 'call_002',
+    'callId': 'call_002',
     'callType': 'audio',
     'status': 'ended',
     'initiatorId': 'user_002',
@@ -86,7 +86,7 @@ final List<CallSessionDto> kMockCallSessions = [
     'endedAt': '2026-03-07T08:15:30Z',
   }),
   CallSessionDto.fromMap(<String, dynamic>{
-    '_id': 'call_003',
+    'callId': 'call_003',
     'callType': 'video',
     'status': 'ringing',
     'initiatorId': 'user_001',
@@ -116,13 +116,12 @@ final RtcJoinCredentialsDto
 kMockRtcJoinCredentials = RtcJoinCredentialsDto.fromMap(<String, dynamic>{
   'token':
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzAwMSIsInJvb20iOiJyb29tX2FiYzEyMyJ9.mock_signature',
-  'roomId': 'room_abc123',
-  'callId': 'call_001',
+  'session': <String, dynamic>{'callId': 'call_001', 'roomId': 'room_abc123'},
 });
 
 final List<CallSessionDto> kMockCallHistory = [
   CallSessionDto.fromMap(<String, dynamic>{
-    '_id': 'call_002',
+    'callId': 'call_002',
     'callType': 'audio',
     'status': 'ended',
     'initiatorId': 'user_002',

@@ -30,13 +30,13 @@ class ActivePersonaContextWireDto {
 
   factory ActivePersonaContextWireDto.fromMap(Map<String, dynamic> m) {
     return ActivePersonaContextWireDto(
-      ownerUserId: _firstNonEmptyWireString(m, <String>['ownerUserId', 'userId']) ?? '',
+      ownerUserId: m['ownerUserId']?.toString() ?? '',
       subAccountId: m['subAccountId']?.toString() ?? '',
       subjectType: m['subjectType']?.toString() ?? '',
-      displayName: m['displayName']?.toString() ?? m['nickname']?.toString() ?? '',
-      avatarUrl: m['avatarUrl']?.toString() ?? m['avatar']?.toString() ?? m['avatarUrlSnapshot']?.toString() ?? '',
+      displayName: m['displayName']?.toString() ?? '',
+      avatarUrl: m['avatarUrl']?.toString() ?? '',
       avatarVersion: (m['avatarVersion'] as num?)?.toInt() ?? 0,
-      personaContextVersion: m['personaContextVersion']?.toString() ?? m['contextVersion']?.toString() ?? '',
+      personaContextVersion: m['personaContextVersion']?.toString() ?? '',
       personaSnapshotVersion: (m['personaSnapshotVersion'] as num?)?.toInt() ?? 1,
       sourceSurfaceId: m['sourceSurfaceId']?.toString() ?? '',
       explicitOverride: m['explicitOverride'] as bool? ?? false,
@@ -87,12 +87,4 @@ class ActivePersonaContextWireDto {
       isPrimary: isPrimary ?? this.isPrimary,
     );
   }
-}
-
-String? _firstNonEmptyWireString(Map<String, dynamic> m, List<String> keys) {
-  for (final k in keys) {
-    final v = m[k]?.toString();
-    if (v != null && v.isNotEmpty) return v;
-  }
-  return null;
 }

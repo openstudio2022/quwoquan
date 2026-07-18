@@ -23,10 +23,10 @@ RUNTIME_CONFIG_ROOT = ROOT / "runtime-config"
 CHAT_MEDIA_ROOT = Path(
     os.getenv("CHAT_GROUP_AVATAR_LOCAL_MEDIA_ROOT", "/tmp/chat-media")
 ).resolve()
-USER_CIRCLE_PATH = re.compile(r"^/v1/users/[^/]+/circles(?:/|$)")
+USER_CIRCLE_PATH = re.compile(r"^/users/[^/]+/circles(?:/|$)")
 # search domain 在 process_domain_mapping 中始终是独立部署进程（search-service），
 # seed-box 不在本进程内运行 search domain，只按 service.yaml 的 proxy_search 能力把
-# /v1/search* 透传到外部 search-service 上游。上游地址可经环境变量覆盖以适配不同拓扑。
+# /search* 透传到外部 search-service 上游。上游地址可经环境变量覆盖以适配不同拓扑。
 SEARCH_UPSTREAM_HOST = (
     os.getenv("SEED_BOX_SEARCH_UPSTREAM_HOST", "search-service").strip()
     or "search-service"
@@ -502,25 +502,25 @@ class ServiceRegistry:
     def service_for_path(self, path: str) -> str | None:
         if path in {"/healthz", "/livez", "/startupz"}:
             return None
-        if path == "/v1/config/app" or path.startswith("/v1/content"):
+        if path == "/config/app" or path.startswith("/content"):
             return "content-service"
-        if path.startswith("/v1/chat"):
+        if path.startswith("/chat"):
             return "chat-service"
-        if path.startswith("/v1/auth") or path.startswith("/v1/user"):
+        if path.startswith("/auth") or path.startswith("/user"):
             return "user-service"
-        if path.startswith("/v1/integration"):
+        if path.startswith("/integration"):
             return "integration-service"
-        if path.startswith("/v1/homepages"):
+        if path.startswith("/homepages"):
             return "entity-service"
-        if path.startswith("/v1/tag"):
+        if path.startswith("/tag"):
             return "tag-service"
-        if path.startswith("/v1/assistant"):
+        if path.startswith("/assistant"):
             return "assistant-service"
-        if path.startswith("/v1/notifications") or path.startswith("/v1/app-messages"):
+        if path.startswith("/notifications") or path.startswith("/app-messages"):
             return "notification-service"
-        if path.startswith("/v1/circles"):
+        if path.startswith("/circles"):
             return "circle-service"
-        if path.startswith("/v1/users/"):
+        if path.startswith("/users/"):
             if USER_CIRCLE_PATH.match(path):
                 return "circle-service"
             return "user-service"
@@ -570,7 +570,7 @@ class SeedBoxHandler(BaseHTTPRequestHandler):
         if parsed.path in {"/healthz", "/livez", "/startupz"}:
             self._write_health()
             return
-        if parsed.path.startswith("/v1/search"):
+        if parsed.path.startswith("/search"):
             self._proxy(SEARCH_UPSTREAM_HOST, SEARCH_UPSTREAM_PORT)
             return
         target_name = REGISTRY.service_for_path(parsed.path)

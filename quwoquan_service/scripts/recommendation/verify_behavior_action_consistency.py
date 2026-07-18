@@ -15,11 +15,9 @@
 
 用法：
   python3 scripts/recommendation/verify_behavior_action_consistency.py
-  python3 scripts/recommendation/verify_behavior_action_consistency.py --warn-only
 """
 from __future__ import annotations
 
-import argparse
 import re
 import sys
 from pathlib import Path
@@ -147,10 +145,6 @@ def _parse_dart_referral_sources() -> tuple[set[str], list[str]]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--warn-only", action="store_true")
-    args = parser.parse_args()
-
     all_errors: list[str] = []
     warnings: list[str] = []
 
@@ -229,11 +223,7 @@ def main() -> int:
     if all_errors:
         for e in all_errors:
             print(f"FAIL: {e}", file=sys.stderr)
-        label = "[verify_behavior_action_consistency]"
-        if args.warn_only:
-            print(f"{label} FAIL（warn-only）", file=sys.stderr)
-            return 0
-        print(f"{label} FAIL", file=sys.stderr)
+        print("[verify_behavior_action_consistency] FAIL", file=sys.stderr)
         return 1
 
     print("[verify_behavior_action_consistency] OK", file=sys.stderr)

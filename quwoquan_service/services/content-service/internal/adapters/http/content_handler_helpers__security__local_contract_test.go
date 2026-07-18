@@ -13,7 +13,7 @@ func TestTrustedPrincipalOverridesClientActorSelectors(t *testing.T) {
 
 	request := httptest.NewRequest(
 		"GET",
-		"/v1/content/feed?userId=forged-account&deviceActorId=forged-device",
+		"/content/feed?userId=forged-account&deviceActorId=forged-device",
 		nil,
 	)
 	request.Header.Set("X-Client-User-Id", "forged-account-header")
@@ -43,7 +43,7 @@ func TestTrustedPrincipalOverridesClientActorSelectors(t *testing.T) {
 func TestIntersectionActorUsesVerifiedPersonaRatherThanOwnerAccount(t *testing.T) {
 	t.Parallel()
 
-	request := httptest.NewRequest("GET", "/v1/content/intersections/object", nil)
+	request := httptest.NewRequest("GET", "/content/intersections/object", nil)
 	request = request.WithContext(rtauth.WithPrincipal(
 		request.Context(),
 		rtauth.Principal{Actor: operation.ActorContext{

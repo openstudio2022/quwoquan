@@ -90,7 +90,7 @@ gwt_acceptance:
     notes:
     - '[migrated_from_recorded] local_contract quwoquan_app/test/local_contract/ui/discovery/home_intersection_multiform_feed_widget__local_contract_test.dart（spotlight
       卡：头像/封面 + 类型角标 + 一条主谓宾句，无主/副双句堆叠，≤4 卡曝光归因 + 换一批，2026-06-16 green）'
-    - '[migrated_from_recorded] PENDING api_integration：gamma /v1/content/feed/intersections
+    - '[migrated_from_recorded] PENDING api_integration：gamma /content/feed/intersections
       真实 spotlight 链路待 WP-D。'
 execution:
   local_gate:

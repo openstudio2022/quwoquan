@@ -3,11 +3,15 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart' show Icons;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/components/media/image/book/image_book_canvas.dart';
 import 'package:quwoquan_app/components/media/image/book/image_book_page_surface.dart';
 import 'package:quwoquan_app/components/media/shared/pageflip/media_page_flip_book.dart';
+import 'package:quwoquan_app/components/media/shared/viewer/immersive_media_failure_content.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 
 Widget _host(Widget child) => ProviderScope(
   child: CupertinoApp(home: CupertinoPageScaffold(child: child)),
@@ -586,6 +590,18 @@ void main() {
       find.byKey(const ValueKey<String>('image-book-failure-overlay')),
       findsOneWidget,
     );
+    expect(find.byType(ImmersiveMediaFailureContent), findsOneWidget);
+    expect(find.byIcon(Icons.image_not_supported_outlined), findsNothing);
+    expect(find.byIcon(CupertinoIcons.refresh), findsNothing);
+    expect(find.text(UITextConstants.retry), findsOneWidget);
+    expect(
+      tester
+          .widget<CupertinoButton>(
+            find.byKey(const ValueKey<String>('image-book-retry')),
+          )
+          .minimumSize,
+      const Size(AppSpacing.minInteractiveSize, AppSpacing.minInteractiveSize),
+    );
 
     final gestureLayer = find.byKey(
       const ValueKey<String>('media-pageflip-gesture-layer'),
@@ -598,7 +614,7 @@ void main() {
     expect(
       find.byKey(const ValueKey<String>('image-book-failure-overlay')),
       findsNothing,
-      reason: '失败图标属于静态状态，拖动开始后不得随纸张翻动。',
+      reason: '失败内容仅属于静态状态，拖动开始后不得随纸张翻动。',
     );
     await gesture.cancel();
     await tester.pump(const Duration(milliseconds: 16));

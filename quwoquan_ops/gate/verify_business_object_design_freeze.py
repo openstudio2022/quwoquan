@@ -239,7 +239,7 @@ def _validate_metadata_inventory(issues: list[str]) -> None:
         domain = str(document.get("domain") or "").strip()
         forbidden_envelope_fields = sorted(
             field
-            for field in ("version", "schemaVersion", "registryRevision")
+            for field in ("version", "schema", "registryRevision")
             if field in document
         )
         if forbidden_envelope_fields:

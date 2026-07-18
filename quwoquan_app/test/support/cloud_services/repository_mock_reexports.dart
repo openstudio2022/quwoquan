@@ -13,8 +13,6 @@ export 'package:quwoquan_app/cloud/services/content/content_repository.dart'
     show MockContentRepository;
 export 'package:quwoquan_app/cloud/services/entity/entity_repository.dart'
     show MockHomepageRepository;
-export 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart'
-    show MockOpsEventRepository;
 export 'package:quwoquan_app/cloud/services/ops/ops_visit_repository.dart'
     show MockOpsVisitRepository;
 export 'package:quwoquan_app/cloud/services/rtc/rtc_repository.dart'

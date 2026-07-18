@@ -2,27 +2,31 @@
 profileId: cursor_local_calibrated
 policy:
   cursor:
+    provider: cursor_sdk
     model: composer
     runtime: local
   workers:
-    author: 2
+    author: 3
     reviewer: 2
     research: 4
     download: 8
-    codexCli: 1
+    cursorBridgeInstances: 3
   budgets:
     startupTimeoutSeconds: 240
     preflightNetworkTimeoutSeconds: 5
     agentTimeoutSeconds: 1200
+    defaultObjectTokenBudget: 12000
     authRetryLimit: 12
     authRetryDelaySeconds: 300
     noProgressRoundLimit: 6
     researchWaveSize: 8
     researchMaxWavesPerRun: 0
-    coldStartMaxWorkers: 2
+    coldStartMaxWorkers: 3
     workerStaggerSeconds: 8.0
     managedFutureGraceSeconds: 15
     schedulerStaleSeconds: 900
+    controllerLeaseStaleSeconds: 900
+    assignmentDeadlineSeconds: 1200
     downloadFetchRetryLimit: 1
     bridgeLaunchCooldownSeconds: 2.0
     bridgeReadyDelaySeconds: 1.5
@@ -61,6 +65,7 @@ policy:
     queueBackoffCapSeconds: 600
     queueStuckThreshold: 3
     startupProbeSuiteAttempts: 20
+    cursorStartupProbeCacheTtlSeconds: 600
     cursorTrue5xxRateLimit: 0.10
     cursorStartupTimeoutRateLimit: 0.50
     coverageWikiRetryLimit: 3
@@ -88,6 +93,7 @@ policy:
     curlRetries: 1
     curlRetryDelaySeconds: 1
     providerTimeoutSeconds:
+      encyclopedia: 20
       mediawiki: 20
       qunar: 20
       openverse: 25

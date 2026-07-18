@@ -283,7 +283,7 @@ func (s *platformService) handleApplyRelease(w http.ResponseWriter, r *http.Requ
 		writeRuntimeError(w, r, http.StatusBadRequest, "请求处理失败", err.Error())
 		return
 	}
-	releaseID := segmentBetween(r.URL.Path, "/v1/control-plane/platform/releases/", ":apply")
+	releaseID := segmentBetween(r.URL.Path, "/control-plane/platform/releases/", ":apply")
 	workflowRef := releaseWorkflowRef(body.Service)
 	rollbackToken := releaseRollbackToken(body.Service, releaseID)
 	approvalState := "approved"
@@ -367,7 +367,7 @@ func (s *platformService) handleRollbackRelease(w http.ResponseWriter, r *http.R
 		writeRuntimeError(w, r, http.StatusBadRequest, "请求处理失败", err.Error())
 		return
 	}
-	releaseID := segmentBetween(r.URL.Path, "/v1/control-plane/platform/releases/", ":rollback")
+	releaseID := segmentBetween(r.URL.Path, "/control-plane/platform/releases/", ":rollback")
 	workflowRef := strings.TrimSpace(body.WorkflowRef)
 	if workflowRef == "" {
 		workflowRef = releaseWorkflowRef(body.Service)

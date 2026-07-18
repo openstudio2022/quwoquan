@@ -1,4 +1,4 @@
-schemaVersion: quwoquan.vertical_quality_samples.v1
+schema: quwoquan.vertical_quality_samples
 vertical: travel
 samples:
   - id: travel.sample.scenic_spot

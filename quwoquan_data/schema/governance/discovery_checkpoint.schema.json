@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "quwoquan_data.coverage_city_checkpoint/3",
+  "$id": "quwoquan_data.coverage_city_checkpoint",
   "title": "Coverage discovery city checkpoint",
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "schemaVersion",
+    "schema",
     "runId",
     "province",
     "city",
@@ -15,13 +15,28 @@
     "cells"
   ],
   "properties": {
-    "schemaVersion": { "const": "quwoquan_data.coverage_city_checkpoint/3" },
-    "runId": { "type": "string", "minLength": 1 },
-    "province": { "type": "string", "minLength": 1 },
-    "city": { "type": "string", "minLength": 1 },
-    "revisions": { "type": "object" },
-    "guardrails": { "type": "object" },
-    "updatedAt": { "type": "string", "format": "date-time" },
+    "runId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "province": {
+      "type": "string",
+      "minLength": 1
+    },
+    "city": {
+      "type": "string",
+      "minLength": 1
+    },
+    "revisions": {
+      "type": "object"
+    },
+    "guardrails": {
+      "type": "object"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
     "cells": {
       "type": "array",
       "items": {
@@ -42,39 +57,81 @@
           "truncated"
         ],
         "properties": {
-          "cellId": { "type": "string", "pattern": "^[0-9a-f]{20}$" },
+          "cellId": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{20}$"
+          },
           "identity": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["province", "city", "district", "entityType", "source"],
+            "required": [
+              "province",
+              "city",
+              "district",
+              "entityType",
+              "source"
+            ],
             "properties": {
-              "province": { "type": "string", "minLength": 1 },
-              "city": { "type": "string", "minLength": 1 },
-              "district": { "type": "string", "minLength": 1 },
-              "entityType": { "type": "string", "pattern": "^地点/" },
+              "province": {
+                "type": "string",
+                "minLength": 1
+              },
+              "city": {
+                "type": "string",
+                "minLength": 1
+              },
+              "district": {
+                "type": "string",
+                "minLength": 1
+              },
+              "entityType": {
+                "type": "string",
+                "pattern": "^地点/"
+              },
               "source": {
                 "enum": [
                   "wiki_category",
                   "wikidata_geo",
                   "osm_poi",
                   "baidu_baike_search",
-                  "sogou_baike_search",
                   "toutiao_baike_search"
                 ]
               }
             }
           },
-          "sourceRevision": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+          "sourceRevision": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
           "status": {
-            "enum": ["pending", "running", "exhausted", "saturated", "empty", "partial", "failed"]
+            "enum": [
+              "pending",
+              "running",
+              "exhausted",
+              "saturated",
+              "empty",
+              "partial",
+              "failed"
+            ]
           },
           "sourceState": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["cursor", "page"],
+            "required": [
+              "cursor",
+              "page"
+            ],
             "properties": {
-              "cursor": { "type": ["string", "null"] },
-              "page": { "type": "integer", "minimum": 0 }
+              "cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "page": {
+                "type": "integer",
+                "minimum": 0
+              }
             }
           },
           "counts": {
@@ -88,21 +145,51 @@
               "dedupDuplicate"
             ],
             "properties": {
-              "raw": { "type": "integer", "minimum": 0 },
-              "semanticAdmitted": { "type": "integer", "minimum": 0 },
-              "semanticRejected": { "type": "integer", "minimum": 0 },
-              "dedupUnique": { "type": "integer", "minimum": 0 },
-              "dedupDuplicate": { "type": "integer", "minimum": 0 }
+              "raw": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "semanticAdmitted": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "semanticRejected": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "dedupUnique": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "dedupDuplicate": {
+                "type": "integer",
+                "minimum": 0
+              }
             }
           },
           "attemptState": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["attempt", "retryCount", "retryState"],
+            "required": [
+              "attempt",
+              "retryCount",
+              "retryState"
+            ],
             "properties": {
-              "attempt": { "type": "integer", "minimum": 0 },
-              "retryCount": { "type": "integer", "minimum": 0 },
-              "retryState": { "type": ["object", "null"] }
+              "attempt": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "retryCount": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "retryState": {
+                "type": [
+                  "object",
+                  "null"
+                ]
+              }
             }
           },
           "saturationEvidence": {
@@ -115,32 +202,79 @@
               "duplicateRatios"
             ],
             "properties": {
-              "driverComplete": { "type": "boolean" },
-              "consecutiveEmptyPages": { "type": "integer", "minimum": 0 },
-              "newRatios": { "type": "array", "items": { "type": "number", "minimum": 0 } },
-              "duplicateRatios": { "type": "array", "items": { "type": "number", "minimum": 0 } }
+              "driverComplete": {
+                "type": "boolean"
+              },
+              "consecutiveEmptyPages": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "newRatios": {
+                "type": "array",
+                "items": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              },
+              "duplicateRatios": {
+                "type": "array",
+                "items": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              }
             }
           },
-          "stopReason": { "type": ["string", "null"] },
-          "lastSuccessAt": { "type": ["string", "null"] },
+          "stopReason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lastSuccessAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "lastPageSnapshot": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "type": "object",
                 "additionalProperties": false,
-                "required": ["sha256", "rawCount", "capturedAt"],
+                "required": [
+                  "sha256",
+                  "rawCount",
+                  "capturedAt"
+                ],
                 "properties": {
-                  "sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
-                  "rawCount": { "type": "integer", "minimum": 0 },
-                  "capturedAt": { "type": "string", "format": "date-time" }
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^sha256:[0-9a-f]{64}$"
+                  },
+                  "rawCount": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "capturedAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
                 }
               }
             ]
           },
-          "truncated": { "type": "boolean" }
+          "truncated": {
+            "type": "boolean"
+          }
         }
       }
+    },
+    "schema": {
+      "const": "quwoquan_data.coverage_city_checkpoint"
     }
   }
 }

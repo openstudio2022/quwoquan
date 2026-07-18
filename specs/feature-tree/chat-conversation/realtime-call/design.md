@@ -53,7 +53,7 @@ spec.md 定义了 32 人实时音视频通话端到端闭环，且在本轮 PRD 
 
 #### 方案 B：rtc-service 内建独立 WS
 
-rtc-service 自建 `/v1/rtc/signal` WebSocket 端点，独立维护信令连接。
+rtc-service 自建 `/rtc/signal` WebSocket 端点，独立维护信令连接。
 
 **优点**：无外部依赖，可立即开工
 **缺点**：连接管理/心跳/重连/在线感知全部重复建设；端侧需维护两条 WS；运维复杂度翻倍
@@ -122,7 +122,7 @@ Apache 2.0 开源 Go SFU，自部署到自有 K8s 集群。
 **背景**：realtime-gateway 当前 0 个 Go 源文件，不具备先行条件。原 KD-2 端到端时序完全依赖 realtime-gateway WS 推送来电通知，实际无法执行。
 
 **决策变更**：
-- **Phase 1（MVP）**：rtc-service 内建最小 WS 信令端点 `/v1/rtc/signal`，仅承担来电推送和通话状态同步。离线唤醒通过 FCM/APNs VoIP Push。
+- **Phase 1（MVP）**：rtc-service 内建最小 WS 信令端点 `/rtc/signal`，仅承担来电推送和通话状态同步。离线唤醒通过 FCM/APNs VoIP Push。
 - **Phase 2（演进）**：realtime-gateway 就绪后，迁移信令到统一通道，rtc-service WS 下线。
 
 **降级范围**：仅信令投递路径变更，呼叫状态机（KD-1）、SFU 选型、媒体策略、布局算法等决策不变。
@@ -266,7 +266,7 @@ IDLE → JOIN_ROOM → CONNECTING → IN_CALL → LEAVE → ENDED
 ```
 发起方A          rtc-service        LiveKit SFU       realtime-gw        接收方B
   │                  │                  │                  │                │
-  │ POST /v1/rtc/    │                  │                  │                │
+  │ POST /rtc/    │                  │                  │                │
   │ calls            │                  │                  │                │
   │─────────────────▶│                  │                  │                │
   │                  │ CreateRoom       │                  │                │

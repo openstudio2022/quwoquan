@@ -206,7 +206,7 @@ class MockCircleRepository implements CircleRepository {
           }
           if (normalizedType != null && normalizedType.isNotEmpty) {
             final itemType = _normalizeCircleFeedType(
-              item['contentType']?.toString() ?? item['type']?.toString(),
+              item['contentType']?.toString(),
             );
             return itemType == normalizedType;
           }
@@ -215,7 +215,7 @@ class MockCircleRepository implements CircleRepository {
         .take(limit)
         .map((item) => Map<String, dynamic>.from(item))
         .toList(growable: false);
-    return _decodeCircleFeedMaps(maps);
+    return maps.map(contentPostDtoFromReadModelMap).toList(growable: false);
   }
 
   @override
@@ -232,52 +232,35 @@ class MockCircleRepository implements CircleRepository {
         contractStats['weeklyActiveCount'],
       );
       final discussionCount = CircleContractSeedHelpers.intValue(
-        contractStats['discussionCount'] ??
-            contractStats['discussions'] ??
-            contractStats['totalDiscussions'],
+        contractStats['discussionCount'],
       );
       return CircleStatsWireDto.fromMap(<String, dynamic>{
         'circleId': circleId,
-        'members': memberCount,
-        'totalMembers': memberCount,
-        'posts': postCount,
-        'totalPosts': postCount,
-        'discussions': discussionCount,
-        'totalDiscussions': discussionCount,
-        'weeklyActive': weeklyActive,
-        'active': weeklyActive,
-        'likes': 0,
-        'totalLikes': 0,
+        'memberCount': memberCount,
+        'postCount': postCount,
+        'discussionCount': discussionCount,
+        'weeklyActiveCount': weeklyActive,
+        'likeCount': 0,
       });
     }
     final circle = _findCircle(circleId);
     if (circle != null) {
       return CircleStatsWireDto.fromMap(<String, dynamic>{
         'circleId': circleId,
-        'members': circle.memberCount,
-        'totalMembers': circle.memberCount,
-        'posts': circle.postCount,
-        'totalPosts': circle.postCount,
-        'discussions': 0,
-        'totalDiscussions': 0,
-        'weeklyActive': circle.weeklyActiveCount,
-        'active': circle.weeklyActiveCount,
-        'likes': 0,
-        'totalLikes': 0,
+        'memberCount': circle.memberCount,
+        'postCount': circle.postCount,
+        'discussionCount': 0,
+        'weeklyActiveCount': circle.weeklyActiveCount,
+        'likeCount': 0,
       });
     }
     return CircleStatsWireDto.fromMap(<String, dynamic>{
       'circleId': circleId,
-      'members': 0,
-      'totalMembers': 0,
-      'posts': 0,
-      'totalPosts': 0,
-      'discussions': 0,
-      'totalDiscussions': 0,
-      'weeklyActive': 0,
-      'active': 0,
-      'likes': 0,
-      'totalLikes': 0,
+      'memberCount': 0,
+      'postCount': 0,
+      'discussionCount': 0,
+      'weeklyActiveCount': 0,
+      'likeCount': 0,
     });
   }
 
@@ -312,13 +295,11 @@ class MockCircleRepository implements CircleRepository {
   Future<CircleImpactSummary> getCircleImpact(String circleId) async {
     final stats = (await getCircleStats(circleId)).raw;
     final memberCount = CircleContractSeedHelpers.intValue(
-      stats['totalMembers'] ?? stats['members'],
+      stats['memberCount'],
     );
-    final postCount = CircleContractSeedHelpers.intValue(
-      stats['totalPosts'] ?? stats['posts'],
-    );
+    final postCount = CircleContractSeedHelpers.intValue(stats['postCount']);
     final weeklyActive = CircleContractSeedHelpers.intValue(
-      stats['weeklyActive'] ?? stats['active'],
+      stats['weeklyActiveCount'],
     );
     return CircleImpactSummary(
       circleId: circleId,
@@ -394,9 +375,13 @@ class MockCircleRepository implements CircleRepository {
   }) async {
     final contractRows = CircleContractSeedHelpers.homeFeedRows();
     if (contractRows.isNotEmpty) {
-      return _decodeCircleFeedMaps(
-        contractRows.take(limit).map((e) => Map<String, dynamic>.from(e)),
-      );
+      return contractRows
+          .take(limit)
+          .map(
+            (row) =>
+                contentPostDtoFromReadModelMap(Map<String, dynamic>.from(row)),
+          )
+          .toList(growable: false);
     }
     return CircleMockData.catalogCircleFeedPostDtos
         .take(limit)

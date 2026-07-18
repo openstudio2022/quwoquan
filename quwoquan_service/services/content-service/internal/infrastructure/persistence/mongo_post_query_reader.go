@@ -399,8 +399,11 @@ func postDetailProjection() bson.D {
 		{Key: "mediaItems", Value: 1},
 		{Key: "coverUrl", Value: 1},
 		{Key: "thumbnailUrl", Value: 1},
+		{Key: "width", Value: 1},
+		{Key: "height", Value: 1},
+		{Key: "durationMs", Value: 1},
 		{Key: "articleMarkdown", Value: 1},
-		{Key: "articleMarkdownVersion", Value: 1},
+		{Key: "markdownDialect", Value: 1},
 		{Key: "articleMarkdownDigest", Value: 1},
 		{Key: "articleAssetManifest", Value: 1},
 		{Key: "articleRenderProfile", Value: 1},
@@ -441,6 +444,8 @@ func authorPostProjection() bson.D {
 	return bson.D{
 		{Key: "_id", Value: 1},
 		{Key: "authorId", Value: 1},
+		{Key: "authorDisplayNameSnapshot", Value: 1},
+		{Key: "authorAvatarUrlSnapshot", Value: 1},
 		{Key: "contentType", Value: 1},
 		{Key: "contentIdentity", Value: 1},
 		{Key: "title", Value: 1},
@@ -466,8 +471,6 @@ func authorPostProjection() bson.D {
 		{Key: "updatedAt", Value: 1},
 		{Key: "publishedAt", Value: 1},
 		{Key: "lastActiveAt", Value: 1},
-		{Key: "authorDisplayNameSnapshot", Value: 1},
-		{Key: "authorAvatarUrlSnapshot", Value: 1},
 		{Key: "personaContextVersion", Value: 1},
 	}
 }
@@ -488,6 +491,7 @@ func postFeedProjection() bson.D {
 		{Key: "coverFrameTimeMs", Value: 1},
 		{Key: "tagRefs", Value: 1},
 		{Key: "entityRefs", Value: 1},
+		{Key: "visibility", Value: 1},
 		{Key: "contentVertical", Value: 1},
 		{Key: "sourceTaskId", Value: 1},
 		{Key: "likeCount", Value: 1},

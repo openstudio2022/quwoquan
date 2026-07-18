@@ -335,7 +335,7 @@ def analyze_sequence(
         and wave_spread >= minimum_wave_spread
     )
     return {
-        "schemaVersion": 1,
+        "schema": "welcome-motion-frames-report",
         "motionSpecVersion": "petal_bloom_v2",
         "passed": passed,
         "frameCount": len(frames),

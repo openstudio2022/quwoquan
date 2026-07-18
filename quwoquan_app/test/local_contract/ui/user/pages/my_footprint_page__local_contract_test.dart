@@ -25,7 +25,7 @@ void main() {
     );
     final behaviorRepo = MockBehaviorRepository();
     final tracker = ContentBehaviorTracker(
-      repository: behaviorRepo,
+      reporter: behaviorRepo,
       maxBatchSize: 1,
       enablePeriodicFlush: false,
     );

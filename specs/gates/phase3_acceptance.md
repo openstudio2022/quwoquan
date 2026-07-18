@@ -11,14 +11,14 @@
 ```
 用户 query
   → assistant-service ReAct loop
-  → app_search (contentAppSearchHandler → content-service GET /v1/content/posts/search)
+  → app_search (contentAppSearchHandler → content-service GET /content/posts/search)
   → 命中站内 posts（PostSearchItemView.categoryId / subCategory）
   → collectEmergedTags：categoryId/subCategory 去重归一 → Topic/<x> 路径制 tagRef
   → assistant.turn.completed envelope payload.emergedTags（List<String>）
   → 端 extractAssistantEmergedTags（只取 turn.completed、去重、过滤空值）
   → ContentBehaviorTracker.trackAssistantInterest(tagRefs)（不绑定 post）
   → BehaviorEvent{action: assistant_interest, tagRefs}
-  → POST /v1/content/behaviors
+  → POST /content/behaviors
   → BehaviorBatchReported
   → RecommendFeatureProjector.onBehaviorBatch（对所有 event 的 tagRefs 累加，不区分 action）
   → userFeatures.tagInteraction.<tag> += 1
@@ -74,10 +74,10 @@
 
 **本地实证结果（2026-06-02）**：
 - 数据：alpha sample bundle 导入本地 Docker Mongo 默认运行库，`posts=659`、`entities=359`、`rm_discovery_feed=659`。
-- 在线 search：`/v1/content/posts/search?query=四川大学攻略指南` 命中 `posts/article/攻略/四川大学攻略指南/1`，返回 `categoryId=旅行`、`subCategory=旅行主题`。
+- 在线 search：`/content/posts/search?query=四川大学攻略指南` 命中 `posts/article/攻略/四川大学攻略指南/1`，返回 `categoryId=旅行`、`subCategory=旅行主题`。
 - 小艺 app_search：自然语言 query `站内查找四川大学攻略指南` 经 query 归一化使用 `四川大学攻略指南` 命中 1 条站内内容。
 - emergedTags：`conversationId=acv_01KT3X8090XT4PZYWQBSE371R8`，`turnId=atn_01KT3X8090SNHY9RS5CBCMC0R1`，`turn_completed.payload.emergedTags=[Topic/旅行, Topic/旅行主题]`。
-- 行为回流：`POST /v1/content/behaviors` 上报 `assistant_interest` 返回 `204`。
+- 行为回流：`POST /content/behaviors` 上报 `assistant_interest` 返回 `204`。
 - 推荐特征：`rm_recommend_feature.userFeatures.tagInteraction` 包含 `Topic/旅行` 与 `Topic/旅行主题`。
 
 **复现命令（待本地 docker/环境执行）**：
@@ -99,7 +99,7 @@ curl 'http://127.0.0.1:18080/v1/content/posts/search?query=稻城亚丁'
 # 5. 起 assistant-service（configs/alpha 已配 content_search.base_url=18080）
 go run ./services/assistant-service/cmd/api
 #    向小艺发「稻城亚丁什么时候去最好」→ 观测 assistant.turn.completed.payload.emergedTags
-#    端侧 trackAssistantInterest → POST /v1/content/behaviors → 查 rm_recommend_feature.tagInteraction
+#    端侧 trackAssistantInterest → POST /content/behaviors → 查 rm_recommend_feature.tagInteraction
 ```
 
 ## 结论与后续

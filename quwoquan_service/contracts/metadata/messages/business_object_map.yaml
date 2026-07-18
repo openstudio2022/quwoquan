@@ -23,7 +23,7 @@ objects:
   field_roles:
     append_only_fact: []
     authoritative_state:
-    - _id
+    - id
     - type
     - title
     - avatarUrl
@@ -64,7 +64,7 @@ objects:
     transport_only: []
   identity:
     fields:
-    - _id
+    - id
     version_source: store_commit
   invariant_refs:
   - messages/conversation/aggregate.yaml#business_rules

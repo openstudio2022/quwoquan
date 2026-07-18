@@ -10,7 +10,7 @@ import (
 	"quwoquan_service/internal/metadata/graph"
 )
 
-func TestGenerateCoversEveryVersionedTransportOperation(t *testing.T) {
+func TestGenerateCoversEveryTransportOperation(t *testing.T) {
 	contractGraph := &graph.ContractGraph{
 		Operations: []ast.Operation{
 			commandOperation(
@@ -19,7 +19,7 @@ func TestGenerateCoversEveryVersionedTransportOperation(t *testing.T) {
 				"integration",
 				"integration.payment",
 				"POST",
-				"/callbacks/v1/payments/{provider}",
+				"/callbacks/payments/{provider}",
 				"PaymentCallbackRequest",
 				"",
 			),
@@ -28,7 +28,7 @@ func TestGenerateCoversEveryVersionedTransportOperation(t *testing.T) {
 				"GetPost",
 				"content",
 				"content.post",
-				"/v1/content/posts/{postId}",
+				"/content/posts/{postId}",
 				"PostView",
 				"object",
 			),
@@ -38,7 +38,7 @@ func TestGenerateCoversEveryVersionedTransportOperation(t *testing.T) {
 				"content",
 				"content.post",
 				"POST",
-				"/internal/v1/content/posts/{postId}:rebuild-index",
+				"/internal/content/posts/{postId}:rebuild-index",
 				"RebuildPostIndexRequest",
 				"RebuildPostIndexResult",
 			),
@@ -72,7 +72,7 @@ func TestGenerateCoversEveryVersionedTransportOperation(t *testing.T) {
 	assertOperationBinding(
 		t,
 		content,
-		"/v1/content/posts/{postId}",
+		"/content/posts/{postId}",
 		"get",
 		"GetPost",
 		"content.post",
@@ -82,14 +82,14 @@ func TestGenerateCoversEveryVersionedTransportOperation(t *testing.T) {
 	assertPathParameter(
 		t,
 		content,
-		"/v1/content/posts/{postId}",
+		"/content/posts/{postId}",
 		"get",
 		"postId",
 	)
 	assertOperationBinding(
 		t,
 		content,
-		"/internal/v1/content/posts/{postId}:rebuild-index",
+		"/internal/content/posts/{postId}:rebuild-index",
 		"post",
 		"RebuildPostIndex",
 		"content.post",
@@ -97,14 +97,14 @@ func TestGenerateCoversEveryVersionedTransportOperation(t *testing.T) {
 		"command",
 	)
 	if _, exists := content["paths"].(map[string]any)["/health"]; exists {
-		t.Fatal("non-versioned health operation must not enter domain OpenAPI")
+		t.Fatal("non-domain health operation must not enter domain OpenAPI")
 	}
 
 	integration := decodeSnapshot(t, snapshots[1])
 	assertOperationBinding(
 		t,
 		integration,
-		"/callbacks/v1/payments/{provider}",
+		"/callbacks/payments/{provider}",
 		"post",
 		"HandlePaymentCallback",
 		"integration.payment",
@@ -114,7 +114,7 @@ func TestGenerateCoversEveryVersionedTransportOperation(t *testing.T) {
 	assertPathParameter(
 		t,
 		integration,
-		"/callbacks/v1/payments/{provider}",
+		"/callbacks/payments/{provider}",
 		"post",
 		"provider",
 	)
@@ -128,7 +128,7 @@ func TestGenerateModelsRuntimeSessionUpgradeWithoutAggregateCommand(t *testing.T
 			Domain:           "realtime",
 			ObjectID:         "realtime.connection",
 			Method:           "GET",
-			PathTemplate:     "/v1/realtime/ws",
+			PathTemplate:     "/realtime/ws",
 			Kind:             ast.OperationKindSession,
 			KindExplicit:     true,
 			Facet:            "ConnectionSessionFacet",
@@ -144,7 +144,7 @@ func TestGenerateModelsRuntimeSessionUpgradeWithoutAggregateCommand(t *testing.T
 		t.Fatalf("generate OpenAPI snapshots: %v", err)
 	}
 	document := decodeSnapshot(t, snapshots[0])
-	operation := operationAt(t, document, "/v1/realtime/ws", "get")
+	operation := operationAt(t, document, "/realtime/ws", "get")
 	application := operation["x-application"].(map[string]any)
 	if got, want := application["kind"], "session"; got != want {
 		t.Fatalf("session kind = %v, want %s", got, want)
@@ -167,7 +167,7 @@ func TestGenerateHonorsExplicitBodylessPostCommand(t *testing.T) {
 		"ops",
 		"ops.experiment_assignment_fact",
 		"POST",
-		"/v1/ops/experiments/{experimentId}/assignment",
+		"/ops/experiments/{experimentId}/assignment",
 		"",
 		"ExperimentAssignmentFact",
 	)
@@ -184,6 +184,46 @@ func TestGenerateHonorsExplicitBodylessPostCommand(t *testing.T) {
 	}
 }
 
+func TestGenerateExposesTypedIdempotencyAndConcurrencyHeaders(t *testing.T) {
+	operation := commandOperation(
+		"social.circle_group.UpdateCircleGroup",
+		"UpdateCircleGroup",
+		"circle",
+		"social.circle_group",
+		"PATCH",
+		"/circles/groups/{groupId}",
+		"UpdateCircleGroupRequest",
+		"CircleGroup",
+	)
+	operation.Reliability.Idempotency = "required"
+	operation.Concurrency.VersionPrecondition = ast.VersionPreconditionIfMatch
+
+	snapshots, err := Generate(&graph.ContractGraph{
+		Operations: []ast.Operation{operation},
+	})
+	if err != nil {
+		t.Fatalf("generate typed header contract: %v", err)
+	}
+	document := decodeSnapshot(t, snapshots[0])
+	assertPathParameter(t, document, operation.PathTemplate, "patch", "groupId")
+	assertHeaderParameter(
+		t,
+		document,
+		operation.PathTemplate,
+		"patch",
+		"Idempotency-Key",
+		true,
+	)
+	assertHeaderParameter(
+		t,
+		document,
+		operation.PathTemplate,
+		"patch",
+		"If-Match",
+		true,
+	)
+}
+
 func TestGenerateRequiredAuthNeverAdvertisesAnonymousAccess(t *testing.T) {
 	operation := commandOperation(
 		"ops.experiment_assignment_fact.AssignExperimentVariant",
@@ -191,7 +231,7 @@ func TestGenerateRequiredAuthNeverAdvertisesAnonymousAccess(t *testing.T) {
 		"ops",
 		"ops.experiment_assignment_fact",
 		"POST",
-		"/v1/ops/experiments/{experimentId}/assignment",
+		"/ops/experiments/{experimentId}/assignment",
 		"",
 		"ExperimentAssignmentFact",
 	)
@@ -221,7 +261,7 @@ func TestGenerateCarriesTypedAppendSinkWithoutAggregateOwner(t *testing.T) {
 		"ops",
 		"ops.experiment_assignment_fact",
 		"POST",
-		"/v1/ops/experiments/{experimentId}/assignments",
+		"/ops/experiments/{experimentId}/assignments",
 		"AssignExperimentVariantRequest",
 		"ExperimentAssignmentFact",
 	)
@@ -236,7 +276,7 @@ func TestGenerateCarriesTypedAppendSinkWithoutAggregateOwner(t *testing.T) {
 	rendered := operationAt(
 		t,
 		document,
-		"/v1/ops/experiments/{experimentId}/assignments",
+		"/ops/experiments/{experimentId}/assignments",
 		"post",
 	)
 	application := rendered["x-application"].(map[string]any)
@@ -257,7 +297,7 @@ func TestGenerateExpandsCommandAndQuerySchemasWithoutAnonymousMaps(t *testing.T)
 				"content",
 				"content.post",
 				"POST",
-				"/v1/content/posts/{postId}:publish",
+				"/content/posts/{postId}:publish",
 				"PublishPostRequest",
 				"PublishPostResult",
 			),
@@ -266,7 +306,7 @@ func TestGenerateExpandsCommandAndQuerySchemasWithoutAnonymousMaps(t *testing.T)
 				"ListPosts",
 				"content",
 				"content.post",
-				"/v1/content/posts",
+				"/content/posts",
 				"PostCard",
 				"page",
 			),
@@ -276,7 +316,7 @@ func TestGenerateExpandsCommandAndQuerySchemasWithoutAnonymousMaps(t *testing.T)
 				"content",
 				"content.post",
 				"POST",
-				"/v1/content/posts:mark-visited",
+				"/content/posts:mark-visited",
 				"MarkPostsVisitedRequest",
 				"",
 			),
@@ -293,7 +333,7 @@ func TestGenerateExpandsCommandAndQuerySchemasWithoutAnonymousMaps(t *testing.T)
 	publish := operationAt(
 		t,
 		document,
-		"/v1/content/posts/{postId}:publish",
+		"/content/posts/{postId}:publish",
 		"post",
 	)
 	publishApplication := publish["x-application"].(map[string]any)
@@ -314,7 +354,7 @@ func TestGenerateExpandsCommandAndQuerySchemasWithoutAnonymousMaps(t *testing.T)
 		"#/components/schemas/PublishPostResult",
 	)
 
-	list := operationAt(t, document, "/v1/content/posts", "get")
+	list := operationAt(t, document, "/content/posts", "get")
 	listApplication := list["x-application"].(map[string]any)
 	if got, want := listApplication["reader"], "ListPostsReader"; got != want {
 		t.Fatalf("query reader = %v, want %s", got, want)
@@ -344,7 +384,7 @@ func TestGenerateExpandsCommandAndQuerySchemasWithoutAnonymousMaps(t *testing.T)
 		t.Fatal("placeholder schema must not use additionalProperties as a universal map")
 	}
 
-	ack := operationAt(t, document, "/v1/content/posts:mark-visited", "post")
+	ack := operationAt(t, document, "/content/posts:mark-visited", "post")
 	if _, exists := ack["responses"].(map[string]any)["204"]; !exists {
 		t.Fatal("ack command must generate a 204 response")
 	}
@@ -357,7 +397,7 @@ func TestGenerateIsDeterministicAcrossInputOrder(t *testing.T) {
 			"GetProfile",
 			"user",
 			"user.profile",
-			"/v1/users/{personaId}",
+			"/users/{personaId}",
 			"ProfileView",
 			"object",
 		),
@@ -367,7 +407,7 @@ func TestGenerateIsDeterministicAcrossInputOrder(t *testing.T) {
 			"user",
 			"user.profile",
 			"PATCH",
-			"/v1/users/{personaId}",
+			"/users/{personaId}",
 			"UpdateProfileRequest",
 			"ProfileView",
 		),
@@ -400,7 +440,7 @@ func TestCompareDirectoryRejectsStaleAndOrphanSnapshots(t *testing.T) {
 				"GetPost",
 				"content",
 				"content.post",
-				"/v1/content/posts/{postId}",
+				"/content/posts/{postId}",
 				"PostView",
 				"object",
 			),

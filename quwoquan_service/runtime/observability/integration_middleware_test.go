@@ -133,7 +133,7 @@ func TestHTTPServerMiddleware_EmitIOProcessException(t *testing.T) {
 		)
 	}))
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/chat/conversations/1/messages", nil)
+	req := httptest.NewRequest(http.MethodPost, "/chat/conversations/1/messages", nil)
 	req.Header.Set("X-Trace-Id", "APP.sess.chat.message.create.t1.r1")
 	req.Header.Set("X-Request-Id", "APP.chat.message.create.t1.r1")
 	req.Header.Set("X-Client-Session-Id", "sess-001")
@@ -332,7 +332,7 @@ func TestUAT_CorrelationAcrossThreeLogs(t *testing.T) {
 	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
-	req := httptest.NewRequest(http.MethodPost, "/v1/chat/conversations/1/messages", nil)
+	req := httptest.NewRequest(http.MethodPost, "/chat/conversations/1/messages", nil)
 	req.Header.Set("X-Trace-Id", traceID)
 	req.Header.Set("X-Request-Id", requestID)
 	req.Header.Set("X-Client-Session-Id", sessionID)

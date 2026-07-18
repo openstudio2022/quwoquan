@@ -2,9 +2,12 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart' show Icons;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/components/media/image/book/image_book_canvas.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 
 Widget _host(
   Size viewport,
@@ -145,4 +148,51 @@ void main() {
       return _exerciseTenTurns(tester, viewport);
     });
   }
+
+  testWidgets('视频书静态图片失败使用无图标统一文字重试', (tester) async {
+    const viewport = Size(390, 844);
+    await tester.binding.setSurfaceSize(viewport);
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      _host(
+        viewport,
+        ({
+          required context,
+          required pageIndex,
+          required candidates,
+          required pageSize,
+        }) => Future<ui.Image>.error(StateError('controlled image failure')),
+        (_) {},
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 360));
+
+    expect(
+      find.byKey(const ValueKey<String>('image-book-failure-overlay')),
+      findsOneWidget,
+    );
+    expect(find.byIcon(Icons.image_not_supported_outlined), findsNothing);
+    expect(find.byIcon(CupertinoIcons.refresh), findsNothing);
+    expect(find.text(UITextConstants.retry), findsOneWidget);
+    expect(
+      tester
+          .getRect(find.byKey(const ValueKey<String>('image-book-retry')))
+          .size
+          .shortestSide,
+      greaterThanOrEqualTo(AppSpacing.minInteractiveSize),
+    );
+
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('image-book-failure-overlay')),
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is Semantics && widget.properties.liveRegion == true,
+        ),
+      ),
+      findsOneWidget,
+    );
+  });
 }

@@ -28,25 +28,6 @@ func NewPostStore(seed []postmodel.Post) *PostStore {
 	return s
 }
 
-func (s *PostStore) Create(_ context.Context, post *postmodel.Post) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	cp := *post
-	s.posts[cp.ID] = cp
-	return nil
-}
-
-func (s *PostStore) Update(_ context.Context, id string, post *postmodel.Post) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if _, ok := s.posts[id]; !ok {
-		return false
-	}
-	cp := *post
-	s.posts[id] = cp
-	return true
-}
-
 func (s *PostStore) FindByID(_ context.Context, id string) (*postmodel.Post, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -56,6 +37,23 @@ func (s *PostStore) FindByID(_ context.Context, id string) (*postmodel.Post, boo
 	}
 	cp := post
 	return &cp, true
+}
+
+func (s *PostStore) FindByPublicationIntent(
+	_ context.Context,
+	authorID string,
+	publishIntentID string,
+) (*postmodel.Post, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, post := range s.posts {
+		if post.AuthorId == strings.TrimSpace(authorID) &&
+			post.PublishIntentId == strings.TrimSpace(publishIntentID) {
+			cp := post
+			return &cp, true
+		}
+	}
+	return nil, false
 }
 
 func (s *PostStore) AdjustCommentCount(_ context.Context, id string, delta int64) (int64, bool, error) {

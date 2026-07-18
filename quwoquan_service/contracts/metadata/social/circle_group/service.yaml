@@ -1,4 +1,3 @@
-version: 1
 service:
   name: circle-service
   domain: circle
@@ -11,10 +10,12 @@ service:
     target_story: app-cloud-business-object-commercial-closure
 api_routes:
   - method: GET
-    path: /v1/circles/{circleId}/groups
+    path: /circles/{circleId}/groups
+
     operation: ListCircleGroups
     actor: persona
-    auth: required
+    security:
+      auth_mode: required
     application: { kind: query, facet: CircleGroupQueryFacet, method: listCircleGroups, reader: CircleGroupReader, slice: CircleGroupPageSlice }
     query_params: [groupType, visibility, parentGroupId, nodeType, cursor, limit]
     response_entity: CircleGroupSlice
@@ -32,10 +33,12 @@ api_routes:
       response_decoder: decodeCircleGroupPageSlice
 
   - method: GET
-    path: /v1/circles/{circleId}/groups/search
+    path: /circles/{circleId}/groups/search
+
     operation: SearchCircleGroups
     actor: persona
-    auth: required
+    security:
+      auth_mode: required
     application: { kind: query, facet: CircleGroupQueryFacet, method: searchCircleGroups, reader: CircleGroupSearchReader, slice: CircleGroupPageSlice }
     query_params: [query, visibility, groupType, cursor, limit]
     response_entity: CircleGroupSlice
@@ -53,10 +56,12 @@ api_routes:
       response_decoder: decodeCircleGroupPageSlice
 
   - method: POST
-    path: /v1/circles/{circleId}/groups
+    path: /circles/{circleId}/groups
+
     operation: CreateCircleGroup
     actor: persona
-    auth: required
+    security:
+      auth_mode: required
     application: { kind: command, facet: CircleGroupCommandFacet, method: createCircleGroup, aggregate_owner: CircleGroup, mutation_target: CircleGroup, invariant_target: CircleGroup }
     request_entity: CreateCircleGroupRequest
     response_entity: CircleGroupCommandResult
@@ -75,10 +80,12 @@ api_routes:
       response_decoder: decodeCircleGroupCommandResult
 
   - method: GET
-    path: /v1/circles/{circleId}/groups/{groupId}
+    path: /circles/{circleId}/groups/{groupId}
+
     operation: GetCircleGroup
     actor: persona
-    auth: required
+    security:
+      auth_mode: required
     application: { kind: query, facet: CircleGroupQueryFacet, method: getCircleGroup, reader: CircleGroupReader, slice: CircleGroupSlice }
     response_entity: CircleGroupSlice
     authorization: { principal: persona, ownership_policy: active_circle_member }
@@ -95,11 +102,14 @@ api_routes:
       response_decoder: decodeCircleGroupSlice
 
   - method: PATCH
-    path: /v1/circles/{circleId}/groups/{groupId}
+    path: /circles/{circleId}/groups/{groupId}
+
     operation: UpdateCircleGroup
     actor: persona
-    auth: required
+    security:
+      auth_mode: required
     headers: [If-Match, Idempotency-Key]
+    concurrency: { version_precondition: if_match }
     application: { kind: command, facet: CircleGroupCommandFacet, method: updateCircleGroup, aggregate_owner: CircleGroup, mutation_target: CircleGroup, invariant_target: CircleGroup }
     request_entity: UpdateCircleGroupRequest
     response_entity: CircleGroupCommandResult
@@ -118,11 +128,13 @@ api_routes:
       response_decoder: decodeCircleGroupCommandResult
 
   - method: DELETE
-    path: /v1/circles/{circleId}/groups/{groupId}
+    path: /circles/{circleId}/groups/{groupId}
+
     operation: ArchiveCircleGroup
     actor: persona
-    auth: required
-    headers: [If-Match, Idempotency-Key]
+    security:
+      auth_mode: required
+    headers: [Idempotency-Key]
     application: { kind: command, facet: CircleGroupCommandFacet, method: archiveCircleGroup, aggregate_owner: CircleGroup, mutation_target: CircleGroup, invariant_target: CircleGroup }
     response_entity: CircleGroupCommandResult
     authorization: { principal: persona, ownership_policy: group_owner_only }
@@ -147,7 +159,7 @@ contract_test:
   mock_strategy:
     service_side:
       description: 使用 MongoDB 7 replica set testcontainers，不 mock Store/outbox/Reader
-      real_engines: { mongodb: testcontainers (mongo:7 replica set) }
+      real_engines: { mongodb: "testcontainers (mongo:7 replica set)" }
       data_management:
         seed: 仅插入目标 Circle 与 actor CircleMembership policy；CircleGroup 必须经真实 HTTP 创建
         cleanup: DeleteMany all circle_group_* collections

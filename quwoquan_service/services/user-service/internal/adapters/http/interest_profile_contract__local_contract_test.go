@@ -25,7 +25,7 @@ func newInterestHandler(reader application.InterestProfileReader) *UserHandler {
 	return &UserHandler{interestProfile: application.NewInterestProfileService(reader)}
 }
 
-// Contract: GET /v1/users/{userId}/interest-profile returns 200 with the
+// Contract: GET /users/{userId}/interest-profile returns 200 with the
 // service.yaml response_fields when a profile has been derived.
 func TestInterestProfileEndpoint_Computed(t *testing.T) {
 	reader := &fakeInterestReader{view: &application.InterestProfileView{
@@ -41,7 +41,7 @@ func TestInterestProfileEndpoint_Computed(t *testing.T) {
 	mux := newInterestHandler(reader).Routes()
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/v1/users/u1/interest-profile", nil)
+	req := httptest.NewRequest(http.MethodGet, "/users/u1/interest-profile", nil)
 	mux.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
@@ -79,7 +79,7 @@ func TestInterestProfileEndpoint_NotYetComputed(t *testing.T) {
 	mux := newInterestHandler(&fakeInterestReader{view: nil}).Routes()
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/v1/users/u2/interest-profile", nil)
+	req := httptest.NewRequest(http.MethodGet, "/users/u2/interest-profile", nil)
 	mux.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
@@ -105,7 +105,7 @@ func TestInterestProfileEndpoint_ReaderError(t *testing.T) {
 	mux := newInterestHandler(&fakeInterestReader{err: context.DeadlineExceeded}).Routes()
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/v1/users/u3/interest-profile", nil)
+	req := httptest.NewRequest(http.MethodGet, "/users/u3/interest-profile", nil)
 	mux.ServeHTTP(rec, req)
 
 	if rec.Code < 500 {
@@ -117,7 +117,7 @@ func TestInterestProfileEndpoint_ReaderError(t *testing.T) {
 func TestInterestProfileEndpoint_MissingUserID(t *testing.T) {
 	h := newInterestHandler(&fakeInterestReader{})
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/v1/users//interest-profile", nil)
+	req := httptest.NewRequest(http.MethodGet, "/users//interest-profile", nil)
 	h.handleGetUserInterestProfile(rec, req)
 
 	if rec.Code != http.StatusBadRequest {

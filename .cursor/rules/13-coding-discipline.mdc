@@ -97,7 +97,7 @@ Go 侧禁止 `interface{}`（或 `any`）作为业务数据的参数、返回值
 - DTO 字段（`fields.yaml`）
 - surfaceId / operationId / routeId（`ui_config.yaml`）
 
-**绝对禁止**：在业务代码中硬编码 `/v1/...` 路径字符串、错误码字符串、surfaceId 字符串。
+**绝对禁止**：在业务代码中硬编码 `/...` 路径字符串、错误码字符串、surfaceId 字符串。
 
 **历史教训**：审计发现 `tag_repository_remote.dart` 存在 10 处硬编码 `/api/v1/tags/...` 路径，而同仓库的 `RemoteBehaviorRepository` 已经正确使用 `ContentApiMetadata.reportBehaviorsPath`。两种风格并存说明规范执行不一致，新人会学到错误的写法。
 

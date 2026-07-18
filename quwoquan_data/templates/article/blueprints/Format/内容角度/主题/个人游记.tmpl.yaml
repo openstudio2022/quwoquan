@@ -1,5 +1,4 @@
 templateId: 旅行_个人游记
-version: 1
 subject: { kind: topic, type: 旅行/主题, minEntityRefs: 1, subjectTagRef: Format/内容角度/叙事/旅行叙事 }
 vertical: travel
 category: travel

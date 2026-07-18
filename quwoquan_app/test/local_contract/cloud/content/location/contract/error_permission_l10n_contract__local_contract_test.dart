@@ -33,7 +33,7 @@ void main() {
     });
   });
 
-  group('ErrorPermissionL10n — 兼容性契约', () {
+  group('ErrorPermissionL10n — 单轨契约', () {
     test('location keys match integration errors.yaml semantics', () {
       // integration/location/errors.yaml 文案约定
       expect(l10n.locationPermissionRequired, contains('权限'),

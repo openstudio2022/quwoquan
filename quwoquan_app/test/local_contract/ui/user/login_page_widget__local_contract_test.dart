@@ -11,7 +11,6 @@ import 'package:quwoquan_app/cloud/runtime/generated/user/owner_credential_row_d
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/core/auth/auth_gate.dart';
-import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/auth_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/auth/auth_continuation.dart';
@@ -32,6 +31,7 @@ import 'package:quwoquan_app/ui/user/pages/login_page.dart';
 import 'package:quwoquan_app/ui/welcome/widgets/welcome_flower_mark.dart';
 import 'package:simple_icons/simple_icons.dart';
 import '../../../support/runtime_failure_fixtures.dart';
+import '../../../support/recording_app_telemetry_recorder.dart';
 
 const String _defaultNicknameSample = '新同学_260622_6698692';
 
@@ -187,7 +187,9 @@ void main() {
             const _UnavailableOneTapLoginClient(),
           ),
           loginJourneyEventTrackerProvider.overrideWithValue(
-            JourneyEventTracker(eventRepository: MockOpsEventRepository()),
+            JourneyEventTracker(
+              telemetryReporter: RecordingAppTelemetryRecorder(),
+            ),
           ),
         ],
         child: CupertinoApp(
@@ -217,68 +219,28 @@ void main() {
     expect(container.read(authContinuationProvider), isNull);
   });
 
-  test('消息语气分级：仅锁定/封禁/注销为阻断红，频繁为告警，其余中性', () {
-    const blockingPhases = <LoginPhoneOtpPhase>{
-      LoginPhoneOtpPhase.loginLocked,
-      LoginPhoneOtpPhase.accountSuspended,
-      LoginPhoneOtpPhase.accountDeleted,
-    };
-    for (final phase in LoginPhoneOtpPhase.values) {
-      final tone = loginMessageToneForPhase(phase);
-      if (blockingPhases.contains(phase)) {
-        expect(tone, LoginMessageTone.blocking, reason: phase.name);
-      } else if (phase == LoginPhoneOtpPhase.rateLimited) {
-        expect(tone, LoginMessageTone.warning, reason: phase.name);
-      } else {
-        expect(tone, LoginMessageTone.neutral, reason: phase.name);
-      }
-    }
-    // 验证码错误/过期/发送失败等可恢复态绝不用阻断红。
+  test('登录错误仅由位置决定，不维护红/琥珀/灰语气分支', () {
     expect(
-      loginMessageToneForPhase(LoginPhoneOtpPhase.codeError),
-      LoginMessageTone.neutral,
-    );
-    expect(
-      loginMessageToneForPhase(LoginPhoneOtpPhase.codeExpired),
-      LoginMessageTone.neutral,
-    );
-    expect(
-      loginMessageToneForPhase(LoginPhoneOtpPhase.sendFailed),
-      LoginMessageTone.neutral,
-    );
-  });
-
-  testWidgets('消息语气取色：阻断红与可恢复非红区分明确', (tester) async {
-    late BuildContext capturedContext;
-    await tester.pumpWidget(
-      CupertinoApp(
-        home: Builder(
-          builder: (context) {
-            capturedContext = context;
-            return const SizedBox.shrink();
-          },
-        ),
+      loginErrorSurfaceForCode(
+        UserErrorCode.otpRateLimited,
+        origin: LoginFailureOrigin.otpSend,
       ),
+      LoginErrorSurface.otpField,
     );
-
-    final blocking = loginMessageToneColor(
-      capturedContext,
-      LoginMessageTone.blocking,
+    expect(
+      loginErrorSurfaceForCode(
+        UserErrorCode.socialProviderUnavailable,
+        origin: LoginFailureOrigin.social,
+      ),
+      LoginErrorSurface.socialMethod,
     );
-    final warning = loginMessageToneColor(
-      capturedContext,
-      LoginMessageTone.warning,
+    expect(
+      loginErrorSurfaceForCode(
+        UserErrorCode.accountSuspended,
+        origin: LoginFailureOrigin.oneTap,
+      ),
+      LoginErrorSurface.accountBlocked,
     );
-    final neutral = loginMessageToneColor(
-      capturedContext,
-      LoginMessageTone.neutral,
-    );
-
-    expect(blocking, AppColors.iosDestructive(capturedContext));
-    expect(warning, AppColors.warning);
-    expect(neutral, AppColors.iosSecondaryLabel(capturedContext));
-    expect(blocking, isNot(neutral));
-    expect(blocking, isNot(warning));
   });
 
   testWidgets('登录页 hero 使用真实趣我圈花瓣品牌标识与品牌库第三方图标', (tester) async {
@@ -685,7 +647,7 @@ void main() {
     );
 
     expect(feedback.telemetry['code'], feedback.cloudError.runtimeFailure.code);
-    expect(feedback.telemetry['failureKind'], 'internal');
+    expect(feedback.telemetry['failureKind'], 'contract');
     expect(feedback.telemetry['errorType'], 'StateError');
     expect(feedback.telemetry.containsKey('message'), isFalse);
     expect(
@@ -909,7 +871,7 @@ void main() {
   });
 
   testWidgets('无最近账号摘要但 carrier hint 为新号码时展示 carrierPhone 状态', (tester) async {
-    final ops = MockOpsEventRepository();
+    final ops = RecordingAppTelemetryRecorder();
     await _pumpLogin(
       tester,
       authStore: _GuestLoginStore(),
@@ -922,7 +884,7 @@ void main() {
         }),
       ),
       oneTapClient: const _ProbeOneTapLoginClient(),
-      opsEventRepository: ops,
+      telemetryRecorder: ops,
     );
 
     await tester.pump(const Duration(milliseconds: 50));
@@ -933,11 +895,8 @@ void main() {
     expect(find.textContaining('将创建趣我圈账号'), findsOneWidget);
     expect(find.text(UITextConstants.loginOneTapPrimary), findsOneWidget);
     expect(
-      ops.recorded.map((event) => event.eventName),
-      containsAll(<String>[
-        'two_state_login.login_page_exposed',
-        'two_state_login.login_state_resolved',
-      ]),
+      ops.recorded.map((event) => event.action),
+      containsAll(<String>['login_page_exposed', 'login_state_resolved']),
     );
   });
 
@@ -989,6 +948,32 @@ void main() {
       findsOneWidget,
     );
     expect(find.text(UITextConstants.loginSendOtp), findsOneWidget);
+  });
+
+  testWidgets('运营商 hint 返回受限账号时进入阻断面，不降级为手机号创建', (tester) async {
+    final repo = _SuspendedHintAuthRepository();
+    await _pumpLogin(
+      tester,
+      authStore: _GuestLoginStore(),
+      authRepository: repo,
+      oneTapClient: const _ProbeOneTapLoginClient(),
+    );
+
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(
+      find.byKey(const ValueKey<String>('loginAccountBlocked')),
+      findsOneWidget,
+    );
+    expect(find.byType(PhoneNumberField), findsNothing);
+    expect(repo.loginOneTapCalls, 0);
+    final blocking = tester.widget<AppFormErrorCard>(
+      find.byKey(const ValueKey<String>('loginAccountBlocked')),
+    );
+    expect(
+      blocking.semantic.message,
+      UserErrorCode.accountSuspended.messageForLocale('en'),
+    );
   });
 
   testWidgets('用户已切换手机号后迟到的运营商探测不得覆盖当前步骤', (tester) async {
@@ -1138,13 +1123,13 @@ void main() {
         'expiresInSeconds': 60,
       }),
     );
-    final ops = MockOpsEventRepository();
+    final ops = RecordingAppTelemetryRecorder();
     await _pumpLogin(
       tester,
       authStore: store,
       authRepository: repo,
       oneTapClient: const _ProbeOneTapLoginClient(),
-      opsEventRepository: ops,
+      telemetryRecorder: ops,
     );
     await tester.pump(const Duration(milliseconds: 50));
 
@@ -1158,11 +1143,8 @@ void main() {
     expect(store.lastRememberedMethod, AuthRememberedLoginMethod.oneTap);
     expect(store.lastRememberedMaskedIdentifier, '180****3901');
     expect(
-      ops.recorded.map((event) => event.eventName),
-      containsAll(<String>[
-        'two_state_login.login_primary_clicked',
-        'two_state_login.login_success',
-      ]),
+      ops.recorded.map((event) => event.action),
+      containsAll(<String>['login_primary_clicked', 'login_success']),
     );
   });
 
@@ -1830,7 +1812,6 @@ void main() {
 
     // refresh 失败后不停在空面板、也不回到注定失败的一键登录：统一降级到短信验证码流程，
     // 保留可操作短信出口；若宿主平台没有真实可发现方式，不渲染空分隔区。
-    expect(find.byType(UnavailablePanel), findsNothing);
     expect(find.byType(PhoneNumberField), findsOneWidget);
     expect(find.text(UITextConstants.loginOtherMethods), findsNothing);
     expect(find.text(UITextConstants.loginFailed), findsNothing);
@@ -1859,7 +1840,6 @@ void main() {
       findsOneWidget,
     );
     expect(find.text(UITextConstants.loginSendOtp), findsOneWidget);
-    expect(find.byType(UnavailablePanel), findsNothing);
     final feedbackCard = tester.widget<AppFormErrorCard>(
       find.byKey(const ValueKey<String>('login-process-feedback')),
     );
@@ -1899,7 +1879,7 @@ void main() {
   });
 
   testWidgets('社交授权取消静默恢复原登录态且只记录取消事件', (tester) async {
-    final ops = MockOpsEventRepository();
+    final ops = RecordingAppTelemetryRecorder();
     await _pumpLogin(
       tester,
       authStore: _GuestLoginStore(),
@@ -1907,7 +1887,7 @@ void main() {
       oneTapClient: const _UnavailableOneTapLoginClient(),
       nativeAuthBridge: const _CancellingWechatNativeAuthBridge(),
       capabilities: CapabilityProfile.mobile,
-      opsEventRepository: ops,
+      telemetryRecorder: ops,
     );
     await tester.pump(const Duration(milliseconds: 50));
 
@@ -1923,8 +1903,8 @@ void main() {
     );
     expect(find.byType(PhoneOtpPanel), findsOneWidget);
     expect(
-      ops.recorded.map((event) => event.eventName),
-      contains('two_state_login.login_social_cancelled'),
+      ops.recorded.map((event) => event.action),
+      contains('login_social_cancelled'),
     );
   });
 
@@ -2085,7 +2065,7 @@ Future<void> _pumpLogin(
   required AuthSessionStore authStore,
   required AuthRepository authRepository,
   required OneTapLoginClient oneTapClient,
-  MockOpsEventRepository? opsEventRepository,
+  RecordingAppTelemetryRecorder? telemetryRecorder,
   PlatformCapabilities? capabilities,
   NativeAuthBridge? nativeAuthBridge,
   TextScaler? textScaler,
@@ -2093,7 +2073,7 @@ Future<void> _pumpLogin(
   Brightness? brightness,
   String? fontFamily,
 }) async {
-  final ops = opsEventRepository ?? MockOpsEventRepository();
+  final ops = telemetryRecorder ?? RecordingAppTelemetryRecorder();
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -2101,7 +2081,7 @@ Future<void> _pumpLogin(
         authRepositoryProvider.overrideWithValue(authRepository),
         oneTapLoginClientProvider.overrideWithValue(oneTapClient),
         loginJourneyEventTrackerProvider.overrideWithValue(
-          JourneyEventTracker(eventRepository: ops),
+          JourneyEventTracker(telemetryReporter: ops),
         ),
         if (capabilities != null)
           platformCapabilitiesProvider.overrideWithValue(capabilities),
@@ -2571,6 +2551,26 @@ class _RecordingAuthRepository implements AuthRepository {
 
   @override
   Future<void> deletePersona(String subAccountId) async {}
+}
+
+class _SuspendedHintAuthRepository extends _RecordingAuthRepository {
+  @override
+  Future<OneTapLoginHintDto> resolveOneTapLoginHint({
+    required String vendor,
+    required String carrierToken,
+    required String deviceId,
+    required String platform,
+    String? appVersion,
+  }) {
+    throw CloudException(
+      type: CloudErrorType.forbidden,
+      message: 'account is suspended',
+      code: UserErrorCode.accountSuspended.code,
+      runtimeFailure: testRuntimeFailure(
+        code: UserErrorCode.accountSuspended.code,
+      ),
+    );
+  }
 }
 
 class _SocialFailingAuthRepository extends _RecordingAuthRepository {

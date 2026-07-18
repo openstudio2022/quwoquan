@@ -15,11 +15,11 @@ from core.io import read_json
 from core.image_rules import image_caption_quality_issue, image_known_reject_issue
 from core import paths
 from core.paths import execution_root, release_root
-from content.post.base_draft import ARTICLE_MIN_BASE_DRAFT_CHARS, base_draft_readiness
+from content.post.article.base_draft import ARTICLE_MIN_BASE_DRAFT_CHARS, base_draft_readiness
 from core.content_source_registry import homepage_source_can_seed_base_draft
 from core.media_asset_url import build_release_media_manifest
 from core.tree_integrity import tree_integrity_stats
-from core.release_layout import payload_file
+from core.release_layout import object_closure_digest, payload_file, payload_root
 from content.release.environment.consistency import scan_release_contract
 
 
@@ -148,7 +148,7 @@ def _same_source_unit(source_ref: str, source_asset_ref: str) -> bool:
 
 
 def _has_rights_proof(*payloads: Mapping[str, Any]) -> bool:
-    keys = ("authorizationProof", "licenseSnapshot", "termsUrl", "licenseProof")
+    keys = ("authorizationProof", "licenseSnapshot", "termsUrl")
     for payload in payloads:
         for key in keys:
             value = payload.get(key)
@@ -271,7 +271,8 @@ def _article_asset_source_issues(
 
 def _asset_alignment_issues(post_rel: str, manifest: Mapping[str, Any], asset: Mapping[str, Any]) -> list[str]:
     issues: list[str] = []
-    caption = str(asset.get("caption") or "").strip()
+    is_video = _is_video_post(manifest)
+    caption = str(asset.get("caption") or (manifest.get("caption") if is_video else "") or "").strip()
     entity_name = _post_entity_name(manifest)
     asset_label = str(asset.get("assetId") or asset.get("fileName") or "?")
     caption_quality_issue = image_caption_quality_issue(
@@ -300,7 +301,7 @@ def _asset_alignment_issues(post_rel: str, manifest: Mapping[str, Any], asset: M
     )
     if known_reject_issue:
         issues.append(f"{post_rel}: {known_reject_issue}")
-    if _is_image_post(manifest):
+    if _is_image_post(manifest) or is_video:
         return issues
     if not caption:
         issues.append(f"{post_rel}: article asset caption is empty")
@@ -397,22 +398,27 @@ def _release_v3_integrity(release_id: str, root: Path) -> dict[str, Any]:
         for row in consistency.get("blockingIssues") or []
     ]
     header = _json(payload_file(root, "release.json"))
-    if header.get("schemaVersion") != "quwoquan_data.release/3":
-        issues.append(f"{release_id}: release.json schemaVersion must be quwoquan_data.release/3")
+    if header.get("schema") != "quwoquan_data.release":
+        issues.append(f"{release_id}: release.json schema must be quwoquan_data.release")
     if str(header.get("releaseId") or "") != release_id:
         issues.append(f"{release_id}: release.json releaseId mismatch")
     if str(contract.get("releaseId") or "") != release_id:
         issues.append(f"{release_id}: desired_state.json releaseId mismatch")
 
-    canonical = tree_integrity_stats(paths.PUBLISH_ROOT)
     expected_merkle = str(header.get("canonicalMerkle") or "")
     if not expected_merkle:
         issues.append(f"{release_id}: release.json canonicalMerkle is empty")
-    elif expected_merkle != canonical["merkleRoot"]:
-        issues.append(
-            f"{release_id}: canonical Merkle mismatch: "
-            f"release={expected_merkle} current={canonical['merkleRoot']}"
-        )
+    else:
+        try:
+            actual_merkle = object_closure_digest(root)
+        except FileNotFoundError as exc:
+            issues.append(f"{release_id}: {exc}")
+        else:
+            if expected_merkle != actual_merkle:
+                issues.append(
+                    f"{release_id}: object closure Merkle mismatch: "
+                    f"release={expected_merkle} actual={actual_merkle}"
+                )
 
     index = _json(payload_file(root, "index/objects.json"))
     index_refs = {
@@ -424,7 +430,7 @@ def _release_v3_integrity(release_id: str, root: Path) -> dict[str, Any]:
             issues.append(f"{release_id}: index/objects.json {kind} differs from desired_state")
 
     sample = _json(payload_file(root, "sample_bundle.json"))
-    for kind in ("posts", "entities", "tags"):
+    for kind in ("posts", "entities", "creators", "tags"):
         sample_refs = sorted({str(ref) for ref in sample.get(kind) or [] if str(ref).strip()})
         if sample_refs != refs[kind]:
             issues.append(f"{release_id}: sample_bundle.json {kind} differs from desired_state")
@@ -433,7 +439,8 @@ def _release_v3_integrity(release_id: str, root: Path) -> dict[str, Any]:
         release_id=release_id,
         post_refs=refs["posts"],
         entity_refs=refs["entities"],
-        publish_root=paths.PUBLISH_ROOT,
+        object_root=payload_file(root, "objects"),
+        media_root=payload_root(root),
     )
     for message in expected_media["issues"]:
         issues.append(f"{release_id}: release media closure invalid: {message}")
@@ -449,10 +456,10 @@ def _release_v3_integrity(release_id: str, root: Path) -> dict[str, Any]:
             )
 
     return {
-        "schemaVersion": REPORT_SCHEMA,
+        "schema": REPORT_SCHEMA,
         "releaseId": release_id,
-        "releaseContractSchema": str(contract.get("schemaVersion") or ""),
-        "canonicalMerkle": canonical["merkleRoot"],
+        "releaseContractSchema": str(contract.get("schema") or ""),
+        "canonicalMerkle": expected_merkle,
         "passed": not issues,
         "issues": issues,
         "stats": stats,
@@ -471,150 +478,14 @@ def scan_release_integrity(release_id: str) -> dict[str, Any]:
     }
     if not root.is_dir():
         issues.append(f"{release_id}: release directory not found")
-        return {"schemaVersion": REPORT_SCHEMA, "releaseId": release_id, "passed": False, "issues": issues, "stats": stats}
+        return {"schema": REPORT_SCHEMA, "releaseId": release_id, "passed": False, "issues": issues, "stats": stats}
     if payload_file(root, "desired_state.json").is_file():
         return _release_v3_integrity(release_id, root)
 
     issues.append(f"{release_id}: payload/desired_state.json is required")
-    return {"schemaVersion": REPORT_SCHEMA, "releaseId": release_id, "passed": False, "issues": issues, "stats": stats}
+    return {"schema": REPORT_SCHEMA, "releaseId": release_id, "passed": False, "issues": issues, "stats": stats}
 
 
-def scan_runtime_batch_integrity(
-    execution_id: str,
-    *,
-    refs: Iterable[str] | None = None,
-) -> dict[str, Any]:
-    """Run the same publish-facing integrity checks before release assembly.
-
-    This is the bridge between review/materialize and publish: approved runtime
-    objects must already have complete source/image/base-draft evidence. A
-    later release gate should be a confirmation, not the first place these
-    defects are discovered.
-    """
-
-    root = execution_root(execution_id)
-    label = f"{execution_id}/{execution_id}"
-    issues: list[str] = []
-    stats: dict[str, Any] = {
-        "postCount": 0,
-        "articleCount": 0,
-        "imageCount": 0,
-        "videoCount": 0,
-        "assetCount": 0,
-    }
-    if not root.is_dir():
-        issues.append(f"{label}: runtime batch directory not found")
-        return {
-            "schemaVersion": REPORT_SCHEMA,
-            "executionId": execution_id,
-            "passed": False,
-            "issues": issues,
-            "stats": stats,
-        }
-
-    ledger_path = root / "_shared" / "base_draft_ledger.json"
-    ledger = _json(ledger_path)
-    schema = str(ledger.get("schemaVersion") or "")
-    # 账本是否存在的判定延后到统计完成后：base_draft_ledger 只对认领底稿的文章/主页成品
-    # 必需；image/video 作品按设计不认领底稿，纯图片/视频 release 合法缺账本，不应阻断。
-    if ledger and schema != BASE_DRAFT_LEDGER_SCHEMA:
-        issues.append(
-            f"{label}: base_draft_ledger schemaVersion must be "
-            f"{BASE_DRAFT_LEDGER_SCHEMA}, got {schema or '<empty>'}"
-        )
-
-    issues.extend(_entity_homepage_issues(root, root))
-
-    allowed_post_rels: set[str] = set()
-    if refs is not None:
-        from content.post import object_index as content_object
-
-        for ref in refs:
-            try:
-                allowed_post_rels.add(content_object.content_object_rel(execution_id, str(ref)))
-            except KeyError:
-                continue
-
-    post_manifests = sorted((root / "posts").rglob("manifest.json")) if (root / "posts").is_dir() else []
-    for manifest_path in post_manifests:
-        post_rel = manifest_path.parent.relative_to(root).as_posix()
-        if allowed_post_rels and post_rel not in allowed_post_rels:
-            continue
-        manifest = _payload(manifest_path)
-        stats["postCount"] += 1
-        is_image = _is_image_post(manifest)
-        is_video = _is_video_post(manifest)
-        if is_image:
-            stats["imageCount"] += 1
-        elif is_video:
-            stats["videoCount"] += 1
-        else:
-            stats["articleCount"] += 1
-            runtime_post = root / post_rel
-            issues.extend(
-                _base_draft_issues(
-                    release_id=label,
-                    post_rel=post_rel,
-                    manifest=manifest,
-                    runtime_post=runtime_post,
-                    ledger=ledger,
-                )
-            )
-            issues.extend(_review_gate_issues(post_rel, runtime_post))
-
-        assets = manifest.get("assets") if isinstance(manifest.get("assets"), list) else []
-        if is_video and not assets:
-            issues.append(f"{post_rel}: video must include at least one sourced video asset")
-        if not is_image and not is_video and not assets and not _is_text_only_article(manifest, root / post_rel):
-            issues.append(f"{post_rel}: article must include at least one sourced image asset from its base draft")
-        for index, asset in enumerate(assets):
-            if not isinstance(asset, Mapping):
-                issues.append(f"{post_rel}: manifest.assets[{index}] must be an object")
-                continue
-            stats["assetCount"] += 1
-            asset_label = str(asset.get("assetId") or asset.get("fileName") or f"asset[{index}]")
-            source_ref = str(asset.get("sourceRef") or "").strip()
-            source_asset_ref = str(asset.get("sourceAssetRef") or "").strip()
-            if not source_ref:
-                issues.append(f"{post_rel}: {asset_label} missing manifest.assets[].sourceRef")
-            if not source_asset_ref:
-                issues.append(f"{post_rel}: {asset_label} missing manifest.assets[].sourceAssetRef")
-            collection_id = str(asset.get("sourceCollectionId") or "").strip()
-            manifest_sha = _norm_sha(str(asset.get("sha256") or ""))
-            file_name = str(asset.get("fileName") or asset.get("path") or "").strip()
-            actual_sha = _file_sha(manifest_path.parent / "assets" / file_name) if file_name else ""
-            effective_sha = actual_sha or manifest_sha
-            if not manifest_sha:
-                issues.append(f"{post_rel}: {asset_label} missing sha256")
-            elif actual_sha and manifest_sha != actual_sha:
-                issues.append(f"{post_rel}: {asset_label} sha256 mismatch with asset file")
-            if source_ref:
-                meta = _source_unit_meta(root, source_ref)
-                if not _has_rights_proof(asset, meta):
-                    issues.append(f"{post_rel}: {asset_label} missing image authorization proof or license snapshot")
-            issues.extend(_asset_alignment_issues(post_rel, manifest, asset))
-            if not is_image:
-                issues.extend(
-                    _article_asset_source_issues(
-                        post_rel=post_rel,
-                        asset_label=asset_label,
-                        asset=asset,
-                        runtime_post=root / post_rel,
-                    )
-                )
-
-    # 仅当存在认领底稿的文章/主页成品时才要求账本存在；纯图片/视频 release 合法缺账本，
-    # 对齐"诚实弃稿/允许配额不足"的优雅降级：实体只产出图片作品时不得因缺账本硬失败。
-    if stats["articleCount"] > 0 and not ledger:
-        issues.append(f"{label}: missing _shared/base_draft_ledger.json")
-
-    return {
-        "schemaVersion": REPORT_SCHEMA,
-        "executionId": execution_id,
-        "passed": not issues,
-        "issues": issues,
-        "stats": stats,
-    }
 
 
 def release_integrity_issues(release_id: str) -> list[str]:

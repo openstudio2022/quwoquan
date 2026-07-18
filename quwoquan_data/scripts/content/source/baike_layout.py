@@ -1,4 +1,4 @@
-"""百度/搜狗百科 HTML 结构前端：解析章节/段落/信息框进统一 IR（source.layout.json）。
+"""HTML 百科结构前端：解析章节/段落/信息框进统一 IR（source.layout.json）。
 
 替换旧 `_baike_html_plaintext` 的纯文本降级：
 
@@ -182,7 +182,7 @@ def parse_baike_layout(
     source_kind: str,
     extractor: str,
 ) -> dict[str, Any]:
-    """百度/搜狗百科 HTML → 统一结构化 IR。
+    """HTML 百科页面 → 统一结构化 IR。
 
     解析失败（零章节零段落零信息框）返回 ``parseStatus=rejected``，原因
     ``baike_structure_not_found``（反抓取空壳/验证码页等由质量门按低分处理）。

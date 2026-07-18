@@ -8,6 +8,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/user/one_tap_login_hint_dto
 import 'package:quwoquan_app/cloud/runtime/generated/user/owner_credential_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/persona_management_item_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_errors.g.dart';
+import 'package:quwoquan_app/cloud/user/generated/prefab_user_metadata.g.dart';
 import 'package:quwoquan_app/cloud/services/user/auth_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/social_authorization_repository.dart';
@@ -17,8 +18,8 @@ import 'package:quwoquan_app/cloud/services/user/social_authorization_repository
 final class AlphaAuthRepository implements AuthRepository {
   AlphaAuthRepository({DateTime Function()? now}) : _now = now ?? DateTime.now;
 
-  static const _ownerId = 'fixture_user_current';
-  static const _subAccountId = 'fixture_sub_current';
+  static const _ownerId = PrefabUserMetadata.currentUserId;
+  static const _subAccountId = PrefabUserMetadata.currentSubAccountId;
   static const _fixedOtpCode = '123456';
   static const _otpTtl = Duration(minutes: 5);
   static const _otpCooldown = Duration(seconds: 60);

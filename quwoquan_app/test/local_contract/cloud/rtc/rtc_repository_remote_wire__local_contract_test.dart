@@ -15,7 +15,7 @@ void main() {
     test('ListCalls 接受 cursor 字段（rtc-service）', () async {
       final client = MockClient((request) async {
         expect(request.method, equals('GET'));
-        if (request.url.path.endsWith('/v1/rtc/calls')) {
+        if (request.url.path.endsWith('/rtc/calls')) {
           return http.Response(
             rtcListCallsResponseJsonWithCursor(),
             200,
@@ -30,7 +30,7 @@ void main() {
       );
       final list = await repo.listCallHistory(limit: 10);
       expect(list, hasLength(1));
-      expect(list.single.id, equals('call_x'));
+      expect(list.single.callId, equals('call_x'));
     });
 
     test(
@@ -40,7 +40,7 @@ void main() {
         final client = MockClient((request) async {
           captured = request;
           return http.Response(
-            '{"token":"t","session":{"_id":"c0","callType":"audio","status":"ringing","initiatorId":"u0","roomId":"r0","maxParticipants":8,"participantCount":1,"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z"}}',
+            '{"token":"t","session":{"callId":"c0","callType":"audio","status":"ringing","initiatorId":"u0","roomId":"r0","maxParticipants":8,"participantCount":1,"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z"}}',
             200,
             headers: {'content-type': 'application/json'},
           );

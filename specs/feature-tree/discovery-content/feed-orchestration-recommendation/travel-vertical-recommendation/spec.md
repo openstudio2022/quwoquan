@@ -6,7 +6,7 @@
 
 ## 范围
 
-- `GET /v1/content/feed` 中 `type/subCategory=travel|旅行|旅游` 归一为 `vertical=travel_photography`。
+- `GET /content/feed` 中 `type/subCategory=travel|旅行|旅游` 归一为 `vertical=travel_photography`。
 - Tag/Hot/Explore/Author/Mongo/PostRepo/Social/Collaborative/Vector 召回必须遵守 vertical 过滤或在候选回传后过滤。
 - repository fallback 不得混入非旅行内容。
 - 行为事件和推荐指标按 `channelId=travel_photography`、`vertical=travel_photography`、`recallPath` 分桶。

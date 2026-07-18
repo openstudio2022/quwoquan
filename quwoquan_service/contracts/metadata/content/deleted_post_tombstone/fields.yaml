@@ -1,4 +1,3 @@
-version: 1
 entity: DeletedPostTombstone
 description: 删除保留期内用于 410 语义、传播删除与投影重建的只追加事实
 

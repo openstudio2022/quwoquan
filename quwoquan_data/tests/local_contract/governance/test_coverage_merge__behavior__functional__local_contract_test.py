@@ -107,7 +107,7 @@ def test_merge_dedup_gap_and_apply_writeback(monkeypatch):
             "# 测试主清单头注释\n"
             + yaml.safe_dump(
                 {
-                    "schemaVersion": "quwoquan_data.discovery_seed/2",
+                    "schema": "quwoquan_data.discovery_seed",
                     "country": "中国",
                     "province": "浙江省",
                     "city": "舟山市",

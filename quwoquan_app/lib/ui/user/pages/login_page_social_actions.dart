@@ -46,15 +46,9 @@ extension _LoginPageSocialActions on _LoginFrameHostState {
         NativeAuthProvider.qq,
       ].map((provider) async {
         if (staticallyAvailable[provider] != true) {
-          final nativeProductPlatform = <String>{
-            'ios',
-            'android',
-          }.contains(CloudRequestHeaders.platform().toLowerCase());
           return NativeAuthCapability(
             provider: provider,
-            availability: nativeProductPlatform
-                ? NativeAuthAvailability.sdkUnavailable
-                : NativeAuthAvailability.unsupportedPlatform,
+            availability: NativeAuthAvailability.unsupportedPlatform,
             reason: 'platform_capability_unavailable',
           );
         }

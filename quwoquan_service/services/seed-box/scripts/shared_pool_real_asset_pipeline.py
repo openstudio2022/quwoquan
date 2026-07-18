@@ -28,11 +28,18 @@ CONTENT_SCENARIOS = METADATA / "content" / "test_fixtures" / "scenarios" / "cont
 CIRCLE_SCENARIOS = METADATA / "social" / "circle" / "test_fixtures" / "scenarios" / "circle_scenarios.json"
 CHAT_SCENARIOS = METADATA / "messages" / "chat" / "test_fixtures" / "scenarios" / "chat_scenarios.json"
 GROUP_RENDER_PACKAGE = "./tools/render_group_avatar"
-BETA_VIDEO_OBJECT_KEY = "media/video/s/archived-video/beta-sample.mp4"
+PRIMARY_VIDEO_PUBLIC_SLICE_KEY = "media/video/s/video-primary-0001/post/video-content-0001/source.mp4"
 # 真实可播放样例视频源（CC0, H.264/AAC, faststart），随仓库提交，供服务端样例
 # 视频对象拷贝；远大于历史 24B ftyp 占位桩，用于拦截占位桩回退。
-BETA_VIDEO_SOURCE_FILENAME = "beta_sample_video.mp4"
-BETA_VIDEO_MIN_BYTES = 4096
+PRIMARY_VIDEO_SOURCE_FILENAME = "primary_video.mp4"
+PRIMARY_VIDEO_MIN_BYTES = 4096
+PRIMARY_ATTACHMENT_PUBLIC_SLICE_KEY = (
+    "media/attachment/s/archived-attachment/post/fixture_chat_file_001/spec.txt"
+)
+PRIMARY_ATTACHMENT_BYTES = (
+    "Quwoquan contract attachment\n"
+    "This deterministic text file validates chat attachment delivery.\n"
+).encode("utf-8")
 
 ROLE_ORDER = [
     "leadAuthor",
@@ -232,6 +239,48 @@ CORE_CIRCLE_PRESETS = {
     "tech": {"circleId": "fixture_circle_tech", "conversationId": "fixture_conv_circle_tech", "groupId": "fixture_group_tech_public", "name": "契约科技前沿", "ownerId": "fixture_user_article", "format": "png"},
     "food": {"circleId": "fixture_circle_food", "conversationId": "fixture_conv_circle_food", "groupId": "fixture_group_food_public", "name": "契约美食探店", "ownerId": "fixture_user_weekend_2", "format": "png"},
 }
+ADDITIONAL_CIRCLE_PRESETS = (
+    {
+        "sourceThemeId": "tech",
+        "circleId": "fixture_circle_gold_invest",
+        "conversationId": "fixture_conv_circle_gold_invest",
+        "groupId": "fixture_group_gold_invest_public",
+        "name": "黄金投资圈",
+        "summary": "围绕黄金、贵金属和长期资产配置展开事实讨论。",
+        "ownerId": "fixture_user_article",
+        "format": "png",
+        "primaryTheme": "finance",
+        "secondaryThemes": ["investment", "gold"],
+        "themeTags": ["finance", "investment", "gold"],
+        "displayTags": ["黄金", "贵金属", "资产配置"],
+        "primaryCategory": "finance",
+        "secondaryCategory": "黄金",
+        "contentDomain": "finance",
+        "stats": {
+            "memberCount": 8400,
+            "postCount": 1200,
+            "dailyActiveMemberCount": 163,
+            "discussionCount": 326,
+        },
+    },
+    {
+        "sourceThemeId": "designWriting",
+        "circleId": "fixture_circle_neworiental_alumni",
+        "conversationId": "fixture_conv_circle_neworiental_alumni",
+        "groupId": "fixture_group_neworiental_alumni_public",
+        "name": "新东方校友圈",
+        "summary": "新东方校友围绕学习、成长和职业转型形成的兴趣圈。",
+        "ownerId": "fixture_user_commenter",
+        "format": "png",
+        "primaryTheme": "education",
+        "secondaryThemes": ["alumni", "growth"],
+        "themeTags": ["education", "alumni", "growth"],
+        "primaryCategory": "education",
+        "secondaryCategory": "校友",
+        "contentDomain": "education",
+    },
+)
+CORE_MENTION_CONVERSATION_ID = "fixture_conv_group"
 
 def load_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
@@ -239,6 +288,50 @@ def load_json(path: Path) -> dict[str, Any]:
 
 def write_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def merge_owned_fixture(path: Path, generated: dict[str, Any]) -> dict[str, Any]:
+    """Replace generator-owned seed sets without deleting independent fixtures."""
+    if not path.exists():
+        return generated
+
+    existing = load_json(path)
+    merged = dict(existing)
+    merged.update(
+        {
+            key: value
+            for key, value in generated.items()
+            if key not in {"seedSets", "scenarios"}
+        }
+    )
+
+    seed_sets = dict(existing.get("seedSets") or {})
+    seed_sets.update(generated.get("seedSets") or {})
+    merged["seedSets"] = seed_sets
+
+    generated_scenarios = {
+        str(item.get("id") or "").strip(): item
+        for item in generated.get("scenarios") or []
+        if isinstance(item, dict) and str(item.get("id") or "").strip()
+    }
+    scenarios: list[dict[str, Any]] = []
+    consumed: set[str] = set()
+    for item in existing.get("scenarios") or []:
+        if not isinstance(item, dict):
+            continue
+        scenario_id = str(item.get("id") or "").strip()
+        if scenario_id in generated_scenarios:
+            scenarios.append(generated_scenarios[scenario_id])
+            consumed.add(scenario_id)
+        else:
+            scenarios.append(item)
+    scenarios.extend(
+        item
+        for scenario_id, item in generated_scenarios.items()
+        if scenario_id not in consumed
+    )
+    merged["scenarios"] = scenarios
+    return merged
 
 
 def slug(value: str) -> str:
@@ -328,11 +421,11 @@ def build_article_payload(*, title: str, summary: str, body: str, cover: dict[st
     markdown_digest = sha256_bytes(markdown.encode("utf-8"))
     return {
         "articleMarkdown": markdown,
-        "articleMarkdownVersion": "qwq-rich-md/1",
+        "markdownDialect": "qwq-rich-md",
         "articleMarkdownDigest": markdown_digest,
         "articleAssetManifest": {
-            "schemaVersion": 1,
-            "articleMarkdownVersion": "qwq-rich-md/1",
+            "schema": "article-asset-manifest",
+            "markdownDialect": "qwq-rich-md",
             "articleMarkdownDigest": markdown_digest,
             "assets": [
                 {
@@ -502,18 +595,18 @@ def render_group_composite(output_key: str, input_paths: list[Path]) -> dict[str
     return {"objectKey": output_key, "version": 1, "mimeType": "image/png", "width": 256, "height": 256, "sizeBytes": len(raw), "sourceHash": sha256_bytes(raw)}
 
 
-def ensure_beta_sample_video() -> None:
+def ensure_primary_delivery_video() -> None:
     # 服务端样例视频必须是真实可播放的 H.264/AAC MP4（faststart）。
     # 历史实现写入 24B 的 ftyp 占位桩（无 moov/mdat、无音视频轨），导致端侧
     # 聚焦后只能持续「加载中…」且无法播放；这里改为从受控真实源拷贝，并禁止
     # 回退占位桩。真实源随仓库提交在 original_media 下。
-    source = ORIGINAL_ROOT / BETA_VIDEO_SOURCE_FILENAME
-    if not source.is_file() or source.stat().st_size < BETA_VIDEO_MIN_BYTES:
+    source = ORIGINAL_ROOT / PRIMARY_VIDEO_SOURCE_FILENAME
+    if not source.is_file() or source.stat().st_size < PRIMARY_VIDEO_MIN_BYTES:
         raise SystemExit(
-            "missing playable beta sample video source: "
+            "missing playable primary video source: "
             f"{source.relative_to(ROOT)}（禁止回退为不可播放的占位桩）"
         )
-    path = MEDIA_ROOT / canonical_media_object_key(BETA_VIDEO_OBJECT_KEY)
+    path = MEDIA_ROOT / canonical_media_object_key(PRIMARY_VIDEO_PUBLIC_SLICE_KEY)
     path.parent.mkdir(parents=True, exist_ok=True)
     needs_copy = (
         not path.is_file()
@@ -522,6 +615,15 @@ def ensure_beta_sample_video() -> None:
     )
     if needs_copy:
         shutil.copyfile(source, path)
+
+
+def ensure_primary_delivery_attachment() -> None:
+    path = MEDIA_ROOT / canonical_media_object_key(
+        PRIMARY_ATTACHMENT_PUBLIC_SLICE_KEY
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not path.is_file() or path.read_bytes() != PRIMARY_ATTACHMENT_BYTES:
+        path.write_bytes(PRIMARY_ATTACHMENT_BYTES)
 
 
 def load_catalogs() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
@@ -576,7 +678,7 @@ def media_spec(post_id: str, variant: str, source_id: str, width: int, height: i
     return {
         "sourceId": source_id,
         "objectKey": canonical_media_object_key(
-            f"media/image/s/archived-image/post/{post_id}/v1/{variant}.{format_ext}"
+            f"media/image/s/archived-image/post/{post_id}/{variant}.{format_ext}"
         ),
         "width": width,
         "height": height,
@@ -612,14 +714,14 @@ def build_users(source_catalog: dict[str, Any], theme_catalog: dict[str, Any], r
         avatar_format = preset.get("format", "png")
         avatar = derive_image(
             SHARED / source_index[preset["avatarSourceId"]]["download"]["storedRelativePath"],
-            f"media/avatar/s/archived-avatar/user/{preset_id}/v1/avatar.{avatar_format}",
+            f"media/avatar/s/archived-avatar/user/{preset_id}/avatar.{avatar_format}",
             512,
             512,
             avatar_format,
         )
         background = derive_image(
             SHARED / source_index[preset["backgroundSourceId"]]["download"]["storedRelativePath"],
-            f"media/background/s/archived-avatar/user/{preset_id}/v1/background.{avatar_format}",
+            f"media/background/s/archived-avatar/user/{preset_id}/background.{avatar_format}",
             1600,
             900,
             avatar_format,
@@ -664,14 +766,14 @@ def build_users(source_catalog: dict[str, Any], theme_catalog: dict[str, Any], r
             background_format = "jpg" if role_idx % 4 else "png"
             avatar = derive_image(
                 SHARED / source_index[avatar_source_id]["download"]["storedRelativePath"],
-                f"media/avatar/s/archived-avatar/user/{user_id}/v1/avatar.{avatar_format}",
+                f"media/avatar/s/archived-avatar/user/{user_id}/avatar.{avatar_format}",
                 512,
                 512,
                 avatar_format,
             )
             background = derive_image(
                 SHARED / source_index[background_source_id]["download"]["storedRelativePath"],
-                f"media/background/s/archived-avatar/user/{user_id}/v1/background.{background_format}",
+                f"media/background/s/archived-avatar/user/{user_id}/background.{background_format}",
                 1600,
                 900,
                 background_format,
@@ -735,14 +837,14 @@ def build_circles(users: list[dict[str, Any]], user_assets: dict[str, dict[str, 
             avatar_format = "jpg" if index % 3 else "png"
             cover = derive_image(
                 SHARED / source_index[source_id]["download"]["storedRelativePath"],
-                f"media/image/s/archived-image/circle/{circle_id}/v1/cover.{cover_format}",
+                f"media/image/s/archived-image/circle/{circle_id}/cover.{cover_format}",
                 1440,
                 900,
                 cover_format,
             )
             avatar = derive_image(
                 SHARED / source_index[source_id]["download"]["storedRelativePath"],
-                f"media/avatar/s/archived-avatar/circle/{circle_id}/v1/avatar.{avatar_format}",
+                f"media/avatar/s/archived-avatar/circle/{circle_id}/avatar.{avatar_format}",
                 512,
                 512,
                 avatar_format,
@@ -776,47 +878,76 @@ def build_circles(users: list[dict[str, Any]], user_assets: dict[str, dict[str, 
                 }
             )
 
-    for theme_id, preset in CORE_CIRCLE_PRESETS.items():
-        theme = next(item for item in theme_catalog["themes"] if item["themeId"] == theme_id)
+    required_presets = [
+        {"sourceThemeId": theme_id, **preset}
+        for theme_id, preset in CORE_CIRCLE_PRESETS.items()
+    ] + list(ADDITIONAL_CIRCLE_PRESETS)
+    for preset in required_presets:
+        source_theme_id = preset["sourceThemeId"]
+        theme = next(
+            item
+            for item in theme_catalog["themes"]
+            if item["themeId"] == source_theme_id
+        )
         source_id = choose_source(theme, "circleSourceIds", 0)
         cover = derive_image(
             SHARED / source_index[source_id]["download"]["storedRelativePath"],
-            f"media/image/s/archived-image/circle/{preset['circleId']}/v1/cover.{preset['format']}",
+            f"media/image/s/archived-image/circle/{preset['circleId']}/cover.{preset['format']}",
             1440,
             900,
             preset['format'],
         )
         avatar = derive_image(
             SHARED / source_index[source_id]["download"]["storedRelativePath"],
-            f"media/avatar/s/archived-avatar/circle/{preset['circleId']}/v1/avatar.{preset['format']}",
+            f"media/avatar/s/archived-avatar/circle/{preset['circleId']}/avatar.{preset['format']}",
             512,
             512,
             preset['format'],
         )
         circle_assets[preset["circleId"]] = avatar
         circle_covers[preset["circleId"]] = cover
-        member_ids = [user["userId"] for user in grouped[theme_id][:6]]
+        member_ids = [user["userId"] for user in grouped[source_theme_id][:6]]
         memberships[preset["circleId"]] = member_ids
-        primary, secondary, domain = CIRCLE_CATEGORY[theme_id]
+        primary, secondary, domain = CIRCLE_CATEGORY[source_theme_id]
         circles.insert(
             0,
             {
                 "circleId": preset["circleId"],
                 "displayName": preset["name"],
-                "summary": f"{theme['displayName']} 核心夹具圈子。",
+                "summary": preset.get(
+                    "summary",
+                    f"{theme['displayName']} 核心夹具圈子。",
+                ),
                 "avatar": avatar,
                 "cover": cover,
                 "ownerUserId": preset["ownerId"],
-                "primaryTheme": theme_id,
-                "secondaryThemes": list(theme.get("adjacentThemes") or [])[:1],
-                "themeTags": ordered_theme_tags(theme_id, list(theme.get("adjacentThemes") or [])[:1]),
+                "primaryTheme": preset.get("primaryTheme", source_theme_id),
+                "secondaryThemes": preset.get(
+                    "secondaryThemes",
+                    list(theme.get("adjacentThemes") or [])[:1],
+                ),
+                "themeTags": preset.get(
+                    "themeTags",
+                    ordered_theme_tags(
+                        source_theme_id,
+                        list(theme.get("adjacentThemes") or [])[:1],
+                    ),
+                ),
+                "displayTags": preset.get("displayTags"),
                 "circleType": "flagshipCircle",
                 "groupConversationId": preset["conversationId"],
                 "memberUserIds": member_ids,
-                "contentDomain": domain,
-                "primaryCategory": primary,
-                "secondaryCategory": secondary,
-                "stats": {"memberCount": len(member_ids), "postCount": 18, "dailyActiveMemberCount": 8},
+                "contentDomain": preset.get("contentDomain", domain),
+                "primaryCategory": preset.get("primaryCategory", primary),
+                "secondaryCategory": preset.get("secondaryCategory", secondary),
+                "stats": preset.get(
+                    "stats",
+                    {
+                        "memberCount": len(member_ids),
+                        "postCount": 18,
+                        "dailyActiveMemberCount": 8,
+                    },
+                ),
                 "createdAt": iso_at(160),
                 "isCoreFixture": True,
             },
@@ -896,7 +1027,7 @@ def build_posts(users: list[dict[str, Any]], circles: list[dict[str, Any]], sour
                     **build_time_fields(created_offset_hours=320 + len(posts)),
                     "stats": {"likeCount": 48 + index * 3, "commentCount": 4 + index % 6, "shareCount": 2 + index % 4},
                     "isCoreFixture": index < 3,
-                    "videoObjectKey": BETA_VIDEO_OBJECT_KEY if post_type == "videoCoverPost" else None,
+                    "videoObjectKey": PRIMARY_VIDEO_PUBLIC_SLICE_KEY if post_type == "videoCoverPost" else None,
                 }
             )
 
@@ -915,7 +1046,7 @@ def build_posts(users: list[dict[str, Any]], circles: list[dict[str, Any]], sour
             post_id = f"fixture_post_cross_{slug(left_theme)}_{slug(right_theme)}_{index + 1:03d}"
             cover = derive_image(
                 SHARED / source_index[source_id]["download"]["storedRelativePath"],
-                f"media/image/s/archived-image/post/{post_id}/v1/cover.jpg",
+                f"media/image/s/archived-image/post/{post_id}/cover.jpg",
                 1280,
                 720,
                 "jpg",
@@ -1015,7 +1146,7 @@ def build_conversations(users: list[dict[str, Any]], circles: list[dict[str, Any
         members = circle["memberUserIds"][: min(9, len(circle["memberUserIds"]))]
         conv_id = circle["groupConversationId"]
         composite = render_group_composite(
-            f"media/avatar/s/archived-avatar/group/{conv_id}/v1/composite.png",
+            f"media/avatar/s/archived-avatar/group/{conv_id}/composite.png",
             [MEDIA_ROOT / user_assets[user_id]["objectKey"] for user_id in members],
         )
         conversation_members[conv_id] = members
@@ -1143,7 +1274,7 @@ def ensure_core_posts(posts: list[dict[str, Any]], post_assets: dict[str, list[d
         cover_height = 960 if spec["postType"] == "galleryPost" else 720
         cover = derive_image(
             SHARED / sources[source_id]["download"]["storedRelativePath"],
-            f"media/image/s/archived-image/post/{spec['postId']}/v1/cover.png",
+            f"media/image/s/archived-image/post/{spec['postId']}/cover.png",
             1280,
             cover_height,
             "png",
@@ -1153,7 +1284,7 @@ def ensure_core_posts(posts: list[dict[str, Any]], post_assets: dict[str, list[d
             extra_source_id = choose_source(theme, "postSourceIds", spec["sourceIndex"] + extra_idx + 1)
             detail = derive_image(
                 SHARED / sources[extra_source_id]["download"]["storedRelativePath"],
-                f"media/image/s/archived-image/post/{spec['postId']}/v1/image-{extra_idx + 2}.png",
+                f"media/image/s/archived-image/post/{spec['postId']}/image-{extra_idx + 2}.png",
                 1280,
                 720,
                 "png",
@@ -1180,7 +1311,7 @@ def ensure_core_posts(posts: list[dict[str, Any]], post_assets: dict[str, list[d
             ),
             "stats": {"likeCount": 80 + idx * 17, "commentCount": 6 + idx, "shareCount": 3 + idx % 4},
             "isCoreFixture": True,
-            "videoObjectKey": BETA_VIDEO_OBJECT_KEY if spec["postType"] == "videoCoverPost" else None,
+            "videoObjectKey": PRIMARY_VIDEO_PUBLIC_SLICE_KEY if spec["postType"] == "videoCoverPost" else None,
             "locationName": spec["locationName"],
         }
         if spec["postType"] == "articlePost":
@@ -1213,7 +1344,7 @@ def ensure_core_conversations(conversations: list[dict[str, Any]], conversation_
         group_avatar = None
         if spec["type"] != "directConversation":
             group_avatar = render_group_composite(
-                f"media/avatar/s/archived-avatar/group/{spec['conversationId']}/v1/composite.png",
+                f"media/avatar/s/archived-avatar/group/{spec['conversationId']}/composite.png",
                 [MEDIA_ROOT / user_assets[user_id]["objectKey"] for user_id in spec["members"]],
             )
             avatar = group_avatar
@@ -1259,7 +1390,7 @@ def build_user_pool_doc(
         if conversation["conversationType"] != "directConversation"
     }
     return {
-        "schemaVersion": "shared.avatar-user-pool",
+        "schema": "shared.avatar-user-pool",
         "description": "alpha/beta/gamma 共享身份、真实图片来源与媒体派生真相源。运行时只消费 media objectKey 派生后的 URL。",
         "mediaContract": {
             "urlDerivation": "runtime joins MEDIA_*_CDN_BASE_URL or gateway base with objectKey",
@@ -1378,7 +1509,7 @@ def content_kind(post_type: str) -> tuple[str, str]:
     if post_type == "articlePost":
         return "article", "work"
     if post_type == "momentPost":
-        return "moment", "moment"
+        return "micro", "moment"
     return "image", "work"
 
 
@@ -1388,16 +1519,12 @@ def content_row(post: dict[str, Any], circles_by_id: dict[str, dict[str, Any]]) 
     circle = circles_by_id[post["circleRef"]]
     row = {
         "postId": post["postId"],
-        "id": post["postId"],
         "contentType": content_type,
-        "type": content_type,
         "contentIdentity": identity,
-        "identity": identity,
         "authorId": post["authorUserId"],
         "subAccountId": post["authorUserId"],
-        "displayName": post["authorProfile"]["displayName"],
+        "authorDisplayName": post["authorProfile"]["displayName"],
         "authorAvatarUrl": post["authorProfile"]["avatar"]["objectKey"],
-        "avatarUrl": post["authorProfile"]["avatar"]["objectKey"],
         "authorBackgroundUrl": post["authorProfile"]["background"]["objectKey"],
         "postType": post["postType"],
         "primaryTheme": post["primaryTheme"],
@@ -1409,7 +1536,6 @@ def content_row(post: dict[str, Any], circles_by_id: dict[str, dict[str, Any]]) 
         "coverUrl": post["coverAsset"]["objectKey"],
         "thumbnailUrl": post["coverAsset"]["objectKey"],
         "mediaUrls": [asset["objectKey"] for asset in assets],
-        "imageUrls": [asset["objectKey"] for asset in assets if asset["mimeType"].startswith("image/")],
         "circleIds": [circle["circleId"]],
         "circleNames": [circle["displayName"]],
         "circleId": circle["circleId"],
@@ -1459,7 +1585,7 @@ def build_comment_thread_core_seed() -> dict[str, Any]:
     post_id = "fixture_photo_001"
 
     def avatar(uid: str) -> str:
-        return f"media/avatar/s/archived-avatar/user/{uid}/v1/avatar.png"
+        return f"media/avatar/s/archived-avatar/user/{uid}/avatar.png"
 
     repliers = [
         ("fixture_user_friend", "契约好友"),
@@ -1519,7 +1645,7 @@ def build_comment_thread_core_seed() -> dict[str, Any]:
                         "mediaId": f"{reply_id}_media",
                         "type": "image",
                         "url": "media/comment/s/archived-comment/"
-                        f"{reply_id}/v1/comment.png",
+                        f"{reply_id}/comment.png",
                         "width": 1200,
                         "height": 900,
                     }
@@ -1640,21 +1766,29 @@ def build_content_doc(posts: list[dict[str, Any]], circles: list[dict[str, Any]]
     circles_by_id = circle_index(circles)
     users_by_id = user_index(users)
     post_rows = [content_row(post, circles_by_id) for post in posts]
-    post_ids = [row["id"] for row in post_rows]
-    current_posts = [row["id"] for row in post_rows if row["authorId"] == "fixture_user_current"]
+    post_ids = [row["postId"] for row in post_rows]
+    current_posts = [
+        row["postId"]
+        for row in post_rows
+        if row["authorId"] == "fixture_user_current"
+    ]
     comments = []
     reactions = []
     comment_authors = ["fixture_user_commenter", "fixture_user_friend", "fixture_user_current"]
     for idx, row in enumerate(post_rows[:48]):
-        if row["id"] == "fixture_photo_001":
+        if row["postId"] == "fixture_photo_001":
             row["commentCount"] = COMMENT_THREAD_CORE_COMMENT_COUNT
             continue
-        comment_id = "fixture_comment_photo_001" if row["id"] == "fixture_photo_001" else f"fixture_comment_{row['id']}"
+        comment_id = (
+            "fixture_comment_photo_001"
+            if row["postId"] == "fixture_photo_001"
+            else f"fixture_comment_{row['postId']}"
+        )
         author_id = comment_authors[idx % len(comment_authors)]
         comments.append({
             "commentId": comment_id,
             "_id": comment_id,
-            "postId": row["id"],
+            "postId": row["postId"],
             "authorId": author_id,
             "authorDisplayNameSnapshot": users_by_id[author_id]["displayName"],
             "authorAvatarObjectKeySnapshot": users_by_id[author_id]["profile"]["avatar"]["objectKey"],
@@ -1663,15 +1797,15 @@ def build_content_doc(posts: list[dict[str, Any]], circles: list[dict[str, Any]]
             "createdAt": iso_at(900 + idx),
         })
     for idx, row in enumerate(post_rows[:72]):
-        reactions.append({"postId": row["id"], "userId": "fixture_user_current" if idx % 2 == 0 else "fixture_user_friend", "liked": True, "favorited": idx % 3 == 0})
+        reactions.append({"postId": row["postId"], "userId": "fixture_user_current" if idx % 2 == 0 else "fixture_user_friend", "liked": True, "favorited": idx % 3 == 0})
     return {
-        "schemaVersion": "content.scenario-fixtures",
+        "schema": "content.scenario-fixtures",
         "description": "内容域 alpha/beta/gamma 共享测试场景。alpha 端侧从 seedSets.posts 初始化 MockContentRepository，beta/gamma 云侧服务 reset+seed 后由端侧 remote 访问。",
         "repositoryExpectations": {"alpha": "mock", "beta": "remote", "gamma": "remote"},
         "seedSets": {
             "content_discovery_core": {"description": "发现流、详情与搜索共享真实图片主样本。", "posts": post_rows, "reactions": reactions, "comments": comments},
             "comment_thread_core": build_comment_thread_core_seed(),
-            "home_feed_core": {"description": "首页关注、精选与群组三个入口的组合内容种子。", "followingFeedPostIds": current_posts[:24] or post_ids[:24], "featuredFeedPostIds": post_ids[:40], "groupFeedPostIds": [row["id"] for row in post_rows if row["circleId"] == "fixture_circle_photo"][:12]},
+            "home_feed_core": {"description": "首页关注、精选与群组三个入口的组合内容种子。", "followingFeedPostIds": current_posts[:24] or post_ids[:24], "featuredFeedPostIds": post_ids[:40], "groupFeedPostIds": [row["postId"] for row in post_rows if row["circleId"] == "fixture_circle_photo"][:12]},
             "content_detail_core": {"description": "内容详情、评论、reaction 与分享主样本。", "postIds": ["fixture_photo_001", "fixture_article_001", "fixture_video_001"], "commentIds": ["fixture_comment_photo_001"], "reactionPostIds": ["fixture_photo_001"], "shareTargets": [{"id": "fixture_share_chat_group", "type": "chat_conversation", "title": "契约周末群"}]},
             "search_core": {"description": "全局搜索与网络结果页可打开的内容种子。", "history": ["西湖晨光", "契约旅行", "城市漫步"], "resultPostIds": ["fixture_photo_001", "fixture_article_001", "fixture_video_001", "fixture_moment_001"], "networkResults": [{"id": "fixture_search_web_001", "title": "契约搜索网络结果", "url": "https://example.com"}]},
             "publish_core": {"description": "创作入口发布设置、草稿、可选圈子和主页。", "drafts": [{"id": "fixture_draft_photo", "type": "image", "body": "契约草稿内容"}], "selectableCircleIds": ["fixture_circle_photo", "fixture_circle_travel", "fixture_circle_life"], "selectableHomepageIds": ["fixture_homepage_author", "fixture_homepage_poi"]},
@@ -1706,7 +1840,7 @@ def build_user_doc(users: list[dict[str, Any]], posts: list[dict[str, Any]]) -> 
     my_posts = [post["postId"] for post in posts if post["authorUserId"] == "fixture_user_current"][:12]
     author_posts = [post["postId"] for post in posts if post["authorUserId"] == "fixture_user_photo"][:12]
     return {
-        "schemaVersion": "user.scenario-fixtures",
+        "schema": "user.scenario-fixtures",
         "description": "用户域 alpha/beta/gamma 共享测试场景，覆盖我的主页、作者主页、persona 与关系能力。",
         "repositoryExpectations": {"alpha": "mock", "beta": "remote", "gamma": "remote"},
         "seedSets": {
@@ -1744,6 +1878,7 @@ def build_circle_doc(circles: list[dict[str, Any]], memberships: dict[str, list[
             "primaryTheme": circle["primaryTheme"],
             "secondaryThemes": circle["secondaryThemes"],
             "themeTags": circle["themeTags"],
+            "tags": circle.get("displayTags") or circle["themeTags"],
             "categoryId": circle["primaryCategory"],
             "subCategory": circle["secondaryCategory"],
             "domainId": circle["contentDomain"],
@@ -1807,24 +1942,44 @@ def build_circle_doc(circles: list[dict[str, Any]], memberships: dict[str, list[
         "createdAt": iso_at(300),
         "updatedAt": iso_at(300),
     }]
+    profile_circles = [circle for circle in circles if circle["isCoreFixture"]]
+    profile_circle_ids = {circle["circleId"] for circle in profile_circles}
+    profile_placements = [
+        {
+            "circleId": post["circleRef"],
+            "postId": post["postId"],
+            "status": "active",
+        }
+        for post in posts
+        if post["circleRef"] in profile_circle_ids
+    ]
+    profile_stats = [
+        {
+            "circleId": circle["circleId"],
+            "memberCount": circle["stats"]["memberCount"],
+            "postCount": circle["stats"]["postCount"],
+            "discussionCount": circle["stats"].get("discussionCount", 0),
+            "weeklyActiveCount": circle["stats"]["dailyActiveMemberCount"] * 2,
+        }
+        for circle in profile_circles
+    ]
     photo_posts = [post["postId"] for post in posts if post["circleRef"] == "fixture_circle_photo"][:12]
     return {
-        "schemaVersion": "circle.scenario-fixtures",
+        "schema": "circle.scenario-fixtures",
         "description": "圈子域 alpha/beta/gamma 共享测试场景。alpha 端侧从 seedSets.circles 初始化 MockCircleRepository。",
         "repositoryExpectations": {"alpha": "mock", "beta": "remote", "gamma": "remote"},
         "seedSets": {
             "circle_core": {"description": "圈子列表、详情、默认群与成员共享真实图片种子。", "circles": circles_rows, "groups": groups, "members": members_doc, "files": files},
             "circle_home_feed_core": {"description": "首页群组 tab 与圈子 hub feed 所需内容映射。", "featuredCircleIds": [circle["circleId"] for circle in circles[:12]], "groupFeedPostIds": photo_posts or ["fixture_photo_001", "fixture_photo_002", "fixture_article_001", "fixture_video_001"]},
-            "circle_profile_core": {"description": "圈子主页封面、统计、成员与作品。", "circleIds": ["fixture_circle_photo"], "stats": [{"circleId": "fixture_circle_photo", "memberCount": next(circle["stats"]["memberCount"] for circle in circles if circle["circleId"] == "fixture_circle_photo"), "postCount": next(circle["stats"]["postCount"] for circle in circles if circle["circleId"] == "fixture_circle_photo"), "weeklyActiveCount": next(circle["stats"]["dailyActiveMemberCount"] * 2 for circle in circles if circle["circleId"] == "fixture_circle_photo")}], "postIds": photo_posts[:4] or ["fixture_photo_001", "fixture_photo_002", "fixture_article_001", "fixture_video_001"]},
+            "circle_profile_core": {"description": "圈子主页封面、统计、成员与作品。", "circleIds": sorted(profile_circle_ids), "stats": profile_stats, "placements": profile_placements},
             "circle_group_chat_link_core": {"description": "圈子默认公开群与聊天会话的对齐关系。", "links": [{"circleId": circle["circleId"], "groupId": f"fixture_group_{circle_suffix(circle['circleId'])}_public", "conversationId": circle["groupConversationId"]} for circle in circles if circle["isCoreFixture"]]},
         },
         "scenarios": [{"id": "circle_list_detail_basic", "title": "圈子列表与详情契约种子", "type": "circle_list_detail", "domainId": "circle", "seedRefs": ["circle_core", "circle_home_feed_core", "circle_profile_core", "circle_group_chat_link_core"], "uiExpectations": {"circleIds": ["fixture_circle_photo", "fixture_circle_travel"], "textFragments": ["契约摄影社", "契约旅行手账"]}, "remoteExpectations": {"circleIds": ["fixture_circle_photo", "fixture_circle_travel"], "groupIds": ["fixture_group_photo_public"], "memberUserIds": ["fixture_user_owner", "fixture_user_current"], "fileIds": ["fixture_file_photo_guide"]}, "environments": {"alpha": {"enabled": True, "repository": "mock"}, "beta": {"enabled": True, "repository": "remote", "requiresSeedReset": True}, "gamma": {"enabled": True, "repository": "remote", "requiresSeedReset": True}}}],
     }
 
 
-def build_chat_doc(conversations: list[dict[str, Any]], conversation_members: dict[str, list[str]], users: list[dict[str, Any]], posts: list[dict[str, Any]]) -> dict[str, Any]:
+def build_chat_doc(conversations: list[dict[str, Any]], conversation_members: dict[str, list[str]], users: list[dict[str, Any]]) -> dict[str, Any]:
     users_by_id = user_index(users)
-    post_ids = [post["postId"] for post in posts]
     conversation_rows = []
     members_rows: dict[str, list[dict[str, Any]]] = {}
     message_rows: dict[str, list[dict[str, Any]]] = {}
@@ -1836,10 +1991,9 @@ def build_chat_doc(conversations: list[dict[str, Any]], conversation_members: di
         for seq in range(6 if is_direct else 8):
             sender_id = conversation_members[conv_id][seq % len(conversation_members[conv_id])]
             sender = users_by_id[sender_id]
-            shared_post_id = post_ids[(idx * 5 + seq) % len(post_ids)] if seq in {2, 5} else None
             text = f"{sender['displayName']} 在 {conversation['displayName']} 中发送的共享池消息 #{seq + 1}。"
             message_id = f"{conv_id}_msg_{seq + 1:02d}"
-            sender_display_name_snapshot: str | None = sender["displayName"]
+            sender_name: str | None = sender["displayName"]
             message_type = "text"
             media_payload: dict[str, Any] | None = None
             if conv_id == "fixture_conv_direct" and seq == 1:
@@ -1881,10 +2035,10 @@ def build_chat_doc(conversations: list[dict[str, Any]], conversation_members: di
                 message_id = "fixture_msg_direct_file_1"
                 message_type = "file"
                 media_payload = {
-                    "url": "media/file/s/archived-file/post/fixture_chat_file_001/v1/spec.pdf",
-                    "mimeType": "application/pdf",
-                    "fileName": "spec.pdf",
-                    "fileSizeBytes": 2048,
+                    "url": PRIMARY_ATTACHMENT_PUBLIC_SLICE_KEY,
+                    "mimeType": "text/plain",
+                    "fileName": "spec.txt",
+                    "fileSizeBytes": len(PRIMARY_ATTACHMENT_BYTES),
                 }
             if conv_id == "fixture_conv_group" and seq == 0:
                 text = "周末集合时间已确认"
@@ -1905,31 +2059,34 @@ def build_chat_doc(conversations: list[dict[str, Any]], conversation_members: di
                 text = "文章配图已经补齐。"
                 message_id = "fixture_msg_article_direct_1"
             if conv_id == "fixture_conv_direct" and sender_id == "fixture_user_friend":
-                sender_display_name_snapshot = None
-            messages.append({
-                "messageId": message_id,
-                "_id": message_id,
+                sender_name = None
+            message = {
+                "id": message_id,
                 "conversationId": conv_id,
+                "seq": seq + 1,
+                "clientMsgId": f"{message_id}_client",
                 "senderId": sender_id,
+                "senderName": sender_name,
+                "senderAvatar": sender["profile"]["avatar"]["objectKey"],
                 "content": text,
                 "type": message_type,
-                "messageType": message_type,
-                **({"mediaUrl": media_payload["url"]} if media_payload else {}),
-                **({"media": media_payload} if media_payload else {}),
-                "seq": seq + 1,
-                "createdAt": iso_at(1000 + idx * 2 + seq),
-                "senderDisplayNameSnapshot": sender_display_name_snapshot,
-                "senderAvatarObjectKeySnapshot": sender["profile"]["avatar"]["objectKey"],
-                "senderAvatarUrlSnapshot": sender["profile"]["avatar"]["objectKey"],
-                "senderAvatar": sender["profile"]["avatar"]["objectKey"],
-                "sharedPostId": shared_post_id,
-            })
+                "status": "sent",
+                "timestamp": iso_at(1000 + idx * 2 + seq),
+            }
+            if media_payload:
+                message.update(
+                    {
+                        "mediaDeliveryUrl": media_payload["url"],
+                        "mediaType": message_type,
+                        "mediaContentType": media_payload["mimeType"],
+                        "mediaFileSizeBytes": media_payload["fileSizeBytes"],
+                    }
+                )
+            messages.append(message)
         message_rows[conv_id] = messages
         last_message = messages[-1]
         row = {
-            "_id": conv_id,
             "id": conv_id,
-            "conversationId": conv_id,
             "type": "direct" if is_direct else "group",
             "conversationType": conversation["conversationType"],
             "title": conversation["displayName"],
@@ -1940,11 +2097,11 @@ def build_chat_doc(conversations: list[dict[str, Any]], conversation_members: di
             "maxGroupSize": 2 if is_direct else 500,
             "receiptEnabled": True,
             "lastMessagePreview": last_message["content"],
-            "lastMessageTime": last_message["createdAt"],
+            "lastMessageTime": last_message["timestamp"],
             "messageCount": len(messages),
             "status": "active",
-            "createdAt": messages[0]["createdAt"],
-            "updatedAt": last_message["createdAt"],
+            "createdAt": messages[0]["timestamp"],
+            "updatedAt": last_message["timestamp"],
             "avatarObjectKey": conversation["avatar"]["objectKey"],
             "primaryTheme": conversation["primaryTheme"],
             "secondaryThemes": conversation["secondaryThemes"],
@@ -1972,7 +2129,7 @@ def build_chat_doc(conversations: list[dict[str, Any]], conversation_members: di
             }
             for member_id in conversation_members[conv_id]
         ]
-        user_states.append({"_id": f"fixture_state_{conv_id}_current", "userId": "fixture_user_current", "conversationId": conv_id, "readSeq": max(0, len(messages) - 1), "unreadCount": 1 if idx % 3 == 0 else 0, "muted": False, "pinned": idx < 2, "updatedAt": last_message["createdAt"]})
+        user_states.append({"_id": f"fixture_state_{conv_id}_current", "userId": "fixture_user_current", "conversationId": conv_id, "readSeq": max(0, len(messages) - 1), "unreadCount": 1 if idx % 3 == 0 else 0, "mentionUnreadCount": 1 if conv_id == CORE_MENTION_CONVERSATION_ID else 0, "muted": False, "pinned": idx < 2, "updatedAt": last_message["timestamp"]})
     contacts = []
     seen = set()
     for user_id in ["fixture_user_friend", "fixture_user_weekend_1", "fixture_user_weekend_2", "fixture_user_photo", "fixture_user_travel", "fixture_user_article"] + [user["userId"] for user in users if "contact" in user["roleTags"]][:18]:
@@ -1987,27 +2144,31 @@ def build_chat_doc(conversations: list[dict[str, Any]], conversation_members: di
                 "type": "MessageSent",
                 "conversationId": "conv_001",
                 "payload": {
-                    "id": "fixture_rt_conv_001_msg_13",
-                    "_id": "fixture_rt_conv_001_msg_13",
                     "messageId": "fixture_rt_conv_001_msg_13",
                     "conversationId": "conv_001",
                     "seq": 13,
                     "clientMsgId": "fixture_rt_conv_001_msg_13_client",
                     "senderId": "fixture_user_friend",
                     "senderDisplayNameSnapshot": "契约联系人",
-                    "senderAvatarUrlSnapshot": "media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png",
-                    "senderAvatar": "media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png",
+                    "senderAvatarUrlSnapshot": "media/avatar/s/archived-avatar/user/fixture_user_friend/avatar.png",
                     "type": "text",
-                    "messageType": "text",
                     "content": "Fixture Realtime 新消息：咖啡馆门口见。",
-                    "status": "sent",
                     "timestamp": iso_at(1010),
+                },
+            }
+        ],
+        "fixture_conv_group": [
+            {
+                "type": "ConversationMemberAdded",
+                "conversationId": "fixture_conv_group",
+                "payload": {
+                    "userId": "fixture_user_weekend_2",
                 },
             }
         ],
     }
     return {
-        "schemaVersion": "chat.scenario-fixtures",
+        "schema": "chat.scenario-fixtures",
         "description": "聊天域 alpha/beta/gamma 共享测试场景。alpha 端侧从 seedSets.conversations/messages/members 初始化 MockChatRepository。",
         "repositoryExpectations": {"alpha": "mock", "beta": "remote", "gamma": "remote"},
         "seedSets": {
@@ -2022,7 +2183,8 @@ def build_chat_doc(conversations: list[dict[str, Any]], conversation_members: di
 
 
 def main() -> int:
-    ensure_beta_sample_video()
+    ensure_primary_delivery_video()
+    ensure_primary_delivery_attachment()
     source_catalog, theme_catalog, rules = load_catalogs()
     users, user_assets, _background_assets, source_updates = build_users(source_catalog, theme_catalog, rules)
     source_catalog["entries"] = source_updates
@@ -2035,10 +2197,31 @@ def main() -> int:
 
     write_json(SOURCE_CATALOG_PATH, source_catalog)
     write_json(USER_POOL_PATH, build_user_pool_doc(users, posts, circles, conversations, source_catalog, theme_catalog, rules))
-    write_json(USER_SCENARIOS, build_user_doc(users, posts))
-    write_json(CONTENT_SCENARIOS, build_content_doc(posts, circles, users))
-    write_json(CIRCLE_SCENARIOS, build_circle_doc(circles, memberships, users, posts))
-    write_json(CHAT_SCENARIOS, build_chat_doc(conversations, conversation_members, users, posts))
+    write_json(
+        USER_SCENARIOS,
+        merge_owned_fixture(USER_SCENARIOS, build_user_doc(users, posts)),
+    )
+    write_json(
+        CONTENT_SCENARIOS,
+        merge_owned_fixture(
+            CONTENT_SCENARIOS,
+            build_content_doc(posts, circles, users),
+        ),
+    )
+    write_json(
+        CIRCLE_SCENARIOS,
+        merge_owned_fixture(
+            CIRCLE_SCENARIOS,
+            build_circle_doc(circles, memberships, users, posts),
+        ),
+    )
+    write_json(
+        CHAT_SCENARIOS,
+        merge_owned_fixture(
+            CHAT_SCENARIOS,
+            build_chat_doc(conversations, conversation_members, users),
+        ),
+    )
     print(f"shared real asset pipeline synced: {USER_POOL_PATH.relative_to(ROOT)}")
     print(f"media assets written under: {MEDIA_ROOT.relative_to(ROOT)}")
     return 0

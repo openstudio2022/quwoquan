@@ -20,9 +20,21 @@ class LocalChatSearchStore {
     await _database;
   }
 
+  Future<void> close() async {
+    final databaseFuture = _databaseFuture;
+    _databaseFuture = null;
+    if (databaseFuture == null) {
+      return;
+    }
+    final database = await databaseFuture;
+    if (database.isOpen) {
+      await database.close();
+    }
+  }
+
   Future<void> upsertContacts({
     required LocalSearchNamespace namespace,
-    required List<LocalChatSearchContactWire> contacts,
+    required List<LocalChatSearchContactRecord> contacts,
   }) async {
     if (contacts.isEmpty) {
       return;
@@ -32,32 +44,23 @@ class LocalChatSearchStore {
     final now = DateTime.now().toIso8601String();
     _upsertNamespace(batch, namespace, updatedAt: now);
     for (final contact in contacts) {
-      final contactId = _contactId(contact);
+      final contactId = contact.contactId.trim();
       if (contactId.isEmpty) {
         continue;
       }
-      final displayName = _firstNonEmpty(<Object?>[
-        contact['displayName'],
-        contact['nickname'],
-        contact['username'],
-        contactId,
-      ]);
-      final nickname = _string(contact['nickname']);
-      final username = _string(contact['username']);
-      final subtitle = _string(contact['subtitle']);
-      final headline = _firstNonEmpty(<Object?>[
-        contact['headline'],
-        contact['bio'],
-      ]);
-      final remark = _string(contact['remark']);
-      final conversationId = _string(
-        contact['conversationId'] ?? contact['directConversationId'],
-      );
+      final displayNameRaw = contact.displayName.trim();
+      final displayName = displayNameRaw.isNotEmpty
+          ? displayNameRaw
+          : contactId;
+      final nickname = contact.nickname.trim();
+      final username = contact.username.trim();
+      final subtitle = contact.subtitle.trim();
+      final headline = contact.headline.trim();
+      final remark = contact.remark.trim();
+      final conversationId = contact.conversationId.trim();
       final payload = <String, Object?>{
-        ...contact,
-        'contactId': contactId,
+        ...contact.toWireMap(),
         'displayName': displayName,
-        if (conversationId.isNotEmpty) 'conversationId': conversationId,
       };
       final searchableText = _searchableText(<Object?>[
         displayName,
@@ -80,9 +83,7 @@ class LocalChatSearchStore {
         'conversation_id': conversationId,
         'searchable_text': searchableText,
         'payload_json': jsonEncode(payload),
-        'updated_at': _string(contact['updatedAt']).isNotEmpty
-            ? _string(contact['updatedAt'])
-            : now,
+        'updated_at': now,
       }, conflictAlgorithm: ConflictAlgorithm.replace);
       batch.delete(
         'chat_contacts_fts',
@@ -96,18 +97,6 @@ class LocalChatSearchStore {
       });
     }
     await batch.commit(noResult: true);
-  }
-
-  Future<void> upsertConversationRecords({
-    required LocalSearchNamespace namespace,
-    required List<ConversationCacheRecord> conversations,
-  }) async {
-    await upsertConversations(
-      namespace: namespace,
-      conversations: conversations
-          .map((conversation) => conversation.toWireMap())
-          .toList(growable: false),
-    );
   }
 
   Future<List<LocalChatSearchContactRecord>> searchContacts({
@@ -222,7 +211,7 @@ class LocalChatSearchStore {
           });
           final record = _conversationRecordFromPayload(payload);
           return ConversationSearchItemView.fromMap(<String, dynamic>{
-            ...record.toWireMap(),
+            ...record.toCacheMap(),
             'matchedField': matchedField,
             'highlightText': _highlightText(payload, matchedField),
           });
@@ -363,7 +352,7 @@ class LocalChatSearchStore {
             groupAvatarVersion: groupAvatarVersion,
             groupAvatarSourceHash: groupAvatarSourceHash,
           )
-          .toWireMap();
+          .toCacheMap();
       await database.update(
         'chat_conversations',
         <String, Object?>{
@@ -686,7 +675,7 @@ class LocalChatSearchStore {
   ConversationCacheRecord _conversationRecordFromPayload(
     Map<String, dynamic> payload,
   ) {
-    return ConversationCacheRecord.fromWireMap(payload);
+    return ConversationCacheRecord.fromCacheMap(payload);
   }
 
   Future<Database> get _database async {
@@ -768,45 +757,25 @@ class LocalChatSearchStore {
   String _highlightText(Map<String, dynamic> payload, String? matchedField) {
     switch (matchedField) {
       case 'displayName':
-        return _firstNonEmpty(<Object?>[
-          payload['displayName'],
-          payload['nickname'],
-          payload['username'],
-        ]);
+        return _string(payload['displayName']);
       case 'nickname':
         return _string(payload['nickname']);
       case 'username':
         return _string(payload['username']);
       case 'headline':
-        return _firstNonEmpty(<Object?>[payload['headline'], payload['bio']]);
+        return _string(payload['headline']);
       case 'remark':
         return _string(payload['remark']);
       case 'title':
-        return _firstNonEmpty(<Object?>[
-          payload['title'],
-          payload['conversationTitle'],
-        ]);
+        return _string(payload['title']);
       case 'lastMessagePreview':
-        return _firstNonEmpty(<Object?>[
-          payload['lastMessagePreview'],
-          payload['highlightText'],
-        ]);
+        return _string(payload['lastMessagePreview']);
       case 'content':
-        return _firstNonEmpty(<Object?>[
-          payload['contentPreview'],
-          payload['content'],
-        ]);
+        return _string(payload['contentPreview']);
       case 'senderDisplayName':
-        return _firstNonEmpty(<Object?>[
-          payload['senderDisplayName'],
-          payload['senderDisplayNameSnapshot'],
-          payload['senderName'],
-        ]);
+        return _string(payload['senderDisplayName']);
       case 'conversationTitle':
-        return _firstNonEmpty(<Object?>[
-          payload['conversationTitle'],
-          payload['title'],
-        ]);
+        return _string(payload['conversationTitle']);
       default:
         return '';
     }
@@ -852,24 +821,6 @@ class LocalChatSearchStore {
         .map((item) => _normalize(item?.toString()) ?? '')
         .where((item) => item.isNotEmpty)
         .join(' ');
-  }
-
-  String _contactId(Map<String, Object?>? contact) {
-    return _string(
-      contact?['contactId'] ??
-          contact?['subAccountId'] ??
-          contact?['userId'] ??
-          contact?['profileSubjectId'] ??
-          '',
-    );
-  }
-
-  String _conversationId(Map<String, Object?>? conversation) {
-    return _string(
-      conversation?['conversationId'] ??
-          conversation?['id'] ??
-          conversation?['_id'],
-    );
   }
 
   String _firstNonEmpty(List<Object?> values) {

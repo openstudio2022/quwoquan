@@ -25,7 +25,7 @@ func (s *postOutboxEventSpy) Publish(
 func TestPostOutboxPublisherPreservesDurableEventIdentity(t *testing.T) {
 	t.Parallel()
 
-	payload, err := json.Marshal(map[string]any{"_id": "post-1"})
+	payload, err := json.Marshal(map[string]any{"postId": "post-1"})
 	if err != nil {
 		t.Fatalf("marshal payload: %v", err)
 	}

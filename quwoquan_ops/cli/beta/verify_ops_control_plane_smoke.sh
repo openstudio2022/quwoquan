@@ -35,9 +35,9 @@ PY
 }
 
 check_json "$platform_base/healthz" "platform health"
-check_json "$platform_base/v1/control-plane/platform/topology/clusters" "platform clusters"
-check_json "$platform_base/v1/control-plane/platform/configs" "platform config keys"
-check_json "$platform_base/v1/control-plane/platform/configs/resolve?env=beta&cluster=beta-control-a&service=product-ops-service" "platform effective config"
-check_json "$platform_base/v1/control-plane/platform/configs/instances" "platform instance reports"
+check_json "$platform_base/control-plane/platform/topology/clusters" "platform clusters"
+check_json "$platform_base/control-plane/platform/configs" "platform config keys"
+check_json "$platform_base/control-plane/platform/configs/resolve?env=beta&cluster=beta-control-a&service=product-ops-service" "platform effective config"
+check_json "$platform_base/control-plane/platform/configs/instances" "platform instance reports"
 check_json "$product_base/healthz" "product health"
-check_json "$product_base/v1/control-plane/product/metrics/l1l4?env=beta" "product l1l4 metrics"
+check_json "$product_base/control-plane/product/metrics/l1l4?env=beta" "product l1l4 metrics"

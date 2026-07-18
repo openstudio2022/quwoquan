@@ -15,6 +15,7 @@ import (
 	operationsecurity "quwoquan_service/generated/operationsecurity"
 	rtmongo "quwoquan_service/internal/platform/mongodb"
 	rtauth "quwoquan_service/runtime/auth"
+	runtimeconfig "quwoquan_service/runtime/config"
 	rtgov "quwoquan_service/runtime/governance"
 	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
@@ -102,6 +103,16 @@ func main() {
 	}
 	homepageService := application.NewHomepageServiceWithStore(ctx, stateStore, serviceOpts...)
 	handler := httpadapter.NewHandler(homepageService).Routes()
+	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(
+		runtimeconfig.EnvRuntimeConfigProvider{},
+	)
+	if err != nil {
+		log.Fatalf("entity-service access token config invalid: %v", err)
+	}
+	accessVerifier, err := rtauth.NewHS256Verifier(accessTokenConfig)
+	if err != nil {
+		log.Fatalf("entity-service access token verifier invalid: %v", err)
+	}
 	rootMux := http.NewServeMux()
 	healthChecker := rthealth.NewChecker()
 	if mongoPing != nil {
@@ -129,8 +140,10 @@ func main() {
 
 	addr := getenvOrDefault("ENTITY_SERVICE_ADDR", cfg.Service.HTTP.Addr)
 	server := &http.Server{
-		Addr:              addr,
-		Handler:           rateLimited,
+		Addr: addr,
+		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
+			AccessTokenVerifier: accessVerifier,
+		})(rateLimited),
 		BaseContext:       func(_ net.Listener) context.Context { return ctx },
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      30 * time.Second,

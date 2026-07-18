@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +8,8 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';
+import 'package:quwoquan_app/core/services/app_request_wait_controller.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// 单类 feed 状态：items + nextCursor
 class DiscoveryFeedState {
@@ -18,6 +21,7 @@ class DiscoveryFeedState {
     this.nextCursor,
     this.feedRequestId,
     this.isLoading = false,
+    this.isSlow = false,
     this.blockingError,
     this.staleDataError,
     this.appendError,
@@ -30,6 +34,7 @@ class DiscoveryFeedState {
   /// 服务端权威下发的归因 id（frq_ 前缀）；分页回显、行为事件透传。
   final String? feedRequestId;
   final bool isLoading;
+  final bool isSlow;
   final Object? blockingError;
   final Object? staleDataError;
   final Object? appendError;
@@ -58,6 +63,7 @@ class DiscoveryFeedState {
     Object? nextCursor = _unset,
     Object? feedRequestId = _unset,
     bool? isLoading,
+    bool? isSlow,
     Object? blockingError = _unset,
     Object? staleDataError = _unset,
     Object? appendError = _unset,
@@ -72,6 +78,7 @@ class DiscoveryFeedState {
           ? this.feedRequestId
           : feedRequestId as String?,
       isLoading: isLoading ?? this.isLoading,
+      isSlow: isSlow ?? this.isSlow,
       blockingError: identical(blockingError, _unset)
           ? this.blockingError
           : blockingError,
@@ -116,7 +123,18 @@ DiscoveryFeedQuery toDiscoveryFeedQuery(String channelId) {
 class DiscoveryFeedMapNotifier
     extends Notifier<Map<String, AsyncValue<DiscoveryFeedState>>> {
   @override
-  Map<String, AsyncValue<DiscoveryFeedState>> build() => {};
+  Map<String, AsyncValue<DiscoveryFeedState>> build() {
+    ref.onDispose(() {
+      for (final controller in _waitControllers.values) {
+        controller.dispose();
+      }
+      _waitControllers.clear();
+    });
+    return {};
+  }
+
+  final Map<String, AppRequestWaitController> _waitControllers =
+      <String, AppRequestWaitController>{};
 
   /// 解析取数查询：首页频道以 [homeChannelsProvider]（端默认 + 远程覆盖）的 feed_query 为真相源；
   /// 非首页频道（发现 tab photo/video/...）回退 [toDiscoveryFeedQuery]。
@@ -144,7 +162,63 @@ class DiscoveryFeedMapNotifier
     final query = _resolveQuery(channelId);
     final feedSession = ref.read(feedSessionProvider.notifier);
     final sessionId = feedSession.sessionId;
-    state = {...state, channelId: const AsyncLoading()};
+    final controller = _waitControllers.putIfAbsent(
+      channelId,
+      AppRequestWaitController.new,
+    );
+    controller.cancel();
+    final cancellation = CloudOperationCancellationSignal();
+    late final int generation;
+    generation = controller.start(
+      mode: AppRequestWaitMode.foreground,
+      cancellation: cancellation,
+      onSlow: (_) {
+        if (!controller.isCurrent(generation)) return;
+        final value = state[channelId]?.value;
+        if (value == null || value.items.isNotEmpty) return;
+        state = {...state, channelId: AsyncData(value.copyWith(isSlow: true))};
+      },
+      onTimeout: (_) {
+        final value = state[channelId]?.value;
+        if (value == null) return;
+        final error = TimeoutException(
+          'Home foreground read exceeded the 6 second budget.',
+        );
+        state = {
+          ...state,
+          channelId: AsyncData(
+            value.copyWith(
+              isLoading: false,
+              isSlow: false,
+              blockingError: value.items.isEmpty ? error : null,
+              staleDataError: value.items.isNotEmpty ? error : null,
+            ),
+          ),
+        };
+      },
+      observer: (phase, durationMilliseconds) {
+        if (phase == 'complete') return;
+        _recordPageState(
+          channelId,
+          phase: phase,
+          source: 'online',
+          hasCache: currentValue?.items.isNotEmpty ?? false,
+          itemCount: currentValue?.items.length,
+          durationMs: durationMilliseconds,
+        );
+      },
+    );
+    state = {
+      ...state,
+      channelId: AsyncData(
+        (currentValue ?? const DiscoveryFeedState()).copyWith(
+          isLoading: currentValue?.items.isEmpty ?? true,
+          isSlow: false,
+          blockingError: null,
+          staleDataError: null,
+        ),
+      ),
+    };
     _recordPageState(
       channelId,
       phase: 'onlineLoading',
@@ -163,7 +237,12 @@ class DiscoveryFeedMapNotifier
         cursor: null,
         sessionId: sessionId,
         feedRequestId: null,
+        cancellation: cancellation,
+        deadlineAt: DateTime.now().add(
+          AppRequestWaitTimings.foregroundReadDeadline,
+        ),
       );
+      if (!controller.isCurrent(generation)) return;
       // 采纳服务端下发的归因 id，使后续曝光/点击/打开复用同一 feedRequestId。
       feedSession.adoptServerFeedRequestId(
         page.feedRequestId,
@@ -187,6 +266,8 @@ class DiscoveryFeedMapNotifier
             nextCursor: page.nextCursor,
             feedRequestId: page.feedRequestId,
             staleDataError: fallbackError,
+            isLoading: false,
+            isSlow: false,
           ),
         ),
       };
@@ -201,7 +282,9 @@ class DiscoveryFeedMapNotifier
         itemCount: page.items.length,
         requestId: page.feedRequestId,
       );
+      controller.complete(generation);
     } catch (e, st) {
+      if (!controller.isCurrent(generation)) return;
       developer.log(
         'load error: $e',
         name: 'DiscoveryFeed',
@@ -214,6 +297,7 @@ class DiscoveryFeedMapNotifier
           channelId: AsyncData(
             currentValue.copyWith(
               isLoading: false,
+              isSlow: false,
               staleDataError: e,
               blockingError: null,
             ),
@@ -233,7 +317,9 @@ class DiscoveryFeedMapNotifier
       }
       state = {
         ...state,
-        channelId: AsyncData(DiscoveryFeedState(blockingError: e)),
+        channelId: AsyncData(
+          DiscoveryFeedState(blockingError: e, isLoading: false),
+        ),
       };
       _recordPageState(
         channelId,
@@ -243,6 +329,8 @@ class DiscoveryFeedMapNotifier
         hasCache: false,
         itemCount: 0,
       );
+    } finally {
+      controller.complete(generation);
     }
   }
 
@@ -255,6 +343,44 @@ class DiscoveryFeedMapNotifier
         value.isLoading) {
       return;
     }
+    final controller = _waitControllers.putIfAbsent(
+      channelId,
+      AppRequestWaitController.new,
+    );
+    controller.cancel();
+    final cancellation = CloudOperationCancellationSignal();
+    late final int generation;
+    generation = controller.start(
+      mode: AppRequestWaitMode.foreground,
+      showSlowHint: false,
+      cancellation: cancellation,
+      onTimeout: (_) {
+        final latest = state[channelId]?.value;
+        if (latest == null) return;
+        state = {
+          ...state,
+          channelId: AsyncData(
+            latest.copyWith(
+              isLoading: false,
+              appendError: TimeoutException(
+                'Home pagination exceeded the 6 second budget.',
+              ),
+            ),
+          ),
+        };
+      },
+      observer: (phase, durationMilliseconds) {
+        if (phase == 'complete') return;
+        _recordPageState(
+          channelId,
+          phase: phase,
+          source: 'online',
+          hasCache: true,
+          itemCount: value.items.length,
+          durationMs: durationMilliseconds,
+        );
+      },
+    );
     state = {
       ...state,
       channelId: AsyncData(
@@ -287,7 +413,12 @@ class DiscoveryFeedMapNotifier
         cursor: value.nextCursor,
         sessionId: sessionId,
         feedRequestId: value.feedRequestId,
+        cancellation: cancellation,
+        deadlineAt: DateTime.now().add(
+          AppRequestWaitTimings.foregroundReadDeadline,
+        ),
       );
+      if (!controller.isCurrent(generation)) return;
       feedSession.adoptServerFeedRequestId(
         page.feedRequestId,
         rankingVersion: page.rankingVersion,
@@ -327,7 +458,9 @@ class DiscoveryFeedMapNotifier
         itemCountBefore: value.items.length,
         itemCountAfter: merged.length,
       );
+      controller.complete(generation);
     } catch (e, st) {
+      if (!controller.isCurrent(generation)) return;
       developer.log(
         'append error: $e',
         name: 'DiscoveryFeed',
@@ -348,6 +481,8 @@ class DiscoveryFeedMapNotifier
         error: e,
         copyKey: 'appendFailedRetry',
       );
+    } finally {
+      controller.complete(generation);
     }
   }
 
@@ -361,6 +496,7 @@ class DiscoveryFeedMapNotifier
     int? cacheAgeMs,
     int? itemCount,
     String? requestId,
+    int? durationMs,
   }) {
     ref
         .read(pageLifecycleObservabilityProvider)
@@ -376,6 +512,8 @@ class DiscoveryFeedMapNotifier
           cacheAgeMs: cacheAgeMs,
           itemCount: itemCount,
           requestId: requestId,
+          durationMs: durationMs,
+          waitMode: 'foreground',
         );
   }
 

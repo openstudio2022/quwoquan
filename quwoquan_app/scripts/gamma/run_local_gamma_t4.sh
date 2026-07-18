@@ -14,7 +14,10 @@ GAMMA_RUN_ROOT="$QWQ_RUN_ROOT"
 REPORT="${LOCAL_GAMMA_T4_REPORT:-$GAMMA_RUN_ROOT/t4_report.json}"
 GATEWAY_BASE_URL="${LOCAL_GAMMA_GATEWAY_BASE_URL:-https://gamma-api.quwoquan-env.test:19000}"
 PRODUCT_OPS_BASE_URL="${LOCAL_GAMMA_PRODUCT_OPS_BASE_URL:-https://gamma-product-ops.quwoquan-env.test:19010}"
-MEDIA_BASE_URL="${LOCAL_GAMMA_MEDIA_BASE_URL:-https://gamma-image.quwoquan-env.test:19100}"
+MEDIA_AVATAR_BASE_URL="${LOCAL_GAMMA_MEDIA_AVATAR_BASE_URL:-https://gamma-avatar.quwoquan-env.test:19100}"
+MEDIA_IMAGE_BASE_URL="${LOCAL_GAMMA_MEDIA_IMAGE_BASE_URL:-${LOCAL_GAMMA_MEDIA_BASE_URL:-https://gamma-image.quwoquan-env.test:19100}}"
+MEDIA_VIDEO_BASE_URL="${LOCAL_GAMMA_MEDIA_VIDEO_BASE_URL:-https://gamma-video.quwoquan-env.test:19100}"
+MEDIA_UPLOAD_BASE_URL="${LOCAL_GAMMA_MEDIA_UPLOAD_BASE_URL:-https://gamma-upload.quwoquan-env.test:19130}"
 # Local Gamma owns its anonymous session inside the device runtime through the
 # public user-service boundary. Never inherit host credentials: Flutter expands
 # Dart defines into child process arguments, which would expose a bearer token.
@@ -34,11 +37,14 @@ Options:
   --device-id <id>          Run Patrol on a specific Flutter device.
   --platform <name>         android / ios / all (default: all).
   --target <path>           Patrol target file or directory.
-  --release-uat-cases <path> Gamma data-release generated app_uat_cases.json.
+  --release-uat-cases <path> Gamma data-release generated homepage_verification_cases.json.
   --report <path>           Write the Patrol report to this runtime evidence path.
   --gateway-base-url <url>  Mirror gateway URL.
   --product-ops-base-url <url>
-  --media-base-url <url>
+  --media-avatar-base-url <url>
+  --media-image-base-url <url>
+  --media-video-base-url <url>
+  --media-upload-base-url <url>
   --dry-run                 Validate command construction only.
   --help                    Show this help.
 USAGE
@@ -53,7 +59,10 @@ while [[ $# -gt 0 ]]; do
     --report) REPORT="${2:-}"; shift 2 ;;
     --gateway-base-url) GATEWAY_BASE_URL="${2:-}"; shift 2 ;;
     --product-ops-base-url) PRODUCT_OPS_BASE_URL="${2:-}"; shift 2 ;;
-    --media-base-url) MEDIA_BASE_URL="${2:-}"; shift 2 ;;
+    --media-avatar-base-url) MEDIA_AVATAR_BASE_URL="${2:-}"; shift 2 ;;
+    --media-image-base-url) MEDIA_IMAGE_BASE_URL="${2:-}"; shift 2 ;;
+    --media-video-base-url) MEDIA_VIDEO_BASE_URL="${2:-}"; shift 2 ;;
+    --media-upload-base-url) MEDIA_UPLOAD_BASE_URL="${2:-}"; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
     --help|-h) usage; exit 0 ;;
     *) echo "unknown argument: $1" >&2; usage >&2; exit 2 ;;
@@ -95,7 +104,7 @@ if ! command -v flutter >/dev/null 2>&1; then
   exit 2
 fi
 
-export MEDIA_AVATAR_CDN_BASE_URL="$MEDIA_BASE_URL"
+export MEDIA_AVATAR_CDN_BASE_URL="$MEDIA_AVATAR_BASE_URL"
 mkdir -p "$(dirname "$REPORT")"
 
 cmd=(
@@ -110,7 +119,10 @@ cmd=(
   --platform "$PLATFORM"
   --gateway-base-url "$GATEWAY_BASE_URL"
   --product-ops-base-url "$PRODUCT_OPS_BASE_URL"
-  --media-base-url "$MEDIA_BASE_URL"
+  --media-avatar-base-url "$MEDIA_AVATAR_BASE_URL"
+  --media-image-base-url "$MEDIA_IMAGE_BASE_URL"
+  --media-video-base-url "$MEDIA_VIDEO_BASE_URL"
+  --media-upload-base-url "$MEDIA_UPLOAD_BASE_URL"
 )
 if [[ -n "$DEVICE_ID" ]]; then
   cmd+=(--device-id "$DEVICE_ID")

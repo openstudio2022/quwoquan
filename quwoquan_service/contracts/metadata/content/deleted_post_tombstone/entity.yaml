@@ -1,4 +1,3 @@
-version: 1
 domain: content
 entity: DeletedPostTombstone
 object_kind: append_only_fact

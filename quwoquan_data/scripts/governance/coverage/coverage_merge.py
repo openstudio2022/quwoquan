@@ -236,9 +236,8 @@ _SOURCE_LOCATION_PRIORITY = {
     "wikidata_geo": 0,
     "wiki_category": 1,
     "baidu_baike_search": 2,
-    "sogou_baike_search": 3,
-    "toutiao_baike_search": 4,
-    "osm_poi": 5,
+    "toutiao_baike_search": 3,
+    "osm_poi": 4,
 }
 
 
@@ -483,7 +482,7 @@ def merge_candidates(
     expand_runtime_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     report = {
-        "schemaVersion": "quwoquan_data.coverage_merge_report/1",
+        "schema": "quwoquan_data.coverage_merge_report",
         "generatedAt": now_iso(),
         "provinces": provinces,
         "apply": apply,

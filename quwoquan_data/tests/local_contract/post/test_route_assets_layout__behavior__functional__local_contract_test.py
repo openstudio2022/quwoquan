@@ -28,8 +28,8 @@ import cv2  # noqa: E402
 from content.execution.runtime_state import write_execution_runtime_state  # noqa: E402
 from core.paths import ensure_execution_command_layout, ensure_execution_layout  # noqa: E402
 from content.source.source_unit import resolve_entity_object_dir, write_source_unit  # noqa: E402
-from content.post import route_assets as RW  # noqa: E402
-from content.post.route_assets import _build_route_assets  # noqa: E402
+from content.post.article import route_assets as RW  # noqa: E402
+from content.post.article.route_assets import _build_route_assets  # noqa: E402
 from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
 
 

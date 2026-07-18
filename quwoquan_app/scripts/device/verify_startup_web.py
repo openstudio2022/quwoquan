@@ -428,7 +428,7 @@ def main() -> int:
         and motion_spec_current
     )
     report = {
-        "schemaVersion": 2,
+        "schema": "startup-web-report",
         "platform": "web",
         "motionSpecVersion": "petal_bloom_v2",
         "motionSpecCurrent": motion_spec_current,

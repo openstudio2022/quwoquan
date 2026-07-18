@@ -1,4 +1,3 @@
-version: 1
 
 service:
   name: product-ops-service
@@ -12,10 +11,12 @@ service:
 
 api_routes:
   - method: GET
-    path: /v1/control-plane/product/experiments
+    path: /control-plane/product/experiments
+
     operation: ListExperiments
     actor: account
-    auth: required
+    security:
+      auth_mode: required
     response_entity: ExperimentCatalogSlice
     authorization:
       principal: operator
@@ -37,10 +38,14 @@ api_routes:
     description: 读取实验聚合目录和当前策略版本统计。
 
   - method: POST
-    path: /v1/control-plane/product/experiments/{experimentId}:rollout
+    path: /control-plane/product/experiments/{experimentId}:rollout
+
     operation: UpdateExperimentRollout
     actor: account
-    auth: required
+    security:
+      auth_mode: required
+    headers: [If-Match, Idempotency-Key]
+    concurrency: { version_precondition: if_match }
     request_entity: UpdateExperimentRolloutRequest
     request_body_kind: object
     response_entity: UpdateExperimentRolloutResult

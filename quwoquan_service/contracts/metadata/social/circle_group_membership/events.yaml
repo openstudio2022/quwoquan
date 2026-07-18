@@ -1,4 +1,3 @@
-version: 1
 aggregate: CircleGroupMembership
 events:
   - name: CircleGroupMembershipRequested

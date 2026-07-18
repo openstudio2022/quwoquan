@@ -1,4 +1,3 @@
-version: 1
 read_model: ArticleEntityMention
 description: |
   QWQ Rich Markdown 文章行内实体标签投影。实体标签由 Markdown 解析/数据工程出稿产生，
@@ -16,7 +15,6 @@ client_projection:
       dart_type: String
       nullable: false
       source: subjectType
-      aliases: [subjectType, type]
       default: "''"
       description: "实体目标类型；V1.0 支持 homepage。"
 
@@ -24,14 +22,12 @@ client_projection:
       dart_type: String
       nullable: false
       source: subjectId
-      aliases: [subjectId, id]
       default: "''"
 
     - name: homepageId
       dart_type: String
       nullable: false
       source: homepageId
-      aliases: [homepageId]
       default: "''"
       description: "实体服务解析后的 canonical Homepage 标识；实体导航只允许消费该字段。"
 
@@ -39,19 +35,16 @@ client_projection:
       dart_type: String
       nullable: false
       source: displayName
-      aliases: [displayName, label, name]
       default: "''"
 
     - name: rangeStart
       dart_type: int
       nullable: false
       source: rangeStart
-      aliases: [rangeStart, start]
       default: "0"
 
     - name: rangeEnd
       dart_type: int
       nullable: false
       source: rangeEnd
-      aliases: [rangeEnd, end]
       default: "0"

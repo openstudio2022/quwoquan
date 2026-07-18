@@ -89,8 +89,8 @@ make verify-openapi    # missing / stale / orphan 任一即失败
 ```
 
 `make codegen-contract-graph` 依赖 `codegen-openapi`，保证
-`generated/contract_graph.json` 最终包含最新快照摘要。生成范围包含 `/v1/`、
-`/internal/v1/`、`/callbacks/v1/` 的全部 ContractGraph operation；不保留手写
+`generated/contract_graph.json` 最终包含最新快照摘要。生成范围包含 `/`、
+`/internal/`、`/callbacks/` 的全部 ContractGraph operation；不保留手写
 path、schema 或 merge/preserve 逻辑。`operationId` 为稳定 local ID，
 `x-object-id`、`x-actor`、`x-application` 为 canonical binding。
 

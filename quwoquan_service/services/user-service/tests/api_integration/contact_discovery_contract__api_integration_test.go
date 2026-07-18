@@ -25,7 +25,7 @@ func TestContactDiscovery_InitiateAndGetLatest(t *testing.T) {
 	createTestProfile(t, "cd_owner", "cd_user")
 
 	// 发起通讯录发现（无注册命中）
-	rec := doRequest(t, http.MethodPost, "/v1/owner/contact-discovery",
+	rec := doRequest(t, http.MethodPost, "/owner/contact-discovery",
 		`{"hashedPhones":["`+phonematch.Hash(cdOpenPhone)+`"]}`,
 		authHeaders("cd_owner"))
 	if rec.Code != http.StatusAccepted {
@@ -55,7 +55,7 @@ func TestContactDiscovery_InitiateAndGetLatest(t *testing.T) {
 	}
 
 	// 获取最新记录
-	rec = doRequest(t, http.MethodGet, "/v1/owner/contact-discovery/latest", "", authHeaders("cd_owner"))
+	rec = doRequest(t, http.MethodGet, "/owner/contact-discovery/latest", "", authHeaders("cd_owner"))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("get latest: expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -79,7 +79,7 @@ func TestContactDiscovery_MatchesOnlyOpenSubAccounts(t *testing.T) {
 
 	// 发起者上传三个手机号哈希（与客户端同一算法）
 	createTestProfile(t, "initiator", "initiator_user")
-	rec := doRequest(t, http.MethodPost, "/v1/owner/contact-discovery",
+	rec := doRequest(t, http.MethodPost, "/owner/contact-discovery",
 		`{"hashedPhones":["`+phonematch.Hash(cdOpenPhone)+`","`+phonematch.Hash(cdSemiPhone)+`","`+phonematch.Hash(cdStrictPhone)+`"]}`,
 		authHeaders("initiator"))
 	if rec.Code != http.StatusAccepted {
@@ -132,7 +132,7 @@ func TestContactDiscovery_Dismiss(t *testing.T) {
 	createTestProfile(t, "dismiss_owner", "dismiss_user")
 
 	// 发起
-	rec := doRequest(t, http.MethodPost, "/v1/owner/contact-discovery",
+	rec := doRequest(t, http.MethodPost, "/owner/contact-discovery",
 		`{"hashedPhones":["`+phonematch.Hash(cdHiddenPhone)+`"]}`,
 		authHeaders("dismiss_owner"))
 	if rec.Code != http.StatusAccepted {
@@ -142,7 +142,7 @@ func TestContactDiscovery_Dismiss(t *testing.T) {
 	recordID, _ := result["id"].(string)
 
 	// 关闭
-	rec = doRequest(t, http.MethodDelete, "/v1/owner/contact-discovery/"+recordID, "", authHeaders("dismiss_owner"))
+	rec = doRequest(t, http.MethodDelete, "/owner/contact-discovery/"+recordID, "", authHeaders("dismiss_owner"))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("dismiss: expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -166,7 +166,7 @@ func TestContactDiscovery_NeverExposesOwnerAccountId(t *testing.T) {
 
 	// 发现方
 	createTestProfile(t, "finder_owner", "finder_user")
-	rec := doRequest(t, http.MethodPost, "/v1/owner/contact-discovery",
+	rec := doRequest(t, http.MethodPost, "/owner/contact-discovery",
 		`{"hashedPhones":["`+phonematch.Hash(cdHiddenPhone)+`"]}`, authHeaders("finder_owner"))
 	if rec.Code != http.StatusAccepted {
 		t.Fatalf("initiate: %d: %s", rec.Code, rec.Body.String())

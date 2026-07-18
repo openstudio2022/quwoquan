@@ -272,6 +272,7 @@ class ScenarioEvalMockAssistantRepository extends MockAssistantRepository {
     );
 
     yield AssistantStreamEventWire(
+      schema: 'assistant_stream_event',
       eventId: '$turnId:assistant.turn.started',
       conversationId: 'acv_eval_personal_assistant',
       turnId: turnId,
@@ -281,6 +282,7 @@ class ScenarioEvalMockAssistantRepository extends MockAssistantRepository {
       createdAt: createdAt,
     );
     yield AssistantStreamEventWire(
+      schema: 'assistant_stream_event',
       eventId: '$turnId:assistant.tool.requested',
       conversationId: 'acv_eval_personal_assistant',
       turnId: turnId,
@@ -290,6 +292,7 @@ class ScenarioEvalMockAssistantRepository extends MockAssistantRepository {
       createdAt: createdAt,
     );
     yield AssistantStreamEventWire(
+      schema: 'assistant_stream_event',
       eventId: '$turnId:assistant.tool.completed',
       conversationId: 'acv_eval_personal_assistant',
       turnId: turnId,
@@ -299,6 +302,7 @@ class ScenarioEvalMockAssistantRepository extends MockAssistantRepository {
       createdAt: createdAt,
     );
     yield AssistantStreamEventWire(
+      schema: 'assistant_stream_event',
       eventId: '$turnId:assistant.observation.assessed',
       conversationId: 'acv_eval_personal_assistant',
       turnId: turnId,
@@ -341,6 +345,7 @@ class ScenarioEvalMockAssistantRepository extends MockAssistantRepository {
       createdAt: createdAt,
     );
     yield AssistantStreamEventWire(
+      schema: 'assistant_stream_event',
       eventId: '$turnId:assistant.answer.final',
       conversationId: 'acv_eval_personal_assistant',
       turnId: turnId,

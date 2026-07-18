@@ -25,13 +25,10 @@ extension _MockContentRepositorySearch on MockContentRepository {
                   (item['contentType'] == 'micro' ? 'moment' : 'work'))
               .toString()
               .toLowerCase();
-      final itemType = (item['contentType'] ?? item['type'] ?? '')
+      final itemType = (item['contentType'] ?? '').toString().toLowerCase();
+      final itemCategoryId = (item['contentVertical'] ?? '')
           .toString()
           .toLowerCase();
-      final itemCategoryId =
-          (item['categoryId'] ?? item['contentVertical'] ?? '')
-              .toString()
-              .toLowerCase();
       final itemSubCategory = (item['subCategory'] ?? '')
           .toString()
           .toLowerCase();
@@ -49,9 +46,10 @@ extension _MockContentRepositorySearch on MockContentRepository {
           itemSubCategory != expectedSubCategory) {
         continue;
       }
+      final authorDisplayName = item['authorDisplayName']?.toString() ?? '';
       final searchable = <String>[
         item['title']?.toString() ?? '',
-        item['displayName']?.toString() ?? '',
+        authorDisplayName,
         item['body']?.toString() ?? '',
         item['summary']?.toString() ?? '',
         item['locationName']?.toString() ?? '',
@@ -66,19 +64,17 @@ extension _MockContentRepositorySearch on MockContentRepository {
       results.add(
         PostSearchItemView.fromMap(<String, dynamic>{
           ...item,
-          'categoryId': item['categoryId'] ?? item['contentVertical'],
+          'categoryId': item['contentVertical'],
           'subCategory': item['subCategory'],
           'highlightText': matched,
           'matchedField': matched == (item['title']?.toString() ?? '')
               ? 'title'
-              : matched == (item['displayName']?.toString() ?? '')
+              : matched == authorDisplayName
               ? 'author'
               : 'body',
-          'authorId': item['authorId'] ?? item['subAccountId'] ?? '',
-          'authorDisplayName':
-              item['displayName'] ?? item['authorDisplayNameSnapshot'] ?? '',
-          'authorAvatarUrl':
-              item['authorAvatarUrl'] ?? item['authorAvatarUrlSnapshot'] ?? '',
+          'authorId': item['authorId'] ?? '',
+          'authorDisplayName': authorDisplayName,
+          'authorAvatarUrl': item['authorAvatarUrl'] ?? '',
         }),
       );
     }

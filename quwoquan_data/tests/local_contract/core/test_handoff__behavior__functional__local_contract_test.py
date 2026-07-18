@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
 SCRIPTS_ROOT = DATA_ROOT / "scripts"
@@ -14,11 +15,26 @@ for _path in (DATA_ROOT, SCRIPTS_ROOT):
         sys.path.insert(0, str(_path))
 
 from content.execution import handoff  # noqa: E402
+from core.runtime_policy import active_runtime_policy  # noqa: E402
 
 EXECUTION_ID = "20260711--travel-homepage-coverage--cn-zhejiang--canary-902"
 
 
-def test_author_job_packet_isolation_and_exit_gates():
+def _stub_execution_model(monkeypatch) -> None:
+    monkeypatch.setattr(
+        handoff,
+        "execution_model_pair_for_execution",
+        lambda _execution_id: SimpleNamespace(
+            author=SimpleNamespace(
+                provider=SimpleNamespace(value="cursor_sdk"),
+                model_id="composer",
+            )
+        ),
+    )
+
+
+def test_author_job_packet_isolation_and_exit_gates(monkeypatch):
+    _stub_execution_model(monkeypatch)
     brief = {"writingIntent": "planning_consultation", "baseSourceRef": "sources/a.md", "carrier": "article"}
     pack = {
         "title": "三沟联线攻略",
@@ -33,7 +49,7 @@ def test_author_job_packet_isolation_and_exit_gates():
         writing_pack=pack,
         prompt_rel="4.draft/prompt.md",
     )
-    assert packet["schemaVersion"] == "quwoquan_data.author_job_packet/1"
+    assert packet["schema"] == "quwoquan_data.author_job_packet"
     assert packet["ref"] == "r1"
     assert packet["writingIntent"] == "planning_consultation"
     assert packet["baseSourceRef"] == "sources/a.md"
@@ -45,7 +61,8 @@ def test_author_job_packet_isolation_and_exit_gates():
     assert "5.review/repair_report.json" in packet["executionContract"]["inputs"]
 
 
-def test_image_author_job_packet_is_compact_and_image_scoped():
+def test_image_author_job_packet_is_compact_and_image_scoped(monkeypatch):
+    _stub_execution_model(monkeypatch)
     brief = {"carrier": "image", "titleHint": "湖面晨光"}
     pack = {
         "title": "湖面晨光",
@@ -70,11 +87,14 @@ def test_image_author_job_packet_is_compact_and_image_scoped():
         writing_pack=pack,
         prompt_rel="4.draft/prompt.md",
     )
-    assert packet["schemaVersion"] == "quwoquan_data.author_job_packet/1"
+    assert packet["schema"] == "quwoquan_data.author_job_packet"
     assert packet["captionPolicy"]["captionMaxChars"] == 300
     assert "imageGate" in packet["exitGates"]
     assert "writingIntentConsistency" not in packet["exitGates"]
-    assert packet["executionContract"]["budget"]["maxWallClockSeconds"] == 420
+    assert (
+        packet["executionContract"]["budget"]["maxWallClockSeconds"]
+        == active_runtime_policy().queue_max_wall_clock_seconds
+    )
     assert "3.compose/writing_pack.json" not in packet["executionContract"]["inputs"]
 
 

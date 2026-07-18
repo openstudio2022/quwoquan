@@ -26,6 +26,7 @@ type appExposedOperation struct {
 	CanonicalOperationID string               `json:"canonicalOperationId"`
 	ClientContract       *appClientContract   `json:"clientContract"`
 	Commercial           appCommercialBinding `json:"commercial"`
+	Concurrency          appConcurrencyPolicy `json:"concurrency"`
 	Domain               string               `json:"domain"`
 	ErrorCodes           []string             `json:"errorCodes"`
 	Facet                string               `json:"facet"`
@@ -76,6 +77,10 @@ type appReliabilityPolicy struct {
 	MaxAttempts         int    `json:"maxAttempts"`
 	RetryMode           string `json:"retryMode"`
 	TimeoutMilliseconds int    `json:"timeoutMilliseconds"`
+}
+
+type appConcurrencyPolicy struct {
+	VersionPrecondition string `json:"versionPrecondition"`
 }
 
 type appPrivacyPolicy struct {

@@ -11,9 +11,9 @@ from content.source.research.plan_state import (
     _image_window,
     _record_unavailable,
     _source,
-    _url_in_memory,
     _write_lane,
 )
+from content.source.research.reject_memory import _url_in_memory
 from content.source.research.plan_reuse import _homepage_urls_from_current_plan
 from content.source.research.source_quality import (
     _ARTICLE_BASE_CATEGORIES,
@@ -303,4 +303,3 @@ def write_article_lane(
                     "sources": len(article_plan_sources),
                 }
             )
-

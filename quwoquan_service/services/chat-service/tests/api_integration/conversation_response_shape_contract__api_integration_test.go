@@ -35,11 +35,11 @@ func TestMessage_ResponseShape_HasRequiredFields(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"direct","title":"message response","initialMemberIds":["user_test_002"]}`)
-	convID := conv["_id"].(string)
+	convID := conv["id"].(string)
 
 	sendMessage(t, convID, `{"type":"text","content":"hi","clientMsgId":"response-shape-uuid-1"}`)
 
-	code, result := doGet(t, "/v1/chat/conversations/"+convID+"/messages?limit=1", "user_test_001")
+	code, result := doGet(t, "/chat/conversations/"+convID+"/messages?limit=1", "user_test_001")
 	if code != 200 {
 		t.Fatalf("expected 200, got %d", code)
 	}
@@ -59,7 +59,7 @@ func TestMessage_ResponseShape_HasRequiredFields(t *testing.T) {
 			t.Errorf("message response missing required field: %s", field)
 		}
 	}
-	if _, exists := msg["_id"]; exists {
+	if _, exists := msg["id"]; exists {
 		t.Fatal("message response must not expose removed _id alias")
 	}
 }

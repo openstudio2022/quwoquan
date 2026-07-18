@@ -48,6 +48,11 @@ type AggregateStore interface {
 // DetailReader 是 Post detail/card/presentation 的具名读端口。
 type DetailReader interface {
 	FindByID(ctx context.Context, postID string) (*postmodel.Post, bool)
+	FindByPublicationIntent(
+		ctx context.Context,
+		authorID string,
+		publishIntentID string,
+	) (*postmodel.Post, bool)
 }
 
 // CollectionReader 承担 Post 自有的 author-page 与重建扫描 Slice。

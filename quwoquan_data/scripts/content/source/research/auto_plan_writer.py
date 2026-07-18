@@ -1,6 +1,5 @@
 """Per-entity auto research plan implementation."""
 from __future__ import annotations
-import urllib.parse
 from typing import Any
 from core.data_issue import DataIssueCode, DataRecoveryAction
 from core.article_commercial_policy import article_commercial_closure_enabled
@@ -19,6 +18,7 @@ from content.source.research.auto_plan_lanes import (
     _independent_homepage_media_collections,
     write_image_lane,
 )
+from content.source.research.auto_plan_video import write_video_lane
 from content.source.research.auto_plan_article import write_article_lane
 from content.source.research.image_provider_compliance import (
     professional_library_compliance_summary,
@@ -30,20 +30,22 @@ from content.source.research.auto_plan_report import (
 from content.source.research.plan_state import (
     _accept_source,
     _accept_source_with_reject_memory,
-    _download_reject_memory,
     _hydrate_mediawiki_same_source_images,
     _image_at,
     _image_window,
-    _images_from_collections,
     _record_unavailable,
     _safe_collection_id,
     _source,
     _source_unavailable_for_entity,
     _task_content_quotas,
     _task_spec,
+    _write_lane,
+)
+from content.source.research.reject_memory import (
+    _download_reject_memory,
+    _images_from_collections,
     _url_in_memory,
     _verified_image_collections_from_prior_plans,
-    _write_lane,
 )
 from content.source.research.plan_reuse import (
     _homepage_urls_from_current_plan,
@@ -59,7 +61,6 @@ from content.source.research.source_quality import (
     _select_article_plan_sources,
 )
 from content.source.research.homepage_source_policy import (
-    _HOMEPAGE_CORE_SOURCE_LIMIT,
     _homepage_can_seed_base_draft,
     _homepage_core_sources,
 )
@@ -90,6 +91,12 @@ from content.source.research.qunar_sources import (
     _qunar_review_support_source,
     _qunar_travelogue_sources,
 )
+from content.source.research.auto_plan_homepage import HomepageResearchInput, write_homepage_lane
+from content.source.research.baike_com import (
+    geo_context_terms_from_ref,
+    resolve_toutiao_baike_page,
+)
+from content.source.research.baidu_baike import resolve_baidu_baike_page
 
 
 
@@ -103,7 +110,7 @@ def _write_auto_research_plans_impl(
     lanes: set[str] | None = None,
     write_shared_report: bool = True,
 ) -> dict[str, Any]:
-    selected_lanes = lanes or {"homepage", "article", "image"}
+    selected_lanes = lanes or {"homepage", "article", "image", "video"}
     vertical = vertical_from_task_id(execution_id)
     # 单值 entity_type 只作 fallback；每个实体目录类型以 task spec coverageTargets 为准。
     from content.source.prepare import resolve_research_entity_types
@@ -116,7 +123,7 @@ def _write_auto_research_plans_impl(
     updated: list[dict[str, Any]] = []
     issues: list[str] = []
     report: dict[str, Any] = {
-        "schemaVersion": "quwoquan.content.source.auto_research_plan",
+        "schema": "quwoquan.content.source.auto_research_plan",
         "executionId": execution_id,
         "vertical": vertical,
         "selectedLanes": sorted(selected_lanes),
@@ -124,6 +131,7 @@ def _write_auto_research_plans_impl(
         "issues": issues,
         "candidates": [],
         "imageCollections": [],
+        "videoFrames": [],
         "homepageMediaCollections": [],
         "sourceUnavailable": [],
         "rescueEvents": [],
@@ -151,15 +159,12 @@ def _write_auto_research_plans_impl(
         if image_count_is_hard_quota(strategy_spec)
         else minimum_publishable_images_per_target(strategy_spec)
     )
-    try:
-        from content.source.gate import download_requirements
-        required_publishable_images = max(
-            hard_image_works,
-            int(download_requirements(execution_id).get("minImages") or 0),
-        )
-    except Exception:  # noqa: BLE001
-        required_publishable_images = hard_image_works
-    from content.post.base_draft import ARTICLE_MIN_BASE_DRAFT_CHARS
+    from content.source.gate import download_requirements
+    required_publishable_images = max(
+        hard_image_works,
+        download_requirements(execution_id).min_images,
+    )
+    from content.post.article.base_draft import ARTICLE_MIN_BASE_DRAFT_CHARS
     report["scoringPolicy"] = {
         "imageCountPolicy": image_policy,
         "imageBonusSaturationCount": image_bonus_saturation_count,
@@ -178,7 +183,9 @@ def _write_auto_research_plans_impl(
             for value in (target_source.get("aliases") or [])
             if str(value).strip()
         ]
-        needs_source_discovery_context = bool(selected_lanes & {"homepage", "article", "image"})
+        needs_source_discovery_context = bool(
+            selected_lanes & {"homepage", "article", "image", "video"}
+        )
         initial_aliases = _expanded_entity_aliases(
             [*_entity_name_variants(entity_id), *configured_aliases],
             limit=24,
@@ -213,6 +220,27 @@ def _write_auto_research_plans_impl(
                 entity_id,
                 entity_aliases=configured_aliases,
             )
+        geo_context_terms = geo_context_terms_from_ref(
+            str(target_source.get("geoTagRef") or "")
+        )
+        baidu_baike = (
+            resolve_baidu_baike_page(
+                entity_id,
+                entity_aliases=tuple(entity_aliases),
+                geo_context_terms=geo_context_terms,
+            )
+            if "homepage" in selected_lanes
+            else None
+        )
+        toutiao_baike = (
+            resolve_toutiao_baike_page(
+                entity_id,
+                entity_aliases=tuple(entity_aliases),
+                geo_context_terms=geo_context_terms,
+            )
+            if "homepage" in selected_lanes
+            else None
+        )
         related_wiki_titles = [
             title for title in _wiki_related_titles_for_entity(
                 "zh.wikipedia.org",
@@ -221,7 +249,9 @@ def _write_auto_research_plans_impl(
             )
             if title and title != wiki_title
         ] if needs_source_discovery_context else []
-        needs_visual_pool = bool(selected_lanes & {"homepage", "article", "image"})
+        needs_visual_pool = bool(
+            selected_lanes & {"homepage", "article", "image", "video"}
+        )
         voyage_title = (
             _wiki_title_for_entity(
                 "zh.wikivoyage.org",
@@ -391,236 +421,35 @@ def _write_auto_research_plans_impl(
                     recovery=DataRecoveryAction.STOP,
                 )
 
-        homepage_sources: list[dict[str, Any]] = []
-        baidu_url = f"https://baike.baidu.com/item/{urllib.parse.quote(entity_id)}"
-        if "homepage" in selected_lanes:
-            def _accept_homepage_source(source: dict[str, Any]) -> dict[str, Any] | None:
-                return _accept_source_with_reject_memory(
-                    report,
-                    _hydrate_mediawiki_same_source_images(source, entity_id=entity_id),
-                    entity_id=entity_id,
-                    lane="homepage",
-                    entity_aliases=entity_aliases,
-                    rejected_source_urls=rejected_source_urls,
-                )
-
-            for prior_source in prior_homepage_sources:
-                if len(homepage_sources) >= _HOMEPAGE_CORE_SOURCE_LIMIT:
-                    break
-                accepted = _accept_homepage_source(dict(prior_source))
-                if accepted:
-                    homepage_sources.append(accepted)
-            if wiki_url:
-                accepted = _accept_homepage_source(
-                    _source(
-                        source_id="home_wikipedia",
-                        platform="维基百科",
-                        url=wiki_url,
-                        source_kind="wikipedia",
-                        source_title=wiki_title or entity_id,
-                        category="encyclopedia",
-                        discovery_provider="mediawiki_exact_title",
-                        match_confidence=0.99,
-                        evidence_reason=_evidence_reason(
-                            entity_id, "homepage", "Chinese Wikipedia", "encyclopedia"
-                        ),
-                        # 主权威百科候选；最终 primary 由排序后统一仲裁（消除插入序第二真相源）。
-                        source_role="supporting",
-                        # 主页同源图片是页面内容的一部分，必须完整进入下载计划；
-                        # `_image_window` 只适用于 supporting/article 候选，不适用于主页真相源。
-                        images=list(wiki_page_images),
-                        image_evidence_mode="same_source" if wiki_page_images else "",
-                    )
-                )
-                if accepted:
-                    homepage_sources.append(accepted)
-            accepted = _accept_homepage_source(
-                _source(
-                    source_id="home_baidu_baike",
-                    platform="百度百科",
-                    url=baidu_url,
-                    source_kind="baidu_baike",
-                    source_title=entity_id,
-                    category="encyclopedia",
-                    discovery_provider="baidu_baike_exact_item_url",
-                    match_confidence=0.86,
-                    evidence_reason=_evidence_reason(
-                        entity_id, "homepage", "Baidu Baike item URL", "encyclopedia"
-                    ),
-                    # 主权威百科候选；最终 primary 由排序后统一仲裁（消除插入序第二真相源）。
-                    source_role="supporting",
-                    images=[],
-                    image_evidence_mode="",
-                )
-            )
-            if accepted:
-                homepage_sources.append(accepted)
-            for related_index, related_title in enumerate(
-                related_wiki_titles[:2], start=1
-            ):
-                if len(homepage_sources) >= _HOMEPAGE_CORE_SOURCE_LIMIT:
-                    break
-                related_url = _wiki_url("zh.wikipedia.org", related_title)
-                if not related_url:
-                    continue
-                related_images = _mediawiki_page_images(
-                    "zh.wikipedia.org",
-                    related_title,
-                    entity_id=entity_id,
-                    limit=3,
-                )
-                related_pool = related_images
-                accepted = _accept_homepage_source(
-                    _source(
-                        source_id=f"home_related_encyclopedia_support_{related_index}",
-                        platform="维基百科",
-                        url=related_url,
-                        source_kind="wikipedia",
-                        source_title=related_title,
-                        category="encyclopedia",
-                        discovery_provider="mediawiki_related_title",
-                        match_confidence=0.82,
-                        evidence_reason=(
-                            f"Chinese Wikipedia related page {related_title} provides "
-                            f"entity context and rights-compatible media for {entity_id}"
-                        ),
-                        source_role="supporting",
-                        images=_image_window(related_pool, 0, count=3),
-                        image_evidence_mode=(
-                            "same_source" if related_images else ""
-                        ) if related_pool else "",
-                    )
-                )
-                if accepted:
-                    homepage_sources.append(accepted)
-            if len(homepage_sources) < _HOMEPAGE_CORE_SOURCE_LIMIT:
-                accepted = _accept_homepage_source(
-                    _source(
-                        source_id="home_sogou_baike",
-                        platform="搜狗百科",
-                        url=f"https://baike.sogou.com/v?query={urllib.parse.quote(entity_id)}",
-                        source_kind="sogou_baike",
-                        source_title=entity_id,
-                        category="encyclopedia",
-                        discovery_provider="sogou_baike_exact_query_url",
-                        match_confidence=0.78,
-                        evidence_reason=_evidence_reason(
-                            entity_id, "homepage", "Sogou Baike query URL", "encyclopedia"
-                        ),
-                        # 主权威百科候选；最终 primary 由排序后统一仲裁（消除插入序第二真相源）。
-                        source_role="supporting",
-                        images=[],
-                        image_evidence_mode="",
-                    )
-                )
-                if accepted:
-                    homepage_sources.append(accepted)
-            if len(homepage_sources) < _HOMEPAGE_CORE_SOURCE_LIMIT:
-                accepted = _accept_homepage_source(
-                    _source(
-                        source_id="home_toutiao_baike",
-                        platform="今日头条百科",
-                        url=f"https://www.baike.com/wiki/{urllib.parse.quote(entity_id)}",
-                        source_kind="toutiao_baike",
-                        source_title=entity_id,
-                        category="encyclopedia",
-                        discovery_provider="toutiao_baike_exact_item_url",
-                        match_confidence=0.78,
-                        evidence_reason=_evidence_reason(
-                            entity_id, "homepage", "Toutiao Baike item URL", "encyclopedia"
-                        ),
-                        source_role="supporting",
-                        images=[],
-                        image_evidence_mode="",
-                    )
-                )
-                if accepted:
-                    homepage_sources.append(accepted)
-            homepage_core_sources = _homepage_core_sources(homepage_sources)
-            # 主源统一仲裁：只在四百科闭集内按 authority rank 选择 primary。
-            primary_assigned = False
-            for core_source in homepage_core_sources:
-                if not primary_assigned and _homepage_can_seed_base_draft(core_source):
-                    core_source["sourceRole"] = "primary"
-                    primary_assigned = True
-                elif str(core_source.get("sourceRole") or "") == "primary":
-                    core_source["sourceRole"] = "supporting"
-            homepage_seed_sources = [
-                source for source in homepage_core_sources if _homepage_can_seed_base_draft(source)
-            ]
-            homepage_same_source_seed_sources = [
-                source
-                for source in homepage_seed_sources
-                if str(source.get("imageEvidenceMode") or "").strip() == "same_source"
-                and any(
-                    isinstance(item, dict) and str(item.get("url") or "").strip()
-                    for item in (source.get("imageUrls") or [])
-                )
-            ]
-            homepage_media_collections: list[dict[str, Any]] = []
-            if homepage_seed_sources and not homepage_same_source_seed_sources:
-                homepage_media_collections = _independent_homepage_media_collections(
-                    [
-                        *prior_image_pool,
-                        *wiki_page_images,
-                        *voyage_page_images,
-                        *commons,
-                        *hint_commons,
-                        *wikidata_commons,
-                        *openverse,
-                    ],
-                    entity_id=entity_id,
-                    entity_aliases=list(entity_aliases),
-                    vertical=vertical,
-                    report=report,
-                    limit=1,
-                )
-            if _write_lane(
-                dl / "homepage_source_plan.json",
-                "homepage",
-                {
-                    "policyRevision": "encyclopedia-primary-v2",
-                    "primaryEvidenceRef": (
-                        homepage_core_sources[0]["source_id"]
-                        if homepage_core_sources
-                        else ""
-                    ),
-                    "sources": homepage_core_sources,
-                    "homepageMediaCollections": homepage_media_collections,
-                },
+        homepage_sources = (
+            write_homepage_lane(HomepageResearchInput(
+                execution_id=execution_id,
+                entity_id=entity_id,
+                entity_aliases=tuple(entity_aliases),
+                vertical=vertical,
+                plan_dir=dl,
+                report=report,
+                updated=updated,
+                prior_homepage_sources=tuple(prior_homepage_sources),
+                wiki_url=wiki_url,
+                wiki_title=wiki_title or "",
+                wiki_page_images=tuple(wiki_page_images),
+                related_wiki_titles=tuple(related_wiki_titles),
+                baidu_baike=baidu_baike,
+                toutiao_baike=toutiao_baike,
+                prior_image_pool=tuple(prior_image_pool),
+                voyage_page_images=tuple(voyage_page_images),
+                commons=tuple(commons),
+                hint_commons=tuple(hint_commons),
+                wikidata_commons=tuple(wikidata_commons),
+                openverse=tuple(openverse),
+                rejected_source_urls=frozenset(rejected_source_urls),
                 force=force,
-            ):
-                updated.append(
-                    {
-                        "entityId": entity_id,
-                        "lane": "homepage",
-                        "sources": len(homepage_core_sources),
-                    }
-                )
-            if not homepage_seed_sources:
-                _record_unavailable(
-                    report,
-                    entity_id=entity_id,
-                    lane="homepage",
-                    reason=(
-                        "homepage has no explicit encyclopedia-primary-v2 "
-                        "Wikipedia/Baidu/Sogou/Toutiao source for baseDraft"
-                    ),
-                    code=DataIssueCode.SOURCE_PRIMARY_AUTHORITY_MISSING,
-                    recovery=DataRecoveryAction.STOP,
-                )
-            elif not homepage_same_source_seed_sources and not homepage_media_collections:
-                _record_unavailable(
-                    report,
-                    entity_id=entity_id,
-                    lane="homepage",
-                    reason=(
-                        "homepage has neither same-source imagery nor an independent "
-                        "rights-cleared entity-matched media collection"
-                    ),
-                    code=DataIssueCode.MEDIA_RIGHTS_UNAVAILABLE,
-                    recovery=DataRecoveryAction.STOP,
-                )
+                related_page_images=_mediawiki_page_images,
+            ))
+            if "homepage" in selected_lanes
+            else []
+        )
 
         write_article_lane(
             execution_id=execution_id,
@@ -676,6 +505,17 @@ def _write_auto_research_plans_impl(
                 qid=qid,
                 wiki_title=wiki_title,
                 voyage_title=voyage_title,
+            )
+        if "video" in selected_lanes:
+            write_video_lane(
+                entity_id=entity_id,
+                entity_aliases=entity_aliases,
+                vertical=vertical,
+                plan_dir=dl,
+                force=force,
+                report=report,
+                updated=updated,
+                open_license_image_pool=open_license_image_pool,
             )
     report["sourceAvailability"] = _source_availability_summary(report, entity_ids)
     if write_shared_report:

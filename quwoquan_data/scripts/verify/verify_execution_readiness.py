@@ -33,30 +33,30 @@ def _read_valid_json(path: Path, schema_group: str, schema_name: str, issues: li
     return payload if isinstance(payload, dict) else {}
 
 
-def _terminal_workflow_issues(root: Path, execution_id: str) -> list[str]:
-    state_path = root / "_shared" / "workflow_state.json"
+def _terminal_execution_issues(root: Path, execution_id: str) -> list[str]:
+    state_path = root / "_shared" / "execution_state.json"
     if not state_path.is_file():
-        return [f"{state_path}: workflow completion state is missing"]
+        return [f"{state_path}: execution completion state is missing"]
     try:
         state = read_json(state_path)
-        assert_valid(state, "execution", "workflow_state", label=state_path.as_posix())
+        assert_valid(state, "execution", "execution_state", label=state_path.as_posix())
     except (OSError, ValueError, TypeError) as exc:
-        return [f"{state_path}: workflow state is invalid ({exc})"]
+        return [f"{state_path}: execution state is invalid ({exc})"]
     if str(state.get("executionId") or "") != execution_id:
         return [f"{state_path}: executionId drift"]
 
     issues: list[str] = []
     if str(state.get("status") or "") != "succeeded":
-        issues.append(f"workflow status is not succeeded ({state.get('status') or 'missing'})")
+        issues.append(f"execution status is not succeeded ({state.get('status') or 'missing'})")
     if state.get("waitingCheckpoint"):
-        issues.append(f"workflow still waiting at {state.get('waitingCheckpoint')}")
+        issues.append(f"execution still waiting at {state.get('waitingCheckpoint')}")
     for field in ("activeAutoResearch", "activeAgentScheduler"):
         if state.get(field):
-            issues.append(f"workflow still has {field}")
+            issues.append(f"execution still has {field}")
     for field in ("failedObjects", "completionGateIssues"):
         rows = state.get(field) or []
         if rows:
-            issues.append(f"workflow has {field}={len(rows)}")
+            issues.append(f"execution has {field}={len(rows)}")
     return issues
 
 
@@ -210,7 +210,7 @@ def execution_readiness_issues(execution_id: str, *, require_reviewed: bool) -> 
     if not require_reviewed:
         return issues
 
-    issues.extend(_terminal_workflow_issues(root, execution_id))
+    issues.extend(_terminal_execution_issues(root, execution_id))
     model_readiness = _execution_model_readiness(root, execution_id, issues)
     media_report = homepage_media_completeness_report(execution_id)
     if not bool(media_report.get("passed")):

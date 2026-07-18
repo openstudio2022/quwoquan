@@ -50,7 +50,7 @@
 | UI4 | 胶囊滚动显隐 | `全部 / @我 / 未读` 所在二级胶囊上滑隐藏、回滑显示，且不留下白色空洞 |
 | UI5 | `@我` / `未读` 角标 | `@我` 显示未处理提及数，`未读` 显示未读消息数，二者统一用同一用户态模型驱动 |
 | UI6 | 空状态话术 | `全部`、`@我`、`未读` 分别有独立空状态文案，不再复用鼓励语 |
-| UI7 | 端云一致数据源 | 会话列表统一消费 `GET /v1/chat/inbox` 对应的 per-user inbox read model，而不是 UI 本地拼装 |
+| UI7 | 端云一致数据源 | 会话列表统一消费 `GET /chat/inbox` 对应的 per-user inbox read model，而不是 UI 本地拼装 |
 | UI8 | 已读减数一致性 | 进入会话并成功完成已读同步后，会话行未读数、`@我` 胶囊数、`未读` 胶囊数按同一模型更新 |
 
 ### 4.2 Out-of-Scope
@@ -160,7 +160,7 @@
 
 ### 7.1 唯一真相源
 
-- 会话列表唯一数据源：`GET /v1/chat/inbox`
+- 会话列表唯一数据源：`GET /chat/inbox`
 - 操作 / pageId 真相源：`contracts/metadata/messages/conversation/service.yaml` 与 `contracts/metadata/_shared/request_context.yaml`
 - 路由真相源：`contracts/metadata/_shared/app_routes.yaml`
 

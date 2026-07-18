@@ -1,4 +1,3 @@
-version: 1
 entity: ExperimentAssignmentFact
 layer: e2e
 
@@ -10,7 +9,7 @@ scenarios:
   - name: product_ops_portal_reads_experiment_stats
     steps:
       - product ops opens experiments dashboard
-      - portal requests /v1/control-plane/product/experiments
+      - portal requests /control-plane/product/experiments
       - operator opens one experiment detail and reads bucket stats
     assertions:
       - experiment_list_visible

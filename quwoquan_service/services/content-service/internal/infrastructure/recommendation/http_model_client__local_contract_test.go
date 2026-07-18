@@ -89,7 +89,7 @@ func TestHTTPModelServiceClient_Predict_ContractStable(t *testing.T) {
 		if r.Method != http.MethodPost {
 			t.Fatalf("expected POST, got %s", r.Method)
 		}
-		if r.URL.Path != "/internal/v1/recommendation/model-releases:score" {
+		if r.URL.Path != "/internal/recommendation/model-releases:score" {
 			t.Fatalf("unexpected generated scoring path: %s", r.URL.Path)
 		}
 		if r.Header.Get("Authorization") != "Bearer service-token" {

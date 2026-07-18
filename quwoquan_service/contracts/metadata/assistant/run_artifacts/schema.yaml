@@ -2,7 +2,6 @@ dart_class: RunArtifacts
 library_path: assistant/contracts/run_artifacts.dart
 output_path: assistant/generated/contracts/run_artifacts.g.dart
 contract: run_artifacts
-version: v1
 kind: runtime_persistence_contract
 imports:
   - package:quwoquan_app/assistant/contracts/assistant_journey.dart

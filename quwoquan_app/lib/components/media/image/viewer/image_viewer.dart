@@ -118,9 +118,8 @@ class _ImageViewerState extends ConsumerState<ImageViewer>
       _isFollowing =
           widget.followingUsers?.contains(widget.post['username']) ?? false;
       _likesCount = widget.getPostLikesCount?.call(widget.post) ?? 0;
-      _commentsCount = widget.post['commentsCount'] ?? 0;
-      _sharesCount =
-          widget.post['sharesCount'] ?? widget.post['shareCount'] ?? 0;
+      _commentsCount = widget.post['commentCount'] ?? 0;
+      _sharesCount = widget.post['shareCount'] ?? 0;
     }
   }
 
@@ -293,7 +292,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer>
   Widget _buildCaptionOverlay(BuildContext context) {
     final title = widget.post?['title']?.toString() ?? '';
     final caption =
-        (widget.post?['content'] ?? widget.post?['caption'])?.toString() ?? '';
+        widget.post?['content']?.toString() ?? '';
     if (title.isEmpty && caption.isEmpty) return const SizedBox.shrink();
 
     final bottomOffset =

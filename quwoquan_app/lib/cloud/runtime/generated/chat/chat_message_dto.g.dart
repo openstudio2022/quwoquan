@@ -56,8 +56,8 @@ class ChatMessageDto {
       seq: m['seq'] as int,
       clientMsgId: m['clientMsgId'] as String,
       senderId: m['senderId'] as String,
-      senderName: m['senderDisplayNameSnapshot'] as String?,
-      senderAvatar: m['senderAvatarUrlSnapshot'] as String?,
+      senderName: m['senderName'] as String?,
+      senderAvatar: m['senderAvatar'] as String?,
       type: m['type'] as String,
       content: m['content'] as String?,
       mediaAssetId: m['mediaAssetId'] as String?,
@@ -74,6 +74,31 @@ class ChatMessageDto {
     );
   }
 
+  factory ChatMessageDto.fromReadModelMap(Map<String, dynamic> source) {
+    return ChatMessageDto.fromMap(<String, dynamic>{
+      'id': source['id'],
+      'conversationId': source['conversationId'],
+      'seq': source['seq'],
+      'clientMsgId': source['clientMsgId'],
+      'senderId': source['senderId'],
+      'senderName': source['senderDisplayNameSnapshot'],
+      'senderAvatar': source['senderAvatarUrlSnapshot'],
+      'type': source['type'],
+      'content': source['content'],
+      'mediaAssetId': source['mediaAssetId'],
+      'mediaDeliveryUrl': source['mediaDeliveryUrl'],
+      'mediaType': source['mediaType'],
+      'mediaContentType': source['mediaContentType'],
+      'mediaFileSizeBytes': source['mediaFileSizeBytes'],
+      'card': source['card'],
+      'replyToMessageId': source['replyToMessageId'],
+      'mentions': source['mentions'],
+      'status': source['status'],
+      'recalledAt': source['recalledAt'],
+      'timestamp': source['timestamp'],
+    });
+  }
+
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
       'id': id,
@@ -81,8 +106,8 @@ class ChatMessageDto {
       'seq': seq,
       'clientMsgId': clientMsgId,
       'senderId': senderId,
-      'senderDisplayNameSnapshot': senderName,
-      'senderAvatarUrlSnapshot': senderAvatar,
+      'senderName': senderName,
+      'senderAvatar': senderAvatar,
       'type': type,
       'content': content,
       'mediaAssetId': mediaAssetId,
@@ -153,8 +178,8 @@ void _validateChatMessageDtoWire(Map<String, dynamic> m) {
     'seq',
     'clientMsgId',
     'senderId',
-    'senderDisplayNameSnapshot',
-    'senderAvatarUrlSnapshot',
+    'senderName',
+    'senderAvatar',
     'type',
     'content',
     'mediaAssetId',
@@ -188,11 +213,11 @@ void _validateChatMessageDtoWire(Map<String, dynamic> m) {
   if (!m.containsKey('senderId') || m['senderId'] == null || (m['senderId'] is! String)) {
     throw FormatException('ChatMessageDto.senderId has an invalid wire value');
   }
-  if (m.containsKey('senderDisplayNameSnapshot') && m['senderDisplayNameSnapshot'] != null && (m['senderDisplayNameSnapshot'] is! String)) {
-    throw FormatException('ChatMessageDto.senderDisplayNameSnapshot has an invalid wire value');
+  if (m.containsKey('senderName') && m['senderName'] != null && (m['senderName'] is! String)) {
+    throw FormatException('ChatMessageDto.senderName has an invalid wire value');
   }
-  if (m.containsKey('senderAvatarUrlSnapshot') && m['senderAvatarUrlSnapshot'] != null && (m['senderAvatarUrlSnapshot'] is! String)) {
-    throw FormatException('ChatMessageDto.senderAvatarUrlSnapshot has an invalid wire value');
+  if (m.containsKey('senderAvatar') && m['senderAvatar'] != null && (m['senderAvatar'] is! String)) {
+    throw FormatException('ChatMessageDto.senderAvatar has an invalid wire value');
   }
   if (!m.containsKey('type') || m['type'] == null || (m['type'] is! String)) {
     throw FormatException('ChatMessageDto.type has an invalid wire value');
@@ -235,18 +260,6 @@ void _validateChatMessageDtoWire(Map<String, dynamic> m) {
   }
 }
 
-DateTime? _parseDateTime(dynamic v) {
-  if (v == null) return null;
-  if (v is DateTime) return v;
-  if (v is String) return DateTime.tryParse(v);
-  return null;
-}
-
-List<String>? _parseStringList(dynamic v) {
-  if (v == null) return null;
-  if (v is List) return v.map((e) => e?.toString() ?? '').toList();
-  return null;
-}
 
 Map<String, dynamic>? _parseStringKeyMap(dynamic v) {
   if (v == null) return null;

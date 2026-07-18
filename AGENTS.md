@@ -95,6 +95,8 @@ Codex 在本仓库做任何增量，都必须同时用这些视角审视，不�
 - 先 metadata，后 verify/codegen，再写业务逻辑；禁止手改 codegen 产物。
 - 不维护第二套路由、错误码、UI IA、mock 数据或特性树。
 - 当前阶段按未上线处理：对不合理实现零兼容、零技术债容忍，优先替换为正确契约与正确架构；禁止为错误实现继续加 shim、fallback、allowlist 或旁路。
+- 契约单轨：禁止协议版本信封与 wire 多键双读；正向「旧键仍可解析」测试与 `--warn-only`/`mode=compat` 逃逸一律阻断；门禁 `python3 quwoquan_ops/gate/verify_single_track_contracts.py`。
+- 存储 vs wire：Mongo/bson 可用 `_id`；客户端 HTTP/WS/DTO JSON 只认 canonical `id`/`postId`/`conversationId`/`callId`/`homepageId` 等；`source: _id` 仅表示存储投影源，不得作为 wire 键。
 - 禁止以“后续补”“临时兼容”“测试先放宽”“先绕过 gate”为交付策略；无法闭环就明确阻断。
 - 仓库本地长期工作分支只允许 `dev1.0`；远端只保留 `dev1.0` 与 `main`。未经用户明确同意，不得创建、提交或推送其他分支；若确需例外，先更新 `quwoquan_ops/policies/branch_policy.yaml` 再执行。
 - 脏工作树是常态；禁止回滚或覆盖与你当前任务无关的用户改动。

@@ -1,15 +1,45 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "required": ["schemaVersion", "stage", "executionId", "objectRef", "passed", "checks", "issues"],
+  "required": [
+    "schema",
+    "stage",
+    "executionId",
+    "objectRef",
+    "passed",
+    "checks",
+    "issues"
+  ],
   "additionalProperties": false,
   "properties": {
-    "schemaVersion": { "const": "quwoquan_data.author_self_check/1" },
-    "stage": { "const": "4.draft" },
-    "executionId": { "type": "string", "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(canary|m1|m2|m3)-[0-9]{3,}$" },
-    "objectRef": { "type": "string", "minLength": 1 },
-    "passed": { "type": "boolean" },
-    "checks": { "type": "array", "items": { "type": "object" } },
-    "issues": { "type": "array", "items": { "type": "string" } }
+    "stage": {
+      "const": "4.draft"
+    },
+    "executionId": {
+      "type": "string",
+      "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(canary|m1|m2|m3)-[0-9]{3,}$"
+    },
+    "objectRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "passed": {
+      "type": "boolean"
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "schema": {
+      "const": "quwoquan_data.author_self_check"
+    }
   }
 }

@@ -74,8 +74,7 @@ export const domainOnboardingDomains = {
     "service_names": [
       "seed-box"
     ],
-    "template_role": "backlog_candidate",
-    "version": 1
+    "template_role": "backlog_candidate"
   },
   "chat": {
     "acceptance_status": "integration_pass",
@@ -148,8 +147,7 @@ export const domainOnboardingDomains = {
     "service_names": [
       "seed-box"
     ],
-    "template_role": "replica_ready",
-    "version": 1
+    "template_role": "replica_ready"
   },
   "circle": {
     "acceptance_status": "integration_pass",
@@ -225,8 +223,7 @@ export const domainOnboardingDomains = {
     "service_names": [
       "seed-box"
     ],
-    "template_role": "replica_ready",
-    "version": 1
+    "template_role": "replica_ready"
   },
   "content": {
     "acceptance_status": "integration_pass",
@@ -312,8 +309,7 @@ export const domainOnboardingDomains = {
     "service_names": [
       "seed-box"
     ],
-    "template_role": "template_seed",
-    "version": 1
+    "template_role": "template_seed"
   },
   "entity": {
     "acceptance_status": "integration_pass",
@@ -390,8 +386,7 @@ export const domainOnboardingDomains = {
     "service_names": [
       "seed-box"
     ],
-    "template_role": "replica_ready",
-    "version": 1
+    "template_role": "replica_ready"
   },
   "integration": {
     "acceptance_status": "integration_pass",
@@ -462,8 +457,7 @@ export const domainOnboardingDomains = {
     "service_names": [
       "seed-box"
     ],
-    "template_role": "backlog_candidate",
-    "version": 1
+    "template_role": "backlog_candidate"
   },
   "notification": {
     "acceptance_status": "integration_pass",
@@ -538,8 +532,7 @@ export const domainOnboardingDomains = {
     "service_names": [
       "notification-service"
     ],
-    "template_role": "replica_ready",
-    "version": 1
+    "template_role": "replica_ready"
   },
   "ops": {
     "acceptance_status": "integration_pass",
@@ -623,8 +616,7 @@ export const domainOnboardingDomains = {
     "service_names": [
       "product-ops-service"
     ],
-    "template_role": "backlog_candidate",
-    "version": 1
+    "template_role": "backlog_candidate"
   },
   "realtime": {
     "acceptance_status": "integration_pass",
@@ -695,8 +687,7 @@ export const domainOnboardingDomains = {
     "service_names": [
       "realtime-gateway"
     ],
-    "template_role": "backlog_candidate",
-    "version": 1
+    "template_role": "backlog_candidate"
   },
   "recommendation": {
     "acceptance_status": "integration_pass",
@@ -770,8 +761,7 @@ export const domainOnboardingDomains = {
     "service_names": [
       "recommendation-service"
     ],
-    "template_role": "backlog_candidate",
-    "version": 1
+    "template_role": "backlog_candidate"
   },
   "rtc": {
     "acceptance_status": "integration_pass",
@@ -843,8 +833,7 @@ export const domainOnboardingDomains = {
     "service_names": [
       "rtc-service"
     ],
-    "template_role": "backlog_candidate",
-    "version": 1
+    "template_role": "backlog_candidate"
   },
   "tag": {
     "acceptance_status": "integration_pass",
@@ -911,8 +900,7 @@ export const domainOnboardingDomains = {
     "service_names": [
       "seed-box"
     ],
-    "template_role": "replica_ready",
-    "version": 1
+    "template_role": "replica_ready"
   },
   "user": {
     "acceptance_status": "integration_pass",
@@ -986,8 +974,7 @@ export const domainOnboardingDomains = {
     "service_names": [
       "seed-box"
     ],
-    "template_role": "replica_ready",
-    "version": 1
+    "template_role": "replica_ready"
   }
 } as const;
 export type DomainOnboardingDomains = typeof domainOnboardingDomains;

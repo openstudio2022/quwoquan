@@ -1,4 +1,3 @@
-version: 1
 service:
   name: user-service
   domain: user
@@ -11,7 +10,8 @@ service:
     target_story: app-cloud-business-object-commercial-closure
 api_routes:
   - method: PATCH
-    path: /v1/user/settings/notifications
+    path: /user/settings/notifications
+
     operation: UpdateNotificationSettings
     actor: account
     application:
@@ -30,7 +30,8 @@ api_routes:
       visibility: private
 
   - method: PATCH
-    path: /v1/user/settings/privacy
+    path: /user/settings/privacy
+
     operation: UpdatePrivacySettings
     actor: account
     application:
@@ -49,7 +50,8 @@ api_routes:
       visibility: private
 
   - method: PATCH
-    path: /v1/user/settings/calls
+    path: /user/settings/calls
+
     operation: UpdateCallSettings
     actor: account
     application:
@@ -70,7 +72,8 @@ api_routes:
       visibility: private
 
   - method: PATCH
-    path: /v1/user/settings/appearance
+    path: /user/settings/appearance
+
     operation: UpdateAppearanceSettings
     actor: account
     application:

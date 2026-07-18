@@ -6,16 +6,17 @@ import json
 import sys
 from pathlib import Path
 
-from core.control_types import EXECUTION_MILESTONES
+from core.control_types import EXECUTION_MILESTONES, RolloutMilestone
 from core.paths import OUTPUT_ROOT, PUBLISH_ROOT, execution_root
 from content.release.canonical.baseline_release import build_empty_baseline_release
-from content.release.canonical.object_transaction import build_aggregate_release
+from content.release.canonical.aggregate_release import build_aggregate_release
 from content.release.canonical.two_province_closure import TwoProvinceClosureError, build_pre_environment_attestations
 from content.release.canonical.two_province_environment_closure import (
     TwoProvinceEnvironmentClosureError,
     build_environment_attestations,
 )
-from content.release.canonical.rollout_milestone import RolloutMilestoneError, build_rollout_milestone_attestation
+from content.release.canonical.rollout_attestation import build_rollout_milestone_attestation
+from content.release.canonical.rollout_milestone import RolloutMilestoneError
 
 
 def handle_aggregate_release(args: argparse.Namespace) -> None:
@@ -32,7 +33,7 @@ def handle_aggregate_release(args: argparse.Namespace) -> None:
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
-def handle_empty_baseline_release(args: argparse.Namespace) -> None:
+def handle_baseline_release(args: argparse.Namespace) -> None:
     report = build_empty_baseline_release(
         publish_root=Path(args.publish_root or PUBLISH_ROOT),
         release_root=Path(args.release_root or (OUTPUT_ROOT / "data/releases")),
@@ -96,20 +97,22 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     aggregate.add_argument(
         "--rollout-milestone",
         required=True,
-        choices=tuple(item.value for item in EXECUTION_MILESTONES),
+        choices=tuple(
+            item.value for item in (*EXECUTION_MILESTONES, RolloutMilestone.LAUNCH)
+        ),
         help="该累计 immutable release 对应的 rollout 里程碑",
     )
     aggregate.add_argument("--publish-root")
     aggregate.add_argument("--release-root")
     aggregate.set_defaults(handler=handle_aggregate_release)
     baseline = commands.add_parser(
-        "empty-baseline",
+        "baseline",
         help="创建用于真实 sync rollback 的 immutable 空 desired-state release",
     )
     baseline.add_argument("--release-id", required=True)
     baseline.add_argument("--publish-root")
     baseline.add_argument("--release-root")
-    baseline.set_defaults(handler=handle_empty_baseline_release)
+    baseline.set_defaults(handler=handle_baseline_release)
     closure = commands.add_parser(
         "attest-two-province",
         help="仅在 rollout contract 的全部 execution/source/media/review 闭合后写入最终静态 attestations",

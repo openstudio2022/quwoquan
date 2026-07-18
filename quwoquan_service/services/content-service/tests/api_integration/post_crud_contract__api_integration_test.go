@@ -20,107 +20,91 @@ import (
 	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
 )
 
-// TestCreatePostAggregate verifies POST /v1/content/posts creates an image post
-// and returns 201 with _id and correct contentType.
-// contract.yaml: create_post_aggregate / go_func: TestCreatePostAggregate
-func TestCreatePostAggregate(t *testing.T) {
+// TestSubmitPostPublicationCreatesPublishedPost verifies the only public create ABI.
+func TestSubmitPostPublicationCreatesPublishedPost(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
-
-	body := `{"title":"sunset over the lake","body":"golden hour photography","contentType":"image","mediaUrls":["https://example.com/sunset.jpg"]}`
-	req := httptest.NewRequest(http.MethodPost, "/v1/content/posts", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Client-User-Id", "user_test_001")
-	ensureIdempotencyHeader(req, t.Name())
-	rec := httptest.NewRecorder()
-
-	testHandler.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
-	}
-	var result map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if result["_id"] == nil {
+	result := submitPublishedPostWithAuthor(
+		t,
+		"user_test_001",
+		`{"body":"golden hour photography","contentType":"micro"}`,
+	)
+	if result["postId"] == nil {
 		t.Error("response missing _id field")
 	}
-	if result["contentType"] != "image" {
-		t.Errorf("expected contentType=image, got %v", result["contentType"])
+	if result["contentType"] != "micro" {
+		t.Errorf("expected contentType=micro, got %v", result["contentType"])
 	}
 	if result["authorId"] != "user_test_001" {
 		t.Errorf("expected authorId=user_test_001, got %v", result["authorId"])
 	}
-	if result["status"] != "draft" {
-		t.Errorf("expected status=draft after create, got %v", result["status"])
+	if result["status"] != "published" {
+		t.Errorf("expected status=published after submit, got %v", result["status"])
 	}
 }
 
-// TestCreatePostAllTypes verifies that all four supported content types
-// (image, video, micro, article) are accepted and return 201.
-// contract.yaml: create_post_all_types / go_func: TestCreatePostAllTypes
-func TestCreatePostAllTypes(t *testing.T) {
+// TestSubmitPostPublicationAllTypes verifies all public content variants.
+func TestSubmitPostPublicationAllTypes(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
 	cases := []struct {
 		contentType string
 		extra       string
 	}{
-		{"image", `"mediaUrls":["https://example.com/img.jpg"]`},
-		{"video", `"videoUrl":"https://example.com/vid.mp4"`},
+		{"image", `"body":"image publication"`},
+		{"video", `"body":"video publication"`},
 		{"micro", `"body":"quick thought"`},
-		{"article", `"title":"Deep work tips","articleMarkdown":"# Deep work tips\n\nFocus is a skill","articleMarkdownVersion":"qwq-rich-md/1","articleAssetManifest":{"assets":[]}`},
+		{"article", `"title":"Deep work tips","articleMarkdown":"# Deep work tips\n\nFocus is a skill","markdownDialect":"qwq-rich-md","articleAssetManifest":{"assets":[]}`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.contentType, func(t *testing.T) {
-			payload := fmt.Sprintf(`{"contentType":%q,%s}`, tc.contentType, tc.extra)
-			req := httptest.NewRequest(http.MethodPost, "/v1/content/posts", strings.NewReader(payload))
-			req.Header.Set("Content-Type", "application/json")
-			ensureIdempotencyHeader(req, t.Name())
-			rec := httptest.NewRecorder()
-			testHandler.ServeHTTP(rec, req)
-			if rec.Code != http.StatusCreated {
-				t.Fatalf("contentType=%s: expected 201, got %d: %s", tc.contentType, rec.Code, rec.Body.String())
+			var payload map[string]any
+			if err := json.Unmarshal(
+				[]byte(fmt.Sprintf(`{"contentType":%q,%s}`, tc.contentType, tc.extra)),
+				&payload,
+			); err != nil {
+				t.Fatal(err)
 			}
-			var result map[string]any
-			if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
-				t.Fatalf("contentType=%s: decode response: %v", tc.contentType, err)
+			if tc.contentType == "image" || tc.contentType == "video" {
+				assetID := createReadyPublicationMediaAsset(
+					t,
+					identity.AnonymousFallbackSubAccountID,
+					tc.contentType,
+				)
+				payload["mediaAssetIds"] = []string{assetID}
+				payload["mediaItems"] = []map[string]any{{
+					"kind":    tc.contentType,
+					"mediaId": assetID,
+				}}
 			}
+			encoded, err := json.Marshal(payload)
+			if err != nil {
+				t.Fatal(err)
+			}
+			result := submitPublishedPost(t, string(encoded))
 			if result["contentType"] != tc.contentType {
 				t.Errorf("contentType=%s: response contentType mismatch: got %v", tc.contentType, result["contentType"])
 			}
-			if result["status"] != "draft" {
-				t.Errorf("contentType=%s: expected status=draft, got %v", tc.contentType, result["status"])
+			if result["status"] != "published" {
+				t.Errorf("contentType=%s: expected status=published, got %v", tc.contentType, result["status"])
 			}
 		})
 	}
 }
 
-// TestPublishPostContract verifies CreatePost returns a draft and PublishPost
-// transitions the same aggregate into a published post with stable postId.
-func TestPublishPostContract(t *testing.T) {
+func TestSubmitPostPublicationReturnsStablePublishedPost(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	created := createDraftPostWithAuthor(t, "publish_author", `{
+	published := submitPublishedPostWithAuthor(t, "publish_author", `{
 		"contentType":"article",
 		"contentIdentity":"work",
 		"title":"待发布作品",
-		"body":"先保存为草稿"
-	}`)
-	postID, _ := created["_id"].(string)
-	if postID == "" {
-		t.Fatal("draft post missing _id")
-	}
-	if created["status"] != "draft" {
-		t.Fatalf("expected draft status after create, got %v", created["status"])
-	}
-
-	published := publishPostWithAuthor(t, "publish_author", postID, `{
+		"body":"原子发布",
 		"visibility":"public",
 		"assistantUsePolicy":"inherit"
 	}`)
-	if published["_id"] != postID {
-		t.Fatalf("expected publish keep same post id, got %v", published["_id"])
+	postID, _ := published["postId"].(string)
+	if postID == "" {
+		t.Fatal("published post missing postId")
 	}
 	if published["status"] != "published" {
 		t.Fatalf("expected status=published, got %v", published["status"])
@@ -130,36 +114,31 @@ func TestPublishPostContract(t *testing.T) {
 	}
 }
 
-// TestCreatePublishOutboxProjectionCommercialChain proves the first commercial
-// vertical slice: CreatePost + PublishPost commit stable facts, independent
-// consumers advance their own checkpoints, and Discovery converges from the
-// durable PostPublished event. Re-draining does not duplicate external facts.
-func TestCreatePublishOutboxProjectionCommercialChain(t *testing.T) {
+// TestSubmitPostPublicationOutboxProjectionCommercialChain proves the atomic
+// publication fact drives independent durable projections exactly once.
+func TestSubmitPostPublicationOutboxProjectionCommercialChain(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 	eventSpy.Reset()
 
-	created := createDraftPostWithAuthor(t, "commercial_chain_author", `{
+	published := submitPublishedPostWithAuthor(t, "commercial_chain_author", `{
 		"contentType":"article",
 		"contentIdentity":"work",
 		"title":"端云对象闭环",
 		"articleMarkdown":"# 端云对象闭环\n\nDurable outbox first.",
-		"articleMarkdownVersion":"qwq-rich-md/1",
+		"markdownDialect":"qwq-rich-md",
 		"articleAssetManifest":{"assets":[]}
 	}`)
-	postID, _ := created["_id"].(string)
+	postID, _ := published["postId"].(string)
 	if postID == "" {
-		t.Fatal("draft post missing _id")
+		t.Fatal("published post missing postId")
 	}
-	publishPostWithAuthor(t, "commercial_chain_author", postID, `{"visibility":"public"}`)
 
-	createdEvents := eventSpy.EventsOfType("PostCreated")
 	publishedEvents := eventSpy.EventsOfType("PostPublished")
-	if len(createdEvents) != 1 || len(publishedEvents) != 1 {
-		t.Fatalf("durable lifecycle facts mismatch: created=%d published=%d", len(createdEvents), len(publishedEvents))
+	if len(publishedEvents) != 1 {
+		t.Fatalf("durable publication fact mismatch: published=%d", len(publishedEvents))
 	}
-	if createdEvents[0].EventID == "" || publishedEvents[0].EventID == "" ||
-		createdEvents[0].EventID == publishedEvents[0].EventID {
-		t.Fatalf("stable event identities missing or reused: created=%q published=%q", createdEvents[0].EventID, publishedEvents[0].EventID)
+	if publishedEvents[0].EventID == "" {
+		t.Fatal("stable publication event identity missing")
 	}
 
 	var projection struct {
@@ -202,25 +181,26 @@ func TestCreatePublishOutboxProjectionCommercialChain(t *testing.T) {
 func TestDeletePostContract(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	created := createPostWithAuthor(t, "delete_author", `{
+	created := submitPublishedPostWithAuthor(t, "delete_author", `{
 		"contentType":"micro",
 		"contentIdentity":"moment",
 		"body":"准备删除的点滴"
 	}`)
-	postID, _ := created["_id"].(string)
+	postID, _ := created["postId"].(string)
 	if postID == "" {
 		t.Fatal("published post missing _id")
 	}
 
-	req := httptest.NewRequest(http.MethodDelete, "/v1/content/posts/"+postID, nil)
+	req := httptest.NewRequest(http.MethodDelete, "/content/posts/"+postID, nil)
 	req.Header.Set("X-Client-User-Id", "delete_author")
+	ensureIdempotencyHeader(req, "delete-post")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	getReq := httptest.NewRequest(http.MethodGet, "/v1/content/posts/"+postID, nil)
+	getReq := httptest.NewRequest(http.MethodGet, "/content/posts/"+postID, nil)
 	getReq.Header.Set("X-Client-User-Id", "delete_author")
 	getRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(getRec, getReq)
@@ -232,18 +212,19 @@ func TestDeletePostContract(t *testing.T) {
 func TestGetDeletedPostAfterServiceRestartStillReturnsNotFound(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	created := createPostWithAuthor(t, "delete_restart_author", `{
+	created := submitPublishedPostWithAuthor(t, "delete_restart_author", `{
 		"contentType":"micro",
 		"contentIdentity":"moment",
 		"body":"准备删除后重启再读取"
 	}`)
-	postID, _ := created["_id"].(string)
+	postID, _ := created["postId"].(string)
 	if postID == "" {
 		t.Fatal("published post missing _id")
 	}
 
-	deleteReq := httptest.NewRequest(http.MethodDelete, "/v1/content/posts/"+postID, nil)
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/content/posts/"+postID, nil)
 	deleteReq.Header.Set("X-Client-User-Id", "delete_restart_author")
+	ensureIdempotencyHeader(deleteReq, "delete-post-before-restart")
 	deleteRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(deleteRec, deleteReq)
 	if deleteRec.Code != http.StatusOK {
@@ -274,7 +255,7 @@ func TestGetDeletedPostAfterServiceRestartStillReturnsNotFound(t *testing.T) {
 		).Routes().ServeHTTP(w, r)
 	})
 
-	getReq := httptest.NewRequest(http.MethodGet, "/v1/content/posts/"+postID, nil)
+	getReq := httptest.NewRequest(http.MethodGet, "/content/posts/"+postID, nil)
 	getReq.Header.Set("X-Client-User-Id", "delete_restart_author")
 	getRec := httptest.NewRecorder()
 	restartedHandler.ServeHTTP(getRec, getReq)
@@ -288,13 +269,13 @@ func TestGetDeletedPostAfterServiceRestartStillReturnsNotFound(t *testing.T) {
 func TestGetPostSuccess(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	created := createPost(t, `{"contentType":"image","title":"Test Get","body":"visible post","mediaUrls":["https://example.com/img.jpg"]}`)
-	postID, _ := created["_id"].(string)
+	created := submitPublishedPost(t, `{"contentType":"image","title":"Test Get","body":"visible post"}`)
+	postID, _ := created["postId"].(string)
 	if postID == "" {
 		t.Fatal("created post has no _id")
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/content/posts/"+postID, nil)
+	req := httptest.NewRequest(http.MethodGet, "/content/posts/"+postID, nil)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 
@@ -305,16 +286,16 @@ func TestGetPostSuccess(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if result["_id"] != postID {
-		t.Errorf("expected _id=%s, got %v", postID, result["_id"])
+	if result["postId"] != postID {
+		t.Errorf("expected postId=%s, got %v", postID, result["postId"])
 	}
 }
 
-// TestGetPostNotFound verifies GET /v1/content/posts/{id} returns 404 with
+// TestGetPostNotFound verifies GET /content/posts/{id} returns 404 with
 // structured error code when the post does not exist.
 // contract.yaml: get_post_not_found / go_func: TestGetPostNotFound
 func TestGetPostNotFound(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/v1/content/posts/nonexistent_id_xyz", nil)
+	req := httptest.NewRequest(http.MethodGet, "/content/posts/nonexistent_id_xyz", nil)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 
@@ -335,33 +316,15 @@ func TestGetPostNotFound(t *testing.T) {
 	}
 }
 
-// TestUpdatePostForbidden verifies PATCH /v1/content/posts/{id} from a
-// different user returns 403 when authorId mismatch is enforced.
-// contract.yaml: update_post_forbidden / go_func: TestUpdatePostForbidden
-func TestUpdatePostForbidden(t *testing.T) {
+func TestUpdatePostSettingsForbidden(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	// Create a post owned by user_owner
-	req := httptest.NewRequest(
-		http.MethodPost, "/v1/content/posts",
-		strings.NewReader(`{"contentType":"micro","body":"owner post"}`),
-	)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Client-User-Id", "user_owner")
-	ensureIdempotencyHeader(req, t.Name())
-	rec := httptest.NewRecorder()
-	testHandler.ServeHTTP(rec, req)
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("create post: expected 201, got %d", rec.Code)
-	}
-	var created map[string]any
-	_ = json.Unmarshal(rec.Body.Bytes(), &created)
-	postID, _ := created["_id"].(string)
+	created := submitPublishedPostWithAuthor(t, "user_owner", `{"contentType":"micro","body":"owner post"}`)
+	postID, _ := created["postId"].(string)
 
-	// Attempt update as a different user
 	patchReq := httptest.NewRequest(
-		http.MethodPatch, "/v1/content/posts/"+postID,
-		strings.NewReader(`{"body":"hacker update"}`),
+		http.MethodPatch, "/content/posts/"+postID+"/settings",
+		strings.NewReader(`{"visibility":"private"}`),
 	)
 	patchReq.Header.Set("Content-Type", "application/json")
 	patchReq.Header.Set("X-Client-User-Id", "user_hacker")
@@ -377,32 +340,16 @@ func TestUpdatePostForbidden(t *testing.T) {
 	}
 }
 
-// TestPostCreatedEventPublished verifies that creating a post commits a
-// PostCreated fact and the durable outbox relay publishes it to EventSpy.
-// contract.yaml: create_post_event_published / go_func: TestPostCreatedEventPublished
-func TestPostCreatedEventPublished(t *testing.T) {
+func TestPostPublishedEventPublished(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
 	eventSpy.Reset()
 
-	req := httptest.NewRequest(
-		http.MethodPost,
-		"/v1/content/posts",
-		strings.NewReader(`{"contentType":"micro","body":"event spy test post"}`),
-	)
-	req.Header.Set("Content-Type", "application/json")
-	ensureIdempotencyHeader(req, t.Name())
-	rec := httptest.NewRecorder()
-	testHandler.ServeHTTP(rec, req)
+	submitPublishedPost(t, `{"contentType":"micro","body":"event spy test post"}`)
 
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
-	}
-	drainPostOutbox(t)
-
-	events := eventSpy.EventsOfType("PostCreated")
+	events := eventSpy.EventsOfType("PostPublished")
 	if len(events) == 0 {
-		t.Fatal("expected PostCreated event to be published, got none")
+		t.Fatal("expected PostPublished event to be published, got none")
 	}
 	ev := events[0]
 	if ev.AggregateType != "Post" {
@@ -419,23 +366,21 @@ func TestPostCreatedEventPublished(t *testing.T) {
 	}
 
 	drainPostOutbox(t)
-	if got := len(eventSpy.EventsOfType("PostCreated")); got != 1 {
-		t.Fatalf("checkpoint replay published %d PostCreated events, want 1", got)
+	if got := len(eventSpy.EventsOfType("PostPublished")); got != 1 {
+		t.Fatalf("checkpoint replay published %d PostPublished events, want 1", got)
 	}
 }
 
-// TestCreatePostInvalidContentType verifies that submitting contentType="invalid_type"
+// TestSubmitPostPublicationInvalidContentType verifies that submitting contentType="invalid_type"
 // returns 400 with error code CONTENT.USER.invalid_content_type.
-func TestCreatePostInvalidContentType(t *testing.T) {
+func TestSubmitPostPublicationInvalidContentType(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	req := httptest.NewRequest(
-		http.MethodPost,
-		"/v1/content/posts",
-		strings.NewReader(`{"contentType":"invalid_type","body":"test"}`),
+	req := newPostPublicationRequestForTest(
+		t,
+		"invalid-content-author",
+		`{"contentType":"invalid_type","body":"test"}`,
 	)
-	req.Header.Set("Content-Type", "application/json")
-	ensureIdempotencyHeader(req, t.Name())
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 

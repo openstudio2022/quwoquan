@@ -11,10 +11,8 @@ import (
 // both this App DTO codegen and the Go runtime struct (runtime/recommendation/
 // realtime_patch.go, locked by realtime_patch_test.go) consume it.
 type recPatchContract struct {
-	Version                 int    `yaml:"version"`
 	RealtimeContract        string `yaml:"realtime_contract"`
 	RealtimeChannelTemplate string `yaml:"realtime_channel_template"`
-	SchemaVersion           string `yaml:"schema_version"`
 	ClientCodegen           struct {
 		OutputPath           string `yaml:"output_path"`
 		PatchTypeEnum        string `yaml:"patch_type_enum"`
@@ -93,9 +91,6 @@ func writeRecommendationFeedPatches(appDir, metadataDir string) error {
 }
 
 func validateRecPatchContract(c *recPatchContract) error {
-	if strings.TrimSpace(c.SchemaVersion) == "" {
-		return fmt.Errorf("schema_version is required")
-	}
 	if strings.TrimSpace(c.RealtimeChannelTemplate) == "" {
 		return fmt.Errorf("realtime_channel_template is required")
 	}
@@ -207,9 +202,6 @@ func renderRecommendationFeedPatchesDart(sourcePath string, c *recPatchContract)
 	b.WriteString(filepath.ToSlash(sourcePath))
 	b.WriteString("\n// ignore_for_file: prefer_const_constructors\n\n")
 
-	b.WriteString("/// Realtime feed patch schema version (`schema_version`).\n")
-	b.WriteString(fmt.Sprintf("const feedRealtimePatchSchemaVersion = '%s';\n\n", c.SchemaVersion))
-
 	b.WriteString("/// Per-user realtime channel template (`realtime_channel_template`).\n")
 	b.WriteString(fmt.Sprintf("const feedRealtimePatchChannelTemplate = '%s';\n\n", c.RealtimeChannelTemplate))
 
@@ -281,7 +273,7 @@ func renderRecommendationFeedPatchesDart(sourcePath string, c *recPatchContract)
 	}
 	b.WriteString("    );\n  }\n}\n\n")
 
-	// wire keys manifest (single source for contract tests / forward-compat scans)
+	// wire keys manifest (single source for contract tests)
 	b.WriteString("/// envelope wire 字段顺序（codegen 与 recommendation_realtime_patch.yaml 同步）。\n")
 	b.WriteString("const feedRealtimePatchWireKeys = <String>[\n")
 	for _, f := range c.EnvelopeFields {
@@ -290,12 +282,14 @@ func renderRecommendationFeedPatchesDart(sourcePath string, c *recPatchContract)
 	b.WriteString("];\n\n")
 
 	b.WriteString("/// 解析一条推荐实时 patch 消息体。\n")
-	b.WriteString("/// schemaVersion 不匹配时返回 null（前向兼容：忽略未知 schema），\n")
-	b.WriteString("/// 端侧据此安全降级，不解析未来版本。\n")
-	b.WriteString(fmt.Sprintf("%s? parseFeedRealtimePatch(Map<String, dynamic> message) {\n", class))
-	b.WriteString("  final schema = message['schemaVersion'] as String? ?? '';\n")
-	b.WriteString("  if (schema != feedRealtimePatchSchemaVersion) {\n")
-	b.WriteString("    return null;\n")
+	b.WriteString(fmt.Sprintf("%s parseFeedRealtimePatch(Map<String, dynamic> message) {\n", class))
+	b.WriteString("  final unknownKeys = message.keys\n")
+	b.WriteString("      .where((key) => !feedRealtimePatchWireKeys.contains(key))\n")
+	b.WriteString("      .toList(growable: false);\n")
+	b.WriteString("  if (unknownKeys.isNotEmpty) {\n")
+	b.WriteString("    throw FormatException(\n")
+	b.WriteString("      'FeedRealtimePatch contains unknown fields: ${unknownKeys.join(',')}',\n")
+	b.WriteString("    );\n")
 	b.WriteString("  }\n")
 	b.WriteString(fmt.Sprintf("  return %s.fromWire(message);\n", class))
 	b.WriteString("}\n")

@@ -1,4 +1,3 @@
-version: 1
 read_model: HomepageSource
 
 description: |
@@ -20,47 +19,40 @@ client_projection:
       dart_type: String
       nullable: false
       source: sourceKind
-      aliases: [sourceKind]
       default: "''"
 
     - name: sourceUrl
       dart_type: String
       nullable: false
       source: sourceUrl
-      aliases: [sourceUrl, url]
       default: "''"
 
     - name: title
       dart_type: String
       nullable: false
       source: title
-      aliases: [title]
       default: "''"
 
     - name: fetchedAt
       dart_type: String
       nullable: false
       source: fetchedAt
-      aliases: [fetchedAt]
       default: "''"
 
     - name: snapshotHash
       dart_type: String
       nullable: false
       source: snapshotHash
-      aliases: [snapshotHash]
       default: "''"
 
     - name: policyRevision
       dart_type: String
       nullable: false
       source: policyRevision
-      aliases: [policyRevision]
       default: "''"
 
     - name: sourceUseMode
       dart_type: String
       nullable: false
       source: sourceUseMode
-      aliases: [sourceUseMode]
       default: "''"

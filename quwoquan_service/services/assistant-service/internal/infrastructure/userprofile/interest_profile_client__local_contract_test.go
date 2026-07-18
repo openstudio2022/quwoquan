@@ -37,7 +37,7 @@ func TestClient_GetInterestProfile_MapsContractFields(t *testing.T) {
 	if profile == nil {
 		t.Fatalf("expected non-nil profile")
 	}
-	if gotPath != "/v1/users/user_1/interest-profile" {
+	if gotPath != "/users/user_1/interest-profile" {
 		t.Fatalf("path=%q", gotPath)
 	}
 	if gotUserHeader != "user_1" {

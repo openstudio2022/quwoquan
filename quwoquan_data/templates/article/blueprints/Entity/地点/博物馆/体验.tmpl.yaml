@@ -1,5 +1,4 @@
 templateId: 博物馆_体验
-version: 1
 subject: { kind: entity, type: 地点/博物馆 }
 vertical: travel
 category: humanity

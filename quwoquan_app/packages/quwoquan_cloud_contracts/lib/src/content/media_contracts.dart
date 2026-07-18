@@ -111,23 +111,6 @@ final class SelectManualContentMediaCoverCommand {
   final int coverFrameTimeMs;
 }
 
-final class BindContentPostMediaAssetsCommand {
-  BindContentPostMediaAssetsCommand({
-    required String postId,
-    required Iterable<String> assetIds,
-  }) : postId = _requiredText(postId, 'postId'),
-       assetIds = List<String>.unmodifiable(
-         assetIds.map((value) => _requiredText(value, 'assetId')).toSet(),
-       ) {
-    if (this.assetIds.isEmpty) {
-      throw ArgumentError.value(assetIds, 'assetIds', 'must not be empty');
-    }
-  }
-
-  final String postId;
-  final List<String> assetIds;
-}
-
 final class ContentMediaUploadSessionCommandResult {
   const ContentMediaUploadSessionCommandResult({
     required this.sessionId,
@@ -238,23 +221,6 @@ final class ContentMediaCoverSelectionResult {
   final Uri coverUrl;
 }
 
-final class BindContentPostMediaAssetsResult {
-  BindContentPostMediaAssetsResult({
-    required String postId,
-    required Iterable<String> boundAssetIds,
-    required this.boundCount,
-  }) : postId = _requiredText(postId, 'postId'),
-       boundAssetIds = List<String>.unmodifiable(boundAssetIds) {
-    if (boundCount != this.boundAssetIds.length) {
-      throw const FormatException('boundCount must equal boundAssetIds.length');
-    }
-  }
-
-  final String postId;
-  final List<String> boundAssetIds;
-  final int boundCount;
-}
-
 CloudOperationRequestPayload encodeInitContentMediaUploadCommand(
   InitContentMediaUploadCommand command,
 ) => CloudOperationRequestPayload(
@@ -312,13 +278,6 @@ CloudOperationRequestPayload encodeSelectManualContentMediaCoverCommand(
     if (command.coverAssetId != null) 'coverAssetId': command.coverAssetId,
     'coverFrameTimeMs': command.coverFrameTimeMs,
   },
-);
-
-CloudOperationRequestPayload encodeBindContentPostMediaAssetsCommand(
-  BindContentPostMediaAssetsCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'postId': command.postId},
-  body: <String, Object?>{'assetIds': command.assetIds},
 );
 
 ContentMediaUploadSessionCommandResult
@@ -399,17 +358,6 @@ ContentMediaCoverSelectionResult decodeContentMediaCoverSelectionResult(
     coverFrameTimeMs: _nonNegativeInteger(map, 'coverFrameTimeMs'),
     thumbnailUrl: _uri(map, 'thumbnailUrl'),
     coverUrl: _uri(map, 'coverUrl'),
-  );
-}
-
-BindContentPostMediaAssetsResult decodeBindContentPostMediaAssetsResult(
-  Object? value,
-) {
-  final map = _object(value, 'BindContentPostMediaAssetsResult');
-  return BindContentPostMediaAssetsResult(
-    postId: _string(map, 'postId'),
-    boundAssetIds: _stringList(map, 'boundAssetIds'),
-    boundCount: _positiveInteger(map, 'boundCount'),
   );
 }
 

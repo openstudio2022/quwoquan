@@ -13,6 +13,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "assistant",
       "errorCodes": [],
       "facadeMethod": "createConversation",
@@ -24,7 +25,7 @@
       "mutationTarget": "AssistantConversation",
       "objectId": "assistant.assistant_conversation",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/assistant/conversations",
+      "pathTemplate": "/assistant/conversations",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -57,6 +58,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "assistant",
       "errorCodes": [],
       "facadeMethod": "getConversation",
@@ -68,7 +70,7 @@
       "mutationTarget": "",
       "objectId": "assistant.assistant_conversation",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/assistant/conversations/{conversationId}",
+      "pathTemplate": "/assistant/conversations/{conversationId}",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -101,6 +103,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "assistant",
       "errorCodes": [],
       "facadeMethod": "append",
@@ -112,7 +115,7 @@
       "mutationTarget": "AssistantInteractionEvent",
       "objectId": "assistant.assistant_interaction_event",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/assistant/learning/events",
+      "pathTemplate": "/assistant/learning/events",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -146,6 +149,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "assistant",
       "errorCodes": [],
       "facadeMethod": "getRun",
@@ -157,7 +161,7 @@
       "mutationTarget": "",
       "objectId": "assistant.assistant_run",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/assistant/runs/{runId}",
+      "pathTemplate": "/assistant/runs/{runId}",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -190,6 +194,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "assistant",
       "errorCodes": [],
       "facadeMethod": "getEntryPersonalization",
@@ -201,7 +206,7 @@
       "mutationTarget": "",
       "objectId": "assistant.assistant_run",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/assistant/personalization",
+      "pathTemplate": "/assistant/personalization",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -235,6 +240,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "assistant",
       "errorCodes": [],
       "facadeMethod": "getPolicy",
@@ -246,7 +252,7 @@
       "mutationTarget": "",
       "objectId": "assistant.assistant_run",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/assistant/policy",
+      "pathTemplate": "/assistant/policy",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -280,6 +286,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "assistant",
       "errorCodes": [],
       "facadeMethod": "getSuggestedActions",
@@ -291,7 +298,7 @@
       "mutationTarget": "",
       "objectId": "assistant.assistant_run",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/assistant/suggested-actions",
+      "pathTemplate": "/assistant/suggested-actions",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -325,6 +332,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "assistant",
       "errorCodes": [],
       "facadeMethod": "listMemories",
@@ -336,7 +344,7 @@
       "mutationTarget": "",
       "objectId": "assistant.assistant_run",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/assistant/memories",
+      "pathTemplate": "/assistant/memories",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -370,6 +378,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "assistant",
       "errorCodes": [],
       "facadeMethod": "listTasks",
@@ -381,7 +390,7 @@
       "mutationTarget": "",
       "objectId": "assistant.assistant_run",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/assistant/tasks",
+      "pathTemplate": "/assistant/tasks",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -415,6 +424,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "assistant",
       "errorCodes": [],
       "facadeMethod": "listSkills",
@@ -426,7 +436,7 @@
       "mutationTarget": "",
       "objectId": "assistant.assistant_run",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/assistant/skills",
+      "pathTemplate": "/assistant/skills",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -460,6 +470,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "assistant",
       "errorCodes": [],
       "facadeMethod": "reportPageContext",
@@ -471,7 +482,7 @@
       "mutationTarget": "AssistantRun",
       "objectId": "assistant.assistant_run",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/assistant/page-context",
+      "pathTemplate": "/assistant/page-context",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -505,6 +516,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "assistant",
       "errorCodes": [],
       "facadeMethod": "searchXiaoquResults",
@@ -516,7 +528,7 @@
       "mutationTarget": "",
       "objectId": "assistant.assistant_run",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/assistant/search/xiaoqu",
+      "pathTemplate": "/assistant/search/xiaoqu",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -549,6 +561,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "assistant",
       "errorCodes": [],
       "facadeMethod": "startRun",
@@ -560,7 +573,7 @@
       "mutationTarget": "AssistantRun",
       "objectId": "assistant.assistant_run",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/assistant/conversations/{conversationId}/runs",
+      "pathTemplate": "/assistant/conversations/{conversationId}/runs",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -593,6 +606,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "assistant",
       "errorCodes": [],
       "facadeMethod": "streamEvents",
@@ -604,7 +618,7 @@
       "mutationTarget": "",
       "objectId": "assistant.assistant_run",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/assistant/runs/{runId}/events",
+      "pathTemplate": "/assistant/runs/{runId}/events",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -637,6 +651,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "assistant",
       "errorCodes": [],
       "facadeMethod": "append",
@@ -648,7 +663,7 @@
       "mutationTarget": "AssistantScorecardFact",
       "objectId": "assistant.assistant_scorecard_fact",
       "ownershipPolicy": "",
-      "pathTemplate": "/internal/v1/assistant/learning/scorecards",
+      "pathTemplate": "/internal/assistant/learning/scorecards",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -682,6 +697,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "assistant",
       "errorCodes": [],
       "facadeMethod": "grantConsent",
@@ -693,7 +709,7 @@
       "mutationTarget": "SkillConsent",
       "objectId": "assistant.skill_consent",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/assistant/skills/{skillId}/consent",
+      "pathTemplate": "/assistant/skills/{skillId}/consent",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -727,6 +743,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "assistant",
       "errorCodes": [],
       "facadeMethod": "listConsents",
@@ -738,7 +755,7 @@
       "mutationTarget": "",
       "objectId": "assistant.skill_consent",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/assistant/consents",
+      "pathTemplate": "/assistant/consents",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -772,6 +789,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "assistant",
       "errorCodes": [],
       "facadeMethod": "revokeConsent",
@@ -783,7 +801,7 @@
       "mutationTarget": "SkillConsent",
       "objectId": "assistant.skill_consent",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/assistant/skills/{skillId}/consent",
+      "pathTemplate": "/assistant/skills/{skillId}/consent",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -817,6 +835,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "assistant",
       "errorCodes": [],
       "facadeMethod": "createSubscription",
@@ -828,7 +847,7 @@
       "mutationTarget": "SkillSubscription",
       "objectId": "assistant.skill_subscription",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/assistant/skill-subscriptions",
+      "pathTemplate": "/assistant/skill-subscriptions",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -861,6 +880,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "assistant",
       "errorCodes": [],
       "facadeMethod": "getSubscription",
@@ -872,7 +892,7 @@
       "mutationTarget": "",
       "objectId": "assistant.skill_subscription",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/assistant/skill-subscriptions/{subscriptionId}",
+      "pathTemplate": "/assistant/skill-subscriptions/{subscriptionId}",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -905,6 +925,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "assistant",
       "errorCodes": [],
       "facadeMethod": "listSubscriptions",
@@ -916,7 +937,7 @@
       "mutationTarget": "",
       "objectId": "assistant.skill_subscription",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/assistant/skill-subscriptions",
+      "pathTemplate": "/assistant/skill-subscriptions",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -949,6 +970,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "assistant",
       "errorCodes": [],
       "facadeMethod": "updateSubscriptionStatus",
@@ -960,7 +982,7 @@
       "mutationTarget": "SkillSubscription",
       "objectId": "assistant.skill_subscription",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/assistant/skill-subscriptions/{subscriptionId}/status",
+      "pathTemplate": "/assistant/skill-subscriptions/{subscriptionId}/status",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -993,6 +1015,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "chat",
       "errorCodes": [],
       "facadeMethod": "batchGetConversations",
@@ -1004,7 +1027,7 @@
       "mutationTarget": "",
       "objectId": "chat.conversation",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/chat/conversations/batch",
+      "pathTemplate": "/chat/conversations/batch",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -1037,6 +1060,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "chat",
       "errorCodes": [],
       "facadeMethod": "createConversation",
@@ -1048,7 +1072,7 @@
       "mutationTarget": "Conversation",
       "objectId": "chat.conversation",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/chat/conversations",
+      "pathTemplate": "/chat/conversations",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -1081,6 +1105,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "chat",
       "errorCodes": [],
       "facadeMethod": "dissolveConversation",
@@ -1092,7 +1117,7 @@
       "mutationTarget": "Conversation",
       "objectId": "chat.conversation",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/chat/conversations/{conversationId}",
+      "pathTemplate": "/chat/conversations/{conversationId}",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -1125,6 +1150,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "chat",
       "errorCodes": [],
       "facadeMethod": "getConversation",
@@ -1136,7 +1162,7 @@
       "mutationTarget": "",
       "objectId": "chat.conversation",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/chat/conversations/{conversationId}",
+      "pathTemplate": "/chat/conversations/{conversationId}",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -1174,6 +1200,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
@@ -1190,7 +1217,7 @@
       "mutationTarget": "",
       "objectId": "chat.conversation",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/chat/conversations/{conversationId}/messages/{messageId}/receipts",
+      "pathTemplate": "/chat/conversations/{conversationId}/messages/{messageId}/receipts",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -1223,6 +1250,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "chat",
       "errorCodes": [],
       "facadeMethod": "listContacts",
@@ -1234,7 +1262,7 @@
       "mutationTarget": "",
       "objectId": "chat.conversation",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/chat/contacts",
+      "pathTemplate": "/chat/contacts",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -1268,6 +1296,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "chat",
       "errorCodes": [],
       "facadeMethod": "listConversationTimestamps",
@@ -1279,7 +1308,7 @@
       "mutationTarget": "",
       "objectId": "chat.conversation",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/chat/conversations/timestamps",
+      "pathTemplate": "/chat/conversations/timestamps",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -1312,6 +1341,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "chat",
       "errorCodes": [],
       "facadeMethod": "listConversations",
@@ -1323,7 +1353,7 @@
       "mutationTarget": "",
       "objectId": "chat.conversation",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/chat/conversations",
+      "pathTemplate": "/chat/conversations",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -1357,6 +1387,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
@@ -1371,7 +1402,7 @@
       "mutationTarget": "",
       "objectId": "chat.conversation",
       "ownershipPolicy": "active_persona_inbox",
-      "pathTemplate": "/v1/chat/inbox",
+      "pathTemplate": "/chat/inbox",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -1421,6 +1452,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "chat",
       "errorCodes": [],
       "facadeMethod": "searchContacts",
@@ -1432,7 +1464,7 @@
       "mutationTarget": "",
       "objectId": "chat.conversation",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/chat/contacts/search",
+      "pathTemplate": "/chat/contacts/search",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -1467,6 +1499,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "chat",
       "errorCodes": [],
       "facadeMethod": "searchConversations",
@@ -1478,7 +1511,7 @@
       "mutationTarget": "",
       "objectId": "chat.conversation",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/chat/conversations/search",
+      "pathTemplate": "/chat/conversations/search",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -1511,6 +1544,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "chat",
       "errorCodes": [],
       "facadeMethod": "addMembers",
@@ -1522,7 +1556,7 @@
       "mutationTarget": "ConversationMembership",
       "objectId": "chat.conversation_membership",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/chat/conversations/{conversationId}/members",
+      "pathTemplate": "/chat/conversations/{conversationId}/members",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -1555,6 +1589,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "chat",
       "errorCodes": [],
       "facadeMethod": "listMembers",
@@ -1566,7 +1601,7 @@
       "mutationTarget": "",
       "objectId": "chat.conversation_membership",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/chat/conversations/{conversationId}/members",
+      "pathTemplate": "/chat/conversations/{conversationId}/members",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -1604,6 +1639,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "chat",
       "errorCodes": [],
       "facadeMethod": "transferOwnership",
@@ -1615,7 +1651,7 @@
       "mutationTarget": "ConversationMembership",
       "objectId": "chat.conversation_membership",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/chat/conversations/{conversationId}/owner",
+      "pathTemplate": "/chat/conversations/{conversationId}/owner",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -1648,6 +1684,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "chat",
       "errorCodes": [],
       "facadeMethod": "updateGroupAdmins",
@@ -1659,7 +1696,7 @@
       "mutationTarget": "ConversationMembership",
       "objectId": "chat.conversation_membership",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/chat/conversations/{conversationId}/admins",
+      "pathTemplate": "/chat/conversations/{conversationId}/admins",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -1692,6 +1729,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
@@ -1708,7 +1746,7 @@
       "mutationTarget": "ConversationUserState",
       "objectId": "chat.conversation_user_state",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/chat/conversations/{conversationId}/messages/{messageId}/read",
+      "pathTemplate": "/chat/conversations/{conversationId}/messages/{messageId}/read",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -1741,6 +1779,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "chat",
       "errorCodes": [],
       "facadeMethod": "updateConversationSettings",
@@ -1752,7 +1791,7 @@
       "mutationTarget": "ConversationUserState",
       "objectId": "chat.conversation_user_state",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/chat/conversations/{conversationId}/settings",
+      "pathTemplate": "/chat/conversations/{conversationId}/settings",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -1786,6 +1825,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
@@ -1801,7 +1841,7 @@
       "mutationTarget": "",
       "objectId": "chat.message",
       "ownershipPolicy": "conversation_member",
-      "pathTemplate": "/v1/chat/conversations/{conversationId}/messages",
+      "pathTemplate": "/chat/conversations/{conversationId}/messages",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -1852,6 +1892,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
@@ -1870,7 +1911,7 @@
       "mutationTarget": "Message",
       "objectId": "chat.message",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/chat/conversations/{conversationId}/messages/{messageId}/recall",
+      "pathTemplate": "/chat/conversations/{conversationId}/messages/{messageId}/recall",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -1903,6 +1944,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "chat",
       "errorCodes": [],
       "facadeMethod": "searchMessages",
@@ -1914,7 +1956,7 @@
       "mutationTarget": "",
       "objectId": "chat.message",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/chat/messages/search",
+      "pathTemplate": "/chat/messages/search",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -1953,6 +1995,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
@@ -1974,7 +2017,7 @@
       "mutationTarget": "Message",
       "objectId": "chat.message",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/chat/conversations/{conversationId}/messages",
+      "pathTemplate": "/chat/conversations/{conversationId}/messages",
       "permissions": [],
       "principal": "",
       "privacy": {
@@ -2025,6 +2068,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "chat",
       "errorCodes": [],
       "facadeMethod": "syncMessages",
@@ -2036,7 +2080,7 @@
       "mutationTarget": "",
       "objectId": "chat.message",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/chat/conversations/{conversationId}/sync",
+      "pathTemplate": "/chat/conversations/{conversationId}/sync",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -2069,6 +2113,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.not_found",
@@ -2083,7 +2128,7 @@
       "mutationTarget": "",
       "objectId": "circle.circle",
       "ownershipPolicy": "public_circle_read",
-      "pathTemplate": "/v1/circles/{circleId}",
+      "pathTemplate": "/circles/{circleId}",
       "permissions": [],
       "principal": "public",
       "privacy": {
@@ -2133,6 +2178,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "circle",
       "errorCodes": [],
       "facadeMethod": "getCircleFeed",
@@ -2144,7 +2190,7 @@
       "mutationTarget": "",
       "objectId": "circle.circle",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/circles/{circleId}/feed",
+      "pathTemplate": "/circles/{circleId}/feed",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -2177,6 +2223,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "circle",
       "errorCodes": [],
       "facadeMethod": "getCircleImpact",
@@ -2188,7 +2235,7 @@
       "mutationTarget": "",
       "objectId": "circle.circle",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/circles/{circleId}/impact",
+      "pathTemplate": "/circles/{circleId}/impact",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -2221,6 +2268,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "circle",
       "errorCodes": [],
       "facadeMethod": "getCircleStats",
@@ -2232,7 +2280,7 @@
       "mutationTarget": "",
       "objectId": "circle.circle",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/circles/{circleId}/stats",
+      "pathTemplate": "/circles/{circleId}/stats",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -2265,6 +2313,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "circle",
       "errorCodes": [],
       "facadeMethod": "searchCircles",
@@ -2276,7 +2325,7 @@
       "mutationTarget": "",
       "objectId": "circle.circle",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/circles/search",
+      "pathTemplate": "/circles/search",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -2316,6 +2365,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -2331,7 +2381,7 @@
       "mutationTarget": "CircleBehaviorFact",
       "objectId": "circle.circle_behavior_fact",
       "ownershipPolicy": "authenticated_persona_or_derived_device_actor",
-      "pathTemplate": "/v1/circles/behaviors",
+      "pathTemplate": "/circles/behaviors",
       "permissions": [],
       "principal": "public",
       "privacy": {
@@ -2389,6 +2439,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -2408,7 +2459,7 @@
       "mutationTarget": "CircleFile",
       "objectId": "circle.circle_file",
       "ownershipPolicy": "active_circle_and_optional_group_member",
-      "pathTemplate": "/v1/circles/{circleId}/files",
+      "pathTemplate": "/circles/{circleId}/files",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -2465,6 +2516,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -2484,7 +2536,7 @@
       "mutationTarget": "CircleFile",
       "objectId": "circle.circle_file",
       "ownershipPolicy": "uploader_or_space_manager",
-      "pathTemplate": "/v1/circles/{circleId}/files/{fileId}",
+      "pathTemplate": "/circles/{circleId}/files/{fileId}",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -2540,6 +2592,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -2556,7 +2609,7 @@
       "mutationTarget": "",
       "objectId": "circle.circle_file",
       "ownershipPolicy": "active_circle_and_file_group_member",
-      "pathTemplate": "/v1/circles/{circleId}/files/{fileId}",
+      "pathTemplate": "/circles/{circleId}/files/{fileId}",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -2612,6 +2665,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -2627,7 +2681,7 @@
       "mutationTarget": "",
       "objectId": "circle.circle_file",
       "ownershipPolicy": "active_circle_and_optional_group_member",
-      "pathTemplate": "/v1/circles/{circleId}/files",
+      "pathTemplate": "/circles/{circleId}/files",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -2683,6 +2737,9 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {
+        "versionPrecondition": "if_match"
+      },
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -2703,7 +2760,7 @@
       "mutationTarget": "CircleFile",
       "objectId": "circle.circle_file",
       "ownershipPolicy": "uploader_or_space_manager",
-      "pathTemplate": "/v1/circles/{circleId}/files/{fileId}",
+      "pathTemplate": "/circles/{circleId}/files/{fileId}",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -2759,6 +2816,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -2778,7 +2836,7 @@
       "mutationTarget": "CircleGroup",
       "objectId": "circle.circle_group",
       "ownershipPolicy": "group_owner_only",
-      "pathTemplate": "/v1/circles/{circleId}/groups/{groupId}",
+      "pathTemplate": "/circles/{circleId}/groups/{groupId}",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -2834,6 +2892,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -2853,7 +2912,7 @@
       "mutationTarget": "CircleGroup",
       "objectId": "circle.circle_group",
       "ownershipPolicy": "active_circle_member",
-      "pathTemplate": "/v1/circles/{circleId}/groups",
+      "pathTemplate": "/circles/{circleId}/groups",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -2910,6 +2969,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -2926,7 +2986,7 @@
       "mutationTarget": "",
       "objectId": "circle.circle_group",
       "ownershipPolicy": "active_circle_member",
-      "pathTemplate": "/v1/circles/{circleId}/groups/{groupId}",
+      "pathTemplate": "/circles/{circleId}/groups/{groupId}",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -2982,6 +3042,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -2997,7 +3058,7 @@
       "mutationTarget": "",
       "objectId": "circle.circle_group",
       "ownershipPolicy": "active_circle_member",
-      "pathTemplate": "/v1/circles/{circleId}/groups",
+      "pathTemplate": "/circles/{circleId}/groups",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -3054,6 +3115,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -3069,7 +3131,7 @@
       "mutationTarget": "",
       "objectId": "circle.circle_group",
       "ownershipPolicy": "active_circle_member",
-      "pathTemplate": "/v1/circles/{circleId}/groups/search",
+      "pathTemplate": "/circles/{circleId}/groups/search",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -3126,6 +3188,9 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {
+        "versionPrecondition": "if_match"
+      },
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -3146,7 +3211,7 @@
       "mutationTarget": "CircleGroup",
       "objectId": "circle.circle_group",
       "ownershipPolicy": "group_owner_or_manager",
-      "pathTemplate": "/v1/circles/{circleId}/groups/{groupId}",
+      "pathTemplate": "/circles/{circleId}/groups/{groupId}",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -3202,6 +3267,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -3221,7 +3287,7 @@
       "mutationTarget": "CircleGroupMembership",
       "objectId": "circle.circle_group_membership",
       "ownershipPolicy": "active_circle_member_self_group_membership",
-      "pathTemplate": "/v1/circles/{circleId}/groups/{groupId}/memberships",
+      "pathTemplate": "/circles/{circleId}/groups/{groupId}/memberships",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -3278,6 +3344,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -3297,7 +3364,7 @@
       "mutationTarget": "CircleGroupMembership",
       "objectId": "circle.circle_group_membership",
       "ownershipPolicy": "group_owner_or_manager",
-      "pathTemplate": "/v1/circles/{circleId}/groups/{groupId}/memberships/{personaId}:approve",
+      "pathTemplate": "/circles/{circleId}/groups/{groupId}/memberships/{personaId}:approve",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -3353,6 +3420,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -3368,7 +3436,7 @@
       "mutationTarget": "",
       "objectId": "circle.circle_group_membership",
       "ownershipPolicy": "self_group_membership_only",
-      "pathTemplate": "/v1/circles/{circleId}/groups/{groupId}/memberships/self",
+      "pathTemplate": "/circles/{circleId}/groups/{groupId}/memberships/self",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -3425,6 +3493,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -3443,7 +3512,7 @@
       "mutationTarget": "CircleGroupMembership",
       "objectId": "circle.circle_group_membership",
       "ownershipPolicy": "self_group_membership_only",
-      "pathTemplate": "/v1/circles/{circleId}/groups/{groupId}/memberships/self",
+      "pathTemplate": "/circles/{circleId}/groups/{groupId}/memberships/self",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -3500,6 +3569,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -3516,7 +3586,7 @@
       "mutationTarget": "",
       "objectId": "circle.circle_group_membership",
       "ownershipPolicy": "active_group_member",
-      "pathTemplate": "/v1/circles/{circleId}/groups/{groupId}/memberships",
+      "pathTemplate": "/circles/{circleId}/groups/{groupId}/memberships",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -3574,6 +3644,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -3593,7 +3664,7 @@
       "mutationTarget": "CircleGroupMembership",
       "objectId": "circle.circle_group_membership",
       "ownershipPolicy": "group_owner_or_manager",
-      "pathTemplate": "/v1/circles/{circleId}/groups/{groupId}/memberships/{personaId}:reject",
+      "pathTemplate": "/circles/{circleId}/groups/{groupId}/memberships/{personaId}:reject",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -3649,6 +3720,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -3668,7 +3740,7 @@
       "mutationTarget": "CircleGroupMembership",
       "objectId": "circle.circle_group_membership",
       "ownershipPolicy": "group_owner_or_manager",
-      "pathTemplate": "/v1/circles/{circleId}/groups/{groupId}/memberships/{personaId}",
+      "pathTemplate": "/circles/{circleId}/groups/{groupId}/memberships/{personaId}",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -3725,6 +3797,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -3744,7 +3817,7 @@
       "mutationTarget": "CircleGroupMembership",
       "objectId": "circle.circle_group_membership",
       "ownershipPolicy": "group_owner_only",
-      "pathTemplate": "/v1/circles/{circleId}/groups/{groupId}/memberships/{personaId}/role",
+      "pathTemplate": "/circles/{circleId}/groups/{groupId}/memberships/{personaId}/role",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -3802,6 +3875,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -3817,7 +3891,7 @@
       "mutationTarget": "",
       "objectId": "circle.circle_membership",
       "ownershipPolicy": "self_membership_only",
-      "pathTemplate": "/v1/circles/{circleId}/memberships/self",
+      "pathTemplate": "/circles/{circleId}/memberships/self",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -3874,6 +3948,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -3891,7 +3966,7 @@
       "mutationTarget": "CircleMembership",
       "objectId": "circle.circle_membership",
       "ownershipPolicy": "self_membership_only",
-      "pathTemplate": "/v1/circles/{circleId}/memberships",
+      "pathTemplate": "/circles/{circleId}/memberships",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -3948,6 +4023,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -3966,7 +4042,7 @@
       "mutationTarget": "CircleMembership",
       "objectId": "circle.circle_membership",
       "ownershipPolicy": "self_membership_only",
-      "pathTemplate": "/v1/circles/{circleId}/memberships/self",
+      "pathTemplate": "/circles/{circleId}/memberships/self",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -4023,6 +4099,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -4037,7 +4114,7 @@
       "mutationTarget": "",
       "objectId": "circle.circle_membership",
       "ownershipPolicy": "public_circle_roster",
-      "pathTemplate": "/v1/circles/{circleId}/memberships",
+      "pathTemplate": "/circles/{circleId}/memberships",
       "permissions": [],
       "principal": "public",
       "privacy": {
@@ -4094,6 +4171,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -4108,7 +4186,7 @@
       "mutationTarget": "",
       "objectId": "circle.circle_membership",
       "ownershipPolicy": "public_circle_membership_projection",
-      "pathTemplate": "/v1/personas/{personaId}/circles",
+      "pathTemplate": "/personas/{personaId}/circles",
       "permissions": [],
       "principal": "public",
       "privacy": {
@@ -4167,6 +4245,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -4186,7 +4265,7 @@
       "mutationTarget": "CircleMembership",
       "objectId": "circle.circle_membership",
       "ownershipPolicy": "circle_moderator_only",
-      "pathTemplate": "/v1/circles/{circleId}/memberships/{personaId}/role",
+      "pathTemplate": "/circles/{circleId}/memberships/{personaId}/role",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -4243,6 +4322,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -4260,7 +4340,7 @@
       "mutationTarget": "CirclePostPlacement",
       "objectId": "circle.circle_post_placement",
       "ownershipPolicy": "post_owner_or_circle_moderator",
-      "pathTemplate": "/v1/circles/{circleId}/post-placements",
+      "pathTemplate": "/circles/{circleId}/post-placements",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -4315,6 +4395,7 @@
         "explicit": true,
         "status": "ready"
       },
+      "concurrency": {},
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -4333,7 +4414,7 @@
       "mutationTarget": "Comment",
       "objectId": "content.comment",
       "ownershipPolicy": "comment_author",
-      "pathTemplate": "/v1/content/comments/{commentId}/media:bind",
+      "pathTemplate": "/content/comments/{commentId}/media:bind",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -4387,6 +4468,7 @@
         "explicit": true,
         "status": "ready"
       },
+      "concurrency": {},
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -4407,7 +4489,7 @@
       "mutationTarget": "Comment",
       "objectId": "content.comment",
       "ownershipPolicy": "author_self",
-      "pathTemplate": "/v1/content/posts/{postId}/comments",
+      "pathTemplate": "/content/posts/{postId}/comments",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -4463,6 +4545,7 @@
         "explicit": true,
         "status": "ready"
       },
+      "concurrency": {},
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -4481,7 +4564,7 @@
       "mutationTarget": "Comment",
       "objectId": "content.comment",
       "ownershipPolicy": "comment_author",
-      "pathTemplate": "/v1/content/posts/{postId}/comments/{commentId}",
+      "pathTemplate": "/content/posts/{postId}/comments/{commentId}",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -4537,6 +4620,7 @@
         "explicit": true,
         "status": "ready"
       },
+      "concurrency": {},
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.comment_not_found",
@@ -4551,7 +4635,7 @@
       "mutationTarget": "",
       "objectId": "content.comment",
       "ownershipPolicy": "post_visibility",
-      "pathTemplate": "/v1/content/posts/{postId}/comments/{commentId}/replies",
+      "pathTemplate": "/content/posts/{postId}/comments/{commentId}/replies",
       "permissions": [],
       "principal": "public",
       "privacy": {
@@ -4606,6 +4690,7 @@
         "explicit": true,
         "status": "ready"
       },
+      "concurrency": {},
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.comment_not_found",
@@ -4620,7 +4705,7 @@
       "mutationTarget": "",
       "objectId": "content.comment",
       "ownershipPolicy": "post_visibility",
-      "pathTemplate": "/v1/content/posts/{postId}/comments",
+      "pathTemplate": "/content/posts/{postId}/comments",
       "permissions": [],
       "principal": "public",
       "privacy": {
@@ -4675,6 +4760,7 @@
         "explicit": true,
         "status": "ready"
       },
+      "concurrency": {},
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -4689,7 +4775,7 @@
       "mutationTarget": "",
       "objectId": "content.comment",
       "ownershipPolicy": "self",
-      "pathTemplate": "/v1/content/users/me/comments",
+      "pathTemplate": "/content/users/me/comments",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -4742,6 +4828,7 @@
         "explicit": true,
         "status": "ready"
       },
+      "concurrency": {},
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -4756,7 +4843,7 @@
       "mutationTarget": "",
       "objectId": "content.comment",
       "ownershipPolicy": "referenced_post_author",
-      "pathTemplate": "/v1/content/users/me/received-comments",
+      "pathTemplate": "/content/users/me/received-comments",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -4809,6 +4896,7 @@
         "explicit": true,
         "status": "ready"
       },
+      "concurrency": {},
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -4828,7 +4916,7 @@
       "mutationTarget": "Comment",
       "objectId": "content.comment",
       "ownershipPolicy": "referenced_post_author",
-      "pathTemplate": "/v1/content/posts/{postId}/comments/{commentId}/pin",
+      "pathTemplate": "/content/posts/{postId}/comments/{commentId}/pin",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -4882,6 +4970,7 @@
         "explicit": true,
         "status": "ready"
       },
+      "concurrency": {},
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -4901,7 +4990,7 @@
       "mutationTarget": "Comment",
       "objectId": "content.comment",
       "ownershipPolicy": "referenced_post_author",
-      "pathTemplate": "/v1/content/posts/{postId}/comments/{commentId}/pin",
+      "pathTemplate": "/content/posts/{postId}/comments/{commentId}/pin",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -4955,6 +5044,7 @@
         "explicit": true,
         "status": "ready"
       },
+      "concurrency": {},
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.invalid_argument",
@@ -4969,7 +5059,7 @@
       "mutationTarget": "",
       "objectId": "content.content_reaction",
       "ownershipPolicy": "authenticated_persona_or_derived_device_actor",
-      "pathTemplate": "/v1/content/posts/{postId}/reactions",
+      "pathTemplate": "/content/posts/{postId}/reactions",
       "permissions": [],
       "principal": "public",
       "privacy": {
@@ -5025,6 +5115,7 @@
         "explicit": true,
         "status": "ready"
       },
+      "concurrency": {},
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.invalid_argument",
@@ -5041,7 +5132,7 @@
       "mutationTarget": "ContentReaction",
       "objectId": "content.content_reaction",
       "ownershipPolicy": "authenticated_persona_or_derived_device_actor",
-      "pathTemplate": "/v1/content/posts/{postId}/like",
+      "pathTemplate": "/content/posts/{postId}/like",
       "permissions": [],
       "principal": "public",
       "privacy": {
@@ -5096,6 +5187,7 @@
         "explicit": true,
         "status": "ready"
       },
+      "concurrency": {},
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -5114,7 +5206,7 @@
       "mutationTarget": "ContentReaction",
       "objectId": "content.content_reaction",
       "ownershipPolicy": "authenticated_persona",
-      "pathTemplate": "/v1/content/comments/{commentId}/reaction",
+      "pathTemplate": "/content/comments/{commentId}/reaction",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -5170,6 +5262,7 @@
         "explicit": true,
         "status": "ready"
       },
+      "concurrency": {},
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.invalid_argument",
@@ -5186,7 +5279,7 @@
       "mutationTarget": "ContentReaction",
       "objectId": "content.content_reaction",
       "ownershipPolicy": "authenticated_persona_or_derived_device_actor",
-      "pathTemplate": "/v1/content/posts/{postId}/like",
+      "pathTemplate": "/content/posts/{postId}/like",
       "permissions": [],
       "principal": "public",
       "privacy": {
@@ -5244,6 +5337,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.media_not_found",
@@ -5258,7 +5352,7 @@
       "mutationTarget": "",
       "objectId": "content.media_asset",
       "ownershipPolicy": "public_ready_asset_only",
-      "pathTemplate": "/v1/content/media/{mediaId}",
+      "pathTemplate": "/content/media/{mediaId}",
       "permissions": [],
       "principal": "public",
       "privacy": {
@@ -5317,6 +5411,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -5333,7 +5428,7 @@
       "mutationTarget": "MediaAsset",
       "objectId": "content.media_asset",
       "ownershipPolicy": "asset_owner",
-      "pathTemplate": "/v1/content/media/{mediaId}/cover:auto",
+      "pathTemplate": "/content/media/{mediaId}/cover:auto",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -5390,6 +5485,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -5407,7 +5503,7 @@
       "mutationTarget": "MediaAsset",
       "objectId": "content.media_asset",
       "ownershipPolicy": "asset_owner",
-      "pathTemplate": "/v1/content/media/{mediaId}/cover:manual",
+      "pathTemplate": "/content/media/{mediaId}/cover:manual",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -5464,6 +5560,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -5482,7 +5579,7 @@
       "mutationTarget": "MediaOriginalAccessFact",
       "objectId": "content.media_original_access_fact",
       "ownershipPolicy": "post_visibility_and_media_policy",
-      "pathTemplate": "/v1/content/media/{mediaId}/original:access",
+      "pathTemplate": "/content/media/{mediaId}/original:access",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -5541,6 +5638,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -5559,7 +5657,7 @@
       "mutationTarget": "MediaUploadSession",
       "objectId": "content.media_upload_session",
       "ownershipPolicy": "session_owner",
-      "pathTemplate": "/v1/content/media/uploads/{sessionId}:abort",
+      "pathTemplate": "/content/media/uploads/{sessionId}:abort",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -5620,6 +5718,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -5638,7 +5737,7 @@
       "mutationTarget": "MediaUploadSession",
       "objectId": "content.media_upload_session",
       "ownershipPolicy": "session_owner",
-      "pathTemplate": "/v1/content/media/uploads/{sessionId}:complete",
+      "pathTemplate": "/content/media/uploads/{sessionId}:complete",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -5700,6 +5799,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -5715,7 +5815,7 @@
       "mutationTarget": "",
       "objectId": "content.media_upload_session",
       "ownershipPolicy": "session_owner",
-      "pathTemplate": "/v1/content/media/uploads/{sessionId}",
+      "pathTemplate": "/content/media/uploads/{sessionId}",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -5771,6 +5871,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -5787,7 +5888,7 @@
       "mutationTarget": "MediaUploadSession",
       "objectId": "content.media_upload_session",
       "ownershipPolicy": "session_owner",
-      "pathTemplate": "/v1/content/media/uploads:init",
+      "pathTemplate": "/content/media/uploads:init",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -5849,6 +5950,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.invalid_argument",
@@ -5864,7 +5966,7 @@
       "mutationTarget": "OutboundShareFact",
       "objectId": "content.outbound_share_fact",
       "ownershipPolicy": "authenticated_persona_or_derived_device_actor",
-      "pathTemplate": "/v1/content/posts/{postId}/outbound-shares",
+      "pathTemplate": "/content/posts/{postId}/outbound-shares",
       "permissions": [],
       "principal": "public",
       "privacy": {
@@ -5907,155 +6009,6 @@
     },
     {
       "actorRequirement": "persona",
-      "aggregateOwner": "Post",
-      "authMode": "required",
-      "canonicalOperationId": "content.post.BindMediaAssetsToPost",
-      "clientContract": {
-        "dartImport": "../content/media_contracts.dart",
-        "requestEncoder": "encodeBindContentPostMediaAssetsCommand",
-        "requestType": "BindContentPostMediaAssetsCommand",
-        "responseDecoder": "decodeBindContentPostMediaAssetsResult",
-        "responseType": "BindContentPostMediaAssetsResult"
-      },
-      "commercial": {
-        "blockReason": "App typed Media Facet and Post aggregate binding are complete; Gamma create-publish convergence evidence remains required",
-        "explicit": true,
-        "gapId": "CONTENT_MEDIA_GAMMA_UAT",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
-      },
-      "domain": "content",
-      "errorCodes": [
-        "CONTENT.USER.unauthorized",
-        "CONTENT.USER.media_not_found",
-        "CONTENT.USER.invalid_argument",
-        "CONTENT.USER.idempotency_conflict",
-        "CONTENT.USER.version_conflict",
-        "CONTENT.SYSTEM.storage_read_failed",
-        "CONTENT.SYSTEM.storage_write_failed"
-      ],
-      "facadeMethod": "bindMediaAssetsToPost",
-      "facet": "MediaBindingCommandFacet",
-      "invariantTarget": "Post",
-      "kind": "command",
-      "localOperationId": "BindMediaAssetsToPost",
-      "method": "POST",
-      "mutationTarget": "Post",
-      "objectId": "content.post",
-      "ownershipPolicy": "post_author",
-      "pathTemplate": "/v1/content/posts/{postId}/media:bind",
-      "permissions": [],
-      "principal": "persona",
-      "privacy": {
-        "logPolicy": "metadata_only",
-        "requestClassification": "INTERNAL",
-        "responseClassification": "INTERNAL"
-      },
-      "reliability": {
-        "cancellation": "supported",
-        "idempotency": "required",
-        "maxAttempts": 2,
-        "retryMode": "idempotent",
-        "timeoutMilliseconds": 5000
-      },
-      "requestBodyKind": "",
-      "requestEntity": "",
-      "responseBody": "",
-      "responseBodyKind": "",
-      "responseEntity": "",
-      "scopes": [],
-      "slo": {
-        "availabilityPercent": 99.9,
-        "latencyP95Milliseconds": 800
-      },
-      "sourcePath": "content/post/service.yaml",
-      "surfaceIds": [
-        "createWorkspace"
-      ],
-      "telemetry": {
-        "attributes": [
-          "outcome",
-          "asset_count"
-        ],
-        "metric": "content_post_media_bind",
-        "trace": true
-      }
-    },
-    {
-      "actorRequirement": "persona",
-      "aggregateOwner": "Post",
-      "authMode": "required",
-      "canonicalOperationId": "content.post.CreatePost",
-      "clientContract": {
-        "dartImport": "../content/post_commands.dart",
-        "requestEncoder": "encodeCreateContentPostCommand",
-        "requestType": "CreateContentPostCommand",
-        "responseDecoder": "decodeContentPostLifecycleCommandResult",
-        "responseType": "ContentPostLifecycleCommandResult"
-      },
-      "commercial": {
-        "explicit": true,
-        "status": "ready"
-      },
-      "domain": "content",
-      "errorCodes": [
-        "CONTENT.USER.unauthorized",
-        "CONTENT.USER.invalid_argument",
-        "CONTENT.USER.invalid_content_type",
-        "CONTENT.USER.idempotency_conflict",
-        "CONTENT.SYSTEM.storage_write_failed",
-        "CONTENT.SYSTEM.internal_error"
-      ],
-      "facadeMethod": "createPost",
-      "facet": "PostLifecycleCommandFacet",
-      "invariantTarget": "Post",
-      "kind": "command",
-      "localOperationId": "CreatePost",
-      "method": "POST",
-      "mutationTarget": "Post",
-      "objectId": "content.post",
-      "ownershipPolicy": "creates_owned_post",
-      "pathTemplate": "/v1/content/posts",
-      "permissions": [],
-      "principal": "persona",
-      "privacy": {
-        "logPolicy": "metadata_only",
-        "requestClassification": "PII",
-        "responseClassification": "PII"
-      },
-      "reliability": {
-        "cancellation": "supported",
-        "idempotency": "required",
-        "maxAttempts": 2,
-        "retryMode": "idempotent",
-        "timeoutMilliseconds": 5000
-      },
-      "requestBodyKind": "",
-      "requestEntity": "Post",
-      "responseBody": "",
-      "responseBodyKind": "",
-      "responseEntity": "",
-      "scopes": [],
-      "slo": {
-        "availabilityPercent": 99.9,
-        "latencyP95Milliseconds": 800
-      },
-      "sourcePath": "content/post/service.yaml",
-      "surfaceIds": [
-        "createWorkspace",
-        "globalSearchNetworkResults"
-      ],
-      "telemetry": {
-        "attributes": [
-          "content_type",
-          "outcome"
-        ],
-        "metric": "content_post_create",
-        "trace": true
-      }
-    },
-    {
-      "actorRequirement": "persona",
       "aggregateOwner": "",
       "authMode": "required",
       "canonicalOperationId": "content.post.GetMyFootprint",
@@ -6070,6 +6023,7 @@
         "explicit": true,
         "status": "ready"
       },
+      "concurrency": {},
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -6086,7 +6040,7 @@
       "mutationTarget": "",
       "objectId": "content.post",
       "ownershipPolicy": "self",
-      "pathTemplate": "/v1/content/footprint",
+      "pathTemplate": "/content/footprint",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -6140,6 +6094,7 @@
         "explicit": true,
         "status": "ready"
       },
+      "concurrency": {},
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.post_not_found",
@@ -6156,7 +6111,7 @@
       "mutationTarget": "",
       "objectId": "content.post",
       "ownershipPolicy": "visibility_filtered",
-      "pathTemplate": "/v1/content/posts/{postId}",
+      "pathTemplate": "/content/posts/{postId}",
       "permissions": [],
       "principal": "public",
       "privacy": {
@@ -6211,6 +6166,7 @@
         "explicit": true,
         "status": "ready"
       },
+      "concurrency": {},
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.invalid_argument",
@@ -6226,7 +6182,7 @@
       "mutationTarget": "",
       "objectId": "content.post",
       "ownershipPolicy": "public_author_posts",
-      "pathTemplate": "/v1/content/sub-accounts/{subAccountId}/posts",
+      "pathTemplate": "/content/sub-accounts/{subAccountId}/posts",
       "permissions": [],
       "principal": "public",
       "privacy": {
@@ -6267,80 +6223,6 @@
     },
     {
       "actorRequirement": "persona",
-      "aggregateOwner": "Post",
-      "authMode": "required",
-      "canonicalOperationId": "content.post.PublishPost",
-      "clientContract": {
-        "dartImport": "../content/post_commands.dart",
-        "requestEncoder": "encodePublishContentPostCommand",
-        "requestType": "PublishContentPostCommand",
-        "responseDecoder": "decodeContentPostLifecycleCommandResult",
-        "responseType": "ContentPostLifecycleCommandResult"
-      },
-      "commercial": {
-        "explicit": true,
-        "status": "ready"
-      },
-      "domain": "content",
-      "errorCodes": [
-        "CONTENT.USER.unauthorized",
-        "CONTENT.USER.post_not_found",
-        "CONTENT.USER.invalid_argument",
-        "CONTENT.USER.idempotency_conflict",
-        "CONTENT.SYSTEM.storage_write_failed",
-        "CONTENT.SYSTEM.internal_error"
-      ],
-      "facadeMethod": "publishPost",
-      "facet": "PostLifecycleCommandFacet",
-      "invariantTarget": "Post",
-      "kind": "command",
-      "localOperationId": "PublishPost",
-      "method": "POST",
-      "mutationTarget": "Post",
-      "objectId": "content.post",
-      "ownershipPolicy": "owner_only",
-      "pathTemplate": "/v1/content/posts/{postId}/publish",
-      "permissions": [],
-      "principal": "persona",
-      "privacy": {
-        "logPolicy": "metadata_only",
-        "requestClassification": "PII",
-        "responseClassification": "PII"
-      },
-      "reliability": {
-        "cancellation": "supported",
-        "idempotency": "required",
-        "maxAttempts": 2,
-        "retryMode": "idempotent",
-        "timeoutMilliseconds": 5000
-      },
-      "requestBodyKind": "",
-      "requestEntity": "",
-      "responseBody": "",
-      "responseBodyKind": "",
-      "responseEntity": "",
-      "scopes": [],
-      "slo": {
-        "availabilityPercent": 99.9,
-        "latencyP95Milliseconds": 800
-      },
-      "sourcePath": "content/post/service.yaml",
-      "surfaceIds": [
-        "createWorkspace",
-        "globalSearchNetworkResults"
-      ],
-      "telemetry": {
-        "attributes": [
-          "content_type",
-          "visibility",
-          "outcome"
-        ],
-        "metric": "content_post_publish",
-        "trace": true
-      }
-    },
-    {
-      "actorRequirement": "persona",
       "aggregateOwner": "",
       "authMode": "required",
       "canonicalOperationId": "content.post.SearchPosts",
@@ -6355,6 +6237,7 @@
         "explicit": true,
         "status": "ready"
       },
+      "concurrency": {},
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -6371,7 +6254,7 @@
       "mutationTarget": "",
       "objectId": "content.post",
       "ownershipPolicy": "authenticated_search",
-      "pathTemplate": "/v1/content/posts/search",
+      "pathTemplate": "/content/posts/search",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -6411,6 +6294,80 @@
     },
     {
       "actorRequirement": "persona",
+      "aggregateOwner": "Post",
+      "authMode": "required",
+      "canonicalOperationId": "content.post.SubmitPostPublication",
+      "clientContract": {
+        "dartImport": "../content/post_publication_contracts.dart",
+        "requestEncoder": "encodeSubmitContentPostPublicationCommand",
+        "requestType": "SubmitContentPostPublicationCommand",
+        "responseDecoder": "decodeContentPostPublicationReceipt",
+        "responseType": "ContentPostPublicationReceipt"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "content",
+      "errorCodes": [
+        "CONTENT.USER.unauthorized",
+        "CONTENT.USER.invalid_argument",
+        "CONTENT.USER.invalid_content_type",
+        "CONTENT.USER.idempotency_conflict",
+        "CONTENT.SYSTEM.storage_write_failed",
+        "CONTENT.SYSTEM.internal_error"
+      ],
+      "facadeMethod": "submitPostPublication",
+      "facet": "PostPublicationCommandFacet",
+      "invariantTarget": "Post",
+      "kind": "command",
+      "localOperationId": "SubmitPostPublication",
+      "method": "POST",
+      "mutationTarget": "Post",
+      "objectId": "content.post",
+      "ownershipPolicy": "creates_owned_post",
+      "pathTemplate": "/content/posts:publish",
+      "permissions": [],
+      "principal": "persona",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "PII",
+        "responseClassification": "PII"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "required",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 5000
+      },
+      "requestBodyKind": "",
+      "requestEntity": "Post",
+      "responseBody": "",
+      "responseBodyKind": "",
+      "responseEntity": "",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 800
+      },
+      "sourcePath": "content/post/service.yaml",
+      "surfaceIds": [
+        "createWorkspace",
+        "globalSearchNetworkResults"
+      ],
+      "telemetry": {
+        "attributes": [
+          "content_type",
+          "outcome"
+        ],
+        "metric": "content_post_publication_submit",
+        "trace": true
+      }
+    },
+    {
+      "actorRequirement": "persona",
       "aggregateOwner": "Report",
       "authMode": "required",
       "canonicalOperationId": "content.report.CreateReport",
@@ -6425,6 +6382,7 @@
         "explicit": true,
         "status": "ready"
       },
+      "concurrency": {},
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -6441,7 +6399,7 @@
       "mutationTarget": "Report",
       "objectId": "content.report",
       "ownershipPolicy": "reporter",
-      "pathTemplate": "/v1/content/reports",
+      "pathTemplate": "/content/reports",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -6494,6 +6452,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "entity",
       "errorCodes": [],
       "facadeMethod": "follow",
@@ -6505,7 +6464,7 @@
       "mutationTarget": "Homepage",
       "objectId": "entity.homepage",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/homepages/{homepageId}/follow",
+      "pathTemplate": "/homepages/{homepageId}/follow",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -6530,16 +6489,24 @@
       "aggregateOwner": "",
       "authMode": "required",
       "canonicalOperationId": "entity.homepage.GetEntityImpact",
-      "clientContract": null,
-      "commercial": {
-        "blockReason": "canonical operation awaits object-centered commercial migration",
-        "explicit": true,
-        "gapId": "ENTITY_HOMEPAGE_COMMERCIAL_EVIDENCE",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
+      "clientContract": {
+        "dartImport": "../entity/homepage_queries.dart",
+        "requestEncoder": "encodeHomepageByIdQuery",
+        "requestType": "HomepageByIdQuery",
+        "responseDecoder": "decodeHomepageImpactSummary",
+        "responseType": "HomepageImpactSummaryProjection"
       },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
       "domain": "entity",
-      "errorCodes": [],
+      "errorCodes": [
+        "ENTITY.USER.homepage_not_found",
+        "ENTITY.USER.homepage_offline",
+        "ENTITY.SYSTEM.internal_error"
+      ],
       "facadeMethod": "getImpact",
       "facet": "HomepageQueryFacade",
       "invariantTarget": "",
@@ -6548,42 +6515,68 @@
       "method": "GET",
       "mutationTarget": "",
       "objectId": "entity.homepage",
-      "ownershipPolicy": "",
-      "pathTemplate": "/v1/homepages/{homepageId}/impact",
+      "ownershipPolicy": "published_homepage_read",
+      "pathTemplate": "/homepages/{homepageId}/impact",
       "permissions": [],
-      "principal": "",
-      "privacy": {},
-      "reliability": {},
+      "principal": "persona",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "INTERNAL",
+        "responseClassification": "PUBLIC"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1500
+      },
       "requestBodyKind": "",
       "requestEntity": "",
       "responseBody": "",
       "responseBodyKind": "",
       "responseEntity": "EntityImpactSummary",
       "scopes": [],
-      "slo": {},
+      "slo": {
+        "availabilityPercent": 99.5,
+        "latencyP95Milliseconds": 300
+      },
       "sourcePath": "entity/homepage/service.yaml",
       "surfaceIds": [
         "homepageDetail"
       ],
       "telemetry": {
-        "trace": false
+        "attributes": [
+          "homepage_id",
+          "outcome"
+        ],
+        "metric": "entity_homepage_impact_get",
+        "trace": true
       }
     },
     {
       "actorRequirement": "none",
       "aggregateOwner": "",
-      "authMode": "required",
+      "authMode": "optional",
       "canonicalOperationId": "entity.homepage.GetHomepageDetail",
-      "clientContract": null,
-      "commercial": {
-        "blockReason": "canonical operation awaits object-centered commercial migration",
-        "explicit": true,
-        "gapId": "ENTITY_HOMEPAGE_COMMERCIAL_EVIDENCE",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
+      "clientContract": {
+        "dartImport": "../entity/homepage_queries.dart",
+        "requestEncoder": "encodeHomepageByIdQuery",
+        "requestType": "HomepageByIdQuery",
+        "responseDecoder": "decodeHomepageDetail",
+        "responseType": "HomepageDetailProjection"
       },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
       "domain": "entity",
-      "errorCodes": [],
+      "errorCodes": [
+        "ENTITY.USER.homepage_not_found",
+        "ENTITY.USER.homepage_offline",
+        "ENTITY.SYSTEM.internal_error"
+      ],
       "facadeMethod": "getDetail",
       "facet": "HomepageQueryFacade",
       "invariantTarget": "",
@@ -6592,19 +6585,32 @@
       "method": "GET",
       "mutationTarget": "",
       "objectId": "entity.homepage",
-      "ownershipPolicy": "",
-      "pathTemplate": "/v1/homepages/{homepageId}",
+      "ownershipPolicy": "published_homepage_read",
+      "pathTemplate": "/homepages/{homepageId}",
       "permissions": [],
-      "principal": "",
-      "privacy": {},
-      "reliability": {},
+      "principal": "public",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "PUBLIC",
+        "responseClassification": "PUBLIC"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1500
+      },
       "requestBodyKind": "",
       "requestEntity": "",
       "responseBody": "",
       "responseBodyKind": "",
       "responseEntity": "Homepage",
       "scopes": [],
-      "slo": {},
+      "slo": {
+        "availabilityPercent": 99.5,
+        "latencyP95Milliseconds": 300
+      },
       "sourcePath": "entity/homepage/service.yaml",
       "surfaceIds": [
         "homepageClaim",
@@ -6613,7 +6619,12 @@
         "homepageStatusReport"
       ],
       "telemetry": {
-        "trace": false
+        "attributes": [
+          "homepage_id",
+          "outcome"
+        ],
+        "metric": "entity_homepage_detail_get",
+        "trace": true
       }
     },
     {
@@ -6621,14 +6632,18 @@
       "aggregateOwner": "",
       "authMode": "optional",
       "canonicalOperationId": "entity.homepage.GetHomepageIntroduction",
-      "clientContract": null,
-      "commercial": {
-        "blockReason": "canonical operation awaits object-centered commercial migration",
-        "explicit": true,
-        "gapId": "ENTITY_HOMEPAGE_COMMERCIAL_EVIDENCE",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
+      "clientContract": {
+        "dartImport": "../entity/homepage_queries.dart",
+        "requestEncoder": "encodeHomepageByIdQuery",
+        "requestType": "HomepageByIdQuery",
+        "responseDecoder": "decodeHomepageIntroduction",
+        "responseType": "HomepageIntroductionProjection"
       },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
       "domain": "entity",
       "errorCodes": [
         "ENTITY.USER.homepage_not_found",
@@ -6644,7 +6659,7 @@
       "mutationTarget": "",
       "objectId": "entity.homepage",
       "ownershipPolicy": "published_homepage_read",
-      "pathTemplate": "/v1/homepages/{homepageId}/introduction",
+      "pathTemplate": "/homepages/{homepageId}/introduction",
       "permissions": [],
       "principal": "public",
       "privacy": {
@@ -6685,18 +6700,26 @@
     {
       "actorRequirement": "none",
       "aggregateOwner": "",
-      "authMode": "required",
+      "authMode": "optional",
       "canonicalOperationId": "entity.homepage.GetHomepageRelatedGroups",
-      "clientContract": null,
-      "commercial": {
-        "blockReason": "canonical operation awaits object-centered commercial migration",
-        "explicit": true,
-        "gapId": "ENTITY_HOMEPAGE_COMMERCIAL_EVIDENCE",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
+      "clientContract": {
+        "dartImport": "../entity/homepage_queries.dart",
+        "requestEncoder": "encodeHomepageByIdQuery",
+        "requestType": "HomepageByIdQuery",
+        "responseDecoder": "decodeHomepageRelatedGroups",
+        "responseType": "HomepageRelatedGroupsSlice"
       },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
       "domain": "entity",
-      "errorCodes": [],
+      "errorCodes": [
+        "ENTITY.USER.homepage_not_found",
+        "ENTITY.USER.homepage_offline",
+        "ENTITY.SYSTEM.internal_error"
+      ],
       "facadeMethod": "getRelatedGroups",
       "facet": "HomepageQueryFacade",
       "invariantTarget": "",
@@ -6705,42 +6728,68 @@
       "method": "GET",
       "mutationTarget": "",
       "objectId": "entity.homepage",
-      "ownershipPolicy": "",
-      "pathTemplate": "/v1/homepages/{homepageId}/related-groups",
+      "ownershipPolicy": "published_homepage_read",
+      "pathTemplate": "/homepages/{homepageId}/related-groups",
       "permissions": [],
-      "principal": "",
-      "privacy": {},
-      "reliability": {},
+      "principal": "public",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "PUBLIC",
+        "responseClassification": "PUBLIC"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1500
+      },
       "requestBodyKind": "",
       "requestEntity": "",
       "responseBody": "",
       "responseBodyKind": "",
       "responseEntity": "HomepageRelatedGroupSummaryView",
       "scopes": [],
-      "slo": {},
+      "slo": {
+        "availabilityPercent": 99.5,
+        "latencyP95Milliseconds": 300
+      },
       "sourcePath": "entity/homepage/service.yaml",
       "surfaceIds": [
         "homepageDetail"
       ],
       "telemetry": {
-        "trace": false
+        "attributes": [
+          "homepage_id",
+          "outcome"
+        ],
+        "metric": "entity_homepage_related_groups_get",
+        "trace": true
       }
     },
     {
       "actorRequirement": "none",
       "aggregateOwner": "",
-      "authMode": "required",
+      "authMode": "optional",
       "canonicalOperationId": "entity.homepage.GetHomepageReviewSummary",
-      "clientContract": null,
-      "commercial": {
-        "blockReason": "canonical operation awaits object-centered commercial migration",
-        "explicit": true,
-        "gapId": "ENTITY_HOMEPAGE_COMMERCIAL_EVIDENCE",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
+      "clientContract": {
+        "dartImport": "../entity/homepage_queries.dart",
+        "requestEncoder": "encodeHomepageByIdQuery",
+        "requestType": "HomepageByIdQuery",
+        "responseDecoder": "decodeHomepageReviewSummary",
+        "responseType": "HomepageReviewSummaryProjection"
       },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
       "domain": "entity",
-      "errorCodes": [],
+      "errorCodes": [
+        "ENTITY.USER.homepage_not_found",
+        "ENTITY.USER.homepage_offline",
+        "ENTITY.SYSTEM.internal_error"
+      ],
       "facadeMethod": "getReviewSummary",
       "facet": "HomepageQueryFacade",
       "invariantTarget": "",
@@ -6749,42 +6798,68 @@
       "method": "GET",
       "mutationTarget": "",
       "objectId": "entity.homepage",
-      "ownershipPolicy": "",
-      "pathTemplate": "/v1/homepages/{homepageId}/review-summary",
+      "ownershipPolicy": "published_homepage_read",
+      "pathTemplate": "/homepages/{homepageId}/review-summary",
       "permissions": [],
-      "principal": "",
-      "privacy": {},
-      "reliability": {},
+      "principal": "public",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "PUBLIC",
+        "responseClassification": "PUBLIC"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1500
+      },
       "requestBodyKind": "",
       "requestEntity": "",
       "responseBody": "",
       "responseBodyKind": "",
       "responseEntity": "HomepageReviewSummaryView",
       "scopes": [],
-      "slo": {},
+      "slo": {
+        "availabilityPercent": 99.5,
+        "latencyP95Milliseconds": 300
+      },
       "sourcePath": "entity/homepage/service.yaml",
       "surfaceIds": [
         "homepageDetail"
       ],
       "telemetry": {
-        "trace": false
+        "attributes": [
+          "homepage_id",
+          "outcome"
+        ],
+        "metric": "entity_homepage_review_summary_get",
+        "trace": true
       }
     },
     {
       "actorRequirement": "none",
       "aggregateOwner": "",
-      "authMode": "required",
+      "authMode": "optional",
       "canonicalOperationId": "entity.homepage.GetHomepageShell",
-      "clientContract": null,
-      "commercial": {
-        "blockReason": "canonical operation awaits object-centered commercial migration",
-        "explicit": true,
-        "gapId": "ENTITY_HOMEPAGE_COMMERCIAL_EVIDENCE",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
+      "clientContract": {
+        "dartImport": "../entity/homepage_queries.dart",
+        "requestEncoder": "encodeHomepageByIdQuery",
+        "requestType": "HomepageByIdQuery",
+        "responseDecoder": "decodeHomepageShell",
+        "responseType": "HomepageShellProjection"
       },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
       "domain": "entity",
-      "errorCodes": [],
+      "errorCodes": [
+        "ENTITY.USER.homepage_not_found",
+        "ENTITY.USER.homepage_offline",
+        "ENTITY.SYSTEM.internal_error"
+      ],
       "facadeMethod": "getShell",
       "facet": "HomepageQueryFacade",
       "invariantTarget": "",
@@ -6793,25 +6868,43 @@
       "method": "GET",
       "mutationTarget": "",
       "objectId": "entity.homepage",
-      "ownershipPolicy": "",
-      "pathTemplate": "/v1/homepages/{homepageId}/shell",
+      "ownershipPolicy": "published_homepage_read",
+      "pathTemplate": "/homepages/{homepageId}/shell",
       "permissions": [],
-      "principal": "",
-      "privacy": {},
-      "reliability": {},
+      "principal": "public",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "PUBLIC",
+        "responseClassification": "PUBLIC"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1500
+      },
       "requestBodyKind": "",
       "requestEntity": "",
       "responseBody": "",
       "responseBodyKind": "",
       "responseEntity": "HomepageShellView",
       "scopes": [],
-      "slo": {},
+      "slo": {
+        "availabilityPercent": 99.5,
+        "latencyP95Milliseconds": 300
+      },
       "sourcePath": "entity/homepage/service.yaml",
       "surfaceIds": [
         "homepageDetail"
       ],
       "telemetry": {
-        "trace": false
+        "attributes": [
+          "homepage_id",
+          "outcome"
+        ],
+        "metric": "entity_homepage_shell_get",
+        "trace": true
       }
     },
     {
@@ -6819,14 +6912,18 @@
       "aggregateOwner": "",
       "authMode": "optional",
       "canonicalOperationId": "entity.homepage.GetObjectPageBundle",
-      "clientContract": null,
-      "commercial": {
-        "blockReason": "canonical operation awaits object-centered commercial migration",
-        "explicit": true,
-        "gapId": "ENTITY_HOMEPAGE_COMMERCIAL_EVIDENCE",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
+      "clientContract": {
+        "dartImport": "../entity/homepage_queries.dart",
+        "requestEncoder": "encodeHomepageObjectPageBundleQuery",
+        "requestType": "HomepageObjectPageBundleQuery",
+        "responseDecoder": "decodeHomepageObjectPageBundle",
+        "responseType": "HomepageObjectPageBundleProjection"
       },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
       "domain": "entity",
       "errorCodes": [
         "ENTITY.USER.homepage_not_found",
@@ -6842,7 +6939,7 @@
       "mutationTarget": "",
       "objectId": "entity.homepage",
       "ownershipPolicy": "published_homepage_read",
-      "pathTemplate": "/v1/homepages/{homepageId}/object-page-bundle",
+      "pathTemplate": "/homepages/{homepageId}/object-page-bundle",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -6885,14 +6982,18 @@
       "aggregateOwner": "",
       "authMode": "optional",
       "canonicalOperationId": "entity.homepage.SearchHomepages",
-      "clientContract": null,
-      "commercial": {
-        "blockReason": "canonical operation awaits object-centered commercial migration",
-        "explicit": true,
-        "gapId": "ENTITY_HOMEPAGE_COMMERCIAL_EVIDENCE",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
+      "clientContract": {
+        "dartImport": "../entity/homepage_queries.dart",
+        "requestEncoder": "encodeHomepageSearchQuery",
+        "requestType": "HomepageSearchQuery",
+        "responseDecoder": "decodeHomepageSearchSlice",
+        "responseType": "HomepageSearchSlice"
       },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
       "domain": "entity",
       "errorCodes": [
         "ENTITY.USER.invalid_argument",
@@ -6907,7 +7008,7 @@
       "mutationTarget": "",
       "objectId": "entity.homepage",
       "ownershipPolicy": "published_homepage_search",
-      "pathTemplate": "/v1/homepages/search",
+      "pathTemplate": "/homepages/search",
       "permissions": [],
       "principal": "public",
       "privacy": {
@@ -6917,10 +7018,10 @@
       },
       "reliability": {
         "cancellation": "supported",
-        "idempotency": "none",
+        "idempotency": "optional",
         "maxAttempts": 2,
         "retryMode": "idempotent",
-        "timeoutMilliseconds": 1500
+        "timeoutMilliseconds": 6000
       },
       "requestBodyKind": "",
       "requestEntity": "",
@@ -6958,6 +7059,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "entity",
       "errorCodes": [],
       "facadeMethod": "suggestCandidate",
@@ -6969,7 +7071,7 @@
       "mutationTarget": "Homepage",
       "objectId": "entity.homepage",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/homepages/candidates/suggest",
+      "pathTemplate": "/homepages/candidates/suggest",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -7003,6 +7105,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "entity",
       "errorCodes": [],
       "facadeMethod": "unfollow",
@@ -7014,7 +7117,7 @@
       "mutationTarget": "Homepage",
       "objectId": "entity.homepage",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/homepages/{homepageId}/follow",
+      "pathTemplate": "/homepages/{homepageId}/follow",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -7047,6 +7150,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "entity",
       "errorCodes": [],
       "facadeMethod": "updateClaimedBasics",
@@ -7058,7 +7162,7 @@
       "mutationTarget": "Homepage",
       "objectId": "entity.homepage",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/homepages/{homepageId}/claimed-basics",
+      "pathTemplate": "/homepages/{homepageId}/claimed-basics",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -7091,6 +7195,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "entity",
       "errorCodes": [],
       "facadeMethod": "create",
@@ -7102,7 +7207,7 @@
       "mutationTarget": "HomepageClaimRequest",
       "objectId": "entity.homepage_claim_request",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/homepages/{homepageId}/claim-requests",
+      "pathTemplate": "/homepages/{homepageId}/claim-requests",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -7135,6 +7240,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "entity",
       "errorCodes": [],
       "facadeMethod": "create",
@@ -7146,7 +7252,7 @@
       "mutationTarget": "HomepageStatusReport",
       "objectId": "entity.homepage_status_report",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/homepages/{homepageId}/status-reports",
+      "pathTemplate": "/homepages/{homepageId}/status-reports",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -7182,6 +7288,7 @@
         "explicit": true,
         "status": "ready"
       },
+      "concurrency": {},
       "domain": "integration",
       "errorCodes": [
         "INTEGRATION.USER.location_unavailable",
@@ -7198,7 +7305,7 @@
       "mutationTarget": "",
       "objectId": "integration.location",
       "ownershipPolicy": "public_read",
-      "pathTemplate": "/v1/integration/location/nearby",
+      "pathTemplate": "/integration/location/nearby",
       "permissions": [],
       "principal": "public",
       "privacy": {
@@ -7253,6 +7360,7 @@
         "explicit": true,
         "status": "ready"
       },
+      "concurrency": {},
       "domain": "integration",
       "errorCodes": [
         "INTEGRATION.USER.location_unavailable",
@@ -7269,7 +7377,7 @@
       "mutationTarget": "",
       "objectId": "integration.location",
       "ownershipPolicy": "public_read",
-      "pathTemplate": "/v1/integration/location/search",
+      "pathTemplate": "/integration/location/search",
       "permissions": [],
       "principal": "public",
       "privacy": {
@@ -7324,6 +7432,7 @@
         "explicit": true,
         "status": "ready"
       },
+      "concurrency": {},
       "domain": "notification",
       "errorCodes": [
         "NOTIFICATION.USER.unauthorized",
@@ -7340,7 +7449,7 @@
       "mutationTarget": "Notification",
       "objectId": "notification.notification",
       "ownershipPolicy": "authenticated_account_message_only",
-      "pathTemplate": "/v1/app-messages/{messageId}/ack",
+      "pathTemplate": "/app-messages/{messageId}/ack",
       "permissions": [],
       "principal": "account",
       "privacy": {
@@ -7351,8 +7460,8 @@
       "reliability": {
         "cancellation": "supported",
         "idempotency": "none",
-        "maxAttempts": 2,
-        "retryMode": "idempotent",
+        "maxAttempts": 1,
+        "retryMode": "none",
         "timeoutMilliseconds": 1500
       },
       "requestBodyKind": "",
@@ -7394,6 +7503,7 @@
         "explicit": true,
         "status": "ready"
       },
+      "concurrency": {},
       "domain": "notification",
       "errorCodes": [
         "NOTIFICATION.USER.unauthorized",
@@ -7410,7 +7520,7 @@
       "mutationTarget": "",
       "objectId": "notification.notification",
       "ownershipPolicy": "authenticated_account_message_only",
-      "pathTemplate": "/v1/app-messages/{messageId}",
+      "pathTemplate": "/app-messages/{messageId}",
       "permissions": [],
       "principal": "account",
       "privacy": {
@@ -7420,7 +7530,7 @@
       },
       "reliability": {
         "cancellation": "supported",
-        "idempotency": "none",
+        "idempotency": "optional",
         "maxAttempts": 2,
         "retryMode": "idempotent",
         "timeoutMilliseconds": 1500
@@ -7464,6 +7574,7 @@
         "explicit": true,
         "status": "ready"
       },
+      "concurrency": {},
       "domain": "notification",
       "errorCodes": [
         "NOTIFICATION.USER.unauthorized",
@@ -7478,7 +7589,7 @@
       "mutationTarget": "",
       "objectId": "notification.notification",
       "ownershipPolicy": "authenticated_account_inbox_only",
-      "pathTemplate": "/v1/app-messages/unread-count",
+      "pathTemplate": "/app-messages/unread-count",
       "permissions": [],
       "principal": "account",
       "privacy": {
@@ -7532,6 +7643,7 @@
         "explicit": true,
         "status": "ready"
       },
+      "concurrency": {},
       "domain": "notification",
       "errorCodes": [
         "NOTIFICATION.USER.unauthorized",
@@ -7547,7 +7659,7 @@
       "mutationTarget": "",
       "objectId": "notification.notification",
       "ownershipPolicy": "authenticated_account_inbox_only",
-      "pathTemplate": "/v1/app-messages",
+      "pathTemplate": "/app-messages",
       "permissions": [],
       "principal": "account",
       "privacy": {
@@ -7557,7 +7669,7 @@
       },
       "reliability": {
         "cancellation": "supported",
-        "idempotency": "none",
+        "idempotency": "optional",
         "maxAttempts": 2,
         "retryMode": "idempotent",
         "timeoutMilliseconds": 1500
@@ -7602,6 +7714,7 @@
         "explicit": true,
         "status": "ready"
       },
+      "concurrency": {},
       "domain": "notification",
       "errorCodes": [
         "NOTIFICATION.USER.unauthorized",
@@ -7618,7 +7731,7 @@
       "mutationTarget": "Notification",
       "objectId": "notification.notification",
       "ownershipPolicy": "authenticated_account_message_only",
-      "pathTemplate": "/v1/app-messages/{messageId}/read",
+      "pathTemplate": "/app-messages/{messageId}/read",
       "permissions": [],
       "principal": "account",
       "privacy": {
@@ -7629,8 +7742,8 @@
       "reliability": {
         "cancellation": "supported",
         "idempotency": "none",
-        "maxAttempts": 2,
-        "retryMode": "idempotent",
+        "maxAttempts": 1,
+        "retryMode": "none",
         "timeoutMilliseconds": 1500
       },
       "requestBodyKind": "",
@@ -7669,6 +7782,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "search",
       "errorCodes": [],
       "facadeMethod": "clearRecentSearches",
@@ -7680,7 +7794,7 @@
       "mutationTarget": "RecentSearchState",
       "objectId": "search.recent_search_state",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/search/recent",
+      "pathTemplate": "/search/recent",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -7713,6 +7827,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "search",
       "errorCodes": [],
       "facadeMethod": "deleteRecentSearch",
@@ -7724,7 +7839,7 @@
       "mutationTarget": "RecentSearchState",
       "objectId": "search.recent_search_state",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/search/recent/{entryId}",
+      "pathTemplate": "/search/recent/{entryId}",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -7757,6 +7872,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "search",
       "errorCodes": [],
       "facadeMethod": "listRecentSearches",
@@ -7768,7 +7884,7 @@
       "mutationTarget": "",
       "objectId": "search.recent_search_state",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/search/recent",
+      "pathTemplate": "/search/recent",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -7801,6 +7917,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "search",
       "errorCodes": [],
       "facadeMethod": "upsertRecentSearch",
@@ -7812,7 +7929,7 @@
       "mutationTarget": "RecentSearchState",
       "objectId": "search.recent_search_state",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/search/recent/{entryId}",
+      "pathTemplate": "/search/recent/{entryId}",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -7847,6 +7964,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "tag",
       "errorCodes": [],
       "facadeMethod": "listChildren",
@@ -7858,7 +7976,7 @@
       "mutationTarget": "",
       "objectId": "tag.tag",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/tag/children",
+      "pathTemplate": "/tag/children",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -7891,6 +8009,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "tag",
       "errorCodes": [],
       "facadeMethod": "resolve",
@@ -7902,7 +8021,7 @@
       "mutationTarget": "",
       "objectId": "tag.tag",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/tag/resolve",
+      "pathTemplate": "/tag/resolve",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -7935,6 +8054,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "tag",
       "errorCodes": [],
       "facadeMethod": "validateRefs",
@@ -7946,7 +8066,7 @@
       "mutationTarget": "",
       "objectId": "tag.tag",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/tag/validate",
+      "pathTemplate": "/tag/validate",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -7979,6 +8099,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "user",
       "errorCodes": [],
       "facadeMethod": "dismissContactDiscovery",
@@ -7990,7 +8111,7 @@
       "mutationTarget": "ContactDiscoveryRecord",
       "objectId": "user.contact_discovery",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/owner/contact-discovery/{id}",
+      "pathTemplate": "/owner/contact-discovery/{id}",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -8023,6 +8144,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "user",
       "errorCodes": [],
       "facadeMethod": "getLatestContactDiscovery",
@@ -8034,7 +8156,7 @@
       "mutationTarget": "",
       "objectId": "user.contact_discovery",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/owner/contact-discovery/latest",
+      "pathTemplate": "/owner/contact-discovery/latest",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -8067,6 +8189,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "user",
       "errorCodes": [],
       "facadeMethod": "initiateContactDiscovery",
@@ -8078,7 +8201,7 @@
       "mutationTarget": "ContactDiscoveryRecord",
       "objectId": "user.contact_discovery",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/owner/contact-discovery",
+      "pathTemplate": "/owner/contact-discovery",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -8111,6 +8234,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "user",
       "errorCodes": [],
       "facadeMethod": "updateUserProfile",
@@ -8122,7 +8246,7 @@
       "mutationTarget": "Persona",
       "objectId": "user.persona",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/user/profile",
+      "pathTemplate": "/user/profile",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -8155,6 +8279,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "user",
       "errorCodes": [],
       "facadeMethod": "followUser",
@@ -8166,7 +8291,7 @@
       "mutationTarget": "PersonaRelationship",
       "objectId": "user.persona_relationship",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/user/sub-accounts/{targetSubAccountId}/follow",
+      "pathTemplate": "/user/sub-accounts/{targetSubAccountId}/follow",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -8202,6 +8327,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "user",
       "errorCodes": [],
       "facadeMethod": "getRelationshipCapability",
@@ -8213,7 +8339,7 @@
       "mutationTarget": "",
       "objectId": "user.persona_relationship",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/user/sub-accounts/{subAccountId}/relationship/capability",
+      "pathTemplate": "/user/sub-accounts/{subAccountId}/relationship/capability",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -8249,6 +8375,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "user",
       "errorCodes": [],
       "facadeMethod": "unfollowUser",
@@ -8260,7 +8387,7 @@
       "mutationTarget": "PersonaRelationship",
       "objectId": "user.persona_relationship",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/user/sub-accounts/{targetSubAccountId}/follow",
+      "pathTemplate": "/user/sub-accounts/{targetSubAccountId}/follow",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -8299,6 +8426,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "user",
       "errorCodes": [
         "USER.PROFILE_PROPOSAL.not_found",
@@ -8317,7 +8445,7 @@
       "mutationTarget": "ProfileUpdateProposal",
       "objectId": "user.profile_update_proposal",
       "ownershipPolicy": "target_persona_owner",
-      "pathTemplate": "/v1/user/profile/proposals/{id}/apply",
+      "pathTemplate": "/user/profile/proposals/{id}/apply",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -8332,8 +8460,8 @@
         "retryMode": "idempotent",
         "timeoutMilliseconds": 1500
       },
-      "requestBodyKind": "object",
-      "requestEntity": "ApplyProfileUpdateProposalRequest",
+      "requestBodyKind": "",
+      "requestEntity": "",
       "responseBody": "ProfileUpdateProposalCommandResult",
       "responseBodyKind": "object",
       "responseEntity": "ProfileUpdateProposalCommandResult",
@@ -8376,6 +8504,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "user",
       "errorCodes": [
         "USER.PROFILE_PROPOSAL.not_found",
@@ -8394,7 +8523,7 @@
       "mutationTarget": "ProfileUpdateProposal",
       "objectId": "user.profile_update_proposal",
       "ownershipPolicy": "target_persona_owner",
-      "pathTemplate": "/v1/user/profile/proposals/{id}/confirm",
+      "pathTemplate": "/user/profile/proposals/{id}/confirm",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -8409,8 +8538,8 @@
         "retryMode": "idempotent",
         "timeoutMilliseconds": 1500
       },
-      "requestBodyKind": "object",
-      "requestEntity": "ConfirmProfileUpdateProposalRequest",
+      "requestBodyKind": "",
+      "requestEntity": "",
       "responseBody": "ProfileUpdateProposalCommandResult",
       "responseBodyKind": "object",
       "responseEntity": "ProfileUpdateProposalCommandResult",
@@ -8453,6 +8582,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "user",
       "errorCodes": [
         "USER.PROFILE_PROPOSAL.not_found",
@@ -8471,7 +8601,7 @@
       "mutationTarget": "ProfileUpdateProposal",
       "objectId": "user.profile_update_proposal",
       "ownershipPolicy": "target_persona_owner",
-      "pathTemplate": "/v1/user/personas/{personaId}/profile-proposals",
+      "pathTemplate": "/user/personas/{personaId}/profile-proposals",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -8530,6 +8660,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "user",
       "errorCodes": [
         "USER.PROFILE_PROPOSAL.not_found",
@@ -8548,7 +8679,7 @@
       "mutationTarget": "",
       "objectId": "user.profile_update_proposal",
       "ownershipPolicy": "target_persona_owner",
-      "pathTemplate": "/v1/user/profile/proposals/{id}",
+      "pathTemplate": "/user/profile/proposals/{id}",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -8606,6 +8737,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "user",
       "errorCodes": [
         "USER.PROFILE_PROPOSAL.not_found",
@@ -8624,7 +8756,7 @@
       "mutationTarget": "",
       "objectId": "user.profile_update_proposal",
       "ownershipPolicy": "target_persona_owner",
-      "pathTemplate": "/v1/user/personas/{personaId}/profile-proposals",
+      "pathTemplate": "/user/personas/{personaId}/profile-proposals",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -8682,6 +8814,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "user",
       "errorCodes": [
         "USER.PROFILE_PROPOSAL.not_found",
@@ -8700,7 +8833,7 @@
       "mutationTarget": "ProfileUpdateProposal",
       "objectId": "user.profile_update_proposal",
       "ownershipPolicy": "target_persona_owner",
-      "pathTemplate": "/v1/user/profile/proposals/{id}/reject",
+      "pathTemplate": "/user/profile/proposals/{id}/reject",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -8715,8 +8848,8 @@
         "retryMode": "idempotent",
         "timeoutMilliseconds": 1500
       },
-      "requestBodyKind": "object",
-      "requestEntity": "RejectProfileUpdateProposalRequest",
+      "requestBodyKind": "",
+      "requestEntity": "",
       "responseBody": "ProfileUpdateProposalCommandResult",
       "responseBodyKind": "object",
       "responseEntity": "ProfileUpdateProposalCommandResult",
@@ -8753,6 +8886,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "user",
       "errorCodes": [],
       "facadeMethod": "getProfileEditSnapshot",
@@ -8764,7 +8898,7 @@
       "mutationTarget": "",
       "objectId": "user.user_profile",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/user/profile/edit-snapshot",
+      "pathTemplate": "/user/profile/edit-snapshot",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -8797,6 +8931,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "user",
       "errorCodes": [],
       "facadeMethod": "getProfileQrCard",
@@ -8808,7 +8943,7 @@
       "mutationTarget": "",
       "objectId": "user.user_profile",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/user/profile/qr-card",
+      "pathTemplate": "/user/profile/qr-card",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -8843,6 +8978,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "user",
       "errorCodes": [],
       "facadeMethod": "getSubAccountProfile",
@@ -8854,7 +8990,7 @@
       "mutationTarget": "",
       "objectId": "user.user_profile",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/user/{subAccountId}",
+      "pathTemplate": "/user/{subAccountId}",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -8889,6 +9025,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "user",
       "errorCodes": [
         "USER.USER.not_found",
@@ -8904,7 +9041,7 @@
       "mutationTarget": "",
       "objectId": "user.user_profile",
       "ownershipPolicy": "public_profile_visibility",
-      "pathTemplate": "/v1/user/profile/{userId}",
+      "pathTemplate": "/user/profile/{userId}",
       "permissions": [],
       "principal": "public",
       "privacy": {
@@ -8954,6 +9091,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "user",
       "errorCodes": [],
       "facadeMethod": "listUserLifeItems",
@@ -8965,7 +9103,7 @@
       "mutationTarget": "",
       "objectId": "user.user_profile",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/users/{userId}/life-items",
+      "pathTemplate": "/users/{userId}/life-items",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -8998,6 +9136,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "user",
       "errorCodes": [],
       "facadeMethod": "listUserLikes",
@@ -9009,7 +9148,7 @@
       "mutationTarget": "",
       "objectId": "user.user_profile",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/users/{userId}/likes",
+      "pathTemplate": "/users/{userId}/likes",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -9042,6 +9181,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "user",
       "errorCodes": [],
       "facadeMethod": "listUserWorks",
@@ -9053,7 +9193,7 @@
       "mutationTarget": "",
       "objectId": "user.user_profile",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/users/{userId}/works",
+      "pathTemplate": "/users/{userId}/works",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -9086,6 +9226,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "user",
       "errorCodes": [],
       "facadeMethod": "resolveProfileQrToken",
@@ -9097,7 +9238,7 @@
       "mutationTarget": "",
       "objectId": "user.user_profile",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/public/profile/qr/resolve",
+      "pathTemplate": "/public/profile/qr/resolve",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -9130,6 +9271,7 @@
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
+      "concurrency": {},
       "domain": "user",
       "errorCodes": [],
       "facadeMethod": "searchSocialRelations",
@@ -9141,7 +9283,7 @@
       "mutationTarget": "",
       "objectId": "user.user_profile",
       "ownershipPolicy": "",
-      "pathTemplate": "/v1/user/search/social-relations",
+      "pathTemplate": "/user/search/social-relations",
       "permissions": [],
       "principal": "",
       "privacy": {},
@@ -9166,13 +9308,13 @@
   ],
   "breakingReport": {
     "path": "quwoquan_app/tool/cloud_codegen/contract_graph.breaking.json",
-    "sha256": "e48b87bb5f1203012e92d6cf6aa157e5a1332549200f023528ed0caa46ae3e9b"
+    "sha256": "8e541c2f713e8b381c95342cb5e391e9cedd426c8715a657998b77f9b934cf4a"
   },
   "contractGraph": {
-    "compilerHash": "sha256:4ed8c3c68d174361af3dc6ae2528bfc2d584a0beface032880b79ccff74d4237",
+    "compilerHash": "sha256:4ced336baadf2d6986c419bbee7b5523da603519f40a439f34ee42711d056783",
     "path": "quwoquan_service/generated/contract_graph.json",
-    "sha256": "635a57032f8a0923914f505c4bdc6fd6faa6cbd6de6f20a32a881cf8a0d1c470",
-    "sourceDigestSetSha256": "bc78b57d9b50d5d716aae6ce3ca6dafd96107c5467a1d266e30cf4d03e897a31"
+    "sha256": "b086cfcd64427da2246c979dcf5d12398b7acb393489b9c23e33976d384134cc",
+    "sourceDigestSetSha256": "f195cb9dbdcb0e0aba2682d83703f366531da9240a62f8c29f3cb145fd748f7d"
   },
   "generator": "app-cloud-handoff"
 }

@@ -1,4 +1,3 @@
-version: 1
 entity: EventRecord
 layer: e2e
 
@@ -9,8 +8,8 @@ description: |
 scenarios:
   - name: page_access_event_visible_in_summary
     steps:
-      - app opens a tracked page and reports page_open / page_return through /v1/ops/events
-      - product ops reads /v1/ops/events/summary for page_access
+      - app opens a tracked page and reports page_open / page_return through /ops/events
+      - product ops reads /ops/events/summary for page_access
     assertions:
       - event_record_created
       - page_name_dimension_visible
@@ -18,7 +17,7 @@ scenarios:
 
   - name: analytics_and_learning_visible_in_drilldown
     steps:
-      - analytics façade reports analytics event through /v1/ops/events
+      - analytics façade reports analytics event through /ops/events
       - assistant learning reports scorecard / feedback and bridge event summary
       - operator opens event drilldown view
     assertions:
@@ -29,7 +28,7 @@ scenarios:
   - name: app_exception_event_visible_in_es_and_drilldown
     steps:
       - app captures an uncaught runtime exception and stores it in the latest-100 local queue
-      - app flushes the exception through /v1/ops/events
+      - app flushes the exception through /ops/events
       - product ops stores the primary event and mirrors it to the exception ES index
       - operator or Cursor skill queries by requestId / traceId / errorCode / pageName
     assertions:

@@ -2,7 +2,6 @@ dart_class: AssistantSkillManifestWire
 library_path: assistant/generated/contracts/assistant_skill_manifest.g.dart
 output_path: assistant/generated/contracts/assistant_skill_manifest.g.dart
 contract: assistant_skill_manifest
-version: assistant_skill_manifest.m5
 kind: shared_wire_contract
 fields:
   - { name: skillId, type: string, required: true }

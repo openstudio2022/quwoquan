@@ -3,7 +3,7 @@
 覆盖（quality-dedupe-backfill 交付项）：
 1. homepage_text_quality_issue：弱事实文本（西岭雪山类）与消歧义页必须打回，富事实文本放行。
 2. factual_compress_text：<=1000 不压缩；>2000 压至约 50% 并保留结构行与事实句。
-3. handler_fetch 消重/归一 helper：canonical URL 归一、百度/搜狗百科识别。
+3. handler_fetch 消重/归一 helper：canonical URL 归一、非开放百科识别。
 """
 from __future__ import annotations
 
@@ -19,6 +19,8 @@ from content.source.handler_fetch import (  # noqa: E402
     _canonicalize_source_url,
     _is_non_open_baike_source,
     _publishable_homepage_source_image_count,
+    _resolved_source_title_matches_entity,
+    _source_fetch_failure_issue,
 )
 from content.source.research.homepage_text_quality import homepage_text_quality_issue  # noqa: E402
 from content.source.source_inputs import _normalize_image_specs  # noqa: E402
@@ -57,6 +59,40 @@ def test_homepage_gate_accepts_fact_rich_text():
         "黄龙沟全长约7.5公里，钙华滩流是其核心地质景观。"
     )
     assert homepage_text_quality_issue(rich, "黄龙风景名胜区") == ""
+
+
+def test_homepage_gate_preserves_structured_line_facts_before_counting():
+    text = (
+        "越剧小镇位于浙江省嵊州市，也是女子越剧诞生地。\n"
+        "小镇包括剧院、工坊、艺术家村落和百亩果园。\n"
+        "项目占地百余亩，集现代农业、休闲旅游和文化创意于一体。\n"
+        "园区坐落在剡溪之畔，主要文化设施包括越剧艺术学校。"
+    )
+
+    assert homepage_text_quality_issue(text, "越剧小镇") == ""
+
+
+def test_homepage_gate_does_not_treat_travel_station_guidance_as_station_entity():
+    text = (
+        "中南百草原位于浙江省湖州市安吉县，占地5600亩，是国家AAAA级旅游景区。\n\n"
+        "景区包含植物世界、动物世界和运动世界，核心游览区设有湿地、竹林和草原。\n\n"
+        "园区开放时间为8:00至17:00，游客可通过官方渠道预约门票。\n\n"
+        "乘高铁至湖州站后可换乘旅游专线，车站有直达安吉的客运班次。\n\n"
+        "自驾游客可从杭长高速百丈出口前往，全程约30公里。"
+    )
+
+    assert homepage_text_quality_issue(text, "中南百草原") == ""
+
+
+def test_homepage_gate_rejects_unrelated_taxonomy_page_without_keyword_blacklist():
+    text = (
+        "中华大刀螳学名为Tenodera sinensis，属于昆虫纲螳螂目螳科。\n\n"
+        "该物种体长约90毫米，主要分布于东亚地区。\n\n"
+        "成虫具有发达的前足，通常栖息于草地和灌木。\n\n"
+        "雌虫可产多个卵鞘，每个卵鞘包含数百枚卵。"
+    )
+
+    assert homepage_text_quality_issue(text, "中南百草原") == "insufficient_homepage_facts"
 
 
 def test_homepage_source_image_count_excludes_locator_maps():
@@ -151,17 +187,43 @@ def test_canonicalize_source_url_normalizes_variants():
     assert _canonicalize_source_url("") == ""
 
 
-def test_is_non_open_baike_source_detects_baidu_and_sogou():
+def test_is_non_open_baike_source_detects_baidu_and_toutiao():
     # 来源使用模式只接受 registry 中已冻结的 sourceKind，不按 URL host 猜测。
     assert _is_non_open_baike_source(
         {"sourceKind": "baidu_baike", "url": "https://baike.baidu.com/item/黄龙/123"}
     )
     assert _is_non_open_baike_source(
-        {"sourceKind": "sogou_baike", "url": "https://baike.sogou.com/v123.htm"}
+        {"sourceKind": "toutiao_baike", "url": "https://www.baike.com/wiki/黄龙"}
     )
     assert not _is_non_open_baike_source(
         {"sourceKind": "wikipedia", "url": "https://zh.wikipedia.org/wiki/黄龙"}
     )
+
+
+def test_resolved_wiki_title_accepts_frozen_alias_candidate():
+    source = {"sourceTitle": "金沙湖 (浙江省)"}
+    assert _resolved_source_title_matches_entity(
+        source,
+        resolved_title="金沙湖 (浙江省)",
+        entity_id="杭州金沙湖",
+    )
+    assert not _resolved_source_title_matches_entity(
+        source,
+        resolved_title="金沙湖 (新疆)",
+        entity_id="杭州金沙湖",
+    )
+
+
+def test_source_fetch_exception_is_converted_to_typed_issue():
+    issue = _source_fetch_failure_issue(
+        {"source_id": "home_baidu_baike", "researchLane": "homepage"},
+        entity_id="杭州金沙湖",
+        error=TimeoutError("request timed out"),
+    )
+    assert issue.code.value == "DATA.SOURCE.UNREADABLE"
+    assert issue.lane.value == "homepage"
+    assert issue.recovery.value == "retry_source_discovery"
+    assert dict(issue.attributes)["errorType"] == "TimeoutError"
 
 
 def _run_all() -> None:

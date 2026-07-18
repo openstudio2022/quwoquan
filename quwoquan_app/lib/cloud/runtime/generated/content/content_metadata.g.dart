@@ -60,8 +60,8 @@ class GeneratedPostRuntimeMetadata {
 
   static const int feedDefaultLimit = 20;
 
-  static const String feedPath = '/v1/content/feed';
-  static const String postDetailPathTemplate = '/v1/content/posts/{postId}';
+  static const String feedPath = '/content/feed';
+  static const String postDetailPathTemplate = '/content/posts/{postId}';
 
   static const List<String> feedQueryParams = <String>[
     'identity',
@@ -73,22 +73,21 @@ class GeneratedPostRuntimeMetadata {
     'feedRequestId',
   ];
 
-  static const List<String> createWritableFields = <String>[
+  static const List<String> publicationWritableFields = <String>[
+    'publishIntentId',
+    'localDraftId',
     'contentType',
     'contentIdentity',
     'title',
     'body',
     'summary',
     'semanticMentions',
-    'mediaUrls',
+    'mediaAssetIds',
     'mediaItems',
-    'coverUrl',
-    'thumbnailUrl',
     'articleMarkdown',
-    'articleMarkdownVersion',
+    'markdownDialect',
     'articleAssetManifest',
     'articleRenderProfile',
-    'videoUrl',
     'coverStrategy',
     'coverFrameTimeMs',
     'illustrationAssetId',

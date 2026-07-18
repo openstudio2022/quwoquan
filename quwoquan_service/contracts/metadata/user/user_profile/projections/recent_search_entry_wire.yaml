@@ -1,4 +1,3 @@
-version: 1
 read_model: RecentSearchEntryWire
 
 description: |
@@ -19,33 +18,28 @@ client_projection:
       dart_type: String
       nullable: false
       source: entryId
-      aliases: [entryId]
       default: "''"
 
     - name: query
       dart_type: String
       nullable: false
       source: query
-      aliases: [query]
       default: "''"
 
     - name: scope
       dart_type: String
       nullable: false
       source: scope
-      aliases: [scope]
       default: "'all'"
 
     - name: facet
       dart_type: String
       nullable: true
       source: facet
-      aliases: [facet]
       default: "null"
 
     - name: updatedAt
       dart_type: DateTime
       nullable: true
       source: updatedAt
-      aliases: [updatedAt]
       default: "null"

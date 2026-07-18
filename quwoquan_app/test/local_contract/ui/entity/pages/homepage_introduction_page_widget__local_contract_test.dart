@@ -71,7 +71,7 @@ void main() {
             sourceKind: 'wikipedia',
             sourceUrl: 'https://zh.wikipedia.org/wiki/西湖',
             title: '西湖',
-            policyRevision: 'encyclopedia-primary-v2',
+            policyRevision: 'encyclopedia-primary',
           ),
           sourceUrls: const <String>['https://zh.wikipedia.org/wiki/西湖'],
         ),

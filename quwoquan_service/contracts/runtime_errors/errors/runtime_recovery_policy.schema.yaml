@@ -1,4 +1,4 @@
-schemaVersion: 1
+schema: 1
 types:
   RuntimeRecoveryDecision:
     fields:

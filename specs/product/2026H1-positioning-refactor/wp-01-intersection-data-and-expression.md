@@ -17,7 +17,7 @@
   - 共同校友只有标签级「同校」（保持，校友图谱后置）；
   - Go `evidenceKindRank` 已迁移到注册表标准名（已落地，基线修正）；`intersection_source.go`、`intersection_service_test.go`、Dart mock 种子与 fixtures 仍残留 `mutualFriend / friendVisited / friendInCircle` 等已退场 kind 名，需一次性迁移，**不保留兼容解析**（**未完成 → T1/T4**）。
 - **favorite 全链路退场**：**已落地（基线修正）**——契约（FavoritePost/UnfavoritePost、favoriteCount/favorited 字段、favorite 行为信号）、云侧（handler、推荐特征、指标）、端侧（UI 入口、Repository、本地状态）已全量退场，grep 零残留（仅点赞心形图标 `Icons.favorite*` 豁免）；长期价值推荐信号改用足迹侧已有行为（完读 / 复访 / 转发），不引入新行为类型。本项在准出 grep 中保留为**防回归**项。
-- **足迹只读契约**：**已落地（基线修正）**——`GET /v1/content/footprint` 已登记 `service.yaml` 与 `ui_surfaces.yaml`（route `myFootprint`），Go handler/路由与端侧 codegen 产物已生成；但端侧消费闭环（Repository 三层 + 足迹列表页）尚无消费者（**未完成 → T5**）。
+- **足迹只读契约**：**已落地（基线修正）**——`GET /content/footprint` 已登记 `service.yaml` 与 `ui_surfaces.yaml`（route `myFootprint`），Go handler/路由与端侧 codegen 产物已生成；但端侧消费闭环（Repository 三层 + 足迹列表页）尚无消费者（**未完成 → T5**）。
 - **端侧 kind 折叠债**：**已落地（基线修正）**——Dart 侧 `evidenceKindRank` 已移除，`EvidenceGroup` kind 为开放字符串，文案全部云侧直出（G2 达标）。
 - **商用风险**：Go 真实 source 产出的 reason 经常缺 `displayName/avatarUrl/primaryText`，而端侧 spotlight 过滤条件是「缺 primaryText 不进展示窗」→ beta/gamma 真实环境 spotlight 大量空窗（**未完成 → T3**）。
 
@@ -38,7 +38,7 @@
 
 - Go `intersection_service.go` 的 `evidenceKindRank` 已迁移到注册表标准名（已落地，基线修正；未知 kind 落兜底 rank）；`intersection_source.go` 与测试、Dart mock 种子、contract fixtures 的 kind 取值迁移仍待完成（→ T1/T4）。
 - 契约层删除 `FavoritePost/UnfavoritePost` API、`favoriteCount/favorited/favoritedAt` 字段、`favorite` 行为类型与相关索引/计数/投影 alias；端侧删除全部收藏入口与本地 save/bookmark 状态；不保留兼容路由、字段 alias 或灰度开关。**已落地（基线修正），准出保留防回归 grep。**
-- 「以后再看」由足迹承载：只读契约 `GET /v1/content/footprint`（数据源=既有行为边，无新写路径）**已登记（基线修正）**，足迹**不产生交集**；端侧消费闭环 → T5。
+- 「以后再看」由足迹承载：只读契约 `GET /content/footprint`（数据源=既有行为边，无新写路径）**已登记（基线修正）**，足迹**不产生交集**；端侧消费闭环 → T5。
 
 ### 2.2 文案与展示字段补全（空窗治理）
 
@@ -69,7 +69,7 @@
 ### T3 空窗治理
 
 - source 层从 user/circle/entity 读模型回填 `displayName/avatarUrl`，不得下发空值进候选窗；新增 spotlight 候选完备性 contract 测试（`primaryText` 非空 + 人=头像/物=头图完备）。
-- 验收：gamma `/v1/content/intersections/summary` 返回 ≥5 类事实表达、spotlight 非空（对应 §5 准出 2/3）。
+- 验收：gamma `/content/intersections/summary` 返回 ≥5 类事实表达、spotlight 非空（对应 §5 准出 2/3）。
 
 ### T4 端侧 mock / fixtures 标准化
 
@@ -90,7 +90,7 @@
 ## 3. 周边契约（2026-06 交集统一收口后）
 
 - **允许** `intersection_reason.yaml` / `object_intersection*.yaml` / `object_page_bundle.yaml` / `search_contract.yaml` 字段形状一次性收敛（零兼容）；以 `specs/product/intersection-definition-and-application.md` §18 为准。
-- **不改** 交集 5 维闭集与 6 条 API 路由（`/v1/content/intersections/*`、`/v1/content/feed/intersections*`）。
+- **不改** 交集 5 维闭集与 6 条 API 路由（`/content/intersections/*`、`/content/feed/intersections*`）。
 - 端侧 `evidence_group.dart` kind→排序/图标映射扩展仍归 WP3，消费 WP1·T6 附录 A 清单。
 
 ## 4. 改动范围
@@ -108,7 +108,7 @@
 
 1. T1：contract 测试断言六类 kind 均能产出，且 `primaryText` 符合 §20.3 高层措辞与 `specs/product/intersection-definition-and-application.md` 的词典口径，`intersectionPoints` 非空可枚举。
 2. T1：spotlight 候选完备性测试——进入候选窗的 reason `primaryText != '' && (avatarUrl != '' || objectKind 非 person 有头图)`。
-3. T3：gamma 环境真实 API（`/v1/content/intersections/summary` 与 `/v1/content/feed/intersections`）返回 ≥5 类事实表达；spotlight 候选非空。
+3. T3：gamma 环境真实 API（`/content/intersections/summary` 与 `/content/feed/intersections`）返回 ≥5 类事实表达；spotlight 候选非空。
 4. `bash quwoquan_ops/gate/gate_repo.sh --scope service` 与 `--scope app` 全绿；`make verify-metadata` 绿。
 5. 不得出现端侧本地拼装文案的回归（G2 契约测试保持绿）。
 6. grep 验收：
@@ -123,7 +123,7 @@
 - Given gamma 环境 seed 数据，When 拉取推荐频道 feed intersections，Then 候选窗内每条 reason 的 primaryText/头像完备，spotlight 不空窗。
 - Given 某 reason 为 affinity，Then 其 `confidenceLabel` 为克制文案且不使用六类事实措辞。
 - Given 用户 A 看过/赞过某篇内容（足迹记录），When 任何其他用户拉取与 A 的交集，Then 不产生任何基于足迹的交集 reason（足迹私有、不进 SharedFact）。
-- Given 任意客户端请求 `POST /v1/content/posts/{postId}/favorite`，Then 返回 404（路由已删除，无兼容路由）。
+- Given 任意客户端请求 `POST /content/posts/{postId}/favorite`，Then 返回 404（路由已删除，无兼容路由）。
 
 ## 附录 A · kind → rank / icon / 维度短语映射清单（T6，交接 WP3）
 

@@ -48,10 +48,10 @@ def _scan_manifest_assets(
         except ValueError as exc:
             issues.append(f"{relative_object_path}: invalid assetId {asset_id!r} ({exc})")
             continue
-        if execution_sequence > 0 and parsed["executionSequence"] != execution_sequence:
+        if execution_sequence > 0 and parsed.execution_sequence != execution_sequence:
             issues.append(
                 f"{relative_object_path}: asset executionSequence mismatch "
-                f"({asset_id} => {parsed['executionSequence']} != {execution_sequence})"
+                f"({asset_id} => {parsed.execution_sequence} != {execution_sequence})"
             )
         previous = seen_asset_ids.get(asset_id)
         if previous and previous != relative_object_path:
@@ -73,7 +73,9 @@ def scan_execution(execution_id: str) -> list[str]:
         return [f"execution not found: {root}"]
 
     runtime_state = load_execution_runtime_state(execution_id)
-    execution_sequence = _coerce_execution_sequence(runtime_state.get("executionSequence"))
+    execution_sequence = (
+        runtime_state.execution_sequence if runtime_state is not None else 0
+    )
     if execution_sequence <= 0:
         return [f"{root}: missing executionSequence in runtime_state.json"]
 

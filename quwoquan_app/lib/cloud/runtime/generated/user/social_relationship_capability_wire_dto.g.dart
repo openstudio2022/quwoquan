@@ -20,7 +20,7 @@ class SocialRelationshipCapabilityWireDto {
 
   factory SocialRelationshipCapabilityWireDto.fromMap(Map<String, dynamic> m) {
     return SocialRelationshipCapabilityWireDto(
-      relationState: m['relationState']?.toString() ?? m['relationshipState']?.toString() ?? 'not_following',
+      relationState: m['relationState']?.toString() ?? 'not_following',
       canFollow: m['canFollow'] as bool? ?? false,
       canUnfollow: m['canUnfollow'] as bool? ?? false,
       canOpenConversation: m['canOpenConversation'] as bool? ?? false,

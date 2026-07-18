@@ -3,7 +3,6 @@
 # 及 specs/gates/metadata_driven_ui_gap_inventory.yaml 中 target_read_projection: PostReadPresentation 对齐。
 #
 # 当前阶段：表面 ID 为 SSOT，供端侧逐步收口投影管线；完整 ReadPresentation 类型与字段映射后续迭代扩展。
-version: 1
 dart_enum_name: PostReadSurfaceId
 surfaces:
   - dart_member: feedCard

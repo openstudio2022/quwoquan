@@ -359,17 +359,13 @@ void main() {
 
 PostBaseDto _profilePostDto(String id) {
   return postBaseDtoFromMap(<String, dynamic>{
-    'postId': id,
     'id': id,
-    '_id': id,
-    'contentType': 'micro',
-    'contentIdentity': 'moment',
+    'type': 'micro',
     'identity': 'moment',
     'authorId': 'profile-1',
     'displayName': '展示名',
     'avatarUrl': '',
     'body': '个人作品缓存内容',
-    'mediaUrls': <String>[],
     'likeCount': 0,
     'commentCount': 0,
     'shareCount': 0,

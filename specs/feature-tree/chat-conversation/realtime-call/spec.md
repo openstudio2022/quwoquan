@@ -141,21 +141,21 @@
 
 | 操作 | 方法 | 路径 |
 |------|------|------|
-| InitiateCall | POST | /v1/rtc/calls |
-| GetCall | GET | /v1/rtc/calls/{callId} |
-| AnswerCall | POST | /v1/rtc/calls/{callId}/answer |
-| RejectCall | POST | /v1/rtc/calls/{callId}/reject |
-| HangupCall | POST | /v1/rtc/calls/{callId}/hangup |
-| JoinCall | POST | /v1/rtc/calls/{callId}/join |
-| LeaveCall | POST | /v1/rtc/calls/{callId}/leave |
-| InviteToCall | POST | /v1/rtc/calls/{callId}/invite |
-| GetRtcToken | GET | /v1/rtc/calls/{callId}/token |
-| StartRecording | POST | /v1/rtc/calls/{callId}/recording |
-| StopRecording | DELETE | /v1/rtc/calls/{callId}/recording |
-| StartScreenShare | POST | /v1/rtc/calls/{callId}/screen-share |
-| StopScreenShare | DELETE | /v1/rtc/calls/{callId}/screen-share |
-| ListCallHistory | GET | /v1/rtc/calls |
-| **WS 信令** | — | /v1/rtc/signal |
+| InitiateCall | POST | /rtc/calls |
+| GetCall | GET | /rtc/calls/{callId} |
+| AnswerCall | POST | /rtc/calls/{callId}/answer |
+| RejectCall | POST | /rtc/calls/{callId}/reject |
+| HangupCall | POST | /rtc/calls/{callId}/hangup |
+| JoinCall | POST | /rtc/calls/{callId}/join |
+| LeaveCall | POST | /rtc/calls/{callId}/leave |
+| InviteToCall | POST | /rtc/calls/{callId}/invite |
+| GetRtcToken | GET | /rtc/calls/{callId}/token |
+| StartRecording | POST | /rtc/calls/{callId}/recording |
+| StopRecording | DELETE | /rtc/calls/{callId}/recording |
+| StartScreenShare | POST | /rtc/calls/{callId}/screen-share |
+| StopScreenShare | DELETE | /rtc/calls/{callId}/screen-share |
+| ListCallHistory | GET | /rtc/calls |
+| **WS 信令** | — | /rtc/signal |
 
 ### 4.5 技术架构选型：LiveKit 自部署
 

@@ -12,7 +12,7 @@ scope:
     - /profile/career-interests 独立页面
     - Audience/用户/职业 与 Audience/用户/兴趣偏好 标签树
     - ListTagChildren / ResolveTag / ValidateTagRefs 查询校验链路
-    - PATCH /v1/user/profile 保存 occupationTagRef 与有序 interestTagRefs
+    - PATCH /user/profile 保存 occupationTagRef 与有序 interestTagRefs
     - object_tag_index user 对象投影
   out_of_scope:
     - 推荐标签模块

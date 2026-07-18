@@ -165,7 +165,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(comments.pinCalls, 1);
-    expect(comments.lastPinCommand?.version, 7);
+    expect(comments.lastPinCommand?.postId, 'post-pin');
+    expect(comments.lastPinCommand?.commentId, 'comment-pin');
     await tester.pump(const Duration(seconds: 4));
   });
 }

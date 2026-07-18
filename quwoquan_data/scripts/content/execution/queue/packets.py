@@ -12,6 +12,7 @@ def build_lease_packet(job: Mapping[str, Any]) -> dict[str, Any]:
     content_type = str(job.get("contentType") or meta.get("contentType") or "")
     carrier = str(job.get("carrier") or meta.get("carrier") or "")
     is_image = content_type == "image" or carrier == "image"
+    is_video = content_type == "video" or carrier == "video"
     object_packet_refs = {
         "contentObjectDir": meta.get("contentObjectDir"),
         "authorJobPacket": "4.draft/author_job_packet.json",
@@ -19,7 +20,9 @@ def build_lease_packet(job: Mapping[str, Any]) -> dict[str, Any]:
         "draftMeta": "4.draft/draft_meta.json",
         "selfCheck": "4.draft/author_self_check.json",
     }
-    if not is_image:
+    if is_video:
+        object_packet_refs["videoScript"] = "4.draft/video_script.json"
+    elif not is_image:
         object_packet_refs["draft"] = "4.draft/draft.article.md"
     completion_conditions = (
         [
@@ -28,6 +31,13 @@ def build_lease_packet(job: Mapping[str, Any]) -> dict[str, Any]:
             "ref_review_gate.passed == true (reviewDecision == approved)",
         ]
         if is_image
+        else [
+            "4.draft/video_script.json 通过 video_script schema",
+            "4.draft/draft_meta.json.generator == agent",
+            "4.draft/author_self_check.json 存在",
+            "ref_review_gate.passed == true (reviewDecision == approved)",
+        ]
+        if is_video
         else [
             "4.draft/draft.article.md 已写且非占位",
             "4.draft/author_self_check.json 存在",
@@ -38,13 +48,20 @@ def build_lease_packet(job: Mapping[str, Any]) -> dict[str, Any]:
         ["4.draft/draft_meta.json", "5.review/ref_review_gate.json"]
         if is_image
         else [
+            "4.draft/video_script.json",
+            "4.draft/draft_meta.json",
+            "4.draft/author_self_check.json",
+            "5.review/ref_review_gate.json",
+        ]
+        if is_video
+        else [
             "4.draft/draft.article.md",
             "4.draft/author_self_check.json",
             "5.review/ref_review_gate.json",
         ]
     )
     return {
-        "schemaVersion": "quwoquan_data.lease_packet",
+        "schema": "quwoquan_data.lease_packet",
         "jobId": job.get("jobId"),
         "executionId": job.get("executionId"),
         "ref": job.get("ref"),
@@ -65,9 +82,9 @@ def build_lease_packet(job: Mapping[str, Any]) -> dict[str, Any]:
         "contentType": content_type or None,
         "resultEnvelopeRequired": bool(job.get("resultEnvelopeRequired")),
         "resultEnvelopeContract": {
-            "schemaVersion": pc.AGENT_RESULT_ENVELOPE_SCHEMA,
+            "schema": pc.AGENT_RESULT_ENVELOPE_SCHEMA,
             "required": bool(job.get("resultEnvelopeRequired")),
-            "completionCommand": "workflow controller records the validated AgentResultEnvelope for this execution/job/lease",
+            "completionCommand": "execution controller records the validated AgentResultEnvelope for this execution/job/lease",
             "rules": [
                 "AgentResultEnvelope.files[].path 必须是 batch root 下相对路径",
                 "AgentResultEnvelope.files[].sha256 必须与真实文件一致",

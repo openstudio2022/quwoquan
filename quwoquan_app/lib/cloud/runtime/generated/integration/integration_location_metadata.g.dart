@@ -10,6 +10,6 @@ class IntegrationLocationMetadata {
   static const String responseItemsKey = 'items';
 
   /// API 路径（来自 api_routes）
-  static const String nearbyPath = '/v1/integration/location/nearby';
-  static const String searchPath = '/v1/integration/location/search';
+  static const String nearbyPath = '/integration/location/nearby';
+  static const String searchPath = '/integration/location/search';
 }

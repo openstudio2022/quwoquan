@@ -10,7 +10,7 @@ import (
 
 func TestMediaUploadSessionHTTPPacketPersistsOwnerScopedGetAbortAndReplay(t *testing.T) {
 	owner := "media-session-owner"
-	initialized := performMediaCommand(t, http.MethodPost, "/v1/content/media/uploads:init",
+	initialized := performMediaCommand(t, http.MethodPost, "/content/media/uploads:init",
 		`{"mediaType":"image","contentType":"image/jpeg","fileSize":64,"expectedSha256":"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}`,
 		owner, "media-session-init")
 	sessionID := asTestString(initialized["sessionId"])
@@ -18,17 +18,17 @@ func TestMediaUploadSessionHTTPPacketPersistsOwnerScopedGetAbortAndReplay(t *tes
 		t.Fatalf("init result has no sessionId: %#v", initialized)
 	}
 
-	owned := performMediaQuery(t, "/v1/content/media/uploads/"+sessionID, owner, http.StatusOK)
+	owned := performMediaQuery(t, "/content/media/uploads/"+sessionID, owner, http.StatusOK)
 	if owned["sessionId"] != sessionID || owned["status"] != "pending" {
 		t.Fatalf("owner-scoped session projection drift: %#v", owned)
 	}
-	performMediaQuery(t, "/v1/content/media/uploads/"+sessionID, "media-session-other", http.StatusNotFound)
+	performMediaQuery(t, "/content/media/uploads/"+sessionID, "media-session-other", http.StatusNotFound)
 
-	aborted := performMediaCommand(t, http.MethodPost, "/v1/content/media/uploads/"+sessionID+":abort", "", owner, "media-session-abort")
+	aborted := performMediaCommand(t, http.MethodPost, "/content/media/uploads/"+sessionID+":abort", "", owner, "media-session-abort")
 	if aborted["status"] != "aborted" || aborted["replayed"] != false {
 		t.Fatalf("unexpected abort result: %#v", aborted)
 	}
-	replayed := performMediaCommand(t, http.MethodPost, "/v1/content/media/uploads/"+sessionID+":abort", "", owner, "media-session-abort")
+	replayed := performMediaCommand(t, http.MethodPost, "/content/media/uploads/"+sessionID+":abort", "", owner, "media-session-abort")
 	if replayed["status"] != "aborted" || replayed["replayed"] != true {
 		t.Fatalf("abort replay must be stable: %#v", replayed)
 	}
@@ -37,19 +37,19 @@ func TestMediaUploadSessionHTTPPacketPersistsOwnerScopedGetAbortAndReplay(t *tes
 func TestMediaAssetHTTPPacketExposesOnlyPublicReadyAssetsAndOwnsVideoCover(t *testing.T) {
 	owner := "media-asset-owner"
 	publicAsset := completeMediaForHTTPPacket(t, owner, "image", "image/png", "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "public")
-	publicView := performMediaQuery(t, "/v1/content/media/"+publicAsset, "", http.StatusOK)
+	publicView := performMediaQuery(t, "/content/media/"+publicAsset, "", http.StatusOK)
 	if publicView["assetId"] != publicAsset || publicView["accessPolicy"] != "public" || publicView["status"] != "ready" {
 		t.Fatalf("public MediaAsset slice drift: %#v", publicView)
 	}
 
 	videoAsset := completeMediaForHTTPPacket(t, owner, "video", "video/mp4", "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", "owner_only")
-	performMediaCommand(t, http.MethodPost, "/internal/v1/content/media/"+videoAsset+":processing-result",
+	performMediaCommand(t, http.MethodPost, "/internal/content/media/"+videoAsset+":processing-result",
 		`{"processingStatus":"ready"}`, owner, "media-video-processing-ready")
-	auto := performMediaCommand(t, http.MethodPost, "/v1/content/media/"+videoAsset+"/cover:auto", "", owner, "media-video-cover-auto")
+	auto := performMediaCommand(t, http.MethodPost, "/content/media/"+videoAsset+"/cover:auto", "", owner, "media-video-cover-auto")
 	if auto["mediaId"] != videoAsset || auto["coverStrategy"] != "first_frame" {
 		t.Fatalf("auto cover result drift: %#v", auto)
 	}
-	manual := performMediaCommand(t, http.MethodPost, "/v1/content/media/"+videoAsset+"/cover:manual",
+	manual := performMediaCommand(t, http.MethodPost, "/content/media/"+videoAsset+"/cover:manual",
 		`{"coverFrameTimeMs":1250}`, owner, "media-video-cover-manual")
 	if manual["mediaId"] != videoAsset || manual["coverStrategy"] != "manual" || manual["coverFrameTimeMs"] != float64(1250) {
 		t.Fatalf("manual cover result drift: %#v", manual)
@@ -59,11 +59,11 @@ func TestMediaAssetHTTPPacketExposesOnlyPublicReadyAssetsAndOwnsVideoCover(t *te
 func completeMediaForHTTPPacket(t *testing.T, owner, mediaType, contentType, digest, policy string) string {
 	t.Helper()
 	prefix := "media-packet-" + mediaType + "-" + digest[:8]
-	initialized := performMediaCommand(t, http.MethodPost, "/v1/content/media/uploads:init",
+	initialized := performMediaCommand(t, http.MethodPost, "/content/media/uploads:init",
 		`{"mediaType":"`+mediaType+`","contentType":"`+contentType+`","fileSize":128,"expectedSha256":"sha256:`+digest+`"}`,
 		owner, prefix+"-init")
 	sessionID := asTestString(initialized["sessionId"])
-	completed := performMediaCommand(t, http.MethodPost, "/v1/content/media/uploads/"+sessionID+":complete",
+	completed := performMediaCommand(t, http.MethodPost, "/content/media/uploads/"+sessionID+":complete",
 		`{"accessPolicy":"`+policy+`"}`, owner, prefix+"-complete")
 	assetID := asTestString(completed["assetId"])
 	if assetID == "" {

@@ -1,4 +1,3 @@
-version: 1
 read_model: AuthLoginResult
 
 description: |
@@ -20,63 +19,54 @@ client_projection:
       dart_type: String
       nullable: false
       source: accessToken
-      aliases: [accessToken]
       default: "''"
 
     - name: refreshToken
       dart_type: String
       nullable: false
       source: refreshToken
-      aliases: [refreshToken]
       default: "''"
 
     - name: ownerId
       dart_type: String
       nullable: false
       source: ownerId
-      aliases: [ownerId, ownerAccountId]
       default: "''"
 
     - name: accountState
       dart_type: String
       nullable: false
       source: accountState
-      aliases: [accountState]
       default: "''"
 
     - name: identityOrigin
       dart_type: String
       nullable: false
       source: identityOrigin
-      aliases: [identityOrigin]
       default: "''"
 
     - name: logicalShard
       dart_type: int
       nullable: false
       source: logicalShard
-      aliases: [logicalShard]
       default: "0"
 
     - name: anonymousRetentionPolicy
       dart_type: String
       nullable: false
       source: anonymousRetentionPolicy
-      aliases: [anonymousRetentionPolicy]
       default: "''"
 
     - name: activeSub
       dart_type: Map<String, dynamic>
       nullable: true
       source: activeSub
-      aliases: [activeSub]
       default: "null"
 
     - name: subAccountCount
       dart_type: int
       nullable: false
       source: subAccountCount
-      aliases: [subAccountCount]
       default: "0"
 
     # 快速登录有效期（秒），云端系统配置下发，端侧据此推算软退出后免验证码快速登录的过期时间。
@@ -85,12 +75,10 @@ client_projection:
       dart_type: int
       nullable: false
       source: sessionRememberTtlSeconds
-      aliases: [sessionRememberTtlSeconds, rememberTtlSeconds]
       default: "0"
 
     - name: accountHint
       dart_type: Map<String, dynamic>
       nullable: true
       source: accountHint
-      aliases: [accountHint]
       default: "null"

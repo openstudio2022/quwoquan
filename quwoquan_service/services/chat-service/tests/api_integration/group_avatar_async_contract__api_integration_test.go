@@ -328,7 +328,7 @@ func TestGroupAvatar_CreateConversationReturnsCreatorAvatarBeforeAsyncAvatarRead
 		t,
 		handler,
 		http.MethodPost,
-		"/v1/chat/conversations",
+		"/chat/conversations",
 		`{"type":"group","title":"async create failure"}`,
 		"user_test_001",
 		http.StatusCreated,
@@ -360,12 +360,12 @@ func TestGroupAvatar_DeprecatedMemberAvatarURLFallsBackToCreatorAvatar(t *testin
 		t,
 		handler,
 		http.MethodPost,
-		"/v1/chat/conversations",
+		"/chat/conversations",
 		`{"type":"group","title":"stale polluted avatar","initialMemberIds":["user_test_002"]}`,
 		"user_test_001",
 		http.StatusCreated,
 	)
-	convID := created["_id"].(string)
+	convID := created["id"].(string)
 	chatStore := persistence.NewMongoChatStore(mongoDB)
 	conv, err := chatStore.FindConversationByID(context.Background(), convID)
 	if err != nil {
@@ -383,7 +383,7 @@ func TestGroupAvatar_DeprecatedMemberAvatarURLFallsBackToCreatorAvatar(t *testin
 		t,
 		handler,
 		http.MethodGet,
-		"/v1/chat/conversations/"+convID,
+		"/chat/conversations/"+convID,
 		"",
 		"user_test_001",
 		http.StatusOK,
@@ -395,7 +395,7 @@ func TestGroupAvatar_DeprecatedMemberAvatarURLFallsBackToCreatorAvatar(t *testin
 		t,
 		handler,
 		http.MethodGet,
-		"/v1/chat/inbox?limit=20",
+		"/chat/inbox?limit=20",
 		"",
 		"user_test_002",
 		http.StatusOK,
@@ -417,17 +417,17 @@ func TestGroupAvatar_RecomputeCoalescesEarlyMemberAdds(t *testing.T) {
 		t,
 		handler,
 		http.MethodPost,
-		"/v1/chat/conversations",
+		"/chat/conversations",
 		`{"type":"group","title":"coalesce early joins"}`,
 		"user_test_001",
 		http.StatusCreated,
 	)
-	convID := created["_id"].(string)
+	convID := created["id"].(string)
 	doHandlerJSON(
 		t,
 		handler,
 		http.MethodPost,
-		"/v1/chat/conversations/"+convID+"/members",
+		"/chat/conversations/"+convID+"/members",
 		`{"userIds":["user_test_002"]}`,
 		"user_test_001",
 		http.StatusOK,
@@ -436,7 +436,7 @@ func TestGroupAvatar_RecomputeCoalescesEarlyMemberAdds(t *testing.T) {
 		t,
 		handler,
 		http.MethodPost,
-		"/v1/chat/conversations/"+convID+"/members",
+		"/chat/conversations/"+convID+"/members",
 		`{"userIds":["user_test_003"]}`,
 		"user_test_001",
 		http.StatusOK,
@@ -453,9 +453,9 @@ func TestGroupAvatar_AddMembersFailureDoesNotBlockOrCorruptExistingAvatar(t *tes
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"group","title":"async add failure","initialMemberIds":["user_test_002"]}`)
-	convID := conv["_id"].(string)
+	convID := conv["id"].(string)
 	waitForConversationAvatarVersion(t, convID, 1)
-	_, before := doGet(t, "/v1/chat/conversations/"+convID, "user_test_001")
+	_, before := doGet(t, "/chat/conversations/"+convID, "user_test_001")
 	beforeVersion := int(before["groupAvatarVersion"].(float64))
 	beforeURL := before["avatarUrl"].(string)
 	syncService := runtimesync.NewService(redisRouter.Scene("general"), redisRouter.Scene("realtime"))
@@ -467,7 +467,7 @@ func TestGroupAvatar_AddMembersFailureDoesNotBlockOrCorruptExistingAvatar(t *tes
 		t,
 		handler,
 		http.MethodPost,
-		"/v1/chat/conversations/"+convID+"/members",
+		"/chat/conversations/"+convID+"/members",
 		`{"userIds":["user_test_003"]}`,
 		"user_test_001",
 		http.StatusOK,
@@ -478,7 +478,7 @@ func TestGroupAvatar_AddMembersFailureDoesNotBlockOrCorruptExistingAvatar(t *tes
 	}
 
 	time.Sleep(900 * time.Millisecond)
-	_, after := doGet(t, "/v1/chat/conversations/"+convID, "user_test_001")
+	_, after := doGet(t, "/chat/conversations/"+convID, "user_test_001")
 	if got := int(after["groupAvatarVersion"].(float64)); got != beforeVersion {
 		t.Fatalf("expected avatar version unchanged after failed async add recompute, before=%d after=%d", beforeVersion, got)
 	}
@@ -499,9 +499,9 @@ func TestGroupAvatar_RemoveMemberFailureDoesNotBlockOrCorruptExistingAvatar(t *t
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"group","title":"async remove failure","initialMemberIds":["user_test_002","user_test_003"]}`)
-	convID := conv["_id"].(string)
+	convID := conv["id"].(string)
 	waitForConversationAvatarVersion(t, convID, 1)
-	_, before := doGet(t, "/v1/chat/conversations/"+convID, "user_test_001")
+	_, before := doGet(t, "/chat/conversations/"+convID, "user_test_001")
 	beforeVersion := int(before["groupAvatarVersion"].(float64))
 	beforeURL := before["avatarUrl"].(string)
 	syncService := runtimesync.NewService(redisRouter.Scene("general"), redisRouter.Scene("realtime"))
@@ -513,7 +513,7 @@ func TestGroupAvatar_RemoveMemberFailureDoesNotBlockOrCorruptExistingAvatar(t *t
 		t,
 		handler,
 		http.MethodDelete,
-		"/v1/chat/conversations/"+convID+"/members/user_test_003",
+		"/chat/conversations/"+convID+"/members/user_test_003",
 		"",
 		"user_test_001",
 		http.StatusOK,
@@ -524,7 +524,7 @@ func TestGroupAvatar_RemoveMemberFailureDoesNotBlockOrCorruptExistingAvatar(t *t
 	}
 
 	time.Sleep(900 * time.Millisecond)
-	_, after := doGet(t, "/v1/chat/conversations/"+convID, "user_test_001")
+	_, after := doGet(t, "/chat/conversations/"+convID, "user_test_001")
 	if got := int(after["groupAvatarVersion"].(float64)); got != beforeVersion {
 		t.Fatalf("expected avatar version unchanged after failed async remove recompute, before=%d after=%d", beforeVersion, got)
 	}
@@ -553,12 +553,12 @@ func TestGroupAvatar_RecomputeWorkerRetriesUntilSuccess(t *testing.T) {
 		t,
 		handler,
 		http.MethodPost,
-		"/v1/chat/conversations",
+		"/chat/conversations",
 		`{"type":"group","title":"retry until success"}`,
 		"user_test_001",
 		http.StatusCreated,
 	)
-	convID := created["_id"].(string)
+	convID := created["id"].(string)
 	waitForConversationAvatarVersionFromBackground(t, convID, 1)
 }
 
@@ -582,12 +582,12 @@ func TestGroupAvatar_PatchFanoutRetriesAfterTransientFailure(t *testing.T) {
 		t,
 		handler,
 		http.MethodPost,
-		"/v1/chat/conversations",
+		"/chat/conversations",
 		`{"type":"group","title":"patch retry","initialMemberIds":["user_test_002"]}`,
 		"user_test_001",
 		http.StatusCreated,
 	)
-	convID := created["_id"].(string)
+	convID := created["id"].(string)
 	waitForConversationAvatarVersionFromBackground(t, convID, 1)
 
 	deliveredAfterRetry := false
@@ -635,12 +635,12 @@ func TestGroupAvatar_ReliableTaskOutboxToMemberSyncEndToEnd(t *testing.T) {
 		t,
 		handler,
 		http.MethodPost,
-		"/v1/chat/conversations",
+		"/chat/conversations",
 		`{"type":"group","title":"reliable e2e","initialMemberIds":["user_test_002","user_test_003"]}`,
 		"user_test_001",
 		http.StatusCreated,
 	)
-	convID := created["_id"].(string)
+	convID := created["id"].(string)
 
 	waitForCollectionCount(t, "reliable_task_outbox", bson.M{
 		"taskType":    "chat.group_avatar.recompute",
@@ -679,12 +679,12 @@ func TestGroupAvatar_TaskAckFailureReplaysAndCompletesIdempotently(t *testing.T)
 		t,
 		handler,
 		http.MethodPost,
-		"/v1/chat/conversations",
+		"/chat/conversations",
 		`{"type":"group","title":"ack replay","initialMemberIds":["user_test_002"]}`,
 		"user_test_001",
 		http.StatusCreated,
 	)
-	convID := created["_id"].(string)
+	convID := created["id"].(string)
 	waitForConversationAvatarVersionFromBackground(t, convID, 1)
 	waitForCollectionCount(t, "reliable_async_task", bson.M{
 		"taskType":    "chat.group_avatar.recompute",
@@ -718,12 +718,12 @@ func TestGroupAvatar_NotificationAckFailureReplaysLedgerWithoutDuplicatePatch(t 
 		t,
 		handler,
 		http.MethodPost,
-		"/v1/chat/conversations",
+		"/chat/conversations",
 		`{"type":"group","title":"notification ack replay","initialMemberIds":["user_test_002"]}`,
 		"user_test_001",
 		http.StatusCreated,
 	)
-	convID := created["_id"].(string)
+	convID := created["id"].(string)
 	waitForConversationAvatarVersionFromBackground(t, convID, 1)
 	waitForCollectionCount(t, "notification_outbox", bson.M{
 		"eventType":   "conversation.avatar.updated",
@@ -769,18 +769,18 @@ func TestGroupAvatar_DissolveConversationStopsPendingAvatarNotificationFanout(t 
 		t,
 		handler,
 		http.MethodPost,
-		"/v1/chat/conversations",
+		"/chat/conversations",
 		`{"type":"group","title":"dissolve stops avatar fanout","initialMemberIds":["user_test_002"]}`,
 		"user_test_001",
 		http.StatusCreated,
 	)
-	convID := created["_id"].(string)
+	convID := created["id"].(string)
 	waitForConversationAvatarVersionFromBackground(t, convID, 1)
 	doHandlerJSON(
 		t,
 		handler,
 		http.MethodPost,
-		"/v1/chat/conversations/"+convID+"/members",
+		"/chat/conversations/"+convID+"/members",
 		`{"userIds":["user_test_003"]}`,
 		"user_test_001",
 		http.StatusOK,
@@ -790,7 +790,7 @@ func TestGroupAvatar_DissolveConversationStopsPendingAvatarNotificationFanout(t 
 		"aggregateId": convID,
 		"status":      reliabletask.NotificationStatusRetryWait,
 	}, 1)
-	if code, _ := doDelete(t, "/v1/chat/conversations/"+convID, "user_test_001"); code != http.StatusOK {
+	if code, _ := doDelete(t, "/chat/conversations/"+convID, "user_test_001"); code != http.StatusOK {
 		t.Fatalf("expected dissolve status 200, got %d", code)
 	}
 	waitForCollectionCount(t, "notification_outbox", bson.M{
@@ -823,12 +823,12 @@ func TestGroupAvatar_SourceHashReplayRecreatesMissingNotification(t *testing.T) 
 		t,
 		handler,
 		http.MethodPost,
-		"/v1/chat/conversations",
+		"/chat/conversations",
 		`{"type":"group","title":"notification compensation","initialMemberIds":["user_test_002"]}`,
 		"user_test_001",
 		http.StatusCreated,
 	)
-	convID := created["_id"].(string)
+	convID := created["id"].(string)
 	waitForConversationAvatarVersionFromBackground(t, convID, 1)
 	waitForAvatarPatch(t, syncService, "user_test_001", convID)
 
@@ -888,7 +888,7 @@ func TestGroupAvatar_AddMembersRollsBackWhenOutboxFails(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	created := createConversation(t, `{"type":"group","title":"rollback add"}`)
-	convID := created["_id"].(string)
+	convID := created["id"].(string)
 	chatStore := persistence.NewMongoChatStore(mongoDB)
 	convCache := chatcache.NewConversationCache(redisRouter.Scene("general"))
 	memberSvc := application.NewMemberService(
@@ -918,7 +918,7 @@ func TestGroupAvatar_RemoveMemberRollsBackWhenOutboxFails(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	created := createConversation(t, `{"type":"group","title":"rollback remove","initialMemberIds":["user_test_002"]}`)
-	convID := created["_id"].(string)
+	convID := created["id"].(string)
 	waitForConversationAvatarVersion(t, convID, 1)
 	chatStore := persistence.NewMongoChatStore(mongoDB)
 	convCache := chatcache.NewConversationCache(redisRouter.Scene("general"))
@@ -953,18 +953,18 @@ func TestGroupAvatar_AddRemoveStormUsesLatestTopNineSourceHash(t *testing.T) {
 		t,
 		handler,
 		http.MethodPost,
-		"/v1/chat/conversations",
+		"/chat/conversations",
 		`{"type":"group","title":"add remove storm","initialMemberIds":["user_test_002","user_test_003","user_test_004","user_test_005","user_test_006","user_test_007","user_test_008","user_test_009","user_test_010"]}`,
 		"user_test_001",
 		http.StatusCreated,
 	)
-	convID := created["_id"].(string)
+	convID := created["id"].(string)
 	waitForConversationAvatarVersionFromBackground(t, convID, 1)
 	doHandlerJSON(
 		t,
 		handler,
 		http.MethodPost,
-		"/v1/chat/conversations/"+convID+"/members",
+		"/chat/conversations/"+convID+"/members",
 		`{"userIds":["user_test_011","user_test_012","user_test_013","user_test_014"]}`,
 		"user_test_001",
 		http.StatusOK,
@@ -973,7 +973,7 @@ func TestGroupAvatar_AddRemoveStormUsesLatestTopNineSourceHash(t *testing.T) {
 		t,
 		handler,
 		http.MethodDelete,
-		"/v1/chat/conversations/"+convID+"/members/user_test_003",
+		"/chat/conversations/"+convID+"/members/user_test_003",
 		"",
 		"user_test_001",
 		http.StatusOK,
@@ -982,7 +982,7 @@ func TestGroupAvatar_AddRemoveStormUsesLatestTopNineSourceHash(t *testing.T) {
 		t,
 		handler,
 		http.MethodPost,
-		"/v1/chat/conversations/"+convID+"/members",
+		"/chat/conversations/"+convID+"/members",
 		`{"userIds":["user_test_015"]}`,
 		"user_test_001",
 		http.StatusOK,
@@ -991,7 +991,7 @@ func TestGroupAvatar_AddRemoveStormUsesLatestTopNineSourceHash(t *testing.T) {
 		t,
 		handler,
 		http.MethodDelete,
-		"/v1/chat/conversations/"+convID+"/members/user_test_002",
+		"/chat/conversations/"+convID+"/members/user_test_002",
 		"",
 		"user_test_001",
 		http.StatusOK,
@@ -1041,12 +1041,12 @@ func TestGroupAvatar_MemberChangesFanoutSameAvatarToCurrentMembers(t *testing.T)
 		t,
 		handler,
 		http.MethodPost,
-		"/v1/chat/conversations",
+		"/chat/conversations",
 		`{"type":"group","title":"member fanout consistency","initialMemberIds":["user_test_002","user_test_003"]}`,
 		"user_test_001",
 		http.StatusCreated,
 	)
-	convID := created["_id"].(string)
+	convID := created["id"].(string)
 	waitForConversationAvatarVersionFromBackground(t, convID, 1)
 	for _, userID := range []string{"user_test_001", "user_test_002", "user_test_003"} {
 		waitForAvatarPatch(t, syncService, userID, convID)
@@ -1060,7 +1060,7 @@ func TestGroupAvatar_MemberChangesFanoutSameAvatarToCurrentMembers(t *testing.T)
 		t,
 		handler,
 		http.MethodPost,
-		"/v1/chat/conversations/"+convID+"/members",
+		"/chat/conversations/"+convID+"/members",
 		`{"userIds":["user_test_004"]}`,
 		"user_test_001",
 		http.StatusOK,
@@ -1070,7 +1070,7 @@ func TestGroupAvatar_MemberChangesFanoutSameAvatarToCurrentMembers(t *testing.T)
 		t,
 		handler,
 		http.MethodGet,
-		"/v1/chat/conversations/"+convID,
+		"/chat/conversations/"+convID,
 		"",
 		"user_test_001",
 		http.StatusOK,
@@ -1088,7 +1088,7 @@ func TestGroupAvatar_MemberChangesFanoutSameAvatarToCurrentMembers(t *testing.T)
 		if got := patchIntValue(patch.Payload["groupAvatarVersion"]); got != addVersion {
 			t.Fatalf("user %s patch version = %d want %d", userID, got, addVersion)
 		}
-		inbox := doHandlerJSON(t, handler, http.MethodGet, "/v1/chat/inbox?limit=20", "", userID, http.StatusOK)
+		inbox := doHandlerJSON(t, handler, http.MethodGet, "/chat/inbox?limit=20", "", userID, http.StatusOK)
 		row := findInboxRow(t, inbox["items"], convID)
 		if got := strings.TrimSpace(row["avatarUrl"].(string)); got != addURL {
 			t.Fatalf("user %s inbox avatarUrl = %q want %q", userID, got, addURL)
@@ -1103,7 +1103,7 @@ func TestGroupAvatar_MemberChangesFanoutSameAvatarToCurrentMembers(t *testing.T)
 		t,
 		handler,
 		http.MethodDelete,
-		"/v1/chat/conversations/"+convID+"/members/user_test_003",
+		"/chat/conversations/"+convID+"/members/user_test_003",
 		"",
 		"user_test_001",
 		http.StatusOK,
@@ -1113,7 +1113,7 @@ func TestGroupAvatar_MemberChangesFanoutSameAvatarToCurrentMembers(t *testing.T)
 		t,
 		handler,
 		http.MethodGet,
-		"/v1/chat/conversations/"+convID,
+		"/chat/conversations/"+convID,
 		"",
 		"user_test_001",
 		http.StatusOK,
@@ -1162,12 +1162,12 @@ func TestGroupAvatar_RedisReadyIndexAlphaBetaLocalLoop(t *testing.T) {
 				t,
 				handler,
 				http.MethodPost,
-				"/v1/chat/conversations",
+				"/chat/conversations",
 				`{"type":"group","title":"ready index `+env+`","initialMemberIds":["user_test_002","user_test_003"]}`,
 				"user_test_001",
 				http.StatusCreated,
 			)
-			convID := created["_id"].(string)
+			convID := created["id"].(string)
 			waitForConversationAvatarVersionFromBackground(t, convID, 1)
 			for _, userID := range []string{"user_test_001", "user_test_002", "user_test_003"} {
 				waitForAvatarPatch(t, syncService, userID, convID)
@@ -1264,7 +1264,7 @@ func findInboxRow(t *testing.T, raw any, convID string) map[string]any {
 		if !ok {
 			continue
 		}
-		if row["conversationId"] == convID || row["id"] == convID || row["_id"] == convID {
+		if row["conversationId"] == convID || row["id"] == convID {
 			return row
 		}
 	}

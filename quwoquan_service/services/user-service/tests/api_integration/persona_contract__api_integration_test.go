@@ -60,7 +60,7 @@ func TestGetPersonaLifecycleGuard_HistoryCoverageBySource(t *testing.T) {
 			rec := doRequest(
 				t,
 				http.MethodGet,
-				"/v1/user/personas/pa_shadow_sa_"+tc.name+"/lifecycle-guard",
+				"/user/personas/pa_shadow_sa_"+tc.name+"/lifecycle-guard",
 				"",
 				authHeaders("persona_history_"+tc.name),
 			)
@@ -82,7 +82,7 @@ func TestCreatePersona_Success(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "persona_user_1", "persona_user1")
 
-	rec := doRequest(t, http.MethodPost, "/v1/user/personas",
+	rec := doRequest(t, http.MethodPost, "/user/personas",
 		`{"displayName":"Shadow","isPrivate":true}`,
 		authHeaders("persona_user_1"))
 	if rec.Code != http.StatusCreated {
@@ -98,7 +98,7 @@ func TestCreatePersona_UserHandleReadonly(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "persona_user_handle_create", "persona_user_handle")
 
-	rec := doRequest(t, http.MethodPost, "/v1/user/personas",
+	rec := doRequest(t, http.MethodPost, "/user/personas",
 		`{"displayName":"Shadow","userHandle":"client_handle"}`,
 		authHeaders("persona_user_handle_create"))
 	if rec.Code != http.StatusBadRequest {
@@ -116,7 +116,7 @@ func TestActivatePersona_Transaction(t *testing.T) {
 	createTestPersona(t, "pa_1", "persona_user_2", "PersonaA", true, true)
 	createTestPersona(t, "pa_2", "persona_user_2", "PersonaB", false, false)
 
-	rec := doRequest(t, http.MethodPost, "/v1/user/personas/pa_2_sa/activate", "", authHeaders("persona_user_2"))
+	rec := doRequest(t, http.MethodPost, "/user/personas/pa_2_sa/activate", "", authHeaders("persona_user_2"))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -147,7 +147,7 @@ func TestDeletePersona_PrimaryForbidden(t *testing.T) {
 	createTestPersona(t, "pa_primary", "persona_user_3", "Primary", true, true)
 
 	createTestPersonaFull(t, "pa_other", "persona_user_3", "pa_other_sa", "Other", "open", false, false)
-	rec := doRequest(t, http.MethodDelete, "/v1/user/personas/pa_primary_sa/delete-empty", "", authHeaders("persona_user_3"))
+	rec := doRequest(t, http.MethodDelete, "/user/personas/pa_primary_sa/delete-empty", "", authHeaders("persona_user_3"))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for deleting primary persona, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -159,7 +159,7 @@ func TestGetPersonaManagementSummary_ReturnsQuotaAndActiveContext(t *testing.T) 
 	createTestPersonaFull(t, "pa_primary", "persona_user_4", "pa_primary_sa", "Primary", "open", true, true)
 	createTestPersonaFull(t, "pa_shadow", "persona_user_4", "pa_shadow_sa", "Shadow", "semi", false, false)
 
-	rec := doRequest(t, http.MethodGet, "/v1/user/personas/summary", "", authHeaders("persona_user_4"))
+	rec := doRequest(t, http.MethodGet, "/user/personas/summary", "", authHeaders("persona_user_4"))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -193,7 +193,7 @@ func TestUpdatePersona_ReflectsManagementFields(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodPatch,
-		"/v1/user/personas/pa_edit_sa",
+		"/user/personas/pa_edit_sa",
 		`{"displayName":"After","phone":"13800138000","email":"after@example.com","avatarUrl":"https://example.com/avatar-after.png","isolationLevel":"semi"}`,
 		authHeaders("persona_user_5"),
 	)
@@ -246,7 +246,7 @@ func TestUpdatePersona_UserHandleReadonly(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodPatch,
-		"/v1/user/personas/pa_readonly_sa",
+		"/user/personas/pa_readonly_sa",
 		`{"userHandle":"after_handle"}`,
 		authHeaders("persona_user_handle_update"),
 	)
@@ -284,7 +284,7 @@ func TestApplyPersonaProfileSync_ReturnsAppliedCount(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/personas/pa_source_sa/profile-sync",
+		"/user/personas/pa_source_sa/profile-sync",
 		`{"applyScope":"selected_subjects","syncTargetIds":["pa_target_sa"],"fieldsMask":["phone","email"]}`,
 		authHeaders("persona_user_6"),
 	)
@@ -310,7 +310,7 @@ func TestGetPersonaLifecycleGuard_ActivePersonaRequiresSuccessor(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodGet,
-		"/v1/user/personas/pa_primary_sa/lifecycle-guard",
+		"/user/personas/pa_primary_sa/lifecycle-guard",
 		"",
 		authHeaders("persona_user_7"),
 	)
@@ -341,7 +341,7 @@ func TestGetPersonaLifecycleGuard_HistoryRequiresRetire(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodGet,
-		"/v1/user/personas/pa_shadow_sa/lifecycle-guard",
+		"/user/personas/pa_shadow_sa/lifecycle-guard",
 		"",
 		authHeaders("persona_user_8"),
 	)
@@ -380,7 +380,7 @@ func TestGetPersonaLifecycleGuard_RecordsMongoHistoryFallbackMetric(t *testing.T
 	rec := doRequest(
 		t,
 		http.MethodGet,
-		"/v1/user/personas/pa_shadow_metric_sa/lifecycle-guard",
+		"/user/personas/pa_shadow_metric_sa/lifecycle-guard",
 		"",
 		authHeaders("persona_user_mongo_metric"),
 	)
@@ -404,7 +404,7 @@ func TestRetirePersona_PersistsRetiredStatus(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/personas/pa_shadow_sa/retire",
+		"/user/personas/pa_shadow_sa/retire",
 		"",
 		authHeaders("persona_user_9"),
 	)
@@ -453,7 +453,7 @@ func TestDeleteEmptyPersona_HistoryRequiresRetireConflict(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodDelete,
-		"/v1/user/personas/pa_shadow_sa/delete-empty",
+		"/user/personas/pa_shadow_sa/delete-empty",
 		"",
 		authHeaders("persona_user_10"),
 	)
@@ -472,7 +472,7 @@ func TestRetiredPersona_CannotBeActivatedOrUpdated(t *testing.T) {
 	retireRec := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/personas/pa_shadow_sa/retire",
+		"/user/personas/pa_shadow_sa/retire",
 		"",
 		authHeaders("persona_user_11"),
 	)
@@ -483,7 +483,7 @@ func TestRetiredPersona_CannotBeActivatedOrUpdated(t *testing.T) {
 	activateRec := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/personas/pa_shadow_sa/activate",
+		"/user/personas/pa_shadow_sa/activate",
 		"",
 		authHeaders("persona_user_11"),
 	)
@@ -494,7 +494,7 @@ func TestRetiredPersona_CannotBeActivatedOrUpdated(t *testing.T) {
 	updateRec := doRequest(
 		t,
 		http.MethodPatch,
-		"/v1/user/personas/pa_shadow_sa",
+		"/user/personas/pa_shadow_sa",
 		`{"displayName":"AfterRetire"}`,
 		authHeaders("persona_user_11"),
 	)
@@ -502,7 +502,7 @@ func TestRetiredPersona_CannotBeActivatedOrUpdated(t *testing.T) {
 		t.Fatalf("expected update retired persona 400, got %d: %s", updateRec.Code, updateRec.Body.String())
 	}
 
-	summaryRec := doRequest(t, http.MethodGet, "/v1/user/personas/summary", "", authHeaders("persona_user_11"))
+	summaryRec := doRequest(t, http.MethodGet, "/user/personas/summary", "", authHeaders("persona_user_11"))
 	if summaryRec.Code != http.StatusOK {
 		t.Fatalf("expected summary 200, got %d: %s", summaryRec.Code, summaryRec.Body.String())
 	}

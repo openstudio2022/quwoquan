@@ -33,10 +33,10 @@
 
 ## 核心原则
 
-1. **唯一商业分支**：文章商业化执行只认 `qwq-data task geo-homepages` 创建的单
+1. **唯一商业分支**：文章商业化执行只认 `qwq-data task execute` 创建的单
    execution 主线，不再并行维护第二套 source-planning、produce 或 release 语义。
 2. **开放式扩站但共享验收**：新老站点全部走统一 onboarding 合同，进入 shared pool 后共同承担 H100/H1000 配额；不要求每站各自单独关门。
-3. **证据优先于数量**：`H100/H1000` 完成必须同时具备真实 `env_ready_report`、`task_workflow_state`、`token_ledger`、`managed_batch_audit`、`sdk_monitoring` 与 release/import/search/reco 证据。
+3. **证据优先于数量**：`H100/H1000` 完成必须同时具备真实 `env_ready_report`、`task_execution_state`、`token_ledger`、`managed_batch_audit`、`sdk_monitoring` 与 release/import/search/reco 证据。
 4. **只用最新 composer 主线**：内容生成执行统一使用 `cursor_sdk` 与默认最新 `composer`，不再用细版本口径制造执行漂移。
 5. **历史旁路必须清理**：退场的 `source_plan`、prior-plan source reuse、双 planning contract、旧 quota/reuse/provider 扩散不得继续干扰 commercial path。
 6. **10k 只做 evaluate**：没有 H1000 的真实 throughput / `unitPassedCost` / `sourceReadyObjectCapacity` / `firstPassRate`，不得承诺日产万级可行。
@@ -47,8 +47,8 @@
 - `specs/feature-tree/runtime/runtime-data-engineering/article-commercial-scale-closure/acceptance.yaml`
 - `docs/outstanding_risks_backlog.md`
 - `quwoquan_data/verticals/travel/sources/source_registry.yaml`
-- `quwoquan_data/scripts/content/execution/pipeline/pipeline_run.py`
-- `quwoquan_data/scripts/content/execution/pipeline/content_plan.py`
+- `quwoquan_data/scripts/content/execution/controller/orchestrator.py`
+- `quwoquan_data/scripts/content/execution/controller/content_plan.py`
 - `quwoquan_data/scripts/content/release/canonical/gate.py`
 
 ## 关键裁定

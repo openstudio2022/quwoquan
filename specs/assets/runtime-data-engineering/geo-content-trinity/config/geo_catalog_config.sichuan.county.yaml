@@ -1,7 +1,7 @@
 # 四川地理目录 — 县级（admin_level=6）切片；slices 由
 # quwoquan_data/tools/geo/list_admin_slices_overpass.py --province 四川省 --admin-level 6 --emit-yaml
 # 生成后检入；需刷新时重新运行并核对 diff。
-schemaVersion: quwoquan_data.geo_catalog_config
+schema: quwoquan_data.geo_catalog_config
 name: 四川地理目录候选层_县级切片
 topic_id_prefix: poi
 output_defaults:

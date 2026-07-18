@@ -13,7 +13,7 @@ func TestInvite_GenerateAndGetByCode(t *testing.T) {
 	createTestProfile(t, "inv_owner", "inv_user")
 	createTestPersonaFull(t, "inv_persona", "inv_owner", "sa_inv", "InvSub", "open", true, true)
 
-	rec := doRequest(t, http.MethodPost, "/v1/user/invites",
+	rec := doRequest(t, http.MethodPost, "/user/invites",
 		`{"subAccountId":"sa_inv","channel":"direct","inviteePhone":"hash_invitee_phone"}`,
 		authHeaders("inv_owner"))
 	if rec.Code != http.StatusCreated {
@@ -26,7 +26,7 @@ func TestInvite_GenerateAndGetByCode(t *testing.T) {
 	}
 
 	// 通过 linkCode 获取邀请
-	rec = doRequest(t, http.MethodGet, "/v1/invites/"+linkCode, "", nil)
+	rec = doRequest(t, http.MethodGet, "/invites/"+linkCode, "", nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("get invite by code: expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -50,14 +50,14 @@ func TestInvite_Idempotent_SameKeyReturnsSameCode(t *testing.T) {
 	body := `{"subAccountId":"sa_idem","channel":"direct","inviteePhone":"hash_idem_phone"}`
 
 	// 第一次生成
-	rec1 := doRequest(t, http.MethodPost, "/v1/user/invites", body, authHeaders("idem_owner"))
+	rec1 := doRequest(t, http.MethodPost, "/user/invites", body, authHeaders("idem_owner"))
 	if rec1.Code != http.StatusCreated {
 		t.Fatalf("first generate: expected 201, got %d: %s", rec1.Code, rec1.Body.String())
 	}
 	code1, _ := parseJSON(t, rec1)["linkCode"].(string)
 
 	// 相同参数再次生成
-	rec2 := doRequest(t, http.MethodPost, "/v1/user/invites", body, authHeaders("idem_owner"))
+	rec2 := doRequest(t, http.MethodPost, "/user/invites", body, authHeaders("idem_owner"))
 	if rec2.Code != http.StatusCreated {
 		t.Fatalf("second generate: expected 201, got %d: %s", rec2.Code, rec2.Body.String())
 	}
@@ -82,7 +82,7 @@ func TestInvite_AcceptUpdatesStatus(t *testing.T) {
 	createTestPersonaFull(t, "accept_persona", "accept_owner", "sa_accept", "AcceptSub", "open", true, true)
 
 	// 生成邀请
-	rec := doRequest(t, http.MethodPost, "/v1/user/invites",
+	rec := doRequest(t, http.MethodPost, "/user/invites",
 		`{"subAccountId":"sa_accept","channel":"direct"}`,
 		authHeaders("accept_owner"))
 	if rec.Code != http.StatusCreated {
@@ -91,7 +91,7 @@ func TestInvite_AcceptUpdatesStatus(t *testing.T) {
 	linkCode, _ := parseJSON(t, rec)["linkCode"].(string)
 
 	// 接受邀请
-	rec = doRequest(t, http.MethodPost, "/v1/invites/"+linkCode+"/accept", "", nil)
+	rec = doRequest(t, http.MethodPost, "/invites/"+linkCode+"/accept", "", nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("accept invite: expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -110,7 +110,7 @@ func TestInvite_AttributionToSubAccount_NotOwner(t *testing.T) {
 	createTestProfile(t, "attrib_owner", "attrib_user")
 	createTestPersonaFull(t, "attrib_persona", "attrib_owner", "sa_attrib", "AttribSub", "open", true, true)
 
-	rec := doRequest(t, http.MethodPost, "/v1/user/invites",
+	rec := doRequest(t, http.MethodPost, "/user/invites",
 		`{"subAccountId":"sa_attrib","channel":"social"}`,
 		authHeaders("attrib_owner"))
 	if rec.Code != http.StatusCreated {
@@ -146,12 +146,12 @@ func TestInvite_ListByInviter(t *testing.T) {
 	// 生成三个邀请
 	for i := range 3 {
 		_ = i
-		doRequest(t, http.MethodPost, "/v1/user/invites",
+		doRequest(t, http.MethodPost, "/user/invites",
 			`{"subAccountId":"sa_list_inv","channel":"direct"}`,
 			authHeaders("list_inv_owner"))
 	}
 
-	rec := doRequest(t, http.MethodGet, "/v1/user/invites?subAccountId=sa_list_inv", "", authHeaders("list_inv_owner"))
+	rec := doRequest(t, http.MethodGet, "/user/invites?subAccountId=sa_list_inv", "", authHeaders("list_inv_owner"))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("list invites: expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -168,7 +168,7 @@ func TestInvite_UnknownIdentityFieldRejected(t *testing.T) {
 	createTestProfile(t, "alias_owner", "alias_user")
 	createTestPersonaFull(t, "alias_persona", "alias_owner", "sa_alias", "AliasSub", "open", true)
 
-	rec := doRequest(t, http.MethodPost, "/v1/user/invites",
+	rec := doRequest(t, http.MethodPost, "/user/invites",
 		`{"identityId":"sa_alias","channel":"direct"}`,
 		authHeaders("alias_owner"))
 	if rec.Code != http.StatusBadRequest {

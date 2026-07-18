@@ -10,6 +10,7 @@ import json
 import os
 import re
 import signal
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -30,17 +31,29 @@ from quwoquan_ops.ci.device_matrix.evidence import (
     write_discovered_devices_snapshot,
     write_json,
 )
+from quwoquan_ops.ci.device_matrix.android import resolve_android_debug_bridge
 from quwoquan_ops.cli.lib.dev_up import (
     ANDROID_LOCAL_DEBUG_CA_ENV,
     ANDROID_LOCAL_DEBUG_CA_REQUIRED_ENV,
     local_target_android_debug_ca_cert,
 )
+from quwoquan_ops.cli.lib.local_target_tls import (
+    LocalTargetTlsError,
+    install_ios_simulator_root_ca,
+)
 from quwoquan_ops.cli.lib.patrol_cli import resolve_patrol_cli
+from quwoquan_ops.cli.lib.flutter_android_device_proxy import (
+    ANDROID_DEVICE_INVENTORY_ENV,
+    REAL_FLUTTER_ENV,
+)
 
 
 APP_DIR = REPO_ROOT / "quwoquan_app"
 DEFAULT_REPORT = REPO_ROOT / ".qwq_output" / "env" / "repo" / "runs" / "device-matrix" / "environment-smoke" / "report.json"
-DEFAULT_TARGET = "test/user_acceptance/patrol/environment/basic_viability__user_acceptance_test.dart"
+DEFAULT_TARGET = (
+    "test/user_acceptance/patrol/environment/"
+    "video_playback_canary__user_acceptance_test.dart"
+)
 IOS_SDK_VERSION_PATTERN = re.compile(r"iOS[- ](\d+)(?:[-._](\d+))?")
 XCODE_IOS_SIMULATOR_SDK_PATTERN = re.compile(
     r"-sdk\s+iphonesimulator(\d+)(?:\.(\d+))?"
@@ -51,6 +64,18 @@ LOCAL_TARGETS = {"alpha-local", "beta-local", "gamma-local", "prod-sim"}
 LOCAL_ENVIRONMENT_ALIAS_TARGETS = {"local-gamma": "gamma-local"}
 PUBLIC_TEST_SUFFIX = ".quwoquan-env.test"
 LOCALHOST_SUFFIX = ".localhost"
+FORBIDDEN_PROD_PLAYBACK_CANARY_TOKENS = frozenset(
+    {"fixture", "mock", "seed", "test"}
+)
+IOS_RELEASE_UAT_BUNDLE_IDS = (
+    "com.example.quwoquanApp",
+    "com.example.quwoquanApp.RunnerUITests.xctrunner",
+)
+ANDROID_RELEASE_UAT_PACKAGE = "com.quwoquan.quwoquan_app"
+PATROL_FLUTTER_COMMAND_ENV = "PATROL_FLUTTER_COMMAND"
+ANDROID_DEVICE_PROXY = (
+    REPO_ROOT / "quwoquan_ops" / "cli" / "lib" / "flutter_android_device_proxy.py"
+)
 
 
 def utc_now() -> str:
@@ -78,8 +103,45 @@ def _local_target_for_environment_alias(env_name: str) -> str:
     return LOCAL_ENVIRONMENT_ALIAS_TARGETS.get(normalized, normalized)
 
 
+def _uses_public_video_canary_anonymous_session(
+    args: argparse.Namespace,
+) -> bool:
+    """本地 beta/gamma 的公开视频 canary 无凭据时以 guest 执行只读验收。"""
+
+    target_name = _local_target_for_environment_alias(args.env_name)
+    if target_name not in {"beta-local", "gamma-local"}:
+        return False
+    target = str(getattr(args, "target", "") or "").replace("\\", "/")
+    if not target.endswith(DEFAULT_TARGET):
+        return False
+    supplied = (
+        args.test_auth_token,
+        args.test_refresh_token,
+        _resolved_owner_id(args),
+        _resolved_sub_account_id(args),
+    )
+    return not any(str(value).strip() for value in supplied)
+
+
+def _requires_video_playback_canary(args: argparse.Namespace) -> bool:
+    target = str(getattr(args, "target", "") or "").replace("\\", "/")
+    return target.endswith(DEFAULT_TARGET)
+
+
 def _uses_runtime_anonymous_session(args: argparse.Namespace) -> bool:
-    return args.env_name.strip().lower() == "local-gamma"
+    return (
+        args.env_name.strip().lower() == "local-gamma"
+        and not _uses_public_video_canary_anonymous_session(args)
+    )
+
+
+def _public_video_canary_session_mode(args: argparse.Namespace) -> str:
+    target_name = _local_target_for_environment_alias(args.env_name)
+    if target_name == "beta-local":
+        return "beta_local_anonymous_public_video"
+    if target_name == "gamma-local":
+        return "gamma_local_anonymous_public_video"
+    raise ValueError(f"{target_name} does not support anonymous public video canary")
 
 
 def _is_local_target(env_name: str) -> bool:
@@ -113,21 +175,66 @@ def _rewrite_local_loopback_base(url: str) -> str:
     return urllib.parse.urlunparse(parsed._replace(netloc=netloc))
 
 
+def _rewrite_android_loopback_base(url: str) -> str:
+    """Android 的原生播放器仅保证解析精确 `localhost`，不依赖 `*.localhost` DNS。"""
+
+    parsed = urllib.parse.urlparse(url.strip())
+    if not parsed.scheme or not parsed.hostname:
+        return url
+    host = parsed.hostname.lower()
+    if not (
+        host == "127.0.0.1"
+        or host == "localhost"
+        or host.endswith(LOCALHOST_SUFFIX)
+        or host.endswith(PUBLIC_TEST_SUFFIX)
+    ):
+        return url
+    netloc = f"localhost:{parsed.port}" if parsed.port else "localhost"
+    return urllib.parse.urlunparse(parsed._replace(netloc=netloc))
+
+
+def _resolved_media_base_urls(args: argparse.Namespace) -> dict[str, str]:
+    """解析四类显式注入的媒体 authority；禁止单一 media base 回退。"""
+    return {
+        "mediaAvatarBaseUrl": str(
+            getattr(args, "media_avatar_base_url", "") or ""
+        ).strip(),
+        "mediaImageBaseUrl": str(
+            getattr(args, "media_image_base_url", "") or ""
+        ).strip(),
+        "mediaVideoBaseUrl": str(
+            getattr(args, "media_video_base_url", "") or ""
+        ).strip(),
+        "mediaUploadBaseUrl": str(
+            getattr(args, "media_upload_base_url", "") or ""
+        ).strip(),
+    }
+
+
 def _effective_base_urls_for_device(
     args: argparse.Namespace,
     device: dict[str, Any],
 ) -> dict[str, str]:
     gateway_base_url = args.gateway_base_url.strip()
     product_ops_base_url = args.product_ops_base_url.strip()
-    media_base_url = args.media_base_url.strip()
+    media_urls = _resolved_media_base_urls(args)
     if _is_local_target(args.env_name) and _device_uses_local_loopback(device):
-        gateway_base_url = _rewrite_local_loopback_base(gateway_base_url)
-        product_ops_base_url = _rewrite_local_loopback_base(product_ops_base_url)
-        media_base_url = _rewrite_local_loopback_base(media_base_url)
+        target_platform = str(device.get("targetPlatform", "")).strip().lower()
+        rewrite_base = (
+            _rewrite_android_loopback_base
+            if target_platform.startswith("android")
+            else _rewrite_local_loopback_base
+        )
+        gateway_base_url = rewrite_base(gateway_base_url)
+        product_ops_base_url = rewrite_base(product_ops_base_url)
+        media_urls = {
+            key: rewrite_base(value) if value else value
+            for key, value in media_urls.items()
+        }
     return {
         "gatewayBaseUrl": gateway_base_url,
         "productOpsBaseUrl": product_ops_base_url,
-        "mediaBaseUrl": media_base_url,
+        **media_urls,
     }
 
 
@@ -139,46 +246,265 @@ def _resolved_sub_account_id(args: argparse.Namespace) -> str:
     return str(getattr(args, "current_sub_account_id", "") or "").strip()
 
 
-def _local_debug_ca_path(env_name: str) -> Path | None:
-    try:
-        return local_target_android_debug_ca_cert(
-            _local_target_for_environment_alias(env_name)
+def _validate_video_playback_canary_work_id(
+    args: argparse.Namespace,
+    runtime_env: str,
+) -> str:
+    work_id = str(
+        getattr(args, "video_playback_canary_work_id", "") or ""
+    ).strip()
+    if not work_id:
+        raise ValueError("video playback canary work id is required")
+    if runtime_env == "prod" and any(
+        token in work_id.lower()
+        for token in FORBIDDEN_PROD_PLAYBACK_CANARY_TOKENS
+    ):
+        raise ValueError(
+            "prod playback canary must reference a published release work, not fixture/mock/seed/test data"
         )
-    except RuntimeError:
-        return None
+    return work_id
 
 
-def _install_booted_simulator_root_ca(cert_path: Path) -> dict[str, Any]:
-    try:
-        result = subprocess.run(
-            ["xcrun", "simctl", "keychain", "booted", "add-root-cert", str(cert_path)],
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-    except FileNotFoundError:
-        return {
-            "status": "skipped",
-            "reason": "xcrun unavailable",
-            "certPath": str(cert_path),
-        }
-    output = summarize_output((result.stdout or "") + (result.stderr or ""))
-    return {
-        "status": "attempted" if result.returncode == 0 else "best_effort_failed",
-        "exitCode": result.returncode,
-        "certPath": str(cert_path),
-        "outputSummary": output,
-    }
+def _local_debug_ca_path(env_name: str) -> Path:
+    return local_target_android_debug_ca_cert(
+        _local_target_for_environment_alias(env_name)
+    )
+
+
+def _install_simulator_root_ca(
+    env_name: str,
+    simulator_udid: str,
+) -> dict[str, Any]:
+    return install_ios_simulator_root_ca(
+        _local_target_for_environment_alias(env_name),
+        simulator_udid,
+    )
 
 
 def _device_command_env(args: argparse.Namespace, device: dict[str, Any]) -> dict[str, str]:
     env = dict(os.environ)
     cert_path = _local_debug_ca_path(args.env_name)
     target = str(device.get("targetPlatform", "")).strip().lower()
-    if target.startswith("android") and cert_path is not None:
-        env[ANDROID_LOCAL_DEBUG_CA_ENV] = str(cert_path)
-        env[ANDROID_LOCAL_DEBUG_CA_REQUIRED_ENV] = "1"
+    if target == "ios" and bool(device.get("emulator", False)) and _is_local_target(
+        args.env_name
+    ):
+        device_id = str(device.get("id", "")).strip()
+        if not device_id:
+            raise RuntimeError(
+                "GATE_BLOCK: local iOS Simulator Patrol requires an explicit device id "
+                "for the Xcode CA-trust build phase"
+            )
+        env["QWQ_IOS_SIMULATOR_UDID"] = device_id
+    if target.startswith("android"):
+        adb = resolve_android_debug_bridge()
+        if adb:
+            adb_directory = str(Path(adb).parent)
+            existing_path = env.get("PATH", "")
+            path_entries = existing_path.split(os.pathsep) if existing_path else []
+            if adb_directory not in path_entries:
+                env["PATH"] = (
+                    f"{adb_directory}{os.pathsep}{existing_path}"
+                    if existing_path
+                    else adb_directory
+                )
+        if cert_path is not None:
+            env[ANDROID_LOCAL_DEBUG_CA_ENV] = str(cert_path)
+            env[ANDROID_LOCAL_DEBUG_CA_REQUIRED_ENV] = "1"
+        real_flutter = shutil.which("flutter", path=env.get("PATH", ""))
+        if real_flutter is None:
+            raise RuntimeError(
+                "GATE_BLOCK: Flutter executable is required for Android Patrol"
+            )
+        proxy_devices = [
+            {
+                "id": str(device.get("id", "")).strip(),
+                "name": str(device.get("name", "")).strip(),
+                "targetPlatform": str(device.get("targetPlatform", "")).strip(),
+                "emulator": bool(device.get("emulator", False)),
+                "isSupported": True,
+            }
+        ]
+        env[PATROL_FLUTTER_COMMAND_ENV] = f"{sys.executable} {ANDROID_DEVICE_PROXY}"
+        env[REAL_FLUTTER_ENV] = str(Path(real_flutter).resolve())
+        env[ANDROID_DEVICE_INVENTORY_ENV] = json.dumps(
+            proxy_devices,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
     return env
+
+
+def _prepare_android_local_port_reverse(
+    args: argparse.Namespace,
+    device: dict[str, Any],
+) -> dict[str, Any]:
+    """让 Android 设备上的 *.localhost TLS authority 回到宿主本地 target。"""
+
+    target_platform = str(device.get("targetPlatform", "")).strip().lower()
+    if not (
+        _is_local_target(args.env_name) and target_platform.startswith("android")
+    ):
+        return {"status": "skipped", "reason": "not-required"}
+    adb = resolve_android_debug_bridge()
+    device_id = str(device.get("id", "")).strip()
+    if not adb:
+        raise RuntimeError(
+            "GATE_BLOCK: adb is required to reverse local target ports for Android Patrol "
+            "(set ANDROID_SDK_ROOT/ANDROID_HOME or install platform-tools)",
+        )
+    if not device_id:
+        raise RuntimeError(
+            "GATE_BLOCK: Android Patrol device is missing an explicit device id",
+        )
+    base_urls = _effective_base_urls_for_device(args, device)
+    ports: set[int] = set()
+    for value in base_urls.values():
+        parsed = urllib.parse.urlsplit(value)
+        if parsed.scheme != "https" or not parsed.hostname:
+            continue
+        ports.add(parsed.port or 443)
+    if not ports:
+        raise RuntimeError(
+            "GATE_BLOCK: no HTTPS local target ports are available for Android Patrol",
+        )
+    mappings: list[dict[str, int]] = []
+    for port in sorted(ports):
+        command = [
+            adb,
+            "-s",
+            device_id,
+            "reverse",
+            f"tcp:{port}",
+            f"tcp:{port}",
+        ]
+        result = subprocess.run(
+            command,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout).strip()
+            raise RuntimeError(
+                "GATE_BLOCK: failed to configure Android local target port "
+                f"reverse tcp:{port}: {detail or result.returncode}",
+            )
+        mappings.append({"devicePort": port, "hostPort": port})
+    return {
+        "status": "installed",
+        "deviceId": device_id,
+        "mappings": mappings,
+    }
+
+
+def _reset_release_uat_device_state(
+    args: argparse.Namespace,
+    device: dict[str, Any],
+) -> dict[str, Any]:
+    """Guarantee release-bound journeys start without a persisted App session."""
+    if not str(getattr(args, "release_uat_cases", "") or "").strip():
+        return {"status": "skipped", "reason": "not-release-bound"}
+    if args.dry_run:
+        return {"status": "planned", "reason": "release-bound-cold-start"}
+
+    device_id = str(device.get("id", "")).strip()
+    target = str(device.get("targetPlatform", "")).strip().lower()
+    if not device_id:
+        raise RuntimeError("release-bound UAT device identity is empty")
+
+    reset_rows: list[dict[str, Any]] = []
+    if target == "ios":
+        if not bool(device.get("emulator", False)):
+            raise RuntimeError(
+                "release-bound iOS UAT requires a simulator with resettable App state"
+            )
+        for bundle_id in IOS_RELEASE_UAT_BUNDLE_IDS:
+            command = ["xcrun", "simctl", "uninstall", device_id, bundle_id]
+            result = subprocess.run(command, text=True, capture_output=True, check=False)
+            output = ((result.stdout or "") + (result.stderr or "")).strip()
+            absent = "not installed" in output.lower() or "no such file" in output.lower()
+            if result.returncode != 0 and not absent:
+                raise RuntimeError(
+                    f"release-bound iOS UAT App reset failed for {bundle_id}: "
+                    f"{summarize_output(output)}"
+                )
+            reset_rows.append(
+                {
+                    "bundleId": bundle_id,
+                    "exitCode": result.returncode,
+                    "alreadyAbsent": result.returncode != 0,
+                }
+            )
+    elif target.startswith("android"):
+        adb = resolve_android_debug_bridge()
+        if adb is None:
+            raise RuntimeError("release-bound Android UAT requires adb for App state reset")
+        package_path_command = [
+            str(adb),
+            "-s",
+            device_id,
+            "shell",
+            "pm",
+            "path",
+            ANDROID_RELEASE_UAT_PACKAGE,
+        ]
+        package_path = subprocess.run(
+            package_path_command,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        package_path_output = (
+            (package_path.stdout or "") + (package_path.stderr or "")
+        ).strip()
+        installed = package_path.returncode == 0 and package_path_output.startswith(
+            "package:"
+        )
+        if not installed and package_path.returncode not in (0, 1):
+            raise RuntimeError(
+                "release-bound Android UAT App presence check failed: "
+                f"{summarize_output(package_path_output)}"
+            )
+        if installed:
+            clear_command = [
+                str(adb),
+                "-s",
+                device_id,
+                "shell",
+                "pm",
+                "clear",
+                ANDROID_RELEASE_UAT_PACKAGE,
+            ]
+            clear_result = subprocess.run(
+                clear_command,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            clear_output = (
+                (clear_result.stdout or "") + (clear_result.stderr or "")
+            ).strip()
+            if clear_result.returncode != 0 or "success" not in clear_output.lower():
+                raise RuntimeError(
+                    "release-bound Android UAT App reset failed: "
+                    f"{summarize_output(clear_output)}"
+                )
+        reset_rows.append(
+            {
+                "package": ANDROID_RELEASE_UAT_PACKAGE,
+                "exitCode": 0,
+                "alreadyAbsent": not installed,
+            }
+        )
+    else:
+        raise RuntimeError(
+            f"release-bound UAT does not support non-mobile target platform: {target}"
+        )
+    return {
+        "status": "reset",
+        "reason": "release-bound-cold-start",
+        "applications": reset_rows,
+    }
 
 
 def parse_args() -> argparse.Namespace:
@@ -192,7 +518,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--data-source", choices=("mock", "remote"), default="")
     parser.add_argument("--gateway-base-url", default="")
     parser.add_argument("--product-ops-base-url", default="")
-    parser.add_argument("--media-base-url", default="")
+    parser.add_argument("--media-avatar-base-url", default="")
+    parser.add_argument("--media-image-base-url", default="")
+    parser.add_argument("--media-video-base-url", default="")
+    parser.add_argument("--media-upload-base-url", default="")
+    parser.add_argument(
+        "--video-playback-canary-work-id",
+        default=os.environ.get("VIDEO_PLAYBACK_CANARY_WORK_ID", "").strip(),
+    )
     parser.add_argument("--test-auth-token", default=os.environ.get("TEST_AUTH_TOKEN", "").strip())
     parser.add_argument(
         "--test-refresh-token",
@@ -201,7 +534,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--release-uat-cases",
         default="",
-        help="Gamma data-release 生成的 app_uat_cases.json；只用于两省实体主页真实消费验证",
+        help="Gamma data-release 生成的 homepage_verification_cases.json；只用于两省实体主页真实消费验证",
     )
     parser.add_argument(
         "--current-owner-id",
@@ -227,7 +560,7 @@ def _load_release_uat_cases_b64(path_value: str) -> str:
     if not isinstance(payload, dict):
         raise ValueError("release UAT cases must be an object")
     allowed = {
-        "schemaVersion",
+        "schema",
         "environment",
         "releaseId",
         "runId",
@@ -237,8 +570,8 @@ def _load_release_uat_cases_b64(path_value: str) -> str:
     }
     if set(payload) != allowed:
         raise ValueError("release UAT cases has an invalid field set")
-    if payload.get("schemaVersion") != "quwoquan_data.gamma_app_uat_case_manifest/1":
-        raise ValueError("release UAT cases schemaVersion is invalid")
+    if payload.get("schema") != "quwoquan_data.homepage_verification_case_manifest":
+        raise ValueError("release UAT cases schema is invalid")
     if payload.get("environment") != "gamma":
         raise ValueError("release UAT cases must target gamma")
     for field in ("releaseId", "runId", "importerReportRef", "generatedAt"):
@@ -333,19 +666,15 @@ def run_command(
         timed_out = False
     except subprocess.TimeoutExpired:
         if process is not None:
-            try:
-                os.killpg(process.pid, signal.SIGTERM)
-                output, _ = process.communicate(timeout=10)
-            except Exception:
-                try:
-                    os.killpg(process.pid, signal.SIGKILL)
-                except Exception:
-                    pass
-                output = ""
+            output = _terminate_process_group(process)
         else:
             output = ""
         exit_code = 124
         timed_out = True
+    except KeyboardInterrupt:
+        if process is not None:
+            _terminate_process_group(process)
+        raise
     redacted_output = _redact_text(output, secret_values)
     result = {
         "command": _redact_command(command),
@@ -360,6 +689,23 @@ def run_command(
         log_path.write_text(redacted_output, encoding="utf-8")
         result["logPath"] = repo_relative(log_path)
     return result
+
+
+def _terminate_process_group(process: subprocess.Popen[str]) -> str:
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    try:
+        output, _ = process.communicate(timeout=10)
+        return output or ""
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        output, _ = process.communicate()
+        return output or ""
 
 
 def ios_sdk_version(device: dict[str, Any]) -> tuple[int, int] | None:
@@ -441,7 +787,71 @@ def _select_compatible_ios_devices(
     return selected
 
 
+def _explicit_android_devices(device_ids: list[str]) -> list[dict[str, Any]]:
+    """Resolve explicitly selected Android devices directly from ADB.
+
+    A running Flutter development session may hold the Flutter tool lock for a
+    long time.  Explicit Patrol destinations do not need global Flutter device
+    discovery, so ADB is the narrower and authoritative boundary here.
+    """
+    requested = tuple(dict.fromkeys(item.strip() for item in device_ids if item.strip()))
+    if not requested:
+        return []
+    adb = resolve_android_debug_bridge()
+    result = subprocess.run(
+        [adb, "devices", "-l"],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError("adb devices -l failed:\n" + summarize_output(result.stderr or ""))
+    inventory: dict[str, dict[str, str]] = {}
+    for line in result.stdout.splitlines()[1:]:
+        fields = line.split()
+        if len(fields) < 2 or fields[1] != "device":
+            continue
+        properties = {
+            key: value
+            for field in fields[2:]
+            if ":" in field
+            for key, value in [field.split(":", 1)]
+        }
+        inventory[fields[0]] = properties
+    missing = [device_id for device_id in requested if device_id not in inventory]
+    if missing:
+        raise RuntimeError(
+            "explicit Android Patrol devices are unavailable: " + ", ".join(missing)
+        )
+    return [
+        {
+            "id": device_id,
+            "name": inventory[device_id].get("model") or device_id,
+            "targetPlatform": _android_target_platform(inventory[device_id]),
+            "sdk": inventory[device_id].get("device") or "adb",
+            "emulator": device_id.startswith("emulator-"),
+            "ephemeral": False,
+            "category": "mobile",
+        }
+        for device_id in requested
+    ]
+
+
+def _android_target_platform(properties: dict[str, str]) -> str:
+    descriptor = " ".join(properties.values()).lower()
+    if "arm64" in descriptor or "aarch64" in descriptor:
+        return "android-arm64"
+    if "x86_64" in descriptor or "x64" in descriptor:
+        return "android-x64"
+    if "x86" in descriptor:
+        return "android-x86"
+    return "android-arm"
+
+
 def discover_devices(platform: str, device_ids: list[str]) -> list[dict[str, Any]]:
+    allowed_ids = {item for item in device_ids if item}
+    if platform == "android" and allowed_ids:
+        return _explicit_android_devices(device_ids)
     payload = subprocess.run(
         [
             sys.executable,
@@ -459,7 +869,6 @@ def discover_devices(platform: str, device_ids: list[str]) -> list[dict[str, Any
         )
     data = json.loads(payload.stdout)
     devices = list(data.get("devices") or [])
-    allowed_ids = {item for item in device_ids if item}
     selected: list[dict[str, Any]] = []
     for device in devices:
         target = str(device.get("targetPlatform", "")).lower()
@@ -486,6 +895,8 @@ def discover_devices(platform: str, device_ids: list[str]) -> list[dict[str, Any
 def _prepare_execution_session(args: argparse.Namespace) -> str:
     runtime_env = args.runtime_env.strip() or _runtime_env_for_alias(args.env_name)
     data_source = args.data_source.strip() or _data_source_for_runtime(runtime_env)
+    if _uses_public_video_canary_anonymous_session(args):
+        return _public_video_canary_session_mode(args)
     if _uses_runtime_anonymous_session(args):
         supplied = {
             "test_auth_token": args.test_auth_token,
@@ -548,9 +959,15 @@ def patrol_command(
     base_urls = _effective_base_urls_for_device(args, device)
     gateway_base_url = base_urls["gatewayBaseUrl"]
     product_ops_base_url = base_urls["productOpsBaseUrl"]
-    media_base_url = base_urls["mediaBaseUrl"]
+    media_avatar_base_url = base_urls["mediaAvatarBaseUrl"]
+    media_image_base_url = base_urls["mediaImageBaseUrl"]
+    media_video_base_url = base_urls["mediaVideoBaseUrl"]
+    media_upload_base_url = base_urls["mediaUploadBaseUrl"]
     current_owner_id = _resolved_owner_id(args)
     current_sub_account_id = _resolved_sub_account_id(args)
+    video_playback_canary_work_id = str(
+        getattr(args, "video_playback_canary_work_id", "") or ""
+    ).strip()
     command = [
         patrol_executable,
         "test",
@@ -565,8 +982,14 @@ def patrol_command(
         f"--dart-define=CLOUD_GATEWAY_BASE_URL={gateway_base_url}",
         f"--dart-define=API_CONTRACT_BASE_URL={gateway_base_url}",
         f"--dart-define=API_CONTRACT_PRODUCT_OPS_BASE_URL={product_ops_base_url}",
+        f"--dart-define=VIDEO_PLAYBACK_CANARY_WORK_ID={video_playback_canary_work_id}",
     ]
-    if _uses_runtime_anonymous_session(args):
+    if _uses_public_video_canary_anonymous_session(args):
+        command.append(
+            "--dart-define=QWQ_PATROL_SESSION_MODE="
+            f"{_public_video_canary_session_mode(args)}"
+        )
+    elif _uses_runtime_anonymous_session(args):
         command.append("--dart-define=QWQ_PATROL_SESSION_MODE=local_gamma_anonymous")
     else:
         if dart_define_file is None:
@@ -583,13 +1006,13 @@ def patrol_command(
         sdk_version = ios_sdk_version(device)
         if sdk_version is not None:
             command.append(f"--ios={sdk_version[0]}.{sdk_version[1]}")
-    if media_base_url:
+    if media_avatar_base_url or media_image_base_url or media_video_base_url or media_upload_base_url:
         command.extend(
             [
-                f"--dart-define=MEDIA_AVATAR_CDN_BASE_URL={media_base_url}",
-                f"--dart-define=MEDIA_IMAGE_CDN_BASE_URL={media_base_url}",
-                f"--dart-define=MEDIA_VIDEO_CDN_BASE_URL={media_base_url}",
-                f"--dart-define=MEDIA_UPLOAD_BASE_URL={media_base_url}",
+                f"--dart-define=MEDIA_AVATAR_CDN_BASE_URL={media_avatar_base_url}",
+                f"--dart-define=MEDIA_IMAGE_CDN_BASE_URL={media_image_base_url}",
+                f"--dart-define=MEDIA_VIDEO_CDN_BASE_URL={media_video_base_url}",
+                f"--dart-define=MEDIA_UPLOAD_BASE_URL={media_upload_base_url}",
             ]
         )
     release_uat_cases_b64 = str(getattr(args, "release_uat_cases_b64", "") or "")
@@ -649,8 +1072,22 @@ def _missing_required_args(args: argparse.Namespace) -> list[str]:
     required = [
         ("gateway_base_url", args.gateway_base_url),
         ("product_ops_base_url", args.product_ops_base_url),
+        ("media_avatar_base_url", getattr(args, "media_avatar_base_url", "")),
+        ("media_image_base_url", getattr(args, "media_image_base_url", "")),
+        ("media_video_base_url", getattr(args, "media_video_base_url", "")),
+        ("media_upload_base_url", getattr(args, "media_upload_base_url", "")),
     ]
-    if not _uses_runtime_anonymous_session(args):
+    if _requires_video_playback_canary(args):
+        required.append(
+            (
+                "video_playback_canary_work_id",
+                getattr(args, "video_playback_canary_work_id", ""),
+            )
+        )
+    if not (
+        _uses_runtime_anonymous_session(args) or
+        _uses_public_video_canary_anonymous_session(args)
+    ):
         required.extend(
             [
                 ("test_auth_token", args.test_auth_token),
@@ -684,7 +1121,10 @@ def main() -> int:
         "platform": args.platform,
         "gatewayBaseUrl": args.gateway_base_url,
         "productOpsBaseUrl": args.product_ops_base_url,
-        "mediaBaseUrl": args.media_base_url,
+        **_resolved_media_base_urls(args),
+        "videoPlaybackCanaryWorkId": str(
+            getattr(args, "video_playback_canary_work_id", "") or ""
+        ).strip(),
         "currentOwnerId": _resolved_owner_id(args),
         "currentSubAccountId": _resolved_sub_account_id(args),
         "sessionSource": "",
@@ -739,6 +1179,17 @@ def main() -> int:
             report["endedAt"] = utc_now()
             write_report(report_path, report)
             return 2
+        if _requires_video_playback_canary(args):
+            try:
+                args.video_playback_canary_work_id = (
+                    _validate_video_playback_canary_work_id(args, runtime_env)
+                )
+            except ValueError as exc:
+                report["status"] = "gate_block"
+                report["failureReason"] = str(exc)
+                report["endedAt"] = utc_now()
+                write_report(report_path, report)
+                return 2
 
     try:
         devices = dry_run_devices(args) if args.dry_run else discover_devices(args.platform, args.device_id)
@@ -772,6 +1223,7 @@ def main() -> int:
         },
     )
     failed = False
+    gate_blocked = False
     for device in devices:
         run_dir = evidence_root / sanitize_device_id(str(device.get("id", "")))
         run_dir.mkdir(parents=True, exist_ok=True)
@@ -790,14 +1242,89 @@ def main() -> int:
             and str(device.get("targetPlatform", "")).lower() == "ios"
             and bool(device.get("emulator", False))
         ):
-            cert_path = _local_debug_ca_path(args.env_name)
-            if cert_path is None:
+            try:
+                tls_trust = _install_simulator_root_ca(
+                    args.env_name,
+                    str(device.get("id", "")),
+                )
+            except LocalTargetTlsError as exc:
                 tls_trust = {
-                    "status": "missing",
-                    "reason": f"local debug root CA missing for {args.env_name}",
+                    "status": "failed",
+                    "reason": str(exc),
                 }
-            else:
-                tls_trust = _install_booted_simulator_root_ca(cert_path)
+                report["runs"].append(
+                    {
+                        "device": device,
+                        "exitCode": 2,
+                        "timedOut": False,
+                        "durationMs": 0,
+                        "outputSummary": str(exc),
+                        "preflightFailed": True,
+                        "evidence": {
+                            "runDirectory": repo_relative(run_dir),
+                            "deviceManifestPath": device_manifest_path,
+                            "localTlsTrust": tls_trust,
+                        },
+                    }
+                )
+                failed = True
+                gate_blocked = True
+                continue
+        android_port_reverse = {"status": "skipped", "reason": "not-required"}
+        if str(device.get("targetPlatform", "")).lower().startswith("android"):
+            try:
+                android_port_reverse = _prepare_android_local_port_reverse(
+                    args,
+                    device,
+                )
+            except RuntimeError as exc:
+                android_port_reverse = {
+                    "status": "failed",
+                    "reason": str(exc),
+                }
+                report["runs"].append(
+                    {
+                        "device": device,
+                        "exitCode": 2,
+                        "timedOut": False,
+                        "durationMs": 0,
+                        "outputSummary": str(exc),
+                        "preflightFailed": True,
+                        "evidence": {
+                            "runDirectory": repo_relative(run_dir),
+                            "deviceManifestPath": device_manifest_path,
+                            "localTlsTrust": tls_trust,
+                            "androidPortReverse": android_port_reverse,
+                        },
+                    }
+                )
+                failed = True
+                gate_blocked = True
+                continue
+        try:
+            release_uat_state_reset = _reset_release_uat_device_state(args, device)
+        except RuntimeError as exc:
+            release_uat_state_reset = {"status": "failed", "reason": str(exc)}
+            report["runs"].append(
+                {
+                    "device": device,
+                    "exitCode": 2,
+                    "timedOut": False,
+                    "durationMs": 0,
+                    "outputSummary": str(exc),
+                    "preflightFailed": True,
+                    "evidence": {
+                        "runDirectory": repo_relative(run_dir),
+                        "deviceManifestPath": device_manifest_path,
+                        "localTlsTrust": tls_trust,
+                        "androidPortReverse": android_port_reverse,
+                        "releaseUatStateReset": release_uat_state_reset,
+                    },
+                }
+            )
+            failed = True
+            gate_blocked = True
+            continue
         secret_define_path: Path | None = None
         if args.dry_run:
             secret_define_path = run_dir / "dry-run-patrol-secrets.json"
@@ -821,6 +1348,8 @@ def main() -> int:
                     "QWQ_ANDROID_LOCAL_ENV_CA_PATH": command_env.get(ANDROID_LOCAL_DEBUG_CA_ENV, ""),
                     "QWQ_ANDROID_LOCAL_ENV_CA_REQUIRED": command_env.get(ANDROID_LOCAL_DEBUG_CA_REQUIRED_ENV, ""),
                 },
+                "androidPortReverse": android_port_reverse,
+                "releaseUatStateReset": release_uat_state_reset,
             },
         )
         before_screenshot = capture_device_screenshot(device, run_dir / "before.png")
@@ -877,16 +1406,22 @@ def main() -> int:
             "afterScreenshot": after_screenshot,
             "failureScreenshot": failure_screenshot,
             "localTlsTrust": tls_trust,
+            "androidPortReverse": android_port_reverse,
+            "releaseUatStateReset": release_uat_state_reset,
         }
         report["runs"].append(result)
         failed = failed or result["exitCode"] != 0
 
-    report["status"] = "failed" if failed else "passed"
+    report["status"] = "gate_block" if gate_blocked else ("failed" if failed else "passed")
     if failed:
-        report["failureReason"] = "one or more Patrol runs failed"
+        report["failureReason"] = (
+            "local TLS preflight blocked one or more Patrol runs"
+            if gate_blocked
+            else "one or more Patrol runs failed"
+        )
     report["endedAt"] = utc_now()
     write_report(report_path, report)
-    return 1 if failed else 0
+    return 2 if gate_blocked else (1 if failed else 0)
 
 
 if __name__ == "__main__":

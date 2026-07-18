@@ -9,7 +9,8 @@ api_routes:
     method: createConversation
   method: POST
   operation: CreateAssistantConversation
-  path: /v1/assistant/conversations
+  path: /assistant/conversations
+
   request_fields:
   - summary
   - clientRequestId
@@ -29,7 +30,8 @@ api_routes:
     slice: AssistantConversation
   method: GET
   operation: GetAssistantConversation
-  path: /v1/assistant/conversations/{conversationId}
+  path: /assistant/conversations/{conversationId}
+
   response_entity: AssistantConversation
   security:
     anonymous_policy: deny
@@ -47,4 +49,3 @@ service:
   domain: assistant
   name: assistant-service
   owner: assistant-team
-version: 1

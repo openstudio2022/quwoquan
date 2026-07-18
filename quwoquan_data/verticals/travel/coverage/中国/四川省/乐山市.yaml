@@ -1,7 +1,7 @@
 # 全国地点主清单 · 四川省乐山市（discovery_seed/2，WP2 区县级全量枚举）
 # schema: quwoquan_data/schema/governance/master_list.schema.json
 # 门禁: qwq-data verify coverage-static-identity
-schemaVersion: quwoquan_data.discovery_seed/2
+schema: quwoquan_data.discovery_seed
 country: 中国
 province: 四川省
 city: 乐山市

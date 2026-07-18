@@ -23,6 +23,6 @@
 </constraints>
 
 <output_format>
-只写一个 JSON object：schemaVersion 固定为 `quwoquan_data.homepage_reviewer_response/1`，并包含 executionId、objectRef、decision、issues、findings。
+只写一个 JSON object：schema 固定为 `quwoquan_data.homepage_reviewer_response`，并包含 executionId、objectRef、decision、issues、findings。
 decision 只能是 approved、revision_needed、rejected；issues/findings 均为 string array。
 </output_format>

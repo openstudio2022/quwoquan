@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/testing/patrol_test_support.dart';
 
 void main() {
@@ -18,6 +19,18 @@ void main() {
         expect(session.activeSubAccountId, 'persona-real');
         expect(session.accessToken, 'access-real');
         expect(session.refreshToken, 'refresh-real');
+      },
+    );
+
+    test(
+      'public video canary uses a guest session without fixture credentials',
+      () {
+        final session = buildPatrolAnonymousPublicVideoSession();
+
+        expect(session.isAuthenticated, isFalse);
+        expect(session.status, AuthSessionStatus.guest);
+        expect(session.accessToken, isEmpty);
+        expect(session.activeSubAccountId, isEmpty);
       },
     );
 

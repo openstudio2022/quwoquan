@@ -37,7 +37,7 @@ void main() {
     test('上报失败时不抛异常、事件回灌缓冲，恢复后可重发不丢失', () async {
       final repo = _FlakyBehaviorRepository();
       final tracker = ContentBehaviorTracker(
-        repository: repo,
+        reporter: repo,
         flushInterval: const Duration(hours: 1),
         maxBatchSize: 5,
         enablePeriodicFlush: false,
@@ -69,7 +69,7 @@ void main() {
     setUp(() {
       repo = MockBehaviorRepository();
       tracker = ContentBehaviorTracker(
-        repository: repo,
+        reporter: repo,
         // 设置很长的 flush 间隔，避免定时器干扰
         flushInterval: const Duration(hours: 1),
         maxBatchSize: 5,

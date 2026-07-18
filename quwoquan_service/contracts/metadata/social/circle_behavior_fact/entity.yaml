@@ -1,4 +1,3 @@
-version: 1
 domain: circle
 entity: CircleBehaviorFact
 object_kind: append_only_fact

@@ -87,12 +87,14 @@ def main() -> int:
     if prod_sim_android["mediaImageBaseUrl"] != "https://prod-image.localhost:20100":
         issues.append("prod-sim android local device must map media to prod-sim media port")
     prod_hosted = resolve_app_endpoint_overrides("prod", "android_physical", topology=topology)
-    if prod_hosted["gatewayBaseUrl"] != "https://118.31.239.122:19000":
-        issues.append("prod android launch must keep hosted gateway address")
+    if prod_hosted["gatewayBaseUrl"] != "https://api.quwoquan.com":
+        issues.append("prod android launch must keep canonical api.quwoquan.com gateway")
     if prod_hosted.get("legalBaseUrl") != "https://quwoquan.com/legal":
         issues.append("prod android launch must keep canonical legal base")
-    if prod_hosted["mediaImageBaseUrl"] != "https://118.31.239.122:19100":
-        issues.append("prod android launch must keep hosted media address")
+    if prod_hosted["mediaImageBaseUrl"] != "https://cdn.quwoquan.com":
+        issues.append("prod android launch must keep canonical cdn.quwoquan.com media image base")
+    if prod_hosted.get("mediaUploadBaseUrl") != "https://upload.quwoquan.com":
+        issues.append("prod android launch must keep canonical upload.quwoquan.com media upload base")
     gamma_web = resolve_app_endpoint_overrides("gamma", "web", topology=topology)
     if gamma_web["gatewayBaseUrl"] != "https://gamma-api.quwoquan-env.test:19000":
         issues.append("gamma web must map gateway to secure gamma env domain")
@@ -111,6 +113,9 @@ def main() -> int:
     ).read_text(encoding="utf-8")
     beta_stop = (
         ROOT / "quwoquan_app/scripts/device/stop_app_beta_manual.sh"
+    ).read_text(encoding="utf-8")
+    app_instance_launcher = (
+        ROOT / "quwoquan_app/scripts/device/start_app_instance.sh"
     ).read_text(encoding="utf-8")
     legal_document_page = (
         ROOT / "quwoquan_app/lib/ui/user/pages/legal_document_page.dart"
@@ -155,6 +160,24 @@ def main() -> int:
 
     if "QWQ_ANDROID_LOCAL_ENV_CA_REQUIRED" not in build_gradle:
         issues.append("android debug build must require explicit local CA when launcher marks it required")
+    if (
+        'File(deploymentWorkRoot, "alpha-local/certificates/root.crt")'
+        not in build_gradle
+    ):
+        issues.append(
+            "android alpha debug CA must use the same root.crt that signs the alpha TLS proxy leaf"
+        )
+    if "alpha-local/certificates/tls/ca/root.crt" in build_gradle:
+        issues.append(
+            "android alpha debug CA must not use the retired tls/ca/root.crt path"
+        )
+    if (
+        "verifyAndroidLocalAlphaCaSource" not in build_gradle
+        or "packaged local_env_debug_root.crt must exactly equal" not in build_gradle
+    ):
+        issues.append(
+            "android alpha build must verify the packaged raw CA equals the TLS proxy signing root"
+        )
     if "tasks.withType<FlutterTask>()" not in build_gradle:
         issues.append("android debug build must patch FlutterTask dart-defines for plain flutter run")
     if "alphaLocalTransportDartDefineKeys" not in build_gradle:
@@ -169,12 +192,20 @@ def main() -> int:
         issues.append(
             "android alpha mergeAlphaLocalDartDefines must not remain fill-only for transport URLs"
         )
-    if '"CLOUD_GATEWAY_BASE_URL" to "https://localhost:17000"' not in build_gradle:
-        issues.append("plain android flutter run must default alpha gateway to localhost HTTPS transport")
-    if '"APP_LEGAL_BASE_URL" to "https://localhost:17000/legal"' not in build_gradle:
-        issues.append("plain android flutter run must default alpha legal-static to gateway /legal")
-    if '"MEDIA_IMAGE_CDN_BASE_URL" to "https://localhost:17100"' not in build_gradle:
-        issues.append("plain android flutter run must default alpha media to localhost HTTPS transport")
+    if 'loadRuntimePackageDartDefines("alpha")' not in build_gradle:
+        issues.append("plain android flutter run must derive alpha endpoints from the app runtime package")
+    if "alphaLocalTransportDartDefineKeys.forEach" not in build_gradle:
+        issues.append("plain android flutter run must project every alpha transport endpoint")
+    if "rewriteAlphaLocalTransport(getValue(key))" not in build_gradle:
+        issues.append("plain android flutter run must rewrite alpha transport hosts to localhost")
+    duplicate_alpha_transport_urls = (
+        "https://localhost:17000",
+        "https://localhost:17100",
+    )
+    if any(url in build_gradle for url in duplicate_alpha_transport_urls):
+        issues.append(
+            "plain android flutter run must not duplicate alpha ports outside the runtime package"
+        )
     if "prepareAndroidLocalAlphaStack" not in build_gradle:
         issues.append("plain android flutter run must prepare alpha local stack before debug resource generation")
     if 'environment("QWQ_ALPHA_LOCAL_PUBLIC_HOST_SETUP", "skip")' not in build_gradle:
@@ -216,9 +247,9 @@ def main() -> int:
         )
     if (
         "_installLocalDevHttpsTrustBeforeMediaClients()" not in app_bootstrap
-        or "startupPrerequisites: startupPrerequisites" not in app_bootstrap
+        or "authNetworkPrerequisites:" not in app_bootstrap
     ):
-        issues.append("app bootstrap must pass local HTTPS trust as startup prerequisites before media clients")
+        issues.append("app bootstrap must pass local HTTPS trust as auth network prerequisites before media clients")
     image_cache_controller = (
         ROOT / "quwoquan_app/lib/core/media/app_image_cache_controller.dart"
     ).read_text(encoding="utf-8")
@@ -265,9 +296,21 @@ def main() -> int:
         issues.append("alpha run.sh must pass legal-static base URL with app env dart-defines")
     if "export QWQ_ANDROID_LOCAL_ENV_CA_REQUIRED=1" not in beta_manual:
         issues.append("beta manual launcher must require Android local debug CA for Android devices")
+    if (
+        "prepare_android_local_tls" not in app_instance_launcher
+        or "enable_android_adb_reverse" not in app_instance_launcher
+        or "local_target_android_debug_ca_cert" not in app_instance_launcher
+    ):
+        issues.append(
+            "shared app-instance launcher must derive Android adb reverse and local CA from dev_up topology helpers"
+        )
     alpha_script = (ROOT / "quwoquan_ops/cli/alpha/start_alpha_mock_stack.sh").read_text(
         encoding="utf-8"
     )
+    if 'TLS_ROOT_CERT="$TLS_CA_DIR/root.crt"' not in alpha_script:
+        issues.append(
+            "alpha TLS proxy must expose alpha-local/certificates/root.crt as its signing root"
+        )
     if "quwoquan_ops/cli/lib/tls_reverse_proxy.py" not in alpha_script:
         issues.append("alpha local stack must use repo-owned TLS reverse proxy")
     if "quwoquan_ops/cli/legal_static.py\" package --env alpha" not in alpha_script:
@@ -286,8 +329,14 @@ def main() -> int:
         issues.append("alpha local stack must idempotently skip repeated macOS login keychain trust writes")
     if "QWQ_ALPHA_LOCAL_MACOS_KEYCHAIN_TRUST" not in alpha_script:
         issues.append("alpha local stack must allow skipping macOS login keychain trust for iOS simulator builds")
-    if "simctl keychain booted add-root-cert" not in alpha_script:
-        issues.append("alpha local stack must install the local root CA into booted iOS simulators")
+    if (
+        "quwoquan_ops/cli/lib/local_target_tls.py" not in alpha_script
+        or "install-ios-simulator-ca" not in alpha_script
+        or "--simulator-udid" not in alpha_script
+    ):
+        issues.append(
+            "alpha local stack must delegate explicit Simulator CA installation to local_target_tls.py"
+        )
     if "IP.2 = 10.0.2.2" not in alpha_script:
         issues.append("alpha local TLS certificate must include Android emulator host 10.0.2.2 as an IP SAN")
     if "--resolve" in alpha_script:
@@ -349,9 +398,9 @@ def main() -> int:
     ):
         issues.append("prod-sim startup must verify UTF-8 agreement and privacy-policy content")
     for label, source in {"gamma Caddyfile": local_gamma_caddyfile}.items():
-        if "@api_user path /v1/auth* /v1/owner* /v1/user* /v1/me /v1/me/*" not in source:
+        if "@api_user path /auth* /owner* /user* /me /me/*" not in source:
             issues.append(f"{label} must route auth and owner APIs to user-service")
-        if "@pub_user path /v1/auth* /v1/owner* /v1/user* /v1/me /v1/me/*" not in source:
+        if "@pub_user path /auth* /owner* /user* /me /me/*" not in source:
             issues.append(f"{label} must expose auth and owner APIs on the public gateway")
         if 'handle /legal/manifest.json {' not in source:
             issues.append(f"{label} must preserve JSON content type for the legal manifest")
@@ -362,9 +411,9 @@ def main() -> int:
     if prod_plane_renderer.count('Content-Type "text/html; charset=utf-8"') != 2:
         issues.append("prod renderer must declare UTF-8 for both extensionless legal route surfaces")
     if prod_plane_renderer.count(
-        "@api_user path /v1/auth* /v1/owner* /v1/user* /v1/me /v1/me/*"
+        "@api_user path /auth* /owner* /user* /me /me/*"
     ) != 1 or prod_plane_renderer.count(
-        "@pub_user path /v1/auth* /v1/owner* /v1/user* /v1/me /v1/me/*"
+        "@pub_user path /auth* /owner* /user* /me /me/*"
     ) != 1:
         issues.append("prod renderer must route auth and owner APIs to user-service on both gateway surfaces")
     if 'LOCAL_GAMMA_DEPLOY_RENDER_ROOT="${QWQ_DEPLOY_WORK_ROOT}/gamma-local/rendered"' not in gamma_script:

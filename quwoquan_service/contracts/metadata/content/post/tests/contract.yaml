@@ -1,4 +1,3 @@
-version: 1
 aggregate: Post
 layer: service_side
 
@@ -21,26 +20,26 @@ data_management:
 
 # ── CRUD 场景 ────────────────────────────────────────────────────────
 scenarios:
-  - name: create_post_aggregate
-    operation: CreatePost
-    go_func: TestCreatePostAggregate
-    command: CreatePost (image type)
+  - name: submit_post_publication
+    operation: SubmitPostPublication
+    go_func: TestSubmitPostPublicationCreatesPublishedPost
+    command: SubmitPostPublication (image type)
     seed: []
     assertions:
       - db.posts.FindOne({_id: result.id}) → document exists with correct fields
       - db.media_assets.Find({postId: result.id}) → assets created
-      - eventSpy.AssertPublished("PostCreated", {_id, authorId, contentType, tagRefs})
+      - eventSpy.AssertPublished("PostPublished", {_id, publishIntentId, authorId, contentType, tagRefs})
       - embedding mock called with correct input fields
 
-  - name: create_post_all_types
-    operation: CreatePost
-    go_func: TestCreatePostAllTypes
-    command: CreatePost
+  - name: submit_post_publication_all_types
+    operation: SubmitPostPublication
+    go_func: TestSubmitPostPublicationAllTypes
+    command: SubmitPostPublication
     variants: [image, video, micro, article]
     seed: []
     assertions:
       - each variant: db.posts.FindOne → contentType matches input
-      - each variant: eventSpy.AssertPublished("PostCreated")
+      - each variant: eventSpy.AssertPublished("PostPublished")
 
   - name: get_post_success
     operation: GetPost
@@ -61,20 +60,20 @@ scenarios:
       - response.code == "CONTENT.USER.post_not_found"
       - http_status == 404
 
-  - name: update_post_forbidden
-    operation: UpdatePost
-    go_func: TestUpdatePostForbidden
-    command: UpdatePost (wrong owner)
+  - name: update_post_settings_forbidden
+    operation: UpdatePostSettings
+    go_func: TestUpdatePostSettingsForbidden
+    command: UpdatePostSettings (wrong owner)
     seed: [fixture.NewPost(authorId="user_a")]
     caller: user_b
     assertions:
       - response.code == "CONTENT.USER.forbidden_edit"
       - http_status == 403
 
-  - name: create_post_invalid_content_type
-    operation: CreatePost
-    go_func: TestCreatePostInvalidContentType
-    command: CreatePost (contentType="invalid_type")
+  - name: submit_post_publication_invalid_content_type
+    operation: SubmitPostPublication
+    go_func: TestSubmitPostPublicationInvalidContentType
+    command: SubmitPostPublication (contentType="invalid_type")
     assertions:
       - response.code == "CONTENT.USER.invalid_content_type"
       - http_status == 400
@@ -210,10 +209,20 @@ scenarios:
     operation: UpdateProfileInteractionState
     go_func: TestProfileShareInteractionDurableHTTPContract
     command: UpdateProfileInteractionState(read, idempotent)
-  - name: publish_post_contract
-    operation: PublishPost
-    go_func: TestPublishPostContract
-    command: PublishPost
+  - name: submit_post_publication_replay_contract
+    operation: SubmitPostPublication
+    go_func: TestPostPublicationIntentConcurrentReplayCreatesOnePost
+    command: SubmitPostPublication (same immutable PublishIntent replayed concurrently)
+    assertions:
+      - 同一 actor + publishIntentId + localDraftId 的并发重放只创建一个 Post/outbox
+      - 所有并发调用返回字节稳定的首次 receipt
+  - name: submit_post_publication_intent_reuse_conflict
+    operation: SubmitPostPublication
+    go_func: TestPostPublicationIntentRejectsReuseForAnotherDraft
+    command: SubmitPostPublication (same publishIntentId with another localDraftId)
+    assertions:
+      - 返回 CONTENT.USER.idempotency_conflict
+      - 只有首次 Post/receipt/outbox，第二草稿不创建业务对象
   - name: delete_post_contract
     operation: DeletePost
     go_func: TestDeletePostContract
@@ -271,9 +280,9 @@ scenarios:
       - revoked non-owner GetPost returns 404 CONTENT.USER.post_not_found
       - private object existence is not disclosed as a 403 authorization result
   - name: post_projection_rebuild_replays_durable_outbox
-    operation: PublishPost
+    operation: SubmitPostPublication
     go_func: TestPostProjectionRebuildReplaysDurableOutbox
-    command: replay PostCreated/PostPublished from a fresh projection checkpoint
+    command: replay PostPublished from a fresh projection checkpoint
     assertions:
       - deleting rm_discovery_feed does not mutate the Post aggregate
       - a fresh consumer replays durable outbox facts and rebuilds the projection
@@ -298,10 +307,10 @@ scenarios:
     operation: RequestOriginalImageAccess
     go_func: TestRequestOriginalImageAccessContract
     command: RequestOriginalImageAccess
-  - name: bind_media_assets_to_post_contract
-    operation: BindMediaAssetsToPost
-    go_func: TestBindMediaAssetsToPostContract
-    command: BindMediaAssetsToPost
+  - name: submit_post_publication_with_media_contract
+    operation: SubmitPostPublication
+    go_func: TestSubmitPostPublicationBindsReadyOwnedMedia
+    command: SubmitPostPublication (ready owned MediaAsset references)
   - name: get_my_intersection_summary_contract
     operation: GetMyIntersectionSummary
     go_func: TestIntersectionService_SummaryNewCountAndVisitClears

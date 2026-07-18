@@ -16,6 +16,7 @@ class OpsRequestPageIds {
     'ListServiceConfigs': 'ops.list.service.configs',
     'RecordVisit': 'ops.record.visit',
     'ReportEventBatch': 'ops.report.event.batch',
+    'ReportStartupEventBatch': 'ops.report.startup.event.batch',
     'ResolveEffectiveConfig': 'ops.resolve.effective.config',
     'UpdateExperimentRollout': 'ops.update.experiment.rollout',
     'UpdateServiceConfig': 'ops.update.service.config',
@@ -32,6 +33,7 @@ class OpsRequestPageIds {
   static const String listServiceConfigs = 'ops.list.service.configs';
   static const String recordVisit = 'ops.record.visit';
   static const String reportEventBatch = 'ops.report.event.batch';
+  static const String reportStartupEventBatch = 'ops.report.startup.event.batch';
   static const String resolveEffectiveConfig = 'ops.resolve.effective.config';
   static const String updateExperimentRollout = 'ops.update.experiment.rollout';
   static const String updateServiceConfig = 'ops.update.service.config';

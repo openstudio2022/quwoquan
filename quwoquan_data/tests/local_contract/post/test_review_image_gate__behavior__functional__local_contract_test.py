@@ -23,7 +23,7 @@ sys.path.insert(0, str(SCRIPTS_ROOT))
 import numpy as np  # noqa: E402
 import cv2  # noqa: E402
 
-from content.post.route_review_checks import (  # noqa: E402
+from content.post.article.route_review_checks import (  # noqa: E402
     _check_image_gate,
     _check_image_fidelity,
     _check_carrier_consistency,
@@ -31,7 +31,7 @@ from content.post.route_review_checks import (  # noqa: E402
     _check_image_source_scope,
     _review_fallback_stage,
 )
-from content.post.route_core import _image_caption_from_article  # noqa: E402
+from content.post.article.route_core import _image_caption_from_article  # noqa: E402
 
 FIXTURE_MEDIA = (
     DATA_ROOT.parent

@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"quwoquan_service/runtime/controlplane"
 	"quwoquan_service/services/product-ops-service/internal/application"
@@ -85,17 +86,12 @@ func (s *productService) handleGetTriageSummary(w http.ResponseWriter, r *http.R
 		return
 	}
 	eventQuery := application.EventSummaryQuery{
-		EventType:        strings.TrimSpace(r.URL.Query().Get("eventType")),
-		EventName:        strings.TrimSpace(r.URL.Query().Get("eventName")),
-		PageName:         strings.TrimSpace(r.URL.Query().Get("pageName")),
-		SurfaceID:        strings.TrimSpace(r.URL.Query().Get("surfaceId")),
-		RouteID:          strings.TrimSpace(r.URL.Query().Get("routeId")),
-		TargetType:       strings.TrimSpace(r.URL.Query().Get("targetType")),
-		TargetKey:        strings.TrimSpace(r.URL.Query().Get("targetKey")),
-		EntityType:       strings.TrimSpace(r.URL.Query().Get("entityType")),
-		EntityID:         strings.TrimSpace(r.URL.Query().Get("entityId")),
-		ExperimentBucket: strings.TrimSpace(r.URL.Query().Get("experimentBucket")),
-		Source:           strings.TrimSpace(r.URL.Query().Get("source")),
+		LogType:      strings.TrimSpace(r.URL.Query().Get("logType")),
+		EventType:    strings.TrimSpace(r.URL.Query().Get("eventType")),
+		PageName:     strings.TrimSpace(r.URL.Query().Get("pageName")),
+		AppVersion:   strings.TrimSpace(r.URL.Query().Get("appVersion")),
+		NetworkClass: strings.TrimSpace(r.URL.Query().Get("networkClass")),
+		ErrorCode:    strings.TrimSpace(r.URL.Query().Get("errorCode")),
 	}
 	eventSummary, err := s.telemetry.GetEventSummary(r.Context(), eventQuery)
 	if err != nil {
@@ -103,18 +99,15 @@ func (s *productService) handleGetTriageSummary(w http.ResponseWriter, r *http.R
 		return
 	}
 	recentEvents, err := s.telemetry.GetEventDrilldown(r.Context(), application.EventDrilldownQuery{
-		EventType:        eventQuery.EventType,
-		EventName:        eventQuery.EventName,
-		PageName:         eventQuery.PageName,
-		SurfaceID:        eventQuery.SurfaceID,
-		RouteID:          eventQuery.RouteID,
-		TargetType:       eventQuery.TargetType,
-		TargetKey:        eventQuery.TargetKey,
-		EntityType:       eventQuery.EntityType,
-		EntityID:         eventQuery.EntityID,
-		ExperimentBucket: eventQuery.ExperimentBucket,
-		Source:           eventQuery.Source,
-		Limit:            20,
+		LogType:      eventQuery.LogType,
+		EventType:    eventQuery.EventType,
+		PageName:     eventQuery.PageName,
+		AppVersion:   eventQuery.AppVersion,
+		NetworkClass: eventQuery.NetworkClass,
+		ErrorCode:    eventQuery.ErrorCode,
+		From:         time.Now().UTC().Add(-15 * time.Minute),
+		To:           time.Now().UTC(),
+		Limit:        20,
 	})
 	if err != nil {
 		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
@@ -142,7 +135,16 @@ func (s *productService) handleGetTriageSummary(w http.ResponseWriter, r *http.R
 }
 
 func buildTopEventHotspots(summary application.EventSummary) map[string][]dimensionCount {
-	keys := []string{"pageName", "surfaceId", "routeId", "operationId", "eventName", "eventType", "targetType", "targetKey", "experimentBucket"}
+	keys := []string{
+		"logType",
+		"eventType",
+		"pageName",
+		"appVersion",
+		"networkClass",
+		"deviceManufacturer",
+		"deviceModel",
+		"errorCode",
+	}
 	out := map[string][]dimensionCount{}
 	for _, key := range keys {
 		counter := summary.DimensionCounters[key]
@@ -218,7 +220,7 @@ func buildProductBacklogCandidates(
 			Title:          "补齐事件维度覆盖",
 			Summary:        "当前事件汇总缺少 " + strings.Join(missingDimensions, "、") + " 维度，Agent 无法完整还原调用链。",
 			Owner:          "app-observability",
-			NextAction:     "检查 page_access / event 上报链路，补齐缺失的页面、surface、route 或 operation 维度。",
+			NextAction:     "检查 page_access / event 上报链路，补齐九字段公共信封与事件目录要求的强类型扩展。",
 			DrilldownRoute: "/product/dashboard",
 			RunbookID:      "cfg-rollback-drill",
 			RunbookRoute:   "/platform/runbook",
@@ -292,7 +294,7 @@ func buildProductBacklogCandidates(
 				AuditRoute:     "/audit",
 				Evidence: map[string]any{
 					"missingFields": missingFields,
-					"sampleEventId": recentEvents[0].EventID,
+					"sampleRowKey":  recentEvents[0].RowKey,
 				},
 			})
 		}
@@ -301,7 +303,15 @@ func buildProductBacklogCandidates(
 }
 
 func missingProductEventDimensions(summary application.EventSummary) []string {
-	candidateDimensions := []string{"pageName", "surfaceId", "routeId", "operationId", "targetType", "targetKey", "experimentBucket"}
+	candidateDimensions := []string{
+		"logType",
+		"eventType",
+		"pageName",
+		"appVersion",
+		"networkClass",
+		"deviceManufacturer",
+		"deviceModel",
+	}
 	missing := make([]string, 0, len(candidateDimensions))
 	for _, dimension := range candidateDimensions {
 		if len(summary.DimensionCounters[dimension]) == 0 {
@@ -314,23 +324,35 @@ func missingProductEventDimensions(summary application.EventSummary) []string {
 func missingRecentEventFields(items []application.EventDrilldownItem) []string {
 	fields := map[string]bool{}
 	for _, item := range items {
+		if strings.TrimSpace(item.LogType) == "" {
+			fields["logType"] = true
+		}
+		if strings.TrimSpace(item.EventType) == "" {
+			fields["eventType"] = true
+		}
+		if strings.TrimSpace(item.SessionID) == "" {
+			fields["sessionId"] = true
+		}
 		if strings.TrimSpace(item.PageName) == "" {
 			fields["pageName"] = true
 		}
-		if strings.TrimSpace(item.SurfaceID) == "" {
-			fields["surfaceId"] = true
+		if strings.TrimSpace(item.OccurredAt) == "" {
+			fields["occurredAt"] = true
 		}
-		if strings.TrimSpace(item.RouteID) == "" {
-			fields["routeId"] = true
+		if strings.TrimSpace(item.DeviceManufacturer) == "" {
+			fields["deviceManufacturer"] = true
 		}
-		if strings.TrimSpace(item.OperationID) == "" {
-			fields["operationId"] = true
+		if strings.TrimSpace(item.DeviceModel) == "" {
+			fields["deviceModel"] = true
 		}
-		if strings.TrimSpace(item.TargetType) == "" {
-			fields["targetType"] = true
+		if strings.TrimSpace(item.AppVersion) == "" {
+			fields["appVersion"] = true
 		}
-		if strings.TrimSpace(item.TargetKey) == "" {
-			fields["targetKey"] = true
+		if strings.TrimSpace(item.NetworkClass) == "" {
+			fields["networkClass"] = true
+		}
+		if item.LogType == "error" && item.ErrorCode == nil {
+			fields["errorCode"] = true
 		}
 	}
 	out := make([]string, 0, len(fields))

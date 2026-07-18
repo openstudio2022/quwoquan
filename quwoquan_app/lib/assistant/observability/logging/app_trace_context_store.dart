@@ -1,14 +1,20 @@
 import 'dart:math';
 
+import 'package:quwoquan_app/core/telemetry/app_telemetry_session_store.dart';
+
 class AppTraceContextStore {
   AppTraceContextStore._();
 
   static final AppTraceContextStore instance = AppTraceContextStore._();
   final Random _random = Random();
+  late final String _localDiagnosticSessionId = _newId('local_session');
 
-  String? _sessionId;
-
-  String get sessionId => _sessionId ??= _newId('sess');
+  String get sessionId {
+    final telemetrySession = AppTelemetrySessionStore.instance;
+    return telemetrySession.isInitialized
+        ? telemetrySession.sessionId
+        : _localDiagnosticSessionId;
+  }
 
   /// 隐私安全的派生设备标识（installId hash 派生，非原始设备 ID）。
   /// 由鉴权会话恢复时设置一次；用于游客设备态点赞/分享的设备维度统一标识，

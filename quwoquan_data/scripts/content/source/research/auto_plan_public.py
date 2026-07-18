@@ -111,7 +111,7 @@ def _write_incremental_auto_research_checkpoint(
     partial_reason: str,
 ) -> None:
     persisted = copy.deepcopy(base_report) if isinstance(base_report, Mapping) else {
-        "schemaVersion": "quwoquan.content.source.auto_research_plan",
+        "schema": "quwoquan.content.source.auto_research_plan",
         "executionId": execution_id,
         "vertical": vertical_from_task_id(execution_id),
         "updated": [],
@@ -170,14 +170,16 @@ def write_auto_research_plans(
     entity_type: str,
     force: bool = False,
     lanes: set[str] | None = None,
-    max_workers: int = 1,
+    max_workers: int | None = None,
     progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     """Discover separated source plans, optionally parallelized per entity."""
     selected_lanes = lanes or {"homepage", "article", "image"}
     vertical = vertical_from_task_id(execution_id)
     started = time.monotonic()
-    workers = max(1, int(max_workers or 1))
+    from core.runtime_policy import active_runtime_policy
+
+    workers = max_workers or active_runtime_policy().research_workers
 
     def emit_progress(
         status: str,
@@ -233,7 +235,7 @@ def write_auto_research_plans(
         ]
         prepare_source_plan(execution_id, entities)
         report = {
-            "schemaVersion": "quwoquan.content.source.auto_research_plan",
+            "schema": "quwoquan.content.source.auto_research_plan",
             "executionId": execution_id,
             "vertical": vertical,
             "selectedLanes": sorted(selected_lanes),

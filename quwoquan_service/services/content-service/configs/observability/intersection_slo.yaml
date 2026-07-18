@@ -12,10 +12,10 @@ capability: intersection-unified-experience
 
 # 路由集合（HTTP SLI 的 route label 过滤；与 generated_routes.go 一致）。
 routes:
-  object_intersections: /v1/content/intersections/object
-  my_intersections_list: /v1/content/intersections
-  my_intersection_summary: /v1/content/intersections/summary
-  mark_visited: /v1/content/intersections/visit
+  object_intersections: /content/intersections/object
+  my_intersections_list: /content/intersections
+  my_intersection_summary: /content/intersections/summary
+  mark_visited: /content/intersections/visit
 
 # 指标真相源（Prometheus，promauto 默认注册表，/metrics 暴露）
 metrics:
@@ -33,13 +33,13 @@ slis:
   # ---- HTTP 边界（用户感知延迟与可用性）----
   - id: intersection_api_latency
     description: 交集相关读路由的用户感知延迟，分位数取自 http_server histogram
-    sli: histogram_quantile(q, sum(rate(http_server_duration_seconds_bucket{service="content-service", route=~"/v1/content/intersections.*"}[5m])) by (le))
+    sli: histogram_quantile(q, sum(rate(http_server_duration_seconds_bucket{service="content-service", route=~"/content/intersections.*"}[5m])) by (le))
     objectives:
       p50_ms: 60
       p95_ms: 300
   - id: intersection_api_availability
     description: 交集读路由可用性 = 1 - 5xx 错误率（status 以 5 开头）
-    sli: 1 - sum(rate(http_server_requests_total{service="content-service", route=~"/v1/content/intersections.*", status=~"5.."}[5m])) / sum(rate(http_server_requests_total{service="content-service", route=~"/v1/content/intersections.*"}[5m]))
+    sli: 1 - sum(rate(http_server_requests_total{service="content-service", route=~"/content/intersections.*", status=~"5.."}[5m])) / sum(rate(http_server_requests_total{service="content-service", route=~"/content/intersections.*"}[5m]))
     objective: 0.995
 
   # ---- 业务漏斗（推荐质量与新鲜度）----

@@ -41,13 +41,13 @@ import (
 // contract.yaml: react_with_counter_strategy / go_func: TestReactWithCounterStrategy
 func TestLikePost(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
-	created := createPost(t, `{"contentType":"image","title":"Like target","mediaUrls":["https://example.com/img.jpg"]}`)
-	postID, _ := created["_id"].(string)
+	created := submitPublishedPost(t, `{"contentType":"image","title":"Like target"}`)
+	postID, _ := created["postId"].(string)
 	if postID == "" {
 		t.Fatal("no _id in created post")
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/content/posts/"+postID+"/like", nil)
+	req := httptest.NewRequest(http.MethodPost, "/content/posts/"+postID+"/like", nil)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 
@@ -67,16 +67,16 @@ func TestLikePost(t *testing.T) {
 }
 
 // TestFavoriteRouteRetired 反向守护：收藏概念全量退场后，
-// /v1/content/posts/{id}/favorite 路由必须不再注册（404），防止兼容路由回潮。
+// /content/posts/{id}/favorite 路由必须不再注册（404），防止兼容路由回潮。
 func TestFavoriteRouteRetired(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
-	created := createPost(t, `{"contentType":"image","title":"Favorite retired target","mediaUrls":["https://example.com/img.jpg"]}`)
-	postID, _ := created["_id"].(string)
+	created := submitPublishedPost(t, `{"contentType":"image","title":"Favorite retired target"}`)
+	postID, _ := created["postId"].(string)
 	if postID == "" {
 		t.Fatal("no _id in created post")
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/content/posts/"+postID+"/favorite", nil)
+	req := httptest.NewRequest(http.MethodPost, "/content/posts/"+postID+"/favorite", nil)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 
@@ -85,13 +85,13 @@ func TestFavoriteRouteRetired(t *testing.T) {
 	}
 }
 
-// TestBehaviorBatchReport verifies POST /v1/content/behaviors accepts a mixed batch
+// TestBehaviorBatchReport verifies POST /content/behaviors accepts a mixed batch
 // of impression + dwell + click events and returns 204.
 // contract.yaml: behavior_batch_report
 func TestBehaviorBatchReport(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
-	created := createPost(t, `{"contentType":"image","title":"Behavior batch target","mediaUrls":["https://example.com/img.jpg"]}`)
-	postID, _ := created["_id"].(string)
+	created := submitPublishedPost(t, `{"contentType":"image","title":"Behavior batch target"}`)
+	postID, _ := created["postId"].(string)
 	if postID == "" {
 		t.Fatal("no _id in created post")
 	}
@@ -106,7 +106,7 @@ func TestBehaviorBatchReport(t *testing.T) {
 		]
 	}`, postID, postID, postID)
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/content/behaviors", strings.NewReader(payload))
+	req := httptest.NewRequest(http.MethodPost, "/content/behaviors", strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
@@ -122,11 +122,8 @@ func TestBehaviorBatchReport(t *testing.T) {
 func TestGetMyFootprintContract(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 	const userID = "footprint_user_001"
-	created := createPost(t, `{"contentType":"image","title":"Footprint target","mediaUrls":["https://example.com/img.jpg"]}`)
-	postID := asTestString(created["_id"])
-	if postID == "" {
-		postID = asTestString(created["id"])
-	}
+	created := submitPublishedPost(t, `{"contentType":"image","title":"Footprint target"}`)
+	postID := asTestString(created["postId"])
 	if postID == "" {
 		t.Fatalf("missing post id: %+v", created)
 	}
@@ -137,7 +134,7 @@ func TestGetMyFootprintContract(t *testing.T) {
 			{"clientEventId": "evt-footprint-001", "contentId": %q, "contentType": "image", "action": "click", "userId": %q}
 		]
 	}`, userID, postID, userID)
-	reportReq := httptest.NewRequest(http.MethodPost, "/v1/content/behaviors", strings.NewReader(payload))
+	reportReq := httptest.NewRequest(http.MethodPost, "/content/behaviors", strings.NewReader(payload))
 	reportReq.Header.Set("Content-Type", "application/json")
 	reportReq.Header.Set("X-Client-User-Id", userID)
 	reportReq.Header.Set("X-Client-Sub-Account-Id", userID)
@@ -147,7 +144,7 @@ func TestGetMyFootprintContract(t *testing.T) {
 		t.Fatalf("report behavior: expected 204, got %d: %s", reportRec.Code, reportRec.Body.String())
 	}
 
-	footprintReq := httptest.NewRequest(http.MethodGet, "/v1/content/footprint?type=viewed&limit=10", nil)
+	footprintReq := httptest.NewRequest(http.MethodGet, "/content/footprint?type=viewed&limit=10", nil)
 	footprintReq.Header.Set("X-Client-User-Id", userID)
 	footprintRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(footprintRec, footprintReq)
@@ -171,12 +168,12 @@ func TestGetMyFootprintContract(t *testing.T) {
 	}
 }
 
-// TestBehaviorBatchEmpty verifies POST /v1/content/behaviors with an empty events
+// TestBehaviorBatchEmpty verifies POST /content/behaviors with an empty events
 // array returns 400 with CONTENT.USER.invalid_argument.
 // contract.yaml: behavior_batch_empty
 func TestBehaviorBatchEmpty(t *testing.T) {
 	payload := `{"userId": "user_empty", "events": []}`
-	req := httptest.NewRequest(http.MethodPost, "/v1/content/behaviors", strings.NewReader(payload))
+	req := httptest.NewRequest(http.MethodPost, "/content/behaviors", strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
@@ -194,12 +191,12 @@ func TestBehaviorBatchEmpty(t *testing.T) {
 	}
 }
 
-// TestBehaviorBatchWireAliases verifies the app-facing wire aliases used by
+// TestBehaviorBatchCanonicalWire verifies the app-facing canonical wire used by
 // local gamma T3: postId/type/dwellMs.
-func TestBehaviorBatchWireAliases(t *testing.T) {
+func TestBehaviorBatchCanonicalWire(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
-	created := createPost(t, `{"contentType":"image","title":"Wire alias target","mediaUrls":["https://example.com/img.jpg"]}`)
-	postID, _ := created["_id"].(string)
+	created := submitPublishedPost(t, `{"contentType":"image","title":"Wire canonical target"}`)
+	postID, _ := created["postId"].(string)
 	if postID == "" {
 		t.Fatal("no _id in created post")
 	}
@@ -208,7 +205,7 @@ func TestBehaviorBatchWireAliases(t *testing.T) {
 		`{"userId":"user_reporter_001","events":[{"postId":%q,"type":"dwell","dwellMs":12000,"userId":"user_reporter_001"}]}`,
 		postID,
 	)
-	req := httptest.NewRequest(http.MethodPost, "/v1/content/behaviors", strings.NewReader(payload))
+	req := httptest.NewRequest(http.MethodPost, "/content/behaviors", strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
@@ -335,7 +332,7 @@ func TestBehaviorBatchAssistantInterestAllowsEmptyContentID(t *testing.T) {
 			}
 		]
 	}`
-	req := httptest.NewRequest(http.MethodPost, "/v1/content/behaviors", strings.NewReader(payload))
+	req := httptest.NewRequest(http.MethodPost, "/content/behaviors", strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
@@ -367,7 +364,7 @@ func TestBehaviorBatchWishlistProjectsEntityWishlistEvent(t *testing.T) {
 			}
 		]
 	}`
-	req := httptest.NewRequest(http.MethodPost, "/v1/content/behaviors", strings.NewReader(payload))
+	req := httptest.NewRequest(http.MethodPost, "/content/behaviors", strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Client-User-Id", "user_wishlist_http_001")
 	req.Header.Set("X-Client-Sub-Account-Id", "user_wishlist_http_001")
@@ -587,7 +584,7 @@ func TestGetAuthorImpactReturnsBehaviorAggregation(t *testing.T) {
 			}
 		]
 	}`, authorID)
-	reportReq := httptest.NewRequest(http.MethodPost, "/v1/content/behaviors", strings.NewReader(payload))
+	reportReq := httptest.NewRequest(http.MethodPost, "/content/behaviors", strings.NewReader(payload))
 	reportReq.Header.Set("Content-Type", "application/json")
 	reportRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(reportRec, reportReq)
@@ -595,7 +592,7 @@ func TestGetAuthorImpactReturnsBehaviorAggregation(t *testing.T) {
 		t.Fatalf("report behavior: expected 204, got %d: %s", reportRec.Code, reportRec.Body.String())
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/content/sub-accounts/"+authorID+"/author-impact", nil)
+	req := httptest.NewRequest(http.MethodGet, "/content/sub-accounts/"+authorID+"/author-impact", nil)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -723,14 +720,14 @@ func (a *recommendOnlyProjectorAdapter) Project(ctx context.Context, event ports
 // and is rejected by the generic behavior batch endpoint.
 func TestBehaviorBatchRejectsLike(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
-	created := createPost(t, `{"contentType":"image","title":"Like batch target","mediaUrls":["https://example.com/img.jpg"]}`)
-	postID, _ := created["_id"].(string)
+	created := submitPublishedPost(t, `{"contentType":"image","title":"Like batch target"}`)
+	postID, _ := created["postId"].(string)
 	if postID == "" {
 		t.Fatal("no _id in created post")
 	}
 
 	payload := fmt.Sprintf(`{"events":[{"postId":%q,"type":"like"}]}`, postID)
-	req := httptest.NewRequest(http.MethodPost, "/v1/content/behaviors", strings.NewReader(payload))
+	req := httptest.NewRequest(http.MethodPost, "/content/behaviors", strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)

@@ -5,7 +5,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 ///
 /// 三维度覆盖：
 ///   常规契约  — 正常输入 → 正确输出（字段解析、fromMap）
-///   兼容性契约 — alias 字段（_id/id, lat/lng, distance/distanceMeters）仍正确解析；round-trip
+///   单轨契约 — 拒旧 alias；只认 id/latitude/longitude/distanceMeters；round-trip
 ///   异常/边界契约 — 缺字段/null 安全、全字段缺失不崩溃
 void main() {
   // ──────────────────────────────────────────────────────────────────
@@ -45,10 +45,10 @@ void main() {
   });
 
   // ──────────────────────────────────────────────────────────────────
-  // 兼容性契约：alias 字段仍正确解析；round-trip 稳定
+  // 单轨契约：拒旧 alias；round-trip 只认 canonical
   // ──────────────────────────────────────────────────────────────────
-  group('LocationPoiDto — 兼容性契约', () {
-    test('_id alias used when id missing', () {
+  group('LocationPoiDto — 单轨契约', () {
+    test('rejects _id alias when id missing', () {
       const raw = <String, dynamic>{
         '_id': 'ext-id-abc',
         'name': 'Test',
@@ -56,21 +56,21 @@ void main() {
         'longitude': 2.0,
       };
       final dto = LocationPoiDto.fromMap(raw);
-      expect(dto.id, equals('ext-id-abc'));
+      expect(dto.id, equals(''));
     });
 
-    test('lat/lng alias used when latitude/longitude missing', () {
+    test('rejects lat/lng alias when latitude/longitude missing', () {
       const raw = <String, dynamic>{
         'name': 'Alias POI',
         'lat': 39.9,
         'lng': 116.4,
       };
       final dto = LocationPoiDto.fromMap(raw);
-      expect(dto.latitude, closeTo(39.9, 0.0001));
-      expect(dto.longitude, closeTo(116.4, 0.0001));
+      expect(dto.latitude, equals(0.0));
+      expect(dto.longitude, equals(0.0));
     });
 
-    test('distance alias used when distanceMeters missing', () {
+    test('rejects distance alias when distanceMeters missing', () {
       const raw = <String, dynamic>{
         'name': 'Distant POI',
         'latitude': 1.0,
@@ -78,7 +78,7 @@ void main() {
         'distance': 500,
       };
       final dto = LocationPoiDto.fromMap(raw);
-      expect(dto.distanceMeters, equals(500));
+      expect(dto.distanceMeters, isNull);
     });
 
     test('toMap round-trip preserves fields', () {

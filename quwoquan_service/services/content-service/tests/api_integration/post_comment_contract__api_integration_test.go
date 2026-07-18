@@ -61,16 +61,9 @@ func TestDeleteComment(t *testing.T) {
 	postID := createCommentTestPost(t, "delete-post-owner")
 	created := createCommentThroughAPI(t, postID, "comment-owner", "to be deleted", "")
 
-	stale := commentAPIRequest(t, http.MethodDelete,
-		"/v1/content/posts/"+postID+"/comments/"+created.ID,
-		"comment-owner", map[string]any{"version": created.Version + 1})
-	if stale.Code != http.StatusConflict {
-		t.Fatalf("stale Comment delete status=%d body=%s", stale.Code, stale.Body.String())
-	}
-
 	deleted := commentAPIRequest(t, http.MethodDelete,
-		"/v1/content/posts/"+postID+"/comments/"+created.ID,
-		"comment-owner", map[string]any{"version": created.Version})
+		"/content/posts/"+postID+"/comments/"+created.ID,
+		"comment-owner", nil)
 	if deleted.Code != http.StatusOK {
 		t.Fatalf("delete Comment status=%d body=%s", deleted.Code, deleted.Body.String())
 	}
@@ -91,7 +84,7 @@ func TestGetCounters(t *testing.T) {
 	createCommentThroughAPI(t, postID, "counter-commenter", "count me", "")
 
 	recorder := commentAPIRequest(t, http.MethodGet,
-		"/v1/content/posts/"+postID+"/counters", "viewer", nil)
+		"/content/posts/"+postID+"/counters", "viewer", nil)
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("get counters status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
@@ -110,7 +103,7 @@ func TestCommentCountersStayConsistentAcrossReadModels(t *testing.T) {
 
 	page := listCommentsThroughAPI(t, postID, "viewer", "", 20)
 	counterRecorder := commentAPIRequest(t, http.MethodGet,
-		"/v1/content/posts/"+postID+"/counters", "viewer", nil)
+		"/content/posts/"+postID+"/counters", "viewer", nil)
 	var counters map[string]any
 	decodeCommentResponse(t, counterRecorder, &counters)
 	if page.Total != 1 || numberAsInt64(counters["comment"]) != page.Total {
@@ -118,14 +111,14 @@ func TestCommentCountersStayConsistentAcrossReadModels(t *testing.T) {
 	}
 
 	deleteRecorder := commentAPIRequest(t, http.MethodDelete,
-		"/v1/content/posts/"+postID+"/comments/"+created.ID,
-		"consistency-commenter", map[string]any{"version": created.Version})
+		"/content/posts/"+postID+"/comments/"+created.ID,
+		"consistency-commenter", nil)
 	if deleteRecorder.Code != http.StatusOK {
 		t.Fatalf("delete status=%d body=%s", deleteRecorder.Code, deleteRecorder.Body.String())
 	}
 	page = listCommentsThroughAPI(t, postID, "viewer", "", 20)
 	counterRecorder = commentAPIRequest(t, http.MethodGet,
-		"/v1/content/posts/"+postID+"/counters", "viewer", nil)
+		"/content/posts/"+postID+"/counters", "viewer", nil)
 	decodeCommentResponse(t, counterRecorder, &counters)
 	if page.Total != 0 || numberAsInt64(counters["comment"]) != 0 {
 		t.Fatalf("Comment deletion projection mismatch: page=%+v counters=%+v", page, counters)
@@ -163,13 +156,13 @@ func TestReactToCommentContract(t *testing.T) {
 	comment := createCommentThroughAPI(t, postID, "reaction-strict-commenter", "strict target", "")
 
 	unsupported := commentAPIRequest(t, http.MethodPost,
-		"/v1/content/comments/"+comment.ID+"/reaction",
+		"/content/comments/"+comment.ID+"/reaction",
 		"viewer", map[string]any{"viewerReaction": "like"})
 	if unsupported.Code != http.StatusBadRequest {
 		t.Fatalf("unsupported reaction alias must be rejected, status=%d body=%s", unsupported.Code, unsupported.Body.String())
 	}
 	missing := commentAPIRequest(t, http.MethodPost,
-		"/v1/content/comments/missing-comment/reaction",
+		"/content/comments/missing-comment/reaction",
 		"viewer", map[string]any{"reaction": "like"})
 	if missing.Code != http.StatusNotFound {
 		t.Fatalf("missing Comment reaction target status=%d body=%s", missing.Code, missing.Body.String())
@@ -182,7 +175,7 @@ func TestListCommentsByAuthor(t *testing.T) {
 	postID := createCommentTestPost(t, "author-page-post-owner")
 	created := createCommentThroughAPI(t, postID, "comment-page-author", "authored comment", "")
 	recorder := commentAPIRequest(t, http.MethodGet,
-		"/v1/content/users/me/comments?limit=20", "comment-page-author", nil)
+		"/content/users/me/comments?limit=20", "comment-page-author", nil)
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("author Comment page status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
@@ -199,7 +192,7 @@ func TestListCommentsForPostAuthorContract(t *testing.T) {
 	postID := createCommentTestPost(t, "received-post-owner")
 	created := createCommentThroughAPI(t, postID, "received-commenter", "received comment", "")
 	recorder := commentAPIRequest(t, http.MethodGet,
-		"/v1/content/users/me/received-comments?limit=20", "received-post-owner", nil)
+		"/content/users/me/received-comments?limit=20", "received-post-owner", nil)
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("received Comment page status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
@@ -212,12 +205,9 @@ func TestListCommentsForPostAuthorContract(t *testing.T) {
 
 func createCommentTestPost(t *testing.T, ownerID string) string {
 	t.Helper()
-	created := createPostWithAuthor(t, ownerID,
-		`{"contentType":"image","title":"Comment object target","mediaUrls":["https://example.com/comment.jpg"]}`)
-	postID, _ := created["_id"].(string)
-	if postID == "" {
-		postID, _ = created["id"].(string)
-	}
+	created := submitPublishedPostWithAuthor(t, ownerID,
+		`{"contentType":"image","title":"Comment object target"}`)
+	postID, _ := created["postId"].(string)
 	if postID == "" {
 		t.Fatalf("Comment target Post response has no id: %+v", created)
 	}
@@ -233,7 +223,7 @@ func createCommentThroughAPI(
 ) commentapp.CommentCommandResult {
 	t.Helper()
 	recorder := commentAPIRequest(t, http.MethodPost,
-		"/v1/content/posts/"+postID+"/comments", actorID,
+		"/content/posts/"+postID+"/comments", actorID,
 		map[string]any{"content": content, "replyToCommentId": replyToCommentID, "mentions": []any{}})
 	if recorder.Code != http.StatusCreated {
 		t.Fatalf("create Comment status=%d body=%s", recorder.Code, recorder.Body.String())
@@ -251,7 +241,7 @@ func listCommentsThroughAPI(
 	limit int,
 ) commentapp.CommentPageSlice {
 	t.Helper()
-	path := fmt.Sprintf("/v1/content/posts/%s/comments?limit=%d", postID, limit)
+	path := fmt.Sprintf("/content/posts/%s/comments?limit=%d", postID, limit)
 	if cursor != "" {
 		path += "&cursor=" + cursor
 	}
@@ -272,7 +262,7 @@ func reactToCommentThroughAPI(
 ) reactionapp.CommentReactionCommandResult {
 	t.Helper()
 	recorder := commentAPIRequest(t, http.MethodPost,
-		"/v1/content/comments/"+commentID+"/reaction", actorID,
+		"/content/comments/"+commentID+"/reaction", actorID,
 		map[string]any{"reaction": reaction})
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("react to Comment status=%d body=%s", recorder.Code, recorder.Body.String())

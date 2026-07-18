@@ -1,4 +1,3 @@
-version: 1
 read_model: IntersectionTarget
 description: |
   交集可点击目标（统一交互子契约 · A–E 横切复用值对象，Phase 0 §20.7 冻结）。
@@ -27,23 +26,19 @@ client_projection:
       dart_type: String
       nullable: false
       source: objectType
-      aliases: [objectType]
       default: "''"
     - name: objectId
       dart_type: String
       nullable: false
       source: objectId
-      aliases: [objectId]
       default: "''"
     - name: objectKind
       dart_type: String
       nullable: false
       source: objectKind
-      aliases: [objectKind]
       default: "''"
     - name: routeId
       dart_type: String
       nullable: false
       source: routeId
-      aliases: [routeId]
       default: "''"

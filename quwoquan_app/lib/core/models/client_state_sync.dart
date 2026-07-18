@@ -93,7 +93,7 @@ class ClientStateSyncOutboxEntry {
           DateTime.tryParse(map['nextFlushAt']?.toString() ?? '')?.toUtc() ??
           DateTime.now().toUtc(),
       confirmedBoolValue:
-          _boolOrNull(map['confirmedBoolValue'] ?? map['baselineBoolValue']) ??
+          _boolOrNull(map['confirmedBoolValue']) ??
           (priorNeedsRemoteSync ? !desiredBoolValue : desiredBoolValue),
       retryCount: _int(map['retryCount'], 0),
     );

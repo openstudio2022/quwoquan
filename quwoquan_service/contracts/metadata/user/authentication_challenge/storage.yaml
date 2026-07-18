@@ -1,4 +1,3 @@
-version: 1
 aggregate: AuthenticationChallenge
 backend: postgres
 tables:

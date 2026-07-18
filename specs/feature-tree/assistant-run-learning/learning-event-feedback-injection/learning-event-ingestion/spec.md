@@ -18,8 +18,8 @@
 - `quwoquan_app/lib/assistant/sync/assistant_sync.dart`
 
 ### 云侧契约
-- `POST /v1/assistant/learning/events`
-- `POST /v1/assistant/learning/scorecards`
+- `POST /assistant/learning/events`
+- `POST /assistant/learning/scorecards`
 
 ## 输出
 

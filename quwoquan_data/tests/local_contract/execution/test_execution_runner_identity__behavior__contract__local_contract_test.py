@@ -21,18 +21,21 @@ RECIPE = {
         "modelFamily": "composer",
         "reviewModel": "gpt-5.5",
         "reviewModelFamily": "gpt",
-        "maxWorkers": 1,
     }
 }
 
 
-def test_execution_runner_passes_only_execution_id_to_internal_workflow(monkeypatch):
+def test_execution_runner_passes_only_execution_id_to_internal_controller(monkeypatch):
     observed: dict[str, object] = {}
 
     monkeypatch.setattr(runner, "preflight_execution_models", lambda _recipe: {})
     monkeypatch.setattr(runner, "_prepare_execution", lambda execution_id: observed.setdefault("prepared", execution_id))
     monkeypatch.setattr(runner, "prepare_execution_qualification", lambda execution_id: observed.setdefault("qualified", execution_id))
-    monkeypatch.setattr(runner, "handle_run", lambda args: observed.setdefault("run", args))
+    monkeypatch.setattr(
+        runner,
+        "run_controlled_execution",
+        lambda request: observed.setdefault("run", request),
+    )
 
     runner.run_execution(EXECUTION_ID, RECIPE)
 
@@ -50,7 +53,11 @@ def test_execution_runner_carries_an_audited_checkpoint_recovery(monkeypatch):
     monkeypatch.setattr(runner, "preflight_execution_models", lambda _recipe: {})
     monkeypatch.setattr(runner, "_prepare_execution", lambda _execution_id: None)
     monkeypatch.setattr(runner, "prepare_execution_qualification", lambda _execution_id: None)
-    monkeypatch.setattr(runner, "handle_run", lambda args: observed.setdefault("run", args))
+    monkeypatch.setattr(
+        runner,
+        "run_controlled_execution",
+        lambda request: observed.setdefault("run", request),
+    )
 
     runner.run_execution(
         EXECUTION_ID,
@@ -60,6 +67,5 @@ def test_execution_runner_carries_an_audited_checkpoint_recovery(monkeypatch):
     )
 
     args = observed["run"]
-    assert getattr(args, "reset_stage_retries") == "build_homepage"
-    assert getattr(args, "reset_stage_reason") == "corrected managed agent subprocess import root"
-    assert getattr(args, "reset_react_rewinds") is False
+    assert getattr(args, "recover_stage").value == "build_homepage"
+    assert getattr(args, "recovery_reason") == "corrected managed agent subprocess import root"

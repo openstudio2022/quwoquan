@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 QWQ_OUTPUT_ROOT="${QWQ_OUTPUT_ROOT:-$ROOT_DIR/.qwq_output}"
+QWQ_DEPLOY_WORK_ROOT="${QWQ_DEPLOY_WORK_ROOT:-${XDG_CACHE_HOME:-$HOME/.cache}/quwoquan/deploy}"
 ACTION="${1:-up}"
 eval "$(python3 "$ROOT_DIR/quwoquan_ops/cli/lib/local_run.py" \
   --env prod --target prod-sim --action "$ACTION" --output-root "$QWQ_OUTPUT_ROOT")"
@@ -48,8 +49,9 @@ INTERNAL_PRODUCT_OPS_BASE_URL="http://127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}"
 INTERNAL_MEDIA_BASE_URL="http://127.0.0.1:${MEDIA_PROCESSOR_PORT}"
 TLS_PROXY_NAME="quwoquan_prod_sim_tls_proxy"
 TLS_CADDYFILE="$RUNTIME_CONFIG_DIR/Caddyfile"
-TLS_DATA_DIR="${QWQ_OUTPUT_ROOT}/env/prod/local/prod-sim/pki/caddy"
+TLS_DATA_DIR="$STATE_DIR/caddy-pki"
 TLS_CONFIG_DIR="$RUNTIME_CONFIG_DIR/caddy-autosave"
+TLS_ROOT_CERT="$QWQ_DEPLOY_WORK_ROOT/prod-sim/certificates/root.crt"
 CONTAINER_RUNTIME=""
 CONTAINER_HOST_ALIAS=""
 
@@ -178,8 +180,9 @@ prepare_tls_caddyfile() {
 	}
 }
 
-${PUBLIC_API_HOST},
-${LOCAL_API_HOST} {
+https://${PUBLIC_API_HOST}:${API_EDGE_PORT},
+https://${LOCAL_API_HOST}:${API_EDGE_PORT},
+https://localhost:${API_EDGE_PORT} {
 	import local_tls
 	handle /legal/manifest.json {
 		header {
@@ -203,20 +206,22 @@ ${LOCAL_API_HOST} {
 	}
 }
 
-${PUBLIC_PRODUCT_OPS_HOST},
-${LOCAL_PRODUCT_OPS_HOST} {
+https://${PUBLIC_PRODUCT_OPS_HOST}:${PRODUCT_OPS_PORT},
+https://${LOCAL_PRODUCT_OPS_HOST}:${PRODUCT_OPS_PORT},
+https://localhost:${PRODUCT_OPS_PORT} {
 	import local_tls
 	reverse_proxy ${CONTAINER_HOST_ALIAS}:${PRODUCT_OPS_SERVICE_PORT}
 }
 
-${PUBLIC_MEDIA_HOSTS[0]},
-${PUBLIC_MEDIA_HOSTS[1]},
-${PUBLIC_MEDIA_HOSTS[2]},
-${PUBLIC_MEDIA_HOSTS[3]},
-${LOCAL_MEDIA_HOSTS[0]},
-${LOCAL_MEDIA_HOSTS[1]},
-${LOCAL_MEDIA_HOSTS[2]},
-${LOCAL_MEDIA_HOSTS[3]} {
+https://${PUBLIC_MEDIA_HOSTS[0]}:${MEDIA_EDGE_PORT},
+https://${PUBLIC_MEDIA_HOSTS[1]}:${MEDIA_EDGE_PORT},
+https://${PUBLIC_MEDIA_HOSTS[2]}:${MEDIA_EDGE_PORT},
+https://${PUBLIC_MEDIA_HOSTS[3]}:${MEDIA_EDGE_PORT},
+https://${LOCAL_MEDIA_HOSTS[0]}:${MEDIA_EDGE_PORT},
+https://${LOCAL_MEDIA_HOSTS[1]}:${MEDIA_EDGE_PORT},
+https://${LOCAL_MEDIA_HOSTS[2]}:${MEDIA_EDGE_PORT},
+https://${LOCAL_MEDIA_HOSTS[3]}:${MEDIA_EDGE_PORT},
+https://localhost:${MEDIA_EDGE_PORT} {
 	import local_tls
 	import media_cors
 	reverse_proxy ${CONTAINER_HOST_ALIAS}:${MEDIA_PROCESSOR_PORT}
@@ -239,10 +244,26 @@ start_tls_proxy() {
     -v "$PROD_SIM_LEGAL_STATIC_ROOT:/srv/legal:ro" \
     -v "$TLS_DATA_DIR:/data" \
     -v "$TLS_CONFIG_DIR:/config" \
-    -p "${API_EDGE_PORT}:443" \
-    -p "${PRODUCT_OPS_PORT}:443" \
-    -p "${MEDIA_EDGE_PORT}:443" \
+    -p "${API_EDGE_PORT}:${API_EDGE_PORT}" \
+    -p "${PRODUCT_OPS_PORT}:${PRODUCT_OPS_PORT}" \
+    -p "${MEDIA_EDGE_PORT}:${MEDIA_EDGE_PORT}" \
     docker.io/library/caddy:2.8.4-alpine >/dev/null
+}
+
+export_tls_root_ca() {
+  local deadline=$((SECONDS + 30))
+  mkdir -p "$(dirname "$TLS_ROOT_CERT")"
+  while (( SECONDS < deadline )); do
+    if "$CONTAINER_RUNTIME" cp \
+      "$TLS_PROXY_NAME:/data/caddy/pki/authorities/local/root.crt" \
+      "$TLS_ROOT_CERT" >/dev/null 2>&1 && [[ -s "$TLS_ROOT_CERT" ]]; then
+      chmod 0644 "$TLS_ROOT_CERT"
+      return 0
+    fi
+    sleep 0.5
+  done
+  echo "[prod-sim] GATE_BLOCK: local root CA export failed from Caddy deployment volume: $TLS_ROOT_CERT" >&2
+  return 1
 }
 
 wait_https_ok() {
@@ -370,7 +391,7 @@ case "$ACTION" in
         --enable-conversation-avatar-alias
     wait_http_ok "$MEDIA_ORIGIN_BASE_URL/healthz" 30
     wait_http_ok "$MEDIA_ORIGIN_BASE_URL/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" 30
-    wait_http_range_ok "$MEDIA_ORIGIN_BASE_URL/media/video/s/archived-video/beta-sample.mp4" 30
+    wait_http_range_ok "$MEDIA_ORIGIN_BASE_URL/media/video/s/video-primary-0001/post/video-content-0001/source.mp4" 30
     start_bg media-edge \
       python3 "$ROOT_DIR/quwoquan_ops/cli/lib/http_reverse_proxy.py" \
         --listen-host 127.0.0.1 \
@@ -378,7 +399,7 @@ case "$ACTION" in
         --target-base-url "$MEDIA_ORIGIN_BASE_URL"
     wait_http_ok "$INTERNAL_MEDIA_BASE_URL/healthz" 30
     wait_http_ok "$INTERNAL_MEDIA_BASE_URL/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" 30
-    wait_http_range_ok "$INTERNAL_MEDIA_BASE_URL/media/video/s/archived-video/beta-sample.mp4" 30
+    wait_http_range_ok "$INTERNAL_MEDIA_BASE_URL/media/video/s/video-primary-0001/post/video-content-0001/source.mp4" 30
     start_bg api-edge \
       python3 "$ROOT_DIR/quwoquan_ops/cli/lib/mock_public_plane.py" \
         --listen-host 127.0.0.1 \
@@ -391,7 +412,7 @@ case "$ACTION" in
         --product-ops-base-url "$PRODUCT_OPS_BASE_URL" \
         --media-base-url "$MEDIA_BASE_URL"
     wait_http_ok "$INTERNAL_API_BASE_URL/healthz" 30
-    wait_http_ok "$INTERNAL_API_BASE_URL/v1/config/app" 30
+    wait_http_ok "$INTERNAL_API_BASE_URL/config/app" 30
     start_bg product-ops \
       python3 "$ROOT_DIR/quwoquan_ops/cli/lib/mock_public_plane.py" \
         --listen-host 127.0.0.1 \
@@ -404,14 +425,15 @@ case "$ACTION" in
         --media-base-url "$MEDIA_BASE_URL"
     wait_http_ok "$INTERNAL_PRODUCT_OPS_BASE_URL/healthz" 30
     start_tls_proxy
+    export_tls_root_ca
     wait_https_ok "$PUBLIC_API_HOST" "$API_EDGE_PORT" "/healthz" 30
-    wait_https_ok "$PUBLIC_API_HOST" "$API_EDGE_PORT" "/v1/config/app" 30
+    wait_https_ok "$PUBLIC_API_HOST" "$API_EDGE_PORT" "/config/app" 30
     wait_https_ok "$PUBLIC_API_HOST" "$API_EDGE_PORT" "/legal/user-agreement" 30
     verify_https_legal_document "$PUBLIC_API_HOST" "$API_EDGE_PORT" "/legal/user-agreement" "趣我圈用户协议"
     verify_https_legal_document "$PUBLIC_API_HOST" "$API_EDGE_PORT" "/legal/privacy-policy" "趣我圈隐私政策"
     wait_https_ok "$PUBLIC_PRODUCT_OPS_HOST" "$PRODUCT_OPS_PORT" "/healthz" 30
     wait_https_ok "prod-image.quwoquan-env.test" "$MEDIA_EDGE_PORT" "/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" 30
-    wait_https_range_ok "prod-video.quwoquan-env.test" "$MEDIA_EDGE_PORT" "/media/video/s/archived-video/beta-sample.mp4" 30
+    wait_https_range_ok "prod-video.quwoquan-env.test" "$MEDIA_EDGE_PORT" "/media/video/s/video-primary-0001/post/video-content-0001/source.mp4" 30
     write_report
     echo "[prod-sim] public plane ready: $API_BASE_URL, $MEDIA_BASE_URL"
     ;;

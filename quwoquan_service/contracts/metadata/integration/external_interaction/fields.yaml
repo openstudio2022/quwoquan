@@ -1,4 +1,3 @@
-version: 1
 aggregate: ExternalInteraction
 
 enums:
@@ -27,6 +26,7 @@ entities:
     description: 跨域外部交互可靠异步请求；业务服务只依赖 request/challenge 生命周期，不依赖 Redis 临时状态。
     fields:
       - name: requestId
+        source: requestId
         type: string
         constraints: [PK]
         classification: PUBLIC
@@ -34,6 +34,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: operation
+        source: operation
         type: enum
         enum_ref: ExternalInteractionOperation
         constraints: [NOT_NULL]
@@ -42,6 +43,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: tenant
+        source: tenant
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -49,6 +51,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: env
+        source: env
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -56,6 +59,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: idempotencyKey
+        source: idempotencyKey
         type: string
         constraints: [NOT_NULL]
         classification: PRIVATE
@@ -63,6 +67,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: callbackUrl
+        source: callbackUrl
         type: string
         constraints: [NULLABLE]
         classification: PRIVATE
@@ -70,6 +75,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: callbackEvent
+        source: callbackEvent
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -77,6 +83,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: payloadRef
+        source: payloadRef
         type: string
         constraints: [NOT_NULL]
         classification: PRIVATE
@@ -84,6 +91,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: payloadDigest
+        source: payloadDigest
         type: string
         constraints: [NOT_NULL]
         classification: PRIVATE
@@ -91,6 +99,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: sensitivity
+        source: sensitivity
         type: enum
         enum_ref: ExternalInteractionSensitivity
         constraints: [NOT_NULL]
@@ -99,6 +108,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: status
+        source: status
         type: enum
         enum_ref: ExternalInteractionStatus
         constraints: [NOT_NULL]
@@ -107,6 +117,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: expiresAt
+        source: expiresAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -114,6 +125,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: createdAt
+        source: createdAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -121,6 +133,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: updatedAt
+        source: updatedAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -132,6 +145,7 @@ entities:
     description: 可靠接收外部交互请求后的 202 Accepted 响应。
     fields:
       - name: requestId
+        source: requestId
         type: string
         constraints: [PK]
         classification: PUBLIC
@@ -139,6 +153,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: status
+        source: status
         type: enum
         enum_ref: ExternalInteractionStatus
         constraints: [NOT_NULL]
@@ -147,6 +162,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: acceptedAt
+        source: acceptedAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -158,6 +174,7 @@ entities:
     description: 每一次 provider 调用审计记录，号码等敏感对象只能存 hash 或脱敏值。
     fields:
       - name: attemptId
+        source: attemptId
         type: string
         constraints: [PK]
         classification: PUBLIC
@@ -165,6 +182,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: requestId
+        source: requestId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -172,6 +190,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: provider
+        source: provider
         type: enum
         enum_ref: ExternalInteractionProvider
         constraints: [NOT_NULL]
@@ -180,6 +199,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: providerRequestId
+        source: providerRequestId
         type: string
         constraints: [NULLABLE]
         classification: PRIVATE
@@ -187,6 +207,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: maskedRecipient
+        source: maskedRecipient
         type: string
         constraints: [NULLABLE]
         classification: PRIVATE
@@ -194,6 +215,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: latencyMs
+        source: latencyMs
         type: int
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -201,6 +223,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: status
+        source: status
         type: enum
         enum_ref: ExternalInteractionStatus
         constraints: [NOT_NULL]
@@ -209,6 +232,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: normalizedError
+        source: normalizedError
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -216,6 +240,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: recoveryAction
+        source: recoveryAction
         type: bool
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -223,6 +248,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: createdAt
+        source: createdAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -234,6 +260,7 @@ entities:
     description: 外部交互死信，用于 ops 审计和人工补偿。
     fields:
       - name: deadLetterId
+        source: deadLetterId
         type: string
         constraints: [PK]
         classification: PUBLIC
@@ -241,6 +268,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: requestId
+        source: requestId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -248,6 +276,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: operation
+        source: operation
         type: enum
         enum_ref: ExternalInteractionOperation
         constraints: [NOT_NULL]
@@ -256,6 +285,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: finalError
+        source: finalError
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -263,6 +293,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: recoveryAction
+        source: recoveryAction
         type: bool
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -270,6 +301,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: createdAt
+        source: createdAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC

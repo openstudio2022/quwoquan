@@ -33,11 +33,6 @@ func rtcResolveSessionField(session []fieldDef, wireName string) *fieldDef {
 		if f.Name == wireName || rtcDartPublicFieldName(*f) == wireName {
 			return f
 		}
-		for _, k := range f.JsonKeys {
-			if k == wireName {
-				return f
-			}
-		}
 	}
 	return nil
 }
@@ -94,12 +89,12 @@ func rtcDartStringLiteral(s string) string {
 	return fmt.Sprintf("'%s'", strings.ReplaceAll(s, "'", "\\'"))
 }
 
-// rtcPayloadDartIdentifier is the Dart field name for a wire key.
-// Wire key `_id` maps to `id`; wire key equal to an entity field name maps via client_dart_name;
-// other keys (e.g. callId) stay as-is so we do not collapse aliases of `_id` into `id`.
+// rtcPayloadDartIdentifier is the Dart field name for a WS payload wire key.
+// Wire keys are canonical business names (`callId`, field name, or client_dart_name);
+// storage `_id` is never a client WS wire key.
 func rtcPayloadDartIdentifier(session []fieldDef, wireKey string) string {
-	if wireKey == "_id" {
-		return "id"
+	if strings.TrimSpace(wireKey) == "_id" {
+		return "callId"
 	}
 	for i := range session {
 		f := &session[i]
@@ -109,6 +104,15 @@ func rtcPayloadDartIdentifier(session []fieldDef, wireKey string) string {
 		if rtcDartPublicFieldName(*f) == wireKey {
 			return rtcDartPublicFieldName(*f)
 		}
+	}
+	return wireKey
+}
+
+// rtcPayloadWireKey is the JSON key read from the WS payload object.
+// Never emit or read storage `_id`; CallSession identity on the wire is `callId`.
+func rtcPayloadWireKey(wireKey string) string {
+	if strings.TrimSpace(wireKey) == "_id" {
+		return "callId"
 	}
 	return wireKey
 }
@@ -132,11 +136,18 @@ func emitRtcPayloadClass(b *strings.Builder, ev *rtcEventYAML, session []fieldDe
 	b.WriteString(fmt.Sprintf("  const %s({\n", class))
 
 	for _, key := range ev.PayloadFields {
-		f := rtcResolveSessionField(session, key)
+		wireKey := rtcPayloadWireKey(key)
+		f := rtcResolveSessionField(session, wireKey)
+		if f == nil {
+			f = rtcResolveSessionField(session, key)
+		}
 		dartID := rtcPayloadDartIdentifier(session, key)
 		def := ""
 		if ev.ClientPayloadDefaults != nil {
 			def = strings.TrimSpace(ev.ClientPayloadDefaults[key])
+			if def == "" {
+				def = strings.TrimSpace(ev.ClientPayloadDefaults[wireKey])
+			}
 		}
 		nullable := def == ""
 		if nullable {
@@ -158,11 +169,18 @@ func emitRtcPayloadClass(b *strings.Builder, ev *rtcEventYAML, session []fieldDe
 	b.WriteString("  });\n\n")
 
 	for _, key := range ev.PayloadFields {
-		f := rtcResolveSessionField(session, key)
+		wireKey := rtcPayloadWireKey(key)
+		f := rtcResolveSessionField(session, wireKey)
+		if f == nil {
+			f = rtcResolveSessionField(session, key)
+		}
 		dartID := rtcPayloadDartIdentifier(session, key)
 		def := ""
 		if ev.ClientPayloadDefaults != nil {
 			def = strings.TrimSpace(ev.ClientPayloadDefaults[key])
+			if def == "" {
+				def = strings.TrimSpace(ev.ClientPayloadDefaults[wireKey])
+			}
 		}
 		nullable := def == ""
 		dt := rtcPayloadDartScalarType(f)
@@ -179,11 +197,18 @@ func emitRtcPayloadClass(b *strings.Builder, ev *rtcEventYAML, session []fieldDe
 	b.WriteString(fmt.Sprintf("\n  factory %s.fromWire(Map<String, dynamic> payload) {\n", class))
 	b.WriteString(fmt.Sprintf("    return %s(\n", class))
 	for _, key := range ev.PayloadFields {
-		f := rtcResolveSessionField(session, key)
+		wireKey := rtcPayloadWireKey(key)
+		f := rtcResolveSessionField(session, wireKey)
+		if f == nil {
+			f = rtcResolveSessionField(session, key)
+		}
 		dartID := rtcPayloadDartIdentifier(session, key)
 		def := ""
 		if ev.ClientPayloadDefaults != nil {
 			def = strings.TrimSpace(ev.ClientPayloadDefaults[key])
+			if def == "" {
+				def = strings.TrimSpace(ev.ClientPayloadDefaults[wireKey])
+			}
 		}
 		nullable := def == ""
 		defLit := ""
@@ -196,7 +221,7 @@ func emitRtcPayloadClass(b *strings.Builder, ev *rtcEventYAML, session []fieldDe
 				defLit = rtcDartStringLiteral(def)
 			}
 		}
-		b.WriteString(rtcPayloadFromWireExpr(dartID, key, f, nullable, defLit))
+		b.WriteString(rtcPayloadFromWireExpr(dartID, wireKey, f, nullable, defLit))
 	}
 	for _, key := range ev.OptionalClientStringFields {
 		p := fmt.Sprintf("payload['%s']", key)
@@ -210,7 +235,7 @@ func emitRtcPayloadManifest(b *strings.Builder, ev *rtcEventYAML) {
 	b.WriteString(fmt.Sprintf("/// `%s.payload_fields`（codegen 与 events.yaml 同步）。\n", ev.Name))
 	b.WriteString(fmt.Sprintf("const %s = <String>[\n", base))
 	for _, key := range ev.PayloadFields {
-		b.WriteString(fmt.Sprintf("  '%s',\n", key))
+		b.WriteString(fmt.Sprintf("  '%s',\n", rtcPayloadWireKey(key)))
 	}
 	b.WriteString("];\n")
 	if len(ev.OptionalClientStringFields) > 0 {
@@ -285,7 +310,7 @@ func renderRtcSignalPayloadsDart(sourcePath string, ff *fieldsFile, ev *rtcEvent
 		b.WriteString("}\n\n")
 	}
 
-	b.WriteString("/// Unmodeled or future gateway `type` values; preserves raw map for logging/forward compat.\n")
+	b.WriteString("/// Unmodeled or future gateway `type` values; preserves raw map for logging and diagnostics.\n")
 	b.WriteString("final class RtcWsUnknownPayload extends RtcWsPayload {\n")
 	b.WriteString("  const RtcWsUnknownPayload(this.wireType, this.raw);\n\n")
 	b.WriteString("  final String wireType;\n")

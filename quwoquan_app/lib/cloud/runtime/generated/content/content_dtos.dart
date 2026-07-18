@@ -29,20 +29,17 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/article_post_dto.g.
 import 'package:quwoquan_app/cloud/runtime/generated/content/micro_post_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
 
-/// contentType に応じて対応するサブクラスにディスパッチする。
-/// 按 contentType 分发到对应子类型 DTO。
+/// type に応じて対応するサブクラスにディスパッチする。
+/// 按公开投影 type 分发到对应子类型 DTO。
 ///
-/// 支持的 contentType 值（ContentType 真相源 types.yaml: image/video/micro/article）：
+/// 支持的 type 值（ContentType 真相源 types.yaml: image/video/micro/article）：
 /// - image → PhotoPostDto
 /// - video → VideoPostDto
 /// - article → ArticlePostDto
 /// - micro → MicroPostDto
 PostBaseDto postBaseDtoFromMap(Map<String, dynamic> m) {
-  final contentType = m['contentType']?.toString() ??
-      m['type']?.toString() ??
-      m['category']?.toString() ??
-      '';
-  switch (contentType) {
+  final type = m['type']?.toString() ?? '';
+  switch (type) {
     case 'video':
       return VideoPostDto.fromMap(m);
     case 'article':
@@ -50,7 +47,12 @@ PostBaseDto postBaseDtoFromMap(Map<String, dynamic> m) {
     case 'micro':
       return MicroPostDto.fromMap(m);
     case 'image':
-    default:
       return PhotoPostDto.fromMap(m);
+    default:
+      throw ArgumentError.value(
+        type,
+        'type',
+        'unsupported type; expected image|video|micro|article',
+      );
   }
 }

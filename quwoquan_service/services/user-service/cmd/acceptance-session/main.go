@@ -1,5 +1,5 @@
-// Command acceptance-session issues an ephemeral bearer for the seeded
-// local-Gamma acceptance principal. It is an Ops-only process boundary, not an
+// Command acceptance-session issues an ephemeral bearer for a seeded local
+// integration acceptance principal. It is an Ops-only process boundary, not an
 // HTTP login route or a production authentication bypass.
 package main
 
@@ -13,10 +13,10 @@ import (
 	runtimeconfig "quwoquan_service/runtime/config"
 )
 
-const (
-	requiredEnvironment = "gamma"
-	requiredTarget      = "gamma-local"
-)
+var localAcceptanceTargets = map[string]string{
+	"beta":  "beta-local",
+	"gamma": "gamma-local",
+}
 
 type response struct {
 	OwnerID     string `json:"ownerId"`
@@ -25,9 +25,10 @@ type response struct {
 }
 
 func main() {
-	if strings.TrimSpace(os.Getenv("APP_ENV")) != requiredEnvironment ||
-		strings.TrimSpace(os.Getenv("QWQ_LOCAL_ACCEPTANCE_TARGET")) != requiredTarget {
-		log.Fatal("acceptance session issuer is restricted to local Gamma")
+	environment := strings.TrimSpace(os.Getenv("APP_ENV"))
+	target := strings.TrimSpace(os.Getenv("QWQ_LOCAL_ACCEPTANCE_TARGET"))
+	if localAcceptanceTargets[environment] != target {
+		log.Fatal("acceptance session issuer is restricted to declared local integration targets")
 	}
 	ownerID := requiredEnv("QWQ_ACCEPTANCE_OWNER_ID")
 	personaID := requiredEnv("QWQ_ACCEPTANCE_PERSONA_ID")

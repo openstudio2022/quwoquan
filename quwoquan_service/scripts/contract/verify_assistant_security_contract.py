@@ -50,11 +50,7 @@ def route_auth_mode(route: dict) -> str:
     security = route.get("security")
     if isinstance(security, dict):
         return str(security.get("auth_mode") or "").strip().lower()
-    if str(route.get("auth") or "").strip().lower() == "required":
-        return "required"
-    if route.get("auth_required") is True:
-        return "required"
-    return "public"
+    return ""
 
 
 def main() -> int:

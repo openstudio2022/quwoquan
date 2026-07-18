@@ -1,4 +1,3 @@
-version: 1
 read_model: HomepageIntroductionTimelineItem
 
 description: |
@@ -20,18 +19,15 @@ client_projection:
       dart_type: String
       nullable: false
       source: dateLabel
-      aliases: [dateLabel, date]
       default: "''"
 
     - name: text
       dart_type: String
       nullable: false
       source: text
-      aliases: [text, body]
       default: "''"
 
     - name: assetUrl
       dart_type: String
       nullable: true
       source: assetUrl
-      aliases: [assetUrl, imageUrl]

@@ -1,8 +1,8 @@
-version: 1
 entity: ContactDiscoveryRecord
 
 fields:
   - name: id
+    source: id
     type: string
     constraints: [PK]
     classification: PUBLIC
@@ -11,6 +11,7 @@ fields:
     ops_exposure: read
 
   - name: ownerAccountId
+    source: ownerAccountId
     type: string
     constraints: [NOT_NULL, FK_user_profiles_CASCADE]
     classification: PII
@@ -20,6 +21,7 @@ fields:
     description: 发起发现的主控账号 ID（不暴露给匹配结果接收方）
 
   - name: hashedPhones
+    source: hashedPhones
     type: "string[]"
     constraints: [NOT_NULL]
     classification: SECRET
@@ -33,6 +35,7 @@ fields:
       逐条同算法派生后与本列表比对，因此匹配只在哈希域完成、线缆与库内均不出现对方手机号原文。
 
   - name: matchedSubAccountIds
+    source: matchedSubAccountIds
     type: "string[]"
     constraints: [NULLABLE]
     classification: PUBLIC
@@ -42,6 +45,7 @@ fields:
     description: 匹配到的 SubAccount ID 列表（仅 subAccountId，不含 ownerAccountId）
 
   - name: status
+    source: status
     type: enum
     enum_ref: DiscoveryStatus
     constraints: [NOT_NULL]
@@ -51,6 +55,7 @@ fields:
     ops_exposure: read
 
   - name: matchCount
+    source: matchCount
     type: int
     constraints: [NOT_NULL, DEFAULT_0]
     classification: PUBLIC
@@ -59,6 +64,7 @@ fields:
     ops_exposure: read
 
   - name: expireAt
+    source: expireAt
     type: timestamp
     constraints: [NOT_NULL]
     classification: PUBLIC
@@ -68,6 +74,7 @@ fields:
     description: 72 小时后自动过期
 
   - name: createdAt
+    source: createdAt
     type: timestamp
     constraints: [NOT_NULL]
     classification: PUBLIC
@@ -76,6 +83,7 @@ fields:
     ops_exposure: read
 
   - name: completedAt
+    source: completedAt
     type: timestamp
     constraints: [NULLABLE]
     classification: PUBLIC

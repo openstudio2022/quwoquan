@@ -26,21 +26,21 @@ func TestPost_ErrorCases(t *testing.T) {
 		{
 			name:     "invalid_content_type",
 			method:   http.MethodPost,
-			url:      "/v1/content/posts",
+			url:      "/content/posts:publish",
 			body:     `{"contentType":"unknown_type_xyz"}`,
 			wantCode: http.StatusBadRequest,
 		},
 		{
 			name:        "missing_content_type",
 			method:      http.MethodPost,
-			url:         "/v1/content/posts",
+			url:         "/content/posts:publish",
 			body:        `{}`,
 			wantCode4xx: true,
 		},
 		{
 			name:     "post_not_found",
 			method:   http.MethodGet,
-			url:      "/v1/content/posts/nonexistent_404_xyz",
+			url:      "/content/posts/nonexistent_404_xyz",
 			body:     "",
 			wantCode: http.StatusNotFound,
 		},
@@ -55,6 +55,13 @@ func TestPost_ErrorCases(t *testing.T) {
 			req := httptest.NewRequest(tc.method, tc.url, bodyReader)
 			if tc.body != "" {
 				req.Header.Set("Content-Type", "application/json")
+			}
+			if tc.method == http.MethodPost {
+				req = newPostPublicationRequestForTest(
+					t,
+					"post-error-author",
+					tc.body,
+				)
 			}
 			rec := httptest.NewRecorder()
 			testHandler.ServeHTTP(rec, req)
@@ -86,20 +93,21 @@ func TestPost_ErrorCases(t *testing.T) {
 // update assertion to expect 401. Currently validates that the endpoint responds
 // without a 5xx error.
 func TestPost_Unauthorized_Returns401(t *testing.T) {
-	req := httptest.NewRequest(
-		http.MethodPost, "/v1/content/posts",
-		strings.NewReader(`{"contentType":"micro","body":"auth test"}`),
-	)
+	req := httptest.NewRequest(http.MethodPost, "/content/posts:publish", strings.NewReader(`{
+		"publishIntentId":"unauthorized-publication",
+		"localDraftId":"unauthorized-draft",
+		"contentType":"micro",
+		"body":"auth test"
+	}`))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", "unauthorized-publication")
 	// Intentionally omit X-Client-User-Id header
 
 	rec := httptest.NewRecorder()
-	testHandler.ServeHTTP(rec, req)
+	contentSecuredHandler(t).ServeHTTP(rec, req)
 
-	// When auth middleware is added, this should return 401.
-	// Until then, accept 201 (anonymous fallback) or 401 — never a 5xx.
-	if rec.Code >= 500 {
-		t.Errorf("missing userId should not cause 5xx, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("missing persona must return 401, got %d: %s", rec.Code, rec.Body.String())
 	}
 	var resp map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
@@ -111,7 +119,7 @@ func TestPost_Unauthorized_Returns401(t *testing.T) {
 // returns 404 with a structured error body containing the code field.
 // contract.yaml: get_post_not_found / go_func: TestGetPostNotFound (see post_crud)
 func TestPost_NotFound_Returns404(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/v1/content/posts/does_not_exist_abc123", nil)
+	req := httptest.NewRequest(http.MethodGet, "/content/posts/does_not_exist_abc123", nil)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 
@@ -134,12 +142,11 @@ func TestPost_NotFound_Returns404(t *testing.T) {
 // TestPost_InvalidContentType_Returns400 verifies that submitting an unsupported
 // contentType value returns 400 with a machine-readable error code.
 func TestPost_InvalidContentType_Returns400(t *testing.T) {
-	req := httptest.NewRequest(
-		http.MethodPost,
-		"/v1/content/posts",
-		strings.NewReader(`{"contentType":"unknown_type_xyz"}`),
+	req := newPostPublicationRequestForTest(
+		t,
+		"invalid-content-author",
+		`{"contentType":"unknown_type_xyz"}`,
 	)
-	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 
@@ -158,12 +165,7 @@ func TestPost_InvalidContentType_Returns400(t *testing.T) {
 // TestPost_MissingRequiredBody_Returns400 verifies that an empty body
 // returns 400 (or the handler's documented error for missing contentType).
 func TestPost_MissingRequiredBody_Returns400(t *testing.T) {
-	req := httptest.NewRequest(
-		http.MethodPost,
-		"/v1/content/posts",
-		strings.NewReader(`{}`),
-	)
-	req.Header.Set("Content-Type", "application/json")
+	req := newPostPublicationRequestForTest(t, "missing-content-author", `{}`)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 
@@ -186,13 +188,15 @@ func TestPost_MissingRequiredBody_Returns400(t *testing.T) {
 func TestPost_LikeRoute_NotReturning404(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	created := createPost(t, `{"contentType":"image","title":"Rate limit test","mediaUrls":["https://example.com/img.jpg"]}`)
-	postID, _ := created["_id"].(string)
+	created := submitPublishedPost(t, `{"contentType":"image","title":"Rate limit test"}`)
+	postID, _ := created["postId"].(string)
 	if postID == "" {
 		t.Fatal("no _id in created post")
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/content/posts/"+postID+"/like", nil)
+	req := httptest.NewRequest(http.MethodPost, "/content/posts/"+postID+"/like", nil)
+	req.Header.Set("X-Client-User-Id", "rate-limit-actor")
+	ensureIdempotencyHeader(req, "rate-limit-like")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 

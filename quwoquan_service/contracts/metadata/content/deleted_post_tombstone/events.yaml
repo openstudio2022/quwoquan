@@ -1,4 +1,3 @@
-version: 1
 entity: DeletedPostTombstone
 
 # Tombstone 与 Post 删除、PostDeleted outbox 同事务落库；不再发布第二个同义事件。

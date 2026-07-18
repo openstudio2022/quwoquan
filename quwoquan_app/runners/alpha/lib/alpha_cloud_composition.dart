@@ -18,7 +18,7 @@ List<Override> buildAlphaCloudOverrides() {
   final reportWriter = AlphaContentReportAdapter();
   final comments = AlphaContentCommentFacet();
   final postReactions = AlphaContentPostReactionFacet();
-  final postLifecycle = AlphaContentPostLifecycleWriter();
+  final postPublication = AlphaContentPostPublicationWriter();
   final appMessages = AlphaAppMessageAdapter();
   final chatMessages = AlphaChatMessageCommandWriter();
   final media = AlphaContentMediaFacet();
@@ -63,8 +63,8 @@ List<Override> buildAlphaCloudOverrides() {
       reportWriter,
     ),
     contentPostReactionFacetProvider.overrideWithValue(postReactions),
-    createContentPostLifecycleCommandWriterProvider.overrideWithValue(
-      postLifecycle,
+    createContentPostPublicationWriterProvider.overrideWithValue(
+      postPublication,
     ),
     workBrowserContentCommentFacetProvider.overrideWithValue(comments),
     profileCommentsContentCommentFacetProvider.overrideWithValue(comments),

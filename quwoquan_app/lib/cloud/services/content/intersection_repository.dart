@@ -25,9 +25,9 @@ import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 /// 交集 Repository（三层模式：Abstract → Mock → Remote）。
 ///
 /// 对应云侧路由（contracts/metadata/content/post/service.yaml）：
-///   GET  /v1/content/intersections/summary   我的交集聚合摘要
-///   GET  /v1/content/intersections           我的交集分维度列表（自上次新增在前）
-///   POST /v1/recommendation/intersections/visit 推进已读水位，清零未读红点
+///   GET  /content/intersections/summary   我的交集聚合摘要
+///   GET  /content/intersections           我的交集分维度列表（自上次新增在前）
+///   POST /recommendation/intersections/visit 推进已读水位，清零未读红点
 abstract class IntersectionRepository {
   Future<IntersectionInboxSummary> getMyIntersectionSummary();
 

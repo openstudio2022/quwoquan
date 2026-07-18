@@ -1,5 +1,4 @@
 {
-  "schemaVersion": "rtc.scenario-fixtures",
   "description": "RTC 域 alpha/beta/gamma 共享测试场景，覆盖来电、去电、语音/视频会话与参与人选择。",
   "repositoryExpectations": {
     "alpha": "mock",
@@ -15,14 +14,20 @@
           "type": "voice",
           "state": "incoming",
           "callerUserId": "fixture_user_friend",
-          "participantUserIds": ["fixture_user_current", "fixture_user_friend"]
+          "participantUserIds": [
+            "fixture_user_current",
+            "fixture_user_friend"
+          ]
         },
         {
           "sessionId": "fixture_call_video",
           "type": "video",
           "state": "outgoing",
           "callerUserId": "fixture_user_current",
-          "participantUserIds": ["fixture_user_current", "fixture_user_weekend_1"]
+          "participantUserIds": [
+            "fixture_user_current",
+            "fixture_user_weekend_1"
+          ]
         }
       ],
       "participants": [
@@ -45,20 +50,46 @@
       "title": "RTC 通话会话契约种子",
       "type": "rtc_call_session",
       "domainId": "rtc",
-      "seedRefs": ["rtc_core"],
+      "seedRefs": [
+        "rtc_core"
+      ],
       "uiExpectations": {
-        "sessionIds": ["fixture_call_voice", "fixture_call_video"],
-        "textFragments": ["契约好友", "契约同伴一"]
+        "sessionIds": [
+          "fixture_call_voice",
+          "fixture_call_video"
+        ],
+        "textFragments": [
+          "契约好友",
+          "契约同伴一"
+        ]
       },
       "remoteExpectations": {
-        "sessionIds": ["fixture_call_voice", "fixture_call_video"],
-        "participantUserIds": ["fixture_user_friend", "fixture_user_weekend_1"]
+        "sessionIds": [
+          "fixture_call_voice",
+          "fixture_call_video"
+        ],
+        "participantUserIds": [
+          "fixture_user_friend",
+          "fixture_user_weekend_1"
+        ]
       },
       "environments": {
-        "alpha": { "enabled": true, "repository": "mock" },
-        "beta": { "enabled": true, "repository": "remote", "requiresSeedReset": true },
-        "gamma": { "enabled": true, "repository": "remote", "requiresSeedReset": true }
+        "alpha": {
+          "enabled": true,
+          "repository": "mock"
+        },
+        "beta": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        },
+        "gamma": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        }
       }
     }
-  ]
+  ],
+  "schema": "rtc.scenario-fixtures"
 }

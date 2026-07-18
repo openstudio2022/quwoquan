@@ -2,7 +2,6 @@ dart_class: ContextContinuityPolicy
 library_path: assistant/contracts/context_continuity_policy.dart
 output_path: assistant/generated/contracts/context_continuity_policy.g.dart
 contract: context_continuity_policy
-version: v1
 kind: runtime_context_contract
 fields:
   - { name: queryIntent, type: string, default: '' }

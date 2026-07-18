@@ -29,7 +29,7 @@ func (s *PostService) commitPostCommand(
 		return nil, rterr.NewInvalidArgument(
 			rterr.ModuleContent,
 			"idempotencyKey 必填",
-			commandName+" requires Idempotency-Key or X-Request-Id",
+			commandName+" requires Idempotency-Key",
 		)
 	}
 	commandJSON, err := json.Marshal(commandPayload)

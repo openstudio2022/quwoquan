@@ -10,7 +10,7 @@ void main() {
     final manifestFile = File('assets/brand/app_icon_asset_manifest.json');
     expect(manifestFile.existsSync(), isTrue);
     final manifest = jsonDecode(await manifestFile.readAsString()) as Map;
-    expect(manifest['schemaVersion'], 1);
+    expect(manifest['schema'], 'app-icon-asset-manifest');
     expect(manifest['source'], 'WelcomeAppIconPainter');
 
     final assets = (manifest['assets'] as Map).cast<String, String>();

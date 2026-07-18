@@ -4,11 +4,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
     show ReferralSource;
-import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/search/pages/location_place_landing_page.dart';
+
+import '../../../../support/recording_app_telemetry_recorder.dart';
 
 GoRouter _buildRouter() {
   return GoRouter(
@@ -25,9 +26,8 @@ GoRouter _buildRouter() {
       ),
       GoRoute(
         path: '/homepages/suggest',
-        builder: (context, state) => Text(
-          'SUGGEST_PROBE:${state.uri.queryParameters['query'] ?? ''}',
-        ),
+        builder: (context, state) =>
+            Text('SUGGEST_PROBE:${state.uri.queryParameters['query'] ?? ''}'),
       ),
     ],
   );
@@ -35,13 +35,11 @@ GoRouter _buildRouter() {
 
 Future<void> _pumpLanding(
   WidgetTester tester,
-  MockOpsEventRepository ops,
+  RecordingAppTelemetryRecorder ops,
 ) async {
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [
-        opsEventRepositoryProvider.overrideWithValue(ops),
-      ],
+      overrides: [appTelemetryReporterProvider.overrideWithValue(ops)],
       child: CupertinoApp.router(routerConfig: _buildRouter()),
     ),
   );
@@ -50,7 +48,7 @@ Future<void> _pumpLanding(
 
 void main() {
   testWidgets('临时地点卡渲染名称/地址/临时徽标/提升 CTA', (tester) async {
-    final ops = MockOpsEventRepository();
+    final ops = RecordingAppTelemetryRecorder();
     await _pumpLanding(tester, ops);
 
     expect(find.byKey(TestKeys.locationPlaceLandingPage), findsOneWidget);
@@ -67,7 +65,7 @@ void main() {
   });
 
   testWidgets('提升为实体主页 CTA 跳转 suggestHomepage 并带地点名', (tester) async {
-    final ops = MockOpsEventRepository();
+    final ops = RecordingAppTelemetryRecorder();
     await _pumpLanding(tester, ops);
 
     await tester.tap(find.byKey(TestKeys.locationPlaceLandingPromoteButton));
@@ -77,26 +75,14 @@ void main() {
   });
 
   testWidgets('进入页面上报 enter 曝光事件，CTA 上报 promote_click', (tester) async {
-    final ops = MockOpsEventRepository();
+    final ops = RecordingAppTelemetryRecorder();
     await _pumpLanding(tester, ops);
 
-    expect(
-      ops.recorded.any(
-        (e) => e.eventName == 'location_place_landing.enter',
-      ),
-      isTrue,
-    );
+    expect(ops.recorded.any((e) => e.action == 'enter'), isTrue);
 
     await tester.tap(find.byKey(TestKeys.locationPlaceLandingPromoteButton));
     await tester.pumpAndSettle();
 
-    expect(
-      ops.recorded.any(
-        (e) =>
-            e.eventName == 'location_place_landing.promote_click' &&
-            e.entityId == 'place_west_lake_alley',
-      ),
-      isTrue,
-    );
+    expect(ops.recorded.any((e) => e.action == 'promote_click'), isTrue);
   });
 }

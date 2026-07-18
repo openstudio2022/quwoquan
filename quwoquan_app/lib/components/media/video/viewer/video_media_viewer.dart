@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
+import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/components/media/video/player/video_player_widget.dart';
@@ -95,9 +96,21 @@ class _VideoMediaViewerState extends ConsumerState<VideoMediaViewer> {
   }
 
   Widget _buildVideoPlayer(String videoUrl, String? thumbnailUrl) {
+    final resolver = MediaDeliveryResolver.fromRuntimeConfig();
+    final deliveryReference = resolver.tryResolve(
+      videoUrl,
+      kind: MediaDeliveryKind.video,
+    );
+    if (deliveryReference == null) {
+      return const ColoredBox(color: AppColors.black);
+    }
+    final thumbnailReference = resolver.tryResolve(
+      thumbnailUrl,
+      kind: MediaDeliveryKind.image,
+    );
     return VideoPlayerWidget(
-      videoUrl: videoUrl,
-      thumbnailUrl: thumbnailUrl,
+      deliveryReference: deliveryReference,
+      thumbnailReference: thumbnailReference,
       autoPlay: _isPlaying,
       showControls: true,
       onTap: _togglePlayPause,
@@ -116,10 +129,7 @@ class _VideoMediaViewerState extends ConsumerState<VideoMediaViewer> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              AppColors.overlayStrong,
-              AppColors.transparent,
-            ],
+            colors: [AppColors.overlayStrong, AppColors.transparent],
           ),
         ),
         child: SafeArea(
@@ -136,29 +146,41 @@ class _VideoMediaViewerState extends ConsumerState<VideoMediaViewer> {
                     height: AppSpacing.avatarSize,
                     decoration: BoxDecoration(
                       color: AppColors.overlayDark,
-                      borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
+                      borderRadius: BorderRadius.circular(
+                        AppSpacing.circularBorderRadius,
+                      ),
                     ),
-                  child: Icon(
-                    CupertinoIcons.back,
-                    color: AppColors.white,
-                    size: AppSpacing.smallButtonSize,
-                  ),
+                    child: Icon(
+                      CupertinoIcons.back,
+                      color: AppColors.white,
+                      size: AppSpacing.smallButtonSize,
+                    ),
                   ),
                 ),
-                
+
                 // 视频指示器
                 if (widget.mediaItems.length > 1) ...[
                   SizedBox(width: AppSpacing.md.w),
                   Expanded(
                     child: Row(
-                      children: List.generate(widget.mediaItems.length, (index) {
+                      children: List.generate(widget.mediaItems.length, (
+                        index,
+                      ) {
                         return Container(
-                          width: (MediaQuery.of(context).size.width - AppSpacing.avatarSize * 2 - AppSpacing.md * 2) / widget.mediaItems.length,
+                          width:
+                              (MediaQuery.of(context).size.width -
+                                  AppSpacing.avatarSize * 2 -
+                                  AppSpacing.md * 2) /
+                              widget.mediaItems.length,
                           height: AppSpacing.two.h,
-                          margin: EdgeInsets.only(right: index < widget.mediaItems.length - 1 ? 2.w : 0),
+                          margin: EdgeInsets.only(
+                            right: index < widget.mediaItems.length - 1
+                                ? 2.w
+                                : 0,
+                          ),
                           decoration: BoxDecoration(
-                            color: index == _currentIndex 
-                                ? AppColors.white 
+                            color: index == _currentIndex
+                                ? AppColors.white
                                 : AppColors.overlayMedium,
                             borderRadius: BorderRadius.circular(1.h),
                           ),
@@ -178,7 +200,8 @@ class _VideoMediaViewerState extends ConsumerState<VideoMediaViewer> {
   Widget _buildBottomBar() {
     final isDark = ref.watch(isDarkProvider);
     final currentPost = widget.posts[_currentIndex];
-    final isFollowing = widget.followingUsers?.contains(currentPost['username']) ?? false;
+    final isFollowing =
+        widget.followingUsers?.contains(currentPost['username']) ?? false;
 
     return Positioned(
       bottom: 0,
@@ -189,10 +212,7 @@ class _VideoMediaViewerState extends ConsumerState<VideoMediaViewer> {
           gradient: LinearGradient(
             begin: Alignment.bottomCenter,
             end: Alignment.topCenter,
-            colors: [
-              AppColors.overlayStrong,
-              AppColors.transparent,
-            ],
+            colors: [AppColors.overlayStrong, AppColors.transparent],
           ),
         ),
         child: SafeArea(
@@ -219,30 +239,37 @@ class _VideoMediaViewerState extends ConsumerState<VideoMediaViewer> {
                         ),
                         child: CircleAvatar(
                           radius: (AppSpacing.avatarSize / 2).w,
-                          backgroundColor: isDark ? AppColors.dark.backgroundTertiary : AppColors.light.backgroundTertiary,
-                          backgroundImage: currentPost['avatar']?.isNotEmpty == true
+                          backgroundColor: isDark
+                              ? AppColors.dark.backgroundTertiary
+                              : AppColors.light.backgroundTertiary,
+                          backgroundImage:
+                              currentPost['avatar']?.isNotEmpty == true
                               ? NetworkImage(currentPost['avatar'])
                               : null,
                           child: currentPost['avatar']?.isEmpty != false
                               ? Icon(
                                   CupertinoIcons.person_fill,
-                                  color: isDark ? AppColors.dark.foregroundTertiary : AppColors.light.foregroundTertiary,
+                                  color: isDark
+                                      ? AppColors.dark.foregroundTertiary
+                                      : AppColors.light.foregroundTertiary,
                                   size: AppSpacing.iconMedium.sp,
                                 )
                               : null,
                         ),
                       ),
                     ),
-                    
+
                     SizedBox(width: AppSpacing.sm.w),
-                    
+
                     // 用户信息
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            currentPost['displayName'] ?? currentPost['username'] ?? UITextConstants.user,
+                            currentPost['displayName'] ??
+                                currentPost['username'] ??
+                                UITextConstants.user,
                             style: TextStyle(
                               color: AppColors.white,
                               fontSize: AppTypography.base.sp,
@@ -260,27 +287,38 @@ class _VideoMediaViewerState extends ConsumerState<VideoMediaViewer> {
                         ],
                       ),
                     ),
-                    
+
                     // 关注按钮
                     if (!widget.isBlocked)
                       GestureDetector(
-                        onTap: () => widget.onFollowClick?.call(currentPost['username'], !isFollowing),
+                        onTap: () => widget.onFollowClick?.call(
+                          currentPost['username'],
+                          !isFollowing,
+                        ),
                         child: Container(
                           padding: EdgeInsets.symmetric(
                             horizontal: AppSpacing.md.w,
                             vertical: AppSpacing.sm.h,
                           ),
                           decoration: BoxDecoration(
-                            color: isFollowing 
-                                ? (isDark ? AppColors.dark.backgroundTertiary : AppColors.light.backgroundTertiary)
+                            color: isFollowing
+                                ? (isDark
+                                      ? AppColors.dark.backgroundTertiary
+                                      : AppColors.light.backgroundTertiary)
                                 : AppColors.primaryColor,
-                            borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+                            borderRadius: BorderRadius.circular(
+                              AppSpacing.largeBorderRadius,
+                            ),
                           ),
                           child: Text(
-                            isFollowing ? UITextConstants.following : UITextConstants.follow,
+                            isFollowing
+                                ? UITextConstants.following
+                                : UITextConstants.follow,
                             style: TextStyle(
-                              color: isFollowing 
-                                  ? (isDark ? AppColors.dark.foregroundPrimary : AppColors.light.foregroundPrimary)
+                              color: isFollowing
+                                  ? (isDark
+                                        ? AppColors.dark.foregroundPrimary
+                                        : AppColors.light.foregroundPrimary)
                                   : AppColors.white,
                               fontSize: AppTypography.xs.sp,
                               fontWeight: FontWeight.w600,
@@ -290,9 +328,9 @@ class _VideoMediaViewerState extends ConsumerState<VideoMediaViewer> {
                       ),
                   ],
                 ),
-                
+
                 SizedBox(height: AppSpacing.md.h),
-                
+
                 // 操作按钮
                 Row(
                   children: [
@@ -300,12 +338,14 @@ class _VideoMediaViewerState extends ConsumerState<VideoMediaViewer> {
                     _buildActionButton(
                       icon: CupertinoIcons.heart_fill,
                       count: widget.getPostLikesCount?.call(currentPost) ?? 0,
-                      isActive: widget.likedPosts?.contains(currentPost['id']) ?? false,
+                      isActive:
+                          widget.likedPosts?.contains(currentPost['id']) ??
+                          false,
                       onTap: () => widget.onLikeClick?.call(currentPost),
                     ),
-                    
+
                     SizedBox(width: AppSpacing.lg.w),
-                    
+
                     // 评论按钮
                     _buildActionButtonWidget(
                       iconWidget: AppBubbleIcon(
@@ -315,17 +355,17 @@ class _VideoMediaViewerState extends ConsumerState<VideoMediaViewer> {
                       count: currentPost['commentsCount'] ?? 0,
                       onTap: () => widget.onCommentsClick?.call(currentPost),
                     ),
-                    
+
                     SizedBox(width: AppSpacing.lg.w),
-                    
+
                     // 转发按钮
                     _buildActionButton(
                       icon: CupertinoIcons.arrowshape_turn_up_right,
                       onTap: () => widget.onShareClick?.call(currentPost),
                     ),
-                    
+
                     const Spacer(),
-                    
+
                     // 更多按钮
                     _buildActionButton(
                       icon: CupertinoIcons.ellipsis,
@@ -360,7 +400,9 @@ class _VideoMediaViewerState extends ConsumerState<VideoMediaViewer> {
           if (count > 0) ...[
             SizedBox(height: AppSpacing.two.h),
             Text(
-              count > 1000 ? '${(count / 1000).toStringAsFixed(1)}k' : count.toString(),
+              count > 1000
+                  ? '${(count / 1000).toStringAsFixed(1)}k'
+                  : count.toString(),
               style: TextStyle(
                 color: AppColors.white,
                 fontSize: AppTypography.xs.sp,
@@ -387,7 +429,9 @@ class _VideoMediaViewerState extends ConsumerState<VideoMediaViewer> {
           if (count > 0) ...[
             SizedBox(height: AppSpacing.two.h),
             Text(
-              count > 1000 ? '${(count / 1000).toStringAsFixed(1)}k' : count.toString(),
+              count > 1000
+                  ? '${(count / 1000).toStringAsFixed(1)}k'
+                  : count.toString(),
               style: TextStyle(
                 color: AppColors.white,
                 fontSize: AppTypography.xs.sp,
@@ -405,9 +449,12 @@ class _VideoMediaViewerState extends ConsumerState<VideoMediaViewer> {
     if (!widget.isOpen) return const SizedBox.shrink();
 
     final isDark = ref.watch(isDarkProvider);
-    
+
     return AppScaffold(
-      backgroundColor: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
+      backgroundColor: AppColorsFunctional.getColor(
+        isDark,
+        ColorType.backgroundPrimary,
+      ),
       child: Stack(
         children: [
           // 视频播放器
@@ -423,10 +470,10 @@ class _VideoMediaViewerState extends ConsumerState<VideoMediaViewer> {
               return const SizedBox.shrink();
             },
           ),
-          
+
           // 顶部工具栏
           _buildTopBar(),
-          
+
           // 底部工具栏
           _buildBottomBar(),
         ],

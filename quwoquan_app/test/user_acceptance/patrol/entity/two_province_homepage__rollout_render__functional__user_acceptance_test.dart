@@ -1,8 +1,11 @@
 import 'package:flutter/widgets.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:patrol/patrol.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
+import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/testing/patrol_test_support.dart';
 import '../../../support/gamma_homepage_uat_cases.dart';
@@ -10,13 +13,22 @@ import '../../../support/gamma_homepage_uat_cases.dart';
 const _encodedUatCases = String.fromEnvironment(
   'QWQ_TWO_PROVINCE_UAT_CASES_B64',
 );
+const _visibleElementTimeout = Duration(seconds: 20);
+const _pageLoadTimeout = Duration(seconds: 45);
+const _pollInterval = Duration(milliseconds: 500);
+const _galleryScrollSettle = Duration(milliseconds: 300);
+const _galleryScrollOffset = Offset(0, -600);
+const _galleryScrollAttempts = 16;
 
 void main() {
   patrolTest(
     'two_province_homepage_rollout_render',
     tags: ['t4', 'entity-homepage', 'two-province-rollout'],
     skip: !kRunPatrolT4,
-    config: PatrolTesterConfig(visibleTimeout: const Duration(seconds: 20)),
+    config: PatrolTesterConfig(
+      visibleTimeout: _visibleElementTimeout,
+      printLogs: true,
+    ),
     ($) async {
       final homepages = parseGammaHomepageUatCases(_encodedUatCases);
       await launchPatrolAppOnce($);
@@ -26,10 +38,20 @@ void main() {
           $,
           AppRoutePaths.homepageDetail(id: homepage.homepageId),
         );
+        final detailLoaded = await _waitFor(
+          $,
+          find.byKey(TestKeys.homepageDetailPage),
+          terminalFailure: find.byType(AppPageErrorState),
+        );
+        final boundaryDiagnostic = detailLoaded
+            ? ''
+            : await _diagnoseHomepageBoundary($, homepage.homepageId);
         expect(
-          await _waitFor($, find.byKey(TestKeys.homepageDetailPage)),
+          detailLoaded,
           isTrue,
-          reason: '${homepage.title} detail must load from Gamma',
+          reason:
+              '${homepage.title} detail must load from Gamma; '
+              '${_pageFailureSummary($)}; $boundaryDiagnostic',
         );
         expect(find.byKey(TestKeys.homepageDetailPage), findsOneWidget);
 
@@ -56,23 +78,110 @@ void main() {
   );
 }
 
-Future<bool> _waitFor(PatrolIntegrationTester $, Finder finder) async {
+Future<String> _diagnoseHomepageBoundary(
+  PatrolIntegrationTester $,
+  String homepageId,
+) async {
+  final navigator = find.byType(Navigator).evaluate();
+  if (navigator.isEmpty) {
+    return 'boundary=no-navigator';
+  }
+  final container = ProviderScope.containerOf(navigator.first);
+  final actor = container.read(homepageQueryActorContextProvider);
+  final repository = container.read(homepageRepositoryProvider);
+  final introductionRepository = container.read(
+    homepageIntroductionRepositoryProvider,
+  );
+  final diagnostics = <String>[];
+
+  Future<void> probe(
+    String operation,
+    Future<Object?> Function() invoke,
+  ) async {
+    try {
+      await invoke();
+      diagnostics.add('$operation=pass');
+    } catch (error) {
+      final result = error is CloudException
+          ? _cloudFailureDiagnostic(error)
+          : error.runtimeType.toString();
+      diagnostics.add('$operation=$result');
+    }
+  }
+
+  await probe('detail', () => repository.getHomepageDetail(homepageId));
+  await probe('shell', () => repository.getHomepageShell(homepageId));
+  await probe(
+    'bundle',
+    () => repository.getObjectPageBundle(
+      homepageId,
+      referralSource: ReferralSource.entityPage.value,
+    ),
+  );
+  await probe(
+    'introduction',
+    () => introductionRepository.getHomepageIntroduction(homepageId),
+  );
+  return 'actor=account:${actor.accountId == null ? 'no' : 'yes'}'
+      '/persona:${actor.personaId == null ? 'no' : 'yes'}; '
+      'boundary=${diagnostics.join(',')}';
+}
+
+String _cloudFailureDiagnostic(CloudException error) {
+  final failure = error.runtimeFailure;
+  final cause = error.cause;
+  final argumentDetail = cause is ArgumentError
+      ? 'argument:${cause.name ?? 'unnamed'}:${cause.message ?? 'invalid'}'
+      : '';
+  final safeAttributes = failure.context.attributes
+      .where(
+        (attribute) =>
+            const {'errorType', 'requestPath'}.contains(attribute.key),
+      )
+      .map((attribute) => '${attribute.key}:${attribute.value}')
+      .join('|');
+  final details = <String>[
+    if (safeAttributes.isNotEmpty) safeAttributes,
+    if (argumentDetail.isNotEmpty) argumentDetail,
+  ].join('|');
+  return details.isEmpty ? failure.code : '${failure.code}[$details]';
+}
+
+Future<bool> _waitFor(
+  PatrolIntegrationTester $,
+  Finder finder, {
+  Finder? terminalFailure,
+}) async {
   await $.pump();
-  final deadline = DateTime.now().add(const Duration(seconds: 45));
+  final deadline = DateTime.now().add(_pageLoadTimeout);
   while (DateTime.now().isBefore(deadline)) {
     if (finder.evaluate().isNotEmpty) {
       return true;
     }
-    await $.pump(const Duration(milliseconds: 500));
+    if (terminalFailure?.evaluate().isNotEmpty ?? false) {
+      return false;
+    }
+    await $.pump(_pollInterval);
   }
   return false;
+}
+
+String _pageFailureSummary(PatrolIntegrationTester $) {
+  final errors = find.byType(AppPageErrorState);
+  if (errors.evaluate().isEmpty) {
+    return 'no terminal page error was rendered';
+  }
+  final semantic = $.tester.widget<AppPageErrorState>(errors.first).semantic;
+  return 'code=${semantic.sourceCode ?? 'unmapped'}, '
+      'recovery=${semantic.recoveryAction?.name ?? 'none'}, '
+      'message=${semantic.message}';
 }
 
 Future<bool> _scrollUntilVisible(
   PatrolIntegrationTester $,
   Finder finder,
 ) async {
-  for (var attempt = 0; attempt < 16; attempt += 1) {
+  for (var attempt = 0; attempt < _galleryScrollAttempts; attempt += 1) {
     if (finder.evaluate().isNotEmpty) {
       return true;
     }
@@ -80,8 +189,8 @@ Future<bool> _scrollUntilVisible(
     if (list.evaluate().isEmpty) {
       return false;
     }
-    await $.tester.drag(list.first, const Offset(0, -600));
-    await $.pump(const Duration(milliseconds: 300));
+    await $.tester.drag(list.first, _galleryScrollOffset);
+    await $.pump(_galleryScrollSettle);
   }
   return finder.evaluate().isNotEmpty;
 }

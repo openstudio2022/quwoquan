@@ -78,9 +78,9 @@
 
 | 方法 | 路径 | 操作 | 说明 |
 |---|---|---|---|
-| POST | /v1/chat/conversations/{id}/sync | SyncMessages | 上报 lastSeq，返回 gap 消息 |
-| POST | /v1/chat/conversations/{id}/messages/{msgId}/read | MarkAsRead | 标记已读（更新 readSeq） |
-| GET | /v1/chat/conversations/{id}/messages/{msgId}/receipts | GetReceipts | 获取消息回执列表 |
+| POST | /chat/conversations/{id}/sync | SyncMessages | 上报 lastSeq，返回 gap 消息 |
+| POST | /chat/conversations/{id}/messages/{msgId}/read | MarkAsRead | 标记已读（更新 readSeq） |
+| GET | /chat/conversations/{id}/messages/{msgId}/receipts | GetReceipts | 获取消息回执列表 |
 
 ### 3.2 变更 API
 

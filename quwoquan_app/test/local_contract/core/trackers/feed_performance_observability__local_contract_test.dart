@@ -1,31 +1,34 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/core/media/media_candidate_failure.dart';
+import 'package:quwoquan_app/core/media/media_playback_failure.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
-import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
-import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import 'package:quwoquan_app/core/trackers/feed_performance_observability.dart';
+
+import '../../../support/recording_app_telemetry_recorder.dart';
 
 /// 任务 B · FeedPerformanceObservability 单元测试。
 ///
-/// 复用真实 [AnalyticsService] remote 出口 + [MockOpsEventRepository]，
-/// 既验证度量逻辑，又顺带覆盖 façade -> ops 仓储的端云上报链路（与
-/// analytics_service_test 同一断言口径）。
+/// 复用真实 [AnalyticsService] + 强类型 recorder，覆盖 façade -> Reporter
+/// 的目录化投影与本地诊断隔离。
 void main() {
-  late MockOpsEventRepository ops;
+  late RecordingAppTelemetryRecorder ops;
   late AnalyticsService analytics;
   late FeedPerformanceObservability observability;
 
   setUp(() async {
-    ops = MockOpsEventRepository();
-    analytics = AnalyticsService.forTesting(
-      mode: AppDataSourceMode.remote,
-      eventRepository: ops,
-    );
+    ops = RecordingAppTelemetryRecorder();
+    analytics = AnalyticsService.forTesting(telemetryReporter: ops);
     await analytics.initialize(const AnalyticsConfig());
     observability = FeedPerformanceObservability(analytics: analytics);
   });
 
-  List<OpsEventRecordInput> eventsNamed(String name) {
-    return ops.recorded.where((event) => event.eventName == name).toList();
+  List<RecordedAppTelemetry> eventsNamed(String name) {
+    return ops.recorded
+        .where(
+          (event) =>
+              event.action == name || event.extensions['operationId'] == name,
+        )
+        .toList();
   }
 
   group('首屏 TTI', () {
@@ -35,11 +38,10 @@ void main() {
 
       final tti = eventsNamed(FeedPerformanceMetricNames.firstScreenTtiMs);
       expect(tti, hasLength(1));
-      expect(tti.first.eventType, equals('feed_metric'));
-      expect(tti.first.payload['channelId'], equals('recommend'));
-      expect(tti.first.payload['itemCount'], equals(8));
-      expect(tti.first.payload['durationMs'], isA<int>());
-      expect((tti.first.payload['durationMs'] as int) >= 0, isTrue);
+      expect(tti.first.eventType, equals('performance_sample'));
+      expect(tti.first.extensions.containsKey('channelId'), isFalse);
+      expect(tti.first.extensions['durationMs'], isA<int>());
+      expect((tti.first.extensions['durationMs']! as int) >= 0, isTrue);
     });
 
     test('未先 markFeedRequested 时首帧不上报（无计时起点）', () async {
@@ -99,10 +101,10 @@ void main() {
       final failures = eventsNamed(FeedPerformanceMetricNames.feedLoadFailed);
       expect(failures, hasLength(2));
       expect(
-        failures.map((event) => event.payload['reason']).toSet(),
+        failures.map((event) => event.extensions['failReasonCode']).toSet(),
         equals(<String>{'page_load', 'timeout'}),
       );
-      expect(failures.first.payload['result'], equals('failed'));
+      expect(failures.first.extensions['result'], equals('failed'));
     });
 
     test('首屏成功后复位失败去重，相同 reason 可再次上报', () async {
@@ -128,7 +130,7 @@ void main() {
 
       final failures = eventsNamed(FeedPerformanceMetricNames.feedLoadFailed);
       expect(failures, hasLength(1));
-      expect(failures.first.payload['reason'], equals('unknown'));
+      expect(failures.first.extensions['failReasonCode'], equals('unknown'));
     });
   });
 
@@ -138,31 +140,38 @@ void main() {
         contentId: 'video_001',
         startupMs: 420,
         candidateIndex: 1,
+        autoPlay: true,
       );
 
       final started = eventsNamed(
         FeedPerformanceMetricNames.videoAutoplayStartupMs,
       );
       expect(started, hasLength(1));
-      expect(started.first.payload['contentId'], equals('video_001'));
-      expect(started.first.payload['durationMs'], equals(420));
-      expect(started.first.payload['candidateIndex'], equals(1));
-      expect(started.first.payload['result'], equals('ok'));
+      expect(started.first.extensions.containsKey('contentId'), isFalse);
+      expect(started.first.extensions['durationMs'], equals(420));
+      expect(started.first.extensions['result'], equals('ok'));
     });
 
     test('候选源全部失败上报失败归因', () async {
       observability.recordVideoPlaybackFailed(
         contentId: 'video_002',
         candidatesTried: 3,
+        failureKind: MediaCandidateFailureKind.noPlayableSource.name,
+        userScene: VideoPlaybackUserScene.temporary.name,
+        retryable: true,
+        autoPlay: true,
       );
 
       final failed = eventsNamed(
         FeedPerformanceMetricNames.videoAutoplayFailed,
       );
       expect(failed, hasLength(1));
-      expect(failed.first.payload['contentId'], equals('video_002'));
-      expect(failed.first.payload['candidatesTried'], equals(3));
-      expect(failed.first.payload['result'], equals('failed'));
+      expect(failed.first.extensions.containsKey('contentId'), isFalse);
+      expect(
+        failed.first.extensions['failReasonCode'],
+        equals('noPlayableSource'),
+      );
+      expect(failed.first.extensions['result'], equals('failed'));
     });
   });
 
@@ -195,31 +204,19 @@ void main() {
         cacheClass: 'recent',
       );
 
+      expect(eventsNamed(FeedPerformanceMetricNames.frameJankRatio), isEmpty);
+      expect(eventsNamed(FeedPerformanceMetricNames.imageCacheBytes), isEmpty);
       expect(
-        eventsNamed(FeedPerformanceMetricNames.frameJankRatio),
-        hasLength(1),
+        eventsNamed(FeedPerformanceMetricNames.activeVideoControllerCount),
+        isEmpty,
       );
       expect(
-        eventsNamed(FeedPerformanceMetricNames.imageCacheBytes).single.payload,
-        containsPair('currentSizeBytes', 1024),
+        eventsNamed(FeedPerformanceMetricNames.mediaDownloadQueue),
+        isEmpty,
       );
       expect(
-        eventsNamed(
-          FeedPerformanceMetricNames.activeVideoControllerCount,
-        ).single.payload,
-        containsPair('activeCount', 1),
-      );
-      expect(
-        eventsNamed(
-          FeedPerformanceMetricNames.mediaDownloadQueue,
-        ).single.payload,
-        containsPair('queuedDownloads', 2),
-      );
-      expect(
-        eventsNamed(
-          FeedPerformanceMetricNames.postCacheHitSource,
-        ).single.payload,
-        containsPair('source', 'memory'),
+        eventsNamed(FeedPerformanceMetricNames.postCacheHitSource),
+        isEmpty,
       );
     });
   });

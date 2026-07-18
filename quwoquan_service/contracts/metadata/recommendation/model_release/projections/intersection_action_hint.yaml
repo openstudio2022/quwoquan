@@ -1,4 +1,3 @@
-version: 1
 read_model: IntersectionActionHint
 description: |
   交集/影响力下一步行动建议（统一交互子契约）。
@@ -36,52 +35,43 @@ client_projection:
       dart_type: String
       nullable: false
       source: actionKey
-      aliases: [actionKey]
       default: "''"
     - name: label
       dart_type: String
       nullable: false
       source: label
-      aliases: [label]
       default: "''"
     - name: target
       dart_type: IntersectionTarget
       nullable: true
       source: target
-      aliases: [target]
       map_from_string_key_class: IntersectionTarget
     - name: isPrimary
       dart_type: bool
       nullable: false
       source: isPrimary
-      aliases: [isPrimary]
       default: "false"
     - name: priority
       dart_type: int
       nullable: false
       source: priority
-      aliases: [priority]
       default: "0"
     - name: actionTier
       dart_type: String
       nullable: false
       source: actionTier
-      aliases: [actionTier]
       default: "'light'"
     - name: requiredGates
       dart_type: List<String>
       nullable: false
       source: requiredGates
-      aliases: [requiredGates]
     - name: targetAvailability
       dart_type: String
       nullable: false
       source: targetAvailability
-      aliases: [targetAvailability]
       default: "'available'"
     - name: dispatch
       dart_type: String
       nullable: false
       source: dispatch
-      aliases: [dispatch]
       default: "'navigate'"

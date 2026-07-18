@@ -1,5 +1,4 @@
 templateId: 主题_图文画报
-version: 1
 subject: { kind: topic, type: 旅行/主题, minEntityRefs: 2, subjectTagRef: Topic/旅行/玩法/摄影旅拍 }
 vertical: travel
 category: photography

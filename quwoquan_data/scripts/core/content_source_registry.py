@@ -7,7 +7,7 @@ import yaml
 from core.paths import CONTROL_PLANE_CATALOGS_ROOT
 
 CONTENT_SOURCE_REGISTRY_PATH = CONTROL_PLANE_CATALOGS_ROOT / "content_source_registry.yaml"
-CONTENT_SOURCE_REGISTRY_SCHEMA = "quwoquan.content_source_registry.v2"
+CONTENT_SOURCE_REGISTRY_SCHEMA = "quwoquan.content_source_registry"
 
 VALID_SOURCE_TIERS = (
     "tier1_authoritative",
@@ -23,8 +23,8 @@ def load_content_source_registry() -> dict[str, Any]:
     if not CONTENT_SOURCE_REGISTRY_PATH.is_file():
         raise FileNotFoundError(f"missing content source registry: {CONTENT_SOURCE_REGISTRY_PATH}")
     data = yaml.safe_load(CONTENT_SOURCE_REGISTRY_PATH.read_text(encoding="utf-8")) or {}
-    if data.get("schemaVersion") != CONTENT_SOURCE_REGISTRY_SCHEMA:
-        raise ValueError(f"{CONTENT_SOURCE_REGISTRY_PATH}: invalid schemaVersion")
+    if data.get("schema") != CONTENT_SOURCE_REGISTRY_SCHEMA:
+        raise ValueError(f"{CONTENT_SOURCE_REGISTRY_PATH}: invalid schema")
     return data
 
 
@@ -65,6 +65,13 @@ def homepage_primary_authority_rank(source_kind: str) -> int:
     from core.baike_source_contract import SOURCE_AUTHORITY_RANKS
 
     return SOURCE_AUTHORITY_RANKS.get(str(source_kind or "").strip(), 100)
+
+
+def homepage_core_source_limit() -> int:
+    value = _homepage_lane_policy(load_content_source_registry()).get("maxCoreSources")
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise ValueError("lanePolicies.homepage.maxCoreSources must be a positive integer")
+    return value
 
 
 def resolve_source_tier(source_class: str, *, data: Mapping[str, Any] | None = None) -> dict[str, str]:
@@ -149,7 +156,7 @@ def resolve_homepage_source_role(
     extractor: str = "",
     policy_revision: str = "",
 ) -> str:
-    """完整显式身份匹配四百科封闭集才是 homepage primary。"""
+    """完整显式身份匹配三百科封闭集才是 homepage primary。"""
     from core.baike_source_contract import source_identity_matches_contract
 
     return "primary" if source_identity_matches_contract(
@@ -237,12 +244,12 @@ def verify_content_source_registry() -> list[str]:
         if lane not in lane_policies:
             issues.append(f"lanePolicies.{lane}: missing")
     homepage_policy = _homepage_lane_policy(data)
-    if homepage_policy.get("homepageSourcePolicyRevision") != "encyclopedia-primary-v2":
-        issues.append("lanePolicies.homepage.homepageSourcePolicyRevision must be encyclopedia-primary-v2")
+    if homepage_policy.get("homepageSourcePolicyRevision") != "encyclopedia-primary":
+        issues.append("lanePolicies.homepage.homepageSourcePolicyRevision must be encyclopedia-primary")
     primary_rows = _homepage_primary_rows(data)
     source_kinds = [str(row.get("sourceKind") or "") for row in primary_rows]
-    if source_kinds != ["wikipedia", "baidu_baike", "sogou_baike", "toutiao_baike"]:
-        issues.append("lanePolicies.homepage.primarySources must be the ordered four-encyclopedia closed set")
+    if source_kinds != ["wikipedia", "baidu_baike", "toutiao_baike"]:
+        issues.append("lanePolicies.homepage.primarySources must be the ordered three-encyclopedia closed set")
     required_primary_fields = {
         "sourceKind",
         "sourceId",
@@ -265,10 +272,6 @@ def verify_content_source_registry() -> list[str]:
             issues.append(
                 f"lanePolicies.homepage.primarySources.{kind}: generic_html is forbidden"
             )
-    ranks = {str(row.get("sourceKind")): row.get("authorityRank") for row in primary_rows}
-    if ranks.get("sogou_baike") != ranks.get("toutiao_baike"):
-        issues.append("sogou_baike/toutiao_baike authorityRank must be equal")
-
     signals = data.get("sourceTierSignals") if isinstance(data.get("sourceTierSignals"), dict) else {}
     if not signals:
         issues.append("sourceTierSignals: missing (作品判定来源专业度先验真相源)")
@@ -333,7 +336,7 @@ def _names(rows: Iterable[Mapping[str, Any]], *, role: str | None = None) -> lis
 def build_content_source_guidance(vertical: str = "travel") -> dict[str, Any]:
     data = load_content_source_registry()
     guidance: dict[str, Any] = {
-        "schemaVersion": data.get("schemaVersion"),
+        "schema": data.get("schema"),
         "version": data.get("version"),
         "vertical": vertical,
         "lanePolicies": data.get("lanePolicies") or {},

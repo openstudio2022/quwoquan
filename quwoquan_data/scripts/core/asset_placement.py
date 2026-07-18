@@ -1,6 +1,6 @@
 """确定性配图注入：把 manifest 资产按章节 / 段落锚点放进正文 figure 块。
 
-与文章成品同构（App `qwq-rich-md/1` 真相源 `quwoquan_app/.../qwq_markdown_parser.dart`）：
+与文章成品同构（App `qwq-rich-md` 真相源 `quwoquan_app/.../qwq_markdown_parser.dart`）：
 
     :::figure id="..." layout="wrapLeft|wrapRight|fullWidth" caption="..."
     asset://<assetId>

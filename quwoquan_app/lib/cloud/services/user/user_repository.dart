@@ -80,9 +80,8 @@ List<Map<String, dynamic>> _decodeMockPersonasWire() {
 
 Map<String, dynamic> _mockActivePersonaContextWire() {
   // `resolveMockUserProfileWire` 是 mock 当前用户资料的唯一解析入口，内部已按
-  // override → contract seed → creator_pool → _defaultProfile 顺序回退，并保证
-  // displayName / avatarUrl 非空（当前体验槽位真相源：creator_pool
-  // `currentUserVariant` = fixture_sub_current / 小趣体验号）。此处不再自造第二
+  // override → shared contract seed → _defaultProfile 顺序回退，并保证
+  // displayName / avatarUrl 非空（当前体验槽位来自 prefab user metadata）。此处不再自造第二
   // 真相源或写死占位昵称/头像字面量。
   final profile = resolveMockUserProfileWire(kMockCurrentSubAccountId);
   return <String, dynamic>{

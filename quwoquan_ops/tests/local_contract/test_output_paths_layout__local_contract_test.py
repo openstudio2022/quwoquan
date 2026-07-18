@@ -10,11 +10,18 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.lib import output_paths
+from quwoquan_ops.cli import legal_static
 from quwoquan_ops.gate.verify_output_layout import output_layout_issues
 from quwoquan_ops.gate import verify_output_path_source_contract as source_contract
 
 
 MANIFEST = ROOT / "quwoquan_ops" / "environments" / "output_layout_manifest.yaml"
+
+
+def test_legal_static_source_manifest_uses_the_current_versioned_schema() -> None:
+    _, issues = legal_static.validate_manifest("alpha")
+
+    assert issues == []
 
 
 def _mkdirs(root: Path, paths: tuple[str, ...]) -> None:

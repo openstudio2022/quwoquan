@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 class AuthLoginObservabilityContractTest(unittest.TestCase):
-    def test_dashboard_uses_runtime_http_and_login_funnel_metrics(self) -> None:
+    def test_dashboard_uses_http_metrics_and_sls_owns_login_funnel(self) -> None:
         path = (
             ROOT
             / "quwoquan_ops/observability/monitoring/dashboards/l2_auth_login_commercial.json"
@@ -23,10 +23,22 @@ class AuthLoginObservabilityContractTest(unittest.TestCase):
             for panel in dashboard["panels"]
             for target in panel.get("targets", [])
         )
-        self.assertIn("ops_events_total", expressions)
+        self.assertNotIn("ops_events_total", expressions)
         self.assertIn("http_server_requests_total", expressions)
         self.assertIn("http_server_duration_seconds_bucket", expressions)
         self.assertIn("http_server_error_codes_total", expressions)
+
+        sls_path = (
+            ROOT
+            / "quwoquan_ops/environments/cloud-providers/aliyun/sls/product_telemetry.yaml"
+        )
+        sls = yaml.safe_load(sls_path.read_text(encoding="utf-8"))["spec"]
+        jobs = {item["name"]: item for item in sls["scheduledSql"]["jobs"]}
+        dimensions_sql = jobs[
+            "app-product-telemetry-event-dimensions-hourly"
+        ]["sql"]
+        for dimension in ("journey", "action", "result"):
+            self.assertIn(dimension, dimensions_sql)
 
     def test_alerts_enforce_two_windows_and_contract_thresholds(self) -> None:
         path = (

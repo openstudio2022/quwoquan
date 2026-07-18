@@ -7,9 +7,13 @@ node:
   parent_domain_service: product-ops-growth
   parent_business_capability: event-ingestion-and-analytics
 scope:
-  summary: event schema governance 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: 九字段信封、严格事件/页面目录、批次幂等、SLS 单轨、隐私与保留治理。
+  in_scope:
+  - event_catalog.yaml 与 app_pages.yaml 三端 codegen。
+  - App/Service 双端 strict validation 与 canonical batch digest。
+  - SLS raw/aggregate 单轨和 Portal 查询门面。
+  out_of_scope:
+  - 推荐 BehaviorSignal、Assistant 学习、visit_record。
 gwt_acceptance:
   GWT1:
     title: event schema governance GWT
@@ -20,17 +24,27 @@ gwt_acceptance:
     then:
     - 可观察结果符合预期。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
+    - 九字段与目录在 App/Go/Portal 生成产物一致，未知字段或事件被双端拒绝。
+    - canonical body 重放只写一批，超时后已写入可确认，Portal 默认掩码 sessionId。
+    - Mongo/ES/EventBatchReported/AppLogUploader 旧日志轨零残留。
+    edge_cases:
+    - occurredAt 早于 72h 或晚于 5min。
+    - 批次恰好 50 条/128 KiB 与越界一条/一字节。
+    - PutLogs 超时但服务端已接收。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/ops/event_record/event_catalog.yaml
+    - quwoquan_service/contracts/metadata/_shared/app_pages.yaml
+    - quwoquan_service/contracts/metadata/ops/event_record/storage.yaml
+    performance_points:
+    - ingest P95 <= 800ms
     tests:
       planned:
       - file: quwoquan_service/services/product-ops-service/cmd/api/main__local_contract_test.go
-      - file: quwoquan_service/scripts/runtime/observability/test_es_cli.py
+      - file: quwoquan_service/services/product-ops-service/tests/local_contract/event_catalog__local_contract_test.go
+      - file: quwoquan_service/services/product-ops-service/tests/api_integration/sls_event_store__api_integration_test.go
       recorded:
       - file: quwoquan_service/services/product-ops-service/cmd/api/main__local_contract_test.go
-    status: implemented
+    status: partial
     test_evidence:
       primary:
       - layer: local_contract
@@ -46,7 +60,7 @@ gwt_acceptance:
         envs: *id001
       supporting: []
     notes:
-    - '[migrated_from_recorded_noncanonical] quwoquan_service/scripts/runtime/observability/test_es_cli.py'
+    - metadata/codegen 已进入开发；真实 SLS、gamma 与真机证据未闭合前禁止 implemented。
 execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh

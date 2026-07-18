@@ -85,7 +85,7 @@ class SubAccountProfileViewData {
   final List<String> overriddenFields;
   final DateTime? updatedAt;
 
-  /// Wire DTO 解码在 [SubAccountProfileWireDto]（含 `skip_empty_string_aliases`）；此处仅做展示层回退。
+  /// Wire DTO 已按 canonical 字段解码；此处仅做展示层派生。
   factory SubAccountProfileViewData.fromSubAccountProfileWire(
     SubAccountProfileWireDto w,
   ) {
@@ -136,13 +136,6 @@ class SubAccountProfileViewData {
     );
   }
 
-  /// 仅用于 Repository / 契约解码边界；页面与业务层请使用 [fromProfileSubjectWire]。
-  @Deprecated('Use fromSubAccountProfileWire(SubAccountProfileWireDto)')
-  factory SubAccountProfileViewData.fromMap(Map<String, dynamic> map) {
-    return SubAccountProfileViewData.fromSubAccountProfileWire(
-      SubAccountProfileWireDto.fromMap(map),
-    );
-  }
   SubAccountProfileViewData mergeStats(UserProfileStatsViewData stats) {
     return SubAccountProfileViewData(
       subAccountId: subAccountId,
@@ -199,12 +192,6 @@ class UserProfileStatsViewData {
       postCount: w.postCount,
     );
   }
-  @Deprecated('Use fromUserProfileStatsWire(UserProfileStatsWireDto)')
-  factory UserProfileStatsViewData.fromMap(Map<String, dynamic> m) {
-    return UserProfileStatsViewData.fromUserProfileStatsWire(
-      UserProfileStatsWireDto.fromMap(m),
-    );
-  }
   factory UserProfileStatsViewData.fromProfile(SubAccountProfileViewData p) {
     return UserProfileStatsViewData(
       followingCount: p.followingCount,
@@ -237,14 +224,6 @@ class RelationshipViewData {
       isFollowing: w.isFollowing,
       isFollowedBy: w.isFollowedBy,
       isMutual: w.isMutual,
-    );
-  }
-  @Deprecated(
-    'Use fromRelationshipNormalizedWire(RelationshipNormalizedWireDto)',
-  )
-  factory RelationshipViewData.fromNormalizedMap(Map<String, dynamic> m) {
-    return RelationshipViewData.fromRelationshipNormalizedWire(
-      RelationshipNormalizedWireDto.fromMap(m),
     );
   }
 }
@@ -282,12 +261,6 @@ class ProfileUserLikeRowViewData {
       ),
       likerAvatarVersion: w.likerAvatarVersion,
       likedAt: w.likedAt,
-    );
-  }
-  @Deprecated('Use fromProfileUserLikeRowWire(ProfileUserLikeRowWireDto)')
-  factory ProfileUserLikeRowViewData.fromMap(Map<String, dynamic> m) {
-    return ProfileUserLikeRowViewData.fromProfileUserLikeRowWire(
-      ProfileUserLikeRowWireDto.fromMap(m),
     );
   }
 }
@@ -359,15 +332,6 @@ class ProfileSocialRelationRowViewData {
       relationshipCapability: w.relationshipCapability == null
           ? null
           : RelationshipCapabilityDto.fromMap(w.relationshipCapability!),
-    );
-  }
-
-  @Deprecated(
-    'Use fromProfileSocialRelationRowWire(ProfileSocialRelationRowWireDto)',
-  )
-  factory ProfileSocialRelationRowViewData.fromMap(Map<String, dynamic> map) {
-    return ProfileSocialRelationRowViewData.fromProfileSocialRelationRowWire(
-      ProfileSocialRelationRowWireDto.fromMap(map),
     );
   }
 

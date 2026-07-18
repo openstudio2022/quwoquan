@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
-import 'package:quwoquan_app/app/navigation/page_access_internal_routes.dart';
+import 'package:quwoquan_app/app/navigation/generated/page_access_internal_routes.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/integration/integration_location_errors.g.dart';

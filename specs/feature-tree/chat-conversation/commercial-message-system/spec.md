@@ -148,7 +148,7 @@ App 不得在 UI/Provider 中拼接来源、成员数、最近互动或交集文
 ### 4.4 交集与通知
 
 - `Intersection` 契约必须独立或明确迁入 `recommendation/intersection`，输出 `IntersectionPoint`、`IntersectionReason`、`ObjectIntersectionSummary`、`ContactIntersectionSummary`。
-- `notification-service` 必须实现 `/v1/app-messages`、未读数、标记已读、类型分页和持久化存储。
+- `notification-service` 必须实现 `/app-messages`、未读数、标记已读、类型分页和持久化存储。
 - `messages/conversation` 的 `ListMessageHome`、`ListContactHome`、`GetGroupHome` 与 `MarkAsRead` 必须由真实持久化 read model / read watermark 支撑，禁止仅靠 App 本地缓存或 Mock 拼接维持筛选状态。
 
 ## 5. 商用删除项

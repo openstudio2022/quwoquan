@@ -762,9 +762,9 @@ class RemoteChatRepository implements ChatRepository {
         .take(limit)
         .map(
           (m) => ChatContactTabCircleRowDto.fromMap(<String, dynamic>{
-            'circleId': m['circleId'] ?? m['id'],
-            'displayName': m['displayName'] ?? m['name'],
-            'avatarUrl': m['avatarUrl'] ?? m['coverUrl'],
+            'circleId': m['id'],
+            'displayName': m['name'],
+            'avatarUrl': m['coverUrl'],
             'subtitle': m['description'] ?? '',
           }),
         )

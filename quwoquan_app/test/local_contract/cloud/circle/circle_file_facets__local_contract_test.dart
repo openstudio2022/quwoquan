@@ -124,7 +124,7 @@ void main() {
     },
   );
 
-  test('CircleFile mutations carry optimistic version only in If-Match', () {
+  test('CircleFile only uses If-Match for multi-writer snapshot updates', () {
     final update = encodeUpdateCircleFileCommand(
       UpdateCircleFileCommand(
         circleId: 'circle-1',
@@ -137,13 +137,9 @@ void main() {
     expect(update.body, <String, Object?>{'name': 'renamed.pdf'});
 
     final delete = encodeDeleteCircleFileCommand(
-      DeleteCircleFileCommand(
-        circleId: 'circle-1',
-        fileId: 'file-1',
-        expectedVersion: 8,
-      ),
+      DeleteCircleFileCommand(circleId: 'circle-1', fileId: 'file-1'),
     );
-    expect(delete.headers, <String, String>{'If-Match': '"8"'});
+    expect(delete.headers, isEmpty);
     expect(delete.body, isNull);
   });
 }

@@ -26,7 +26,7 @@ class MyFootprintPage extends ConsumerStatefulWidget {
 }
 
 class _MyFootprintPageState extends ConsumerState<MyFootprintPage> {
-  /// 足迹 type 闭集（契约 GET /v1/content/footprint 的 type 枚举），'' 表示全部。
+  /// 足迹 type 闭集（契约 GET /content/footprint 的 type 枚举），'' 表示全部。
   static const List<String> _typeTabs = <String>[
     '',
     'viewed',

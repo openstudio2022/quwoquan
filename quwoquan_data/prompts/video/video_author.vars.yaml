@@ -1,0 +1,12 @@
+system:
+  required: []
+  optional: []
+task:
+  required:
+    - content_ref
+    - entity_name
+    - segment_count
+    - source_frames_json
+    - video_script_path
+    - draft_meta_path
+  optional: []

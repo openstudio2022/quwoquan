@@ -2,24 +2,68 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Structured Agent result envelope accepted by the production controller.",
   "type": "object",
-  "required": ["schemaVersion", "executionId", "jobId", "ref", "stage", "agent", "files", "gates"],
+  "required": [
+    "schema",
+    "executionId",
+    "jobId",
+    "ref",
+    "stage",
+    "agent",
+    "files",
+    "gates"
+  ],
   "properties": {
-    "schemaVersion": { "const": "quwoquan.agent_result_envelope" },
-    "executionId": { "type": "string", "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(canary|m1|m2|m3)-[0-9]{3,}$" },
-    "envelopeId": { "type": "string" },
-    "jobId": { "type": "string", "minLength": 1 },
-    "ref": { "type": "string", "minLength": 1 },
-    "stage": { "type": "string", "minLength": 1 },
+    "executionId": {
+      "type": "string",
+      "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(canary|m1|m2|m3)-[0-9]{3,}$"
+    },
+    "envelopeId": {
+      "type": "string"
+    },
+    "jobId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stage": {
+      "type": "string",
+      "minLength": 1
+    },
     "agent": {
       "type": "object",
       "description": "审计链（P4 补强）：产物必须能归因到 provider/model/run/prompt。",
-      "required": ["provider", "model", "runId", "promptSha256"],
+      "required": [
+        "provider",
+        "model",
+        "runId",
+        "promptSha256"
+      ],
       "properties": {
-        "agentId": { "type": ["string", "null"] },
-        "runId": { "type": "string", "minLength": 1 },
-        "provider": { "type": "string", "minLength": 1 },
-        "model": { "type": "string", "minLength": 1 },
-        "promptSha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+        "agentId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "provider": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "promptSha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
       }
     },
     "files": {
@@ -27,18 +71,34 @@
       "minItems": 1,
       "items": {
         "type": "object",
-        "required": ["path", "sha256"],
+        "required": [
+          "path",
+          "sha256"
+        ],
         "properties": {
-          "path": { "type": "string", "minLength": 1 },
-          "sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
-          "role": { "type": "string" }
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "role": {
+            "type": "string"
+          }
         }
       }
     },
     "gates": {
       "type": "array",
       "minItems": 1,
-      "items": { "$ref": "gate_verdict.schema.json" }
+      "items": {
+        "$ref": "gate_verdict.schema.json"
+      }
+    },
+    "schema": {
+      "const": "quwoquan.agent_result_envelope"
     }
   }
 }

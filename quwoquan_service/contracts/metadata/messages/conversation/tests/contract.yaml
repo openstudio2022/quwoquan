@@ -1,4 +1,3 @@
-version: 1
 aggregate: Conversation
 layer: service_side
 

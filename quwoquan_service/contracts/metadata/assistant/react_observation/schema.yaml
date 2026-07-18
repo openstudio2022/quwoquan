@@ -2,7 +2,6 @@ dart_class: ReactObservationDto
 library_path: assistant/contracts/react_observation.dart
 output_path: assistant/generated/contracts/react_observation.g.dart
 contract: react_observation
-version: v1
 kind: runtime_policy_contract
 fields:
   - { name: status, type: string, default: '' }

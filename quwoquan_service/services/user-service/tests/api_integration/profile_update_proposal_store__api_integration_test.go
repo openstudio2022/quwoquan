@@ -50,7 +50,7 @@ func TestProfileUpdateProposalPostgresCommitIsAtomicAndReplayable(t *testing.T) 
 
 	confirmCommand := proposalapp.ConfirmCommand{
 		ProposalID: "proposal-api-integration-1", ActorPersonaID: personaID,
-		ExpectedProposalVersion: 1, IdempotencyKey: "proposal-confirm-key",
+		IdempotencyKey: "proposal-confirm-key",
 	}
 	confirmReceipt, err := proposalFacade.Confirm(ctx, confirmCommand)
 	if err != nil {
@@ -63,20 +63,28 @@ func TestProfileUpdateProposalPostgresCommitIsAtomicAndReplayable(t *testing.T) 
 	if err != nil || !replayedConfirm.Replayed {
 		t.Fatalf("replay confirm mismatch: receipt=%#v err=%v", replayedConfirm, err)
 	}
+	noopConfirmCommand := proposalapp.ConfirmCommand{
+		ProposalID: "proposal-api-integration-1", ActorPersonaID: personaID,
+		IdempotencyKey: "proposal-confirm-noop-key",
+	}
+	noopConfirm, err := proposalFacade.Confirm(ctx, noopConfirmCommand)
+	if err != nil || noopConfirm.Replayed || noopConfirm.Version != 2 {
+		t.Fatalf("persist confirm no-op mismatch: receipt=%#v err=%v", noopConfirm, err)
+	}
 	confirmed, err := store.Load(ctx, "proposal-api-integration-1")
 	if err != nil {
 		t.Fatalf("load confirmed proposal: %v", err)
 	}
 	applied, err := proposalFacade.Apply(ctx, proposalapp.ApplyCommand{
 		ProposalID: confirmed.ID, ActorPersonaID: personaID,
-		ExpectedProposalVersion: confirmed.Version, IdempotencyKey: "proposal-apply-key",
+		IdempotencyKey: "proposal-apply-key",
 	})
 	if err != nil {
 		t.Fatalf("apply proposal through Persona Command Facade: %v", err)
 	}
 	replayedApply, err := proposalFacade.Apply(ctx, proposalapp.ApplyCommand{
 		ProposalID: confirmed.ID, ActorPersonaID: personaID,
-		ExpectedProposalVersion: confirmed.Version, IdempotencyKey: "proposal-apply-key",
+		IdempotencyKey: "proposal-apply-key",
 	})
 	if err != nil {
 		t.Fatalf("replay applied proposal: %v", err)
@@ -84,12 +92,23 @@ func TestProfileUpdateProposalPostgresCommitIsAtomicAndReplayable(t *testing.T) 
 	if applied.Status != string(proposalmodel.StatusApplied) || !replayedApply.Replayed {
 		t.Fatalf("apply receipts mismatch: applied=%#v replayed=%#v", applied, replayedApply)
 	}
+	replayedNoopConfirm, err := proposalFacade.Confirm(ctx, noopConfirmCommand)
+	if err != nil ||
+		!replayedNoopConfirm.Replayed ||
+		replayedNoopConfirm.Version != noopConfirm.Version ||
+		replayedNoopConfirm.Status != noopConfirm.Status {
+		t.Fatalf(
+			"confirm no-op must replay the pre-apply result: receipt=%#v err=%v",
+			replayedNoopConfirm,
+			err,
+		)
+	}
 
 	loaded, err := store.Load(ctx, confirmed.ID)
 	if err != nil {
 		t.Fatalf("load proposal: %v", err)
 	}
-	if loaded.Status != proposalmodel.StatusApplied || loaded.Version != 3 || loaded.ProposedChanges.DisplayName == nil || *loaded.ProposedChanges.DisplayName != displayName {
+	if loaded.Status != proposalmodel.StatusApplied || loaded.Version != 4 || loaded.ProposedChanges.DisplayName == nil || *loaded.ProposedChanges.DisplayName != displayName {
 		t.Fatalf("loaded state mismatch: %#v", loaded)
 	}
 
@@ -103,7 +122,7 @@ func TestProfileUpdateProposalPostgresCommitIsAtomicAndReplayable(t *testing.T) 
 	if err := pgPool.QueryRow(ctx, `SELECT COUNT(*) FROM profile_update_proposals_outbox WHERE aggregate_id=$1`, confirmed.ID).Scan(&outboxCount); err != nil {
 		t.Fatalf("count outbox: %v", err)
 	}
-	if stateCount != 1 || receiptCount != 3 || outboxCount != 3 {
+	if stateCount != 1 || receiptCount != 5 || outboxCount != 4 {
 		t.Fatalf("atomic packet mismatch: state=%d receipts=%d outbox=%d", stateCount, receiptCount, outboxCount)
 	}
 	var (

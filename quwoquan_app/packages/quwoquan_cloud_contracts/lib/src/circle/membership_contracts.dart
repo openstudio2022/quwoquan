@@ -12,15 +12,10 @@ final class JoinCircleMembershipCommand {
 }
 
 final class LeaveCircleMembershipCommand {
-  LeaveCircleMembershipCommand({
-    required String circleId,
-    required this.expectedVersion,
-  }) : circleId = _required(circleId, 'circleId') {
-    _positive(expectedVersion, 'expectedVersion');
-  }
+  LeaveCircleMembershipCommand({required String circleId})
+    : circleId = _required(circleId, 'circleId');
 
   final String circleId;
-  final int expectedVersion;
 }
 
 final class UpdateCircleMembershipRoleCommand {
@@ -28,7 +23,6 @@ final class UpdateCircleMembershipRoleCommand {
     required String circleId,
     required String personaId,
     required this.role,
-    required this.expectedVersion,
   }) : circleId = _required(circleId, 'circleId'),
        personaId = _required(personaId, 'personaId') {
     if (role == CircleMembershipRole.owner) {
@@ -38,13 +32,11 @@ final class UpdateCircleMembershipRoleCommand {
         'owner transfer is not a role update',
       );
     }
-    _positive(expectedVersion, 'expectedVersion');
   }
 
   final String circleId;
   final String personaId;
   final CircleMembershipRole role;
-  final int expectedVersion;
 }
 
 final class CircleMembershipListQuery {
@@ -237,7 +229,6 @@ CloudOperationRequestPayload encodeLeaveCircleMembershipCommand(
   LeaveCircleMembershipCommand command,
 ) => CloudOperationRequestPayload(
   pathParameters: <String, String>{'circleId': command.circleId},
-  headers: <String, String>{'If-Match': '"${command.expectedVersion}"'},
 );
 
 CloudOperationRequestPayload encodeUpdateCircleMembershipRoleCommand(
@@ -247,10 +238,7 @@ CloudOperationRequestPayload encodeUpdateCircleMembershipRoleCommand(
     'circleId': command.circleId,
     'personaId': command.personaId,
   },
-  body: <String, Object?>{
-    'role': command.role.name,
-    'expectedVersion': command.expectedVersion,
-  },
+  body: <String, Object?>{'role': command.role.name},
 );
 
 CloudOperationRequestPayload encodeCircleMembershipListQuery(
@@ -513,10 +501,6 @@ String _required(String value, String name) {
   final normalized = value.trim();
   if (normalized.isEmpty) throw ArgumentError.value(value, name, 'required');
   return normalized;
-}
-
-void _positive(int value, String name) {
-  if (value <= 0) throw ArgumentError.value(value, name, 'must be positive');
 }
 
 void _limit(int value) {

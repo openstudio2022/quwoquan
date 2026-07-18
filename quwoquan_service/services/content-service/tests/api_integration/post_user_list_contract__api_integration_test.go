@@ -13,11 +13,11 @@ func TestListUserPosts(t *testing.T) {
 
 	authorID := "author_list_test"
 	for i := 0; i < 3; i++ {
-		createPostWithAuthor(t, authorID, `{"contentType":"image","title":"user post","mediaUrls":["https://example.com/img.jpg"]}`)
+		submitPublishedPostWithAuthor(t, authorID, `{"contentType":"image","title":"user post"}`)
 	}
-	createPostWithAuthor(t, "other_author", `{"contentType":"image","title":"other post","mediaUrls":["https://example.com/img.jpg"]}`)
+	submitPublishedPostWithAuthor(t, "other_author", `{"contentType":"image","title":"other post"}`)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/content/sub-accounts/"+authorID+"/posts?limit=20", nil)
+	req := httptest.NewRequest(http.MethodGet, "/content/sub-accounts/"+authorID+"/posts?limit=20", nil)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -36,7 +36,7 @@ func TestListUserPosts(t *testing.T) {
 func TestListUserPostsEmpty(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/content/sub-accounts/nonexistent_user/posts?limit=20", nil)
+	req := httptest.NewRequest(http.MethodGet, "/content/sub-accounts/nonexistent_user/posts?limit=20", nil)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {

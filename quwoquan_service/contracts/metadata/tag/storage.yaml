@@ -1,4 +1,3 @@
-version: 1
 entity: TagNodeView
 backend: mongodb
 

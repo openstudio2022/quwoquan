@@ -1,6 +1,6 @@
 """Production content-supply contracts shared by queues, runners and gates.
 
-The key rule is intentionally simple: an Agent cannot advance workflow state
+The key rule is intentionally simple: an Agent cannot advance execution state
 with prose.  It must submit an AgentResultEnvelope that names every produced
 file, includes sha256 hashes, and carries final gate verdicts.
 """
@@ -58,8 +58,8 @@ def _expect_string(payload: Mapping[str, Any], key: str, issues: list[str], *, p
 
 def validate_gate_verdict(verdict: Mapping[str, Any], *, require_passing: bool = False) -> list[str]:
     issues: list[str] = []
-    if verdict.get("schemaVersion") != GATE_VERDICT_SCHEMA:
-        issues.append("gate.schemaVersion must be quwoquan.gate_verdict")
+    if verdict.get("schema") != GATE_VERDICT_SCHEMA:
+        issues.append("gate.schema must be quwoquan.gate_verdict")
     gate_id = verdict.get("gateId") or verdict.get("gate")
     if not isinstance(gate_id, str) or not gate_id.strip():
         issues.append("gate.gateId is required")
@@ -84,8 +84,8 @@ def validate_agent_result_envelope(
     require_passing_gates: bool = True,
 ) -> list[str]:
     issues: list[str] = []
-    if envelope.get("schemaVersion") != AGENT_RESULT_ENVELOPE_SCHEMA:
-        issues.append("envelope.schemaVersion must be quwoquan.agent_result_envelope")
+    if envelope.get("schema") != AGENT_RESULT_ENVELOPE_SCHEMA:
+        issues.append("envelope.schema must be quwoquan.agent_result_envelope")
     for key in ("executionId", "jobId", "ref", "stage"):
         _expect_string(envelope, key, issues, prefix="envelope")
 
@@ -172,7 +172,7 @@ def build_gate_verdict(
 ) -> dict[str, Any]:
     issue_list = [str(issue) for issue in (issues or []) if str(issue).strip()]
     return {
-        "schemaVersion": GATE_VERDICT_SCHEMA,
+        "schema": GATE_VERDICT_SCHEMA,
         "gateId": gate_id,
         "decision": decision,
         "final": True,
@@ -200,7 +200,7 @@ def build_agent_result_envelope(
 
     execution_id = validate_execution_id(str(job.get("executionId") or ""))
     payload = {
-        "schemaVersion": AGENT_RESULT_ENVELOPE_SCHEMA,
+        "schema": AGENT_RESULT_ENVELOPE_SCHEMA,
         "executionId": execution_id,
         "jobId": job.get("jobId"),
         "ref": job.get("ref"),
@@ -236,7 +236,7 @@ def build_token_ledger_entry(
     """账本条目（P4 补强）：runId 必填，token 用量必须能关联到具体 agent run。"""
     exceeded = int(budget_tokens) > 0 and int(used_tokens) > int(budget_tokens)
     return {
-        "schemaVersion": TOKEN_LEDGER_SCHEMA,
+        "schema": TOKEN_LEDGER_SCHEMA,
         "executionId": execution_id,
         "jobId": job_id,
         "runId": run_id,
@@ -255,8 +255,8 @@ def build_token_ledger_entry(
 
 def validate_token_ledger_entry(entry: Mapping[str, Any]) -> list[str]:
     issues: list[str] = []
-    if entry.get("schemaVersion") != TOKEN_LEDGER_SCHEMA:
-        issues.append("tokenLedger.schemaVersion must be quwoquan.token_ledger")
+    if entry.get("schema") != TOKEN_LEDGER_SCHEMA:
+        issues.append("tokenLedger.schema must be quwoquan.token_ledger")
     for key in ("executionId", "jobId", "runId", "creatorProfileId", "contentType"):
         _expect_string(entry, key, issues, prefix="tokenLedger")
     budget = int(entry.get("budgetTokens") or 0)

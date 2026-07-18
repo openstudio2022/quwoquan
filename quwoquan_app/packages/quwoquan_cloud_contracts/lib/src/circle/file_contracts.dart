@@ -64,18 +64,12 @@ final class UpdateCircleFileCommand {
 }
 
 final class DeleteCircleFileCommand {
-  DeleteCircleFileCommand({
-    required String circleId,
-    required String fileId,
-    required this.expectedVersion,
-  }) : circleId = _required(circleId, 'circleId'),
-       fileId = _required(fileId, 'fileId') {
-    _positive(expectedVersion, 'expectedVersion');
-  }
+  DeleteCircleFileCommand({required String circleId, required String fileId})
+    : circleId = _required(circleId, 'circleId'),
+      fileId = _required(fileId, 'fileId');
 
   final String circleId;
   final String fileId;
-  final int expectedVersion;
 }
 
 final class CircleFileQuery {
@@ -212,7 +206,6 @@ CloudOperationRequestPayload encodeDeleteCircleFileCommand(
     'circleId': command.circleId,
     'fileId': command.fileId,
   },
-  headers: <String, String>{'If-Match': '"${command.expectedVersion}"'},
 );
 
 CloudOperationRequestPayload encodeCircleFileQuery(CircleFileQuery query) =>

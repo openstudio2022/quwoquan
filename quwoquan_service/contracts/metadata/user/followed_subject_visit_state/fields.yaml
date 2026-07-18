@@ -1,4 +1,3 @@
-version: 1
 entity: FollowedSubjectVisitState
 
 entities:
@@ -6,6 +5,7 @@ entities:
     description: 当前 viewer 对关注对象的访问水位
     fields:
       - name: personaId
+        source: personaId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -14,6 +14,7 @@ entities:
         ops_exposure: read
 
       - name: subjectType
+        source: subjectType
         type: enum
         enum_ref: FollowingSubjectType
         constraints: [NOT_NULL]
@@ -23,6 +24,7 @@ entities:
         ops_exposure: read
 
       - name: subjectId
+        source: subjectId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -31,6 +33,7 @@ entities:
         ops_exposure: read
 
       - name: lastVisitedAt
+        source: lastVisitedAt
         type: timestamp
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -39,6 +42,7 @@ entities:
         ops_exposure: read
 
       - name: updatedAt
+        source: updatedAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC

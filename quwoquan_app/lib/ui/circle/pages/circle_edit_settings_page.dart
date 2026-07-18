@@ -3,7 +3,7 @@ import 'dart:async';
 // settings-canonical-exception: deferred_inset state part hosts SettingsInsetFormPageScaffold; CR-20260624-settings-page-redesign
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/app/navigation/page_access_internal_routes.dart';
+import 'package:quwoquan_app/app/navigation/generated/page_access_internal_routes.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/components/media/app_media_image.dart';

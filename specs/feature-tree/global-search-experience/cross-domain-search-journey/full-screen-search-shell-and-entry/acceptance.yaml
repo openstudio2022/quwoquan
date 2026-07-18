@@ -60,31 +60,43 @@ gwt_acceptance:
       supporting: []
     notes: []
   GWT2:
-    title: 输入过程只快速定位已连接或已关注对象
+    title: 输入过程本地结果先出且云实体不阻塞
     given:
     - 用户在全局搜索页输入关键词。
     when:
-    - suggest 模式 search(request) 返回联系人、聊天、圈子、地点、人和推荐词候选。
+    - 本地联系人、会话、消息、常用项与云端实体主页开始并行查询。
     then:
-    - 页面按顺序展示联系人、聊天记录、已加入圈子、已关注地点、已关注的人、推荐搜索词。
+    - 搜索框尾部只有清除按钮，输入框内没有 spinner。
+    - 本地域各自在 1.5 秒内结算并先于慢云端结果展示。
+    - 发布态云实体作为既有“搜索网络结果”段预览，不新增第五分段。
+    - 输入“钱”时包含匹配命中“东钱湖”，点击后进入对应实体主页。
     - 无命中的分组隐藏。
     - 不展示未关注圈子、未关注地点、未连接的人、图片、视频、长文正式结果。
     - 点击搜索按钮进入正式结果页，默认 Tab 为全部。
     done_when:
-    - 输入过程不再承担正式结果浏览，只承担已有对象快速定位。
+    - 本地结果不被聊天同步、圈子预热或云实体延迟阻塞。
     edge_cases:
-    - 所有已连接对象无命中时，只保留推荐搜索词或空态。
+    - 单域失败显示 partial；所有域成功且为空才显示 empty；所有域失败才显示整页 error。
+    - query 变化、清空、返回和 dispose 后旧 completion 不得回写。
+    - 空白阻塞到 3 秒提示一次，6 秒取消 transport、停止 spinner 并显示重试，不得显示“暂无结果”。
     - 联系人点击必须直达会话或按既有回退打开可用会话。
     contract_refs:
     - quwoquan_service/contracts/metadata/_shared/search_contract.yaml
     - quwoquan_service/contracts/metadata/_shared/search_objects.yaml
+    - quwoquan_service/contracts/metadata/search/query/service.yaml
+    - quwoquan_service/contracts/metadata/entity/homepage/service.yaml
     performance_points:
     - 输入后首批可见分组 P95 在 1.5s 内出现。
     tests:
       planned:
       - file: quwoquan_app/test/local_contract/ui/search/pages/global_search_page_widget__local_contract_test.dart
-      recorded: []
-    status: pending
+      recorded:
+      - file: quwoquan_app/test/local_contract/ui/search/pages/global_search_page_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/core/widgets/app_request_feedback__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/runtime/cloud_http_client_cancellation__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/services/contract_seeded_mock_repository__local_contract_test.dart
+    status: implemented
     test_evidence:
       primary:
       - layer: local_contract
@@ -111,12 +123,14 @@ gwt_acceptance:
     - 已连接区按聊天记录、联系人、已加入圈子、已关注地点、已关注的人、已互动内容顺序展示，每类最多一组。
     - 未连接发现区按交集、圈子、地点、人、图片、视频、长文同类成组，并按匹配池数量与相关度比例混排。
     - 发现区不展示“查看更多”，继续下滑加载下一批组。
+    - 当前 query/tab generation 只调用一次 canonical `POST /search`，App 不做顺序 fan-out。
     done_when:
     - 全部 Tab 同时满足“已连接优先”和“未连接按比例发现”的信息架构。
     edge_cases:
     - 某一类只有已连接结果时，不再在发现区重复出现。
     - 某一类只有未连接结果时，只进入发现区。
     - 单域失败必须用 degrade signal 展示，不阻塞其他分组。
+    - query/tab 变化、6 秒 timeout 与 dispose 都会取消或废弃旧请求；旧响应不得闪回。
     contract_refs:
     - specs/feature-tree/global-search-experience/spec.md
     - quwoquan_service/contracts/metadata/_shared/search_contract.yaml
@@ -126,8 +140,10 @@ gwt_acceptance:
       planned:
       - file: quwoquan_app/test/local_contract/ui/search/pages/search_network_results_page_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/search/search_repository__local_contract_test.dart
-      recorded: []
-    status: pending
+      recorded:
+      - file: quwoquan_app/test/local_contract/ui/search/pages/search_network_results_page_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/search/search_repository__local_contract_test.dart
+    status: implemented
     test_evidence:
       primary:
       - layer: local_contract

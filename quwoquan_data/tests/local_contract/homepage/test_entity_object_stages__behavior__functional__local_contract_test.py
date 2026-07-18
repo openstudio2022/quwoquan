@@ -21,7 +21,7 @@ from core.paths import (  # noqa: E402
     execution_entity_page_input_path,
     ensure_execution_layout,
 )
-from content.homepage.homepage import prepare_entity_pages  # noqa: E402
+from content.homepage.homepage_prepare import prepare_entity_pages  # noqa: E402
 from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
 
 _EXECUTION_ID = "20260712--travel-homepage-coverage--cn-sichuan--canary-999"

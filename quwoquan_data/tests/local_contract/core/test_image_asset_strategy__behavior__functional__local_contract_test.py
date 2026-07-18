@@ -76,9 +76,36 @@ def test_open_license_scale_requires_prescreened_pool_or_publish_strategy():
     issues = image_asset_strategy_scale_issues(spec)
 
     assert len(issues) == 1
-    assert "openLicenseScaleProof" in issues[0]
+    assert "open_license_scale_proof.json" in issues[0]
     assert "preScreenedEntityCount>=100" in issues[0]
     assert "publishableImageAssets>=200" not in issues[0]
+
+
+def test_homepage_scale_requires_one_publishable_image_per_target():
+    spec = {
+        "scope": {
+            "coverageTargets": [
+                {"entityType": "地点/景区", "name": f"景区{i}"}
+                for i in range(100)
+            ]
+        },
+        "content": {
+            "quotas": {"imageWorksPerTarget": 0},
+            "research": {
+                "imageAssetStrategy": "open_license_publish",
+                "imageCountPolicy": "hard_quota",
+                "minimumPublishableImagesPerTarget": 1,
+                "allowAiImages": False,
+            },
+        },
+        "acceptance": {"minEntities": 100},
+    }
+
+    issues = image_asset_strategy_scale_issues(spec)
+
+    assert len(issues) == 1
+    assert "preScreenedEntityCount>=100" in issues[0]
+    assert "publishableImageAssets>=100" in issues[0]
 
 
 def test_hard_quota_open_license_scale_requires_publishable_asset_count():
@@ -95,18 +122,18 @@ def test_hard_quota_open_license_scale_requires_publishable_asset_count():
                 "imageAssetStrategy": "open_license_publish",
                 "imageCountPolicy": "hard_quota",
                 "allowAiImages": False,
-                "openLicenseScaleProof": {
-                    "preScreenedEntityCount": 100,
-                    "publishableImageAssets": 175,
-                    "assetPoolPath": "quwoquan_data/publish/media/library",
-                    "verifiedAt": "2026-06-20T00:00:00Z",
-                },
             },
         },
         "acceptance": {"minEntities": 100},
     }
+    proof = {
+        "preScreenedEntityCount": 100,
+        "publishableImageAssets": 175,
+        "assetPoolPath": ".qwq_output/data/tasks/example/entities",
+        "verifiedAt": "2026-06-20T00:00:00Z",
+    }
 
-    issues = image_asset_strategy_scale_issues(spec)
+    issues = image_asset_strategy_scale_issues(spec, proof)
 
     assert len(issues) == 1
     assert "publishableImageAssets>=200" in issues[0]
@@ -125,18 +152,18 @@ def test_open_license_scale_passes_with_prescreened_pool_proof():
             "research": {
                 "imageAssetStrategy": "open_license_publish",
                 "allowAiImages": False,
-                "openLicenseScaleProof": {
-                    "preScreenedEntityCount": 100,
-                    "publishableImageAssets": 175,
-                    "assetPoolPath": "quwoquan_data/publish/media/library",
-                    "verifiedAt": "2026-06-20T00:00:00Z",
-                },
             },
         },
         "acceptance": {"minEntities": 100},
     }
+    proof = {
+        "preScreenedEntityCount": 100,
+        "publishableImageAssets": 175,
+        "assetPoolPath": ".qwq_output/data/tasks/example/entities",
+        "verifiedAt": "2026-06-20T00:00:00Z",
+    }
 
-    assert image_asset_strategy_scale_issues(spec) == []
+    assert image_asset_strategy_scale_issues(spec, proof) == []
 
 
 def test_licensed_provider_scale_requires_asset_pool_proof():
@@ -161,7 +188,7 @@ def test_licensed_provider_scale_requires_asset_pool_proof():
     issues = image_asset_strategy_scale_issues(spec)
 
     assert len(issues) == 1
-    assert "licensedProviderScaleProof" in issues[0]
+    assert "licensed_provider_scale_proof.json" in issues[0]
     assert "licensedEntityCount>=100" in issues[0]
 
 
@@ -187,5 +214,5 @@ def test_ai_generated_scale_requires_synthetic_pool_proof():
     issues = image_asset_strategy_scale_issues(spec)
 
     assert len(issues) == 1
-    assert "syntheticScaleProof" in issues[0]
+    assert "synthetic_scale_proof.json" in issues[0]
     assert "generatedEntityCount>=100" in issues[0]

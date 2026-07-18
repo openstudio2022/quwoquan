@@ -3,7 +3,7 @@ import 'package:quwoquan_app/core/media/asset_url_resolver.dart';
 
 void main() {
   group('AssetUrlResolver', () {
-    test('resolves asset manifest objectKey through CDN base', () {
+    test('resolves canonical public slice objectKey through CDN base', () {
       const resolver = AssetUrlResolver(
         imageCdnBaseUrl: 'https://img.example.com',
         gatewayBaseUrl: 'https://api.example.com',
@@ -13,15 +13,14 @@ void main() {
         'assets': <Object?>[
           <String, Object?>{
             'assetId': 'cover',
-            'objectKey':
-                'media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg',
+            'objectKey': 'media/image/s/article/post-1/v1/cover.jpg',
           },
         ],
       });
 
       expect(
         urls['cover'],
-        'https://img.example.com/media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg',
+        'https://img.example.com/media/image/s/article/post-1/v1/cover.jpg',
       );
     });
 
@@ -34,14 +33,17 @@ void main() {
         'assets': <Object?>[
           <String, Object?>{
             'assetId': 'detail',
-            'cdnUrl': 'https://cdn.example.com/detail.png',
-            'objectKey':
-                'media/objects/sha256/bb/bb/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.png',
+            'cdnUrl':
+                'https://cdn.example.com/media/image/s/article/post-1/v1/detail.png',
+            'objectKey': 'media/image/s/article/post-1/v1/detail-fallback.png',
           },
         ],
       });
 
-      expect(urls['detail'], 'https://cdn.example.com/detail.png');
+      expect(
+        urls['detail'],
+        'https://cdn.example.com/media/image/s/article/post-1/v1/detail.png',
+      );
     });
 
     test('selects media variants by scene and gates original access', () {
@@ -57,31 +59,33 @@ void main() {
           <String, Object?>{
             'assetId': 'cover',
             'kind': 'image',
-            'cdnUrl': 'https://cdn.example.com/fallback.jpg',
+            'cdnUrl':
+                'https://cdn.example.com/media/image/s/article/post-1/v1/fallback.jpg',
             'variants': <String, Object?>{
               'thumbnail': <String, Object?>{
                 'profile': 'thumbnail',
-                'cdnUrl': 'https://cdn.example.com/cover-thumb.webp',
-                'objectKey':
-                    'media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg',
+                'cdnUrl':
+                    'https://cdn.example.com/media/image/s/article/post-1/v1/cover-thumb.webp',
+                'objectKey': 'media/image/s/article/post-1/v1/cover-thumb.webp',
                 'sourceSha256':
                     'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
                 'width': 320,
               },
               'display': <String, Object?>{
                 'profile': 'display',
-                'cdnUrl': 'https://cdn.example.com/cover-display.webp',
+                'cdnUrl':
+                    'https://cdn.example.com/media/image/s/article/post-1/v1/cover-display.webp',
                 'objectKey':
-                    'media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg',
+                    'media/image/s/article/post-1/v1/cover-display.webp',
                 'sourceSha256':
                     'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
                 'width': 960,
               },
               'full': <String, Object?>{
                 'profile': 'full',
-                'cdnUrl': 'https://cdn.example.com/cover-full.webp',
-                'objectKey':
-                    'media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg',
+                'cdnUrl':
+                    'https://cdn.example.com/media/image/s/article/post-1/v1/cover-full.webp',
+                'objectKey': 'media/image/s/article/post-1/v1/cover-full.webp',
                 'sourceSha256':
                     'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
                 'width': 2048,
@@ -105,7 +109,7 @@ void main() {
           variantsById,
           profile: MediaAssetVariantProfile.thumbnail,
         ),
-        'https://cdn.example.com/cover-thumb.webp',
+        'https://cdn.example.com/media/image/s/article/post-1/v1/cover-thumb.webp',
       );
       expect(
         resolver.resolveVariantUrl(
@@ -113,7 +117,7 @@ void main() {
           variantsById,
           profile: MediaAssetVariantProfile.display,
         ),
-        'https://cdn.example.com/cover-display.webp',
+        'https://cdn.example.com/media/image/s/article/post-1/v1/cover-display.webp',
       );
       expect(
         resolver.resolveVariantUrl(
@@ -121,7 +125,7 @@ void main() {
           variantsById,
           profile: MediaAssetVariantProfile.full,
         ),
-        'https://cdn.example.com/cover-full.webp',
+        'https://cdn.example.com/media/image/s/article/post-1/v1/cover-full.webp',
       );
       expect(
         resolver.resolveVariantUrl(
@@ -129,7 +133,7 @@ void main() {
           variantsById,
           profile: MediaAssetVariantProfile.original,
         ),
-        'https://cdn.example.com/cover-full.webp',
+        'https://cdn.example.com/media/image/s/article/post-1/v1/cover-full.webp',
       );
 
       final defaultUrls = resolver.resolveManifestUrls(const <String, Object?>{
@@ -138,10 +142,12 @@ void main() {
             'assetId': 'cover',
             'variants': <String, Object?>{
               'display': <String, Object?>{
-                'cdnUrl': 'https://cdn.example.com/cover-display.webp',
+                'cdnUrl':
+                    'https://cdn.example.com/media/image/s/article/post-1/v1/cover-display.webp',
               },
               'original': <String, Object?>{
-                'cdnUrl': 'https://cdn.example.com/original.jpg',
+                'cdnUrl':
+                    'https://cdn.example.com/media/image/s/article/post-1/v1/original.jpg',
                 'requiresAccess': true,
               },
             },
@@ -151,7 +157,7 @@ void main() {
 
       expect(
         defaultUrls['cover'],
-        'https://cdn.example.com/cover-display.webp',
+        'https://cdn.example.com/media/image/s/article/post-1/v1/cover-display.webp',
       );
       expect(defaultUrls['cover'], isNot(contains('original.jpg')));
     });

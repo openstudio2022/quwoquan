@@ -408,14 +408,8 @@ Map<String, dynamic> _relationshipRowToSocialRelationWire(
       profileRow?['displayName']?.toString() ??
       (targetUserId.isNotEmpty ? targetUserId : sourceUserId);
   final avatarUrl = profileRow?['avatarUrl']?.toString() ?? '';
-  final userHandle =
-      profileRow?['userHandle']?.toString() ??
-      profileRow?['username']?.toString() ??
-      subAccountId;
-  final username =
-      profileRow?['username']?.toString() ??
-      profileRow?['userHandle']?.toString() ??
-      subAccountId;
+  final userHandle = profileRow?['userHandle']?.toString() ?? subAccountId;
+  final username = profileRow?['username']?.toString() ?? subAccountId;
   final mutual = relationState == 'mutual';
   final following = relationState == 'following' || mutual;
   final followedBy = relationState == 'followed_by' || mutual;
@@ -522,7 +516,7 @@ List<Map<String, dynamic>> _contentSeedReactions() {
 }
 
 String _postSeedId(Map<String, dynamic> post) {
-  return (post['postId'] ?? post['id'])?.toString() ?? '';
+  return post['postId']?.toString() ?? '';
 }
 
 String _profileSeedName(
@@ -547,7 +541,7 @@ int _profileSeedAvatarVersion(
 }
 
 String _postSeedContentType(Map<String, dynamic>? post) {
-  return post?['contentType']?.toString() ?? post?['type']?.toString() ?? '';
+  return post?['contentType']?.toString() ?? '';
 }
 
 String _postSeedSummary(Map<String, dynamic>? post) {
@@ -584,8 +578,7 @@ String _postSeedPreviewImageUrl(Map<String, dynamic>? post) {
   if (post == null) {
     return '';
   }
-  final direct =
-      post['coverUrl']?.toString() ?? post['thumbnailUrl']?.toString() ?? '';
+  final direct = post['coverUrl']?.toString() ?? '';
   if (direct.trim().isNotEmpty) {
     return direct;
   }
@@ -597,10 +590,7 @@ String _postSeedPreviewImageUrl(Map<String, dynamic>? post) {
 }
 
 String _commentSeedText(Map<String, dynamic> comment) {
-  return comment['content']?.toString() ??
-      comment['body']?.toString() ??
-      comment['text']?.toString() ??
-      '';
+  return comment['content']?.toString() ?? '';
 }
 
 String _commentSeedKind(Map<String, dynamic> comment) {
@@ -611,14 +601,9 @@ String _commentSeedKind(Map<String, dynamic> comment) {
       : 'comment';
 }
 
-// 回复场景下的顶级评论 id，供互动深链在评论区高亮父评论行；
-// 回退到 replyToCommentId（fixture 若未显式标注 parent）。
+// 回复场景下的顶级评论 id，供互动深链在评论区高亮父评论行。
 String _commentSeedParentId(Map<String, dynamic> comment) {
-  final parentCommentId = comment['parentCommentId']?.toString() ?? '';
-  if (parentCommentId.isNotEmpty) {
-    return parentCommentId;
-  }
-  return comment['replyToCommentId']?.toString() ?? '';
+  return comment['parentCommentId']?.toString() ?? '';
 }
 
 List<Map<String, dynamic>> _contractLikeWiresFor(String userId) {
@@ -627,7 +612,7 @@ List<Map<String, dynamic>> _contractLikeWiresFor(String userId) {
   }
   final postsById = <String, Map<String, dynamic>>{
     for (final post in _contentSeedPosts())
-      (post['postId'] ?? post['id']).toString(): post,
+      (post['postId'] ?? '').toString(): post,
   };
   final profileById = <String, Map<String, dynamic>>{
     for (final row in _contractProfileRows()) row['userId'].toString(): row,
@@ -644,12 +629,8 @@ List<Map<String, dynamic>> _contractLikeWiresFor(String userId) {
         final likerProfile = profileById[likerUserId];
         return <String, dynamic>{
           'postId': postId,
-          'title':
-              post['title']?.toString() ?? post['body']?.toString() ?? postId,
-          'coverUrl':
-              post['coverUrl']?.toString() ??
-              post['thumbnailUrl']?.toString() ??
-              '',
+          'title': post['title']?.toString() ?? postId,
+          'coverUrl': post['coverUrl']?.toString() ?? '',
           'likerNickname':
               likerProfile?['displayName']?.toString() ?? likerUserId,
           'likerAvatarUrl': likerProfile?['avatarUrl']?.toString() ?? '',
@@ -667,7 +648,7 @@ List<Map<String, dynamic>> _contractInteractionReceivedWiresFor(String userId) {
   }
   final postsById = <String, Map<String, dynamic>>{
     for (final post in _contentSeedPosts())
-      (post['postId'] ?? post['id']).toString(): post,
+      (post['postId'] ?? '').toString(): post,
   };
   final profileById = <String, Map<String, dynamic>>{
     for (final row in _contractProfileRows()) row['userId'].toString(): row,
@@ -704,7 +685,7 @@ List<Map<String, dynamic>> _contractInteractionReceivedWiresFor(String userId) {
           previewImageUrl: _postSeedPreviewImageUrl(post),
           previewText: _postSeedSummary(post),
           filterKeys: const <String>['likes'],
-          createdAt: reaction['createdAt'] ?? reaction['updatedAt'],
+          createdAt: reaction['createdAt'],
         );
       })
       .whereType<Map<String, dynamic>>();
@@ -809,7 +790,7 @@ List<Map<String, dynamic>> _contractInteractionSentWiresFor(String userId) {
           previewImageUrl: _postSeedPreviewImageUrl(post),
           previewText: _postSeedSummary(post),
           filterKeys: const <String>['likes'],
-          createdAt: reaction['createdAt'] ?? reaction['updatedAt'],
+          createdAt: reaction['createdAt'],
         );
       })
       .whereType<Map<String, dynamic>>();
@@ -884,9 +865,8 @@ List<Map<String, dynamic>> _contractPersonaRows() {
       .map((item) {
         final subAccountId = item['subAccountId']?.toString() ?? '';
         return <String, dynamic>{
-          'id': subAccountId,
-          'userId': subAccountId,
-          'displayName': item['name']?.toString() ?? subAccountId,
+          'subAccountId': subAccountId,
+          'displayName': item['displayName']?.toString() ?? subAccountId,
           'avatarUrl':
               _contractProfileWireByUserId[subAccountId]
                       ?.avatarUrl

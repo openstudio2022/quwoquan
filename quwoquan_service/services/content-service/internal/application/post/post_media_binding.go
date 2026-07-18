@@ -2,49 +2,52 @@ package post
 
 import (
 	"context"
+	"fmt"
 	"strings"
-	"time"
 
 	rterr "quwoquan_service/runtime/errors"
+	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
 	contentgenerated "quwoquan_service/services/content-service/internal/generated"
 )
 
-type BindMediaAssetsToPostResult struct {
-	PostID        string   `json:"postId"`
-	BoundAssetIDs []string `json:"boundAssetIds"`
-	BoundCount    int      `json:"boundCount"`
-}
-
-type bindMediaAssetsToPostPayload struct {
-	PostID   string   `json:"postId"`
-	AssetIDs []string `json:"assetIds"`
-}
-
-func (s *PostService) BindMediaAssetsToPost(ctx context.Context, postID, ownerID string, assetIDs []string) (BindMediaAssetsToPostResult, error) {
-	postID = strings.TrimSpace(postID)
-	if postID == "" {
-		return BindMediaAssetsToPostResult{}, rterr.NewInvalidArgument(rterr.ModuleContent, "postId 不能为空", "missing postId")
+func (s *PostService) prepareMediaAssetsForPublication(
+	ctx context.Context,
+	post *postmodel.Post,
+	ownerID string,
+	assetIDs []string,
+) error {
+	if post == nil {
+		return rterr.NewInvalidArgument(
+			rterr.ModuleContent,
+			"发布内容不能为空",
+			"post is required",
+		)
 	}
-	post, ok := s.store.FindByID(ctx, postID)
-	if !ok {
-		return BindMediaAssetsToPostResult{}, rterr.NewAppError(rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"), "内容不存在", "post not found")
-	}
-	if err := requireMediaOwner(post.AuthorId, ownerID); err != nil {
-		return BindMediaAssetsToPostResult{}, err
+	if len(assetIDs) == 0 {
+		post.MediaAssetIds = nil
+		post.MediaUrls = nil
+		post.VideoUrl = ""
+		post.CoverUrl = ""
+		post.ThumbnailUrl = ""
+		return nil
 	}
 	if s.mediaAssetBindings == nil {
-		return BindMediaAssetsToPostResult{}, rterr.NewUnavailable(rterr.ModuleContent, "媒体读取服务未配置", "MediaAsset binding reader is required")
+		return rterr.NewUnavailable(
+			rterr.ModuleContent,
+			"媒体读取服务未配置",
+			"MediaAsset binding reader is required",
+		)
 	}
 	assets, err := s.mediaAssetBindings.FindMediaAssetsForBinding(ctx, assetIDs)
 	if err != nil {
-		return BindMediaAssetsToPostResult{}, rterr.NewUnavailable(rterr.ModuleContent, "读取媒体素材失败", err.Error())
+		return rterr.NewUnavailable(rterr.ModuleContent, "读取媒体素材失败", err.Error())
 	}
 	bound := make([]string, 0, len(assetIDs))
 	seen := make(map[string]struct{}, len(assetIDs))
 	for _, rawID := range assetIDs {
 		assetID := strings.TrimSpace(rawID)
 		if assetID == "" {
-			return BindMediaAssetsToPostResult{}, rterr.NewInvalidArgument(rterr.ModuleContent, "素材 ID 不能为空", "empty media asset id")
+			return rterr.NewInvalidArgument(rterr.ModuleContent, "素材 ID 不能为空", "empty media asset id")
 		}
 		if _, duplicate := seen[assetID]; duplicate {
 			continue
@@ -52,32 +55,206 @@ func (s *PostService) BindMediaAssetsToPost(ctx context.Context, postID, ownerID
 		seen[assetID] = struct{}{}
 		asset, ok := assets[assetID]
 		if !ok {
-			return BindMediaAssetsToPostResult{}, rterr.NewAppError(rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "media_not_found"), "素材不存在", "media asset not found")
+			return rterr.NewAppError(rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "media_not_found"), "素材不存在", "media asset not found")
 		}
 		if err := requireMediaOwner(asset.OwnerID, ownerID); err != nil {
-			return BindMediaAssetsToPostResult{}, err
+			return err
 		}
 		if !asset.Ready {
-			return BindMediaAssetsToPostResult{}, rterr.NewInvalidArgument(rterr.ModuleContent, "素材尚未就绪", "media asset not ready")
+			return rterr.NewInvalidArgument(rterr.ModuleContent, "素材尚未就绪", "media asset not ready")
 		}
 		bound = append(bound, assetID)
 	}
-	if len(bound) == 0 {
-		return BindMediaAssetsToPostResult{}, rterr.NewInvalidArgument(rterr.ModuleContent, "至少选择一个媒体素材", "at least one media asset is required")
+	if err := s.mediaAssetBindings.MaterializePublicSlices(ctx, bound); err != nil {
+		return rterr.NewUnavailable(
+			rterr.ModuleContent,
+			"公开媒体交付准备失败",
+			err.Error(),
+		)
 	}
-	now := time.Now().UTC()
-	expectedVersion := post.Version
+	if err := projectBoundMediaAssets(post, assets, bound); err != nil {
+		return rterr.NewInvalidArgument(
+			rterr.ModuleContent,
+			"素材不能用于当前内容",
+			err.Error(),
+		)
+	}
 	post.MediaAssetIds = append([]string(nil), bound...)
-	post.UpdatedAt = now
-	post.ContentDigest = postContentDigest(post)
-	if _, err = s.commitPostCommand(
-		ctx, post, expectedVersion, "BindMediaAssetsToPost",
-		bindMediaAssetsToPostPayload{PostID: postID, AssetIDs: bound},
-		"PostMediaAssetsBound", bindMediaAssetsToPostPayload{PostID: postID, AssetIDs: bound}, now,
-	); err != nil {
-		return BindMediaAssetsToPostResult{}, err
+	return nil
+}
+
+// projectBoundMediaAssets is the only Post projection from MediaAsset identity
+// to consumer-visible media references. It deliberately emits canonical public
+// slice keys, never the upload response's signed delivery URL or CAS key.
+func projectBoundMediaAssets(
+	post *postmodel.Post,
+	assets map[string]MediaAssetBindingSlice,
+	boundAssetIDs []string,
+) error {
+	if post == nil {
+		return fmt.Errorf("post is required")
 	}
-	return BindMediaAssetsToPostResult{PostID: postID, BoundAssetIDs: bound, BoundCount: len(bound)}, nil
+	manualCoverIDs := make(map[string]struct{})
+	for _, assetID := range boundAssetIDs {
+		asset := assets[assetID]
+		if strings.EqualFold(asset.MediaType, "video") &&
+			strings.TrimSpace(asset.ManualCoverAssetID) != "" {
+			manualCoverIDs[asset.ManualCoverAssetID] = struct{}{}
+		}
+	}
+	// The draft carries non-delivery presentation metadata from the App. Keep it
+	// before clearing all client-controlled URL fields below; the bind projection
+	// will rebuild each media item with canonical public slice references.
+	metadataByAssetID := boundMediaItemMetadata(post.MediaItems)
+
+	// Binding supersedes any client-supplied media URL fields, so a successful
+	// bind removes the historical cdnUrl/CAS persistence bypass.
+	post.MediaUrls = nil
+	post.MediaItems = nil
+	post.VideoUrl = ""
+	post.CoverUrl = ""
+	post.ThumbnailUrl = ""
+
+	mediaURLs := make([]string, 0, len(boundAssetIDs))
+	mediaItems := make([]map[string]any, 0, len(boundAssetIDs))
+	var firstImageSlice string
+	var firstVideoSlice string
+	var firstVideoCover string
+	for _, assetID := range boundAssetIDs {
+		asset := assets[assetID]
+		publicSliceKey := strings.TrimSpace(asset.PublicSliceKey)
+		if publicSliceKey == "" {
+			return fmt.Errorf("media asset %q has no public slice key", assetID)
+		}
+		switch strings.ToLower(strings.TrimSpace(asset.MediaType)) {
+		case "image":
+			if _, isManualCoverOnly := manualCoverIDs[assetID]; isManualCoverOnly {
+				continue
+			}
+			mediaURLs = append(mediaURLs, publicSliceKey)
+			item := boundMediaItem(metadataByAssetID[assetID])
+			item["kind"] = "image"
+			item["url"] = publicSliceKey
+			mediaItems = append(mediaItems, item)
+			if firstImageSlice == "" {
+				firstImageSlice = publicSliceKey
+			}
+		case "video":
+			coverSlice, err := boundVideoCoverSlice(asset, assets)
+			if err != nil {
+				return err
+			}
+			mediaURLs = append(mediaURLs, publicSliceKey)
+			item := boundMediaItem(metadataByAssetID[assetID])
+			item["kind"] = "video"
+			item["mediaAssetId"] = asset.AssetID
+			item["mediaAssetVersion"] = asset.Version
+			item["url"] = publicSliceKey
+			item["coverUrl"] = coverSlice
+			item["durationMs"] = asset.VerifiedDurationMs
+			item["width"] = asset.VideoWidth
+			item["height"] = asset.VideoHeight
+			if asset.PreviewTrackVersion > 0 {
+				item["previewTrackVersion"] = asset.PreviewTrackVersion
+				item["previewTrackManifestUrl"] = asset.PreviewTrackManifestSliceKey
+			}
+			mediaItems = append(mediaItems, item)
+			if firstVideoSlice == "" {
+				firstVideoSlice = publicSliceKey
+				firstVideoCover = coverSlice
+			}
+		}
+	}
+
+	post.MediaUrls = mediaURLs
+	if len(mediaItems) > 0 {
+		post.MediaItems = mediaItems
+	}
+	if firstImageSlice != "" {
+		post.CoverUrl = firstImageSlice
+	}
+	if firstVideoSlice != "" {
+		post.VideoUrl = firstVideoSlice
+		post.ThumbnailUrl = firstVideoCover
+		post.CoverUrl = firstVideoCover
+	}
+	if strings.EqualFold(strings.TrimSpace(post.ContentType), "video") &&
+		firstVideoSlice == "" {
+		return fmt.Errorf("video post requires a bound ready video MediaAsset")
+	}
+	return nil
+}
+
+func boundMediaItemMetadata(raw any) map[string]map[string]any {
+	items := make([]map[string]any, 0)
+	switch value := raw.(type) {
+	case []map[string]any:
+		items = append(items, value...)
+	case []any:
+		for _, item := range value {
+			if typed, ok := item.(map[string]any); ok {
+				items = append(items, typed)
+			}
+		}
+	}
+	result := make(map[string]map[string]any, len(items))
+	for _, item := range items {
+		assetID := strings.TrimSpace(asString(item["mediaId"]))
+		if assetID == "" {
+			continue
+		}
+		result[assetID] = item
+	}
+	return result
+}
+
+func boundMediaItem(source map[string]any) map[string]any {
+	item := make(map[string]any)
+	// The client may retain non-delivery presentation metadata while a draft is
+	// awaiting binding. URL-shaped fields are deliberately excluded: only this
+	// function supplies url/coverUrl from public slice projection.
+	for _, field := range []string{
+		"mediaId",
+		"coverAssetId",
+		"durationMs",
+		"width",
+		"height",
+		"title",
+		"coverStrategy",
+		"coverFrameTimeMs",
+	} {
+		if value, exists := source[field]; exists {
+			item[field] = value
+		}
+	}
+	return item
+}
+
+func boundVideoCoverSlice(
+	video MediaAssetBindingSlice,
+	assets map[string]MediaAssetBindingSlice,
+) (string, error) {
+	if coverAssetID := strings.TrimSpace(video.ManualCoverAssetID); coverAssetID != "" {
+		cover, found := assets[coverAssetID]
+		if !found || !cover.Ready || !strings.EqualFold(cover.MediaType, "image") {
+			return "", fmt.Errorf(
+				"video asset %q references an unavailable manual cover asset %q",
+				video.AssetID,
+				coverAssetID,
+			)
+		}
+		if coverSlice := strings.TrimSpace(cover.PublicSliceKey); coverSlice != "" {
+			return coverSlice, nil
+		}
+		return "", fmt.Errorf(
+			"manual cover asset %q has no public slice key",
+			coverAssetID,
+		)
+	}
+	if coverSlice := strings.TrimSpace(video.CoverPublicSliceKey); coverSlice != "" {
+		return coverSlice, nil
+	}
+	return "", fmt.Errorf("video asset %q has no VOD cover public slice key", video.AssetID)
 }
 
 func requireMediaOwner(resourceOwnerID, actorID string) error {

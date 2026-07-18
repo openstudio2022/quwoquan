@@ -33,7 +33,7 @@ from core.article_package import (  # noqa: E402
     sha256_file,
 )
 from core.io import write_json  # noqa: E402
-from content.post.draft_io import draft_asset_reference_issues  # noqa: E402
+from content.post.article.draft_io import draft_asset_reference_issues  # noqa: E402
 from verify.verify_content_quality import asset_closure_issues  # noqa: E402
 
 

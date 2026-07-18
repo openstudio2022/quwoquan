@@ -1,4 +1,3 @@
-version: 1
 domain: tag
 aggregate_root: TagTaxonomyRelease
 object_kind: aggregate_root

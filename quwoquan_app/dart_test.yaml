@@ -15,4 +15,6 @@ tags:
   event:
   replay:
   environment-smoke:
+  home-rec:
+  video-playback:
   flaky:

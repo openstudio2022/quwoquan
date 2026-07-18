@@ -37,8 +37,8 @@ def load_travel_source_registry() -> dict[str, Any]:
     if not TRAVEL_SOURCE_REGISTRY_PATH.is_file():
         raise FileNotFoundError(f"missing travel source registry: {TRAVEL_SOURCE_REGISTRY_PATH}")
     data = yaml.safe_load(TRAVEL_SOURCE_REGISTRY_PATH.read_text(encoding="utf-8")) or {}
-    if data.get("schemaVersion") != "quwoquan.travel_source_registry":
-        raise ValueError(f"{TRAVEL_SOURCE_REGISTRY_PATH}: invalid schemaVersion")
+    if data.get("schema") != "quwoquan.travel_source_registry":
+        raise ValueError(f"{TRAVEL_SOURCE_REGISTRY_PATH}: invalid schema")
     if data.get("vertical") != "travel":
         raise ValueError(f"{TRAVEL_SOURCE_REGISTRY_PATH}: vertical mismatch")
     return data

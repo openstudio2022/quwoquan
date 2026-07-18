@@ -54,7 +54,7 @@ class IntersectionActorEvidence {
       relationObjectId: m['relationObjectId']?.toString() ?? '',
       relationObjectName: m['relationObjectName']?.toString() ?? '',
       sourcePointId: m['sourcePointId']?.toString() ?? '',
-      sourceRef: m['sourceRef']?.toString() ?? m['kind']?.toString() ?? m['intersectionKind']?.toString() ?? '',
+      sourceRef: m['sourceRef']?.toString() ?? '',
       actionSummaryText: m['actionSummaryText']?.toString() ?? '',
       likeCount: (m['likeCount'] as num?)?.toInt() ?? 0,
       commentCount: (m['commentCount'] as num?)?.toInt() ?? 0,
@@ -62,7 +62,7 @@ class IntersectionActorEvidence {
       privacyState: m['privacyState']?.toString() ?? 'visible',
       target: m['target'] == null ? null : IntersectionTarget.fromMap(_parseStringKeyMap(m['target'])!),
       evidenceRank: (m['evidenceRank'] as num?)?.toInt() ?? 0,
-      snapshotVersion: m['snapshotVersion']?.toString() ?? m['pointSummarySnapshotId']?.toString() ?? '',
+      snapshotVersion: m['snapshotVersion']?.toString() ?? '',
       sortKey: (m['sortKey'] as num?)?.toInt() ?? 0,
     );
   }

@@ -42,7 +42,7 @@
 
 ## 4. OpenAPI（user 包）
 
-- 已补充：`/v1/user/settings/calls`、`RelationshipCapability`、`PersonaManagementSummary`、`PrivacySettings.blockedKeywords` 等（见 `quwoquan_service/contracts/metadata/user/openapi.yaml`）。
+- 已补充：`/user/settings/calls`、`RelationshipCapability`、`PersonaManagementSummary`、`PrivacySettings.blockedKeywords` 等（见 `quwoquan_service/contracts/metadata/user/openapi.yaml`）。
 
 ## 5. 与 metadata 唯一源关系
 

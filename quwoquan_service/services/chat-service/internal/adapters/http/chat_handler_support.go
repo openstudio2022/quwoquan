@@ -61,13 +61,22 @@ func (h *ChatHandler) flattenInboxItems(ctx context.Context, items []application
 }
 
 func (h *ChatHandler) inboxItemToWire(ctx context.Context, item application.InboxItem) map[string]any {
-	conv := h.conversationToWire(ctx, item.Conversation)
-	conv["lastSeq"] = item.Conversation.MaxSeq
-	conv["unreadCount"] = item.UserState.UnreadCount
-	conv["mentionUnreadCount"] = item.UserState.MentionUnreadCount
-	conv["muted"] = item.UserState.Muted
-	conv["pinned"] = item.UserState.Pinned
-	return conv
+	conv := item.Conversation
+	return map[string]any{
+		"id":                 conv.ID,
+		"type":               conv.Type,
+		"title":              conv.Title,
+		"avatarUrl":          h.resolveConversationAvatarURL(ctx, conv),
+		"groupAvatarVersion": conv.GroupAvatarVersion,
+		"lastMessagePreview": conv.LastMessagePreview,
+		"lastMessageTime":    conv.LastMessageTime,
+		"lastSeq":            conv.MaxSeq,
+		"unreadCount":        item.UserState.UnreadCount,
+		"mentionUnreadCount": item.UserState.MentionUnreadCount,
+		"muted":              item.UserState.Muted,
+		"pinned":             item.UserState.Pinned,
+		"circleId":           conv.CircleId,
+	}
 }
 
 func (h *ChatHandler) messageHomeRowToWire(ctx context.Context, item application.InboxItem) map[string]any {
@@ -282,7 +291,6 @@ func (h *ChatHandler) conversationToWire(ctx context.Context, conv model.Convers
 	avatarURL := h.resolveConversationAvatarURL(ctx, conv)
 	return map[string]any{
 		"id":                    conv.ID,
-		"_id":                   conv.ID,
 		"conversationId":        conv.ID,
 		"type":                  conv.Type,
 		"title":                 conv.Title,

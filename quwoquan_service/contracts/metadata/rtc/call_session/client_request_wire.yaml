@@ -1,6 +1,5 @@
 # 与 service.yaml 中 request_fields 对应的 Dart/JSON 类型（codegen 唯一源）。
 # 键名与 request_fields 条目一致。
-version: 1
 field_types:
   callType: string
   inviteeIds: list_string

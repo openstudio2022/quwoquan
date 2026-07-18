@@ -5,5 +5,5 @@
 - 封面、图片展开、『相关图片』区、`_entity.json`、`manifest.json` 全部由 finalize 代码侧生成；
   你不得书写任何 `asset://`、`:::figure`、`:::gallery` 或 frontmatter。
 - 正文必须能在底稿 / 来源中回溯事实，禁止机械模板句、工程化口径与重复凑字。
-- 写回正文后停止；`task geo-homepages` 调度器会自动执行 finalize / 采纳门。失败时仅按 validator 提示修正正文，不得调用其它工作流入口。
+- 写回正文后停止；`task execute` 调度器会自动执行 finalize / 采纳门。失败时仅按 validator 提示修正正文，不得调用其它工作流入口。
 </output_format>

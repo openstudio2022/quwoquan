@@ -21,7 +21,7 @@
 
 - 一个 domain 在同一环境中只能归属一个部署进程
 - `beta`、`gamma`、`prod` 的进程-领域映射必须一致
-- 对外接口仍按领域服务暴露（`/v1/content/*`、`/v1/chat/*` 等），不受部署拓扑影响
+- 对外接口仍按领域服务暴露（`/content/*`、`/chat/*` 等），不受部署拓扑影响
 - 不新增 `all-in-one/`、`content-only/` 目录，代码目录保持按领域服务组织
 - 模块化部署通过 `RuntimeModule` 与 `DeploymentPackage` 表达；onebox 是 package 组合，不是业务代码目录
 - `quwoquan_ops/environments/module_package_mapping.yaml` 表达 `deploymentPackage -> modules`，并必须与 `process_domain_mapping.yaml` 的 domain 归属一致

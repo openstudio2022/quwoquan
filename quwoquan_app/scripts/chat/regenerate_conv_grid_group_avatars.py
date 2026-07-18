@@ -62,7 +62,7 @@ def render_conv_grid(n: int) -> Path:
     input_paths = [
         _resolve_mock_avatar_path(_avatar_object_key(user_id)) for user_id in member_ids
     ]
-    output_key = f"media/avatar/s/archived-avatar/conversation/conv_grid_{n}/v1/mock.png"
+    output_key = f"media/avatar/s/archived-avatar/conversation/conv_grid_{n}/mock.png"
     output_path = MEDIA_ROOT / output_key.removeprefix("media/")
     output_path.parent.mkdir(parents=True, exist_ok=True)
     cmd = ["go", "run", RENDER_PKG, str(output_path), *[str(path) for path in input_paths]]

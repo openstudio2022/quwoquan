@@ -315,10 +315,10 @@ Journey 内正式 contract：
 
 ### 双读 / 双写
 
-- **不做跨服务同步双写**
+- **禁止跨服务同步双写与 wire 双读**
 - 内容写路径只写 content canonical reference
 - 主页聚合采用异步消费内容事实
-- 旧自由文本如必须短期兼容，仅允许 read fallback，不允许继续 write
+- 旧自由文本 attach 一律拒绝；不得以 read fallback / 正向兼容测试保留旧键
 
 退出条件：
 

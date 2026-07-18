@@ -63,19 +63,12 @@ class SlotFillPlan extends SlotFillPlanDto {
   }
 }
 
-SlotFillEntry _slotFillEntryFromRaw(
-  String slotId,
-  Map<String, dynamic> json,
-) {
+SlotFillEntry _slotFillEntryFromRaw(String slotId, Map<String, dynamic> json) {
   return SlotFillEntry(
     slotId: slotId,
     value: json['value'],
-    source: parseSlotSource(
-      ((json['source'] ?? json['detectedFrom']) as String?)?.trim() ?? '',
-    ),
-    action: parseSlotFillAction(
-      ((json['action'] ?? json['fillStrategy']) as String?)?.trim() ?? '',
-    ),
+    source: parseSlotSource((json['source'] as String?)?.trim() ?? ''),
+    action: parseSlotFillAction((json['action'] as String?)?.trim() ?? ''),
     confidence: (json['confidence'] as num?)?.toDouble() ?? 0.0,
   );
 }

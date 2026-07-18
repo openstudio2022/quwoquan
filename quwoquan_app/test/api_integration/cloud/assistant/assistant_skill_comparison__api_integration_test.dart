@@ -307,7 +307,7 @@ void _expectScreenClass(WidgetTester tester) {
 String _toolNameForEvent(Map<String, dynamic> payload) {
   final raw = payload['toolUse'];
   if (raw is Map) {
-    return (raw['toolName'] ?? raw['tool_name'] ?? '').toString();
+    return (raw['toolName'] ?? '').toString();
   }
   return '';
 }

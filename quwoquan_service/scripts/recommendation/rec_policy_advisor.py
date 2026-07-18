@@ -229,7 +229,7 @@ def simulate_url(base: str, policy_id: str) -> str:
     """Build the product-ops :simulate URL. There is intentionally NO activate
     counterpart in this module. Asserts the suffix so a typo can never escalate."""
     base = base.rstrip("/")
-    url = f"{base}/v1/control-plane/product/recommendation/policies/{policy_id}:simulate"
+    url = f"{base}/control-plane/product/recommendation/policies/{policy_id}:simulate"
     assert url.endswith(":simulate"), "advisor only ever calls :simulate"
     assert ":activate" not in url, "advisor must never call :activate"
     return url

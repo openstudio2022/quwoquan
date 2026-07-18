@@ -43,6 +43,19 @@ func (*handlerProposalStore) Replay(context.Context, string, string, string) (pr
 	return proposalports.CommitReceipt{}, false, nil
 }
 
+func (*handlerProposalStore) RecordNoopReceipt(
+	_ context.Context,
+	proposal proposalmodel.ProfileUpdateProposal,
+	_ string,
+	_ string,
+) (proposalports.CommitReceipt, error) {
+	return proposalports.CommitReceipt{
+		ProposalID: proposal.ID,
+		Version:    proposal.Version,
+		Status:     string(proposal.Status),
+	}, nil
+}
+
 func (s *handlerProposalStore) Commit(_ context.Context, _ int64, changes proposalports.ChangeSet) (proposalports.CommitReceipt, error) {
 	s.proposal = changes.Proposal
 	return proposalports.CommitReceipt{
@@ -101,7 +114,7 @@ func TestProfileProposalHTTPRequiresTrustedInvocationAndIdempotency(t *testing.T
 	t.Parallel()
 	handler := newProfileProposalHandlerForTest(t, &handlerProposalStore{})
 
-	request := httptest.NewRequest(http.MethodPost, "/v1/user/personas/persona-1/profile-proposals", strings.NewReader(`{}`))
+	request := httptest.NewRequest(http.MethodPost, "/user/personas/persona-1/profile-proposals", strings.NewReader(`{}`))
 	request.SetPathValue("personaId", "persona-1")
 	recorder := httptest.NewRecorder()
 	handler.handleCreateProfileProposal(recorder, request)
@@ -111,7 +124,7 @@ func TestProfileProposalHTTPRequiresTrustedInvocationAndIdempotency(t *testing.T
 
 	request = profileProposalRequest(
 		http.MethodPost,
-		"/v1/user/personas/persona-1/profile-proposals",
+		"/user/personas/persona-1/profile-proposals",
 		`{"proposalId":"proposal-1","source":"persona","displayName":"new name"}`,
 		createProfileProposalOperation,
 		"persona-1",
@@ -132,7 +145,7 @@ func TestProfileProposalHTTPStrictBodyOwnerAndCursor(t *testing.T) {
 
 	request := profileProposalRequest(
 		http.MethodPost,
-		"/v1/user/personas/persona-1/profile-proposals",
+		"/user/personas/persona-1/profile-proposals",
 		`{"proposalId":"proposal-1","source":"persona","displayName":"new name","legacyMedia":{}}`,
 		createProfileProposalOperation,
 		"persona-1",
@@ -147,7 +160,7 @@ func TestProfileProposalHTTPStrictBodyOwnerAndCursor(t *testing.T) {
 
 	request = profileProposalRequest(
 		http.MethodPost,
-		"/v1/user/profile/proposals/proposal-1/confirm",
+		"/user/profile/proposals/proposal-1/confirm",
 		`{"expectedProposalVersion":1,"expectedTargetPersonaVersion":1}`,
 		confirmProfileProposalOperation,
 		"persona-1",
@@ -162,7 +175,7 @@ func TestProfileProposalHTTPStrictBodyOwnerAndCursor(t *testing.T) {
 
 	request = profileProposalRequest(
 		http.MethodPost,
-		"/v1/user/personas/persona-1/profile-proposals",
+		"/user/personas/persona-1/profile-proposals",
 		`{"proposalId":"proposal-1","source":"persona","displayName":"new name"}`,
 		createProfileProposalOperation,
 		"persona-1",
@@ -177,7 +190,7 @@ func TestProfileProposalHTTPStrictBodyOwnerAndCursor(t *testing.T) {
 
 	request = profileProposalRequest(
 		http.MethodGet,
-		"/v1/user/profile/proposals/proposal-1",
+		"/user/profile/proposals/proposal-1",
 		"",
 		getProfileProposalOperation,
 		"persona-2",
@@ -200,7 +213,7 @@ func TestProfileProposalHTTPStrictBodyOwnerAndCursor(t *testing.T) {
 func TestProfileProposalHTTPDoesNotMaskInfrastructureFailureAsClientError(t *testing.T) {
 	t.Parallel()
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, "/v1/user/profile/proposals/proposal-1", nil)
+	request := httptest.NewRequest(http.MethodGet, "/user/profile/proposals/proposal-1", nil)
 	writeProfileProposalError(recorder, request, errors.New("database unavailable"))
 	if recorder.Code != http.StatusInternalServerError || responseCode(t, recorder) != "USER.SYSTEM.internal_error" {
 		t.Fatalf("infrastructure error was misclassified: status=%d body=%s", recorder.Code, recorder.Body.String())

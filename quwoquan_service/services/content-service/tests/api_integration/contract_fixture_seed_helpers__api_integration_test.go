@@ -13,6 +13,7 @@ import (
 	"quwoquan_service/services/content-service/internal/application/commandmeta"
 	commentapp "quwoquan_service/services/content-service/internal/application/comment"
 	reactionapp "quwoquan_service/services/content-service/internal/application/reaction"
+	postevent "quwoquan_service/services/content-service/internal/domain/post/event"
 	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
 	reactiondomain "quwoquan_service/services/content-service/internal/domain/reaction"
 	recinfra "quwoquan_service/services/content-service/internal/infrastructure/recommendation"
@@ -37,20 +38,23 @@ type contentFixtureSeedSet struct {
 }
 
 type contentFixturePost struct {
-	ID           string   `json:"id"`
 	PostID       string   `json:"postId"`
 	ContentType  string   `json:"contentType"`
 	Identity     string   `json:"contentIdentity"`
 	AuthorID     string   `json:"authorId"`
-	DisplayName  string   `json:"displayName"`
+	DisplayName  string   `json:"authorDisplayName"`
 	AvatarURL    string   `json:"authorAvatarUrl"`
 	Title        string   `json:"title"`
 	Body         string   `json:"body"`
 	Summary      string   `json:"summary"`
 	Tags         []string `json:"tagRefs"`
 	CoverURL     string   `json:"coverUrl"`
-	ImageURLs    []string `json:"imageUrls"`
+	ThumbnailURL string   `json:"thumbnailUrl"`
+	MediaURLs    []string `json:"mediaUrls"`
 	VideoURL     string   `json:"videoUrl"`
+	Width        int64    `json:"width"`
+	Height       int64    `json:"height"`
+	DurationMS   int64    `json:"durationMs"`
 	LocationName string   `json:"locationName"`
 	LikeCount    int64    `json:"likeCount"`
 	CommentCount int64    `json:"commentCount"`
@@ -74,6 +78,31 @@ type contentFixtureReaction struct {
 	PostID string `json:"postId"`
 	UserID string `json:"userId"`
 	Liked  bool   `json:"liked"`
+}
+
+func contentFixturePostByID(
+	t *testing.T,
+	seedRef string,
+	postID string,
+) contentFixturePost {
+	t.Helper()
+	pack, err := contractfixture.LoadMetadataJSON[contentFixturePack](
+		"content/test_fixtures/scenarios/content_scenarios.json",
+	)
+	if err != nil {
+		t.Fatalf("load content fixture: %v", err)
+	}
+	seedSet, ok := pack.SeedSets[seedRef]
+	if !ok {
+		t.Fatalf("content seed ref not found: %s", seedRef)
+	}
+	for _, post := range seedSet.Posts {
+		if post.PostID == postID {
+			return post
+		}
+	}
+	t.Fatalf("content fixture post not found: %s", postID)
+	return contentFixturePost{}
 }
 
 func seedContentContractFixture(t *testing.T, seedRefs ...string) contractSeedEvidence {
@@ -106,10 +135,10 @@ func seedContentContractFixture(t *testing.T, seedRefs ...string) contractSeedEv
 		TargetStore:   "mongodb:content_test.posts",
 		InsertedCount: inserted,
 		VerifiedEndpoints: []string{
-			"/v1/content/feed",
-			"/v1/content/posts/fixture_photo_001",
-			"/v1/content/posts/fixture_photo_001/comments",
-			"/v1/content/posts/fixture_photo_001/reaction",
+			"/content/feed",
+			"/content/posts/fixture_photo_001",
+			"/content/posts/fixture_photo_001/comments",
+			"/content/posts/fixture_photo_001/reaction",
 		},
 	}
 }
@@ -123,12 +152,15 @@ func seedContentFixtureSeedSet(t *testing.T, ctx context.Context, seedSet conten
 		if _, err := mongoDB.Collection("posts").InsertOne(ctx, post); err != nil {
 			t.Fatalf("seed content post %s: %v", post.ID, err)
 		}
+		if err := seedContentFixturePlaybackProjection(ctx, fp, post.ID); err != nil {
+			t.Fatalf("seed content playback projection %s: %v", post.ID, err)
+		}
 		payload, err := contentFixtureProjectionPayload(post)
 		if err != nil {
 			t.Fatalf("encode content projection payload %s: %v", post.ID, err)
 		}
 		if err := discoveryProjector.Project(ctx, recinfra.ProjectorEvent{
-			Type:          "PostPublished",
+			Type:          postevent.PostPublished,
 			AggregateType: "Post",
 			AggregateID:   post.ID,
 			Payload:       payload,
@@ -203,6 +235,45 @@ func seedContentFixtureSeedSet(t *testing.T, ctx context.Context, seedSet conten
 	return inserted
 }
 
+func seedContentFixturePlaybackProjection(
+	ctx context.Context,
+	fixture contentFixturePost,
+	postID string,
+) error {
+	fields := bson.M{}
+	if fixture.ThumbnailURL != "" {
+		fields["thumbnailUrl"] = fixture.ThumbnailURL
+	}
+	if fixture.Width > 0 {
+		fields["width"] = fixture.Width
+	}
+	if fixture.Height > 0 {
+		fields["height"] = fixture.Height
+	}
+	if fixture.DurationMS > 0 {
+		fields["durationMs"] = fixture.DurationMS
+	}
+	if fixture.ContentType == "video" && fixture.VideoURL != "" {
+		fields["mediaItems"] = []bson.M{{
+			"kind":       "video",
+			"url":        fixture.VideoURL,
+			"coverUrl":   fixture.ThumbnailURL,
+			"durationMs": fixture.DurationMS,
+			"width":      fixture.Width,
+			"height":     fixture.Height,
+		}}
+	}
+	if len(fields) == 0 {
+		return nil
+	}
+	_, err := mongoDB.Collection("posts").UpdateOne(
+		ctx,
+		bson.M{"_id": postID},
+		bson.M{"$set": fields},
+	)
+	return err
+}
+
 func contentFixtureProjectionPayload(post *postmodel.Post) (map[string]any, error) {
 	encoded, err := json.Marshal(post)
 	if err != nil {
@@ -233,9 +304,6 @@ func resetContentFixtureNamespace(t *testing.T) {
 
 func contentPostFromFixture(fp contentFixturePost) *postmodel.Post {
 	id := strings.TrimSpace(fp.PostID)
-	if id == "" {
-		id = strings.TrimSpace(fp.ID)
-	}
 	createdAt := parseFixtureTime(fp.CreatedAt)
 	updatedAt := createdAt
 	if value := strings.TrimSpace(fp.UpdatedAt); value != "" {
@@ -245,12 +313,14 @@ func contentPostFromFixture(fp contentFixturePost) *postmodel.Post {
 	if value := strings.TrimSpace(fp.PublishedAt); value != "" {
 		publishedAt = parseFixtureTime(value)
 	}
-	mediaURLs := append([]string{}, fp.ImageURLs...)
+	mediaURLs := append([]string{}, fp.MediaURLs...)
 	if len(mediaURLs) == 0 && fp.CoverURL != "" && fp.ContentType == "image" {
 		mediaURLs = []string{fp.CoverURL}
 	}
 	return &postmodel.Post{
 		ID:                        id,
+		PublishIntentId:           "fixture-publish-intent:" + id,
+		LocalDraftId:              "fixture-local-draft:" + id,
 		AuthorId:                  fp.AuthorID,
 		AuthorDisplayNameSnapshot: fp.DisplayName,
 		AuthorAvatarUrlSnapshot:   fp.AvatarURL,
@@ -285,10 +355,9 @@ func parseFixtureTime(value string) time.Time {
 	return time.Now().UTC()
 }
 
-func TestContentPostFromFixturePreservesCanonicalIdentity(t *testing.T) {
+func TestContentPostFromFixtureRequiresCanonicalPostID(t *testing.T) {
 	t.Parallel()
 	post := contentPostFromFixture(contentFixturePost{
-		ID:          "fixture-fallback-id",
 		PostID:      "fixture-post-id",
 		ContentType: "image",
 		Identity:    "work",

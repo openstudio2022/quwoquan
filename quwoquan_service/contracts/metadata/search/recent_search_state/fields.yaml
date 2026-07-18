@@ -1,4 +1,3 @@
-version: 1
 entity: RecentSearchState
 fields:
   - { name: id, type: string, constraints: [PK, NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: drop, ops_exposure: read }

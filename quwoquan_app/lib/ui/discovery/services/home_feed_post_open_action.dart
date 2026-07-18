@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
-    show BehaviorAction, ReferralSource;
+    show BehaviorAction, BehaviorEvent, ReferralSource;
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -43,14 +43,21 @@ Future<void> openHomeFeedPost(
     (item) => item.id == post.id,
   );
   ref
-      .read(behaviorRepositoryProvider)
-      .reportSingle(
-        contentId: post.id,
-        action: BehaviorAction.click,
-        authorId: post.authorId,
-        referralSource: ReferralSource.organicFeed,
-        feedRequestId: navFeedRequestId,
-        position: feedPosition >= 0 ? feedPosition : null,
+      .read(behaviorReporterProvider)
+      .reportEvents(
+        events: <BehaviorEvent>[
+          BehaviorEvent(
+            contentId: post.id,
+            action: BehaviorAction.click,
+            state: 'click',
+            clientEventId:
+                'home_click:${navFeedRequestId.trim()}:${post.id}:${DateTime.now().toUtc().microsecondsSinceEpoch}',
+            authorId: post.authorId,
+            referralSource: ReferralSource.organicFeed,
+            feedRequestId: navFeedRequestId,
+            position: feedPosition >= 0 ? feedPosition : null,
+          ),
+        ],
       );
 
   final rawPostsById = homeFollowingMediaViewerRaws(

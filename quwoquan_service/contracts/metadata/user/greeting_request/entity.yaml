@@ -1,4 +1,3 @@
-version: 1
 domain: user
 entity: GreetingRequest
 object_kind: aggregate_root

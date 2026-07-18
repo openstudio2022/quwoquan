@@ -5,8 +5,8 @@ import 'package:quwoquan_app/ui/content/models/post_read_ui_bundle.dart';
 
 /// 创作草稿 → 与 [projectArticleDetailView] 兼容的 wire Map（预览 / ReadPresentation 管道入口）。
 ///
-/// CreatePost 可写字段以 `contracts/metadata/content/post/service.yaml` CreatePost.writable_fields 为 SSOT；
-/// 实际上传仍走 [buildCreatePostPayloadMap] + [attachActivePersonaToCreatePayload]。
+/// SubmitPostPublication 可写字段以 `contracts/metadata/content/post/service.yaml` 为 SSOT；
+/// 实际上传仍走 [buildPostPublicationPayloadMap] + [attachActivePersonaToCreatePayload]。
 Map<String, dynamic> createEditorStateToArticlePreviewWire(
   CreateEditorState state, {
   String previewPostId = 'draft_preview',
@@ -15,7 +15,6 @@ Map<String, dynamic> createEditorStateToArticlePreviewWire(
   final markdown = buildArticleMarkdownForPayload(state);
   return <String, dynamic>{
     'postId': previewPostId,
-    '_id': previewPostId,
     'id': previewPostId,
     'contentType': 'article',
     'type': 'article',
@@ -32,7 +31,7 @@ Map<String, dynamic> createEditorStateToArticlePreviewWire(
     'shareCount': 0,
     'coverUrl': cover,
     ArticleDetailWireKeys.articleMarkdown: markdown,
-    ArticleDetailWireKeys.articleMarkdownVersion: 'qwq-rich-md/1',
+    ArticleDetailWireKeys.markdownDialect: 'qwq-rich-md',
     ArticleDetailWireKeys.articleAssetManifest:
         buildArticleAssetManifestForPayload(state),
     ArticleDetailWireKeys.articleRenderProfile:
@@ -58,7 +57,7 @@ PostReadUiBundle postReadPreviewBundleFromCreateEditorState(
   );
 }
 
-/// 发布确认页摘要 → 与 CreatePost 可写字段形状对齐的预览 wire（无真实媒体 URL）。
+/// 发布确认页摘要 → 与 SubmitPostPublication 可写字段形状对齐的预览 wire（无真实媒体 URL）。
 Map<String, dynamic> createPublishConfirmPreviewWire({
   required CreateContentIdentity contentIdentity,
   required String title,
@@ -70,7 +69,6 @@ Map<String, dynamic> createPublishConfirmPreviewWire({
 }) {
   final base = <String, dynamic>{
     'postId': previewPostId,
-    '_id': previewPostId,
     'id': previewPostId,
     'authorId': 'preview',
     'displayName': '',

@@ -146,9 +146,6 @@ func (v *validator) validateSharedControlPlaneBaseline() {
 		return
 	}
 
-	if parsed.Version <= 0 {
-		v.errorf("_shared/control_plane.yaml: version must be >= 1")
-	}
 	if len(parsed.Planes) == 0 {
 		v.errorf("_shared/control_plane.yaml: planes cannot be empty")
 	}

@@ -8,7 +8,7 @@ import '../../../../support/recording_content_media_facet.dart';
 
 void main() {
   group('video publish payload cover contract', () {
-    test('视频发布上传视频与封面并只携带远端引用', () async {
+    test('视频发布上传视频与封面并只携带 MediaAsset ID', () async {
       final media = RecordingContentMediaFacet();
       final fileStorage = _MemoryFileStorageGateway(<String, List<int>>{
         '/tmp/clip.mp4': <int>[1, 2, 3, 4],
@@ -31,7 +31,7 @@ void main() {
             title: '视频作品',
           );
 
-      final prepared = await buildCreatePostPayloadWithRemoteImageMedia(
+      final prepared = await buildPostPublicationPayloadWithRemoteMedia(
         media: media,
         fileStorageGateway: fileStorage,
         state: state,
@@ -58,18 +58,9 @@ void main() {
         'video_asset_1',
         'image_asset_2',
       ]);
-      expect(
-        prepared.payload['videoUrl'],
-        'https://cdn.quwoquan.test/video_asset_1.mp4',
-      );
-      expect(
-        prepared.payload['thumbnailUrl'],
-        'https://cdn.quwoquan.test/image_asset_2.jpg',
-      );
-      expect(
-        prepared.payload['coverUrl'],
-        'https://cdn.quwoquan.test/image_asset_2.jpg',
-      );
+      expect(prepared.payload, isNot(contains('videoUrl')));
+      expect(prepared.payload, isNot(contains('thumbnailUrl')));
+      expect(prepared.payload, isNot(contains('coverUrl')));
       expect(prepared.payload['coverStrategy'], 'manual');
       expect(prepared.payload['coverFrameTimeMs'], 3200);
       expect(prepared.payload['durationMs'], 12345);
@@ -78,13 +69,14 @@ void main() {
       expect(prepared.payload.values.toString(), isNot(contains('/tmp/')));
       final mediaItems =
           prepared.payload['mediaItems'] as List<Map<String, Object?>>;
-      expect(
-        mediaItems.single['thumbnailUrl'],
-        prepared.payload['thumbnailUrl'],
-      );
-      expect(mediaItems.single['coverUrl'], prepared.payload['coverUrl']);
       expect(mediaItems.single['mediaId'], 'video_asset_1');
       expect(mediaItems.single['coverAssetId'], 'image_asset_2');
+      expect(mediaItems.single, isNot(contains('url')));
+      expect(mediaItems.single, isNot(contains('coverUrl')));
+      expect(
+        prepared.payload.values.toString(),
+        isNot(contains('cdn.quwoquan.test')),
+      );
     });
 
     test('封面上传失败会 abort 封面 session 且不返回半成品 payload', () async {
@@ -104,7 +96,7 @@ void main() {
           );
 
       await expectLater(
-        buildCreatePostPayloadWithRemoteImageMedia(
+        buildPostPublicationPayloadWithRemoteMedia(
           media: media,
           fileStorageGateway: fileStorage,
           state: state,

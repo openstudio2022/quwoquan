@@ -1,5 +1,4 @@
 # Minimal RTC fields fixture for codegen golden tests (not a production contract).
-version: 2
 aggregate: CallSession
 
 entities:
@@ -13,10 +12,10 @@ entities:
   CallSession:
     fields:
       - name: _id
+        source: _id
         type: ObjectId
         constraints: [PK]
-        client_dart_name: id
-        json_keys: [id, _id, callId]
+        client_dart_name: callId
 
       - name: status
         type: enum

@@ -1,4 +1,4 @@
-schemaVersion: quwoquan.vertical_coverage.v1
+schema: quwoquan.vertical_coverage
 vertical: photography
 description: 摄影垂类覆盖边界。当前只有标签骨架，缺少独立生产任务与授权图片供应链。
 units:

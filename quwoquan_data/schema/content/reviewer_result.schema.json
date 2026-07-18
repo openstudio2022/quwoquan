@@ -1,25 +1,81 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "required": ["schemaVersion", "stage", "executionId", "objectRef", "provider", "model", "modelFamily", "runId", "verdict", "issues", "resultHash"],
+  "required": [
+    "schema",
+    "stage",
+    "executionId",
+    "objectRef",
+    "provider",
+    "model",
+    "modelFamily",
+    "runId",
+    "verdict",
+    "issues",
+    "resultHash"
+  ],
   "additionalProperties": false,
   "properties": {
-    "schemaVersion": { "const": "quwoquan_data.reviewer_result/1" },
-    "stage": { "const": "5.review" },
-    "executionId": { "type": "string", "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(canary|m1|m2|m3)-[0-9]{3,}$" },
-    "executionBinding": { "enum": ["frozen", "standalone"] },
-    "objectRef": { "type": "string", "minLength": 1 },
-    "provider": { "type": "string", "minLength": 1 },
-    "model": { "type": "string", "minLength": 1 },
-    "modelFamily": { "type": "string", "minLength": 1 },
+    "stage": {
+      "const": "5.review"
+    },
+    "executionId": {
+      "type": "string",
+      "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(canary|m1|m2|m3)-[0-9]{3,}$"
+    },
+    "executionBinding": {
+      "enum": [
+        "frozen",
+        "standalone"
+      ]
+    },
+    "objectRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "provider": {
+      "type": "string",
+      "minLength": 1
+    },
+    "model": {
+      "type": "string",
+      "minLength": 1
+    },
+    "modelFamily": {
+      "type": "string",
+      "minLength": 1
+    },
     "runId": {
       "type": "string",
       "minLength": 1,
-      "not": { "pattern": "^contract-output:" }
+      "not": {
+        "pattern": "^contract-output:"
+      }
     },
-    "verdict": { "enum": ["passed", "failed"] },
-    "issues": { "type": "array", "items": { "type": "string" } },
-    "findings": { "type": "array", "items": { "type": "string" } },
-    "resultHash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+    "verdict": {
+      "enum": [
+        "passed",
+        "failed"
+      ]
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "resultHash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "schema": {
+      "const": "quwoquan_data.reviewer_result"
+    }
   }
 }

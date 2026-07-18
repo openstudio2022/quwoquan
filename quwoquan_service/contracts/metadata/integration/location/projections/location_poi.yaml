@@ -1,4 +1,3 @@
-version: 1
 read_model: LocationPoi
 
 description: |
@@ -22,41 +21,35 @@ client_projection:
     - name: id
       dart_type: String
       nullable: false
-      source: _id
-      aliases: [_id, id]
+      source: id
       default: "''"
 
     - name: name
       dart_type: String
       nullable: false
       source: name
-      aliases: [name]
       default: "''"
 
     - name: latitude
       dart_type: double
       nullable: false
       source: latitude
-      aliases: [latitude, lat]
       default: "0.0"
 
     - name: longitude
       dart_type: double
       nullable: false
       source: longitude
-      aliases: [longitude, lng]
       default: "0.0"
 
     - name: address
       dart_type: String
       nullable: true
       source: address
-      aliases: [address]
       default: "''"
 
     - name: distanceMeters
       dart_type: int
       nullable: true
       source: distanceMeters
-      aliases: [distanceMeters, distance]
       default: "null"

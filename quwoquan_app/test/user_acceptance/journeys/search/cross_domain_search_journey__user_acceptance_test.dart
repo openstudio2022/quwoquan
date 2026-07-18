@@ -19,6 +19,7 @@ import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/search/pages/global_search_page.dart';
 import 'package:quwoquan_app/ui/search/pages/search_network_results_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// 跨域搜索 T4 旅程（SIT1）：
 /// suggest 本地两阶段、result 云侧固定 Tab、本地对象不进 result、最近搜索、
@@ -382,7 +383,11 @@ Future<void> _pumpUntil(
 /// 旅程主仓库：suggest 返回本地联系人/会话；result 返回云侧 entity/location/post。
 class _JourneySearchRepository implements SearchRepository {
   @override
-  Future<SearchResponse> search(SearchRequest request) async {
+  Future<SearchResponse> search(
+    SearchRequest request, {
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  }) async {
     final normalized = request.normalized();
     if (normalized.mode == SearchMode.suggest) {
       return SearchResponse(
@@ -414,62 +419,71 @@ class _JourneySearchRepository implements SearchRepository {
   }
 }
 
-SearchResponse _cloudResult(SearchRequest normalized) {
-  if (normalized.objectTypes.contains(SearchObjectType.entityHomepage) ||
-      normalized.objectTypes.contains(SearchObjectType.locationPlace)) {
-    final sections = <SearchSection>[];
-    if (normalized.objectTypes.contains(SearchObjectType.entityHomepage)) {
-      sections.add(
-        const SearchSection(
-          id: 'homepages',
-          title: '主页',
-          objectTypes: <SearchObjectType>[SearchObjectType.entityHomepage],
-          hits: <SearchHit>[
-            SearchHit(
-              objectType: SearchObjectType.entityHomepage,
-              objectId: 'homepage_west_lake',
-              title: '西湖',
-              subtitle: '杭州',
-              snippet: '杭州热门地点',
-              resolvedFrom: SearchResolvedFrom.remote,
-              payload: SearchHitPayloadWireMap(<String, dynamic>{
-                'id': 'homepage_west_lake',
-                'title': '西湖',
-                'followerCount': 1200,
-                'contentCount': 340,
-              }),
-            ),
-          ],
-          resolvedFrom: SearchResolvedFrom.remote,
-        ),
-      );
-    }
-    if (normalized.objectTypes.contains(SearchObjectType.locationPlace)) {
-      sections.add(
-        const SearchSection(
-          id: 'locations',
-          title: '位置',
-          objectTypes: <SearchObjectType>[SearchObjectType.locationPlace],
-          hits: <SearchHit>[
-            SearchHit(
-              objectType: SearchObjectType.locationPlace,
-              objectId: 'place_west_lake_alley',
-              title: '西湖旁断桥小巷',
-              subtitle: '杭州',
-              resolvedFrom: SearchResolvedFrom.remote,
-              payload: SearchHitPayloadWireMap(<String, dynamic>{
-                'objectId': 'place_west_lake_alley',
-                'connectionState': 'connected',
-              }),
-            ),
-          ],
-          resolvedFrom: SearchResolvedFrom.remote,
-        ),
-      );
-    }
-    return SearchResponse(request: normalized, sections: sections);
+SearchResponse _cloudResult(
+  SearchRequest normalized, {
+  bool contentDomainFails = false,
+}) {
+  final sections = <SearchSection>[];
+  final degradeSignals = <SearchDegradeSignal>[];
+  if (normalized.objectTypes.contains(SearchObjectType.entityHomepage)) {
+    sections.add(
+      const SearchSection(
+        id: 'homepages',
+        title: '主页',
+        objectTypes: <SearchObjectType>[SearchObjectType.entityHomepage],
+        hits: <SearchHit>[
+          SearchHit(
+            objectType: SearchObjectType.entityHomepage,
+            objectId: 'homepage_west_lake',
+            title: '西湖',
+            subtitle: '杭州',
+            snippet: '杭州热门地点',
+            resolvedFrom: SearchResolvedFrom.remote,
+            payload: SearchHitPayloadWireMap(<String, dynamic>{
+              'id': 'homepage_west_lake',
+              'title': '西湖',
+              'followerCount': 1200,
+              'contentCount': 340,
+            }),
+          ),
+        ],
+        resolvedFrom: SearchResolvedFrom.remote,
+      ),
+    );
   }
-  if (normalized.objectTypes.contains(SearchObjectType.contentPost)) {
+  if (normalized.objectTypes.contains(SearchObjectType.locationPlace)) {
+    sections.add(
+      const SearchSection(
+        id: 'locations',
+        title: '位置',
+        objectTypes: <SearchObjectType>[SearchObjectType.locationPlace],
+        hits: <SearchHit>[
+          SearchHit(
+            objectType: SearchObjectType.locationPlace,
+            objectId: 'place_west_lake_alley',
+            title: '西湖旁断桥小巷',
+            subtitle: '杭州',
+            resolvedFrom: SearchResolvedFrom.remote,
+            payload: SearchHitPayloadWireMap(<String, dynamic>{
+              'objectId': 'place_west_lake_alley',
+              'connectionState': 'connected',
+            }),
+          ),
+        ],
+        resolvedFrom: SearchResolvedFrom.remote,
+      ),
+    );
+  }
+  if (normalized.objectTypes.contains(SearchObjectType.contentPost) &&
+      contentDomainFails) {
+    degradeSignals.add(
+      const SearchDegradeSignal(
+        code: 'content_remote_failed',
+        message: '内容单域暂不可用',
+        objectType: SearchObjectType.contentPost,
+      ),
+    );
+  } else if (normalized.objectTypes.contains(SearchObjectType.contentPost)) {
     final item = PostSearchItemView.fromMap(<String, dynamic>{
       'postId': 'post_west_lake_timelapse',
       'contentType': 'video',
@@ -481,35 +495,40 @@ SearchResponse _cloudResult(SearchRequest normalized) {
       'authorDisplayName': '延时摄影师',
       'likeCount': 88,
     });
-    return SearchResponse(
-      request: normalized,
-      sections: <SearchSection>[
-        SearchSection(
-          id: 'content',
-          title: '内容',
-          objectTypes: const <SearchObjectType>[SearchObjectType.contentPost],
-          hits: <SearchHit>[
-            SearchHit(
-              objectType: SearchObjectType.contentPost,
-              objectId: item.postId,
-              title: item.title ?? item.postId,
-              snippet: item.summary,
-              resolvedFrom: SearchResolvedFrom.remote,
-              payload: SearchHitPayloadContentPost(item),
-            ),
-          ],
-          resolvedFrom: SearchResolvedFrom.remote,
-        ),
-      ],
+    sections.add(
+      SearchSection(
+        id: 'content',
+        title: '内容',
+        objectTypes: const <SearchObjectType>[SearchObjectType.contentPost],
+        hits: <SearchHit>[
+          SearchHit(
+            objectType: SearchObjectType.contentPost,
+            objectId: item.postId,
+            title: item.title ?? item.postId,
+            snippet: item.summary,
+            resolvedFrom: SearchResolvedFrom.remote,
+            payload: SearchHitPayloadContentPost(item),
+          ),
+        ],
+        resolvedFrom: SearchResolvedFrom.remote,
+      ),
     );
   }
-  return SearchResponse(request: normalized, sections: const <SearchSection>[]);
+  return SearchResponse(
+    request: normalized,
+    sections: sections,
+    degradeSignals: degradeSignals,
+  );
 }
 
 /// content 域抛错，entity/location 正常：验证单域失败不阻塞整页。
 class _ContentDomainFailingRepository implements SearchRepository {
   @override
-  Future<SearchResponse> search(SearchRequest request) async {
+  Future<SearchResponse> search(
+    SearchRequest request, {
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  }) async {
     final normalized = request.normalized();
     if (normalized.mode == SearchMode.suggest) {
       return SearchResponse(
@@ -517,10 +536,7 @@ class _ContentDomainFailingRepository implements SearchRepository {
         sections: const <SearchSection>[],
       );
     }
-    if (normalized.objectTypes.contains(SearchObjectType.contentPost)) {
-      throw StateError('content domain backend unavailable');
-    }
-    return _cloudResult(normalized);
+    return _cloudResult(normalized, contentDomainFails: true);
   }
 }
 

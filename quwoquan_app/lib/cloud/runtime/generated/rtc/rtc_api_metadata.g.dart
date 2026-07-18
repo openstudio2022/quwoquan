@@ -8,26 +8,27 @@ class RtcApiMetadata {
 
   static const String domain = 'rtc';
   static const List<String> apiPrefixes = <String>[
-    '/v1/rtc',
+    '/rtc/call-recordings',
+    '/rtc/calls',
   ];
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
-    'AnswerCall': '/v1/rtc/calls/{callId}/answer',
-    'CancelCall': '/v1/rtc/calls/{callId}/cancel',
-    'GetCall': '/v1/rtc/calls/{callId}',
-    'HangupCall': '/v1/rtc/calls/{callId}/hangup',
-    'InitiateCall': '/v1/rtc/calls',
-    'InviteToCall': '/v1/rtc/calls/{callId}/invite',
-    'JoinCall': '/v1/rtc/calls/{callId}/join',
-    'LeaveCall': '/v1/rtc/calls/{callId}/leave',
-    'ListCalls': '/v1/rtc/calls',
-    'RejectCall': '/v1/rtc/calls/{callId}/reject',
-    'StartCallRecording': '/v1/rtc/calls/{callId}/recordings',
-    'StartScreenShare': '/v1/rtc/calls/{callId}/screen-share/start',
-    'StopCallRecording': '/v1/rtc/call-recordings/{recordingId}:stop',
-    'StopScreenShare': '/v1/rtc/calls/{callId}/screen-share/stop',
-    'ToggleCamera': '/v1/rtc/calls/{callId}/camera',
-    'ToggleMute': '/v1/rtc/calls/{callId}/mute',
+    'AnswerCall': '/rtc/calls/{callId}/answer',
+    'CancelCall': '/rtc/calls/{callId}/cancel',
+    'GetCall': '/rtc/calls/{callId}',
+    'HangupCall': '/rtc/calls/{callId}/hangup',
+    'InitiateCall': '/rtc/calls',
+    'InviteToCall': '/rtc/calls/{callId}/invite',
+    'JoinCall': '/rtc/calls/{callId}/join',
+    'LeaveCall': '/rtc/calls/{callId}/leave',
+    'ListCalls': '/rtc/calls',
+    'RejectCall': '/rtc/calls/{callId}/reject',
+    'StartCallRecording': '/rtc/calls/{callId}/recordings',
+    'StartScreenShare': '/rtc/calls/{callId}/screen-share/start',
+    'StopCallRecording': '/rtc/call-recordings/{recordingId}:stop',
+    'StopScreenShare': '/rtc/calls/{callId}/screen-share/stop',
+    'ToggleCamera': '/rtc/calls/{callId}/camera',
+    'ToggleMute': '/rtc/calls/{callId}/mute',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
@@ -94,87 +95,87 @@ class RtcApiMetadata {
   static const String toggleCameraOperation = 'ToggleCamera';
   static const String toggleMuteOperation = 'ToggleMute';
 
-  static const String answerCallPathTemplate = '/v1/rtc/calls/{callId}/answer';
+  static const String answerCallPathTemplate = '/rtc/calls/{callId}/answer';
   static String answerCallPath({required String callId}) {
     return _fillPath(answerCallPathTemplate, <String, String>{
       'callId': callId,
     });
   }
-  static const String cancelCallPathTemplate = '/v1/rtc/calls/{callId}/cancel';
+  static const String cancelCallPathTemplate = '/rtc/calls/{callId}/cancel';
   static String cancelCallPath({required String callId}) {
     return _fillPath(cancelCallPathTemplate, <String, String>{
       'callId': callId,
     });
   }
-  static const String getCallPathTemplate = '/v1/rtc/calls/{callId}';
+  static const String getCallPathTemplate = '/rtc/calls/{callId}';
   static String getCallPath({required String callId}) {
     return _fillPath(getCallPathTemplate, <String, String>{
       'callId': callId,
     });
   }
-  static const String hangupCallPathTemplate = '/v1/rtc/calls/{callId}/hangup';
+  static const String hangupCallPathTemplate = '/rtc/calls/{callId}/hangup';
   static String hangupCallPath({required String callId}) {
     return _fillPath(hangupCallPathTemplate, <String, String>{
       'callId': callId,
     });
   }
-  static const String initiateCallPath = '/v1/rtc/calls';
-  static const String inviteToCallPathTemplate = '/v1/rtc/calls/{callId}/invite';
+  static const String initiateCallPath = '/rtc/calls';
+  static const String inviteToCallPathTemplate = '/rtc/calls/{callId}/invite';
   static String inviteToCallPath({required String callId}) {
     return _fillPath(inviteToCallPathTemplate, <String, String>{
       'callId': callId,
     });
   }
-  static const String joinCallPathTemplate = '/v1/rtc/calls/{callId}/join';
+  static const String joinCallPathTemplate = '/rtc/calls/{callId}/join';
   static String joinCallPath({required String callId}) {
     return _fillPath(joinCallPathTemplate, <String, String>{
       'callId': callId,
     });
   }
-  static const String leaveCallPathTemplate = '/v1/rtc/calls/{callId}/leave';
+  static const String leaveCallPathTemplate = '/rtc/calls/{callId}/leave';
   static String leaveCallPath({required String callId}) {
     return _fillPath(leaveCallPathTemplate, <String, String>{
       'callId': callId,
     });
   }
-  static const String listCallsPath = '/v1/rtc/calls';
-  static const String rejectCallPathTemplate = '/v1/rtc/calls/{callId}/reject';
+  static const String listCallsPath = '/rtc/calls';
+  static const String rejectCallPathTemplate = '/rtc/calls/{callId}/reject';
   static String rejectCallPath({required String callId}) {
     return _fillPath(rejectCallPathTemplate, <String, String>{
       'callId': callId,
     });
   }
-  static const String startCallRecordingPathTemplate = '/v1/rtc/calls/{callId}/recordings';
+  static const String startCallRecordingPathTemplate = '/rtc/calls/{callId}/recordings';
   static String startCallRecordingPath({required String callId}) {
     return _fillPath(startCallRecordingPathTemplate, <String, String>{
       'callId': callId,
     });
   }
-  static const String startScreenSharePathTemplate = '/v1/rtc/calls/{callId}/screen-share/start';
+  static const String startScreenSharePathTemplate = '/rtc/calls/{callId}/screen-share/start';
   static String startScreenSharePath({required String callId}) {
     return _fillPath(startScreenSharePathTemplate, <String, String>{
       'callId': callId,
     });
   }
-  static const String stopCallRecordingPathTemplate = '/v1/rtc/call-recordings/{recordingId}:stop';
+  static const String stopCallRecordingPathTemplate = '/rtc/call-recordings/{recordingId}:stop';
   static String stopCallRecordingPath({required String recordingId}) {
     return _fillPath(stopCallRecordingPathTemplate, <String, String>{
       'recordingId': recordingId,
     });
   }
-  static const String stopScreenSharePathTemplate = '/v1/rtc/calls/{callId}/screen-share/stop';
+  static const String stopScreenSharePathTemplate = '/rtc/calls/{callId}/screen-share/stop';
   static String stopScreenSharePath({required String callId}) {
     return _fillPath(stopScreenSharePathTemplate, <String, String>{
       'callId': callId,
     });
   }
-  static const String toggleCameraPathTemplate = '/v1/rtc/calls/{callId}/camera';
+  static const String toggleCameraPathTemplate = '/rtc/calls/{callId}/camera';
   static String toggleCameraPath({required String callId}) {
     return _fillPath(toggleCameraPathTemplate, <String, String>{
       'callId': callId,
     });
   }
-  static const String toggleMutePathTemplate = '/v1/rtc/calls/{callId}/mute';
+  static const String toggleMutePathTemplate = '/rtc/calls/{callId}/mute';
   static String toggleMutePath({required String callId}) {
     return _fillPath(toggleMutePathTemplate, <String, String>{
       'callId': callId,

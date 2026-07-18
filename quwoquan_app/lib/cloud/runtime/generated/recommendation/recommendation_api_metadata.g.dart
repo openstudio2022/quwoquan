@@ -8,17 +8,17 @@ class RecommendationApiMetadata {
 
   static const String domain = 'recommendation';
   static const List<String> apiPrefixes = <String>[
-    '/internal/v1',
-    '/v1/recommendation',
+    '/internal/recommendation',
+    '/recommendation/intersections',
   ];
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
-    'ActivateRecommendationModelRelease': '/internal/v1/recommendation/model-releases/{releaseId}:activate',
-    'BatchScoreRecommendationCandidates': '/internal/v1/recommendation/model-releases:batch-score',
-    'MarkRecommendationIntersectionsVisited': '/v1/recommendation/intersections/visit',
-    'RollbackRecommendationModelRelease': '/internal/v1/recommendation/model-releases/{releaseId}:rollback',
-    'ScoreRecommendationCandidates': '/internal/v1/recommendation/model-releases:score',
-    'StageRecommendationModelRelease': '/internal/v1/recommendation/model-releases',
+    'ActivateRecommendationModelRelease': '/internal/recommendation/model-releases/{releaseId}:activate',
+    'BatchScoreRecommendationCandidates': '/internal/recommendation/model-releases:batch-score',
+    'MarkRecommendationIntersectionsVisited': '/recommendation/intersections/visit',
+    'RollbackRecommendationModelRelease': '/internal/recommendation/model-releases/{releaseId}:rollback',
+    'ScoreRecommendationCandidates': '/internal/recommendation/model-releases:score',
+    'StageRecommendationModelRelease': '/internal/recommendation/model-releases',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
@@ -56,22 +56,22 @@ class RecommendationApiMetadata {
   static const String scoreRecommendationCandidatesOperation = 'ScoreRecommendationCandidates';
   static const String stageRecommendationModelReleaseOperation = 'StageRecommendationModelRelease';
 
-  static const String activateRecommendationModelReleasePathTemplate = '/internal/v1/recommendation/model-releases/{releaseId}:activate';
+  static const String activateRecommendationModelReleasePathTemplate = '/internal/recommendation/model-releases/{releaseId}:activate';
   static String activateRecommendationModelReleasePath({required String releaseId}) {
     return _fillPath(activateRecommendationModelReleasePathTemplate, <String, String>{
       'releaseId': releaseId,
     });
   }
-  static const String batchScoreRecommendationCandidatesPath = '/internal/v1/recommendation/model-releases:batch-score';
-  static const String markRecommendationIntersectionsVisitedPath = '/v1/recommendation/intersections/visit';
-  static const String rollbackRecommendationModelReleasePathTemplate = '/internal/v1/recommendation/model-releases/{releaseId}:rollback';
+  static const String batchScoreRecommendationCandidatesPath = '/internal/recommendation/model-releases:batch-score';
+  static const String markRecommendationIntersectionsVisitedPath = '/recommendation/intersections/visit';
+  static const String rollbackRecommendationModelReleasePathTemplate = '/internal/recommendation/model-releases/{releaseId}:rollback';
   static String rollbackRecommendationModelReleasePath({required String releaseId}) {
     return _fillPath(rollbackRecommendationModelReleasePathTemplate, <String, String>{
       'releaseId': releaseId,
     });
   }
-  static const String scoreRecommendationCandidatesPath = '/internal/v1/recommendation/model-releases:score';
-  static const String stageRecommendationModelReleasePath = '/internal/v1/recommendation/model-releases';
+  static const String scoreRecommendationCandidatesPath = '/internal/recommendation/model-releases:score';
+  static const String stageRecommendationModelReleasePath = '/internal/recommendation/model-releases';
 
   static String _fillPath(String template, Map<String, String> params) {
     var path = template;

@@ -1,4 +1,3 @@
-version: 1
 service:
   name: search-service
   domain: search
@@ -11,7 +10,8 @@ service:
     target_story: app-cloud-business-object-commercial-closure
 api_routes:
   - method: GET
-    path: /v1/search/recent
+    path: /search/recent
+
     operation: ListRecentSearches
     actor: persona
     application:
@@ -22,10 +22,11 @@ api_routes:
       slice: ListRecentSearchesSlice
     description: 获取当前 Persona 的有界最近搜索状态
     response_entity: RecentSearchEntryView
-    auth: required
-
+    security:
+      auth_mode: required
   - method: PUT
-    path: /v1/search/recent/{entryId}
+    path: /search/recent/{entryId}
+
     operation: UpsertRecentSearch
     actor: persona
     application:
@@ -39,10 +40,11 @@ api_routes:
     request_entity: RecentSearchEntryView
     request_fields: [query, scope, facet, updatedAt]
     response_entity: RecentSearchEntryView
-    auth: required
-
+    security:
+      auth_mode: required
   - method: DELETE
-    path: /v1/search/recent/{entryId}
+    path: /search/recent/{entryId}
+
     operation: DeleteRecentSearch
     actor: persona
     application:
@@ -53,10 +55,11 @@ api_routes:
       mutation_target: RecentSearchState
       invariant_target: RecentSearchState
     description: 删除单条最近搜索记录
-    auth: required
-
+    security:
+      auth_mode: required
   - method: DELETE
-    path: /v1/search/recent
+    path: /search/recent
+
     operation: ClearRecentSearches
     actor: persona
     application:
@@ -67,4 +70,5 @@ api_routes:
       mutation_target: RecentSearchState
       invariant_target: RecentSearchState
     description: 清空当前账号最近搜索记录
-    auth: required
+    security:
+      auth_mode: required

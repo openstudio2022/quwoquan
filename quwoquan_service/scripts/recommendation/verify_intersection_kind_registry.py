@@ -15,7 +15,7 @@
      actionKeys(by kind) / actionLabel(by key) 全部 == registry，取代「markdown + 手写 switch」双源）。
   4. iconKeyByDimension 末级回退闭集：键 ∈ dimensions、值 ∈ iconKeyLegend，且每个维度都有回退。
   5. actionLabelByKey 键集 == actionHintLegend 键集（终端短标签与词典描述同闭集）。
-  6. 服务端消费方（intersection_service.go / intersection_hydration.go）已改为查 generated.Intersection* 表，
+  6. 服务端消费方（intersection_service.go / intersection_hydration*.go）已改为查 generated.Intersection* 表，
      不得回归手写 kind→iconKey/route/asset/action/evidenceRank switch（防漂移再生）。
 
 退出码: 0 通过 / 1 失败。
@@ -41,9 +41,9 @@ SERVICE_GO = (
     REPO_ROOT
     / "quwoquan_service/services/content-service/internal/application/intersection/intersection_service.go"
 )
-HYDRATION_GO = (
+HYDRATION_PACKAGE = (
     REPO_ROOT
-    / "quwoquan_service/services/content-service/internal/application/intersection/intersection_hydration.go"
+    / "quwoquan_service/services/content-service/internal/application/intersection"
 )
 
 VALUE_TIERS = {"T1", "T2", "T3", "T4"}
@@ -357,19 +357,20 @@ def diff_field(name: str, expected: dict, actual: dict, problems: list[str]) -> 
 
 def check_consumers_table_driven(problems: list[str]) -> None:
     """消费方必须查 generated.Intersection* 表，不得回归手写 kind switch。"""
-    if not SERVICE_GO.exists() or not HYDRATION_GO.exists():
-        problems.append("intersection_service.go / intersection_hydration.go missing")
+    hydration_files = sorted(HYDRATION_PACKAGE.glob("intersection_hydration*.go"))
+    if not SERVICE_GO.exists() or not hydration_files:
+        problems.append("intersection_service.go / intersection_hydration*.go missing")
         return
     service = SERVICE_GO.read_text(encoding="utf-8")
-    hydration = HYDRATION_GO.read_text(encoding="utf-8")
+    hydration = "\n".join(path.read_text(encoding="utf-8") for path in hydration_files)
     required = [
         (service, "generated.IntersectionEvidenceRank", "intersection_service.go evidenceKindRank"),
-        (hydration, "generated.IntersectionIconKeyByKind", "intersection_hydration.go iconKeyForKind"),
-        (hydration, "generated.IntersectionIconKeyByDimension", "intersection_hydration.go dimension fallback"),
-        (hydration, "generated.IntersectionRouteIDByObjectKind", "intersection_hydration.go routeIDForObjectKind"),
-        (hydration, "generated.IntersectionAssetKindByObjectKind", "intersection_hydration.go assetKindForObjectKind"),
-        (hydration, "generated.IntersectionActionKeysByKind", "intersection_hydration.go actionKeysForKind"),
-        (hydration, "generated.IntersectionActionLabelByKey", "intersection_hydration.go actionLabelForKey"),
+        (hydration, "generated.IntersectionIconKeyByKind", "intersection hydration iconKeyForKind"),
+        (hydration, "generated.IntersectionIconKeyByDimension", "intersection hydration dimension fallback"),
+        (hydration, "generated.IntersectionRouteIDByObjectKind", "intersection hydration routeIDForObjectKind"),
+        (hydration, "generated.IntersectionAssetKindByObjectKind", "intersection hydration assetKindForObjectKind"),
+        (hydration, "generated.IntersectionActionKeysByKind", "intersection hydration actionKeysForKind"),
+        (hydration, "generated.IntersectionActionLabelByKey", "intersection hydration actionLabelForKey"),
     ]
     for src, token, where in required:
         if token not in src:

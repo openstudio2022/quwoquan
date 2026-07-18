@@ -8,12 +8,12 @@ void main() {
     test('metadata exposes required list and mark visited APIs', () {
       expect(
         UserApiMetadata.operationToPathTemplate['ListFollowingSubjects'],
-        equals('/v1/user/following-subjects'),
+        equals('/user/following-subjects'),
       );
       expect(
         UserApiMetadata.operationToPathTemplate['MarkFollowedSubjectVisited'],
         equals(
-          '/v1/user/followed-subjects/{subjectType}/{subjectId}:mark-visited',
+          '/user/followed-subjects/{subjectType}/{subjectId}:mark-visited',
         ),
       );
       expect(

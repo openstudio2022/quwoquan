@@ -1,4 +1,3 @@
-version: 1
 aggregate: Conversation
 layer: app_side
 
@@ -23,7 +22,7 @@ scenarios:
 
   - name: commercial_message_home_rows
     description: 商用消息首页行解析，覆盖 conversation 与 notification 两类行
-    route: GET /v1/chat/message-home
+    route: GET /chat/message-home
     variants: [all, unread, group, direct, notification]
     assertions:
       - items_match_message_home_row_schema
@@ -33,7 +32,7 @@ scenarios:
 
   - name: commercial_contact_home_rows
     description: 商用联系首页行解析，覆盖用户、圈子和讨论
-    route: GET /v1/chat/contact-home
+    route: GET /chat/contact-home
     variants: [all, mutual, circle, group]
     assertions:
       - items_match_contact_home_row_schema
@@ -43,7 +42,7 @@ scenarios:
 
   - name: commercial_group_home
     description: 讨论页顶部与聊天信息页共享同一个 GroupHome DTO
-    route: GET /v1/chat/groups/{conversationId}/home
+    route: GET /chat/groups/{conversationId}/home
     assertions:
       - title_member_count_sources_present
       - capability_entries_include_album_file_event_member

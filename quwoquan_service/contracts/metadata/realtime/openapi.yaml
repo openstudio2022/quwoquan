@@ -4,7 +4,7 @@ info:
     title: quwoquan realtime API
     version: v1
 paths:
-    /v1/channel/{channelType}/webhook:
+    /channel/{channelType}/webhook:
         post:
             operationId: ChannelWebhook
             x-contract-operation-id: realtime.channel_ingress_receipt.ChannelWebhook
@@ -36,7 +36,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-    /v1/config/realtime:
+    /config/realtime:
         get:
             operationId: GetRealtimeConfig
             x-contract-operation-id: realtime.connection.GetRealtimeConfig
@@ -61,7 +61,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-    /v1/realtime/poll:
+    /realtime/poll:
         get:
             operationId: LongPoll
             x-contract-operation-id: realtime.connection.LongPoll
@@ -88,7 +88,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/realtime/ws:
+    /realtime/ws:
         get:
             operationId: WebSocketUpgrade
             x-contract-operation-id: realtime.connection.WebSocketUpgrade

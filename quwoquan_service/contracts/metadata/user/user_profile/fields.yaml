@@ -1,4 +1,3 @@
-version: 1
 aggregate: UserAccount
 
 # 语义说明：
@@ -10,6 +9,7 @@ entities:
     description: 用户根实体——登录凭证、设备、恢复、审计与多分身管理容器
     fields:
       - name: userId
+        source: userId
         type: string
         constraints: [PK]
         classification: PUBLIC
@@ -20,6 +20,7 @@ entities:
         description: 全局唯一 owner ID；匿名与注册账号都使用同一稳定主键规则
 
       - name: accountState
+        source: accountState
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -30,6 +31,7 @@ entities:
         description: 账号生命周期状态：anonymous | active | suspended | deleted
 
       - name: identityOrigin
+        source: identityOrigin
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -40,6 +42,7 @@ entities:
         description: 首次创建来源：anonymous_device | phone | wechat | alipay | qq | apple | passkey | migrated_seed
 
       - name: logicalShard
+        source: logicalShard
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -50,6 +53,7 @@ entities:
         description: 固定逻辑槽位；由结构化 ownerId 生成并长期稳定
 
       - name: anonymousRetentionPolicy
+        source: anonymousRetentionPolicy
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -60,6 +64,7 @@ entities:
         description: 匿名痕迹保留策略；当前固定为 preserve
 
       - name: phone
+        source: phone
         type: string
         constraints: [UK, NULLABLE]
         classification: PII
@@ -70,6 +75,7 @@ entities:
         description: 手机号（登录凭证）；匿名账号允许为空
 
       - name: nickname
+        source: nickname
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -81,6 +87,7 @@ entities:
         description: 昵称（显示名，允许重复，不再作为唯一标识；唯一性由 userId/subAccountId/userHandle 承担）
 
       - name: nicknameCustomized
+        source: nicknameCustomized
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -91,6 +98,7 @@ entities:
         description: 用户是否手动修改过昵称；首次创建的系统默认昵称为 false，用户改名后置 true，端侧据此决定是否展示昵称编辑画笔
 
       - name: avatarUrl
+        source: avatarUrl
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -100,6 +108,7 @@ entities:
         recommend_feature: false
 
       - name: avatarAssetId
+        source: avatarAssetId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -110,6 +119,7 @@ entities:
         description: 用户头像资产主键；作为头像真相源的稳定引用
 
       - name: avatarVersion
+        source: avatarVersion
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -120,6 +130,7 @@ entities:
         description: 用户头像版本号；用于群头像重算与 patch 幂等
 
       - name: backgroundUrl
+        source: backgroundUrl
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -130,6 +141,7 @@ entities:
         description: owner 基线主页头图 URL
 
       - name: backgroundAssetId
+        source: backgroundAssetId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -140,6 +152,7 @@ entities:
         description: 用户主页头图资产主键；作为封面图真相源的稳定引用
 
       - name: bio
+        source: bio
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -151,6 +164,7 @@ entities:
         description: 个人签名
 
       - name: identityTags
+        source: identityTags
         type: "[]string"
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -162,6 +176,7 @@ entities:
         description: 主页单行身份标签（用户语言短词，如「AI产品 / 摄影 / 旅行 / 北京」），端侧以 · 分隔单行展示；与 bio 互补不重复
 
       - name: interestTags
+        source: interestTags
         type: "[]string"
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -173,6 +188,7 @@ entities:
         description: 声明式用户兴趣（路径制 tagRef，真相源 control_plane/governance/taxonomy）；与行为派生兴趣互补，用于兴趣维度交集与冷启动召回
 
       - name: gender
+        source: gender
         type: enum
         enum_ref: Gender
         constraints: [NULLABLE]
@@ -183,6 +199,7 @@ entities:
         recommend_feature: true
 
       - name: birthDate
+        source: birthDate
         type: date
         constraints: [NULLABLE]
         classification: PII
@@ -192,6 +209,7 @@ entities:
         recommend_feature: false
 
       - name: region
+        source: region
         type: string
         constraints: [NULLABLE]
         classification: PII
@@ -202,6 +220,7 @@ entities:
         description: 地区（ipResidenceProfile 落库）
 
       - name: regionTagRef
+        source: regionTagRef
         type: tag_ref
         constraints: [NULLABLE]
         classification: PII
@@ -212,6 +231,7 @@ entities:
         description: 省市两级结构化行政区 tagRef，公开展示由 tag-service 派生
 
       - name: status
+        source: status
         type: enum
         enum_ref: UserStatus
         constraints: [NOT_NULL]
@@ -223,6 +243,7 @@ entities:
         observe_metric: user_status_gauge
 
       - name: profileVersion
+        source: profileVersion
         type: int
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -233,6 +254,7 @@ entities:
         description: 画像快照版本号（端侧增量校验）
 
       - name: followerCount
+        source: followerCount
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -243,6 +265,7 @@ entities:
         description: 关注该用户主页的人数；人页统计前台展示为「粉丝」（字段名 followerCount 不变，禁止使用「关注者」）
 
       - name: followingCount
+        source: followingCount
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -252,6 +275,7 @@ entities:
         recommend_feature: true
 
       - name: postCount
+        source: postCount
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -261,6 +285,7 @@ entities:
         recommend_feature: true
 
       - name: circleCount
+        source: circleCount
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -271,6 +296,7 @@ entities:
         description: 已加入圈子数（由 circle-service 成员变更事件驱动更新）
 
       - name: likeCount
+        source: likeCount
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -281,6 +307,7 @@ entities:
         description: 获赞总数（由 content-service 点赞事件驱动更新）
 
       - name: createdAt
+        source: createdAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -290,6 +317,7 @@ entities:
         recommend_feature: true
 
       - name: ownerDisplayName
+        source: ownerDisplayName
         type: string
         constraints: [NULLABLE]
         classification: PII
@@ -300,6 +328,7 @@ entities:
         description: 主控账号管理视角名称（仅自己控制台可见，不对外展示）
 
       - name: subAccountCount
+        source: subAccountCount
         type: int
         constraints: [NOT_NULL, DEFAULT_1]
         classification: PUBLIC
@@ -310,6 +339,7 @@ entities:
         description: 当前持有子账号数量（冗余计数）
 
       - name: updatedAt
+        source: updatedAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -323,6 +353,7 @@ entities:
     cache_excluded: true
     fields:
       - name: displayName
+        source: displayName
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -332,6 +363,7 @@ entities:
         description: 登录页展示昵称；优先 ownerDisplayName，其次 nickname
 
       - name: nicknameCustomized
+        source: nicknameCustomized
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -341,6 +373,7 @@ entities:
         description: 昵称是否为用户主动设置或第三方授权同步的有效公开昵称；端侧不得通过昵称格式猜测
 
       - name: avatarUrl
+        source: avatarUrl
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -349,6 +382,7 @@ entities:
         ops_exposure: read
 
       - name: avatarAssetId
+        source: avatarAssetId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -357,6 +391,7 @@ entities:
         ops_exposure: read
 
       - name: maskedPhone
+        source: maskedPhone
         type: string
         constraints: [NULLABLE]
         classification: PII
@@ -366,6 +401,7 @@ entities:
         description: 脱敏手机号，如 138****8888；端侧不得接触真实手机号
 
       - name: identityOrigin
+        source: identityOrigin
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -374,6 +410,7 @@ entities:
         ops_exposure: read
 
       - name: lastLoginAt
+        source: lastLoginAt
         type: timestamp
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -386,6 +423,7 @@ entities:
     cache_excluded: true
     fields:
       - name: state
+        source: state
         type: enum
         enum_ref: OneTapLoginHintState
         constraints: [NOT_NULL]
@@ -395,6 +433,7 @@ entities:
         ops_exposure: read
 
       - name: maskedPhone
+        source: maskedPhone
         type: string
         constraints: [NULLABLE]
         classification: PII
@@ -403,6 +442,7 @@ entities:
         ops_exposure: mask
 
       - name: registered
+        source: registered
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -411,6 +451,7 @@ entities:
         ops_exposure: read
 
       - name: accountHint
+        source: accountHint
         type: object
         object_ref: LoginAccountHint
         constraints: [NULLABLE]
@@ -420,6 +461,7 @@ entities:
         ops_exposure: mask
 
       - name: expiresInSeconds
+        source: expiresInSeconds
         type: int
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -428,6 +470,7 @@ entities:
         ops_exposure: read
 
       - name: providerRequestId
+        source: providerRequestId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -445,6 +488,7 @@ entities:
     cache_excluded: true
     fields:
       - name: provider
+        source: provider
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -453,6 +497,7 @@ entities:
         ops_exposure: read
 
       - name: providerRequestId
+        source: providerRequestId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -461,6 +506,7 @@ entities:
         ops_exposure: read
 
       - name: latencyMs
+        source: latencyMs
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -469,6 +515,7 @@ entities:
         ops_exposure: read
 
       - name: resultCode
+        source: resultCode
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -477,6 +524,7 @@ entities:
         ops_exposure: read
 
       - name: occurredAt
+        source: occurredAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -489,6 +537,7 @@ entities:
     cache_excluded: true
     fields:
       - name: id
+        source: id
         type: string
         constraints: [PK]
         classification: PUBLIC
@@ -497,6 +546,7 @@ entities:
         ops_exposure: read
 
       - name: ownerId
+        source: ownerId
         type: string
         constraints: [FK_user_profiles_CASCADE, NOT_NULL]
         classification: PUBLIC
@@ -505,6 +555,7 @@ entities:
         ops_exposure: read
 
       - name: agreementVersion
+        source: agreementVersion
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -513,6 +564,7 @@ entities:
         ops_exposure: read
 
       - name: privacyVersion
+        source: privacyVersion
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -521,6 +573,7 @@ entities:
         ops_exposure: read
 
       - name: acceptedAt
+        source: acceptedAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -529,6 +582,7 @@ entities:
         ops_exposure: read
 
       - name: deviceId
+        source: deviceId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -537,6 +591,7 @@ entities:
         ops_exposure: read
 
       - name: platform
+        source: platform
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -545,6 +600,7 @@ entities:
         ops_exposure: read
 
       - name: sourceOperation
+        source: sourceOperation
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -561,6 +617,7 @@ entities:
     cache_excluded: true
     fields:
       - name: id
+        source: id
         type: string
         constraints: [PK]
         classification: PUBLIC
@@ -569,6 +626,7 @@ entities:
         ops_exposure: read
 
       - name: ownerId
+        source: ownerId
         type: string
         constraints: [FK_user_profiles_CASCADE, NOT_NULL]
         classification: PUBLIC
@@ -578,6 +636,7 @@ entities:
         description: 绑定到的匿名或已升级 owner ID
 
       - name: installIdHash
+        source: installIdHash
         type: string
         constraints: [NOT_NULL]
         classification: SECRET
@@ -587,6 +646,7 @@ entities:
         description: 安装实例标识的哈希值，仅用于审计和定位
 
       - name: deviceFingerprintHash
+        source: deviceFingerprintHash
         type: string
         constraints: [NOT_NULL]
         classification: SECRET
@@ -596,6 +656,7 @@ entities:
         description: 设备指纹摘要；同设备稳定命中同一匿名 owner
 
       - name: platform
+        source: platform
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -604,6 +665,7 @@ entities:
         ops_exposure: read
 
       - name: appVersion
+        source: appVersion
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -612,6 +674,7 @@ entities:
         ops_exposure: read
 
       - name: lastSeenAt
+        source: lastSeenAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -620,6 +683,7 @@ entities:
         ops_exposure: read
 
       - name: createdAt
+        source: createdAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -628,6 +692,7 @@ entities:
         ops_exposure: read
 
       - name: updatedAt
+        source: updatedAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -643,6 +708,7 @@ entities:
     description: 我的二维码可撤销 token 存储；仅保存 token hash，不保存手机号、ownerId 或 bearer token
     fields:
       - name: tokenId
+        source: tokenId
         type: string
         constraints: [PK]
         classification: INTERNAL
@@ -651,6 +717,7 @@ entities:
         ops_exposure: mask
 
       - name: tokenHash
+        source: tokenHash
         type: string
         constraints: [NOT_NULL, UK]
         classification: INTERNAL
@@ -659,6 +726,7 @@ entities:
         ops_exposure: mask
 
       - name: ownerUserId
+        source: ownerUserId
         type: string
         constraints: [NOT_NULL]
         classification: INTERNAL
@@ -667,6 +735,7 @@ entities:
         ops_exposure: read
 
       - name: subAccountId
+        source: subAccountId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -675,6 +744,7 @@ entities:
         ops_exposure: read
 
       - name: userHandle
+        source: userHandle
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -683,6 +753,7 @@ entities:
         ops_exposure: read
 
       - name: styleVersion
+        source: styleVersion
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -691,6 +762,7 @@ entities:
         ops_exposure: read
 
       - name: status
+        source: status
         type: string
         constraints: [NOT_NULL]
         classification: INTERNAL
@@ -699,6 +771,7 @@ entities:
         ops_exposure: read
 
       - name: expiresAt
+        source: expiresAt
         type: timestamp
         constraints: [NULLABLE]
         classification: INTERNAL
@@ -707,6 +780,7 @@ entities:
         ops_exposure: read
 
       - name: revokedAt
+        source: revokedAt
         type: timestamp
         constraints: [NULLABLE]
         classification: INTERNAL
@@ -715,6 +789,7 @@ entities:
         ops_exposure: read
 
       - name: createdAt
+        source: createdAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: INTERNAL
@@ -723,6 +798,7 @@ entities:
         ops_exposure: read
 
       - name: updatedAt
+        source: updatedAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: INTERNAL
@@ -735,6 +811,7 @@ entities:
     cache_excluded: true
     fields:
       - name: userId
+        source: userId
         type: string
         constraints: [PK, FK_user_profiles_CASCADE]
         classification: PUBLIC
@@ -744,6 +821,7 @@ entities:
         description: 1:1 关联
 
       - name: passwordHash
+        source: passwordHash
         type: string
         constraints: [NOT_NULL]
         classification: SECRET
@@ -752,6 +830,7 @@ entities:
         ops_exposure: drop
 
       - name: otpSecret
+        source: otpSecret
         type: string
         constraints: [NULLABLE]
         classification: SECRET
@@ -760,6 +839,7 @@ entities:
         ops_exposure: drop
 
       - name: refreshToken
+        source: refreshToken
         type: string
         constraints: [NULLABLE]
         classification: SECRET
@@ -768,6 +848,7 @@ entities:
         ops_exposure: drop
 
       - name: refreshTokenExpiresAt
+        source: refreshTokenExpiresAt
         type: timestamp
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -776,6 +857,7 @@ entities:
         ops_exposure: drop
 
       - name: lastLoginAt
+        source: lastLoginAt
         type: timestamp
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -784,6 +866,7 @@ entities:
         ops_exposure: read
 
       - name: lastLoginIp
+        source: lastLoginIp
         type: string
         constraints: [NULLABLE]
         classification: PII
@@ -792,6 +875,7 @@ entities:
         ops_exposure: mask
 
       - name: loginFailCount
+        source: loginFailCount
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -801,6 +885,7 @@ entities:
         observe_metric: login_fail_counter
 
       - name: lockedUntil
+        source: lockedUntil
         type: timestamp
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -809,6 +894,7 @@ entities:
         ops_exposure: read
 
       - name: createdAt
+        source: createdAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -817,6 +903,7 @@ entities:
         ops_exposure: drop
 
       - name: updatedAt
+        source: updatedAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -828,6 +915,7 @@ entities:
     description: 聚合 owner 默认值与当前子账号 override 后的 appearance 快照
     fields:
       - name: themeMode
+        source: themeMode
         type: enum
         enum_ref: ThemeModeSetting
         constraints: [NOT_NULL]
@@ -837,6 +925,7 @@ entities:
         ops_exposure: read
 
       - name: fontSizePreset
+        source: fontSizePreset
         type: enum
         enum_ref: FontSizePreset
         constraints: [NOT_NULL]
@@ -846,6 +935,7 @@ entities:
         ops_exposure: read
 
       - name: source
+        source: source
         type: enum
         enum_ref: AppearanceSource
         constraints: [NOT_NULL]
@@ -855,6 +945,7 @@ entities:
         ops_exposure: read
 
       - name: ownerDefaultThemeMode
+        source: ownerDefaultThemeMode
         type: enum
         enum_ref: ThemeModeSetting
         constraints: [NOT_NULL]
@@ -864,6 +955,7 @@ entities:
         ops_exposure: read
 
       - name: ownerDefaultFontSizePreset
+        source: ownerDefaultFontSizePreset
         type: enum
         enum_ref: FontSizePreset
         constraints: [NOT_NULL]
@@ -873,6 +965,7 @@ entities:
         ops_exposure: read
 
       - name: hasSubAccountOverride
+        source: hasSubAccountOverride
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -881,6 +974,7 @@ entities:
         ops_exposure: read
 
       - name: version
+        source: version
         type: int
         constraints: [NOT_NULL, DEFAULT_1]
         classification: PUBLIC
@@ -889,6 +983,7 @@ entities:
         ops_exposure: read
 
       - name: updatedAt
+        source: updatedAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -900,6 +995,7 @@ entities:
     description: 写入外观与字号偏好的统一 mutation
     fields:
       - name: themeMode
+        source: themeMode
         type: enum
         enum_ref: ThemeModeSetting
         constraints: [NOT_NULL]
@@ -908,6 +1004,7 @@ entities:
         api_exposure: read_write
         ops_exposure: read
       - name: fontSizePreset
+        source: fontSizePreset
         type: enum
         enum_ref: FontSizePreset
         constraints: [NOT_NULL]
@@ -917,6 +1014,7 @@ entities:
         ops_exposure: read
 
       - name: applyScope
+        source: applyScope
         type: enum
         enum_ref: AppearanceApplyScope
         constraints: [NOT_NULL]
@@ -930,6 +1028,7 @@ entities:
     description: 用户基线与分身 override 合成后的继承状态视图
     fields:
       - name: inheritsFromOwner
+        source: inheritsFromOwner
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -938,6 +1037,7 @@ entities:
         ops_exposure: read
 
       - name: overriddenFields
+        source: overriddenFields
         type: "[]string"
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -946,6 +1046,7 @@ entities:
         ops_exposure: read
 
       - name: lastSyncSource
+        source: lastSyncSource
         type: enum
         enum_ref: ProfileSyncSource
         constraints: [NULLABLE]
@@ -955,6 +1056,7 @@ entities:
         ops_exposure: read
 
       - name: lastSyncAt
+        source: lastSyncAt
         type: timestamp
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -966,6 +1068,7 @@ entities:
     description: 当前激活分身上下文快照；供 content/chat/circle/assistant/notification 统一消费
     fields:
       - name: ownerUserId
+        source: ownerUserId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -974,6 +1077,7 @@ entities:
         ops_exposure: read
 
       - name: subAccountId
+        source: subAccountId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -982,6 +1086,7 @@ entities:
         ops_exposure: read
 
       - name: isolationLevel
+        source: isolationLevel
         type: enum
         enum_ref: IsolationLevel
         constraints: [NOT_NULL]
@@ -991,6 +1096,7 @@ entities:
         ops_exposure: read
 
       - name: profileVisibility
+        source: profileVisibility
         type: enum
         enum_ref: ProfileVisibility
         constraints: [NOT_NULL]
@@ -1000,6 +1106,7 @@ entities:
         ops_exposure: read
 
       - name: contextVersion
+        source: contextVersion
         type: int
         constraints: [NOT_NULL, DEFAULT_1]
         classification: PUBLIC
@@ -1008,6 +1115,7 @@ entities:
         ops_exposure: read
 
       - name: personaSnapshotVersion
+        source: personaSnapshotVersion
         type: int
         constraints: [NOT_NULL, DEFAULT_1]
         classification: PUBLIC
@@ -1016,6 +1124,7 @@ entities:
         ops_exposure: read
 
       - name: sourceSurfaceId
+        source: sourceSurfaceId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -1024,6 +1133,7 @@ entities:
         ops_exposure: read
 
       - name: explicitOverride
+        source: explicitOverride
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -1032,6 +1142,7 @@ entities:
         ops_exposure: read
 
       - name: switchedAt
+        source: switchedAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -1043,6 +1154,7 @@ entities:
     description: 用户私有的分身管理列表项视图
     fields:
       - name: subAccountId
+        source: subAccountId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -1051,6 +1163,7 @@ entities:
         ops_exposure: read
 
       - name: displayName
+        source: displayName
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -1059,6 +1172,7 @@ entities:
         ops_exposure: read
 
       - name: userHandle
+        source: userHandle
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -1067,6 +1181,7 @@ entities:
         ops_exposure: read
 
       - name: phone
+        source: phone
         type: string
         constraints: [NULLABLE]
         classification: PII
@@ -1075,6 +1190,7 @@ entities:
         ops_exposure: mask
 
       - name: email
+        source: email
         type: string
         constraints: [NULLABLE]
         classification: PII
@@ -1083,6 +1199,7 @@ entities:
         ops_exposure: mask
 
       - name: avatarUrl
+        source: avatarUrl
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -1091,6 +1208,7 @@ entities:
         ops_exposure: read
 
       - name: backgroundUrl
+        source: backgroundUrl
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -1099,6 +1217,7 @@ entities:
         ops_exposure: read
 
       - name: bio
+        source: bio
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -1107,6 +1226,7 @@ entities:
         ops_exposure: read
 
       - name: isolationLevel
+        source: isolationLevel
         type: enum
         enum_ref: IsolationLevel
         constraints: [NOT_NULL]
@@ -1116,6 +1236,7 @@ entities:
         ops_exposure: read
 
       - name: isPrimary
+        source: isPrimary
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -1124,6 +1245,7 @@ entities:
         ops_exposure: read
 
       - name: isActive
+        source: isActive
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -1132,6 +1254,7 @@ entities:
         ops_exposure: read
 
       - name: status
+        source: status
         type: enum
         enum_ref: PersonaStatus
         constraints: [NOT_NULL]
@@ -1141,6 +1264,7 @@ entities:
         ops_exposure: read
 
       - name: retiredAt
+        source: retiredAt
         type: timestamp
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -1149,6 +1273,7 @@ entities:
         ops_exposure: read
 
       - name: inheritsFromOwner
+        source: inheritsFromOwner
         type: bool
         constraints: [NOT_NULL, DEFAULT_TRUE]
         classification: PUBLIC
@@ -1157,6 +1282,7 @@ entities:
         ops_exposure: read
 
       - name: profileVisibility
+        source: profileVisibility
         type: enum
         enum_ref: ProfileVisibility
         constraints: [NOT_NULL]
@@ -1166,6 +1292,7 @@ entities:
         ops_exposure: read
 
       - name: purposeHint
+        source: purposeHint
         type: string
         constraints: [NULLABLE]
         classification: PII
@@ -1174,6 +1301,7 @@ entities:
         ops_exposure: read
 
       - name: hasAttributedHistory
+        source: hasAttributedHistory
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -1182,6 +1310,7 @@ entities:
         ops_exposure: read
 
       - name: updatedAt
+        source: updatedAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -1190,6 +1319,7 @@ entities:
         ops_exposure: read
 
       - name: lastActivatedAt
+        source: lastActivatedAt
         type: timestamp
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -1201,6 +1331,7 @@ entities:
     description: owner 私有的分身配额与主状态摘要
     fields:
       - name: ownerUserId
+        source: ownerUserId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -1209,6 +1340,7 @@ entities:
         ops_exposure: read
 
       - name: totalCount
+        source: totalCount
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -1217,6 +1349,7 @@ entities:
         ops_exposure: read
 
       - name: quotaLimit
+        source: quotaLimit
         type: int
         constraints: [NOT_NULL, DEFAULT_5]
         classification: PUBLIC
@@ -1225,6 +1358,7 @@ entities:
         ops_exposure: read
 
       - name: remainingCount
+        source: remainingCount
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -1233,6 +1367,7 @@ entities:
         ops_exposure: read
 
       - name: activeSubAccountId
+        source: activeSubAccountId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -1241,6 +1376,7 @@ entities:
         ops_exposure: read
 
       - name: primarySubAccountId
+        source: primarySubAccountId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -1252,6 +1388,7 @@ entities:
     description: owner 在删除/退役前读取的生命周期保护视图
     fields:
       - name: subAccountId
+        source: subAccountId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -1260,6 +1397,7 @@ entities:
         ops_exposure: read
 
       - name: requestedAction
+        source: requestedAction
         type: enum
         enum_ref: PersonaLifecycleAction
         constraints: [NOT_NULL]
@@ -1269,6 +1407,7 @@ entities:
         ops_exposure: read
 
       - name: allowed
+        source: allowed
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -1277,6 +1416,7 @@ entities:
         ops_exposure: read
 
       - name: reason
+        source: reason
         type: enum
         enum_ref: PersonaLifecycleGuardReason
         constraints: [NOT_NULL]
@@ -1286,6 +1426,7 @@ entities:
         ops_exposure: read
 
       - name: hasAttributedHistory
+        source: hasAttributedHistory
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -1294,6 +1435,7 @@ entities:
         ops_exposure: read
 
       - name: requiresSuccessor
+        source: requiresSuccessor
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -1305,6 +1447,7 @@ entities:
     description: 统一个人主页主体读模型；用户与分身最终都映射到此视图
     fields:
       - name: subAccountId
+        source: subAccountId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -1314,6 +1457,7 @@ entities:
         description: 稳定公开主体 ID；个人主页、关系图谱与跨域动作统一以此为真相源
 
       - name: ownerUserId
+        source: ownerUserId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -1323,6 +1467,7 @@ entities:
         description: 仅用于本人管理/上下文透传；公开读取不得返回
 
       - name: subjectType
+        source: subjectType
         type: enum
         enum_ref: ProfileSubjectType
         constraints: [NOT_NULL]
@@ -1332,6 +1477,7 @@ entities:
         ops_exposure: read
 
       - name: userHandle
+        source: userHandle
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -1341,6 +1487,7 @@ entities:
         description: 公开句柄真相源；用于公开路由与展示
 
       - name: username
+        source: username
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -1350,6 +1497,7 @@ entities:
         description: 兼容别名；值与 userHandle 保持一致，不再承担内部主键语义
 
       - name: displayName
+        source: displayName
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -1358,6 +1506,7 @@ entities:
         ops_exposure: read
 
       - name: nicknameCustomized
+        source: nicknameCustomized
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -1367,6 +1516,7 @@ entities:
         description: 是否手动修改过昵称；端侧据此决定本人主页是否展示昵称编辑画笔
 
       - name: avatarUrl
+        source: avatarUrl
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -1375,6 +1525,7 @@ entities:
         ops_exposure: read
 
       - name: backgroundUrl
+        source: backgroundUrl
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -1383,6 +1534,7 @@ entities:
         ops_exposure: read
 
       - name: bio
+        source: bio
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -1391,6 +1543,7 @@ entities:
         ops_exposure: read
 
       - name: identityTags
+        source: identityTags
         type: "[]string"
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -1400,6 +1553,7 @@ entities:
         description: 主页单行身份标签（继承 owner 基线 identityTags，端侧以 · 分隔单行展示）
 
       - name: followerCount
+        source: followerCount
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -1409,6 +1563,7 @@ entities:
         description: 关注该子账号主页的人数；人页统计前台展示为「粉丝」（字段名 followerCount 不变，禁止使用「关注者」）
 
       - name: followingCount
+        source: followingCount
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -1417,6 +1572,7 @@ entities:
         ops_exposure: read
 
       - name: postCount
+        source: postCount
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -1425,6 +1581,7 @@ entities:
         ops_exposure: read
 
       - name: circleCount
+        source: circleCount
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -1433,6 +1590,7 @@ entities:
         ops_exposure: read
 
       - name: likeCount
+        source: likeCount
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -1441,6 +1599,7 @@ entities:
         ops_exposure: read
 
       - name: profileVisibility
+        source: profileVisibility
         type: enum
         enum_ref: ProfileVisibility
         constraints: [NOT_NULL, DEFAULT_PUBLIC]
@@ -1451,6 +1610,7 @@ entities:
         description: 兼容展示枚举；由 isolationLevel 派生（open->public, semi->friends, strict->private）
 
       - name: isolationLevel
+        source: isolationLevel
         type: enum
         enum_ref: IsolationLevel
         constraints: [NOT_NULL]
@@ -1461,6 +1621,7 @@ entities:
         description: 公开访问边界真相源；strict 时公开读取返回不可见语义
 
       - name: inheritsFromOwner
+        source: inheritsFromOwner
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -1469,6 +1630,7 @@ entities:
         ops_exposure: read
 
       - name: overriddenFields
+        source: overriddenFields
         type: "[]string"
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -1477,6 +1639,7 @@ entities:
         ops_exposure: read
 
       - name: updatedAt
+        source: updatedAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -1488,6 +1651,7 @@ entities:
     description: 统一资料编辑 mutation；显式携带同步范围与同步目标
     fields:
       - name: nickname
+        source: nickname
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -1496,6 +1660,7 @@ entities:
         ops_exposure: read
 
       - name: displayName
+        source: displayName
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -1504,6 +1669,7 @@ entities:
         ops_exposure: read
 
       - name: phone
+        source: phone
         type: string
         constraints: [NULLABLE]
         classification: PII
@@ -1512,6 +1678,7 @@ entities:
         ops_exposure: mask
 
       - name: email
+        source: email
         type: string
         constraints: [NULLABLE]
         classification: PII
@@ -1520,6 +1687,7 @@ entities:
         ops_exposure: mask
 
       - name: avatarUrl
+        source: avatarUrl
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -1528,6 +1696,7 @@ entities:
         ops_exposure: read
 
       - name: avatarAssetId
+        source: avatarAssetId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -1537,6 +1706,7 @@ entities:
         description: 头像媒体资产 ID；服务校验 owner/scope/status 后绑定并派生 URL
 
       - name: backgroundUrl
+        source: backgroundUrl
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -1545,6 +1715,7 @@ entities:
         ops_exposure: read
 
       - name: backgroundAssetId
+        source: backgroundAssetId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -1554,6 +1725,7 @@ entities:
         description: 封面媒体资产 ID；服务校验 owner/scope/status 后绑定并派生 URL
 
       - name: bio
+        source: bio
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -1562,6 +1734,7 @@ entities:
         ops_exposure: read
 
       - name: gender
+        source: gender
         type: enum
         enum_ref: Gender
         constraints: [NULLABLE]
@@ -1571,6 +1744,7 @@ entities:
         ops_exposure: read
 
       - name: birthDate
+        source: birthDate
         type: date
         constraints: [NULLABLE]
         classification: PII
@@ -1579,6 +1753,7 @@ entities:
         ops_exposure: read
 
       - name: region
+        source: region
         type: string
         constraints: [NULLABLE]
         classification: PII
@@ -1587,6 +1762,7 @@ entities:
         ops_exposure: read
 
       - name: regionTagRef
+        source: regionTagRef
         type: tag_ref
         constraints: [NULLABLE]
         classification: PII
@@ -1596,6 +1772,7 @@ entities:
         description: 省市两级结构化行政区 tagRef，必须位于 Topic/地理/行政区/中国/ 下，公开展示由 tag-service 派生
 
       - name: occupationTagRef
+        source: occupationTagRef
         type: tag_ref
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -1605,6 +1782,7 @@ entities:
         description: 用户职业标签，V1 单选，必须由 tag-service validateRefs 校验
 
       - name: interestTagRefs
+        source: interestTagRefs
         type: "[]tag_ref"
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -1614,6 +1792,7 @@ entities:
         description: 用户兴趣标签，V1 多选，必须由 tag-service validateRefs 校验
 
       - name: callerRingtoneId
+        source: callerRingtoneId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -1622,6 +1801,7 @@ entities:
         ops_exposure: read
 
       - name: isolationLevel
+        source: isolationLevel
         type: enum
         enum_ref: IsolationLevel
         constraints: [NULLABLE]
@@ -1631,6 +1811,7 @@ entities:
         ops_exposure: read
 
       - name: purposeHint
+        source: purposeHint
         type: string
         constraints: [NULLABLE]
         classification: PII
@@ -1639,6 +1820,7 @@ entities:
         ops_exposure: read
 
       - name: profileVisibility
+        source: profileVisibility
         type: enum
         enum_ref: ProfileVisibility
         constraints: [NULLABLE]
@@ -1648,6 +1830,7 @@ entities:
         ops_exposure: read
 
       - name: applyScope
+        source: applyScope
         type: enum
         enum_ref: ProfileSyncApplyScope
         constraints: [NOT_NULL, DEFAULT_CURRENT_SUBJECT_ONLY]
@@ -1657,6 +1840,7 @@ entities:
         ops_exposure: read
 
       - name: syncTargetIds
+        source: syncTargetIds
         type: "[]string"
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -1665,6 +1849,7 @@ entities:
         ops_exposure: read
 
       - name: fieldsMask
+        source: fieldsMask
         type: "[]string"
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -1676,6 +1861,7 @@ entities:
     description: 我的二维码卡片 wire；payload 为公开主页 HTTPS link + 可撤销 token 摘要，不包含手机号或 bearer token
     fields:
       - name: publicProfileUrl
+        source: publicProfileUrl
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -1684,6 +1870,7 @@ entities:
         ops_exposure: read
 
       - name: qrPayload
+        source: qrPayload
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -1692,6 +1879,7 @@ entities:
         ops_exposure: read
 
       - name: qrTokenId
+        source: qrTokenId
         type: string
         constraints: [NOT_NULL]
         classification: INTERNAL
@@ -1700,6 +1888,7 @@ entities:
         ops_exposure: mask
 
       - name: styleVersion
+        source: styleVersion
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -1708,6 +1897,7 @@ entities:
         ops_exposure: read
 
       - name: avatarUrl
+        source: avatarUrl
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -1716,6 +1906,7 @@ entities:
         ops_exposure: read
 
       - name: displayName
+        source: displayName
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -1724,6 +1915,7 @@ entities:
         ops_exposure: read
 
       - name: region
+        source: region
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -1732,6 +1924,7 @@ entities:
         ops_exposure: read
 
       - name: shareText
+        source: shareText
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -1740,6 +1933,7 @@ entities:
         ops_exposure: read
 
       - name: expiresAt
+        source: expiresAt
         type: timestamp
         constraints: [NULLABLE]
         classification: INTERNAL
@@ -1751,6 +1945,7 @@ entities:
     description: 公开二维码扫码解析结果；只返回规范主页目标与扫码状态
     fields:
       - name: subAccountId
+        source: subAccountId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -1759,6 +1954,7 @@ entities:
         ops_exposure: read
 
       - name: userHandle
+        source: userHandle
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -1767,6 +1963,7 @@ entities:
         ops_exposure: read
 
       - name: publicProfileUrl
+        source: publicProfileUrl
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -1775,6 +1972,7 @@ entities:
         ops_exposure: read
 
       - name: scanStatus
+        source: scanStatus
         type: string
         constraints: [NOT_NULL]
         classification: INTERNAL
@@ -1786,6 +1984,7 @@ entities:
     description: 本人资料编辑页私有凭证摘要，只返回脱敏展示值
     fields:
       - name: credentialType
+        source: credentialType
         type: enum
         enum_ref: CredentialType
         constraints: [NOT_NULL]
@@ -1795,6 +1994,7 @@ entities:
         ops_exposure: read
 
       - name: displayLabel
+        source: displayLabel
         type: string
         constraints: [NOT_NULL]
         classification: PII
@@ -1803,6 +2003,7 @@ entities:
         ops_exposure: mask
 
       - name: isBound
+        source: isBound
         type: bool
         constraints: [NOT_NULL]
         classification: INTERNAL
@@ -1814,6 +2015,7 @@ entities:
     description: 本人资料编辑页私有快照，合并 owner/profile、active persona、凭证摘要、QR 摘要和标签选择
     fields:
       - name: ownerUserId
+        source: ownerUserId
         type: string
         constraints: [NOT_NULL]
         classification: INTERNAL
@@ -1822,6 +2024,7 @@ entities:
         ops_exposure: read
 
       - name: subAccountId
+        source: subAccountId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -1830,6 +2033,7 @@ entities:
         ops_exposure: read
 
       - name: avatarUrl
+        source: avatarUrl
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -1838,6 +2042,7 @@ entities:
         ops_exposure: read
 
       - name: avatarAssetId
+        source: avatarAssetId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -1846,6 +2051,7 @@ entities:
         ops_exposure: read
 
       - name: avatarVersion
+        source: avatarVersion
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -1854,6 +2060,7 @@ entities:
         ops_exposure: read
 
       - name: backgroundUrl
+        source: backgroundUrl
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -1862,6 +2069,7 @@ entities:
         ops_exposure: read
 
       - name: backgroundAssetId
+        source: backgroundAssetId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -1870,6 +2078,7 @@ entities:
         ops_exposure: read
 
       - name: nickname
+        source: nickname
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -1878,6 +2087,7 @@ entities:
         ops_exposure: read
 
       - name: displayName
+        source: displayName
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -1886,6 +2096,7 @@ entities:
         ops_exposure: read
 
       - name: gender
+        source: gender
         type: enum
         enum_ref: Gender
         constraints: [NULLABLE]
@@ -1895,6 +2106,7 @@ entities:
         ops_exposure: read
 
       - name: birthDate
+        source: birthDate
         type: date
         constraints: [NULLABLE]
         classification: PII
@@ -1903,6 +2115,7 @@ entities:
         ops_exposure: read
 
       - name: region
+        source: region
         type: string
         constraints: [NULLABLE]
         classification: PII
@@ -1911,6 +2124,7 @@ entities:
         ops_exposure: read
 
       - name: regionTagRef
+        source: regionTagRef
         type: tag_ref
         constraints: [NULLABLE]
         classification: PII
@@ -1920,6 +2134,7 @@ entities:
         description: 省市两级结构化行政区 tagRef；客户端保存 tagRef，不提交任意展示文案
 
       - name: userHandle
+        source: userHandle
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -1929,6 +2144,7 @@ entities:
         description: 系统分配的趣我圈号，只读，不允许客户端 PATCH
 
       - name: bio
+        source: bio
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -1937,6 +2153,7 @@ entities:
         ops_exposure: read
 
       - name: identityTags
+        source: identityTags
         type: "[]string"
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -1945,6 +2162,7 @@ entities:
         ops_exposure: read
 
       - name: occupationTagRef
+        source: occupationTagRef
         type: tag_ref
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -1953,6 +2171,7 @@ entities:
         ops_exposure: read
 
       - name: interestTagRefs
+        source: interestTagRefs
         type: "[]tag_ref"
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -1961,6 +2180,7 @@ entities:
         ops_exposure: read
 
       - name: phoneCredential
+        source: phoneCredential
         type: ProfileCredentialSummaryWire
         constraints: [NULLABLE]
         classification: PII
@@ -1969,6 +2189,7 @@ entities:
         ops_exposure: mask
 
       - name: qrCard
+        source: qrCard
         type: ProfileQrCardWire
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -1977,6 +2198,7 @@ entities:
         ops_exposure: read
 
       - name: updatedAt
+        source: updatedAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: INTERNAL
@@ -1988,6 +2210,7 @@ entities:
     description: 社交关系搜索结果携带的关系能力位快照
     fields:
       - name: relationState
+        source: relationState
         type: enum
         enum_ref: RelationshipState
         constraints: [NOT_NULL]
@@ -1997,6 +2220,7 @@ entities:
         ops_exposure: read
 
       - name: canFollow
+        source: canFollow
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -2005,6 +2229,7 @@ entities:
         ops_exposure: read
 
       - name: canUnfollow
+        source: canUnfollow
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -2013,6 +2238,7 @@ entities:
         ops_exposure: read
 
       - name: canOpenConversation
+        source: canOpenConversation
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -2021,6 +2247,7 @@ entities:
         ops_exposure: read
 
       - name: canStartVoiceCall
+        source: canStartVoiceCall
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -2029,6 +2256,7 @@ entities:
         ops_exposure: read
 
       - name: canStartVideoCall
+        source: canStartVideoCall
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -2040,6 +2268,7 @@ entities:
     description: 社交关系搜索结果项视图，统一承接“人”的搜索对象
     fields:
       - name: subAccountId
+        source: subAccountId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -2048,6 +2277,7 @@ entities:
         ops_exposure: read
 
       - name: username
+        source: username
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -2057,6 +2287,7 @@ entities:
         description: 兼容别名；与 userHandle 保持一致
 
       - name: userHandle
+        source: userHandle
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -2065,6 +2296,7 @@ entities:
         ops_exposure: read
 
       - name: displayName
+        source: displayName
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -2073,6 +2305,7 @@ entities:
         ops_exposure: read
 
       - name: avatarUrl
+        source: avatarUrl
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -2081,6 +2314,7 @@ entities:
         ops_exposure: read
 
       - name: headline
+        source: headline
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -2089,6 +2323,7 @@ entities:
         ops_exposure: read
 
       - name: chatAvailable
+        source: chatAvailable
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -2097,6 +2332,7 @@ entities:
         ops_exposure: read
 
       - name: relationshipCapability
+        source: relationshipCapability
         type: SocialRelationshipCapabilityView
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -2108,6 +2344,7 @@ entities:
     description: 最近搜索记录视图，供本地与云端同步对齐
     fields:
       - name: entryId
+        source: entryId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -2116,6 +2353,7 @@ entities:
         ops_exposure: read
 
       - name: query
+        source: query
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -2124,6 +2362,7 @@ entities:
         ops_exposure: read
 
       - name: scope
+        source: scope
         type: enum
         enum_ref: SearchScope
         constraints: [NOT_NULL]
@@ -2133,6 +2372,7 @@ entities:
         ops_exposure: read
 
       - name: facet
+        source: facet
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -2141,6 +2381,7 @@ entities:
         ops_exposure: read
 
       - name: updatedAt
+        source: updatedAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC

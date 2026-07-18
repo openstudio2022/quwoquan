@@ -292,7 +292,7 @@ def repair_homepage(issue: HomepageIssue) -> dict[str, Any]:
     manifest = read_json(manifest_path) if manifest_path.is_file() else {}
     if not isinstance(manifest, dict):
         manifest = {}
-    manifest["schemaVersion"] = manifest.get("schemaVersion") or "quwoquan.entity.homepage_manifest"
+    manifest["schema"] = manifest.get("schema") or "quwoquan.entity.homepage_manifest"
     manifest["entityRef"] = entity_ref
     manifest["tagRefs"] = entity.get("tagRefs") or manifest.get("tagRefs") or []
     manifest["assets"] = assets
@@ -314,7 +314,7 @@ def repair_homepage(issue: HomepageIssue) -> dict[str, Any]:
 def write_report(path: Path, issues: list[HomepageIssue], repairs: list[dict[str, Any]]) -> None:
     repo_root = _repo_root()
     payload = {
-        "schemaVersion": "quwoquan.content.homepage.assets.report",
+        "schema": "quwoquan.content.homepage.assets.report",
         "generatedAt": NOW_ISO,
         "issueCount": len(issues),
         "repairCount": len(repairs),

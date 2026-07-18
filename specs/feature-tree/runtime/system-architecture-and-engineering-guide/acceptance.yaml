@@ -42,7 +42,7 @@ sit_acceptance:
         - file: quwoquan_service/services/content-service/tests/api_integration/post_crud_contract__api_integration_test.go
         - file: quwoquan_service/services/content-service/tests/api_integration/report_crud_contract__api_integration_test.go
         - file: quwoquan_app/test/local_contract/cloud/generated_operation_client__contract__local_contract_test.dart
-        - file: quwoquan_app/test/local_contract/cloud/remote/content/post/post_lifecycle_remote__local_contract_test.dart
+        - file: quwoquan_app/test/local_contract/cloud/remote/content/post/post_publication_remote__local_contract_test.dart
     status: pending
     test_evidence:
       primary:
@@ -64,11 +64,11 @@ sit_acceptance:
     story_refs: []
     done_when:
       - "beta/gamma/prod 中 `seed-box` 承载 application plane 的冷启动域：content、integration、chat、user、circle、notification、entity、tag、assistant。"
-      - "`product-ops-service` 独立承载 ops domain、`/v1/ops*` 与 `/v1/control-plane/product*`，不再作为 seed-box child process。"
+      - "`product-ops-service` 独立承载 ops domain、`/ops*` 与 `/control-plane/product*`，不再作为 seed-box child process。"
       - "`recommendation-service` 保持独立，`search-service` 保持独立上游，edge/media/service/data 四运行时平面保持隔离。"
       - "`seed_box_entrypoint.py` 与 `Dockerfile` 实际承载所有 seed-box domains，不能只让 YAML 三源自洽。"
       - "`prod_plane_access_isolation.yaml` 的 service runtime plane 纳入独立 `product-ops-service` governed workload，且 prod root kustomization 能渲染该 workload。"
-      - "Strangler split candidates 的 `route_prefix` 来自 metadata `service.yaml` 真实 path 前缀，而非硬编码 `/v1/<domain>/`。"
+      - "Strangler split candidates 的 `route_prefix` 来自 metadata `service.yaml` 真实 path 前缀，而非硬编码 `/<domain>/`。"
       - "`gateway` / `orchestrator` 不再作为 seed-box 幽灵域出现。"
     contract_refs:
       - quwoquan_service/services/seed-box/deploy/seed_box_entrypoint.py
@@ -87,7 +87,7 @@ sit_acceptance:
         - file: quwoquan_service/services/content-service/tests/api_integration/post_identity_contract__api_integration_test.go
         - file: quwoquan_service/services/content-service/tests/api_integration/report_crud_contract__api_integration_test.go
         - file: quwoquan_app/test/local_contract/cloud/generated_operation_client__contract__local_contract_test.dart
-        - file: quwoquan_app/test/local_contract/cloud/remote/content/post/post_lifecycle_remote__local_contract_test.dart
+        - file: quwoquan_app/test/local_contract/cloud/remote/content/post/post_publication_remote__local_contract_test.dart
     status: pending
     test_evidence:
       primary:
@@ -149,6 +149,9 @@ sit_acceptance:
       - "14 个 metadata domain 的唯一 Registry 完整登记 bounded context、aggregate root、child object、关系、owner 与访问策略。"
       - "跨上下文写只经目标 Command Facade，读只经 named Reader/Slice；owned entity/value object 只经 aggregate root。"
       - "command 绑定 aggregate owner，query 绑定 named Reader/Slice；统一 URL 不被误当聚合边界。"
+      - "调用方版本前置条件仅用于多人快照覆盖；一次提交、命名状态迁移、set/append、projection、external reference 与 runtime session 不接收调用方版本字段。"
+      - "目标状态已满足的命名意图仍持久化 no-op receipt；相同 key 重放原始结果且不递增 aggregate version、不制造伪 outbox 事件。"
+      - "跨 aggregate 写入必须有对象专属持久化检查点；ProfileUpdateProposal applying 能阻断并发 Reject、崩溃续作且不会形成 Persona 已应用但 Proposal rejected。"
       - "页面 page/route/surface/Slice、light/dark、多屏、语义 token、错误恢复与 capability 合同冻结。"
       - "测试矩阵、数据预制、十条 Journey、商用 SLO/运维运营和零兼容删除策略冻结。"
       - "所有未决项有唯一 decision id，不允许实现时 fallback。"
@@ -156,7 +159,12 @@ sit_acceptance:
       planned: []
       recorded:
         - file: quwoquan_ops/tests/local_contract/test_business_object_design_freeze__local_contract_test.py
+        - file: quwoquan_ops/tests/local_contract/test_api_path_unversioned__contract__local_contract_test.py
         - file: quwoquan_service/internal/metadata/graph/ddd_cqrs_guardrails__contract__local_contract_test.go
+        - file: quwoquan_service/internal/metadata/graph/operation_concurrency_calibration__contract__local_contract_test.go
+        - file: quwoquan_service/services/user-service/internal/application/persona/profile_update_proposal/facade__local_contract_test.go
+        - file: quwoquan_service/services/content-service/tests/local_contract/comment_aggregate__command_query__local_contract_test.go
+        - file: quwoquan_service/internal/metadata/validate/allowed_path__contract__local_contract_test.go
     status: partial
     test_evidence:
       primary:
@@ -166,6 +174,7 @@ sit_acceptance:
             - local_contract.runtime.system_architecture_and_engineering_guide.sit4.actor_object_boundary
             - local_contract.runtime.system_architecture_and_engineering_guide.sit4.facade_url_data_ports
             - local_contract.runtime.system_architecture_and_engineering_guide.sit4.page_error_test_contract
+            - local_contract.runtime.system_architecture_and_engineering_guide.sit4.api_path_unversioned
           envs: [local]
       supporting:
         - layer: local_contract

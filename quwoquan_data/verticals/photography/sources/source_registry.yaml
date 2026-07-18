@@ -1,4 +1,4 @@
-schemaVersion: quwoquan.site_source_registry.v1
+schema: quwoquan.site_source_registry
 vertical: photography
 sites:
   - siteId: pinterest

@@ -18,7 +18,7 @@ void main() {
         conversationId: 'conv_001',
         inviteeIds: ['user_002', 'user_003'],
       );
-      expect(result.session.id, isNotEmpty);
+      expect(result.session.callId, isNotEmpty);
       expect(result.session.callType, isNotNull);
       expect(result.session.status, isNotNull);
       expect(result.session.roomId, isNotEmpty);
@@ -26,7 +26,7 @@ void main() {
 
     test('getCallSession 返回指定会话', () async {
       final session = await repo.getCallSession('call_001');
-      expect(session.id, equals('call_001'));
+      expect(session.callId, equals('call_001'));
       expect(session.callType, isNotNull);
       expect(session.status, isNotNull);
     });
@@ -38,17 +38,11 @@ void main() {
     });
 
     test('rejectCall 正常完成', () async {
-      await expectLater(
-        repo.rejectCall('call_001'),
-        completes,
-      );
+      await expectLater(repo.rejectCall('call_001'), completes);
     });
 
     test('hangUp 正常完成', () async {
-      await expectLater(
-        repo.hangUp('call_001'),
-        completes,
-      );
+      await expectLater(repo.hangUp('call_001'), completes);
     });
 
     test('joinRtcToken 返回 token 和 roomId', () async {
@@ -73,31 +67,19 @@ void main() {
     });
 
     test('startScreenShare 正常完成', () async {
-      await expectLater(
-        repo.startScreenShare('call_001'),
-        completes,
-      );
+      await expectLater(repo.startScreenShare('call_001'), completes);
     });
 
     test('stopScreenShare 正常完成', () async {
-      await expectLater(
-        repo.stopScreenShare('call_001'),
-        completes,
-      );
+      await expectLater(repo.stopScreenShare('call_001'), completes);
     });
 
     test('startRecording 正常完成', () async {
-      await expectLater(
-        repo.startRecording('call_001'),
-        completes,
-      );
+      await expectLater(repo.startRecording('call_001'), completes);
     });
 
     test('stopRecording 正常完成', () async {
-      await expectLater(
-        repo.stopRecording('call_001'),
-        completes,
-      );
+      await expectLater(repo.stopRecording('call_001'), completes);
     });
 
     test('listCallHistory 返回列表', () async {
@@ -105,7 +87,7 @@ void main() {
       expect(history, isList);
       expect(history, isNotEmpty);
       final first = history.first;
-      expect(first.id, isNotEmpty);
+      expect(first.callId, isNotEmpty);
       expect(first.callType, isNotNull);
       expect(first.status, equals('ended'));
     });
@@ -129,9 +111,9 @@ void main() {
   });
 
   // ──────────────────────────────────────────────────────────────────
-  // 兼容性契约
+  // 单轨契约
   // ──────────────────────────────────────────────────────────────────
-  group('MockRtcRepository — 兼容性契约', () {
+  group('MockRtcRepository — 单轨契约', () {
     late RtcRepository repo;
 
     setUp(() {
@@ -145,7 +127,7 @@ void main() {
       );
       final wire = result.session.toMap();
       final requiredFields = [
-        'id',
+        'callId',
         'callType',
         'status',
         'initiatorId',
@@ -153,8 +135,11 @@ void main() {
         'participants',
       ];
       for (final field in requiredFields) {
-        expect(wire.containsKey(field), isTrue,
-            reason: 'missing field: $field');
+        expect(
+          wire.containsKey(field),
+          isTrue,
+          reason: 'missing field: $field',
+        );
       }
     });
 
@@ -214,7 +199,7 @@ void main() {
 
     test('getCallSession 不存在的 callId 返回默认', () async {
       final session = await repo.getCallSession('nonexistent_call');
-      expect(session.id, isNotEmpty);
+      expect(session.callId, isNotEmpty);
     });
 
     test('listParticipants 不存在的 callId 返回空列表', () async {
@@ -228,11 +213,8 @@ void main() {
     });
 
     test('initiateCall 空 inviteeIds 正常返回', () async {
-      final result = await repo.initiateCall(
-        callType: 'audio',
-        inviteeIds: [],
-      );
-      expect(result.session.id, isNotEmpty);
+      final result = await repo.initiateCall(callType: 'audio', inviteeIds: []);
+      expect(result.session.callId, isNotEmpty);
     });
 
     test('muteToggle + cameraToggle 连续调用不崩溃', () async {

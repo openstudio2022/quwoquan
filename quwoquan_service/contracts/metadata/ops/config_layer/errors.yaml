@@ -1,4 +1,3 @@
-version: 1
 domain: OPS
 aggregate: ConfigLayer
 description: 平台 ConfigLayer 命令与 Reader 的稳定错误语义。

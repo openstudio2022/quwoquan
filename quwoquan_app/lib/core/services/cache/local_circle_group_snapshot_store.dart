@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -17,10 +18,28 @@ class LocalCircleGroupSnapshotStore {
   final String? _databasePath;
   final DatabaseFactory? _databaseFactory;
   final Map<String, Future<void>> _seedFutures = <String, Future<void>>{};
+  int _activeOperationCount = 0;
+  Completer<void>? _idleCompleter;
   Future<Database>? _databaseFuture;
 
   Future<void> ensureReady() async {
     await _database;
+  }
+
+  Future<void> waitUntilIdle() async {
+    await _idleCompleter?.future;
+  }
+
+  Future<void> close() async {
+    final databaseFuture = _databaseFuture;
+    _databaseFuture = null;
+    if (databaseFuture == null) {
+      return;
+    }
+    final database = await databaseFuture;
+    if (database.isOpen) {
+      await database.close();
+    }
   }
 
   Future<bool> hasAnySnapshot(LocalSearchNamespace namespace) async {
@@ -39,33 +58,53 @@ class LocalCircleGroupSnapshotStore {
     int circleLimit = 12,
     int groupsPerCircle = 20,
   }) async {
-    if (await hasAnySnapshot(namespace)) {
-      return true;
-    }
-    final existing = _seedFutures[namespace.key];
-    if (existing != null) {
+    _beginOperation();
+    try {
+      if (await hasAnySnapshot(namespace)) {
+        return true;
+      }
+      final existing = _seedFutures[namespace.key];
+      if (existing != null) {
+        try {
+          await existing;
+          return true;
+        } catch (_) {
+          return false;
+        }
+      }
+      final future = _seedFromRemote(
+        namespace: namespace,
+        circleRepository: circleRepository,
+        circleGroupQuery: circleGroupQuery,
+        circleLimit: circleLimit,
+        groupsPerCircle: groupsPerCircle,
+      );
+      _seedFutures[namespace.key] = future;
       try {
-        await existing;
+        await future;
         return true;
       } catch (_) {
         return false;
+      } finally {
+        _seedFutures.remove(namespace.key);
       }
-    }
-    final future = _seedFromRemote(
-      namespace: namespace,
-      circleRepository: circleRepository,
-      circleGroupQuery: circleGroupQuery,
-      circleLimit: circleLimit,
-      groupsPerCircle: groupsPerCircle,
-    );
-    _seedFutures[namespace.key] = future;
-    try {
-      await future;
-      return true;
-    } catch (_) {
-      return false;
     } finally {
-      _seedFutures.remove(namespace.key);
+      _endOperation();
+    }
+  }
+
+  void _beginOperation() {
+    if (_activeOperationCount == 0) {
+      _idleCompleter = Completer<void>();
+    }
+    _activeOperationCount += 1;
+  }
+
+  void _endOperation() {
+    _activeOperationCount -= 1;
+    if (_activeOperationCount == 0) {
+      _idleCompleter?.complete();
+      _idleCompleter = null;
     }
   }
 

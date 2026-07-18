@@ -1,5 +1,5 @@
 name: process_trace_log_baseline
-contractVersion: 2
+schema: 2
 description: Short runtime event log schema with metadata-driven kv.
 enums:
   origin:
@@ -45,7 +45,7 @@ io_kv:
   source: metadata_driven
   default_strategy: minimal
 forbidden_fields:
-  - schemaVersion
+  - schema
   - signal
   - logKind
   - env

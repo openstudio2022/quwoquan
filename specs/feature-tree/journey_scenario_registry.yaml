@@ -38,6 +38,18 @@ journeys:
       - UAT_BUSINESS_OBJECT_COMMERCIALIZATION
     status: specified
 
+  - id: cold-start-safe-handoff
+    title: 冷启动安全交接与可观测恢复
+    user_goal: 用户从系统启动页进入 Flutter 欢迎与主壳时，无论配置、路由、首帧或网络观测是否异常，都能在有限时间内看到可解释、可恢复的终态。
+    scenario_refs:
+      - cold-start-safe-handoff-and-telemetry
+    domain_services:
+      - runtime
+      - product-ops-growth
+    uat_refs:
+      - UAT_COLD_START_SAFE_HANDOFF
+    status: specified
+
   - id: content-discovery-to-consumption
     title: 内容发现到消费
     user_goal: 用户从发现页进入内容详情，并完成阅读、互动或跳转作者主页。
@@ -208,6 +220,27 @@ scenarios:
     boundary_notes:
       - UserAccount 只承担账号/认证/安全，公开业务动作使用 Persona；ActorContext 明确 accountId/personaId/deviceActorId。
       - 登录关闭回安全状态，登录成功通过 AuthContinuation 恢复目标动作；不得通过旧路由或 fallback 绕过双目标合同。
+    status: specified
+
+  - id: cold-start-safe-handoff-and-telemetry
+    title: 原生首帧、Flutter 启动恢复与启动遥测
+    parent_journey: cold-start-safe-handoff
+    domain_services:
+      - runtime
+      - product-ops-growth
+    business_capabilities:
+      - runtime/runtime-client-foundation
+      - product-ops-growth/event-ingestion-and-analytics
+    stories:
+      - runtime/runtime-client-foundation/cold-start-performance
+      - product-ops-growth/event-ingestion-and-analytics/analytics-metric-dictionary
+    acceptance_refs:
+      - specs/feature-tree/acceptance.yaml#UAT_COLD_START_SAFE_HANDOFF
+      - specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/acceptance.yaml#GWT6
+      - specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/acceptance.yaml#SIT2
+    boundary_notes:
+      - runtime 负责原生→Flutter handoff、启动状态机与用户恢复面；product-ops-growth 只接收固定、脱敏、可幂等的启动事实并负责投影与告警。
+      - 通用 `/ops/events` 继续要求已验证主体；匿名启动接收面不得变成通用埋点旁路。
     status: specified
 
   - id: global-route-edge-pop-contract

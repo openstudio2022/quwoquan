@@ -189,7 +189,7 @@ func decodePostLifecycleMessage(message rtredis.StreamMessage) (placementports.P
 		return placementports.PostLifecycleEvent{}, fmt.Errorf("Content Post lifecycle occurredAt is invalid")
 	}
 	var payload struct {
-		ID       string `json:"_id"`
+		ID       string `json:"id"`
 		PostID   string `json:"postId"`
 		AuthorID string `json:"authorId"`
 		Status   string `json:"status"`

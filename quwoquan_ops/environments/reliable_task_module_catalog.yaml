@@ -1,6 +1,6 @@
 version: 1
 compatibleRuntimeVersion: ">=1.0.0"
-schemaVersion: 1
+schema: 1
 
 modules:
   chat.api:
@@ -482,7 +482,7 @@ tasks:
     queue: reliabletask.data.content_supply
     partitionKey: partitionKey
     payloadAllowlist:
-      - schemaVersion
+      - schema
       - jobId
       - taskId
       - batchId

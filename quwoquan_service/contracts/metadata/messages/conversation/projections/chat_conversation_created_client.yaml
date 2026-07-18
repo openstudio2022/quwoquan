@@ -1,4 +1,3 @@
-version: 2
 read_model: ChatConversationCreatedRow
 description: |
   CreateConversation 等写入路径返回的 Conversation 文档在端侧仅需会话 id 时的精简投影。
@@ -11,6 +10,5 @@ client_projection:
     - name: conversationId
       dart_type: String
       nullable: false
-      source: _id
-      aliases: [_id, id, conversationId]
+      source: id
       default: "''"

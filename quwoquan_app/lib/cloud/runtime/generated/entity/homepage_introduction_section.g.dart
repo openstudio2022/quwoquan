@@ -23,7 +23,7 @@ class HomepageIntroductionSection {
     return HomepageIntroductionSection(
       kind: m['kind']?.toString() ?? 'overview',
       title: m['title']?.toString() ?? '',
-      bodyMarkdown: m['bodyMarkdown']?.toString() ?? m['body']?.toString() ?? m['markdown']?.toString() ?? null,
+      bodyMarkdown: m['bodyMarkdown']?.toString() ?? null,
       assets: _parseProjectionDtoList(m['assets'], HomepageIntroductionAsset.fromMap),
       timelineItems: _parseProjectionDtoList(m['timelineItems'], HomepageIntroductionTimelineItem.fromMap),
     );

@@ -1,10 +1,10 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "quwoquan_data.coverage_cleanup_audit/2",
+  "$id": "quwoquan_data.coverage_cleanup_audit",
   "title": "Coverage candidate cleanup audit",
   "type": "object",
   "required": [
-    "schemaVersion",
+    "schema",
     "mode",
     "currentLeafCount",
     "quarantineCount",
@@ -19,14 +19,33 @@
     "mutationMode"
   ],
   "properties": {
-    "schemaVersion": { "const": "quwoquan_data.coverage_cleanup_audit/2" },
-    "mode": { "enum": ["audit", "apply"] },
-    "currentLeafCount": { "type": "integer", "minimum": 0 },
-    "quarantineCount": { "type": "integer", "minimum": 0 },
-    "projectedLeafCount": { "type": "integer", "minimum": 0 },
-    "inputSnapshot": { "$ref": "#/$defs/snapshot" },
-    "projectedSnapshot": { "$ref": "#/$defs/snapshot" },
-    "dimensions": { "type": "object" },
+    "mode": {
+      "enum": [
+        "audit",
+        "apply"
+      ]
+    },
+    "currentLeafCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "quarantineCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "projectedLeafCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "inputSnapshot": {
+      "$ref": "#/$defs/snapshot"
+    },
+    "projectedSnapshot": {
+      "$ref": "#/$defs/snapshot"
+    },
+    "dimensions": {
+      "type": "object"
+    },
     "identityAudit": {
       "type": "object",
       "required": [
@@ -38,36 +57,98 @@
         "reason"
       ],
       "properties": {
-        "mergeCount": { "type": "integer", "minimum": 0 },
-        "splitCount": { "type": "integer", "minimum": 0 },
-        "crossRegionCount": { "type": "integer", "minimum": 0 },
-        "unresolvedCount": { "type": "integer", "minimum": 0 },
-        "applyStatus": { "enum": ["safe", "GATE_BLOCK"] },
-        "reason": { "type": "string", "minLength": 1 }
+        "mergeCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "splitCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "crossRegionCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unresolvedCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "applyStatus": {
+          "enum": [
+            "safe",
+            "GATE_BLOCK"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     },
     "coverageGaps": {
       "type": "object",
-      "required": ["saturationStatus", "missingDistrictTypes", "sourceDriverCompletion"],
+      "required": [
+        "saturationStatus",
+        "missingDistrictTypes",
+        "sourceDriverCompletion"
+      ],
       "properties": {
-        "saturationStatus": { "enum": ["not_proven", "proven"] },
-        "missingDistrictTypes": { "type": "array" },
-        "sourceDriverCompletion": { "type": "object" }
+        "saturationStatus": {
+          "enum": [
+            "not_proven",
+            "proven"
+          ]
+        },
+        "missingDistrictTypes": {
+          "type": "array"
+        },
+        "sourceDriverCompletion": {
+          "type": "object"
+        }
       }
     },
-    "machineActionList": { "type": "string", "minLength": 1 },
-    "quarantineLedger": { "type": "string", "minLength": 1 },
-    "mutationMode": { "type": "string", "minLength": 1 }
+    "machineActionList": {
+      "type": "string",
+      "minLength": 1
+    },
+    "quarantineLedger": {
+      "type": "string",
+      "minLength": 1
+    },
+    "mutationMode": {
+      "type": "string",
+      "minLength": 1
+    },
+    "schema": {
+      "const": "quwoquan_data.coverage_cleanup_audit"
+    }
   },
   "$defs": {
     "snapshot": {
       "type": "object",
-      "required": ["sha256", "membershipSha256", "files", "leaves"],
+      "required": [
+        "sha256",
+        "membershipSha256",
+        "files",
+        "leaves"
+      ],
       "properties": {
-        "sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
-        "membershipSha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
-        "files": { "type": "integer", "minimum": 0 },
-        "leaves": { "type": "integer", "minimum": 0 }
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "membershipSha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "files": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "leaves": {
+          "type": "integer",
+          "minimum": 0
+        }
       }
     }
   }

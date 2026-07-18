@@ -1,4 +1,3 @@
-version: 1
 aggregate: AssistantInteractionEvent
 
 entities:
@@ -6,6 +5,7 @@ entities:
     description: 交互事件与反馈
     fields:
       - name: eventId
+        source: eventId
         type: string
         constraints: [PK]
         classification: PUBLIC
@@ -14,6 +14,7 @@ entities:
         ops_exposure: read
 
       - name: runId
+        source: runId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -22,6 +23,7 @@ entities:
         ops_exposure: read
 
       - name: traceId
+        source: traceId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -31,6 +33,7 @@ entities:
         description: OTEL trace 关联
 
       - name: userId
+        source: userId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -39,6 +42,7 @@ entities:
         ops_exposure: read
 
       - name: sessionId
+        source: sessionId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -47,6 +51,7 @@ entities:
         ops_exposure: read
 
       - name: pageType
+        source: pageType
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -55,6 +60,7 @@ entities:
         ops_exposure: read
 
       - name: domainId
+        source: domainId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -63,6 +69,7 @@ entities:
         ops_exposure: read
 
       - name: queryText
+        source: queryText
         type: string
         constraints: [NULLABLE]
         classification: SENSITIVE
@@ -71,6 +78,7 @@ entities:
         ops_exposure: mask
 
       - name: answerText
+        source: answerText
         type: string
         constraints: [NULLABLE]
         classification: SENSITIVE
@@ -79,6 +87,7 @@ entities:
         ops_exposure: mask
 
       - name: userTags
+        source: userTags
         type: "[]string"
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -87,6 +96,7 @@ entities:
         ops_exposure: read
 
       - name: durationMs
+        source: durationMs
         type: int
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -95,6 +105,7 @@ entities:
         ops_exposure: read
 
       - name: explicitThumb
+        source: explicitThumb
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -103,6 +114,7 @@ entities:
         ops_exposure: read
 
       - name: explicitReasonCodes
+        source: explicitReasonCodes
         type: "[]string"
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -111,6 +123,7 @@ entities:
         ops_exposure: read
 
       - name: copiedAnswer
+        source: copiedAnswer
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -119,6 +132,7 @@ entities:
         ops_exposure: read
 
       - name: sharedAnswer
+        source: sharedAnswer
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -127,6 +141,7 @@ entities:
         ops_exposure: read
 
       - name: regeneratedAnswer
+        source: regeneratedAnswer
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -135,6 +150,7 @@ entities:
         ops_exposure: read
 
       - name: styleAdjusted
+        source: styleAdjusted
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -143,6 +159,7 @@ entities:
         ops_exposure: read
 
       - name: modelSwitched
+        source: modelSwitched
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -151,6 +168,7 @@ entities:
         ops_exposure: read
 
       - name: referenceOpened
+        source: referenceOpened
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -159,6 +177,7 @@ entities:
         ops_exposure: read
 
       - name: interrupted
+        source: interrupted
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -167,6 +186,7 @@ entities:
         ops_exposure: read
 
       - name: feedbackTargetMessageId
+        source: feedbackTargetMessageId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -175,6 +195,7 @@ entities:
         ops_exposure: read
 
       - name: correctionText
+        source: correctionText
         type: string
         constraints: [NULLABLE]
         classification: SENSITIVE
@@ -183,6 +204,7 @@ entities:
         ops_exposure: mask
 
       - name: eventType
+        source: eventType
         type: enum
         enum_ref: InteractionEventType
         constraints: [NULLABLE]
@@ -192,6 +214,7 @@ entities:
         ops_exposure: read
 
       - name: feedbackType
+        source: feedbackType
         type: enum
         enum_ref: FeedbackType
         constraints: [NULLABLE]
@@ -201,6 +224,7 @@ entities:
         ops_exposure: read
 
       - name: feedbackScore
+        source: feedbackScore
         type: float
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -209,6 +233,7 @@ entities:
         ops_exposure: read
 
       - name: feedbackText
+        source: feedbackText
         type: string
         constraints: [NULLABLE]
         classification: SENSITIVE
@@ -217,6 +242,7 @@ entities:
         ops_exposure: mask
 
       - name: createdAt
+        source: createdAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC

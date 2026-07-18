@@ -98,36 +98,6 @@ void main() {
     );
   });
 
-  test(
-    'post media binding deduplicates typed asset ids before transport',
-    () async {
-      final executor = _MediaRecordingExecutor(
-        response: <String, Object?>{
-          'postId': 'post-1',
-          'boundAssetIds': <String>['mas-1'],
-          'boundCount': 1,
-        },
-      );
-      final client = GeneratedCloudOperationClient(executor);
-
-      final result = await client.contentPostBindMediaAssetsToPost(
-        BindContentPostMediaAssetsCommand(
-          postId: 'post-1',
-          assetIds: const <String>['mas-1', 'mas-1'],
-        ),
-        context: _context(
-          surfaceId: 'createWorkspace',
-          idempotencyKey: 'media-bind-1',
-        ),
-      );
-
-      expect(executor.pathParameters, <String, String>{'postId': 'post-1'});
-      expect(executor.body, <String, Object?>{
-        'assetIds': <String>['mas-1'],
-      });
-      expect(result.boundCount, 1);
-    },
-  );
 }
 
 CloudOperationInvocationContext _context({

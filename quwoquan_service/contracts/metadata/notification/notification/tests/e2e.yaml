@@ -1,4 +1,3 @@
-version: 1
 entity: Notification
 layer: e2e
 
@@ -19,8 +18,8 @@ scenarios:
 
   - name: notification_center_reads_unread_count
     steps:
-      - app loads unread count from /v1/notifications/unread-count
-      - app opens /v1/notifications and marks one item as read
+      - app loads unread count from /notifications/unread-count
+      - app opens /notifications and marks one item as read
     assertions:
       - unread_count_visible
       - read_state_changes_persist

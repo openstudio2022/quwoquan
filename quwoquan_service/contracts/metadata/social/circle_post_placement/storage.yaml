@@ -1,4 +1,3 @@
-version: 1
 aggregate: CirclePostPlacement
 backend: mongodb
 collections:

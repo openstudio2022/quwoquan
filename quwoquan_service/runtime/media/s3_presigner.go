@@ -19,6 +19,7 @@ type PresignClient interface {
 	PresignPutObject(ctx context.Context, bucket, key string, constraints PutObjectConstraints, ttl time.Duration) (string, error)
 	StatObject(ctx context.Context, bucket, key string) (*ObjectInfo, error)
 	PromoteObject(ctx context.Context, bucket, sourceKey, targetKey string, metadata map[string]string) error
+	CopyObject(ctx context.Context, bucket, sourceKey, targetKey string) error
 }
 
 type PutObjectConstraints struct {
@@ -125,6 +126,26 @@ func (c *S3PresignClient) PromoteObject(ctx context.Context, bucket, sourceKey, 
 		}); err != nil {
 			return fmt.Errorf("s3 delete promoted source object: %w", err)
 		}
+	}
+	return nil
+}
+
+// CopyObject materializes a public delivery slice without deleting the
+// private CAS source. Metadata and content type are preserved by S3's default
+// copy behavior, which is essential for a video Range/MIME response.
+func (c *S3PresignClient) CopyObject(
+	ctx context.Context,
+	bucket string,
+	sourceKey string,
+	targetKey string,
+) error {
+	_, err := c.client.CopyObject(ctx, &s3.CopyObjectInput{
+		Bucket:     aws.String(bucket),
+		Key:        aws.String(targetKey),
+		CopySource: aws.String(bucket + "/" + sourceKey),
+	})
+	if err != nil {
+		return fmt.Errorf("s3 copy public slice: %w", err)
 	}
 	return nil
 }

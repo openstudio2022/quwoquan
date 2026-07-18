@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
@@ -453,6 +454,8 @@ class _PagedFeaturedContentRepository extends MockContentRepository {
     String sort = kFeedSortRecommend,
     String? sessionId,
     String? feedRequestId,
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
   }) async {
     final posts = _postsForCategory(category);
     if (posts.isEmpty) {
@@ -466,6 +469,8 @@ class _PagedFeaturedContentRepository extends MockContentRepository {
         sort: sort,
         sessionId: sessionId,
         feedRequestId: feedRequestId,
+        cancellation: cancellation,
+        deadlineAt: deadlineAt,
       );
     }
     final offset = int.tryParse((cursor ?? '').trim()) ?? 0;
@@ -629,7 +634,7 @@ Map<String, dynamic> _articleMarkdownRaw(
     'type': 'article',
     'contentType': 'article',
     'authorId': post.authorId,
-    'authorNickname': post.displayName,
+    'authorDisplayName': post.displayName,
     'authorAvatarUrl': post.avatarUrl,
     'title': post.title,
     'body': post.body,
@@ -638,10 +643,10 @@ Map<String, dynamic> _articleMarkdownRaw(
     'articleTemplate': post.articleTemplate,
     'articleFontPreset': post.articleFontPreset,
     'articleMarkdown': markdown,
-    'articleMarkdownVersion': 'qwq-rich-md/1',
+    'markdownDialect': 'qwq-rich-md',
     'articleAssetManifest': const <String, dynamic>{
-      'schemaVersion': 1,
-      'articleMarkdownVersion': 'qwq-rich-md/1',
+      'schema': 'article-asset-manifest',
+      'markdownDialect': 'qwq-rich-md',
       'articleMarkdownDigest': 'fixture:multipage',
       'assets': <Map<String, dynamic>>[],
     },
@@ -945,7 +950,12 @@ void main() {
       contains('void didUpdateWidget(covariant VideoPlayerWidget oldWidget)'),
       reason: '视频播放器必须响应 autoPlay 变化，同步切页后的播放/暂停状态。',
     );
-    expect(videoPlayerSource, contains('_syncPlaybackWithAutoPlay();'));
+    expect(
+      videoPlayerSource,
+      contains('_playbackSession.setAutomaticPlaybackEligible(widget.autoPlay);'),
+      reason: 'autoPlay 变更必须经 VideoPlaybackSession 的强类型状态机同步，'
+          '不能回退到播放器私有播放控制。',
+    );
   });
 
   testWidgets('视频书沉浸流尾部显示加载哨兵并预取下一批内容', (tester) async {
@@ -1131,7 +1141,7 @@ void main() {
                     'type': 'image',
                     'contentType': 'image',
                     'authorId': post.authorId,
-                    'authorNickname': post.displayName,
+                    'authorDisplayName': post.displayName,
                     'authorAvatarUrl': post.avatarUrl,
                     'title': '回归标题',
                     'body': '回归正文',
@@ -1203,7 +1213,7 @@ void main() {
                     'type': 'article',
                     'contentType': 'article',
                     'authorId': post.authorId,
-                    'authorNickname': post.displayName,
+                    'authorDisplayName': post.displayName,
                     'authorAvatarUrl': post.avatarUrl,
                     'title': post.title,
                     'body': post.body,
@@ -1273,7 +1283,7 @@ void main() {
               'type': 'photo',
               'contentType': 'image',
               'authorId': post.authorId,
-              'authorNickname': post.displayName,
+              'authorDisplayName': post.displayName,
               'authorAvatarUrl': post.avatarUrl,
               'title': '封面标题',
               'body': '封面正文，需要在浏览器底部展示出来。',
@@ -1519,7 +1529,7 @@ void main() {
               'type': 'photo',
               'contentType': 'image',
               'authorId': post.authorId,
-              'authorNickname': post.displayName,
+              'authorDisplayName': post.displayName,
               'authorAvatarUrl': post.avatarUrl,
               'title': '宽屏标题',
               'body': '宽屏说明正文',
@@ -1582,7 +1592,7 @@ void main() {
             'type': 'photo',
             'contentType': 'image',
             'authorId': post.authorId,
-            'authorNickname': post.displayName,
+            'authorDisplayName': post.displayName,
             'authorAvatarUrl': post.avatarUrl,
             'title': '延后加载标题',
             'body': '延后加载正文',
@@ -1632,7 +1642,7 @@ void main() {
               'type': 'photo',
               'contentType': 'image',
               'authorId': post.authorId,
-              'authorNickname': post.displayName,
+              'authorDisplayName': post.displayName,
               'authorAvatarUrl': post.avatarUrl,
               'title': '贴底标题',
               'body': '贴底说明正文',
@@ -1715,7 +1725,7 @@ void main() {
               'type': 'micro',
               'contentType': 'micro',
               'authorId': post.authorId,
-              'authorNickname': post.displayName,
+              'authorDisplayName': post.displayName,
               'authorAvatarUrl': post.avatarUrl,
               'title': '临时改地点提醒',
               'body': post.body,
@@ -1756,7 +1766,7 @@ void main() {
               'type': 'micro',
               'contentType': 'micro',
               'authorId': post.authorId,
-              'authorNickname': post.displayName,
+              'authorDisplayName': post.displayName,
               'authorAvatarUrl': post.avatarUrl,
               'title': '临时改地点提醒',
               'body': post.body,
@@ -1824,7 +1834,7 @@ void main() {
   testWidgets('视频书交集代表人 span 点击进入用户并透传 feedRequestId 归因', (tester) async {
     final behaviorRepo = MockBehaviorRepository();
     final tracker = ContentBehaviorTracker(
-      repository: behaviorRepo,
+      reporter: behaviorRepo,
       maxBatchSize: 1,
       enablePeriodicFlush: false,
     );
@@ -1872,7 +1882,7 @@ void main() {
               'type': 'micro',
               'contentType': 'micro',
               'authorId': post.authorId,
-              'authorNickname': post.displayName,
+              'authorDisplayName': post.displayName,
               'authorAvatarUrl': post.avatarUrl,
               'title': '临时改地点提醒',
               'body': post.body,
@@ -1917,7 +1927,7 @@ void main() {
   testWidgets('视频书交集显式对象 span 点击进入主页并透传归因', (tester) async {
     final behaviorRepo = MockBehaviorRepository();
     final tracker = ContentBehaviorTracker(
-      repository: behaviorRepo,
+      reporter: behaviorRepo,
       maxBatchSize: 1,
       enablePeriodicFlush: false,
     );
@@ -1987,7 +1997,7 @@ void main() {
               'type': 'micro',
               'contentType': 'micro',
               'authorId': post.authorId,
-              'authorNickname': post.displayName,
+              'authorDisplayName': post.displayName,
               'authorAvatarUrl': post.avatarUrl,
               'title': '临时改地点提醒',
               'body': post.body,
@@ -2030,7 +2040,7 @@ void main() {
   testWidgets('视频书交集显式行动对象 span 点击进入对象并透传归因', (tester) async {
     final behaviorRepo = MockBehaviorRepository();
     final tracker = ContentBehaviorTracker(
-      repository: behaviorRepo,
+      reporter: behaviorRepo,
       maxBatchSize: 1,
       enablePeriodicFlush: false,
     );
@@ -2088,7 +2098,7 @@ void main() {
               'type': 'micro',
               'contentType': 'micro',
               'authorId': post.authorId,
-              'authorNickname': post.displayName,
+              'authorDisplayName': post.displayName,
               'authorAvatarUrl': post.avatarUrl,
               'title': '临时改地点提醒',
               'body': post.body,
@@ -2152,7 +2162,7 @@ void main() {
               'type': 'micro',
               'contentType': 'micro',
               'authorId': post.authorId,
-              'authorNickname': post.displayName,
+              'authorDisplayName': post.displayName,
               'authorAvatarUrl': post.avatarUrl,
               'title': '临时改地点提醒',
               'body': post.body,
@@ -2869,7 +2879,7 @@ void main() {
               'type': 'article',
               'contentType': 'article',
               'authorId': post.authorId,
-              'authorNickname': post.displayName,
+              'authorDisplayName': post.displayName,
               'authorAvatarUrl': post.avatarUrl,
               'title': post.title,
               'body': post.body,
@@ -2878,10 +2888,10 @@ void main() {
               'articleTemplate': post.articleTemplate,
               'articleFontPreset': post.articleFontPreset,
               'articleMarkdown': articleMarkdown,
-              'articleMarkdownVersion': 'qwq-rich-md/1',
+              'markdownDialect': 'qwq-rich-md',
               'articleAssetManifest': const <String, dynamic>{
-                'schemaVersion': 1,
-                'articleMarkdownVersion': 'qwq-rich-md/1',
+                'schema': 'article-asset-manifest',
+                'markdownDialect': 'qwq-rich-md',
                 'articleMarkdownDigest': 'fixture:test-long',
                 'assets': <Map<String, dynamic>>[],
               },
@@ -3296,7 +3306,7 @@ void main() {
               'type': 'article',
               'contentType': 'article',
               'authorId': post.authorId,
-              'authorNickname': post.displayName,
+              'authorDisplayName': post.displayName,
               'authorAvatarUrl': post.avatarUrl,
               'title': post.title,
               'body': post.body,
@@ -3318,10 +3328,10 @@ void main() {
                   '第一页前言。\n\n'
                   '第二段落继续展开说明。\n\n'
                   '第三段落把正文推到下一页。\n',
-              'articleMarkdownVersion': 'qwq-rich-md/1',
+              'markdownDialect': 'qwq-rich-md',
               'articleAssetManifest': <String, dynamic>{
-                'schemaVersion': 1,
-                'articleMarkdownVersion': 'qwq-rich-md/1',
+                'schema': 'article-asset-manifest',
+                'markdownDialect': 'qwq-rich-md',
                 'articleMarkdownDigest': 'fixture:test',
                 'assets': <Map<String, dynamic>>[
                   {
@@ -3934,7 +3944,7 @@ void main() {
           'type': 'article',
           'contentType': 'article',
           'authorId': post.authorId,
-          'authorNickname': post.displayName,
+          'authorDisplayName': post.displayName,
           'authorAvatarUrl': post.avatarUrl,
           'coverUrl': post.coverUrl,
           'articleTemplate': post.articleTemplate,
@@ -3948,10 +3958,10 @@ void main() {
               '## 水合章节\n\n'
               '水合后的正文第一段。\n\n'
               '水合后的正文第二段。\n',
-          'articleMarkdownVersion': 'qwq-rich-md/1',
+          'markdownDialect': 'qwq-rich-md',
           'articleAssetManifest': const <String, dynamic>{
-            'schemaVersion': 1,
-            'articleMarkdownVersion': 'qwq-rich-md/1',
+            'schema': 'article-asset-manifest',
+            'markdownDialect': 'qwq-rich-md',
             'articleMarkdownDigest': 'fixture:hydrated',
             'assets': <Map<String, dynamic>>[],
           },
@@ -3976,7 +3986,7 @@ void main() {
               'type': 'article',
               'contentType': 'article',
               'authorId': post.authorId,
-              'authorNickname': post.displayName,
+              'authorDisplayName': post.displayName,
               'authorAvatarUrl': post.avatarUrl,
               'title': '分发标题',
               'body': '分发摘要正文',
@@ -4032,7 +4042,7 @@ void main() {
               'type': 'article',
               'contentType': 'article',
               'authorId': post.authorId,
-              'authorNickname': post.displayName,
+              'authorDisplayName': post.displayName,
               'authorAvatarUrl': post.avatarUrl,
               'title': '分发标题',
               'body': '分发摘要正文',

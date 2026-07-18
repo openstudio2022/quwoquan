@@ -6,7 +6,7 @@ final homepageIntroductionRepositoryProvider =
       return cloudRepositoryImplForMode(
         mode,
         remote: () => RemoteHomepageIntroductionRepository(
-          httpClient: ref.watch(cloudHttpClientProvider),
+          queryAdapter: ref.watch(_homepageQueryAdapterProvider),
         ),
         mock: () => const MockHomepageIntroductionRepository(),
       );

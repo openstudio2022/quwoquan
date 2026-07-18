@@ -11,7 +11,7 @@ scope:
   in_scope:
   - 业务写模型与搜索读模型分离；读模型派生、可重建/回放。
   - 各域 indexer 灌入统一 ES 索引 quwoquan_objects；多读切片按 objectType/query class 弹性。
-  - search-service + ES 端到端：stackctl package/up/health/verify + 网关 /v1/search 冒烟。
+  - search-service + ES 端到端：stackctl package/up/health/verify + 网关 /search 冒烟。
   out_of_scope:
   - 业务主存储向 ES 迁移。
   - 向量/语义召回在最高 QPS suggest 路径默认开启。
@@ -71,7 +71,7 @@ gwt_acceptance:
     - '[migrated_from_recorded_noncanonical] quwoquan_service/runtime/search/es/query_builder_test.go'
     - '[migrated_from_recorded_noncanonical] quwoquan_service/runtime/search/backend_switch_test.go'
   GWT2:
-    title: search-service + ES 端到端冒烟（stackctl gamma：package/up/health/verify + /v1/search
+    title: search-service + ES 端到端冒烟（stackctl gamma：package/up/health/verify + /search
       200 + feedback 202）
     given:
     - local-gamma 已通过 stackctl 实例化 search-service（容器 search-service:18095，ES quwoquan_objects）。
@@ -79,11 +79,11 @@ gwt_acceptance:
     - stackctl package --env gamma --include-services；up --env gamma --skip-app（含
       backfill）；health --target gamma-local --scope full；verify --env gamma --kind
       all --tier all。
-    - 经 Caddy 网关 POST /v1/search 与 POST /v1/search/feedback。
+    - 经 Caddy 网关 POST /search 与 POST /search/feedback。
     then:
     - up 阶段 quwoquan_objects backfill 完成（total/indexed），places 投影完成；health 全 healthy（search-service
       -> 200）；verify 全 checks passed。
-    - /v1/search 返回 200，信封含 requestId/rankingVersion/experimentBucket 与 hit 级 rankReasons/rankPosition；/v1/search/feedback
+    - /search 返回 200，信封含 requestId/rankingVersion/experimentBucket 与 hit 级 rankReasons/rankPosition；/search/feedback
       返回 202 accepted。
     done_when:
     - 搜索 api_integration 真实链路证据齐全（已迁移 canonical run evidence：`search_smoke_report.json` +
@@ -194,7 +194,7 @@ gwt_acceptance:
   GWT4:
     title: 搜索词热力、相关搜索词与推荐 Feed 排序闭环
     given:
-    - /v1/search query log、/v1/search/feedback、queryheat、Redis Stream、content-service
+    - /search query log、/search/feedback、queryheat、Redis Stream、content-service
       consumer、FeatureStore 与 RuleScorer 已装配。
     when:
     - 用户搜索并点击结果，search-service 记录 query/feedback，queryheat 生成 relatedTerms/termHeat，搜索信号发布到

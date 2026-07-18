@@ -10,7 +10,7 @@ class GreetingReplyResultDto {
 
   factory GreetingReplyResultDto.fromMap(Map<String, dynamic> m) {
     return GreetingReplyResultDto(
-      conversationId: m['conversationId']?.toString() ?? m['promotedConversationId']?.toString() ?? '',
+      conversationId: m['conversationId']?.toString() ?? '',
     );
   }
 

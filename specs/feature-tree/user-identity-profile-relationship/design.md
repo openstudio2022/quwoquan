@@ -178,9 +178,9 @@ spec.md 状态：4 份 spec 已完整基线，acceptance A1-A8 均已定义，�
 
 | API 路径前缀 | 返回视图 | 说明 |
 |-------------|---------|------|
-| `/v1/owner/...` | `OwnerAccount` 视图 | 仅自己可调用，包含凭证、设备、子账号列表、通讯录发现 |
-| `/v1/user/{subAccountId}/...` | `SubAccount` 视图 | 公开侧，主页、关注、作品、互动数据 |
-| `/v1/me/...` | 当前激活 `SubAccount` 的快捷视图 | 等同于 `/v1/user/{activeSub}/...` |
+| `/owner/...` | `OwnerAccount` 视图 | 仅自己可调用，包含凭证、设备、子账号列表、通讯录发现 |
+| `/user/{subAccountId}/...` | `SubAccount` 视图 | 公开侧，主页、关注、作品、互动数据 |
+| `/me/...` | 当前激活 `SubAccount` 的快捷视图 | 等同于 `/user/{activeSub}/...` |
 
 ---
 

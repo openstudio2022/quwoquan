@@ -41,10 +41,10 @@ SSOT：`contracts/metadata/assistant/**/schema.yaml`（及 `assistant_run/fields
 
 ## 2. 盘点结论（缺口）
 
-- **`answerDecision` / `diagnostics`**：已实现路径 B（`partitioned_map` + Dart wrapper 类）；Go `wirepoc` 仍为整段 `json.RawMessage`（字段级 struct 可选后续增强）。
+- **`answerDecision` / `diagnostics`**：已实现路径 B（`partitioned_map` + Dart wrapper 类）。
 - **带 `dart_class` + `library_path` 的 `schema.yaml` 共 26 个**，与 `lib/assistant/generated/contracts/` 下 **26 个** `*.g.dart` **一一对应**，无「有 schema 未注册生成」的缺口。
 - **未使用本路径 `schema.yaml` 的 assistant 元数据**（云聚合 / 技能同意等）：`assistant_run/*`（非单文件 `schema.yaml`）、`skill_consent/*` —— 由 **`assistant_run/fields.yaml` + `service.yaml`** 描述 HTTP 视图与实体；端侧列表/策略等 wire 类型由 **`codegen_app_metadata` → `assistant_cloud_api_wire.g.dart`** 生成（见生成器 `assistant_api_wire_codegen.go`），与 `AssistantRepository` 对齐。
-- **Go 侧**：协议形状 PoC 见 `generated/assistant/wirepoc/`（`run_artifacts` + `assistant_turn` 同构 struct + CI `go test`）；业务服务全面消费需后续接入 assistant-service。
+- **Go 侧**：orphan `generated/assistant/wirepoc/` 已删除（CR-113）；正式 wire 以 Dart generated + assistant-service 主链为准，禁止再落独立 PoC 双轨。
 
 ## 3. 共享 wire fixture（端云对照）
 
@@ -57,4 +57,4 @@ SSOT：`contracts/metadata/assistant/**/schema.yaml`（及 `assistant_run/fields
 
 - 端侧：`make codegen-app`（仓库根）或 `make -C quwoquan_service codegen-app`。
 - 元数据校验：`make -C quwoquan_service verify-metadata`。
-- Go wire PoC：`make -C quwoquan_service test-unit`（已包含 `./generated/assistant/wirepoc/...`）或单独 `go test ./generated/assistant/wirepoc/...`。
+- Go 单测：`make -C quwoquan_service test-unit`（不再包含已删除的 wirepoc 路径）。

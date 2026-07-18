@@ -1,4 +1,3 @@
-version: 1
 service:
   name: entity-service
   domain: entity
@@ -11,7 +10,8 @@ service:
     target_story: app-cloud-business-object-commercial-closure
 api_routes:
   - method: POST
-    path: /v1/homepages/{homepageId}/reviews
+    path: /homepages/{homepageId}/reviews
+
     operation: CreateHomepageReview
     actor: persona
     application:
@@ -23,9 +23,11 @@ api_routes:
       invariant_target: HomepageReview
     request_fields: [rating, body, tagRefs, idempotencyKey]
     response_entity: HomepageReview
-    auth: required
+    security:
+      auth_mode: required
   - method: PATCH
-    path: /v1/homepage-reviews/{reviewId}
+    path: /homepage-reviews/{reviewId}
+
     operation: UpdateHomepageReview
     actor: persona
     application:
@@ -35,11 +37,13 @@ api_routes:
       aggregate_owner: HomepageReview
       mutation_target: HomepageReview
       invariant_target: HomepageReview
-    request_fields: [rating, body, tagRefs, expectedVersion, idempotencyKey]
+    request_fields: [rating, body, tagRefs, idempotencyKey]
     response_entity: HomepageReview
-    auth: required
+    security:
+      auth_mode: required
   - method: DELETE
-    path: /v1/homepage-reviews/{reviewId}
+    path: /homepage-reviews/{reviewId}
+
     operation: DeleteHomepageReview
     actor: persona
     application:
@@ -49,5 +53,6 @@ api_routes:
       aggregate_owner: HomepageReview
       mutation_target: HomepageReview
       invariant_target: HomepageReview
-    request_fields: [expectedVersion, idempotencyKey]
-    auth: required
+    request_fields: [idempotencyKey]
+    security:
+      auth_mode: required

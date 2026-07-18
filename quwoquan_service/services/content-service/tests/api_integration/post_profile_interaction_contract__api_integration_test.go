@@ -17,18 +17,19 @@ import (
 func TestProfileInteractionActivitiesReceived(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	created := createPostWithAuthor(
+	created := submitPublishedPostWithAuthor(
 		t,
 		"author_profile_subject",
-		`{"contentType":"image","title":"互动流目标内容","mediaUrls":["https://example.com/profile.jpg"]}`,
+		`{"contentType":"image","title":"互动流目标内容"}`,
 	)
-	postID, _ := created["_id"].(string)
+	postID, _ := created["postId"].(string)
 	if postID == "" {
 		t.Fatal("missing post id")
 	}
 
-	likeReq := httptest.NewRequest(http.MethodPost, "/v1/content/posts/"+postID+"/like", nil)
+	likeReq := httptest.NewRequest(http.MethodPost, "/content/posts/"+postID+"/like", nil)
 	likeReq.Header.Set("X-Client-User-Id", "actor_like")
+	ensureIdempotencyHeader(likeReq, "profile-interaction-like")
 	likeRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(likeRec, likeReq)
 	if likeRec.Code != http.StatusOK {
@@ -37,11 +38,13 @@ func TestProfileInteractionActivitiesReceived(t *testing.T) {
 
 	commentReq := httptest.NewRequest(
 		http.MethodPost,
-		"/v1/content/posts/"+postID+"/comments",
+		"/content/posts/"+postID+"/comments",
 		strings.NewReader(`{"content":"评论互动"}`),
 	)
 	commentReq.Header.Set("Content-Type", "application/json")
 	commentReq.Header.Set("X-Client-User-Id", "actor_comment")
+	commentReq.Header.Set("X-Client-Sub-Account-Id", "actor_comment")
+	ensureIdempotencyHeader(commentReq, "profile-interaction-comment-received")
 	commentRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(commentRec, commentReq)
 	if commentRec.Code != http.StatusCreated {
@@ -62,7 +65,7 @@ func TestProfileInteractionActivitiesReceived(t *testing.T) {
 
 	req := httptest.NewRequest(
 		http.MethodGet,
-		"/v1/content/sub-accounts/author_profile_subject/interactions/received?limit=10",
+		"/content/sub-accounts/author_profile_subject/interactions/received?limit=10",
 		nil,
 	)
 	rec := httptest.NewRecorder()
@@ -98,23 +101,25 @@ func TestProfileInteractionActivitiesReceived(t *testing.T) {
 func TestProfileInteractionActivitiesSent(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	created := createPostWithAuthor(
+	created := submitPublishedPostWithAuthor(
 		t,
 		"author_for_sent",
-		`{"contentType":"image","title":"发出互动目标","mediaUrls":["https://example.com/sent.jpg"]}`,
+		`{"contentType":"image","title":"发出互动目标"}`,
 	)
-	postID, _ := created["_id"].(string)
+	postID, _ := created["postId"].(string)
 	if postID == "" {
 		t.Fatal("missing post id")
 	}
 
 	commentReq := httptest.NewRequest(
 		http.MethodPost,
-		"/v1/content/posts/"+postID+"/comments",
+		"/content/posts/"+postID+"/comments",
 		strings.NewReader(`{"content":"我发出的评论"}`),
 	)
 	commentReq.Header.Set("Content-Type", "application/json")
 	commentReq.Header.Set("X-Client-User-Id", "actor_sent_comment")
+	commentReq.Header.Set("X-Client-Sub-Account-Id", "actor_sent_comment")
+	ensureIdempotencyHeader(commentReq, "profile-interaction-comment-sent")
 	commentRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(commentRec, commentReq)
 	if commentRec.Code != http.StatusCreated {
@@ -123,7 +128,7 @@ func TestProfileInteractionActivitiesSent(t *testing.T) {
 
 	req := httptest.NewRequest(
 		http.MethodGet,
-		"/v1/content/sub-accounts/actor_sent_comment/interactions/sent?limit=10",
+		"/content/sub-accounts/actor_sent_comment/interactions/sent?limit=10",
 		nil,
 	)
 	rec := httptest.NewRecorder()

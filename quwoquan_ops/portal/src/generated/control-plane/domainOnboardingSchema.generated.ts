@@ -103,7 +103,6 @@ export const domainOnboardingSchema = {
       "replica_ready",
       "backlog_candidate"
     ]
-  },
-  "version": 1
+  }
 } as const;
 export type DomainOnboardingSchema = typeof domainOnboardingSchema;

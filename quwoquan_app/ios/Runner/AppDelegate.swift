@@ -1,16 +1,121 @@
 import AVFoundation
+import CoreTelephony
 import CoreGraphics
 import CoreLocation
 import Flutter
 import UIKit
 
+/// 首帧前只落固定 schema 到本地，不做网络 IO，也不记录账号、异常文本或堆栈。
+///
+/// Flutter 成功装配后会从同一 UserDefaults 迁入可靠启动 journal；下一次成功启动会补传
+/// 本次 native watchdog 的终态。
+private final class StartupNativeTelemetryJournal {
+  private static let eventsKey = "startup_telemetry_native_journal_v1"
+  private static let attemptKey = "startup_telemetry_native_attempt_v1"
+  private static let maxEvents = 32
+
+  private let defaults: UserDefaults
+  private var attemptId = ""
+  private var sequence = 0
+  private var lastElapsedMs = 0
+
+  init(defaults: UserDefaults = .standard) {
+    self.defaults = defaults
+    beginAttempt()
+  }
+
+  func beginAttempt() {
+    attemptId = UUID().uuidString.replacingOccurrences(of: "-", with: "")
+    sequence = 0
+    lastElapsedMs = 0
+    defaults.set(attemptId, forKey: Self.attemptKey)
+  }
+
+  func record(
+    phase: String,
+    elapsedMs: Int,
+    outcome: String,
+    recoverySurface: String = "",
+    failureCode: String = "",
+    failureSource: String = "",
+    deadlineOrigin: String = "ios_process"
+  ) {
+    sequence += 1
+    let normalizedElapsedMs = max(0, elapsedMs)
+    let phaseDurationMs = max(0, normalizedElapsedMs - lastElapsedMs)
+    lastElapsedMs = max(lastElapsedMs, normalizedElapsedMs)
+    var event: [String: Any] = [
+      "eventId": "\(attemptId)_\(sequence)",
+      "attemptId": attemptId,
+      "sequence": sequence,
+      "phase": phase,
+      "phaseDurationMs": phaseDurationMs,
+      "elapsedMs": normalizedElapsedMs,
+      "outcome": outcome,
+      "occurredAt": ISO8601DateFormatter().string(from: Date()),
+      "platform": "ios",
+      "runtimeEnv": "unknown",
+    ]
+    if !recoverySurface.isEmpty {
+      event["recoverySurface"] = recoverySurface
+    }
+    if !failureCode.isEmpty {
+      event["failureCode"] = failureCode
+    }
+    if !failureSource.isEmpty {
+      event["failureSource"] = failureSource
+    }
+    if !deadlineOrigin.isEmpty {
+      event["deadlineOrigin"] = deadlineOrigin
+    }
+    guard let data = try? JSONSerialization.data(withJSONObject: event),
+          let encoded = String(data: data, encoding: .utf8)
+    else {
+      return
+    }
+    var events = defaults.stringArray(forKey: Self.eventsKey) ?? []
+    events.append(encoded)
+    if events.count > Self.maxEvents {
+      events.removeFirst(events.count - Self.maxEvents)
+    }
+    defaults.set(events, forKey: Self.eventsKey)
+  }
+
+  var currentAttemptId: String { attemptId }
+
+  func events() -> [String] {
+    defaults.stringArray(forKey: Self.eventsKey) ?? []
+  }
+
+  func clearEvents() {
+    defaults.removeObject(forKey: Self.eventsKey)
+  }
+}
+
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
+  // 所有构建都使用同一进程钟硬门；Debug 慢启动必须修关键路径，不能形成双时钟。
+  private static let flutterFirstFrameDeadline: TimeInterval = 6
   private let processStartUptime = ProcessInfo.processInfo.systemUptime
   private let videoEditingPlugin = VideoEditingPlugin()
   private let personalAssistantNativeApiPlugin = PersonalAssistantNativeApiPlugin()
   private let commercialAuthPlugin = CommercialAuthPlugin()
   private let aliyunOneTapPlugin = AliyunOneTapPlugin()
+  private let cellularNetworkInfo = CTTelephonyNetworkInfo()
+  private let startupTelemetryJournal = StartupNativeTelemetryJournal()
+  private var flutterFirstFrameWatchdog: DispatchWorkItem?
+  private var nativeRecoveryTerminalReconciliation: DispatchWorkItem?
+  private var deferredPluginRegistry: FlutterPluginRegistry?
+  private var retryFlutterEngine: FlutterEngine?
+  private var generatedPluginsRegistered = false
+  private var flutterFirstFrameConfirmed = false
+  private var startupSafeTerminalConfirmed = false
+  private var appInForeground = false
+  private var nativeRecoveryShown = false
+  private var nativeRecoveryDeadlineReached = false
+  private var firstFrameForegroundRemaining = AppDelegate.flutterFirstFrameDeadline
+  private var foregroundStartedUptime: TimeInterval = 0
+  private weak var startupRecoveryView: UIView?
 
   override func application(
     _ application: UIApplication,
@@ -22,19 +127,33 @@ import UIKit
       registerMethodChannels(binaryMessenger: registrar.messenger())
     }
     window?.backgroundColor = StartupTransitionBackground.color
-    window?.rootViewController?.view.backgroundColor = StartupTransitionBackground.color
+    startupTelemetryJournal.record(
+      phase: "native_pre_flutter",
+      elapsedMs: Int((ProcessInfo.processInfo.systemUptime - processStartUptime) * 1000),
+      outcome: "observed"
+    )
+    appInForeground = true
+    // 预算从进程最早可得的 monotonic 时钟开始，不能在 becomeActive 时重新给完整 6 秒。
+    foregroundStartedUptime = processStartUptime
+    armFlutterFirstFrameWatchdog()
     return launched
   }
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     NSLog("QWQStartup ios_implicit_flutter_engine_initialized")
+    window?.rootViewController?.view.backgroundColor = StartupTransitionBackground.color
     registerStartupTimingsChannel(
       binaryMessenger: engineBridge.applicationRegistrar.messenger()
     )
-    GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    // GeneratedPluginRegistrant 会同步装配 RTC、相机、媒体等重插件。将其延后到 Flutter
+    // 首帧确认后，避免 iOS 静态 LaunchScreen 因插件初始化被永久遮挡。
+    deferredPluginRegistry = engineBridge.pluginRegistry
     registerMethodChannels(
       binaryMessenger: engineBridge.applicationRegistrar.messenger(),
       includeStartupTimings: false
+    )
+    observeNativeFlutterFirstFrame(
+      window?.rootViewController as? FlutterViewController
     )
   }
 
@@ -77,6 +196,53 @@ import UIKit
     oneTapLoginChannel.setMethodCallHandler { [weak self] call, result in
       self?.aliyunOneTapPlugin.handle(call: call, result: result)
     }
+
+    let cellularGenerationChannel = FlutterMethodChannel(
+      name: "quwoquan/network/cellular_generation",
+      binaryMessenger: binaryMessenger
+    )
+    cellularGenerationChannel.setMethodCallHandler { [weak self] call, result in
+      guard call.method == "readGeneration" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      result(self?.readCellularGeneration() ?? "unknown")
+    }
+
+    let deferredPluginsChannel = FlutterMethodChannel(
+      name: "quwoquan/startup/deferred_plugins",
+      binaryMessenger: binaryMessenger
+    )
+    deferredPluginsChannel.setMethodCallHandler { [weak self] call, result in
+      guard call.method == "ensureStartupPostFirstFrame" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      // 此调用只从 Dart 已完成 Shell 首帧的 scheduler 发起。统一走首帧
+      // 确认入口，避免 channel 路径绕过 `flutterFirstFrameConfirmed` 直接注册。
+      self?.confirmFlutterFirstFrame(source: "safe_terminal")
+      result(nil)
+    }
+  }
+
+  private func readCellularGeneration() -> String {
+    var technologies: [String] = []
+    if #available(iOS 12.0, *) {
+      if let technologiesByService = cellularNetworkInfo.serviceCurrentRadioAccessTechnology {
+        technologies = Array(technologiesByService.values)
+      }
+    }
+    if technologies.isEmpty, let current = cellularNetworkInfo.currentRadioAccessTechnology {
+      technologies = [current]
+    }
+    if #available(iOS 14.1, *) {
+      if technologies.contains(CTRadioAccessTechnologyNR)
+        || technologies.contains(CTRadioAccessTechnologyNRNSA)
+      {
+        return "g5"
+      }
+    }
+    return technologies.contains(CTRadioAccessTechnologyLTE) ? "g4" : "unknown"
   }
 
   private func registerStartupTimingsChannel(
@@ -87,18 +253,36 @@ import UIKit
       binaryMessenger: binaryMessenger
     )
     startupTimingsChannel.setMethodCallHandler { [weak self] call, result in
+      guard let self else {
+        result(nil)
+        return
+      }
       if call.method == "recordStartupEvent" {
         let event = call.arguments as? String ?? "{}"
-        NSLog("QWQStartup startup_event %@", event)
+        self.logSafeStartupEvent(event)
+        if event.contains("\"eventName\":\"flutter_first_frame\"") {
+          self.confirmFlutterFirstFrame(source: "dart_channel")
+        }
+        if event.contains("\"eventName\":\"startup_safe_terminal\"") {
+          self.confirmStartupSafeTerminal()
+        }
+        result(nil)
+        return
+      }
+      if call.method == "readStartupJournal" {
+        result([
+          "attemptId": self.startupTelemetryJournal.currentAttemptId,
+          "events": self.startupTelemetryJournal.events(),
+        ])
+        return
+      }
+      if call.method == "clearStartupJournal" {
+        self.startupTelemetryJournal.clearEvents()
         result(nil)
         return
       }
       guard call.method == "readProcessSegments" else {
         result(FlutterMethodNotImplemented)
-        return
-      }
-      guard let self else {
-        result(nil)
         return
       }
       let elapsedMs = Int(
@@ -107,8 +291,413 @@ import UIKit
       result([
         "elapsedSinceProcessStartMs": elapsedMs,
         "deadlineOrigin": "ios_process",
+        "startupAttemptId": self.startupTelemetryJournal.currentAttemptId,
       ])
     }
+  }
+
+  private func logSafeStartupEvent(_ rawEvent: String) {
+    guard let data = rawEvent.data(using: .utf8),
+          let object = try? JSONSerialization.jsonObject(with: data),
+          let event = object as? [String: Any],
+          let eventName = event["eventName"] as? String
+    else {
+      return
+    }
+    if eventName == "startup_bootstrap_failure" {
+      // bootstrap 根已经显示 Flutter recovery；只输出固定 terminal 标识，
+      // 不转写失败详情、异常内容或用户态上下文。
+      NSLog("QWQStartup startup_probe phase=safe_recovery_shown")
+      return
+    }
+    guard eventName == "startup_welcome_sequence" else {
+      NSLog("QWQStartup startup_event_received eventName=%@", eventName)
+      return
+    }
+    logSafeStartupProbeTerminal(event)
+    // 原生层只确认 Flutter 启动事件到达；probe 仅可见终态，不镜像动效 phase/replay。
+    NSLog("QWQStartup startup_event_received eventName=startup_welcome_sequence")
+  }
+
+  private func logSafeStartupProbeTerminal(_ event: [String: Any]) {
+    guard let phase = event["phase"] as? String else { return }
+    switch phase {
+    case "finished":
+      guard let welcomeExitMs = safeStartupProbeDuration(
+        event,
+        preferredField: "welcomeExitMs"
+      ) else {
+        return
+      }
+      let exitReason = safeStartupProbeExitReason(event["exitReason"] as? String)
+      NSLog(
+        "QWQStartup startup_probe phase=finished welcomeExitMs=%d%@",
+        welcomeExitMs,
+        exitReason.isEmpty ? "" : " exitReason=\(exitReason)"
+      )
+    case "main_shell_first_paint":
+      guard let shellFirstPaintMs = safeStartupProbeDuration(
+        event,
+        preferredField: "shellFirstPaintMs"
+      ) else {
+        return
+      }
+      NSLog(
+        "QWQStartup startup_probe phase=main_shell_first_paint shellFirstPaintMs=%d",
+        shellFirstPaintMs
+      )
+    case "welcome_overlay_removed":
+      guard let overlayRemovedMs = safeStartupProbeDuration(
+        event,
+        preferredField: "overlayRemovedMs"
+      ) else {
+        return
+      }
+      NSLog(
+        "QWQStartup startup_probe phase=welcome_overlay_removed overlayRemovedMs=%d",
+        overlayRemovedMs
+      )
+    case "safe_recovery_shown":
+      NSLog("QWQStartup startup_probe phase=safe_recovery_shown")
+    default:
+      return
+    }
+  }
+
+  private func safeStartupProbeDuration(
+    _ event: [String: Any],
+    preferredField: String
+  ) -> Int? {
+    for field in [preferredField, "elapsedSinceProcessStartMs"] {
+      guard let value = event[field] as? NSNumber else { continue }
+      let duration = value.intValue
+      if duration >= 0 && duration <= 300_000 {
+        return duration
+      }
+    }
+    return nil
+  }
+
+  private func safeStartupProbeExitReason(_ value: String?) -> String {
+    guard let value else { return "" }
+    switch value {
+    case "ready_primary", "ready_replay", "deadline", "deadline_fallback":
+      return value
+    default:
+      return ""
+    }
+  }
+
+  override func applicationDidBecomeActive(_ application: UIApplication) {
+    super.applicationDidBecomeActive(application)
+    if !appInForeground {
+      appInForeground = true
+      foregroundStartedUptime = ProcessInfo.processInfo.systemUptime
+    }
+    armFlutterFirstFrameWatchdog()
+  }
+
+  override func applicationWillResignActive(_ application: UIApplication) {
+    if appInForeground && !startupSafeTerminalConfirmed {
+      _ = consumeForegroundFirstFrameBudget(
+        now: ProcessInfo.processInfo.systemUptime
+      )
+    }
+    appInForeground = false
+    foregroundStartedUptime = 0
+    cancelFlutterFirstFrameWatchdog()
+    super.applicationWillResignActive(application)
+  }
+
+  override func applicationWillTerminate(_ application: UIApplication) {
+    cancelFlutterFirstFrameWatchdog()
+    cancelNativeRecoveryTerminalReconciliation()
+    super.applicationWillTerminate(application)
+  }
+
+  private func observeNativeFlutterFirstFrame(
+    _ controller: FlutterViewController?
+  ) {
+    controller?.setFlutterViewDidRenderCallback { [weak self] in
+      self?.confirmFlutterFirstFrame(source: "renderer")
+    }
+  }
+
+  private func confirmFlutterFirstFrame(source: String) {
+    guard !flutterFirstFrameConfirmed else { return }
+    // renderer 首帧是 native watchdog 的物理事实；Dart channel 仅作幂等补充。
+    // 迟到首帧仍须记账并注册延迟插件；recovery 撤销由 safe_terminal 负责。
+    flutterFirstFrameConfirmed = true
+    let elapsedMs = Int((ProcessInfo.processInfo.systemUptime - processStartUptime) * 1000)
+    NSLog("QWQStartup ios_flutter_first_frame elapsedMs=%d source=%@", elapsedMs, source)
+    registerGeneratedPluginsAfterFirstFrame()
+  }
+
+  private func confirmStartupSafeTerminal() {
+    guard !startupSafeTerminalConfirmed else { return }
+    // MethodChannel 可能比 watchdog 主线程任务晚几毫秒。只要 Flutter 已到
+    // routerShell / recovery 安全面，就必须取消看门狗并撤销竞态恢复层。
+    startupSafeTerminalConfirmed = true
+    cancelFlutterFirstFrameWatchdog()
+    cancelNativeRecoveryTerminalReconciliation()
+    dismissNativeStartupRecoveryForSafeTerminalRace()
+    let elapsedMs = Int((ProcessInfo.processInfo.systemUptime - processStartUptime) * 1000)
+    NSLog("QWQStartup ios_startup_safe_terminal elapsedMs=%d", elapsedMs)
+  }
+
+  private func dismissNativeStartupRecoveryForSafeTerminalRace() {
+    guard nativeRecoveryShown else {
+      nativeRecoveryDeadlineReached = false
+      return
+    }
+    startupRecoveryView?.removeFromSuperview()
+    startupRecoveryView = nil
+    nativeRecoveryShown = false
+    nativeRecoveryDeadlineReached = false
+    NSLog("QWQStartup ios_startup_safe_terminal_race_dismissed")
+  }
+
+  private func registerGeneratedPluginsAfterFirstFrame() {
+    guard !generatedPluginsRegistered, let deferredPluginRegistry else { return }
+    generatedPluginsRegistered = true
+    GeneratedPluginRegistrant.register(with: deferredPluginRegistry)
+    NSLog("QWQStartup ios_generated_plugins_registered_after_first_frame")
+  }
+
+  private func armFlutterFirstFrameWatchdog() {
+    guard !startupSafeTerminalConfirmed,
+          !nativeRecoveryShown,
+          !nativeRecoveryDeadlineReached,
+          appInForeground
+    else {
+      return
+    }
+    cancelFlutterFirstFrameWatchdog()
+    let remaining = consumeForegroundFirstFrameBudget(
+      now: ProcessInfo.processInfo.systemUptime
+    )
+    guard remaining > 0 else {
+      triggerNativeFirstFrameDeadline()
+      return
+    }
+    let watchdog = DispatchWorkItem { [weak self] in
+      self?.triggerNativeFirstFrameDeadline()
+    }
+    flutterFirstFrameWatchdog = watchdog
+    DispatchQueue.main.asyncAfter(deadline: .now() + remaining, execute: watchdog)
+  }
+
+  private func cancelFlutterFirstFrameWatchdog() {
+    flutterFirstFrameWatchdog?.cancel()
+    flutterFirstFrameWatchdog = nil
+  }
+
+  private func scheduleNativeRecoveryTerminal(
+    elapsedMs: Int,
+    firstFrameMissing: Bool
+  ) {
+    cancelNativeRecoveryTerminalReconciliation()
+    let reconciliation = DispatchWorkItem { [weak self] in
+      guard let self,
+            !self.startupSafeTerminalConfirmed,
+            self.nativeRecoveryShown,
+            self.nativeRecoveryDeadlineReached
+      else {
+        return
+      }
+      self.recordNativeStartupTerminal(
+        elapsedMs: elapsedMs,
+        firstFrameMissing: firstFrameMissing
+      )
+    }
+    nativeRecoveryTerminalReconciliation = reconciliation
+    DispatchQueue.main.asyncAfter(
+      deadline: .now() + .milliseconds(120),
+      execute: reconciliation
+    )
+  }
+
+  private func cancelNativeRecoveryTerminalReconciliation() {
+    nativeRecoveryTerminalReconciliation?.cancel()
+    nativeRecoveryTerminalReconciliation = nil
+  }
+
+  private func consumeForegroundFirstFrameBudget(now: TimeInterval) -> TimeInterval {
+    guard appInForeground, !startupSafeTerminalConfirmed else {
+      return firstFrameForegroundRemaining
+    }
+    if foregroundStartedUptime > 0 {
+      let elapsed = max(0, now - foregroundStartedUptime)
+      firstFrameForegroundRemaining = max(0, firstFrameForegroundRemaining - elapsed)
+      foregroundStartedUptime = now
+    }
+    return firstFrameForegroundRemaining
+  }
+
+  private func triggerNativeFirstFrameDeadline() {
+    guard !startupSafeTerminalConfirmed,
+          !nativeRecoveryShown,
+          !nativeRecoveryDeadlineReached,
+          appInForeground
+    else {
+      return
+    }
+    let elapsedMs = Int((ProcessInfo.processInfo.systemUptime - processStartUptime) * 1000)
+    // 主线程再次核对，避免 MethodChannel 晚几毫秒导致假阳性 nativeRecovery。
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      guard !self.startupSafeTerminalConfirmed,
+            !self.nativeRecoveryShown,
+            !self.nativeRecoveryDeadlineReached,
+            self.appInForeground
+      else {
+        return
+      }
+      self.nativeRecoveryDeadlineReached = true
+      self.recordNativeStartupDeadline(
+        elapsedMs: elapsedMs,
+        firstFrameMissing: !self.flutterFirstFrameConfirmed
+      )
+      self.showNativeStartupRecovery(elapsedMs: elapsedMs, recordDeadline: false)
+    }
+  }
+
+  private func recordNativeStartupDeadline(
+    elapsedMs: Int,
+    firstFrameMissing: Bool
+  ) {
+    let outcome = firstFrameMissing ? "native_first_frame_timeout" : "startup_deadline"
+    let failureCode = firstFrameMissing ? "OPS.SYSTEM.startup_native_first_frame_timeout" : "OPS.SYSTEM.startup_initialization_failed"
+    let timeoutLog = firstFrameMissing
+      ? "ios_native_first_frame_timeout"
+      : "ios_startup_safe_terminal_timeout"
+    NSLog(
+      "QWQStartup %@ elapsedMs=%d",
+      timeoutLog,
+      elapsedMs
+    )
+    startupTelemetryJournal.record(
+      phase: "recovery",
+      elapsedMs: elapsedMs,
+      outcome: outcome,
+      recoverySurface: "native_recovery",
+      failureCode: failureCode,
+      failureSource: "native_watchdog"
+    )
+    // native recovery 先可见；120ms 内收到 safe_terminal 视为同帧竞态，
+    // 不能与 Flutter terminal 同时落为同一 attempt 的两个终态。
+    scheduleNativeRecoveryTerminal(
+      elapsedMs: elapsedMs,
+      firstFrameMissing: firstFrameMissing
+    )
+  }
+
+  private func recordNativeStartupTerminal(
+    elapsedMs: Int,
+    firstFrameMissing: Bool
+  ) {
+    guard !startupSafeTerminalConfirmed else { return }
+    let failureCode = firstFrameMissing
+      ? "OPS.SYSTEM.startup_native_first_frame_timeout"
+      : "OPS.SYSTEM.startup_initialization_failed"
+    startupTelemetryJournal.record(
+      phase: "terminal",
+      elapsedMs: elapsedMs,
+      outcome: "recovery",
+      recoverySurface: "native_recovery",
+      failureCode: failureCode,
+      failureSource: "native_watchdog"
+    )
+  }
+
+  private func showNativeStartupRecovery() {
+    let elapsedMs = Int((ProcessInfo.processInfo.systemUptime - processStartUptime) * 1000)
+    showNativeStartupRecovery(elapsedMs: elapsedMs, recordDeadline: true)
+  }
+
+  private func showNativeStartupRecovery(elapsedMs: Int, recordDeadline: Bool) {
+    guard !startupSafeTerminalConfirmed, !nativeRecoveryShown, let window else { return }
+    nativeRecoveryShown = true
+    if recordDeadline {
+      nativeRecoveryDeadlineReached = true
+      recordNativeStartupDeadline(
+        elapsedMs: elapsedMs,
+        firstFrameMissing: !flutterFirstFrameConfirmed
+      )
+    }
+
+    let recovery = UIView(frame: window.bounds)
+    recovery.backgroundColor = StartupTransitionBackground.color
+    recovery.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+
+    let title = UILabel()
+    title.text = "应用启动遇到问题"
+    title.textColor = .white
+    title.font = .systemFont(ofSize: 22, weight: .semibold)
+    title.textAlignment = .center
+    title.translatesAutoresizingMaskIntoConstraints = false
+
+    let message = UILabel()
+    message.text = "暂未显示应用界面，请重试或重新打开应用。"
+    message.textColor = .white
+    message.font = .systemFont(ofSize: 15)
+    message.numberOfLines = 0
+    message.textAlignment = .center
+    message.translatesAutoresizingMaskIntoConstraints = false
+
+    let retry = UIButton(type: .system)
+    retry.setTitle("重试", for: .normal)
+    retry.setTitleColor(StartupTransitionBackground.color, for: .normal)
+    retry.backgroundColor = .white
+    retry.layer.cornerRadius = 10
+    retry.addTarget(self, action: #selector(retryFlutterStartup), for: .touchUpInside)
+    retry.translatesAutoresizingMaskIntoConstraints = false
+
+    recovery.addSubview(title)
+    recovery.addSubview(message)
+    recovery.addSubview(retry)
+    NSLayoutConstraint.activate([
+      title.centerXAnchor.constraint(equalTo: recovery.centerXAnchor),
+      title.centerYAnchor.constraint(equalTo: recovery.centerYAnchor, constant: -50),
+      message.leadingAnchor.constraint(equalTo: recovery.leadingAnchor, constant: 32),
+      message.trailingAnchor.constraint(equalTo: recovery.trailingAnchor, constant: -32),
+      message.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 16),
+      retry.centerXAnchor.constraint(equalTo: recovery.centerXAnchor),
+      retry.topAnchor.constraint(equalTo: message.bottomAnchor, constant: 28),
+      retry.widthAnchor.constraint(equalToConstant: 108),
+      retry.heightAnchor.constraint(equalToConstant: 44),
+    ])
+    window.addSubview(recovery)
+    startupRecoveryView = recovery
+  }
+
+  @objc private func retryFlutterStartup() {
+    startupRecoveryView?.removeFromSuperview()
+    startupRecoveryView = nil
+    nativeRecoveryShown = false
+    nativeRecoveryDeadlineReached = false
+    cancelNativeRecoveryTerminalReconciliation()
+    startupTelemetryJournal.beginAttempt()
+    startupTelemetryJournal.record(phase: "native_pre_flutter", elapsedMs: 0, outcome: "retry")
+    flutterFirstFrameConfirmed = false
+    startupSafeTerminalConfirmed = false
+    firstFrameForegroundRemaining = Self.flutterFirstFrameDeadline
+    foregroundStartedUptime = ProcessInfo.processInfo.systemUptime
+    generatedPluginsRegistered = false
+    let engine = FlutterEngine(name: "qwq_startup_retry_\(UUID().uuidString)")
+    guard engine.run() else {
+      showNativeStartupRecovery()
+      return
+    }
+    retryFlutterEngine = engine
+    deferredPluginRegistry = engine
+    registerStartupTimingsChannel(binaryMessenger: engine.binaryMessenger)
+    registerMethodChannels(binaryMessenger: engine.binaryMessenger, includeStartupTimings: false)
+    let controller = FlutterViewController(engine: engine, nibName: nil, bundle: nil)
+    window?.rootViewController = controller
+    window?.makeKeyAndVisible()
+    observeNativeFlutterFirstFrame(controller)
+    armFlutterFirstFrameWatchdog()
   }
 
   override func application(

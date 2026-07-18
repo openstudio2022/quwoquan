@@ -32,6 +32,7 @@ import cv2  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from core.io import read_json, write_json  # noqa: E402
+from core.control_types import ContentType, PostStage  # noqa: E402
 from core.data_issue import (  # noqa: E402
     DataIssueCode,
     DataIssueStage,
@@ -45,19 +46,19 @@ from core.paths import (  # noqa: E402
     ensure_execution_command_layout,
     ensure_execution_layout,
 )
-from content.post.evidence_bundle import public_byline_label  # noqa: E402
+from content.post.article.evidence_bundle import public_byline_label  # noqa: E402
 from content.post.object_index import read_brief_object, write_brief_object  # noqa: E402
-from content.post.base_draft import save_base_draft_ledger  # noqa: E402
-from content.post.draft_io import read_writing_pack, write_agent_draft  # noqa: E402
+from content.post.article.base_draft import save_base_draft_ledger  # noqa: E402
+from content.post.article.draft_io import read_writing_pack, write_agent_draft  # noqa: E402
 from verify.post_verify import verify_scope  # noqa: E402
 from content.source.source_unit import resolve_entity_object_dir, write_source_unit  # noqa: E402
 from content.execution.stage_reports import stage_result_path, write_repair_report  # noqa: E402
-from content.post.route_analysis import analyze_route_ref  # noqa: E402
-from content.post.entity_workflow import (  # noqa: E402
+from content.post.article.route_analysis import analyze_route_ref  # noqa: E402
+from content.post.article.entity_composition import (  # noqa: E402
     build_entity_writing_pack,
     is_entity_brief,
-    review_entity_draft,
 )
+from content.post.article.entity_review import review_entity_draft  # noqa: E402
 from content.post.materialize_apply import materialize_posts  # noqa: E402
 from content.post.handler import PostStageRequest, handle_post  # noqa: E402
 from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
@@ -369,7 +370,7 @@ def test_compose_brief_persists_reassigned_base_source_ref():
     save_base_draft_ledger(
         EXECUTION_ID,
         {
-            "schemaVersion": "quwoquan_data.base_draft_ledger",
+            "schema": "quwoquan_data.base_draft_ledger",
             "assignments": {initial_ref: "三星堆博物馆_图集"},
         },
     )
@@ -402,8 +403,8 @@ def test_compose_brief_persists_reassigned_base_source_ref():
     handle_post(
         PostStageRequest(
             execution_id=EXECUTION_ID,
-            content_type="article",
-            stage="compose-brief",
+            content_type=ContentType.ARTICLE,
+            stage=PostStage.COMPOSE_BRIEF,
             refs=(REF,),
             writer_group_size=1,
             materialize=False,

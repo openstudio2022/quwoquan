@@ -38,7 +38,6 @@ final class AliyunOneTapPlugin {
         return;
       case "probe":
         Map<String, Object> probe = new HashMap<>();
-        probe.put("isAvailable", isAvailable());
         // 反射桥当前只能在授权页打开后取得 token，不能形成入口阶段可提交凭据。
         // Flutter 据此 fail-closed 隐藏入口，避免用点击后的失败探测能力。
         probe.put(

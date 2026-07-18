@@ -1,4 +1,3 @@
-version: 1
 aggregate: CirclePostPlacement
 entities:
   CirclePostPlacement:
@@ -29,7 +28,6 @@ entities:
     description: 更新放置运营状态的强类型命令输入。
     fields:
       - { name: enabled, type: bool, constraints: [NOT_NULL] }
-      - { name: expectedVersion, type: int64, constraints: [NOT_NULL] }
 
   CirclePostPlacementCommandResult:
     description: 放置命令提交回执。

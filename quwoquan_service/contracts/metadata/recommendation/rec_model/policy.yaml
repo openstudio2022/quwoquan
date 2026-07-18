@@ -172,7 +172,6 @@ segmentTargeting:
   weightDeltas:
     formatMatch: 0.4
     topicMatch: 0.2
-version: 1
 weightPresets:
   control:
     audienceMatch: 0.8

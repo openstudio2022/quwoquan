@@ -20,7 +20,7 @@ import 'package:quwoquan_app/ui/content/entry/services/create_draft_local_storag
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../support/cloud_services/content_facet_overrides.dart';
 import '../../../../support/recording_content_media_facet.dart';
-import '../../../../support/recording_content_post_lifecycle_writer.dart';
+import '../../../../support/recording_content_post_publication_writer.dart';
 
 class _AuthedSessionStore implements AuthSessionStore {
   const _AuthedSessionStore();
@@ -117,7 +117,7 @@ class _CreateHostApp extends StatelessWidget {
 
 Widget _buildApp(
   MockContentRepository repository,
-  RecordingContentPostLifecycleWriter postLifecycle,
+  RecordingContentPostPublicationWriter postPublication,
 ) {
   final router = GoRouter(
     routes: <RouteBase>[
@@ -149,8 +149,8 @@ Widget _buildApp(
     overrides: [
       currentUserIdProvider.overrideWithValue('user_001'),
       ...mockContentFacetOverrides(repository),
-      createContentPostLifecycleCommandWriterProvider.overrideWithValue(
-        postLifecycle,
+      createContentPostPublicationWriterProvider.overrideWithValue(
+        postPublication,
       ),
       createContentMediaFacetProvider.overrideWithValue(
         RecordingContentMediaFacet(),
@@ -193,12 +193,12 @@ void main() {
 
   testWidgets('退出保存后可从本地草稿页恢复，并在发布成功后清稿', (tester) async {
     final repository = MockContentRepository();
-    final postLifecycle = RecordingContentPostLifecycleWriter();
+    final postPublication = RecordingContentPostPublicationWriter();
     final draftRepository = SharedPreferencesCreateDraftRepository(
       scopeKey: CreateDraftLocalStorage.scopeKeyForUser('user_001'),
     );
 
-    await tester.pumpWidget(_buildApp(repository, postLifecycle));
+    await tester.pumpWidget(_buildApp(repository, postPublication));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('打开创作'));
@@ -237,8 +237,7 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     await tester.pump(const Duration(seconds: 1));
 
-    expect(postLifecycle.createCommands, hasLength(1));
-    expect(postLifecycle.publishCommands, hasLength(1));
+    expect(postPublication.submitCommands, hasLength(1));
     expect(find.byKey(TestKeys.localDraftPage), findsOneWidget);
     expect(find.byKey(TestKeys.localDraftEmptyState), findsOneWidget);
     expect((await draftRepository.load()).drafts, isEmpty);

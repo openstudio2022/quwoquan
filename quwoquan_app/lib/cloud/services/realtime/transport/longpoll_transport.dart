@@ -15,7 +15,7 @@ typedef LongPollEventCallback =
     void Function(List<Map<String, dynamic>> events);
 
 /// Long-polling transport for idle (app foreground, no active chat) state.
-/// Polls `GET /v1/chat/realtime/poll` with long-hold semantics.
+/// Polls `GET /chat/realtime/poll` with long-hold semantics.
 class LongPollTransport {
   LongPollTransport({
     required this.config,

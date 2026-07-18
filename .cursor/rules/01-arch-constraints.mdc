@@ -80,7 +80,9 @@ domain ← application ← adapters ← infrastructure（单向依赖）
   root 并通过 typed reference/event 协作，不能为了兼容旧路径保留双重身份。
 - Registry/ContractGraph 只允许单轨当前 schema：禁止 `version`、`schemaVersion`、
   `registryRevision`、`_schemas/v*`、legacy parser、migration adapter 和版本选择分支；
-  聚合并发 `expectedVersion`、事件顺序与正式 `/v1` 资源路径不属于兼容版本。
+  聚合并发 `expectedVersion`、事件顺序不属于兼容版本。HTTP API 资源路径禁止携带
+  `/vN`、`/internal/vN`、`/callbacks/vN` 版本段，只允许无版本资源路径（如 `/content/posts`、
+  `/internal/recommendation/...`）。
 
 ### 1.3 runtime 统一能力
 

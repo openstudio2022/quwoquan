@@ -39,9 +39,20 @@ class AlphaAuthPublicPlaneApiIntegrationTest(unittest.TestCase):
         except urllib.error.HTTPError as error:
             return error.code, json.loads(error.read().decode("utf-8"))
 
+    def _get(self, path: str) -> tuple[int, dict[str, object]]:
+        with urllib.request.urlopen(f"{self.base_url}{path}", timeout=5) as response:
+            return response.status, json.loads(response.read().decode("utf-8"))
+
+    def test_homepage_search_has_alpha_mock_contract_projection(self) -> None:
+        status, payload = self._get("/homepages/search?query=%E8%A5%BF%E6%B9%96&limit=1")
+
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["items"], [])
+        self.assertTrue(payload["mockBoundary"])
+
     def test_bare_alpha_send_and_login_routes_are_json_and_metadata_aligned(self) -> None:
         send_status, send_payload = self._post(
-            "/v1/auth/otp/send",
+            "/auth/otp/send",
             {"phone": "18013813909", "deviceId": "alpha-device", "platform": "ios"},
         )
         self.assertEqual(send_status, 200)
@@ -49,7 +60,7 @@ class AlphaAuthPublicPlaneApiIntegrationTest(unittest.TestCase):
         self.assertNotIn("123456", json.dumps(send_payload))
 
         login_status, login_payload = self._post(
-            "/v1/auth/login/phone",
+            "/auth/login/phone",
             {
                 "phone": "18013813909",
                 "otpCode": "123456",
@@ -64,9 +75,9 @@ class AlphaAuthPublicPlaneApiIntegrationTest(unittest.TestCase):
         self.assertEqual(login_payload["identityOrigin"], "phone")
 
     def test_wrong_code_returns_json_error_instead_of_html_404(self) -> None:
-        self._post("/v1/auth/otp/send", {"phone": "13900000000"})
+        self._post("/auth/otp/send", {"phone": "13900000000"})
         status, payload = self._post(
-            "/v1/auth/login/phone",
+            "/auth/login/phone",
             {
                 "phone": "13900000000",
                 "otpCode": "000000",

@@ -39,7 +39,7 @@ const rtcWsTypeScreenShareStopped = 'screen_share.stopped';
 /// WS payload for metadata event `CallInitiated` (`client_ws_type` = [rtcWsTypeCallInitiated]).
 class RtcCallInitiatedPayload {
   const RtcCallInitiatedPayload({
-    this.id,
+    this.callId,
     this.callType,
     this.initiatorId,
     this.initiatorRingtoneId,
@@ -49,7 +49,7 @@ class RtcCallInitiatedPayload {
     this.createdAt,
   });
 
-  final String? id;
+  final String? callId;
   final String? callType;
   final String? initiatorId;
   final String? initiatorRingtoneId;
@@ -60,7 +60,7 @@ class RtcCallInitiatedPayload {
 
   factory RtcCallInitiatedPayload.fromWire(Map<String, dynamic> payload) {
     return RtcCallInitiatedPayload(
-      id: payload['_id'] as String?,
+      callId: payload['callId'] as String?,
       callType: payload['callType'] as String?,
       initiatorId: payload['initiatorId'] as String?,
       initiatorRingtoneId: payload['initiatorRingtoneId'] as String?,
@@ -156,7 +156,7 @@ class RtcCallConnectedPayload {
 /// WS payload for metadata event `CallEnded` (`client_ws_type` = [rtcWsTypeCallEnded]).
 class RtcCallEndedPayload {
   const RtcCallEndedPayload({
-    this.id,
+    this.callId,
     this.callType,
     this.initiatorId,
     this.conversationId,
@@ -167,7 +167,7 @@ class RtcCallEndedPayload {
     this.endedAt,
   });
 
-  final String? id;
+  final String? callId;
   final String? callType;
   final String? initiatorId;
   final String? conversationId;
@@ -179,7 +179,7 @@ class RtcCallEndedPayload {
 
   factory RtcCallEndedPayload.fromWire(Map<String, dynamic> payload) {
     return RtcCallEndedPayload(
-      id: payload['_id'] as String?,
+      callId: payload['callId'] as String?,
       callType: payload['callType'] as String?,
       initiatorId: payload['initiatorId'] as String?,
       conversationId: payload['conversationId'] as String?,
@@ -380,7 +380,7 @@ final class RtcScreenShareStoppedWsPayload extends RtcWsPayload {
   final RtcScreenShareStoppedPayload data;
 }
 
-/// Unmodeled or future gateway `type` values; preserves raw map for logging/forward compat.
+/// Unmodeled or future gateway `type` values; preserves raw map for logging and diagnostics.
 final class RtcWsUnknownPayload extends RtcWsPayload {
   const RtcWsUnknownPayload(this.wireType, this.raw);
 
@@ -438,7 +438,7 @@ const rtcWsKnownWireTypes = <String>[
 
 /// `CallInitiated.payload_fields`（codegen 与 events.yaml 同步）。
 const rtcCallInitiatedPayloadWireKeys = <String>[
-  '_id',
+  'callId',
   'callType',
   'initiatorId',
   'initiatorRingtoneId',
@@ -480,7 +480,7 @@ const rtcCallConnectedPayloadWireKeys = <String>[
 
 /// `CallEnded.payload_fields`（codegen 与 events.yaml 同步）。
 const rtcCallEndedPayloadWireKeys = <String>[
-  '_id',
+  'callId',
   'callType',
   'initiatorId',
   'conversationId',

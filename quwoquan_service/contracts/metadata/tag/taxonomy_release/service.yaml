@@ -1,4 +1,3 @@
-version: 1
 service:
   name: tag-service
   domain: tag
@@ -11,7 +10,8 @@ service:
     target_story: app-cloud-business-object-commercial-closure
 api_routes:
   - method: POST
-    path: /internal/v1/tag/taxonomy-releases
+    path: /internal/tag/taxonomy-releases
+
     operation: StageTagTaxonomyRelease
     actor: account
     application:
@@ -23,9 +23,11 @@ api_routes:
       invariant_target: TagTaxonomyRelease
     request_fields: [releaseId, sourceOwner, canonicalDigest, nodeCount, idempotencyKey]
     response_entity: TagTaxonomyRelease
-    auth: required
+    security:
+      auth_mode: required
   - method: POST
-    path: /internal/v1/tag/taxonomy-releases/{releaseId}:activate
+    path: /internal/tag/taxonomy-releases/{releaseId}:activate
+
     operation: ActivateTagTaxonomyRelease
     actor: account
     application:
@@ -35,6 +37,7 @@ api_routes:
       aggregate_owner: TagTaxonomyRelease
       mutation_target: TagTaxonomyRelease
       invariant_target: TagTaxonomyRelease
-    request_fields: [expectedVersion, idempotencyKey]
+    request_fields: [idempotencyKey]
     response_entity: TagTaxonomyRelease
-    auth: required
+    security:
+      auth_mode: required

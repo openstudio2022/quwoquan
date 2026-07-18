@@ -26,11 +26,11 @@ from core.paths import (  # noqa: E402
     execution_root,
     execution_shared_dir,
     execution_source_unit_dir,
-    execution_workflow_packet_path,
+    execution_command_packet_path,
     publish_data,
     relative_execution_ref,
 )
-from content.execution.pipeline.publish import _workflow_release_id  # noqa: E402
+from content.execution.controller.publish import _execution_release_id  # noqa: E402
 
 EXECUTION_ID = "20260711--travel-homepage-object-paths--cn-sichuan--canary-001"
 
@@ -68,12 +68,12 @@ def test_shared_runtime_state_is_not_a_root_level_batch_manifest():
     root = execution_root(EXECUTION_ID)
     assert execution_runtime_state_path(EXECUTION_ID) == root / "_shared/runtime_state.json"
     assert execution_shared_dir(EXECUTION_ID) == root / "_shared"
-    packet = execution_workflow_packet_path(EXECUTION_ID, "build_homepage")
-    assert packet.relative_to(root).as_posix() == "_shared/workflow_packets/build_homepage.json"
+    packet = execution_command_packet_path(EXECUTION_ID, "build_homepage")
+    assert packet.relative_to(root).as_posix() == "_shared/command_packets/build_homepage.json"
 
 
 def test_single_execution_release_uses_the_readable_execution_id():
-    assert _workflow_release_id(EXECUTION_ID) == EXECUTION_ID
+    assert _execution_release_id(EXECUTION_ID) == EXECUTION_ID
 
 
 def test_execution_collects_only_approved_entities():

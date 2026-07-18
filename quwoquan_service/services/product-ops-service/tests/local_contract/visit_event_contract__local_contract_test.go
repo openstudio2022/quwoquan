@@ -2,131 +2,405 @@ package local_contract
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
+	"strconv"
+	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	sls "github.com/aliyun/aliyun-log-go-sdk"
 
 	"quwoquan_service/services/product-ops-service/internal/application"
 	telemetrypersistence "quwoquan_service/services/product-ops-service/internal/infrastructure/persistence"
 )
 
-type failingMirror struct {
-	called chan struct{}
-}
-
-func (m failingMirror) MirrorEvents(context.Context, []application.EventDrilldownItem) error {
-	close(m.called)
-	return errors.New("es unavailable")
-}
-
-func TestTelemetryStore_RecordVisitAndStats(t *testing.T) {
+func TestTelemetryServiceAcceptsStrictBatchAndMasksSession(t *testing.T) {
 	store := telemetrypersistence.NewMemoryTelemetryStore()
+	service := application.NewTelemetryService(store, nil)
+	now := time.Now().UTC().Add(-2 * time.Minute)
+	events := []application.EventRecordInput{
+		validEvent("page_open", "event", now),
+		validEvent("page_return", "event", now.Add(time.Second)),
+	}
+	events[0].NetworkClass = "5g"
+	events[1].NetworkClass = "4g"
+	duration := 1200
+	events[1].DurationMS = &duration
+	batchKey := digestKey("strict-batch")
 
-	for range 3 {
-		if _, err := store.RecordVisit(context.Background(), application.VisitInput{
-			UserID:     "user-1",
-			TargetType: "page",
-			TargetKey:  "page_home",
-			SessionID:  "sess_1",
-			Source:     "page_access",
-		}); err != nil {
-			t.Fatalf("record visit: %v", err)
+	ack, err := service.ReportEventBatch(context.Background(), batchKey, events)
+	if err != nil || ack.AcceptedCount != 2 || ack.DuplicateBatch {
+		t.Fatalf("first batch ack=%+v err=%v", ack, err)
+	}
+	duplicate, err := service.ReportEventBatch(context.Background(), batchKey, events)
+	if err != nil || !duplicate.DuplicateBatch || duplicate.AcceptedCount != 2 {
+		t.Fatalf("duplicate batch ack=%+v err=%v", duplicate, err)
+	}
+
+	drilldown, err := service.GetEventDrilldown(context.Background(), application.EventDrilldownQuery{
+		From:  now.Add(-time.Minute),
+		To:    now.Add(time.Minute),
+		Limit: 10,
+	})
+	if err != nil {
+		t.Fatalf("drilldown: %v", err)
+	}
+	if drilldown.TotalCount != 2 || len(drilldown.Items) != 2 {
+		t.Fatalf("drilldown=%+v", drilldown)
+	}
+	if !strings.HasPrefix(drilldown.Items[0].SessionID, "s.***.") {
+		t.Fatalf("sessionId must be masked: %q", drilldown.Items[0].SessionID)
+	}
+}
+
+func TestTelemetryServiceRejectsWholeBatchBeforeWrite(t *testing.T) {
+	store := telemetrypersistence.NewMemoryTelemetryStore()
+	service := application.NewTelemetryService(store, nil)
+	now := time.Now().UTC().Add(-time.Minute)
+	valid := validEvent("page_open", "event", now)
+	invalid := validEvent("page_open", "event", now)
+	invalid.NetworkClass = "vpn"
+
+	if _, err := service.ReportEventBatch(context.Background(), digestKey("invalid-batch"), []application.EventRecordInput{valid, invalid}); err == nil {
+		t.Fatal("unknown networkClass must reject the whole batch")
+	}
+	summary, err := service.GetEventSummary(context.Background(), application.EventSummaryQuery{
+		From: now.Add(-time.Hour),
+		To:   time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatalf("summary: %v", err)
+	}
+	if summary.TotalCount != 0 {
+		t.Fatalf("invalid batch must not partially write: %+v", summary)
+	}
+}
+
+func TestTelemetryIngestionAcceptsCellularGenerationsAndRejectsRemovedVPNValue(t *testing.T) {
+	store := telemetrypersistence.NewMemoryTelemetryStore()
+	service := application.NewTelemetryService(store, nil)
+	occurredAt := time.Now().UTC().Add(-time.Minute)
+	event := application.EventRecordInput{
+		LogType:            "event",
+		EventType:          "page_open",
+		SessionID:          "s.Z3Vlc3RfaW50ZWdyYXRpb24." + strconv.FormatInt(occurredAt.UnixMilli(), 10),
+		PageName:           "home",
+		OccurredAt:         occurredAt.Format(time.RFC3339Nano),
+		DeviceManufacturer: "Apple",
+		DeviceModel:        "iPhone",
+		AppVersion:         "1.0.0",
+		NetworkClass:       "5g",
+	}
+	if _, err := service.ReportEventBatch(
+		context.Background(),
+		digestKey("cellular-generation"),
+		[]application.EventRecordInput{event},
+	); err != nil {
+		t.Fatalf("5g telemetry event must be accepted: %v", err)
+	}
+
+	event.NetworkClass = "vpn"
+	if _, err := service.ReportEventBatch(
+		context.Background(),
+		digestKey("removed-vpn"),
+		[]application.EventRecordInput{event},
+	); err == nil {
+		t.Fatal("removed networkClass vpn must be rejected")
+	}
+}
+
+func TestTelemetryServiceRejectsCatalogSessionTimeAndRequiredExtensionViolations(t *testing.T) {
+	now := time.Now().UTC()
+	tests := map[string]application.EventRecordInput{
+		"unknown event": func() application.EventRecordInput {
+			event := validEvent("not_registered", "event", now)
+			return event
+		}(),
+		"unknown page": func() application.EventRecordInput {
+			event := validEvent("page_open", "event", now)
+			event.PageName = "not_registered"
+			return event
+		}(),
+		"invalid session": func() application.EventRecordInput {
+			event := validEvent("page_open", "event", now)
+			event.SessionID = "s.raw.user.1"
+			return event
+		}(),
+		"expired event": func() application.EventRecordInput {
+			return validEvent("page_open", "event", now.Add(-73*time.Hour))
+		}(),
+		"missing errorCode": func() application.EventRecordInput {
+			return validEvent("runtime_exception", "error", now)
+		}(),
+	}
+	for name, event := range tests {
+		t.Run(name, func(t *testing.T) {
+			store := telemetrypersistence.NewMemoryTelemetryStore()
+			service := application.NewTelemetryService(store, nil)
+			if _, err := service.ReportEventBatch(context.Background(), digestKey(name), []application.EventRecordInput{event}); err == nil {
+				t.Fatalf("%s must be rejected", name)
+			}
+		})
+	}
+}
+
+func TestStartupDiagnosticsUseIndependentIdempotentBatch(t *testing.T) {
+	store := telemetrypersistence.NewMemoryTelemetryStore()
+	service := application.NewTelemetryService(store, nil)
+	records := []application.StartupDiagnosticRecord{{
+		EventID: "attempt_000000000001_1", AttemptID: "attempt_000000000001",
+		Phase: "router_ready", Outcome: "ready", OccurredAt: time.Now().UTC().Format(time.RFC3339Nano),
+		Platform: "ios", RuntimeEnv: "alpha", Sequence: 1, PhaseDurationMS: 120, ElapsedMS: 200,
+	}}
+	first, err := service.ReportStartupDiagnostics(context.Background(), "proof_000000000000000001", records)
+	if err != nil || first.DuplicateBatch {
+		t.Fatalf("first startup batch=%+v err=%v", first, err)
+	}
+	second, err := service.ReportStartupDiagnostics(context.Background(), "proof_000000000000000001", records)
+	if err != nil || !second.DuplicateBatch {
+		t.Fatalf("duplicate startup batch=%+v err=%v", second, err)
+	}
+}
+
+func TestSLSEventProtocolWritesOnceAndConfirmsTimeoutAfterWrite(t *testing.T) {
+	client := newRecordingSLSClient()
+	client.failAfterWriteOnce = true
+	config := localSLSConfig()
+	store, err := telemetrypersistence.NewSLSEventLogStore(client, config)
+	if err != nil {
+		t.Fatalf("new SLS store: %v", err)
+	}
+	ledger := telemetrypersistence.NewMemoryTelemetryStore()
+	service := application.NewTelemetryServiceWithStores(ledger, store, ledger)
+	event := validEvent("page_open", "event", time.Now().UTC().Add(-time.Minute))
+	batchKey := digestKey("timeout-after-write")
+
+	ack, err := service.ReportEventBatch(context.Background(), batchKey, []application.EventRecordInput{event})
+	if err != nil || ack.AcceptedCount != 1 || ack.DuplicateBatch {
+		t.Fatalf("write-after-timeout ack=%+v err=%v", ack, err)
+	}
+	duplicate, err := service.ReportEventBatch(context.Background(), batchKey, []application.EventRecordInput{event})
+	if err != nil || !duplicate.DuplicateBatch {
+		t.Fatalf("duplicate ack=%+v err=%v", duplicate, err)
+	}
+	raw := client.logs(config.RawLogstore)
+	if len(raw) != 1 {
+		t.Fatalf("same sealed batch must land once, rows=%d", len(raw))
+	}
+	for _, field := range []string{"logType", "eventType", "sessionId", "pageName", "occurredAt", "deviceManufacturer", "deviceModel", "appVersion", "networkClass", "_batchKey", "_batchIndex", "ingestedAt"} {
+		if raw[0][field] == "" {
+			t.Fatalf("SLS row missing %s: %+v", field, raw[0])
 		}
 	}
+}
 
-	stats, err := store.GetVisitStats(context.Background(), application.VisitStatsQuery{
-		TargetType: "page",
-		TargetKey:  "page_home",
-	})
+func TestTelemetryServicePersistsTypedVideoPlaybackQoeWithoutContentAttribution(t *testing.T) {
+	client := newRecordingSLSClient()
+	config := localSLSConfig()
+	store, err := telemetrypersistence.NewSLSEventLogStore(client, config)
 	if err != nil {
-		t.Fatalf("get visit stats: %v", err)
+		t.Fatalf("new SLS store: %v", err)
 	}
-	if stats.TotalVisits != 3 {
-		t.Fatalf("expected totalVisits=3, got %d", stats.TotalVisits)
+	ledger := telemetrypersistence.NewMemoryTelemetryStore()
+	service := application.NewTelemetryServiceWithStores(ledger, store, ledger)
+	now := time.Now().UTC().Add(-time.Minute)
+	readyMS, rebufferCount, rebufferMS, seekCount := 420, 1, 180, 2
+	playbackMode, result := "autoplay", "success"
+	event := validEvent("video_playback_qoe", "event", now)
+	event.ReadyMS = &readyMS
+	event.RebufferCount = &rebufferCount
+	event.RebufferMS = &rebufferMS
+	event.SeekCount = &seekCount
+	event.PlaybackMode = &playbackMode
+	event.Result = &result
+
+	if _, err := service.ReportEventBatch(context.Background(), digestKey("video-qoe"), []application.EventRecordInput{event}); err != nil {
+		t.Fatalf("report video qoe: %v", err)
 	}
-	if len(stats.Items) != 1 || stats.Items[0].VisitCount != 3 {
-		t.Fatalf("unexpected visit stats: %+v", stats.Items)
+	rows := client.logs(config.RawLogstore)
+	if len(rows) != 1 {
+		t.Fatalf("expected one qoe row, got %d", len(rows))
+	}
+	row := rows[0]
+	for field, expected := range map[string]string{
+		"eventType":     "video_playback_qoe",
+		"readyMs":       "420",
+		"rebufferCount": "1",
+		"rebufferMs":    "180",
+		"seekCount":     "2",
+		"playbackMode":  "autoplay",
+	} {
+		if row[field] != expected {
+			t.Fatalf("qoe %s=%q, want %q; row=%+v", field, row[field], expected, row)
+		}
+	}
+	for _, forbidden := range []string{"postId", "feedRequestId", "rankingVersion", "tagRefs"} {
+		if _, ok := row[forbidden]; ok {
+			t.Fatalf("Ops QoE must not contain %s: %+v", forbidden, row)
+		}
 	}
 }
 
-func TestTelemetryStore_ReportEventBatchIdempotent(t *testing.T) {
-	store := telemetrypersistence.NewMemoryTelemetryStore()
-
-	events := []application.EventRecordInput{
-		{
-			EventID:      "evt-1",
-			EventType:    "experience",
-			EventName:    "page_open",
-			EventVersion: "v1",
-			Priority:     "P0",
-			Producer:     "app.page_access",
-			PageName:     "home",
-			OccurredAt:   "2026-04-01T00:00:00Z",
-		},
-	}
-
-	ack1, _, err := store.ReportEventBatch(context.Background(), events)
+func TestSLSStartupDiagnosticsStayInRestrictedLogstore(t *testing.T) {
+	client := newRecordingSLSClient()
+	config := localSLSConfig()
+	store, err := telemetrypersistence.NewSLSEventLogStore(client, config)
 	if err != nil {
-		t.Fatalf("report first batch: %v", err)
+		t.Fatalf("new SLS store: %v", err)
 	}
-	ack2, _, err := store.ReportEventBatch(context.Background(), events)
-	if err != nil {
-		t.Fatalf("report duplicate batch: %v", err)
+	ledger := telemetrypersistence.NewMemoryTelemetryStore()
+	service := application.NewTelemetryServiceWithStores(ledger, store, ledger)
+	record := application.StartupDiagnosticRecord{
+		EventID: "startup_attempt_000001_1", AttemptID: "startup_attempt_000001", Sequence: 1,
+		Phase: "router_ready", PhaseDurationMS: 100, ElapsedMS: 200, Outcome: "ready",
+		OccurredAt: time.Now().UTC().Format(time.RFC3339Nano), Platform: "ios", RuntimeEnv: "gamma",
 	}
-	if ack1.AcceptedCount != 1 || ack2.DuplicateCount != 1 {
-		t.Fatalf("unexpected batch ack: first=%+v second=%+v", ack1, ack2)
+	if _, err := service.ReportStartupDiagnostics(context.Background(), "startup_proof_000000000001", []application.StartupDiagnosticRecord{record}); err != nil {
+		t.Fatalf("report startup diagnostic: %v", err)
 	}
-
-	drilldown, err := store.GetEventDrilldown(context.Background(), application.EventDrilldownQuery{
-		EventName: "page_open",
-		Limit:     10,
-	})
-	if err != nil {
-		t.Fatalf("get event drilldown: %v", err)
+	if len(client.logs(config.RawLogstore)) != 0 || len(client.logs(config.StartupDiagnosticLogstore)) != 1 {
+		t.Fatalf("startup diagnostics crossed logstore boundary")
 	}
-	if drilldown.TotalCount != 1 || len(drilldown.Items) != 1 || drilldown.Items[0].EventID != "evt-1" {
-		t.Fatalf("expected single idempotent event record, got %+v", drilldown)
+	row := client.logs(config.StartupDiagnosticLogstore)[0]
+	for _, forbidden := range []string{"sessionId", "userId", "pageName", "callStack"} {
+		if _, ok := row[forbidden]; ok {
+			t.Fatalf("restricted startup row contains %s: %+v", forbidden, row)
+		}
 	}
 }
 
-func TestTelemetryService_ExceptionMirrorFailureDoesNotBlockAck(t *testing.T) {
-	store := telemetrypersistence.NewMemoryTelemetryStore()
-	mirror := failingMirror{called: make(chan struct{})}
-	service := application.NewTelemetryServiceWithMirror(store, nil, mirror)
-
-	ack, err := service.ReportEventBatch(context.Background(), []application.EventRecordInput{
-		{
-			EventID:        "evt-exception-1",
-			EventType:      "exception",
-			EventName:      "runtime_exception",
-			Producer:       "app.exception",
-			SessionID:      "sess-1",
-			PageVisitID:    "visit-1",
-			RequestID:      "req-1",
-			TraceID:        "trace-1",
-			PageName:       "global.app.runtime",
-			ErrorCode:      "APP.RUNTIME.uncaught_exception",
-			ErrorModule:    "APP",
-			ErrorKind:      "RUNTIME",
-			ErrorReason:    "uncaught_exception",
-			Nature:         "bug",
-			BusinessObject: "app_runtime",
-			FunctionModule: "global_error_handler",
-			AppRuntimeEnv:  "alpha",
-			AppVersion:     "test",
-			Platform:       "ios",
-			OccurredAt:     "2026-04-01T00:00:00Z",
-		},
-	})
+func TestSLSDrilldownScansIngestWindowThenFiltersOccurredAt(t *testing.T) {
+	client := newRecordingSLSClient()
+	store, err := telemetrypersistence.NewSLSEventLogStore(client, localSLSConfig())
 	if err != nil {
-		t.Fatalf("report event batch should not fail on mirror error: %v", err)
+		t.Fatalf("new SLS store: %v", err)
 	}
-	if ack.AcceptedCount != 1 {
-		t.Fatalf("expected accepted count 1, got %+v", ack)
+	from := time.Now().UTC().Add(-24 * time.Hour)
+	to := from.Add(time.Hour)
+	if _, err := store.GetEventDrilldown(context.Background(), application.EventDrilldownQuery{
+		From: from, To: to, Limit: 25,
+	}); err != nil {
+		t.Fatalf("query SLS drilldown: %v", err)
 	}
-	select {
-	case <-mirror.called:
-	case <-time.After(time.Second):
-		t.Fatalf("mirror was not called")
+	request := client.lastRequest()
+	if request == nil {
+		t.Fatal("SLS drilldown request was not recorded")
 	}
+	if request.To-request.From < int64((71 * time.Hour).Seconds()) {
+		t.Fatalf("raw outer window must scan ingestion retention: %+v", request)
+	}
+	for _, marker := range []string{
+		"from_iso8601_timestamp(occurredAt)",
+		from.Format(time.RFC3339Nano),
+		to.Format(time.RFC3339Nano),
+		"LIMIT 25",
+	} {
+		if !strings.Contains(request.Query, marker) {
+			t.Fatalf("raw query missing %q: %s", marker, request.Query)
+		}
+	}
+}
+
+type recordingSLSClient struct {
+	mu                 sync.Mutex
+	byLogstore         map[string][]map[string]string
+	failAfterWriteOnce bool
+	requests           []*sls.GetLogRequest
+}
+
+func newRecordingSLSClient() *recordingSLSClient {
+	return &recordingSLSClient{byLogstore: map[string][]map[string]string{}}
+}
+
+func (c *recordingSLSClient) PostLogStoreLogs(_ string, logstore string, group *sls.LogGroup, _ *string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, logEntry := range group.Logs {
+		row := map[string]string{}
+		for _, content := range logEntry.Contents {
+			row[content.GetKey()] = content.GetValue()
+		}
+		c.byLogstore[logstore] = append(c.byLogstore[logstore], row)
+	}
+	if c.failAfterWriteOnce {
+		c.failAfterWriteOnce = false
+		return errors.New("simulated timeout after durable write")
+	}
+	return nil
+}
+
+func (c *recordingSLSClient) GetLogsV2(_ string, logstore string, request *sls.GetLogRequest) (*sls.GetLogsResponse, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	requestCopy := *request
+	c.requests = append(c.requests, &requestCopy)
+	if strings.Contains(request.Query, "SELECT count(*) AS count") {
+		batchKey := queryBatchKey(request.Query)
+		count := 0
+		for _, row := range c.byLogstore[logstore] {
+			if row["_batchKey"] == batchKey {
+				count++
+			}
+		}
+		return &sls.GetLogsResponse{Logs: []map[string]string{{"count": strconv.Itoa(count)}}}, nil
+	}
+	rows := append([]map[string]string(nil), c.byLogstore[logstore]...)
+	return &sls.GetLogsResponse{Logs: rows, Count: int64(len(rows))}, nil
+}
+
+func (c *recordingSLSClient) lastRequest() *sls.GetLogRequest {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.requests) == 0 {
+		return nil
+	}
+	requestCopy := *c.requests[len(c.requests)-1]
+	return &requestCopy
+}
+
+func (c *recordingSLSClient) logs(logstore string) []map[string]string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]map[string]string(nil), c.byLogstore[logstore]...)
+}
+
+func queryBatchKey(query string) string {
+	prefix := `_batchKey:"`
+	start := strings.Index(query, prefix)
+	if start < 0 {
+		return ""
+	}
+	start += len(prefix)
+	end := strings.Index(query[start:], `"`)
+	if end < 0 {
+		return ""
+	}
+	return query[start : start+end]
+}
+
+func localSLSConfig() telemetrypersistence.SLSConfig {
+	return telemetrypersistence.SLSConfig{
+		Region: "cn-hangzhou", Endpoint: "example.invalid", Project: "test-project",
+		RawLogstore:               "app-product-telemetry-raw",
+		StartupDiagnosticLogstore: "app-startup-diagnostic-raw",
+		AggregateLogstore:         "app-product-telemetry-hourly", Timeout: 1200 * time.Millisecond,
+	}
+}
+
+func validEvent(eventType, logType string, occurredAt time.Time) application.EventRecordInput {
+	return application.EventRecordInput{
+		LogType: logType, EventType: eventType,
+		SessionID: "s.Z3Vlc3RfdGVzdA." + strconv.FormatInt(occurredAt.UnixMilli(), 10),
+		PageName:  "home", OccurredAt: occurredAt.Format(time.RFC3339Nano),
+		DeviceManufacturer: "Apple", DeviceModel: "iPhone",
+		AppVersion: "1.0.0", NetworkClass: "wifi",
+	}
+}
+
+func digestKey(value string) string {
+	digest := sha256.Sum256([]byte(value))
+	return hex.EncodeToString(digest[:])
 }

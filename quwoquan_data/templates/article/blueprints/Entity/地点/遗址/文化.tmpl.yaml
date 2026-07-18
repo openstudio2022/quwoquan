@@ -1,5 +1,4 @@
 templateId: 遗址_文化
-version: 1
 subject: { kind: entity, type: 地点/遗址 }
 vertical: travel
 category: humanity

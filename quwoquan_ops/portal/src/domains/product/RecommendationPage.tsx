@@ -4,7 +4,9 @@ import { Line, LineChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YA
 import { productConfigSchema } from '../../generated/control-plane/productConfig.generated.js';
 import { productControlPlane } from '../../generated/control-plane/productControlPlane.generated.js';
 import {
+  fetchRecommendationBehaviorMetrics,
   fetchRecommendationPolicies,
+  type RecommendationBehaviorMetrics,
   type RecommendationPolicyItem,
 } from '../../shared/api/controlPlane.js';
 import { SectionCard } from '../../shared/components/SectionCard.js';
@@ -17,13 +19,15 @@ export function RecommendationPage() {
   );
   const recommendationConfigs = productConfigSchema.configs.filter((item) => item.key.includes('ops.reco.'));
   const [policies, setPolicies] = useState<RecommendationPolicyItem[]>([]);
+  const [behaviorMetrics, setBehaviorMetrics] = useState<RecommendationBehaviorMetrics | null>(null);
   const [remoteReady, setRemoteReady] = useState(false);
   const [runtimeError, setRuntimeError] = useState<RuntimeError | null>(null);
 
   useEffect(() => {
-    fetchRecommendationPolicies()
-      .then((items) => {
+    Promise.all([fetchRecommendationPolicies(), fetchRecommendationBehaviorMetrics()])
+      .then(([items, metrics]) => {
         setPolicies(items);
+        setBehaviorMetrics(metrics);
         setRemoteReady(true);
         setRuntimeError(null);
       })
@@ -41,6 +45,14 @@ export function RecommendationPage() {
       diversity: Number(policy.guardrailSnapshot.diversity ?? 0),
     }));
   }, [policies]);
+  const behaviorByState = useMemo(() => {
+    const totals = new Map<string, number>();
+    behaviorMetrics?.series.forEach((item) => {
+      const state = item.labels.state || 'unknown';
+      totals.set(state, (totals.get(state) ?? 0) + item.value);
+    });
+    return Array.from(totals.entries()).map(([state, value]) => ({ state, value }));
+  }, [behaviorMetrics]);
 
   const surfaceRows = [
     ['featured', '首页精品', 'feed.impression / click / dwell'],
@@ -123,6 +135,32 @@ export function RecommendationPage() {
           </div>
         </SectionCard>
       </div>
+
+      <SectionCard
+        title="推荐反馈真实指标"
+        subtitle="直接读取 recommendation_behavior_by_attribution_total；不经过 /ops/events"
+      >
+        <div className="stack-list">
+          {behaviorByState.map((item) => (
+            <div className="policy-item" key={item.state}>
+              <div>
+                <p className="item-title">{item.state}</p>
+                <p className="item-subtitle">source={behaviorMetrics?.source} · freshness={behaviorMetrics?.freshness}</p>
+              </div>
+              <span className="badge badge--neutral">{item.value}</span>
+            </div>
+          ))}
+          {behaviorByState.length === 0 ? (
+            <div className="policy-item">
+              <div>
+                <p className="item-title">暂无推荐反馈</p>
+                <p className="item-subtitle">指标端点可达，但当前进程尚未接收 BehaviorSignal。</p>
+              </div>
+              <span className="badge badge--neutral">0</span>
+            </div>
+          ) : null}
+        </div>
+      </SectionCard>
 
       <SectionCard title="策略池" subtitle="结合模拟、canary、回滚令牌和 guardrail 快照管理策略生命周期">
         <div className="stack-list">

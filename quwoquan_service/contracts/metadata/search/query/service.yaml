@@ -1,4 +1,3 @@
-version: 1
 
 service:
   name: search-service
@@ -10,15 +9,42 @@ service:
     gap_id: SEARCH_QUERY_COMMERCIAL_EVIDENCE
     target_story: app-cloud-business-object-commercial-closure
   description: |
-    云侧统一搜索服务。承载 canonical search(request) 的 POST /v1/search
-    （mode=suggest|result）与 POST /v1/search/feedback，复用 runtime/search.Retrieve
+    云侧统一搜索服务。承载 canonical search(request) 的 POST /search
+    （mode=suggest|result）与 POST /search/feedback，复用 runtime/search.Retrieve
     单趟跨类型排序；召回后端 ES 主 + native 透明回退（FallbackBackend）。
 
 api_routes:
   - method: POST
-    path: /v1/search
+    path: /search
+
     operation: SearchQuery
     actor: persona_or_device
+    authorization:
+      principal: public
+      ownership_policy: authenticated_persona_or_derived_device_actor
+    reliability:
+      timeout_ms: 6000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    privacy:
+      request_classification: SENSITIVE
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: search_query
+      trace: true
+      attributes: [mode, target_count, outcome]
+    slo:
+      latency_p95_ms: 1500
+      availability_percent: 99.5
+    security:
+      auth_mode: optional
+      principal: public
+      token_transport: bearer
+      anonymous_policy: allow
+      visibility: public
     application:
       kind: query
       facet: SearchFacade
@@ -29,10 +55,9 @@ api_routes:
     request_entity: SearchQuery
     writable_fields: [query, mode, objectTypes, limit]
     response_entity: SearchResponseView
-    auth: optional
-
   - method: POST
-    path: /v1/search/feedback
+    path: /search/feedback
+
     operation: ReportSearchFeedback
     actor: persona_or_device
     application:
@@ -45,8 +70,8 @@ api_routes:
     description: 上报搜索结果交互反馈（impression/click/dwell/refine/zero_result/degrade），驱动排序信号与 relevance 评测
     request_entity: SearchFeedbackEvent
     writable_fields: [searchRequestId, eventType, objectId, target, rankPosition, referralSource, feedRequestId, dwellMs]
-    auth: optional
-
+    security:
+      auth_mode: optional
 consumers:
   - name: app
     capabilities: [search, suggest, report_feedback]
@@ -61,10 +86,10 @@ contract_test:
       mock_target: search-service API
       scenarios:
         - name: search_result
-          route: POST /v1/search
+          route: POST /search
           assertions: [status_200, hits_match_schema]
         - name: report_feedback
-          route: POST /v1/search/feedback
+          route: POST /search/feedback
           assertions: [status_202, feedback_accepted]
     service_side:
       description: 使用 ES httptest 替身 + native 回退；不 mock runtime/search 排序

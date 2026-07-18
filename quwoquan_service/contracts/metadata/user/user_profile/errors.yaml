@@ -1,4 +1,3 @@
-version: 1
 domain: USER
 aggregate: UserProfile
 
@@ -105,7 +104,7 @@ errors:
     dart_const: internalError
     go_const: ErrInternalError
     user_message:
-      zh: "服务异常，请稍后重试"
+      zh: "登录服务暂不可用，请使用其他方式登录"
       en: "Service error, please try again later"
 
   # ── 认证与凭证错误 ─────────────────────────────────────────────────────────
@@ -155,7 +154,7 @@ errors:
     dart_const: otpRateLimited
     go_const: ErrOtpRateLimited
     user_message:
-      zh: "发送过于频繁，请稍后再试"
+      zh: "操作过于频繁，请稍后重试"
       en: "Verification code requests are too frequent, please retry later"
 
   - code: USER.AUTH.otp_provider_failed
@@ -167,7 +166,7 @@ errors:
     dart_const: otpProviderFailed
     go_const: ErrOtpProviderFailed
     user_message:
-      zh: "验证码发送失败，请重试或换其它方式"
+      zh: "验证码发送失败，请稍后重试"
       en: "Failed to send verification code, please retry or use another method"
 
   - code: USER.AUTH.credential_conflict
@@ -263,7 +262,7 @@ errors:
     dart_const: socialProviderUnavailable
     go_const: ErrSocialProviderUnavailable
     user_message:
-      zh: "第三方登录暂不可用，请改用其他方式"
+      zh: "第三方登录暂不可用，请使用其他方式登录"
       en: "Third-party login is unavailable, please use another method"
 
   - code: USER.AUTH.apple_auth_failed
@@ -311,7 +310,7 @@ errors:
     dart_const: carrierUnavailable
     go_const: ErrCarrierUnavailable
     user_message:
-      zh: "本机号码登录暂不可用，请使用短信验证码"
+      zh: "本机号码登录暂不可用，请使用其他方式登录"
       en: "Carrier sign-in is unavailable; use SMS verification instead"
 
   - code: USER.AUTH.carrier_token_invalid
@@ -323,7 +322,7 @@ errors:
     dart_const: carrierTokenInvalid
     go_const: ErrCarrierTokenInvalid
     user_message:
-      zh: "本机号码授权已失效，请使用短信验证码"
+      zh: "本机号码授权已失效，请使用其他方式登录"
       en: "Carrier authorization expired; use SMS verification instead"
 
   - code: USER.AUTH.carrier_provider_timeout
@@ -335,7 +334,7 @@ errors:
     dart_const: carrierProviderTimeout
     go_const: ErrCarrierProviderTimeout
     user_message:
-      zh: "本机号码校验超时，请使用短信验证码"
+      zh: "本机号码校验超时，请使用其他方式登录"
       en: "Carrier verification timed out; use SMS verification instead"
 
   - code: USER.AUTH.carrier_phone_mismatch
@@ -371,7 +370,7 @@ errors:
     dart_const: accountSuspended
     go_const: ErrAccountSuspended
     user_message:
-      zh: "账号已被限制登录，请按页面提示处理"
+      zh: "账号已被限制登录，请更换手机号或联系支持"
       en: "This account is currently restricted"
 
   - code: USER.AUTH.account_deleted
@@ -383,7 +382,7 @@ errors:
     dart_const: accountDeleted
     go_const: ErrAccountDeleted
     user_message:
-      zh: "账号已注销或进入删除流程，无法直接登录"
+      zh: "账号已注销或进入删除流程，请更换手机号登录"
       en: "This account has been deleted or is being deleted"
 
   # ── 子账号错误 ─────────────────────────────────────────────────────────────

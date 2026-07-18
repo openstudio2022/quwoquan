@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
@@ -142,6 +144,32 @@ void main() {
         expect(after.appendError, isNull);
       },
     );
+
+    test('缓存命中后台刷新时保留正文且不闪回首屏 loading', () async {
+      final repo = _ControllableContentRepository();
+      final container = _container(repo);
+      addTearDown(container.dispose);
+
+      final notifier = container.read(discoveryFeedMapProvider.notifier);
+      await notifier.load('photo');
+      final before = container.read(discoveryFeedMapProvider)['photo']!.value!;
+      expect(before.items, isNotEmpty);
+
+      repo.holdNextRequest = true;
+      final refresh = notifier.load('photo', force: true);
+      await container.pump();
+
+      final during = container.read(discoveryFeedMapProvider)['photo']!.value!;
+      expect(during.items, before.items);
+      expect(during.isLoading, isFalse);
+
+      repo.release();
+      await refresh;
+      expect(
+        container.read(discoveryFeedMapProvider)['photo']!.value!.items,
+        isNotEmpty,
+      );
+    });
   });
 
   group('ContentPostReactionFacet', () {
@@ -191,6 +219,8 @@ class _FailingContentRepository extends MockContentRepository {
     String sort = kFeedSortRecommend,
     String? sessionId,
     String? feedRequestId,
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
   }) async {
     throw Exception('network_error');
   }
@@ -205,6 +235,50 @@ class _FailingContentRepository extends MockContentRepository {
     String? cursor,
     String sort = kFeedSortRecommend,
   }) async => throw Exception('network_error');
+}
+
+class _ControllableContentRepository extends MockContentRepository {
+  bool holdNextRequest = false;
+  Completer<DiscoveryFeedPage>? _pending;
+  DiscoveryFeedPage? _heldPage;
+
+  @override
+  Future<DiscoveryFeedPage> listDiscoveryFeedPage({
+    required String category,
+    String? identity,
+    String? type,
+    String? subCategory,
+    int limit = 20,
+    String? cursor,
+    String sort = kFeedSortRecommend,
+    String? sessionId,
+    String? feedRequestId,
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  }) async {
+    final page = await super.listDiscoveryFeedPage(
+      category: category,
+      identity: identity,
+      type: type,
+      subCategory: subCategory,
+      limit: limit,
+      cursor: cursor,
+      sort: sort,
+      sessionId: sessionId,
+      feedRequestId: feedRequestId,
+      cancellation: cancellation,
+      deadlineAt: deadlineAt,
+    );
+    if (!holdNextRequest) return page;
+    holdNextRequest = false;
+    _heldPage = page;
+    _pending = Completer<DiscoveryFeedPage>();
+    return _pending!.future;
+  }
+
+  void release() {
+    _pending?.complete(_heldPage!);
+  }
 }
 
 class _NoopPostInteractionStateNotifier extends PostInteractionStateNotifier {

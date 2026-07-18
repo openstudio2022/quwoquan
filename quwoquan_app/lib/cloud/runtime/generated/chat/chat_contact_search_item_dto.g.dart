@@ -26,12 +26,12 @@ class ChatContactSearchItemDto {
 
   factory ChatContactSearchItemDto.fromMap(Map<String, dynamic> m) {
     return ChatContactSearchItemDto(
-      contactId: m['contactId']?.toString() ?? m['userId']?.toString() ?? '',
-      displayName: m['displayName']?.toString() ?? m['name']?.toString() ?? '',
-      avatarUrl: m['avatarUrl']?.toString() ?? m['avatar']?.toString() ?? null,
+      contactId: m['contactId']?.toString() ?? '',
+      displayName: m['displayName']?.toString() ?? '',
+      avatarUrl: m['avatarUrl']?.toString() ?? null,
       conversationId: m['conversationId']?.toString() ?? null,
       conversationType: m['conversationType']?.toString() ?? null,
-      source: m['source']?.toString() ?? m['contactSource']?.toString() ?? null,
+      source: m['source']?.toString() ?? null,
       subtitle: m['subtitle']?.toString() ?? null,
       highlightText: m['highlightText']?.toString() ?? null,
       matchedField: m['matchedField']?.toString() ?? null,

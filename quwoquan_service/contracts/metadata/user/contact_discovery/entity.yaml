@@ -28,4 +28,3 @@ lifecycle:
   ttl_hours: 72
 object_kind: aggregate_root
 storage_backend: postgres
-version: 1

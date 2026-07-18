@@ -17,7 +17,7 @@ func TestGreeting_SendReplyIgnoreCancel(t *testing.T) {
 	sendRec := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/greeting-request",
+		"/user/greeting-request",
 		`{"targetSubAccountId":"sa_gr_tgt","requestMessage":"hello","source":"profile"}`,
 		authHeadersForPersona("gr_req", "sa_gr_req"),
 	)
@@ -33,7 +33,7 @@ func TestGreeting_SendReplyIgnoreCancel(t *testing.T) {
 	dupRec := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/greeting-request",
+		"/user/greeting-request",
 		`{"targetSubAccountId":"sa_gr_tgt","requestMessage":"again","source":"profile"}`,
 		authHeadersForPersona("gr_req", "sa_gr_req"),
 	)
@@ -44,7 +44,7 @@ func TestGreeting_SendReplyIgnoreCancel(t *testing.T) {
 	replyRec := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/greeting-request/"+requestID+"/reply",
+		"/user/greeting-request/"+requestID+"/reply",
 		"",
 		authHeadersForPersona("gr_tgt", "sa_gr_tgt"),
 	)
@@ -62,7 +62,7 @@ func TestGreeting_SendReplyIgnoreCancel(t *testing.T) {
 	capRec := doRequest(
 		t,
 		http.MethodGet,
-		"/v1/user/sub-accounts/sa_gr_tgt/relationship/capability",
+		"/user/sub-accounts/sa_gr_tgt/relationship/capability",
 		"",
 		authHeadersForPersona("gr_req", "sa_gr_req"),
 	)
@@ -82,7 +82,7 @@ func TestGreeting_IgnoreAndCancel(t *testing.T) {
 	sendRec := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/greeting-request",
+		"/user/greeting-request",
 		`{"targetSubAccountId":"sa_gr2_tgt","requestMessage":"ping","source":"profile"}`,
 		authHeadersForPersona("gr2_req", "sa_gr2_req"),
 	)
@@ -92,7 +92,7 @@ func TestGreeting_IgnoreAndCancel(t *testing.T) {
 	ignoreRec := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/greeting-request/"+requestID+"/ignore",
+		"/user/greeting-request/"+requestID+"/ignore",
 		"",
 		authHeadersForPersona("gr2_tgt", "sa_gr2_tgt"),
 	)
@@ -107,7 +107,7 @@ func TestGreeting_IgnoreAndCancel(t *testing.T) {
 	sendRec2 := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/greeting-request",
+		"/user/greeting-request",
 		`{"targetSubAccountId":"sa_gr2_tgt","requestMessage":"again","source":"profile"}`,
 		authHeadersForPersona("gr2_req", "sa_gr2_req"),
 	)
@@ -120,7 +120,7 @@ func TestGreeting_IgnoreAndCancel(t *testing.T) {
 	cancelRec := doRequest(
 		t,
 		http.MethodDelete,
-		"/v1/user/greeting-request/"+cancelID,
+		"/user/greeting-request/"+cancelID,
 		"",
 		authHeadersForPersona("gr2_req", "sa_gr2_req"),
 	)
@@ -156,14 +156,14 @@ func TestGreeting_MutualSenderRejected(t *testing.T) {
 	doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/sub-accounts/sa_gr4_tgt/follow",
+		"/user/sub-accounts/sa_gr4_tgt/follow",
 		"",
 		authHeadersForPersona("gr4_req", "sa_gr4_req"),
 	)
 	doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/sub-accounts/sa_gr4_req/follow",
+		"/user/sub-accounts/sa_gr4_req/follow",
 		"",
 		authHeadersForPersona("gr4_tgt", "sa_gr4_tgt"),
 	)
@@ -171,7 +171,7 @@ func TestGreeting_MutualSenderRejected(t *testing.T) {
 	sendRec := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/greeting-request",
+		"/user/greeting-request",
 		`{"targetSubAccountId":"sa_gr4_tgt","requestMessage":"mutual","source":"profile"}`,
 		authHeadersForPersona("gr4_req", "sa_gr4_req"),
 	)
@@ -195,7 +195,7 @@ func TestGreeting_BlockedSenderRejected(t *testing.T) {
 	doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/sub-accounts/sa_gr3_req/block",
+		"/user/sub-accounts/sa_gr3_req/block",
 		"",
 		authHeadersForPersona("gr3_tgt", "sa_gr3_tgt"),
 	)
@@ -203,7 +203,7 @@ func TestGreeting_BlockedSenderRejected(t *testing.T) {
 	sendRec := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/greeting-request",
+		"/user/greeting-request",
 		`{"targetSubAccountId":"sa_gr3_tgt","requestMessage":"blocked","source":"profile"}`,
 		authHeadersForPersona("gr3_req", "sa_gr3_req"),
 	)

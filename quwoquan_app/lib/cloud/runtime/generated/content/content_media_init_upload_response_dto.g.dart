@@ -17,9 +17,9 @@ class ContentMediaInitUploadResponseDto {
   factory ContentMediaInitUploadResponseDto.fromMap(Map<String, dynamic> m) {
     return ContentMediaInitUploadResponseDto(
       sessionId: m['sessionId']?.toString() ?? '',
-      mediaId: m['mediaId']?.toString() ?? m['assetId']?.toString() ?? m['id']?.toString() ?? null,
+      mediaId: m['mediaId']?.toString() ?? null,
       uploadUrl: m['uploadUrl']?.toString() ?? null,
-      presignUrl: m['presignUrl']?.toString() ?? m['uploadUrl']?.toString() ?? null,
+      presignUrl: m['presignUrl']?.toString() ?? null,
     );
   }
 

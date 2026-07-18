@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_search_item_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
 
 class LocalChatSearchContactRecord {
   const LocalChatSearchContactRecord({
@@ -27,35 +28,29 @@ class LocalChatSearchContactRecord {
   final String? highlightText;
   final String? matchedField;
 
+  factory LocalChatSearchContactRecord.fromChatContactRowDto(
+    ChatContactRowDto dto,
+  ) {
+    return LocalChatSearchContactRecord(
+      contactId: dto.userId.trim(),
+      displayName: dto.displayName.trim(),
+      headline: dto.bio.trim(),
+      avatarUrl: dto.avatarUrl.trim(),
+    );
+  }
+
   factory LocalChatSearchContactRecord.fromWireMap(Map<String, dynamic> map) {
-    final contactId = _firstNonEmpty(<Object?>[
-      map['contactId'],
-      map['subAccountId'],
-      map['userId'],
-      map['profileSubjectId'],
-      map['id'],
-    ]);
+    final contactId = _string(map['contactId']);
     return LocalChatSearchContactRecord(
       contactId: contactId,
-      displayName: _firstNonEmpty(<Object?>[
-        map['displayName'],
-        map['nickname'],
-        map['username'],
-        contactId,
-      ]),
+      displayName: _firstNonEmpty(<Object?>[map['displayName'], contactId]),
       nickname: _string(map['nickname']),
       username: _string(map['username']),
       subtitle: _string(map['subtitle']),
-      headline: _firstNonEmpty(<Object?>[map['headline'], map['bio']]),
+      headline: _string(map['headline']),
       remark: _string(map['remark']),
-      avatarUrl: _firstNonEmpty(<Object?>[
-        map['avatarUrl'],
-        map['avatar'],
-      ]),
-      conversationId: _firstNonEmpty(<Object?>[
-        map['conversationId'],
-        map['directConversationId'],
-      ]),
+      avatarUrl: _string(map['avatarUrl']),
+      conversationId: _string(map['conversationId']),
       highlightText: _optionalString(map['highlightText']),
       matchedField: _optionalString(map['matchedField']),
     );
@@ -64,8 +59,6 @@ class LocalChatSearchContactRecord {
   Map<String, dynamic> toWireMap() {
     return <String, dynamic>{
       'contactId': contactId,
-      'userId': contactId,
-      'id': contactId,
       'displayName': displayName,
       if (nickname.isNotEmpty) 'nickname': nickname,
       if (username.isNotEmpty) 'username': username,

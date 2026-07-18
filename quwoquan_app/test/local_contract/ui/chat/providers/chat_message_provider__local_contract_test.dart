@@ -38,14 +38,14 @@ void main() {
       expect(
         friendMessage.senderAvatar,
         contains(
-          '/media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png',
+          '/media/avatar/s/archived-avatar/user/fixture_user_friend/avatar.png',
         ),
       );
       expect(selfMessage.senderName, matches(_defaultNicknamePattern));
       expect(
         selfMessage.senderAvatar,
         contains(
-          '/media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png',
+          '/media/avatar/s/archived-avatar/user/fixture_user_current/avatar.png',
         ),
       );
     });

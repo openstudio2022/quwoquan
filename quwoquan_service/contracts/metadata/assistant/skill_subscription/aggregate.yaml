@@ -1,4 +1,3 @@
-version: 1
 domain: assistant
 aggregate_root: SkillSubscription
 object_kind: aggregate_root

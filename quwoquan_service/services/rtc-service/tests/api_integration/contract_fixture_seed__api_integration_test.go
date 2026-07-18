@@ -46,7 +46,7 @@ func TestContractFixtureSeed_RtcReadsViaHandler(t *testing.T) {
 		}
 		resp := doPost(
 			t,
-			"/v1/rtc/calls",
+			"/rtc/calls",
 			fmt.Sprintf(`{"callType":%q,"inviteeIds":[%q]}`, callType, invitee),
 			session.CallerUserID,
 			http.StatusCreated,

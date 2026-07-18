@@ -18,13 +18,14 @@
 
 # Ops owns the single immutable local-gamma route table. Compose mounts this
 # file directly; runtime output contains evidence and process state only.
-gamma-api.quwoquan-env.test,
-gamma-api.localhost {
+https://gamma-api.quwoquan-env.test:{$LOCAL_GAMMA_HTTP_PORT:19000},
+https://gamma-api.localhost:{$LOCAL_GAMMA_HTTP_PORT:19000},
+https://localhost:{$LOCAL_GAMMA_HTTP_PORT:19000} {
 	import local_gamma_tls
 	handle /healthz {
 		reverse_proxy content-service:18080
 	}
-	handle /v1/config/app {
+	handle /config/app {
 		reverse_proxy content-service:18080
 	}
 	handle /livez {
@@ -33,43 +34,43 @@ gamma-api.localhost {
 	handle /startupz {
 		reverse_proxy content-service:18080
 	}
-	@api_content path /v1/content*
+	@api_content path /content*
 	handle @api_content {
 		reverse_proxy content-service:18080
 	}
-	@api_chat path /v1/chat*
+	@api_chat path /chat*
 	handle @api_chat {
 		reverse_proxy chat-service:18081
 	}
-	@api_user path /v1/auth* /v1/owner* /v1/user* /v1/me /v1/me/*
+	@api_user path /auth* /owner* /user* /me /me/*
 	handle @api_user {
 		reverse_proxy user-service:18082
 	}
-	@api_assistant path /v1/assistant*
+	@api_assistant path /assistant*
 	handle @api_assistant {
 		reverse_proxy assistant-service:18087
 	}
-	@api_notification path /v1/app-messages /v1/app-messages/*
+	@api_notification path /app-messages /app-messages/*
 	handle @api_notification {
 		reverse_proxy notification-service:18087
 	}
-	@api_tag path /v1/tag*
+	@api_tag path /tag*
 	handle @api_tag {
 		reverse_proxy tag-service:18092
 	}
-	@api_search path /v1/search*
+	@api_search path /search*
 	handle @api_search {
 		reverse_proxy search-service:18095
 	}
-	@api_entity path /v1/homepages*
+	@api_entity path /homepages*
 	handle @api_entity {
 		reverse_proxy entity-service:18084
 	}
-	@api_circle path /v1/circles*
+	@api_circle path /circles*
 	handle @api_circle {
 		reverse_proxy circle-service:18082
 	}
-	handle /v1/ops/* {
+	handle /ops/* {
 		reverse_proxy product-ops-service:18086
 	}
 	handle /legal/manifest.json {
@@ -99,13 +100,14 @@ gamma-api.localhost {
 	}
 }
 
-gamma-product-ops.quwoquan-env.test,
-gamma-product-ops.localhost {
+https://gamma-product-ops.quwoquan-env.test:{$LOCAL_GAMMA_PRODUCT_OPS_PORT:19010},
+https://gamma-product-ops.localhost:{$LOCAL_GAMMA_PRODUCT_OPS_PORT:19010},
+https://localhost:{$LOCAL_GAMMA_PRODUCT_OPS_PORT:19010} {
 	import local_gamma_tls
 	handle /healthz {
 		reverse_proxy product-ops-service:18086
 	}
-	handle /v1/ops/* {
+	handle /ops/* {
 		reverse_proxy product-ops-service:18086
 	}
 	handle {
@@ -113,14 +115,13 @@ gamma-product-ops.localhost {
 	}
 }
 
-gamma-avatar.quwoquan-env.test,
-gamma-image.quwoquan-env.test,
-gamma-video.quwoquan-env.test,
-gamma-upload.quwoquan-env.test,
-gamma-avatar.localhost,
-gamma-image.localhost,
-gamma-video.localhost,
-gamma-upload.localhost {
+https://gamma-avatar.quwoquan-env.test:{$LOCAL_GAMMA_MEDIA_EDGE_PORT:19100},
+https://gamma-image.quwoquan-env.test:{$LOCAL_GAMMA_MEDIA_EDGE_PORT:19100},
+https://gamma-video.quwoquan-env.test:{$LOCAL_GAMMA_MEDIA_EDGE_PORT:19100},
+https://gamma-avatar.localhost:{$LOCAL_GAMMA_MEDIA_EDGE_PORT:19100},
+https://gamma-image.localhost:{$LOCAL_GAMMA_MEDIA_EDGE_PORT:19100},
+https://gamma-video.localhost:{$LOCAL_GAMMA_MEDIA_EDGE_PORT:19100},
+https://localhost:{$LOCAL_GAMMA_MEDIA_EDGE_PORT:19100} {
 	import local_gamma_tls
 	import media_cors
 	handle /healthz {
@@ -130,50 +131,59 @@ gamma-upload.localhost {
 	file_server
 }
 
+https://gamma-upload.quwoquan-env.test:{$LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT:19130},
+https://gamma-upload.localhost:{$LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT:19130},
+https://localhost:{$LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT:19130} {
+	import local_gamma_tls
+	import media_cors
+	root * /srv/media
+	file_server
+}
+
 :80 {
 	handle /healthz {
 		reverse_proxy content-service:18080
 	}
-	handle /v1/config/app {
+	handle /config/app {
 		reverse_proxy content-service:18080
 	}
-	@pub_content path /v1/content*
+	@pub_content path /content*
 	handle @pub_content {
 		reverse_proxy content-service:18080
 	}
-	@pub_chat path /v1/chat*
+	@pub_chat path /chat*
 	handle @pub_chat {
 		reverse_proxy chat-service:18081
 	}
-	@pub_user path /v1/auth* /v1/owner* /v1/user* /v1/me /v1/me/*
+	@pub_user path /auth* /owner* /user* /me /me/*
 	handle @pub_user {
 		reverse_proxy user-service:18082
 	}
-	@pub_assistant path /v1/assistant*
+	@pub_assistant path /assistant*
 	handle @pub_assistant {
 		reverse_proxy assistant-service:18087
 	}
-	@pub_notification path /v1/app-messages /v1/app-messages/*
+	@pub_notification path /app-messages /app-messages/*
 	handle @pub_notification {
 		reverse_proxy notification-service:18087
 	}
-	@pub_tag path /v1/tag*
+	@pub_tag path /tag*
 	handle @pub_tag {
 		reverse_proxy tag-service:18092
 	}
-	@pub_search path /v1/search*
+	@pub_search path /search*
 	handle @pub_search {
 		reverse_proxy search-service:18095
 	}
-	@pub_entity path /v1/homepages*
+	@pub_entity path /homepages*
 	handle @pub_entity {
 		reverse_proxy entity-service:18084
 	}
-	@pub_circle path /v1/circles*
+	@pub_circle path /circles*
 	handle @pub_circle {
 		reverse_proxy circle-service:18082
 	}
-	handle /v1/ops/* {
+	handle /ops/* {
 		reverse_proxy product-ops-service:18086
 	}
 	handle /legal/* {

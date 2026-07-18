@@ -69,7 +69,10 @@ final class AlphaCircleFileFacet
     DeleteCircleFileCommand command,
   ) async {
     final key = _key(command.circleId, command.fileId);
-    final current = _required(key, command.expectedVersion);
+    final current = _required(key);
+    if (current.status == CircleFileStatus.deleted) {
+      return _result(current);
+    }
     final deleted = CircleFileSlice(
       fileId: current.fileId,
       version: current.version + 1,

@@ -86,7 +86,7 @@ def probe_search(query: str = "成都", timeout_s: float = 5.0) -> dict:
         }
     ).encode()
     req = urllib.request.Request(
-        f"{SEARCH_BASE}/v1/search",
+        f"{SEARCH_BASE}/search",
         data=body,
         method="POST",
         headers={

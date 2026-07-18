@@ -18,6 +18,8 @@ class _SearchNetworkResultsPageState
   Timer? _debounceTimer;
   int _requestToken = 0;
   bool _isLoading = false;
+  bool _isSlow = false;
+  final AppRequestWaitController _waitController = AppRequestWaitController();
   UiErrorSemantic? _errorSemantic;
   AssistantSearchResultView? _xiaoquResult;
   List<PostSearchItemView> _contentResults = const <PostSearchItemView>[];
@@ -73,6 +75,8 @@ class _SearchNetworkResultsPageState
   void dispose() {
     _trackPageDwell();
     _debounceTimer?.cancel();
+    _requestToken += 1;
+    _waitController.dispose();
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -307,39 +311,8 @@ class _SearchNetworkResultsPageState
     return SearchResultTabSpec.normalizeInitialTabId(tabId);
   }
 
-  bool get _hasRenderableResultsForActiveTab {
-    if (_activeTabId == _tabIntersection) {
-      return _groupResults.isNotEmpty ||
-          _connectedGroupHits.isNotEmpty ||
-          _discoveryGroupHits.isNotEmpty ||
-          _contentResults.isNotEmpty ||
-          _intersectionEntityHit != null ||
-          _connectedLocations.isNotEmpty;
-    }
-    if (_activeTabId == _tabAll) {
-      return _contentResults.isNotEmpty || _entityTopResult() != null;
-    }
-    return _contentResults.isNotEmpty;
-  }
-
-  List<SearchDegradeSignal> _mergeDegradeSignals(
-    Iterable<SearchResponse> responses,
-  ) {
-    final seen = <String>{};
-    final merged = <SearchDegradeSignal>[];
-    for (final response in responses) {
-      for (final signal in response.degradeSignals) {
-        final key = '${signal.code}|${signal.objectType?.wireValue ?? ''}';
-        if (seen.add(key)) {
-          merged.add(signal);
-        }
-      }
-    }
-    return merged;
-  }
-
   Widget? _buildDegradeBanner() {
-    if (_degradeSignals.isEmpty || _hasRenderableResultsForActiveTab) {
+    if (_degradeSignals.isEmpty) {
       return null;
     }
     const friendlyMessage = UITextConstants.searchPartialGroupFailed;
@@ -609,57 +582,13 @@ class _SearchNetworkResultsPageState
 
   void _scheduleRefresh({bool immediate = false}) {
     _debounceTimer?.cancel();
+    _requestToken += 1;
+    _waitController.cancel();
     if (immediate) {
       unawaited(_loadResults());
       return;
     }
     _debounceTimer = Timer(_queryDebounce, () => unawaited(_loadResults()));
-  }
-
-  Future<SearchResponse> _guardedSearchResponse(
-    Future<SearchResponse> future,
-  ) async {
-    try {
-      return await future;
-    } catch (error) {
-      return SearchResponse(
-        request: SearchRequest(query: _query.trim(), mode: SearchMode.result),
-        sections: const <SearchSection>[],
-        degradeSignals: <SearchDegradeSignal>[
-          SearchDegradeSignal(
-            code: '',
-            message: UITextConstants.searchPartialGroupFailed,
-          ),
-        ],
-      );
-    }
-  }
-
-  Future<SearchResponse> _loadContentResponse(String query) async {
-    final selection = widget.launchContext.searchObjectSelection.normalized();
-    final contentTypes = switch (_activeTabId) {
-      _tabVideo => const <SearchContentTypeFilter>{
-        SearchContentTypeFilter.video,
-      },
-      _tabImage => const <SearchContentTypeFilter>{
-        SearchContentTypeFilter.image,
-      },
-      _tabArticle => const <SearchContentTypeFilter>{
-        SearchContentTypeFilter.article,
-      },
-      _ => selection.contentTypes,
-    };
-    return ref
-        .read(searchRepositoryProvider)
-        .search(
-          SearchRequest(
-            query: query,
-            mode: SearchMode.result,
-            objectTypes: const <SearchObjectType>{SearchObjectType.contentPost},
-            limit: 12,
-            contentTypes: contentTypes,
-          ),
-        );
   }
 
   Iterable<SearchHit> _hitsFromResponse(SearchResponse response) {
@@ -819,8 +748,8 @@ class _SearchNetworkResultsPageState
 
   static String _entityMetaFromHit(SearchHit hit) {
     final payload = hit.payload.toWireMap();
-    final followerCount = payload['followerCount'] ?? payload['followCount'];
-    final contentCount = payload['contentCount'] ?? payload['postCount'];
+    final followerCount = payload['followerCount'];
+    final contentCount = payload['contentCount'];
     final parts = <String>[];
     if (followerCount is num && followerCount > 0) {
       parts.add('${_formatCompactCount(followerCount)}关注');
@@ -866,22 +795,6 @@ class _SearchNetworkResultsPageState
     };
   }
 
-  Future<SearchResponse> _loadGroupResponse(String query) {
-    return ref
-        .read(searchRepositoryProvider)
-        .search(
-          SearchRequest(
-            query: query,
-            mode: SearchMode.result,
-            objectTypes: const <SearchObjectType>{
-              SearchObjectType.circleGroup,
-              SearchObjectType.circleCircle,
-            },
-            limit: 12,
-          ),
-        );
-  }
-
   List<SearchHit> _groupHitsFromResponse(SearchResponse response) {
     return _hitsFromResponse(response)
         .where(
@@ -895,22 +808,6 @@ class _SearchNetworkResultsPageState
   // 实体顶卡 + 一方地点单源：消费云侧第一方对象 entity.homepage（已绑定实体主页）与
   // location.place（被内容引用但未绑定主页的自由文本地点，R-S05e）。不再走
   // integration.location_poi —— 后者是发布选点用的三方实时 POI，由默认搜索页 suggest 承接。
-  Future<SearchResponse> _loadLocationResponse(String query) {
-    return ref
-        .read(searchRepositoryProvider)
-        .search(
-          SearchRequest(
-            query: query,
-            mode: SearchMode.result,
-            objectTypes: const <SearchObjectType>{
-              SearchObjectType.entityHomepage,
-              SearchObjectType.locationPlace,
-            },
-            limit: 12,
-          ),
-        );
-  }
-
   List<SearchHit> _locationHitsFromResponse(SearchResponse response) {
     return _hitsFromResponse(response)
         .where(

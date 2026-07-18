@@ -29,7 +29,7 @@ void main() {
         runtimeEnvironment: 'gamma',
       );
       final uri = credential!.authorizeWebSocket(
-        Uri.parse('wss://gateway.example/v1/realtime/ws'),
+        Uri.parse('wss://gateway.example/realtime/ws'),
       );
 
       expect(uri.queryParameters['access_token'], 'jwt-token');
@@ -76,7 +76,7 @@ void main() {
 
       transport = LongPollTransport(
         config: const RealtimeConfig(
-          wsUrl: 'ws://127.0.0.1:18080/v1/realtime/ws',
+          wsUrl: 'ws://127.0.0.1:18080/realtime/ws',
           longPollHoldSec: 1,
         ),
         authTokenProvider: const _TokenProvider('jwt-token'),
@@ -130,7 +130,7 @@ void main() {
 
         transport = LongPollTransport(
           config: const RealtimeConfig(
-            wsUrl: 'ws://127.0.0.1:18080/v1/realtime/ws',
+            wsUrl: 'ws://127.0.0.1:18080/realtime/ws',
             longPollHoldSec: 1,
           ),
           authTokenProvider: const _TokenProvider('jwt-token'),
@@ -160,7 +160,7 @@ void main() {
         var requestCount = 0;
         final transport = LongPollTransport(
           config: const RealtimeConfig(
-            wsUrl: 'ws://127.0.0.1:18080/v1/realtime/ws',
+            wsUrl: 'ws://127.0.0.1:18080/realtime/ws',
             longPollHoldSec: 1,
           ),
           authTokenProvider: const _TokenProvider(null),

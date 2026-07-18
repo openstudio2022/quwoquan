@@ -2,7 +2,9 @@ package media
 
 import (
 	"context"
+	"fmt"
 
+	runtimemedia "quwoquan_service/runtime/media"
 	mediaapp "quwoquan_service/services/content-service/internal/application/media"
 	postapp "quwoquan_service/services/content-service/internal/application/post"
 	mediamodel "quwoquan_service/services/content-service/internal/domain/media/model"
@@ -12,13 +14,23 @@ type mediaAssetBatchReader interface {
 	FindMediaAssetsByIDs(context.Context, []string) (map[string]mediaapp.MediaAssetSlice, error)
 }
 
-type PostBindingReader struct{ assets mediaAssetBatchReader }
+type publicSlicePublisher interface {
+	PublishPublicSlice(context.Context, string, string) error
+}
 
-func NewPostBindingReader(assets mediaAssetBatchReader) *PostBindingReader {
-	if assets == nil {
-		panic("PostBindingReader requires MediaAsset batch reader")
+type PostBindingReader struct {
+	assets    mediaAssetBatchReader
+	publisher publicSlicePublisher
+}
+
+func NewPostBindingReader(
+	assets mediaAssetBatchReader,
+	publisher publicSlicePublisher,
+) *PostBindingReader {
+	if assets == nil || publisher == nil {
+		panic("PostBindingReader requires MediaAsset batch reader and public slice publisher")
 	}
-	return &PostBindingReader{assets: assets}
+	return &PostBindingReader{assets: assets, publisher: publisher}
 }
 
 func (r *PostBindingReader) FindMediaAssetsForBinding(
@@ -31,13 +43,91 @@ func (r *PostBindingReader) FindMediaAssetsForBinding(
 	}
 	result := make(map[string]postapp.MediaAssetBindingSlice, len(assets))
 	for assetID, asset := range assets {
+		publicSliceKey := asset.VideoPublicSliceKey
+		if asset.MediaType != "video" {
+			publicSliceKey = runtimemedia.BuildContentMediaPublicSliceKey(
+				asset.MediaType,
+				asset.AssetID,
+				asset.Version,
+				asset.ContentType,
+			)
+		}
+		if publicSliceKey == "" {
+			return nil, fmt.Errorf(
+				"media asset %q cannot derive a canonical public slice key",
+				asset.AssetID,
+			)
+		}
 		result[assetID] = postapp.MediaAssetBindingSlice{
-			AssetID: asset.AssetID,
-			OwnerID: asset.OwnerID,
-			Ready:   asset.ProcessingStatus == mediamodel.ProcessingStatusReady,
+			AssetID:                      asset.AssetID,
+			OwnerID:                      asset.OwnerID,
+			Ready:                        asset.ProcessingStatus == mediamodel.ProcessingStatusReady,
+			MediaType:                    asset.MediaType,
+			ContentType:                  asset.ContentType,
+			Version:                      asset.Version,
+			PublicSliceKey:               publicSliceKey,
+			VerifiedDurationMs:           asset.VerifiedDurationMs,
+			VideoWidth:                   asset.VideoWidth,
+			VideoHeight:                  asset.VideoHeight,
+			VideoPublicSliceKey:          asset.VideoPublicSliceKey,
+			CoverPublicSliceKey:          asset.CoverPublicSliceKey,
+			PreviewTrackVersion:          asset.PreviewTrackVersion,
+			PreviewTrackManifestSliceKey: asset.PreviewTrackManifestSliceKey,
+			CoverStrategy:                asset.CoverStrategy,
+			ManualCoverAssetID:           asset.ManualCoverAssetID,
+			CoverFrameTimeMs:             asset.CoverFrameTimeMs,
 		}
 	}
 	return result, nil
+}
+
+// MaterializePublicSlices runs only after the Post application layer has
+// completed owner and ready-state validation. This prevents an unauthorized
+// binding attempt from making a private asset reachable on a public slice.
+func (r *PostBindingReader) MaterializePublicSlices(
+	ctx context.Context,
+	assetIDs []string,
+) error {
+	assets, err := r.assets.FindMediaAssetsByIDs(ctx, assetIDs)
+	if err != nil {
+		return err
+	}
+	for _, assetID := range assetIDs {
+		asset, ok := assets[assetID]
+		if !ok {
+			return fmt.Errorf("media asset %q is unavailable for public slice materialization", assetID)
+		}
+		if asset.MediaType == "video" {
+			if asset.VideoPublicSliceKey == "" || asset.CoverPublicSliceKey == "" {
+				return fmt.Errorf("ready video asset %q has no VOD delivery slices", asset.AssetID)
+			}
+			continue
+		}
+		publicSliceKey := runtimemedia.BuildContentMediaPublicSliceKey(
+			asset.MediaType,
+			asset.AssetID,
+			asset.Version,
+			asset.ContentType,
+		)
+		if publicSliceKey == "" {
+			return fmt.Errorf(
+				"media asset %q cannot derive a canonical public slice key",
+				asset.AssetID,
+			)
+		}
+		if err := r.publisher.PublishPublicSlice(
+			ctx,
+			asset.ObjectKey,
+			publicSliceKey,
+		); err != nil {
+			return fmt.Errorf(
+				"materialize public slice for media asset %q: %w",
+				asset.AssetID,
+				err,
+			)
+		}
+	}
+	return nil
 }
 
 var _ postapp.MediaAssetBindingReader = (*PostBindingReader)(nil)

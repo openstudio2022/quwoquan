@@ -21,7 +21,7 @@ def test_resolve_semantic_mentions_merges_sidecar_into_manifest(tmp_path: Path, 
     write_json(
         sidecar_path,
         {
-            "schemaVersion": "quwoquan_data.review_entities",
+            "schema": "quwoquan_data.review_entities",
             "ref": "post:1",
             "semanticMentions": [
                 {

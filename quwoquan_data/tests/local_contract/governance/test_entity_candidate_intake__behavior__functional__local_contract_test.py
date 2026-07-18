@@ -48,7 +48,6 @@ def test_unknown_entity_is_candidate_not_placeholder_homepage(tmp_path: Path, mo
         EXECUTION_ID,
         "post:1",
         meta,
-        auto_generate=True,
         article_text=article,
         candidate_repository=repository,
     )

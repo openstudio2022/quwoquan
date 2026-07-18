@@ -6,15 +6,18 @@ void main() {
   test('导入视频与用户上传视频使用同一封面展示合同', () {
     final imported = _videoWire(
       id: 'imported-video',
-      videoUrl: 'media/video/imported/clip.mp4',
-      thumbnailUrl: 'media/video/imported/clip.mp4?variant=thumb&t=0',
+      videoUrl: 'media/video/s/imported-video/post/imported-video/v1/clip.mp4',
+      thumbnailUrl:
+          'media/image/s/imported-image/post/imported-video/v1/thumb.jpg'
+          '?variant=thumb&t=0',
       coverStrategy: 'first_frame',
       coverFrameTimeMs: 0,
     );
     final uploaded = _videoWire(
       id: 'uploaded-video',
-      videoUrl: 'media/user/uploaded/clip.mp4',
-      thumbnailUrl: 'media/user/uploaded/manual-cover.jpg',
+      videoUrl: 'media/video/s/uploaded-video/post/uploaded-video/v1/clip.mp4',
+      thumbnailUrl:
+          'media/image/s/uploaded-image/post/uploaded-video/v1/manual-cover.jpg',
       coverStrategy: 'manual',
       coverFrameTimeMs: 3200,
     );
@@ -30,8 +33,8 @@ void main() {
 
     expect(importedView.video!.thumbnailUrl, importedView.cover!.url);
     expect(uploadedView.video!.thumbnailUrl, uploadedView.cover!.url);
-    expect(importedView.video!.url, contains('imported/clip.mp4'));
-    expect(uploadedView.video!.url, contains('uploaded/clip.mp4'));
+    expect(importedView.video!.url, contains('/imported-video/'));
+    expect(uploadedView.video!.url, contains('/uploaded-video/'));
     expect(importedView.video!.thumbnailUrl, contains('variant=thumb'));
     expect(uploadedView.video!.thumbnailUrl, contains('manual-cover.jpg'));
   });
@@ -45,13 +48,12 @@ Map<String, dynamic> _videoWire({
   required int coverFrameTimeMs,
 }) {
   return <String, dynamic>{
-    '_id': id,
-    'postId': id,
-    'contentType': 'video',
+    'id': id,
+    'type': 'video',
     'identity': 'work',
     'authorId': 'author',
     'displayName': '作者',
-    'authorAvatarUrl': '',
+    'avatarUrl': '',
     'videoUrl': videoUrl,
     'thumbnailUrl': thumbnailUrl,
     'coverUrl': thumbnailUrl,

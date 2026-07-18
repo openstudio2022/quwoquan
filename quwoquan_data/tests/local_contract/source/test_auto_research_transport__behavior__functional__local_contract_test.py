@@ -21,7 +21,9 @@ def test_auto_research_curl_json_preserves_call_timeout_and_retry_floor():
 
     class _Proc:
         returncode = 0
-        stdout = b'{"ok": true}'
+        stdout = (
+            b'{"ok": true}\n__QWQ_HTTP_META__200\thttps://example.test/api'
+        )
 
     def _fake_run(cmd, *, capture_output, check):
         _ = (capture_output, check)
@@ -45,7 +47,10 @@ def test_auto_research_curl_json_tolerates_non_utf8_stdout():
 
     class _Proc:
         returncode = 0
-        stdout = b'{"ok": "\\xff"}\xff'
+        stdout = (
+            b'{"ok": "\\xff"}\xff\n__QWQ_HTTP_META__200\t'
+            b'https://example.test/bad-encoding'
+        )
 
     def _fake_run(cmd, *, capture_output, check):
         _ = (cmd, capture_output, check)

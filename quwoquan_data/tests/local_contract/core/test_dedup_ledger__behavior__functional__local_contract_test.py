@@ -73,7 +73,7 @@ def test_mark_is_idempotent_and_schema_stamped() -> None:
     dedup.mark_entity_done(TASK, "幂等实体")
     manifest = dedup.load_manifest(TASK)
     assert manifest["completedEntities"].count("幂等实体") == 1
-    assert manifest["schemaVersion"] == dedup.LEDGER_SCHEMA
+    assert manifest["schema"] == dedup.LEDGER_SCHEMA
 
 
 def _run_all() -> None:

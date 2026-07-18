@@ -143,6 +143,7 @@ func TestClientSearchMapsHitsToCandidates(t *testing.T) {
 		"objectId":   "post_1",
 		"title":      "洱海骑行攻略",
 		"summary":    "环湖一日",
+		"contentType": "video",
 		"target":     string(rtsearch.TargetVideo),
 		"visibility": "public",
 		"tags":       []any{"骑行", "洱海"},
@@ -168,7 +169,10 @@ func TestClientSearchMapsHitsToCandidates(t *testing.T) {
 	if doc.ObjectID != "post_1" || doc.Title != "洱海骑行攻略" {
 		t.Fatalf("bad doc: %#v", doc)
 	}
-	// ContentType must be reconstructed from target so the ranker keeps it a video.
+	// ContentType 必须来自索引字段，禁止从 target 推导。
+	if doc.ContentType != "video" {
+		t.Fatalf("contentType not preserved: %q", doc.ContentType)
+	}
 	if rtsearch.TargetForDocument(doc) != rtsearch.TargetVideo {
 		t.Fatalf("target not preserved, contentType=%q", doc.ContentType)
 	}

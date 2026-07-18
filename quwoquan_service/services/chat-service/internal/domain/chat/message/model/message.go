@@ -14,7 +14,7 @@ var (
 // recall transition. Media delivery data belongs to content.MediaAsset; this
 // aggregate stores only the stable cross-context reference.
 type Message struct {
-	ID                        string       `json:"_id" bson:"_id"`
+	ID                        string       `json:"id" bson:"_id"`
 	ConversationID            string       `json:"conversationId" bson:"conversationId"`
 	Seq                       int64        `json:"seq" bson:"seq"`
 	ClientMessageID           string       `json:"clientMsgId" bson:"clientMsgId"`
@@ -75,7 +75,7 @@ func (m Message) PreviewText() string {
 
 // MessageReceipt is an append-only read fact emitted for a Message.
 type MessageReceipt struct {
-	ID             string    `json:"_id" bson:"_id"`
+	ID             string    `json:"id" bson:"_id"`
 	MessageID      string    `json:"messageId" bson:"messageId"`
 	ConversationID string    `json:"conversationId" bson:"conversationId"`
 	UserID         string    `json:"userId" bson:"userId"`

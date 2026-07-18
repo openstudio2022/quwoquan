@@ -27,7 +27,7 @@ class ConversationMemberDto {
 
   factory ConversationMemberDto.fromMap(Map<String, dynamic> map) {
     return ConversationMemberDto(
-      id: (map['_id'] ?? map['id'] ?? '') as String,
+      id: (map['id'] ?? '') as String,
       conversationId: (map['conversationId'] ?? '') as String,
       userId: (map['userId'] ?? '') as String,
       displayName: map['displayName'] as String?,
@@ -36,21 +36,22 @@ class ConversationMemberDto {
       role: (map['role'] ?? 'member') as String,
       assistantSkillId: map['assistantSkillId'] as String?,
       invitedBy: map['invitedBy'] as String?,
-      joinedAt: DateTime.tryParse((map['joinedAt'] ?? '') as String) ??
+      joinedAt:
+          DateTime.tryParse((map['joinedAt'] ?? '') as String) ??
           DateTime.now(),
     );
   }
 
   Map<String, dynamic> toMap() => {
-        'id': id,
-        'conversationId': conversationId,
-        'userId': userId,
-        if (displayName != null) 'displayName': displayName,
-        if (avatarUrl != null) 'avatarUrl': avatarUrl,
-        'memberType': memberType,
-        'role': role,
-        if (assistantSkillId != null) 'assistantSkillId': assistantSkillId,
-        if (invitedBy != null) 'invitedBy': invitedBy,
-        'joinedAt': joinedAt.toIso8601String(),
-      };
+    'id': id,
+    'conversationId': conversationId,
+    'userId': userId,
+    if (displayName != null) 'displayName': displayName,
+    if (avatarUrl != null) 'avatarUrl': avatarUrl,
+    'memberType': memberType,
+    'role': role,
+    if (assistantSkillId != null) 'assistantSkillId': assistantSkillId,
+    if (invitedBy != null) 'invitedBy': invitedBy,
+    'joinedAt': joinedAt.toIso8601String(),
+  };
 }

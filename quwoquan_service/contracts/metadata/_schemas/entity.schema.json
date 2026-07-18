@@ -3,11 +3,21 @@
   "$id": "https://quwoquan.local/contracts/metadata/entity.schema.json",
   "type": "object",
   "additionalProperties": false,
-  "required": ["version", "domain", "entity", "object_kind", "description"],
+  "required": [
+    "domain",
+    "entity",
+    "object_kind",
+    "description"
+  ],
   "properties": {
-    "version": { "type": "integer", "minimum": 1 },
-    "domain": { "type": "string", "minLength": 1 },
-    "entity": { "type": "string", "minLength": 1 },
+    "domain": {
+      "type": "string",
+      "minLength": 1
+    },
+    "entity": {
+      "type": "string",
+      "minLength": 1
+    },
     "object_kind": {
       "enum": [
         "owned_entity",
@@ -19,28 +29,83 @@
         "runtime_session"
       ]
     },
-    "aggregate_owner": { "type": "string", "minLength": 1 },
-    "description": { "type": "string", "minLength": 1 },
-    "storage_backend": { "type": "string", "minLength": 1 },
-    "cache_layer": { "type": ["string", "null"] },
-    "cache_ttl_seconds": { "type": ["integer", "null"], "minimum": 1 },
-    "capabilities": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
-    "taggable": { "type": "boolean" },
-    "vector_enabled": { "type": "boolean" },
-    "relation_signal": { "type": "boolean" },
-    "ddd_layer_mapping": { "type": "object" },
-    "service": { "type": "object" },
-    "ownership": { "type": "object" },
-    "storage": { "type": "object" },
-    "business_rules": { "type": ["array", "object"] },
-    "lifecycle": { "type": "object" }
+    "aggregate_owner": {
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "storage_backend": {
+      "type": "string",
+      "minLength": 1
+    },
+    "cache_layer": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "cache_ttl_seconds": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "taggable": {
+      "type": "boolean"
+    },
+    "vector_enabled": {
+      "type": "boolean"
+    },
+    "relation_signal": {
+      "type": "boolean"
+    },
+    "ddd_layer_mapping": {
+      "type": "object"
+    },
+    "service": {
+      "type": "object"
+    },
+    "ownership": {
+      "type": "object"
+    },
+    "storage": {
+      "type": "object"
+    },
+    "business_rules": {
+      "type": [
+        "array",
+        "object"
+      ]
+    },
+    "lifecycle": {
+      "type": "object"
+    }
   },
   "allOf": [
     {
       "if": {
-        "properties": { "object_kind": { "const": "owned_entity" } }
+        "properties": {
+          "object_kind": {
+            "const": "owned_entity"
+          }
+        }
       },
-      "then": { "required": ["aggregate_owner"] }
+      "then": {
+        "required": [
+          "aggregate_owner"
+        ]
+      }
     }
   ]
 }

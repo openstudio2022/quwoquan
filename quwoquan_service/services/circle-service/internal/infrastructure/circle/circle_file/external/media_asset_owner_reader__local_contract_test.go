@@ -24,7 +24,7 @@ func TestMediaAssetOwnerReaderUsesShortLivedScopedCredentialAndStrictSlice(t *te
 		t.Fatal(err)
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-		if request.URL.Path != "/internal/v1/content/media/asset-ready:reference" ||
+		if request.URL.Path != "/internal/content/media/asset-ready:reference" ||
 			request.URL.Query().Get("ownerPersonaId") != "persona-owner" {
 			http.Error(w, "route drift", http.StatusBadRequest)
 			return

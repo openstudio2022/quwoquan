@@ -25,12 +25,8 @@ METADATA = ROOT / "quwoquan_service" / "contracts" / "metadata"
 SHARED = METADATA / "_shared" / "test_fixtures"
 MEDIA_ROOT = SHARED / "media"
 USER_POOL_PATH = SHARED / "user_pool.json"
-CREATOR_POOL_PATH = SHARED / "user_pool.creator_pool.travel_photo_1k_v1.json"
 SOURCE_CATALOG_PATH = SHARED / "source_catalog.json"
 COMPOSITION_RULES_PATH = SHARED / "composition_rules.json"
-CREATOR_POOL_SEED = SHARED / "creator_pool" / "creator_travel_photo_1k_v1.seed.json"
-CREATOR_POOL_CANONICAL_REFS = ["creator_travel_photo_1k_v1", "creator_travel_photo_1k_v1_core"]
-PROFILE_PRESET_MANIFEST = MEDIA_ROOT / "profile_presets.manifest.json"
 USER_SCENARIOS = METADATA / "user" / "test_fixtures" / "scenarios" / "user_scenarios.json"
 CONTENT_SCENARIOS = METADATA / "content" / "test_fixtures" / "scenarios" / "content_scenarios.json"
 CIRCLE_SCENARIOS = METADATA / "social" / "circle" / "test_fixtures" / "scenarios" / "circle_scenarios.json"
@@ -41,6 +37,7 @@ MANIFESTS = {
     "gamma": SHARED / "app_gamma_seed_manifest.json",
 }
 GAMMA_CURATED_MEDIA_BUNDLE = ROOT / "quwoquan_ops" / "environments" / "gamma_curated_media_bundle.json"
+MEDIA_DELIVERY_MANIFEST = ROOT / "quwoquan_ops" / "environments" / "media_delivery_manifest.json"
 GROUP_RENDER_PACKAGE = "./tools/render_group_avatar"
 GAMMA_CURATED_EXPECTATIONS = {
     "content": {
@@ -79,6 +76,7 @@ MEDIA_FIELD_NAMES = {
     "coverUrl",
     "thumbnailUrl",
     "videoUrl",
+    "mediaDeliveryUrl",
 }
 
 
@@ -133,19 +131,6 @@ def circle_map(pool: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 def conversation_map(pool: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return {str(item["conversationId"]): item for item in pool.get("conversations", []) if isinstance(item, dict)}
-
-
-def _merge_users_by_id(*user_lists: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    merged: dict[str, dict[str, Any]] = {}
-    for items in user_lists:
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            user_id = str(item.get("userId") or "").strip()
-            if not user_id:
-                continue
-            merged[user_id] = item
-    return list(merged.values())
 
 
 def _profile_avatar_overlay() -> dict[str, dict[str, Any]]:
@@ -252,12 +237,8 @@ def _circle_media_overlay() -> dict[str, dict[str, Any]]:
 
 def load_effective_user_pool() -> dict[str, Any]:
     shared_pool = load_json(USER_POOL_PATH)
-    creator_pool = load_json(CREATOR_POOL_PATH)
     combined_pool = dict(shared_pool)
-    merged_users = _merge_users_by_id(
-        list(shared_pool.get("users") or []),
-        list(creator_pool.get("users") or []),
-    )
+    merged_users = [dict(item) for item in shared_pool.get("users") or [] if isinstance(item, dict)]
     profile_overlay = _profile_avatar_overlay()
     for user in merged_users:
         overlay = profile_overlay.get(str(user.get("userId") or ""))
@@ -276,25 +257,15 @@ def load_effective_user_pool() -> dict[str, Any]:
             user["groupPersonaMix"] = []
     combined_pool["users"] = merged_users
     circles_by_id = circle_map(shared_pool)
-    for item in creator_pool.get("circles") or []:
-        if not isinstance(item, dict):
-            continue
-        circle_id = str(item.get("circleId") or "").strip()
-        if circle_id:
-            circles_by_id[circle_id] = item
     for circle_id, summary in _circle_summary_overlay().items():
         circles_by_id.setdefault(circle_id, summary)
     combined_pool["circles"] = list(circles_by_id.values())
     circle_media = dict(shared_pool.get("circleMedia") or {})
-    for circle_id, bundle in (creator_pool.get("circleMedia") or {}).items():
-        circle_media[str(circle_id)] = bundle
     for circle_id, bundle in _circle_media_overlay().items():
         circle_media.setdefault(circle_id, bundle)
     combined_pool["circleMedia"] = circle_media
     stats = dict(shared_pool.get("statistics") or {})
-    stats["sharedScenarioUserCount"] = len(list(shared_pool.get("users") or []))
-    stats["creatorPoolUserCount"] = len(list(creator_pool.get("users") or []))
-    stats["combinedFixtureUserCount"] = len(combined_pool["users"])
+    stats["effectiveUserCount"] = len(combined_pool["users"])
     combined_pool["statistics"] = stats
     return combined_pool
 
@@ -461,8 +432,8 @@ def verify_pool_assets(errors: list[str], pool: dict[str, Any], rules: dict[str,
     if not allowed_mime_types:
         fail(errors, "user_pool.mediaContract.allowedMimeTypes must not be empty")
         return
-    if pool.get("schemaVersion") != "shared.avatar-user-pool":
-        fail(errors, f"user_pool schemaVersion must be shared.avatar-user-pool, got {pool.get('schemaVersion')!r}")
+    if pool.get("schema") != "shared.avatar-user-pool":
+        fail(errors, f"user_pool schema must be shared.avatar-user-pool, got {pool.get('schema')!r}")
     stats = pool.get("statistics") or {}
     if int(stats.get("mediaAssetCount") or 0) < int((rules.get("targets") or {}).get("mediaAssetCountFloor") or 0):
         fail(errors, "user_pool mediaAssetCount below composition rule floor")
@@ -542,7 +513,9 @@ def verify_content_fixture(
 ) -> None:
     post_media = pool.get("postMedia") or {}
     for post in content["seedSets"]["content_discovery_core"]["posts"]:
-        post_id = str(post.get("postId") or post.get("id"))
+        post_id = str(post.get("postId") or "")
+        if "id" in post:
+            fail(errors, f"content post {post_id} must not expose retired id")
         user = assert_pool_user(errors, users, f"content post {post_id}", post.get("authorId"))
         if not user:
             continue
@@ -564,9 +537,10 @@ def verify_content_fixture(
         )
         if not avatar_key or not background_key:
             continue
-        for field in ("authorAvatarUrl", "avatarUrl"):
-            if post.get(field) != avatar_key:
-                fail(errors, f"content post {post_id}.{field} must equal user avatarObjectKey")
+        if post.get("authorAvatarUrl") != avatar_key:
+            fail(errors, f"content post {post_id}.authorAvatarUrl must equal user avatarObjectKey")
+        if "avatarUrl" in post:
+            fail(errors, f"content post {post_id} must not expose retired avatarUrl")
         if post.get("authorBackgroundUrl") != background_key:
             fail(errors, f"content post {post_id}.authorBackgroundUrl must equal user backgroundObjectKey")
         if post.get("postType") != summary.get("postType"):
@@ -622,33 +596,30 @@ def verify_circle_fixture(
             fail(errors, f"circle {circle_id}.themeTags must match user_pool.circles")
     for members in seed.get("members", {}).values():
         for member in members:
-            persona_id = member.get("personaId")
-            if "userId" in member:
-                fail(errors, f"circle member {persona_id!r} must not expose retired userId")
-            user = assert_pool_user(errors, users, "circle member persona", persona_id)
+            user_id = member.get("userId")
+            if "personaId" in member:
+                fail(errors, f"circle member {user_id!r} must not expose retired personaId")
+            user = assert_pool_user(errors, users, "circle member user", user_id)
             if user and member.get("avatarUrl") != resolved_user_media_key(user, "avatarObjectKey"):
-                fail(errors, f"circle member {persona_id} avatarUrl must equal user_pool avatar")
+                fail(errors, f"circle member {user_id} avatarUrl must equal user_pool avatar")
     for files in seed.get("files", {}).values():
         for item in files:
             file_id = item.get("_id")
-            for retired_field in ("objectKey", "storageUrl", "uploadUrl"):
+            for retired_field in ("assetId", "uploaderPersonaId", "storageUrl", "uploadUrl"):
                 if retired_field in item:
-                    fail(errors, f"circle file {file_id}.{retired_field} must not cross the Media boundary")
-            uploader_persona_id = str(item.get("uploaderPersonaId") or "").strip()
+                    fail(errors, f"circle file {file_id} must not expose retired {retired_field}")
+            object_key = str(item.get("objectKey") or "").strip()
+            assert_media_ref(errors, f"circle file {file_id}.objectKey", object_key)
+            uploader_id = str(item.get("uploaderId") or "").strip()
             assert_pool_user(
                 errors,
                 users,
-                f"circle file {file_id}.uploaderPersonaId",
-                uploader_persona_id,
+                f"circle file {file_id}.uploaderId",
+                uploader_id,
             )
-            asset_id = str(item.get("assetId") or "").strip()
             file_type = str(item.get("fileType") or "").strip()
-            if file_type == "file" and not asset_id:
-                fail(errors, f"circle file {file_id}.assetId is required for file")
-            if file_type == "folder" and asset_id:
-                fail(errors, f"circle file {file_id}.assetId must be empty for folder")
-            if file_type not in {"file", "folder"}:
-                fail(errors, f"circle file {file_id}.fileType must be file or folder, got {file_type!r}")
+            if file_type not in {"image", "video", "document", "other"}:
+                fail(errors, f"circle file {file_id}.fileType is not a client media kind: {file_type!r}")
 
 
 def direct_target_user(conversation_id: str, current_user_id: str, members: dict[str, list[dict[str, Any]]]) -> str:
@@ -672,8 +643,10 @@ def verify_chat_fixture(
     current_user_id = str(seed.get("currentUserId") or "fixture_user_current")
     members = seed.get("members") or {}
     for conv in seed["conversations"]:
-        conv_id = str(conv.get("conversationId") or conv.get("id") or "")
-        conv_type = str(conv.get("type") or conv.get("conversationType") or "").lower()
+        conv_id = str(conv.get("id") or "")
+        if "conversationId" in conv or "_id" in conv:
+            fail(errors, f"conversation {conv_id} exposes retired identity aliases")
+        conv_type = str(conv.get("type") or "").lower()
         summary = conversations_by_id.get(conv_id)
         if not summary:
             fail(errors, f"conversation {conv_id} missing user_pool.conversations summary")
@@ -719,9 +692,12 @@ def verify_chat_fixture(
                 fail(errors, f"chat member {conv_id}/{member.get('userId')} isCurrentUser must equal {expected_current}")
     for conv_id, messages in seed.get("messages", {}).items():
         for message in messages:
-            user = assert_pool_user(errors, users, f"chat message {conv_id}/{message.get('messageId')}", message.get("senderId"))
-            if user and message.get("senderAvatarUrlSnapshot") != resolved_user_media_key(user, "avatarObjectKey"):
-                fail(errors, f"chat message {message.get('messageId')} senderAvatarUrlSnapshot must equal user_pool avatar")
+            message_id = message.get("id")
+            if "messageId" in message or "senderAvatarUrlSnapshot" in message:
+                fail(errors, f"chat message {message_id} exposes retired message aliases")
+            user = assert_pool_user(errors, users, f"chat message {conv_id}/{message_id}", message.get("senderId"))
+            if user and message.get("senderAvatar") != resolved_user_media_key(user, "avatarObjectKey"):
+                fail(errors, f"chat message {message_id} senderAvatar must equal user_pool avatar")
     for contact in chat["seedSets"]["chat_contacts_core"].get("contacts", []):
         user = assert_pool_user(errors, users, "chat contact", contact.get("userId"))
         if user and contact.get("avatarUrl") != resolved_user_media_key(user, "avatarObjectKey"):
@@ -795,7 +771,7 @@ def verify_manifests(errors: list[str]) -> dict[str, dict[str, Any]]:
 
 def verify_gamma_curated_coverage(errors: list[str], gamma_docs: dict[str, dict[str, Any]]) -> None:
     content_posts = {
-        str(item.get("postId") or item.get("id") or "")
+        str(item.get("postId") or "")
         for item in gamma_docs["content"]["seedSets"]["content_discovery_core"].get("posts", [])
     }
     required_posts = {"fixture_photo_001", "fixture_video_001", "fixture_article_001", "fixture_moment_001"}
@@ -804,7 +780,7 @@ def verify_gamma_curated_coverage(errors: list[str], gamma_docs: dict[str, dict[
         fail(errors, f"gamma curated content posts missing core coverage: {missing_posts}")
 
     user_profiles = {
-        str(item.get("userId") or item.get("id") or "")
+        str(item.get("userId") or "")
         for item in gamma_docs["user"]["seedSets"]["user_profile_core"].get("profiles", [])
     }
     required_users = {"fixture_user_current", "fixture_user_photo", "fixture_user_travel", "fixture_user_article"}
@@ -813,7 +789,7 @@ def verify_gamma_curated_coverage(errors: list[str], gamma_docs: dict[str, dict[
         fail(errors, f"gamma curated user profiles missing core coverage: {missing_users}")
 
     circle_ids = {
-        str(item.get("id") or item.get("circleId") or "")
+        str(item.get("id") or "")
         for item in gamma_docs["circle"]["seedSets"]["circle_core"].get("circles", [])
     }
     required_circles = {"fixture_circle_photo", "fixture_circle_travel", "fixture_circle_city", "fixture_circle_tech"}
@@ -822,7 +798,7 @@ def verify_gamma_curated_coverage(errors: list[str], gamma_docs: dict[str, dict[
         fail(errors, f"gamma curated circles missing core coverage: {missing_circles}")
 
     conversation_ids = {
-        str(item.get("conversationId") or item.get("id") or "")
+        str(item.get("id") or "")
         for item in gamma_docs["chat"]["seedSets"]["chat_core"].get("conversations", [])
     }
     required_conversations = {
@@ -839,18 +815,14 @@ def verify_gamma_curated_coverage(errors: list[str], gamma_docs: dict[str, dict[
 def verify_gamma_curated_media_bundle(
     errors: list[str],
     bundle: dict[str, Any],
-    gamma_docs: dict[str, dict[str, Any]],
+    gamma_fixture_docs: list[dict[str, Any]],
+    delivery_manifest: dict[str, Any],
 ) -> None:
-    if bundle.get("schemaVersion") != "gamma-curated-media-bundle":
-        fail(errors, "gamma curated media bundle schemaVersion must be gamma-curated-media-bundle")
+    if bundle.get("schema") != "gamma-curated-media-bundle":
+        fail(errors, "gamma curated media bundle schema must be gamma-curated-media-bundle")
     if bundle.get("environment") != "gamma":
         fail(errors, "gamma curated media bundle environment must be gamma")
-    max_images = int(bundle.get("maxImageObjectCount") or 0)
     image_count = int(bundle.get("imageObjectCount") or 0)
-    if max_images <= 0:
-        fail(errors, "gamma curated media bundle maxImageObjectCount must be positive")
-    if image_count > max_images:
-        fail(errors, f"gamma curated imageObjectCount exceeds cap: {image_count}")
 
     media_objects = bundle.get("mediaObjects")
     if not isinstance(media_objects, list) or not media_objects:
@@ -858,6 +830,7 @@ def verify_gamma_curated_media_bundle(
         return
 
     object_keys: set[str] = set()
+    actual_image_count = 0
     for item in media_objects:
         object_key = str(item.get("objectKey") or "")
         relative_path = str(item.get("relativePath") or "")
@@ -874,66 +847,29 @@ def verify_gamma_curated_media_bundle(
         actual_hash = sha256_bytes(raw)
         if expected_hash != actual_hash:
             fail(errors, f"gamma curated media bundle hash mismatch for {object_key}: expected {expected_hash}, got {actual_hash}")
+        if str(item.get("mimeType") or "").startswith("image/"):
+            actual_image_count += 1
+
+    if image_count != actual_image_count:
+        fail(errors, f"gamma curated imageObjectCount mismatch: expected {actual_image_count}, got {image_count}")
+    if int(bundle.get("totalObjectCount") or 0) != len(media_objects):
+        fail(errors, "gamma curated totalObjectCount must equal mediaObjects length")
 
     scenario_media_refs: set[str] = set()
-    for doc in gamma_docs.values():
+    for doc in gamma_fixture_docs:
         scenario_media_refs.update(collect_media_refs(doc))
-    missing = sorted(scenario_media_refs - object_keys)
+    delivery_media_refs = {
+        str(item.get("publicSliceKey") or "").strip()
+        for item in delivery_manifest.get("assets") or []
+        if isinstance(item, dict) and str(item.get("publicSliceKey") or "").strip()
+    }
+    expected_media_refs = scenario_media_refs | delivery_media_refs
+    missing = sorted(expected_media_refs - object_keys)
     if missing:
         fail(errors, f"gamma curated scenarios reference media outside curated bundle: {missing[:10]}")
-
-
-def verify_creator_pool_media(errors: list[str]) -> None:
-    """Creator pool avatar/cover must resolve through committed preset manifests.
-
-    Canonical creator pool profiles no longer publish raw avatarObjectKey/backgroundObjectKey.
-    The truth source is preset IDs -> preset manifest -> committed media assets.
-    """
-    if not CREATOR_POOL_SEED.is_file():
-        fail(errors, f"creator_pool seed missing: {CREATOR_POOL_SEED.relative_to(ROOT)}")
-        return
-    if not PROFILE_PRESET_MANIFEST.is_file():
-        fail(errors, f"profile preset manifest missing: {PROFILE_PRESET_MANIFEST.relative_to(ROOT)}")
-        return
-    seed = load_json(CREATOR_POOL_SEED)
-    preset_manifest = load_json(PROFILE_PRESET_MANIFEST)
-    avatar_ids = {str(item.get("presetId") or "") for item in preset_manifest.get("avatars") or []}
-    cover_ids = {str(item.get("presetId") or "") for item in preset_manifest.get("covers") or []}
-    users = seed.get("users") or []
-    if not isinstance(users, list) or not users:
-        fail(errors, "creator_pool seed has no users")
-        return
-    for user in users:
-        handle = str(user.get("userHandle") or user.get("subAccountId") or "?")
-        avatar = str(user.get("avatarPresetId") or "")
-        cover = str(user.get("coverPresetId") or "")
-        if avatar not in avatar_ids:
-            fail(errors, f"creator_pool[{handle}] avatarPresetId not found in preset manifest: {avatar!r}")
-        if cover not in cover_ids:
-            fail(errors, f"creator_pool[{handle}] coverPresetId not found in preset manifest: {cover!r}")
-
-
-def verify_creator_pool_manifests(errors: list[str], manifests: dict[str, dict[str, Any]]) -> None:
-    entries: dict[str, dict[str, Any]] = {}
-    for env, manifest in manifests.items():
-        item = next(
-            (it for it in manifest.get("seedRefs", []) if it.get("domain") == "creator_pool"),
-            None,
-        )
-        if not item:
-            fail(errors, f"{env} manifest missing creator_pool domain")
-            continue
-        entries[env] = item
-    if len(entries) != len(manifests):
-        return
-    fixture_paths = {it.get("fixturePath") for it in entries.values()}
-    if len(fixture_paths) != 1:
-        fail(errors, f"creator_pool fixturePath must match across environments: {sorted(map(str, fixture_paths))}")
-    refs_set = {tuple(it.get("refs") or []) for it in entries.values()}
-    if len(refs_set) != 1:
-        fail(errors, f"creator_pool refs must match across environments: {sorted(map(str, refs_set))}")
-    if tuple(entries["alpha"].get("refs") or []) != tuple(CREATOR_POOL_CANONICAL_REFS):
-        fail(errors, f"creator_pool refs must be canonical v1 set {CREATOR_POOL_CANONICAL_REFS}")
+    extra = sorted(object_keys - expected_media_refs)
+    if extra:
+        fail(errors, f"gamma curated media bundle contains unreferenced objects: {extra[:10]}")
 
 
 def verify_entity_scale(
@@ -981,8 +917,6 @@ def main() -> int:
     verify_circle_fixture(errors, users, pool, circles_by_id, circle)
     verify_chat_fixture(errors, users, pool, conversations_by_id, chat)
     manifests = verify_manifests(errors)
-    verify_creator_pool_media(errors)
-    verify_creator_pool_manifests(errors, manifests)
     verify_entity_scale(errors, rules, user_doc, content, circle, chat)
     for label, document in (
         ("user_scenarios", user_doc),
@@ -1005,7 +939,17 @@ def main() -> int:
     verify_chat_fixture(errors, users, pool, conversations_by_id, gamma_docs["chat"])
     verify_gamma_curated_coverage(errors, gamma_docs)
     gamma_bundle = load_json(GAMMA_CURATED_MEDIA_BUNDLE)
-    verify_gamma_curated_media_bundle(errors, gamma_bundle, gamma_docs)
+    gamma_fixture_docs = [
+        load_json(METADATA / str(item.get("fixturePath") or ""))
+        for item in manifests["gamma"]["seedRefs"]
+        if str(item.get("fixturePath") or "").strip()
+    ]
+    verify_gamma_curated_media_bundle(
+        errors,
+        gamma_bundle,
+        gamma_fixture_docs,
+        load_json(MEDIA_DELIVERY_MANIFEST),
+    )
     for label, document in gamma_docs.items():
         verify_no_external_media(errors, document, f"gamma_{label}_scenarios")
     if errors:

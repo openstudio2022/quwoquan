@@ -3,25 +3,22 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/feed_realtime_patch.g.dart';
-import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
-import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 import 'package:quwoquan_app/ui/discovery/providers/feed_realtime_patch_provider.dart';
+
+import '../../../../support/recording_app_telemetry_recorder.dart';
 
 const String _authedUserId = 'test-sub-account';
 const String _channel = 'moment';
 
 void main() {
-  late MockOpsEventRepository ops;
+  late RecordingAppTelemetryRecorder ops;
   late AnalyticsService analytics;
 
   setUp(() async {
-    ops = MockOpsEventRepository();
-    analytics = AnalyticsService.forTesting(
-      mode: AppDataSourceMode.remote,
-      eventRepository: ops,
-    );
+    ops = RecordingAppTelemetryRecorder();
+    analytics = AnalyticsService.forTesting(telemetryReporter: ops);
     await analytics.initialize(const AnalyticsConfig());
   });
 
@@ -58,8 +55,12 @@ void main() {
         const <String>[];
   }
 
-  List<OpsEventRecordInput> eventsNamed(String name) =>
-      ops.recorded.where((event) => event.eventName == name).toList();
+  List<RecordedAppTelemetry> eventsNamed(String name) => ops.recorded
+      .where(
+        (event) =>
+            event.action == name || event.extensions['operationId'] == name,
+      )
+      .toList();
 
   group('negative_feedback_removal · 不打断阅读位置', () {
     test('post 维度：仅移除视口之外的目标项，视口内目标暂缓', () {
@@ -146,9 +147,7 @@ void main() {
         ),
       );
 
-      final hint = container
-          .read(feedRealtimePatchProvider)
-          .hintFor(_channel);
+      final hint = container.read(feedRealtimePatchProvider).hintFor(_channel);
       expect(hint, isNotNull);
       expect(hint!.newCandidateCount, 5);
       expect(hint.hasUpdate, isTrue);
@@ -167,9 +166,7 @@ void main() {
         ),
       );
 
-      final hint = container
-          .read(feedRealtimePatchProvider)
-          .hintFor(_channel);
+      final hint = container.read(feedRealtimePatchProvider).hintFor(_channel);
       expect(hint!.refreshSuggested, isTrue);
       expect(hint.newCandidateCount, 0);
       expect(hint.hasUpdate, isTrue);
@@ -191,7 +188,10 @@ void main() {
       notifier.applyPatch(patch);
 
       expect(
-        container.read(feedRealtimePatchProvider).hintFor(_channel)!.newCandidateCount,
+        container
+            .read(feedRealtimePatchProvider)
+            .hintFor(_channel)!
+            .newCandidateCount,
         3,
       );
     });
@@ -215,7 +215,10 @@ void main() {
       );
 
       expect(currentItemIds(container), <String>['p0', 'p1', 'p2']);
-      expect(container.read(feedRealtimePatchProvider).hintFor(_channel), isNull);
+      expect(
+        container.read(feedRealtimePatchProvider).hintFor(_channel),
+        isNull,
+      );
     });
 
     test('游客不消费 patch（鉴权门拦截）', () {
@@ -230,7 +233,10 @@ void main() {
         ),
       );
 
-      expect(container.read(feedRealtimePatchProvider).hintFor(_channel), isNull);
+      expect(
+        container.read(feedRealtimePatchProvider).hintFor(_channel),
+        isNull,
+      );
     });
 
     test('patch.userId 与当前用户不一致则忽略', () {
@@ -246,7 +252,10 @@ void main() {
         ),
       );
 
-      expect(container.read(feedRealtimePatchProvider).hintFor(_channel), isNull);
+      expect(
+        container.read(feedRealtimePatchProvider).hintFor(_channel),
+        isNull,
+      );
     });
   });
 
@@ -266,8 +275,8 @@ void main() {
       expect(eventsNamed('feed_patch_received'), hasLength(1));
       expect(eventsNamed('feed_patch_displayed'), hasLength(1));
       final received = eventsNamed('feed_patch_received').first;
-      expect(received.eventType, 'feed_realtime_patch');
-      expect(received.payload['patchId'], 'fb-1');
+      expect(received.eventType, 'product_action');
+      expect(received.extensions.containsKey('patchId'), isFalse);
     });
 
     test('点击刷新记录并清除提示', () {
@@ -283,7 +292,10 @@ void main() {
       notifier.acknowledgeRefresh(_channel);
 
       expect(eventsNamed('feed_patch_refresh_clicked'), hasLength(1));
-      expect(container.read(feedRealtimePatchProvider).hintFor(_channel), isNull);
+      expect(
+        container.read(feedRealtimePatchProvider).hintFor(_channel),
+        isNull,
+      );
     });
   });
 }
@@ -321,7 +333,6 @@ FeedRealtimePatch _patch({
   int affectedCount = 0,
 }) {
   return FeedRealtimePatch(
-    schemaVersion: feedRealtimePatchSchemaVersion,
     patchId: patchId,
     patchType: type,
     userId: userId,
@@ -351,8 +362,10 @@ class _AuthedSession extends AuthSessionController {
 
 class _GuestSession extends AuthSessionController {
   @override
-  AuthSessionState build() =>
-      const AuthSessionState(status: AuthSessionStatus.guest, installId: 'test');
+  AuthSessionState build() => const AuthSessionState(
+    status: AuthSessionStatus.guest,
+    installId: 'test',
+  );
 }
 
 class _SeededFeedMap extends DiscoveryFeedMapNotifier {

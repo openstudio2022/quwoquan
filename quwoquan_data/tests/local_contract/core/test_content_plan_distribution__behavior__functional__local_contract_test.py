@@ -103,7 +103,7 @@ def test_content_plan_separated_research_enforces_per_target_quota_count():
     for execution_id, items in items_by_execution.items():
         write_json(
             execution_content_plan_packet_path(execution_id),
-            {"schemaVersion": cp.CONTENT_PLAN_SCHEMA, "items": items},
+            {"schema": cp.CONTENT_PLAN_SCHEMA, "items": items},
         )
     article_spec = {
         "scope": {
@@ -138,16 +138,16 @@ def test_content_plan_separated_research_enforces_per_target_quota_count():
     write_json(
         execution_content_plan_packet_path(EXECUTION_ID),
         {
-            "schemaVersion": "quwoquan_data.content_plan_packet/1",
+            "schema": "invalid.content_plan_packet",
             "items": items_by_execution[EXECUTION_ID],
         },
     )
     schema_issues = cp.validate_content_plan(EXECUTION_ID, article_spec)
-    assert any("content_plan_packet.schemaVersion" in issue for issue in schema_issues), schema_issues
+    assert any("content_plan_packet.schema" in issue for issue in schema_issues), schema_issues
     write_json(
         execution_content_plan_packet_path(IMAGE_EXECUTION_ID),
         {
-            "schemaVersion": cp.CONTENT_PLAN_SCHEMA,
+            "schema": cp.CONTENT_PLAN_SCHEMA,
             "items": items_by_execution[IMAGE_EXECUTION_ID][:-1],
         },
     )
@@ -191,7 +191,7 @@ def test_content_plan_commercial_closure_treats_per_target_quota_as_ceiling():
     write_json(
         execution_content_plan_packet_path(EXECUTION_ID),
         {
-            "schemaVersion": cp.CONTENT_PLAN_SCHEMA,
+            "schema": cp.CONTENT_PLAN_SCHEMA,
             "items": [
                 {
                     "ref": ref,
@@ -210,7 +210,7 @@ def test_content_plan_commercial_closure_treats_per_target_quota_as_ceiling():
         },
     )
     spec = {
-        "workflowPolicy": {
+        "executionPolicy": {
             "articleCommercialClosure": True,
             "targetObjectCount": 100,
         },
@@ -360,11 +360,11 @@ def test_content_plan_separated_research_keeps_image_lane_without_angle_coverage
     }
     write_json(
         execution_content_plan_packet_path(EXECUTION_ID),
-        {"schemaVersion": cp.CONTENT_PLAN_SCHEMA, "items": items},
+        {"schema": cp.CONTENT_PLAN_SCHEMA, "items": items},
     )
     write_json(
         execution_content_plan_packet_path(IMAGE_EXECUTION_ID),
-        {"schemaVersion": cp.CONTENT_PLAN_SCHEMA, "items": [image_item]},
+        {"schema": cp.CONTENT_PLAN_SCHEMA, "items": [image_item]},
     )
     assert cp.validate_content_plan(EXECUTION_ID, article_spec) == []
     assert cp.validate_content_plan(IMAGE_EXECUTION_ID, image_spec) == []
@@ -380,7 +380,7 @@ def test_content_plan_separated_research_keeps_image_lane_without_angle_coverage
     )
     write_json(
         execution_content_plan_packet_path(EXECUTION_ID),
-        {"schemaVersion": cp.CONTENT_PLAN_SCHEMA, "items": items[:2]},
+        {"schema": cp.CONTENT_PLAN_SCHEMA, "items": items[:2]},
     )
     # writingIntent 仍是派生可选标签，但 per-target 数量是冻结放量合同；
     # 缺篇数必须阻断，不存在 execution 级部分交付旁路。

@@ -13,20 +13,20 @@ const String _assistantScenarioFixtureJsonBase64 = String.fromEnvironment(
 
 class AssistantScenarioPack {
   const AssistantScenarioPack({
-    required this.schemaVersion,
+    required this.schema,
     required this.repositoryExpectations,
     required this.seedSets,
     required this.scenarios,
   });
 
-  final String schemaVersion;
+  final String schema;
   final Map<String, String> repositoryExpectations;
   final Map<String, dynamic> seedSets;
   final List<AssistantScenario> scenarios;
 
   factory AssistantScenarioPack.fromJson(Map<String, dynamic> json) {
     return AssistantScenarioPack(
-      schemaVersion: (json['schemaVersion'] ?? '').toString(),
+      schema: (json['schema'] ?? '').toString(),
       repositoryExpectations:
           (json['repositoryExpectations'] as Map? ?? const <String, dynamic>{})
               .map((key, value) => MapEntry(key.toString(), value.toString())),
@@ -302,6 +302,7 @@ class ScenarioMockAssistantRepository extends MockAssistantRepository {
     );
 
     yield AssistantStreamEventWire(
+      schema: 'assistant_stream_event',
       eventId: '$turnId:assistant.turn.started',
       conversationId: 'acv_fixture_personal_assistant',
       turnId: turnId,
@@ -311,6 +312,7 @@ class ScenarioMockAssistantRepository extends MockAssistantRepository {
       createdAt: createdAt,
     );
     yield AssistantStreamEventWire(
+      schema: 'assistant_stream_event',
       eventId: '$turnId:assistant.plan.updated',
       conversationId: 'acv_fixture_personal_assistant',
       turnId: turnId,
@@ -327,6 +329,7 @@ class ScenarioMockAssistantRepository extends MockAssistantRepository {
       createdAt: createdAt,
     );
     yield AssistantStreamEventWire(
+      schema: 'assistant_stream_event',
       eventId: '$turnId:assistant.tool.requested',
       conversationId: 'acv_fixture_personal_assistant',
       turnId: turnId,
@@ -336,6 +339,7 @@ class ScenarioMockAssistantRepository extends MockAssistantRepository {
       createdAt: createdAt,
     );
     yield AssistantStreamEventWire(
+      schema: 'assistant_stream_event',
       eventId: '$turnId:assistant.tool.completed',
       conversationId: 'acv_fixture_personal_assistant',
       turnId: turnId,
@@ -345,6 +349,7 @@ class ScenarioMockAssistantRepository extends MockAssistantRepository {
       createdAt: createdAt,
     );
     yield AssistantStreamEventWire(
+      schema: 'assistant_stream_event',
       eventId: '$turnId:assistant.observation.assessed',
       conversationId: 'acv_fixture_personal_assistant',
       turnId: turnId,
@@ -362,6 +367,7 @@ class ScenarioMockAssistantRepository extends MockAssistantRepository {
       createdAt: createdAt,
     );
     yield AssistantStreamEventWire(
+      schema: 'assistant_stream_event',
       eventId: '$turnId:assistant.answer.final',
       conversationId: 'acv_fixture_personal_assistant',
       turnId: turnId,

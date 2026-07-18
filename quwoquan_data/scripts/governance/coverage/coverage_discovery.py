@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 import urllib.parse
 from datetime import datetime
@@ -433,7 +434,7 @@ def discover_candidates(
     target_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     report: dict[str, Any] = {
-        "schemaVersion": "quwoquan_data.coverage_discover_report/1",
+        "schema": "quwoquan_data.coverage_discover_report",
         "generatedAt": now_iso(),
         "provinces": provinces,
         "sources": sources,

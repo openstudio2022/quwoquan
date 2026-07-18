@@ -45,7 +45,7 @@ def _fixture(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     _write(
         payload_file(release, "release.json"),
         {
-            "schemaVersion": "quwoquan_data.release/3",
+            "schema": "quwoquan_data.release",
             "releaseId": RELEASE_ID,
             "releaseKind": "content",
             "executionIds": [execution_id],
@@ -67,14 +67,14 @@ def _fixture(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     import_run_id = "import-001"
     import_root = output / "env/gamma/runs/data-release" / RELEASE_ID / import_run_id
     importer_ref = (import_root / "homepage-import.json").relative_to(output).as_posix()
-    cases_ref = (import_root / "app_uat_cases.json").relative_to(output).as_posix()
+    cases_ref = (import_root / "homepage_verification_cases.json").relative_to(output).as_posix()
     mapping = {"地点/景区/普陀山": "homepage-putuo", "地点/景区/海螺沟": "homepage-hailuogou"}
     _write(import_root / "run.json", {"environment": "gamma", "releaseId": RELEASE_ID, "kind": "apply"})
-    _write(import_root / "result.json", {"environment": "gamma", "releaseId": RELEASE_ID, "status": "completed", "appUatCasesRef": cases_ref})
+    _write(import_root / "result.json", {"environment": "gamma", "releaseId": RELEASE_ID, "status": "completed", "homepageVerificationCasesRef": cases_ref})
     _write(
         import_root / "homepage-import.json",
         {
-            "schemaVersion": "quwoquan_service.homepage_import_report/3",
+            "schema": "quwoquan_service.homepage_import_report",
             "releaseId": RELEASE_ID,
             "env": "gamma",
             "dryRun": False,
@@ -91,9 +91,9 @@ def _fixture(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
         },
     )
     _write(
-        import_root / "app_uat_cases.json",
+        import_root / "homepage_verification_cases.json",
         {
-            "schemaVersion": "quwoquan_data.gamma_app_uat_case_manifest/1",
+            "schema": "quwoquan_data.homepage_verification_case_manifest",
             "environment": "gamma",
             "releaseId": RELEASE_ID,
             "runId": import_run_id,
@@ -108,16 +108,16 @@ def _fixture(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     api_run_id = "api-001"
     api_root = output / "env/gamma/runs/data-release" / RELEASE_ID / api_run_id
     api_ref = (api_root / "homepage-api-verification.json").relative_to(output).as_posix()
-    _write(api_root / "run.json", {"environment": "gamma", "releaseId": RELEASE_ID, "kind": "homepage_api_verification"})
+    _write(api_root / "run.json", {"environment": "gamma", "releaseId": RELEASE_ID, "kind": "verify"})
     _write(api_root / "result.json", {"environment": "gamma", "releaseId": RELEASE_ID, "status": "completed", "homepageApiVerificationRef": api_ref})
     _write(
         api_root / "homepage-api-verification.json",
         {
-            "schemaVersion": "quwoquan_data.gamma_homepage_api_verification/1",
+            "schema": "quwoquan_data.homepage_api_verification",
             "environment": "gamma",
             "releaseId": RELEASE_ID,
             "runId": api_run_id,
-            "sourceUatCasesRef": cases_ref,
+            "sourceCasesRef": cases_ref,
             "apiBaseUrl": "https://gamma.example.test",
             "verifiedAt": "2026-07-13T00:00:00Z",
             "passed": True,
@@ -153,7 +153,7 @@ def _fixture(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     _write(replay_root / "run.json", {"environment": "gamma", "releaseId": RELEASE_ID, "kind": "apply"})
     _write(replay_root / "result.json", {"environment": "gamma", "releaseId": RELEASE_ID, "status": "completed"})
     common = {
-        "schemaVersion": "quwoquan_data.two_province_release_attestation/1",
+        "schema": "quwoquan_data.two_province_release_attestation",
         "releaseId": RELEASE_ID,
         "payloadSha256": digest,
         "passed": True,

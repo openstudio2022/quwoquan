@@ -1,5 +1,4 @@
 templateId: 古镇_叙事
-version: 1
 subject: { kind: entity, type: 地点/古镇 }
 vertical: travel
 category: travel

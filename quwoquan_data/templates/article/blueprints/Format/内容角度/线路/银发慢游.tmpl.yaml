@@ -1,5 +1,4 @@
 templateId: 线路_银发慢游
-version: 1
 subject: { kind: topic, type: 旅行/线路, minEntityRefs: 2, subjectTagRef: Format/内容角度/攻略/银发专享 }
 vertical: travel
 category: travel

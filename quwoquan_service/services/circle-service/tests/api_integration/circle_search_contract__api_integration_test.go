@@ -11,7 +11,7 @@ func TestSearchCirclesShape(t *testing.T) {
 	createTestCircle(t, "可搜圈子Alpha")
 	createTestCircle(t, "另一个Beta")
 
-	rec := doRequest(t, http.MethodGet, "/v1/circles/search?query=alpha&limit=10", nil)
+	rec := doRequest(t, http.MethodGet, "/circles/search?query=alpha&limit=10", nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}

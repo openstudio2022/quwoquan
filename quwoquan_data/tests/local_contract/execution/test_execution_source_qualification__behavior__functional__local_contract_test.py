@@ -48,8 +48,8 @@ def _write_source_catalog(root: Path, *, source_kind: str = "wikipedia") -> None
     evidence.parent.mkdir(parents=True)
     evidence.write_text("{}\n", encoding="utf-8")
     catalog = {
-        "schemaVersion": "quwoquan_data.object_source_catalog/1",
-        "policyRevision": "encyclopedia-primary-v2",
+        "schema": "quwoquan_data.object_source_catalog",
+        "policyRevision": "encyclopedia-primary",
         "primaryEvidenceRef": evidence_ref,
         "primarySource": {
             "sourceUnitId": "普陀山__wikipedia__abc",
@@ -61,7 +61,7 @@ def _write_source_catalog(root: Path, *, source_kind: str = "wikipedia") -> None
             "title": "普陀山",
             "fetchedAt": "2026-07-13T00:00:00Z",
             "snapshotHash": "sha256:" + "a" * 64,
-            "policyRevision": "encyclopedia-primary-v2",
+            "policyRevision": "encyclopedia-primary",
             "sourceUseMode": "licensed_adaptation",
             "evidenceRef": evidence_ref,
         },

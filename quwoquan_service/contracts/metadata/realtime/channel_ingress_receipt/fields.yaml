@@ -1,4 +1,3 @@
-version: 1
 entity: ChannelIngressReceipt
 
 entities:
@@ -6,6 +5,7 @@ entities:
     description: 已验签外部渠道入站事实
     fields:
       - name: id
+        source: id
         type: string
         constraints: [NOT_NULL]
         classification: INTERNAL
@@ -13,6 +13,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: channelType
+        source: channelType
         type: string
         constraints: [NOT_NULL]
         classification: INTERNAL
@@ -20,6 +21,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: providerEventId
+        source: providerEventId
         type: string
         constraints: [NOT_NULL]
         classification: INTERNAL
@@ -27,6 +29,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: payloadDigest
+        source: payloadDigest
         type: string
         constraints: [NOT_NULL]
         classification: INTERNAL
@@ -34,6 +37,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: receivedAt
+        source: receivedAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: INTERNAL

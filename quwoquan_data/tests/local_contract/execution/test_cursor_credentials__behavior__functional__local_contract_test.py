@@ -69,26 +69,3 @@ def test_auth_error_classification_excludes_bridge_noise():
         "cursor-sdk-bridge failed: Missing value for --tool-callback-auth-token"
     )
     assert not cc.is_cursor_auth_error("internal error", status=500)
-
-
-def test_probe_cursor_key_ready_requires_file_and_http_200(tmp_path, monkeypatch):
-    monkeypatch.setenv(cc.CURSOR_API_KEY_FILE_ENV, str(tmp_path / "missing"))
-    assert cc.probe_cursor_key_ready() is False
-
-    key_file = _key_file(tmp_path, "crsr_live_key")
-    monkeypatch.setenv(cc.CURSOR_API_KEY_FILE_ENV, str(key_file))
-    calls: list[list[str]] = []
-
-    def fake_run(argv, **_kwargs):
-        calls.append(list(argv))
-
-        class Result:
-            returncode = 0
-            stdout = b"200"
-
-        return Result()
-
-    monkeypatch.setattr(cc.subprocess, "run", fake_run)
-    assert cc.probe_cursor_key_ready() is True
-    assert cc.CURSOR_CLOUD_API_ME_URL in calls[0]
-    assert any(part == "Authorization: Bearer crsr_live_key" for part in calls[0])

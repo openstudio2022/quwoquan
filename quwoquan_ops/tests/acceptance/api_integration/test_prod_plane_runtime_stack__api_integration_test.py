@@ -125,8 +125,8 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
             self.assertNotIn("\n  postgres:\n", compose)
             self.assertNotIn("\n  mongodb:\n", compose)
             self.assertNotIn("\n  redis:\n", compose)
-            self.assertNotIn("search-service:", compose)
-            self.assertNotIn("circle-service:", compose)
+            self.assertNotIn("\n  search-service:\n", compose)
+            self.assertNotIn("\n  circle-service:\n", compose)
             compose_payload = yaml.safe_load(compose)
             entity_env = compose_payload["services"]["entity-service"]["environment"]
             self.assertEqual(
@@ -141,14 +141,15 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
             self.assertIn("LOCAL_GAMMA_HTTPS_PORT=18443", env_text)
             self.assertIn("LOCAL_GAMMA_ADMIN_PORT=12019", env_text)
             caddy_text = (out_dir / "runtime/Caddyfile").read_text(encoding="utf-8")
-            self.assertIn("handle /v1/config/app", caddy_text)
-            self.assertIn("@api_tag path /v1/tag*", caddy_text)
+            self.assertNotIn("/v1/", caddy_text)
+            self.assertIn("handle /config/app", caddy_text)
+            self.assertIn("@api_tag path /tag*", caddy_text)
             self.assertIn(
-                "@pub_user path /v1/auth* /v1/owner* /v1/user* /v1/me /v1/me/*",
+                "@pub_user path /auth* /owner* /user* /me /me/*",
                 caddy_text,
             )
-            self.assertIn("@api_entity path /v1/homepages*", caddy_text)
-            self.assertIn("@pub_entity path /v1/homepages*", caddy_text)
+            self.assertIn("@api_entity path /homepages*", caddy_text)
+            self.assertIn("@pub_entity path /homepages*", caddy_text)
             self.assertEqual(caddy_text.count("reverse_proxy entity-service:18084"), 2)
             self.assertEqual(caddy_text.count("handle /legal/manifest.json {"), 2)
             self.assertEqual(

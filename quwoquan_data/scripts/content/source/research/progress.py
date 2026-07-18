@@ -24,7 +24,7 @@ def _write_auto_research_progress(
 ) -> dict[str, Any]:
     elapsed = max(time.monotonic() - started_monotonic, 0.001) if started_monotonic else 0.0
     progress = {
-        "schemaVersion": "quwoquan.content.source.auto_research_progress",
+        "schema": "quwoquan.content.source.auto_research_progress",
         "updatedAt": _now_iso(),
         "status": status,
         "entityId": entity_id,

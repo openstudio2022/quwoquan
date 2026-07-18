@@ -4,10 +4,18 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "schemaVersion": { "const": "quwoquan_data.discovery_seed/2" },
-    "country": { "type": "string", "description": "国家名，与 coverage/ 下一级目录名一致，如 中国" },
-    "province": { "type": "string", "description": "省级行政区名，与省目录名一致，如 四川省" },
-    "city": { "type": "string", "description": "市州级行政区名，与文件名（去 .yaml）一致，如 成都市" },
+    "country": {
+      "type": "string",
+      "description": "国家名，与 coverage/ 下一级目录名一致，如 中国"
+    },
+    "province": {
+      "type": "string",
+      "description": "省级行政区名，与省目录名一致，如 四川省"
+    },
+    "city": {
+      "type": "string",
+      "description": "市州级行政区名，与文件名（去 .yaml）一致，如 成都市"
+    },
     "districts": {
       "type": "array",
       "minItems": 1,
@@ -16,7 +24,10 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "district": { "type": "string", "description": "区县名，如 都江堰市" },
+          "district": {
+            "type": "string",
+            "description": "区县名，如 都江堰市"
+          },
           "leaves": {
             "type": "array",
             "minItems": 1,
@@ -24,8 +35,14 @@
               "type": "object",
               "additionalProperties": false,
               "properties": {
-                "name": { "type": "string", "description": "地点常用名" },
-                "canonicalName": { "type": "string", "description": "规范名（entityRef 第三段真相源，跨文件全局唯一）" },
+                "name": {
+                  "type": "string",
+                  "description": "地点常用名"
+                },
+                "canonicalName": {
+                  "type": "string",
+                  "description": "规范名（entityRef 第三段真相源，跨文件全局唯一）"
+                },
                 "entityType": {
                   "type": "string",
                   "description": "主类型单值 `地点/{Entity地点一级节点名}`（裁决 6 优先级表判定；决定 entityRef 第二段目录归属），如 地点/景区；必须落在试点 scope（景区/自然景观/打卡地/遗址/古镇/宗教场所/博物馆/公园 + 可选 温泉/主题乐园）"
@@ -33,7 +50,9 @@
                 "typeTagRefs": {
                   "type": "array",
                   "minItems": 1,
-                  "items": { "type": "string" },
+                  "items": {
+                    "type": "string"
+                  },
                   "description": "全量类型标签数组，精确到叶子（如 Entity/地点/景区/5A景区 + Entity/地点/博物馆）；主类型对应叶子必须在数组中；物化时全部进 _entity.json.tagRefs"
                 },
                 "geoTagRef": {
@@ -42,12 +61,16 @@
                 },
                 "geoTagRefs": {
                   "type": "array",
-                  "items": { "type": "string" },
+                  "items": {
+                    "type": "string"
+                  },
                   "description": "可选：跨省/跨市地点的全量地理归属数组（必须包含 geoTagRef 主归属）；非跨界地点缺省"
                 },
                 "aliases": {
                   "type": "array",
-                  "items": { "type": "string" },
+                  "items": {
+                    "type": "string"
+                  },
                   "description": "可选：别名（去重与检索辅助）"
                 },
                 "selectionPriority": {
@@ -59,24 +82,55 @@
                   "type": "object",
                   "additionalProperties": false,
                   "properties": {
-                    "qid": { "type": "string", "pattern": "^Q[1-9][0-9]*$" },
-                    "wikipediaPageId": { "type": "integer", "minimum": 1 },
-                    "osmType": { "type": "string", "enum": ["node", "way", "relation"] },
-                    "osmId": { "type": "string", "pattern": "^[0-9]+$" }
+                    "qid": {
+                      "type": "string",
+                      "pattern": "^Q[1-9][0-9]*$"
+                    },
+                    "wikipediaPageId": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "osmType": {
+                      "type": "string",
+                      "enum": [
+                        "node",
+                        "way",
+                        "relation"
+                      ]
+                    },
+                    "osmId": {
+                      "type": "string",
+                      "pattern": "^[0-9]+$"
+                    }
                   },
                   "dependentRequired": {
-                    "osmType": ["osmId"],
-                    "osmId": ["osmType"]
+                    "osmType": [
+                      "osmId"
+                    ],
+                    "osmId": [
+                      "osmType"
+                    ]
                   },
                   "description": "候选身份解析：QID > Wikipedia pageid > OSM type/id"
                 },
                 "coordinates": {
                   "type": "object",
                   "additionalProperties": false,
-                  "required": ["lat", "lon"],
+                  "required": [
+                    "lat",
+                    "lon"
+                  ],
                   "properties": {
-                    "lat": { "type": "number", "minimum": -90, "maximum": 90 },
-                    "lon": { "type": "number", "minimum": -180, "maximum": 180 }
+                    "lat": {
+                      "type": "number",
+                      "minimum": -90,
+                      "maximum": 90
+                    },
+                    "lon": {
+                      "type": "number",
+                      "minimum": -180,
+                      "maximum": 180
+                    }
                   }
                 },
                 "discoverySources": {
@@ -88,7 +142,6 @@
                       "wikidata_geo",
                       "osm_poi",
                       "baidu_baike_search",
-                      "sogou_baike_search",
                       "toutiao_baike_search"
                     ]
                   },
@@ -107,9 +160,21 @@
             }
           }
         },
-        "required": ["district", "leaves"]
+        "required": [
+          "district",
+          "leaves"
+        ]
       }
+    },
+    "schema": {
+      "const": "quwoquan_data.discovery_seed"
     }
   },
-  "required": ["schemaVersion", "country", "province", "city", "districts"]
+  "required": [
+    "schema",
+    "country",
+    "province",
+    "city",
+    "districts"
+  ]
 }

@@ -38,9 +38,9 @@
 
 ### A1. 频道端侧统一消费 `homeChannels`（含远程覆盖、去硬编码、去漂移）
 - [x] **频道集合决策（产品决策，先定）**：结论 = 把现有 7 频道（following/recommend/campus/travel/photography/tech/car）全部纳入 `ui_config.home_channels` 默认集，统一由运营配置管理。
-- [x] `home_primary_tab_strip.dart` 去 `homeTabIds` 硬编码，改消费 `homeChannelsProvider`（`ContentUIConfig.homeChannels` 默认 + `/v1/config/app` 远程覆盖合并，按 order 排序）；`recommendedTabId` 对齐 `recommend`。
+- [x] `home_primary_tab_strip.dart` 去 `homeTabIds` 硬编码，改消费 `homeChannelsProvider`（`ContentUIConfig.homeChannels` 默认 + `/config/app` 远程覆盖合并，按 order 排序）；`recommendedTabId` 对齐 `recommend`。
 - [x] `home_page._buildBody` 去硬编码 switch，按频道 `template`（`single_column_relations` / `masonry_recommend` / `intersection_rail_masonry`）路由 `HomeMultiFormFeed`；`channelId` 与 `channel.id` 对齐，消除 `recommend → 'moment'` 漂移。
-- [x] 远程覆盖链路接通：`HomeChannelsRemoteOverride.fromAppConfigRoot` 解析 `/v1/config/app` → 合并进 `ContentRuntimeConfigState.homeChannels` → 失败/缺省回退 meta 默认。
+- [x] 远程覆盖链路接通：`HomeChannelsRemoteOverride.fromAppConfigRoot` 解析 `/config/app` → 合并进 `ContentRuntimeConfigState.homeChannels` → 失败/缺省回退 meta 默认。
 - [x] 验收：频道增删改/调序仅改云侧配置即在端生效（不发版）；拉取失败回退默认；端默认与远程同 schema。
 - [x] 测试：频道 provider 合并/回退单测（`home_channels_remote_override_test`）；strip/`_buildBody` 模板路由 widget 测试（`home_channel_template_routing_test`）；`post_ui_config_contract_test` 7 频道契约。
 

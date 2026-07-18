@@ -252,15 +252,22 @@ func mediaAssetResult(
 	if asset == nil {
 		return MediaAssetCommandResult{Replayed: replayed}
 	}
+	descriptor := asset.VideoProcessingDescriptor()
 	return MediaAssetCommandResult{
-		AssetID:            asset.ID(),
-		Version:            asset.Version(),
-		ProcessingStatus:   asset.ProcessingStatus(),
-		AccessPolicy:       asset.AccessPolicy(),
-		CoverStrategy:      asset.CoverStrategy(),
-		ManualCoverAssetID: asset.ManualCoverAssetID(),
-		CoverFrameTimeMs:   asset.CoverFrameTimeMs(),
-		Replayed:           replayed,
+		AssetID:             asset.ID(),
+		Version:             asset.Version(),
+		ProcessingStatus:    asset.ProcessingStatus(),
+		AccessPolicy:        asset.AccessPolicy(),
+		CoverStrategy:       asset.CoverStrategy(),
+		ManualCoverAssetID:  asset.ManualCoverAssetID(),
+		CoverFrameTimeMs:    asset.CoverFrameTimeMs(),
+		VerifiedDurationMs:  descriptor.VerifiedDurationMs,
+		VideoWidth:          descriptor.VideoWidth,
+		VideoHeight:         descriptor.VideoHeight,
+		VideoCodec:          descriptor.VideoCodec,
+		VideoContainer:      descriptor.VideoContainer,
+		PreviewTrackVersion: descriptor.PreviewTrackVersion,
+		Replayed:            replayed,
 	}
 }
 

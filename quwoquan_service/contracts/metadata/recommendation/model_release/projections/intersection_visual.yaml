@@ -1,4 +1,3 @@
-version: 1
 read_model: IntersectionVisual
 description: |
   交集样本视觉标识（统一交互子契约 · A–E 横切复用值对象，Phase 0 §20.7 冻结）。
@@ -24,23 +23,19 @@ client_projection:
       dart_type: String
       nullable: false
       source: assetKind
-      aliases: [assetKind]
       default: "''"
     - name: imageUrl
       dart_type: String
       nullable: false
       source: imageUrl
-      aliases: [imageUrl]
       default: "''"
     - name: displayName
       dart_type: String
       nullable: false
       source: displayName
-      aliases: [displayName]
       default: "''"
     - name: target
       dart_type: IntersectionTarget
       nullable: true
       source: target
-      aliases: [target]
       map_from_string_key_class: IntersectionTarget

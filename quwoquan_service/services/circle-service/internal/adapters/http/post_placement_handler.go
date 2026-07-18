@@ -43,13 +43,8 @@ func (handler *CircleHandler) handlePostPlacements(w http.ResponseWriter, r *htt
 			writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "placement resource only accepts DELETE"))
 			return
 		}
-		expectedVersion, err := parseExpectedVersion(r.Header.Get("If-Match"))
-		if err != nil {
-			writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "请求缺少有效版本", err.Error()))
-			return
-		}
-		result, err := handler.placementCommands.Remove(r.Context(), placementapp.VersionedCommand{
-			CircleID: circleID, PlacementID: placementID, ExpectedVersion: expectedVersion,
+		result, err := handler.placementCommands.Remove(r.Context(), placementapp.TargetCommand{
+			CircleID: circleID, PlacementID: placementID,
 		})
 		if err != nil {
 			writeHTTPError(w, r, err)
@@ -63,19 +58,15 @@ func (handler *CircleHandler) handlePostPlacements(w http.ResponseWriter, r *htt
 		return
 	}
 	var body struct {
-		Enabled         bool  `json:"enabled"`
-		ExpectedVersion int64 `json:"expectedVersion"`
+		Enabled bool `json:"enabled"`
 	}
-	if err := readStrictJSON(r, &body); err != nil || body.ExpectedVersion <= 0 {
-		if err == nil {
-			err = fmt.Errorf("expectedVersion must be positive")
-		}
+	if err := readStrictJSON(r, &body); err != nil {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "请求体无效", err.Error()))
 		return
 	}
 	command := placementapp.PresentationCommand{
 		CircleID: circleID, PlacementID: placementID,
-		ExpectedVersion: body.ExpectedVersion, Enabled: body.Enabled,
+		Enabled: body.Enabled,
 	}
 	var (
 		result placementapp.CommandResult

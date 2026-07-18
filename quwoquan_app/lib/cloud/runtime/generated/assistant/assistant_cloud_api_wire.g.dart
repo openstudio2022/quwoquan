@@ -253,7 +253,7 @@ class AssistantConversationGroundingMember {
   factory AssistantConversationGroundingMember.fromJson(Map<String, dynamic> json) {
     return AssistantConversationGroundingMember(
       userId: (json['userId'] ?? '').toString(),
-      displayName: (json['displayName'] ?? json['display_name'] ?? json['name'] ?? '').toString(),
+      displayName: (json['displayName'] ?? '').toString(),
       memberType: (json['memberType'] ?? '').toString(),
       role: json['role']?.toString(),
       assistantSkillId: json['assistantSkillId']?.toString(),
@@ -433,7 +433,7 @@ class AssistantSuggestedHomepageView {
       id: (json['id'] ?? '').toString(),
       type: (json['type'] ?? '').toString(),
       canonicalEntityId: json['canonicalEntityId']?.toString(),
-      displayName: (json['displayName'] ?? json['display_name'] ?? json['name'] ?? '').toString(),
+      displayName: (json['displayName'] ?? '').toString(),
       reason: json['reason']?.toString(),
     );
   }
@@ -700,7 +700,7 @@ class AssistantPolicyView {
     return AssistantPolicyView(
       version: (json['version'] ?? '').toString(),
       values: (json['values'] as Map?)?.cast<String, dynamic>(),
-      updatedAt: json['updatedAt']?.toString() ?? json['updated_at']?.toString(),
+      updatedAt: json['updatedAt']?.toString(),
     );
   }
 
@@ -878,7 +878,7 @@ class AssistantSearchResultView {
 
   factory AssistantSearchResultView.fromJson(Map<String, dynamic> json) {
     return AssistantSearchResultView(
-      queryEcho: (json['queryEcho'] ?? json['userQuery'] ?? '').toString().trim(),
+      queryEcho: (json['queryEcho'] ?? '').toString().trim(),
       summary: json['summary']?.toString(),
       searchIntensity: json['searchIntensity']?.toString(),
       citations: ((json['citations'] as List?) ?? const [])
@@ -958,12 +958,12 @@ class AssistantSkillCatalogItemView {
 
   factory AssistantSkillCatalogItemView.fromJson(Map<String, dynamic> json) {
     return AssistantSkillCatalogItemView(
-      skillId: (json['skillId'] ?? json['skill_id'] ?? json['id'] ?? '').toString(),
-      displayName: (json['displayName'] ?? json['display_name'] ?? json['name'] ?? '').toString(),
-      description: json['description']?.toString() ?? json['desc']?.toString(),
+      skillId: (json['skillId'] ?? '').toString(),
+      displayName: (json['displayName'] ?? '').toString(),
+      description: json['description']?.toString(),
       category: json['category']?.toString(),
-      requiresConsent: json['requiresConsent'] == true || json['requires_consent'] == true,
-      iconHint: json['iconHint']?.toString() ?? json['icon_hint']?.toString(),
+      requiresConsent: json['requiresConsent'] == true,
+      iconHint: json['iconHint']?.toString(),
     );
   }
 
@@ -1035,7 +1035,7 @@ class AssistantTurnEnvelope {
       conversationId: (json['conversationId'] ?? '').toString(),
       turnType: (json['turnType'] ?? '').toString(),
       status: (json['status'] ?? '').toString(),
-      skillId: (json['skillId'] ?? json['skill_id'] ?? json['id'] ?? '').toString(),
+      skillId: (json['skillId'] ?? '').toString(),
       domainId: (json['domainId'] ?? '').toString(),
       input: (json['input'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
       trigger: (json['trigger'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
@@ -1083,12 +1083,12 @@ class AssistantUserMemoryView {
 
   factory AssistantUserMemoryView.fromJson(Map<String, dynamic> json) {
     return AssistantUserMemoryView(
-      memoryId: (json['memoryId'] ?? json['memory_id'] ?? json['id'] ?? '').toString(),
+      memoryId: (json['memoryId'] ?? '').toString(),
       title: (json['title'] ?? '').toString(),
       snippet: json['snippet']?.toString(),
-      sourceType: json['sourceType']?.toString() ?? json['source_type']?.toString(),
-      createdAt: json['createdAt']?.toString() ?? json['created_at']?.toString(),
-      updatedAt: json['updatedAt']?.toString() ?? json['updated_at']?.toString(),
+      sourceType: json['sourceType']?.toString(),
+      createdAt: json['createdAt']?.toString(),
+      updatedAt: json['updatedAt']?.toString(),
     );
   }
 
@@ -1146,14 +1146,14 @@ class AssistantUserTaskView {
 
   factory AssistantUserTaskView.fromJson(Map<String, dynamic> json) {
     return AssistantUserTaskView(
-      taskId: (json['taskId'] ?? json['task_id'] ?? json['id'] ?? '').toString(),
+      taskId: (json['taskId'] ?? '').toString(),
       title: (json['title'] ?? '').toString(),
       description: json['description']?.toString(),
       status: (json['status'] ?? 'pending').toString(),
-      dueAt: json['dueAt']?.toString() ?? json['due_at']?.toString(),
+      dueAt: json['dueAt']?.toString(),
       priority: json['priority']?.toString(),
-      sourceSkillId: json['sourceSkillId']?.toString() ?? json['source_skill_id']?.toString(),
-      updatedAt: json['updatedAt']?.toString() ?? json['updated_at']?.toString(),
+      sourceSkillId: json['sourceSkillId']?.toString(),
+      updatedAt: json['updatedAt']?.toString(),
     );
   }
 
@@ -1287,7 +1287,7 @@ class InteractionEvent {
       feedbackType: json['feedbackType']?.toString(),
       feedbackScore: (json['feedbackScore'] as num?)?.toDouble(),
       feedbackText: json['feedbackText']?.toString(),
-      createdAt: json['createdAt']?.toString() ?? json['created_at']?.toString(),
+      createdAt: json['createdAt']?.toString(),
     );
   }
 
@@ -1337,7 +1337,7 @@ class PageContextAck {
     return PageContextAck(
       accepted: json['accepted'] == true,
       contextKey: (json['contextKey'] ?? '').toString(),
-      expiresAt: json['expiresAt']?.toString() ?? json['expires_at']?.toString(),
+      expiresAt: json['expiresAt']?.toString(),
     );
   }
 
@@ -1381,7 +1381,7 @@ class Scorecard {
       metricId: (json['metricId'] ?? '').toString(),
       scoreValue: (json['scoreValue'] as num?)?.toDouble() ?? 0.0,
       scoreSource: (json['scoreSource'] ?? '').toString(),
-      createdAt: json['createdAt']?.toString() ?? json['created_at']?.toString(),
+      createdAt: json['createdAt']?.toString(),
     );
   }
 

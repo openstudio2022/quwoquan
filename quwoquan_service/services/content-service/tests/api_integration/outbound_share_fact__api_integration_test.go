@@ -12,12 +12,12 @@ import (
 )
 
 func TestCreateOutboundSharePersistsFactReceiptAndOutbox(t *testing.T) {
-	created := createPostWithAuthor(
+	created := submitPublishedPostWithAuthor(
 		t,
 		"outbound-share-owner",
 		`{"contentType":"article","title":"可分享内容","body":"真实站外分享事实","visibility":"public"}`,
 	)
-	postID, _ := created["_id"].(string)
+	postID, _ := created["postId"].(string)
 	if postID == "" {
 		t.Fatal("missing postId")
 	}
@@ -26,7 +26,7 @@ func TestCreateOutboundSharePersistsFactReceiptAndOutbox(t *testing.T) {
 	perform := func() map[string]any {
 		request := httptest.NewRequest(
 			http.MethodPost,
-			"/v1/content/posts/"+postID+"/outbound-shares",
+			"/content/posts/"+postID+"/outbound-shares",
 			bytes.NewReader(requestBody),
 		)
 		request.Header.Set("Content-Type", "application/json")

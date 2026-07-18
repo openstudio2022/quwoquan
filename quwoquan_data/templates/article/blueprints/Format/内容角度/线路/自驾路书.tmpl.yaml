@@ -1,5 +1,4 @@
 templateId: 线路_自驾路书
-version: 1
 subject: { kind: topic, type: 旅行/线路, minEntityRefs: 3, subjectTagRef: Topic/旅行/出行方式/自驾 }
 vertical: travel
 category: travel

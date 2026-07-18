@@ -4,7 +4,7 @@
 class ContentBehaviorTracker {
   const ContentBehaviorTracker._();
 
-  static const String _batchRoute = '/v1/content/behaviors';
+  static const String _batchRoute = '/content/behaviors';
 
   /// Public read-only accessor for the batch route (used in contract tests).
   static String get batchRoute => _batchRoute;
@@ -198,6 +198,16 @@ class ContentBehaviorTracker {
     _enqueue(<String, dynamic>{
       'type': 'play_progress',
       'postId': postId,
+      'consumedRatio': consumedRatio,
+      'totalUnits': totalUnits,
+    });
+  }
+
+  static void trackEffectivePlay(String postId, int effectivePlayMs, double consumedRatio, int totalUnits) {
+    _enqueue(<String, dynamic>{
+      'type': 'effective_play',
+      'postId': postId,
+      'effectivePlayMs': effectivePlayMs,
       'consumedRatio': consumedRatio,
       'totalUnits': totalUnits,
     });

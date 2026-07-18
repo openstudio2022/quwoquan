@@ -144,6 +144,9 @@ func generateMongoModel(ctx *genContext, entityName string) error {
 		goType := fieldTypeToGoType(ctx, entityName, f.Name, f.Type, notNull)
 
 		jsonTag := f.Name
+		if f.Name == "_id" {
+			jsonTag = "id"
+		}
 		if f.APIExposure == "drop" {
 			jsonTag = "-"
 		}

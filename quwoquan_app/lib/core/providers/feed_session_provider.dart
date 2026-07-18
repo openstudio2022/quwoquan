@@ -53,7 +53,7 @@ class FeedSessionNotifier extends Notifier<String> {
   /// 当前 feed 会话归因的理由生成版本（服务端 envelope.reasonVersion）。
   String get currentReasonVersion => _currentReasonVersion;
 
-  /// 采纳服务端 GET /v1/content/feed 下发的权威 feedRequestId。
+  /// 采纳服务端 GET /content/feed 下发的权威 feedRequestId。
   ///
   /// 首页发现流加载/分页后调用，使 [currentFeedRequestId] 与服务端 envelope 对齐，
   /// 后续曝光/点击/打开等行为事件复用同一归因 id。空值忽略（保留上一个有效 id）。

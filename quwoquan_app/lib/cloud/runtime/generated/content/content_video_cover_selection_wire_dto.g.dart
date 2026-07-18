@@ -23,9 +23,9 @@ class ContentVideoCoverSelectionWireDto {
       mediaId: m['mediaId']?.toString() ?? '',
       coverStrategy: m['coverStrategy']?.toString() ?? '',
       manualCoverAssetId: m['manualCoverAssetId']?.toString() ?? null,
-      thumbnailUrl: m['thumbnailUrl']?.toString() ?? m['thumbnail']?.toString() ?? m['coverUrl']?.toString() ?? m['cover']?.toString() ?? '',
-      coverUrl: m['coverUrl']?.toString() ?? m['cover']?.toString() ?? m['thumbnailUrl']?.toString() ?? m['thumbnail']?.toString() ?? '',
-      coverFrameTimeMs: (m['coverFrameTimeMs'] as num?)?.toInt() ?? (m['cover_frame_time_ms'] as num?)?.toInt() ?? null,
+      thumbnailUrl: m['thumbnailUrl']?.toString() ?? '',
+      coverUrl: m['coverUrl']?.toString() ?? '',
+      coverFrameTimeMs: (m['coverFrameTimeMs'] as num?)?.toInt() ?? null,
     );
   }
 

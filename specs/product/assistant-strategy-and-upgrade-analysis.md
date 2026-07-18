@@ -29,7 +29,7 @@
 
 典型机制：
 
-- 单一入口：`/v1/run`、`/v1/run/stream`
+- 单一入口：`/run`、`/run/stream`
 - 流式事件：`trace/chunk/completed/failed`
 - 统一结果契约：可被 UI 与渠道直接消费
 - 远端执行失败时回退本地执行器
@@ -488,8 +488,8 @@ Local Engine <-> Remote Engine (OpenClaw/Cloud)
 
 **OpenClaw 侧角色**（从集成文档推断）：
 
-- OpenClaw 作为**远端服务**暴露 `POST /v1/run`（及可选 `/v1/run/stream`）；小趣 `CapabilityGateway` 在 remotePreferred 下将整次 run 交给 OpenClaw，由 OpenClaw 内部完成其自身的 Agent/ReAct 或等价流程，返回完整 `AssistantRunResponse`。
-- 反向：OpenClaw 可调小趣暴露的 `GET /v1/skills`、`POST /v1/skills/invoke`、`POST /v1/run/stream`，将小趣当作「技能与 run 的提供方」使用，形成**双向互操作**（见 `openclaw_feishu_integration.md`）。
+- OpenClaw 作为**远端服务**暴露 `POST /run`（及可选 `/run/stream`）；小趣 `CapabilityGateway` 在 remotePreferred 下将整次 run 交给 OpenClaw，由 OpenClaw 内部完成其自身的 Agent/ReAct 或等价流程，返回完整 `AssistantRunResponse`。
+- 反向：OpenClaw 可调小趣暴露的 `GET /skills`、`POST /skills/invoke`、`POST /run/stream`，将小趣当作「技能与 run 的提供方」使用，形成**双向互操作**（见 `openclaw_feishu_integration.md`）。
 
 **差距与借鉴**：
 
@@ -507,7 +507,7 @@ Local Engine <-> Remote Engine (OpenClaw/Cloud)
 
 **OpenClaw 集成视角**：
 
-- OpenClaw 通过 `GET /v1/skills` 同步技能元数据，再通过 `POST /v1/skills/invoke` 按 skill 调用；小趣侧技能由 Manifest + SkillExecutor 执行，内部会用到上述工具链，但**技能本身**目前为打包的 4 个 .skill.yaml，无第三方或远程注册技能。
+- OpenClaw 通过 `GET /skills` 同步技能元数据，再通过 `POST /skills/invoke` 按 skill 调用；小趣侧技能由 Manifest + SkillExecutor 执行，内部会用到上述工具链，但**技能本身**目前为打包的 4 个 .skill.yaml，无第三方或远程注册技能。
 
 **世界级参照与差距**：
 
@@ -529,8 +529,8 @@ Local Engine <-> Remote Engine (OpenClaw/Cloud)
 - **接入方式**：  
   - **App**：直接调 `CapabilityGateway` / `AssistantGateway`，channel=app。  
   - **OpenClaw**：通过 OpenClawBridge 调小趣 `runRemote` 或小趣 HTTP 网关；OpenClaw 也可拉取 skills 并 invoke，channel 传 openclaw。  
-  - **Feishu**：通过 `POST /v1/assistent/channels/feishu` 等入口，由 `AssistentFeishuAdapter` ingest → 网关 run/invoke → dispatch 回飞书。
-- **统一网关**：`openclaw_feishu_integration.md` 所列端点（/v1/skills、/v1/skills/invoke、/v1/run、/v1/run/stream、/v1/assistent/channels/{adapterId}）支持多渠道共用同一套 run/skill 能力，并可通过 token、签名策略（ASSISTENT_FEISHU_SIGN_MODE、ASSISTENT_OPENCLAW_SIGN_SECRET）做渠道级鉴权。
+  - **Feishu**：通过 `POST /assistent/channels/feishu` 等入口，由 `AssistentFeishuAdapter` ingest → 网关 run/invoke → dispatch 回飞书。
+- **统一网关**：`openclaw_feishu_integration.md` 所列端点（/skills、/skills/invoke、/run、/run/stream、/assistent/channels/{adapterId}）支持多渠道共用同一套 run/skill 能力，并可通过 token、签名策略（ASSISTENT_FEISHU_SIGN_MODE、ASSISTENT_OPENCLAW_SIGN_SECRET）做渠道级鉴权。
 
 **差距与借鉴**：
 
@@ -701,7 +701,7 @@ Local Engine <-> Remote Engine (OpenClaw/Cloud)
     - 在发现/圈子等页的「找小趣」入口预填或推荐与当前内容相关的问法（如「总结这篇」「推荐类似」）。
 
 11. **开放性与插件化（与 §3 对齐）**
-    - **渠道**：保持并完善 Adapter SPI 与统一网关（/v1/run、/v1/skills、/v1/assistent/channels/{adapterId}），文档化 OpenClaw/Feishu 等接入方式。
+    - **渠道**：保持并完善 Adapter SPI 与统一网关（/run、/skills、/assistent/channels/{adapterId}），文档化 OpenClaw/Feishu 等接入方式。
     - **Skill 开放契约**：定义「Skill 描述 + invoke 端点」契约，便于合作方以远程 Skill 形式接入；可选支持从云侧拉取技能目录与授权状态。
     - **可观测**：runId/traceId 与成本按 channel 上报，支持按渠道/租户的用量与质量分析。
 

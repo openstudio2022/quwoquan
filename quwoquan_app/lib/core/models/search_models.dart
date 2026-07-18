@@ -1,5 +1,4 @@
-import 'package:flutter/cupertino.dart';
-import 'package:flutter/foundation.dart' show setEquals;
+import 'package:flutter/foundation.dart' show ValueGetter, setEquals;
 
 export 'package:quwoquan_app/core/models/search_hit_payload.dart';
 export 'package:quwoquan_app/cloud/runtime/generated/content/post_search_item_view_dto.g.dart';
@@ -360,14 +359,11 @@ class ConversationSearchItemView {
 
   factory ConversationSearchItemView.fromMap(Map<String, dynamic> map) {
     return ConversationSearchItemView(
-      conversationId: (map['conversationId'] ?? map['id'] ?? map['_id'] ?? '')
-          .toString()
-          .trim(),
+      conversationId: (map['conversationId'] ?? '').toString().trim(),
       type: (map['type'] ?? 'direct').toString().trim(),
-      title: (map['title'] ?? map['conversationTitle'] ?? '').toString().trim(),
+      title: (map['title'] ?? '').toString().trim(),
       avatarUrl: _optionalString(map['avatarUrl']),
-      lastMessagePreview: (map['lastMessagePreview'] ?? map['highlightText'])
-          ?.toString(),
+      lastMessagePreview: map['lastMessagePreview']?.toString(),
       lastMessageTime: _parseDateTime(map['lastMessageTime']),
       memberCount: (map['memberCount'] as num?)?.toInt() ?? 0,
       circleId: map['circleId']?.toString(),
@@ -411,27 +407,15 @@ class MessageSearchItemView {
 
   factory MessageSearchItemView.fromMap(Map<String, dynamic> map) {
     return MessageSearchItemView(
-      messageId: (map['messageId'] ?? map['id'] ?? map['_id'] ?? '')
-          .toString()
-          .trim(),
+      messageId: (map['messageId'] ?? '').toString().trim(),
       conversationId: (map['conversationId'] ?? '').toString().trim(),
       conversationTitle: map['conversationTitle']?.toString(),
       conversationAvatarUrl: map['conversationAvatarUrl']?.toString(),
       senderPersonaId: map['senderPersonaId']?.toString(),
-      senderDisplayName:
-          (map['senderDisplayName'] ??
-                  map['senderDisplayNameSnapshot'] ??
-                  map['senderName'])
-              ?.toString(),
-      senderAvatarUrl:
-          (map['senderAvatarUrl'] ?? map['senderAvatarUrlSnapshot'])
-              ?.toString(),
-      messageType: (map['messageType'] ?? map['type'] ?? 'text')
-          .toString()
-          .trim(),
-      contentPreview: (map['contentPreview'] ?? map['content'] ?? '')
-          .toString()
-          .trim(),
+      senderDisplayName: map['senderDisplayName']?.toString(),
+      senderAvatarUrl: map['senderAvatarUrl']?.toString(),
+      messageType: (map['messageType'] ?? 'text').toString().trim(),
+      contentPreview: (map['contentPreview'] ?? '').toString().trim(),
       seq: (map['seq'] as num?)?.toInt(),
       timestamp: _parseDateTime(map['timestamp']) ?? DateTime.now(),
       highlightText: map['highlightText']?.toString(),
@@ -534,7 +518,7 @@ enum SearchSuggestionSectionKind {
     SearchSuggestionSectionKind.circles => '已加入圈子',
     SearchSuggestionSectionKind.locations => '已关注地点',
     SearchSuggestionSectionKind.followedPeople => '人',
-    SearchSuggestionSectionKind.network => '匹配搜索词',
+    SearchSuggestionSectionKind.network => '搜索网络结果',
   };
 }
 
@@ -614,14 +598,19 @@ class NetworkSearchSuggestion {
     this.title,
     this.subtitle,
     this.initialTabId,
+    this.homepageId,
+    this.coverUrl,
   });
 
   final String query;
   final String? title;
   final String? subtitle;
   final String? initialTabId;
+  final String? homepageId;
+  final String? coverUrl;
 
   String get displayTitle => title ?? query;
+  bool get isHomepagePreview => homepageId?.trim().isNotEmpty == true;
 }
 
 class SearchHighlightSpan {
@@ -912,6 +901,10 @@ class SearchSessionState {
     this.recentSearches = const <RecentSearchEntryView>[],
     this.inspiration = const SearchInspirationState(),
     this.isLoading = false,
+    this.isNetworkLoading = false,
+    this.isSlow = false,
+    this.isPartial = false,
+    this.failure,
     this.isHydratingHistory = false,
     this.isManagingHistory = false,
     this.isHistoryExpanded = false,
@@ -927,6 +920,10 @@ class SearchSessionState {
   final List<RecentSearchEntryView> recentSearches;
   final SearchInspirationState inspiration;
   final bool isLoading;
+  final bool isNetworkLoading;
+  final bool isSlow;
+  final bool isPartial;
+  final Object? failure;
   final bool isHydratingHistory;
   final bool isManagingHistory;
   final bool isHistoryExpanded;
@@ -952,6 +949,10 @@ class SearchSessionState {
     List<RecentSearchEntryView>? recentSearches,
     SearchInspirationState? inspiration,
     bool? isLoading,
+    bool? isNetworkLoading,
+    bool? isSlow,
+    bool? isPartial,
+    ValueGetter<Object?>? failure,
     bool? isHydratingHistory,
     bool? isManagingHistory,
     bool? isHistoryExpanded,
@@ -967,6 +968,10 @@ class SearchSessionState {
       recentSearches: recentSearches ?? this.recentSearches,
       inspiration: inspiration ?? this.inspiration,
       isLoading: isLoading ?? this.isLoading,
+      isNetworkLoading: isNetworkLoading ?? this.isNetworkLoading,
+      isSlow: isSlow ?? this.isSlow,
+      isPartial: isPartial ?? this.isPartial,
+      failure: failure != null ? failure() : this.failure,
       isHydratingHistory: isHydratingHistory ?? this.isHydratingHistory,
       isManagingHistory: isManagingHistory ?? this.isManagingHistory,
       isHistoryExpanded: isHistoryExpanded ?? this.isHistoryExpanded,

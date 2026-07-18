@@ -38,7 +38,7 @@ void main() {
       expect(request, isNotNull);
 
       expect(request!.method, 'POST');
-      expect(request.url.path, '/v1/content/posts/post-1/like');
+      expect(request.url.path, '/content/posts/post-1/like');
       expect(
         request.headers['X-Client-Operation-Id'],
         AppCloudOperationIds.contentContentReactionLikePost,
@@ -74,7 +74,7 @@ void main() {
       expect(request, isNotNull);
 
       expect(request!.method, 'DELETE');
-      expect(request.url.path, '/v1/content/posts/post-1/like');
+      expect(request.url.path, '/content/posts/post-1/like');
       expect(
         request.headers['X-Client-Operation-Id'],
         AppCloudOperationIds.contentContentReactionUnlikePost,
@@ -106,7 +106,7 @@ void main() {
       expect(request, isNotNull);
 
       expect(request!.method, 'GET');
-      expect(request.url.path, '/v1/content/posts/post-1/reactions');
+      expect(request.url.path, '/content/posts/post-1/reactions');
       expect(
         request.headers['X-Client-Operation-Id'],
         AppCloudOperationIds.contentContentReactionGetContentReactionState,

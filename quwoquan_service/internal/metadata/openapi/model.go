@@ -72,10 +72,11 @@ type openAPIApplicationBinding struct {
 }
 
 type openAPIParameter struct {
-	Name     string        `yaml:"name"`
-	In       string        `yaml:"in"`
-	Required bool          `yaml:"required"`
-	Schema   openAPISchema `yaml:"schema"`
+	Name        string        `yaml:"name"`
+	In          string        `yaml:"in"`
+	Required    bool          `yaml:"required"`
+	Description string        `yaml:"description,omitempty"`
+	Schema      openAPISchema `yaml:"schema"`
 }
 
 type openAPIRequestBody struct {

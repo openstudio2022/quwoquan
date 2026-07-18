@@ -12,14 +12,15 @@ from __future__ import annotations
 import sys
 
 from support.source_plan_guidance_fixtures import *  # noqa: F401,F403
+from support.execution_manifest_fixture import ExecutionFixtureBuilder  # noqa: E402
 
 from content.source.research.wiki_media import _file_match_key, _mediawiki_page_images
 from content.source.research.wiki_common import _strip_html
 
 
-# 模拟 action=parse&prop=wikitext 返回的页面正文：信息框(非 [[File:]]) + 正文真实图位
-# (含一个 .webm 视频) ；panoramio 类页面外图不出现在 wikitext，模拟其只能经 prop=images
-# 全量 transclude 混入——修复后绝不应进入候选。
+# 模拟单一 query bundle 返回的页面正文：信息框(非 [[File:]]) + 正文真实图位
+# (含一个 .webm 视频)；panoramio 类页面外图不出现在 bundle 的 rendered image inventory，
+# 修复后绝不应进入候选。
 _FAKE_WIKITEXT = """{{Infobox 山
 | image = SomeInfoboxOnlyFile.jpg
 }}
@@ -109,20 +110,25 @@ _FILE_INFO = {
 
 def _fake_wiki_api(host, params):
     action = str(params.get("action") or "")
-    if action == "parse":
-        assert str(params.get("prop") or "") == "text|wikitext|images"
+    if action == "query" and str(params.get("prop") or "") == "extracts|revisions|images":
         return {
-            "parse": {
-                "title": "青城山",
-                "pageid": 42,
-                "wikitext": {"*": _FAKE_WIKITEXT},
-                "text": {"*": "<div class='mw-parser-output'>rendered</div>"},
-                "images": [
-                    "TaiAn GuZhen.jpg",
-                    "WuLongGou.jpg",
-                    "BaiZhangQiao.jpg",
-                    "Laojunge.webm",
-                ],
+            "query": {
+                "pages": {
+                    "42": {
+                        "title": "青城山",
+                        "pageid": 42,
+                        "extract": "青城山后山包含泰安古镇、五龙沟与百丈桥。",
+                        "revisions": [
+                            {"revid": 84, "slots": {"main": {"*": _FAKE_WIKITEXT}}}
+                        ],
+                        "images": [
+                            {"title": "File:TaiAn GuZhen.jpg"},
+                            {"title": "File:WuLongGou.jpg"},
+                            {"title": "File:BaiZhangQiao.jpg"},
+                            {"title": "File:Laojunge.webm"},
+                        ],
+                    }
+                }
             }
         }
     if action == "query" and "imageinfo" in str(params.get("prop") or ""):
@@ -257,6 +263,10 @@ def test_homepage_source_images_are_same_source_only_no_search_pool_urls():
 
     task = "20260711--travel-homepage-source-images--cn-zhejiang--canary-001"
     entity = "同源隔离景区"
+    ExecutionFixtureBuilder(
+        task,
+        targets=({"entityType": "地点/景区", "name": entity},),
+    ).build()
 
     def _wiki_img(name: str, caption: str, order: int) -> dict:
         return {
@@ -331,7 +341,7 @@ def test_homepage_source_images_are_same_source_only_no_search_pool_urls():
             [entity],
             entity_type="景区",
             force=True,
-            lanes={"homepage", "article"},
+            lanes={"homepage"},
         )
     finally:
         for name, value in apw_originals.items():

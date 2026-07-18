@@ -8,14 +8,12 @@ void main() {
   group('ContentSurfaceViewMapper.fromDto — 四媒体类型投影契约 (T1)', () {
     test('image 帖 → kind.image，多图 + 作者/统计字段对齐', () {
       final dto = PhotoPostDto.fromMap(<String, dynamic>{
-        '_id': 'photo1',
-        'postId': 'photo1',
-        'type': 'photo',
-        'contentType': 'image',
+        'id': 'photo1',
+        'type': 'image',
         'identity': 'work',
         'authorId': 'a1',
         'displayName': '作者甲',
-        'authorAvatarUrl': 'media/avatar/s/fixture/a1/v1/avatar.png',
+        'avatarUrl': 'media/avatar/s/fixture/a1/v1/avatar.png',
         'imageUrls': <String>[
           'media/image/s/fixture/photo1/v1/1.jpg',
           'media/image/s/fixture/photo1/v1/2.jpg',
@@ -47,14 +45,12 @@ void main() {
 
     test('video 帖 → kind.video，单视频 ref + 时长', () {
       final dto = VideoPostDto.fromMap(<String, dynamic>{
-        '_id': 'video1',
-        'postId': 'video1',
+        'id': 'video1',
         'type': 'video',
-        'contentType': 'video',
         'identity': 'work',
         'authorId': 'a2',
         'displayName': '作者乙',
-        'authorAvatarUrl': '',
+        'avatarUrl': '',
         'videoUrl': 'media/video/s/fixture/video1/v1/clip.mp4',
         'thumbnailUrl': 'media/image/s/fixture/video1/v1/thumb.jpg',
         'durationMs': 12000,
@@ -82,14 +78,12 @@ void main() {
 
     test('video 帖封面优先使用 thumbnailUrl，cover 与播放 poster 同源', () {
       final dto = VideoPostDto.fromMap(<String, dynamic>{
-        '_id': 'video-cover-priority',
-        'postId': 'video-cover-priority',
+        'id': 'video-cover-priority',
         'type': 'video',
-        'contentType': 'video',
         'identity': 'work',
         'authorId': 'a2',
         'displayName': '作者乙',
-        'authorAvatarUrl': '',
+        'avatarUrl': '',
         'videoUrl': 'media/video/s/fixture/video1/v1/clip.mp4',
         'thumbnailUrl': 'media/image/s/fixture/video1/v1/manual-thumb.jpg',
         'coverUrl': 'media/image/s/fixture/video1/v1/stale-cover.jpg',
@@ -120,14 +114,12 @@ void main() {
 
     test('article 帖 → kind.article，标题/正文/封面 + wire 模板字段', () {
       final dto = ArticlePostDto.fromMap(<String, dynamic>{
-        '_id': 'article1',
-        'postId': 'article1',
+        'id': 'article1',
         'type': 'article',
-        'contentType': 'article',
         'identity': 'work',
         'authorId': 'a3',
         'displayName': '作者丙',
-        'authorAvatarUrl': '',
+        'avatarUrl': '',
         'title': '统一展示标题',
         'body': '正文摘要',
         'coverUrl': 'media/image/s/fixture/article1/v1/cover.jpg',
@@ -161,14 +153,12 @@ void main() {
 
     test('micro 帖 → kind.micro，仅正文，无媒体', () {
       final dto = MicroPostDto.fromMap(<String, dynamic>{
-        '_id': 'micro1',
-        'postId': 'micro1',
+        'id': 'micro1',
         'type': 'micro',
-        'contentType': 'micro',
         'identity': 'moment',
         'authorId': 'a4',
         'displayName': '作者丁',
-        'authorAvatarUrl': '',
+        'avatarUrl': '',
         'body': '随手一条',
         'likeCount': 0,
         'commentCount': 0,
@@ -187,14 +177,12 @@ void main() {
 
     test('intersectionReasons 透传到统一 model', () {
       final dto = MicroPostDto.fromMap(<String, dynamic>{
-        '_id': 'micro2',
-        'postId': 'micro2',
+        'id': 'micro2',
         'type': 'micro',
-        'contentType': 'micro',
         'identity': 'moment',
         'authorId': 'a5',
         'displayName': '作者戊',
-        'authorAvatarUrl': '',
+        'avatarUrl': '',
         'body': '带交集理由',
         'likeCount': 0,
         'commentCount': 0,
@@ -226,14 +214,12 @@ void main() {
 
     test('时间语义：createdAt 用真实创作时间，updatedAt/publishedAt 透传 (T1)', () {
       final dto = ArticlePostDto.fromMap(<String, dynamic>{
-        '_id': 'time1',
-        'postId': 'time1',
+        'id': 'time1',
         'type': 'article',
-        'contentType': 'article',
         'identity': 'work',
         'authorId': 'a7',
         'displayName': '作者庚',
-        'authorAvatarUrl': '',
+        'avatarUrl': '',
         'title': '时间语义文章',
         'body': '正文',
         'coverUrl': '',
@@ -256,14 +242,12 @@ void main() {
 
     test('时间语义：未更新内容只有 createdAt，hasMeaningfulUpdate=false (T1)', () {
       final dto = ArticlePostDto.fromMap(<String, dynamic>{
-        '_id': 'time2',
-        'postId': 'time2',
+        'id': 'time2',
         'type': 'article',
-        'contentType': 'article',
         'identity': 'work',
         'authorId': 'a8',
         'displayName': '作者辛',
-        'authorAvatarUrl': '',
+        'avatarUrl': '',
         'title': '未更新文章',
         'body': '正文',
         'coverUrl': '',
@@ -282,14 +266,12 @@ void main() {
 
     test('时间语义：createdAt 缺失时不以 publishedAt 借壳（契约纯洁） (T1)', () {
       final dto = ArticlePostDto.fromMap(<String, dynamic>{
-        '_id': 'time3',
-        'postId': 'time3',
+        'id': 'time3',
         'type': 'article',
-        'contentType': 'article',
         'identity': 'work',
         'authorId': 'a9',
         'displayName': '作者壬',
-        'authorAvatarUrl': '',
+        'avatarUrl': '',
         'title': '仅有发布时间',
         'body': '正文',
         'coverUrl': '',
@@ -308,14 +290,12 @@ void main() {
 
     test('referral 上下文透传（不影响展示字段）', () {
       final dto = MicroPostDto.fromMap(<String, dynamic>{
-        '_id': 'micro3',
-        'postId': 'micro3',
+        'id': 'micro3',
         'type': 'micro',
-        'contentType': 'micro',
         'identity': 'moment',
         'authorId': 'a6',
         'displayName': '作者己',
-        'authorAvatarUrl': '',
+        'avatarUrl': '',
         'body': 'x',
         'likeCount': 0,
         'commentCount': 0,

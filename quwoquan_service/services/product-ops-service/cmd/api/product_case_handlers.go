@@ -18,7 +18,7 @@ func (s *productService) handleListModerationCases(w http.ResponseWriter, r *htt
 }
 
 func (s *productService) handleGetModerationCase(w http.ResponseWriter, r *http.Request) {
-	caseID := strings.TrimPrefix(r.URL.Path, "/v1/control-plane/product/moderation/cases/")
+	caseID := strings.TrimPrefix(r.URL.Path, "/control-plane/product/moderation/cases/")
 	caseID = strings.TrimSuffix(caseID, ":startReview")
 	caseID = strings.TrimSuffix(caseID, ":applyAction")
 	caseID = strings.Trim(caseID, "/")
@@ -41,7 +41,7 @@ func (s *productService) handleGetModerationCase(w http.ResponseWriter, r *http.
 }
 
 func (s *productService) handleStartModerationReview(w http.ResponseWriter, r *http.Request) {
-	caseID := segmentBetween(r.URL.Path, "/v1/control-plane/product/moderation/cases/", ":startReview")
+	caseID := segmentBetween(r.URL.Path, "/control-plane/product/moderation/cases/", ":startReview")
 	item, ok, err := s.store.GetDocument("moderation_cases", caseID)
 	if err != nil {
 		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
@@ -91,7 +91,7 @@ func (s *productService) handleStartModerationReview(w http.ResponseWriter, r *h
 }
 
 func (s *productService) handleApplyEnforcementAction(w http.ResponseWriter, r *http.Request) {
-	caseID := segmentBetween(r.URL.Path, "/v1/control-plane/product/moderation/cases/", ":applyAction")
+	caseID := segmentBetween(r.URL.Path, "/control-plane/product/moderation/cases/", ":applyAction")
 	var body struct {
 		Action string `json:"action"`
 		Actor  string `json:"actor"`
@@ -186,7 +186,7 @@ func (s *productService) handleListRecoveryCases(w http.ResponseWriter, r *http.
 }
 
 func (s *productService) handleGetRecoveryCase(w http.ResponseWriter, r *http.Request) {
-	caseID := strings.TrimPrefix(r.URL.Path, "/v1/control-plane/product/recovery/cases/")
+	caseID := strings.TrimPrefix(r.URL.Path, "/control-plane/product/recovery/cases/")
 	caseID = strings.TrimSuffix(caseID, ":submitDecision")
 	caseID = strings.Trim(caseID, "/")
 	item, ok, err := s.store.GetDocument("recovery_cases", caseID)
@@ -208,7 +208,7 @@ func (s *productService) handleGetRecoveryCase(w http.ResponseWriter, r *http.Re
 }
 
 func (s *productService) handleSubmitRecoveryDecision(w http.ResponseWriter, r *http.Request) {
-	caseID := segmentBetween(r.URL.Path, "/v1/control-plane/product/recovery/cases/", ":submitDecision")
+	caseID := segmentBetween(r.URL.Path, "/control-plane/product/recovery/cases/", ":submitDecision")
 	var body struct {
 		Decision string `json:"decision"`
 		Actor    string `json:"actor"`
@@ -302,7 +302,7 @@ func (s *productService) handleListAppealCases(w http.ResponseWriter, r *http.Re
 }
 
 func (s *productService) handleGetAppealCase(w http.ResponseWriter, r *http.Request) {
-	caseID := strings.TrimPrefix(r.URL.Path, "/v1/control-plane/product/appeal/cases/")
+	caseID := strings.TrimPrefix(r.URL.Path, "/control-plane/product/appeal/cases/")
 	caseID = strings.TrimSuffix(caseID, ":submitDecision")
 	caseID = strings.Trim(caseID, "/")
 	item, ok, err := s.store.GetDocument("appeal_cases", caseID)
@@ -324,7 +324,7 @@ func (s *productService) handleGetAppealCase(w http.ResponseWriter, r *http.Requ
 }
 
 func (s *productService) handleSubmitAppealDecision(w http.ResponseWriter, r *http.Request) {
-	caseID := segmentBetween(r.URL.Path, "/v1/control-plane/product/appeal/cases/", ":submitDecision")
+	caseID := segmentBetween(r.URL.Path, "/control-plane/product/appeal/cases/", ":submitDecision")
 	var body struct {
 		Decision string `json:"decision"`
 		Actor    string `json:"actor"`

@@ -121,17 +121,14 @@ void main() {
       throwsFormatException,
     );
     final confirmPayload = encodeConfirmProfileUpdateProposalCommand(
-      ConfirmProfileUpdateProposalCommand(
-        proposalId: 'proposal-1',
-        expectedProposalVersion: 1,
-      ),
+      ConfirmProfileUpdateProposalCommand(proposalId: 'proposal-1'),
     );
-    expect(confirmPayload.body, <String, Object?>{
-      'expectedProposalVersion': 1,
-    });
+    expect(confirmPayload.body, isNull);
     expect(
-      confirmPayload.body,
-      isNot(contains('expectedTargetPersonaVersion')),
+      () => decodeProfileUpdateProposalView(
+        _proposalView()..['targetPersonaExpectedVersion'] = 1,
+      ),
+      throwsFormatException,
     );
   });
 }
@@ -156,7 +153,6 @@ Map<String, Object?> _proposalView() => <String, Object?>{
   'isolationLevel': null,
   'purposeHint': null,
   'reviewedBy': null,
-  'targetPersonaExpectedVersion': null,
   'version': 1,
   'createdAt': '2026-07-16T01:00:00Z',
   'updatedAt': '2026-07-16T01:00:00Z',

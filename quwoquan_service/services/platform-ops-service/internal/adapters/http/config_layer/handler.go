@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
 	rterr "quwoquan_service/runtime/errors"
@@ -20,14 +21,13 @@ type Handler struct {
 }
 
 type SetConfigLayerValueRequest struct {
-	LayerID         string                  `json:"layerId"`
-	ExpectedVersion int64                   `json:"expectedVersion"`
-	ScopeLevel      string                  `json:"scopeLevel"`
-	ScopeID         string                  `json:"scopeId"`
-	Environment     string                  `json:"environment,omitempty"`
-	Cluster         string                  `json:"cluster,omitempty"`
-	Service         string                  `json:"service,omitempty"`
-	Value           configmodel.ConfigValue `json:"value"`
+	LayerID     string                  `json:"layerId"`
+	ScopeLevel  string                  `json:"scopeLevel"`
+	ScopeID     string                  `json:"scopeId"`
+	Environment string                  `json:"environment,omitempty"`
+	Cluster     string                  `json:"cluster,omitempty"`
+	Service     string                  `json:"service,omitempty"`
+	Value       configmodel.ConfigValue `json:"value"`
 }
 
 type ConfigLayerView struct {
@@ -61,13 +61,13 @@ func NewHandler(configs *configapp.Facade) (*Handler, error) {
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
-	case r.Method == http.MethodGet && r.URL.Path == "/v1/control-plane/platform/configs":
+	case r.Method == http.MethodGet && r.URL.Path == "/control-plane/platform/configs":
 		h.listConfigKeys(w, r)
-	case r.Method == http.MethodGet && r.URL.Path == "/v1/control-plane/platform/configs/layers":
+	case r.Method == http.MethodGet && r.URL.Path == "/control-plane/platform/configs/layers":
 		h.listLayers(w, r)
-	case r.Method == http.MethodGet && r.URL.Path == "/v1/control-plane/platform/configs/resolve":
+	case r.Method == http.MethodGet && r.URL.Path == "/control-plane/platform/configs/resolve":
 		h.resolve(w, r)
-	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/v1/control-plane/platform/configs/") && strings.HasSuffix(r.URL.Path, ":update"):
+	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/control-plane/platform/configs/") && strings.HasSuffix(r.URL.Path, ":update"):
 		h.setValue(w, r)
 	default:
 		writeError(w, r, platformgenerated.AppErrorFromConfigInvalid("config route or method is not registered"))
@@ -109,7 +109,7 @@ func (h *Handler) resolve(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) setValue(w http.ResponseWriter, r *http.Request) {
-	configKey := segmentBetween(r.URL.Path, "/v1/control-plane/platform/configs/", ":update")
+	configKey := segmentBetween(r.URL.Path, "/control-plane/platform/configs/", ":update")
 	if configKey == "" {
 		writeError(w, r, platformgenerated.AppErrorFromConfigInvalid("configKey is required"))
 		return
@@ -119,8 +119,13 @@ func (h *Handler) setValue(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, platformgenerated.AppErrorFromConfigInvalid(err.Error()))
 		return
 	}
+	expectedVersion, err := parseIfMatchVersion(r.Header.Get("If-Match"))
+	if err != nil {
+		writeError(w, r, platformgenerated.AppErrorFromConfigInvalid(err.Error()))
+		return
+	}
 	receipt, layer, err := h.configs.SetValue(r.Context(), configapp.SetValueCommand{
-		LayerID: request.LayerID, ExpectedVersion: request.ExpectedVersion,
+		LayerID: request.LayerID, ExpectedVersion: expectedVersion,
 		Scope: configmodel.Scope{
 			Level: request.ScopeLevel, ID: request.ScopeID, Environment: request.Environment,
 			Cluster: request.Cluster, Service: request.Service,
@@ -137,6 +142,17 @@ func (h *Handler) setValue(w http.ResponseWriter, r *http.Request) {
 		Receipt configports.CommitReceipt `json:"receipt"`
 	}{Layer: toLayerView(layer), Receipt: receipt}
 	writeJSON(w, http.StatusOK, response)
+}
+
+func parseIfMatchVersion(raw string) (int64, error) {
+	normalized := strings.TrimSpace(raw)
+	normalized = strings.TrimPrefix(normalized, "W/")
+	normalized = strings.Trim(normalized, "\"")
+	version, err := strconv.ParseInt(normalized, 10, 64)
+	if err != nil || version < 0 {
+		return 0, fmt.Errorf("If-Match must contain a non-negative aggregate version")
+	}
+	return version, nil
 }
 
 func toLayerView(layer configmodel.ConfigLayer) ConfigLayerView {

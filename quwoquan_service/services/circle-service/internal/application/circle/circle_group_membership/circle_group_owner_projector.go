@@ -24,7 +24,7 @@ func (projector *CircleGroupOwnerProjector) Publish(ctx context.Context, event g
 		return nil
 	}
 	var payload struct {
-		GroupID            string `json:"_id"`
+		GroupID            string `json:"groupId"`
 		CircleID           string `json:"circleId"`
 		CreatedByPersonaID string `json:"createdByPersonaId"`
 	}

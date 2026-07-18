@@ -3,7 +3,7 @@ import 'package:quwoquan_app/core/models/search_models.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
 
 class LocalChatSearchMessageRecord {
-  static const int schemaVersion = 1;
+  static const int schema = 1;
 
   const LocalChatSearchMessageRecord({
     required this.messageId,
@@ -75,7 +75,7 @@ class LocalChatSearchMessageRecord {
     ConversationCacheRecord? conversation,
   }) {
     const allowedKeys = <String>{
-      'schemaVersion',
+      'schema',
       'messageId',
       'conversationId',
       'conversationType',
@@ -101,10 +101,10 @@ class LocalChatSearchMessageRecord {
         '${unknownKeys.toList()..sort()}',
       );
     }
-    final version = map['schemaVersion'];
-    if (version != schemaVersion) {
+    final version = map['schema'];
+    if (version != schema) {
       throw FormatException(
-        'Unsupported LocalChatSearchMessageRecord schemaVersion: $version',
+        'Unsupported LocalChatSearchMessageRecord schema: $version',
       );
     }
     return LocalChatSearchMessageRecord(
@@ -197,7 +197,7 @@ class LocalChatSearchMessageRecord {
 
   Map<String, dynamic> toProjectionMap() {
     return <String, dynamic>{
-      'schemaVersion': schemaVersion,
+      'schema': schema,
       'messageId': messageId,
       'conversationId': conversationId,
       'conversationType': conversationType,

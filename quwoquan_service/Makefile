@@ -17,7 +17,7 @@ QWQ_OUTPUT_ROOT ?= $(REPO_ROOT)/.qwq_output
 ML_REPORT_ROOT ?= $(QWQ_OUTPUT_ROOT)/env/repo/runs/ml
 ML_PYTHON ?= $(if $(wildcard $(QWQ_OUTPUT_ROOT)/env/repo/local/python-envs/cache/rec-model/bin/python),$(QWQ_OUTPUT_ROOT)/env/repo/local/python-envs/cache/rec-model/bin/python,python3)
 ML_SCRIPTS := services/rec-model-service/scripts
-PYTEST_NO_CACHE := -p no:cacheprovider
+PYTEST_FLAGS := -o cache_dir=$(QWQ_OUTPUT_ROOT)/env/repo/local/tests/cache/pytest
 export QWQ_OUTPUT_ROOT
 export PYTHONDONTWRITEBYTECODE ?= 1
 
@@ -34,7 +34,7 @@ test: test-unit
 
 test-unit:
 	$(MAKE) -C services/assistant-service test
-	go test ./runtime/... ./generated/assistant/wirepoc/... ./services/content-service/... ./services/chat-service/... ./services/user-service/... ./services/rtc-service/... -v -count=1
+	go test ./runtime/... ./services/content-service/... ./services/chat-service/... ./services/user-service/... ./services/rtc-service/... -v -count=1
 
 test-contract:
 	$(MAKE) -C services/assistant-service test
@@ -197,13 +197,13 @@ verify-ml-features:
 	$(ML_PYTHON) $(ML_SCRIPTS)/verify_feature_consistency.py
 
 verify-ml-tests:
-	$(ML_PYTHON) -m pytest $(PYTEST_NO_CACHE) services/rec-model-service/tests -q
+	$(ML_PYTHON) -m pytest $(PYTEST_FLAGS) services/rec-model-service/tests -q
 
 verify-rec-policy-advisor:
-	$(ML_PYTHON) -m pytest $(PYTEST_NO_CACHE) scripts/recommendation/test_rec_policy_advisor.py -q
+	$(ML_PYTHON) -m pytest $(PYTEST_FLAGS) scripts/recommendation/test_rec_policy_advisor.py -q
 
 verify-content-flywheel-tests:
-	$(ML_PYTHON) -m pytest $(PYTEST_NO_CACHE) scripts/recommendation/test_eval_content_flywheel_loop.py -q
+	$(ML_PYTHON) -m pytest $(PYTEST_FLAGS) scripts/recommendation/test_eval_content_flywheel_loop.py -q
 
 verify-content-flywheel-loop:
 	$(ML_PYTHON) scripts/recommendation/eval_content_flywheel_loop.py --mongodb-uri "$(MONGODB_URI)" $(if $(filter 1 true yes,$(FLYWHEEL_REQUIRE_CLOSED)),--require-closed-loop,) $(if $(strip $(FLYWHEEL_OUT)),--output "$(FLYWHEEL_OUT)",)

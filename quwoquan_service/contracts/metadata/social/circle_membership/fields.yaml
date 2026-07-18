@@ -1,4 +1,3 @@
-version: 1
 aggregate: CircleMembership
 entities:
   CircleMembership:
@@ -78,7 +77,6 @@ entities:
     description: 管理员变更目标 membership 角色的强类型命令。
     fields:
       - { name: role, type: enum, enum_ref: CircleMemberRole, constraints: [NOT_NULL] }
-      - { name: expectedVersion, type: int64, constraints: [NOT_NULL] }
 
   CircleMembershipCommandReceipt:
     description: actor-scoped idempotency receipt。

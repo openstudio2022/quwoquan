@@ -1,8 +1,7 @@
-version: 1
 read_model: ProfileQrCardWire
 
 description: |
-  GET /v1/user/profile/qr-card 返回的我的二维码卡片 wire。二维码内容必须是公开主页 HTTPS link，
+  GET /user/profile/qr-card 返回的我的二维码卡片 wire。二维码内容必须是公开主页 HTTPS link，
   不包含手机号、ownerId 或 bearer token；qrTokenId 仅用于服务端撤销与观测。
 
 source_entities:
@@ -21,67 +20,57 @@ client_projection:
       dart_type: String
       nullable: false
       source: publicProfileUrl
-      aliases: [publicProfileUrl]
       default: "''"
 
     - name: qrPayload
       dart_type: String
       nullable: false
       source: qrPayload
-      aliases: [qrPayload]
       default: "''"
 
     - name: qrTokenId
       dart_type: String
       nullable: false
       source: qrTokenId
-      aliases: [qrTokenId]
       default: "''"
 
     - name: styleVersion
       dart_type: String
       nullable: false
       source: styleVersion
-      aliases: [styleVersion]
       default: "'v1'"
 
     - name: avatarUrl
       dart_type: String
       nullable: false
       source: avatarUrl
-      aliases: [avatarUrl]
       default: "''"
 
     - name: avatarVersion
       dart_type: String
       nullable: false
       source: avatarVersion
-      aliases: [avatarVersion]
       default: "''"
 
     - name: displayName
       dart_type: String
       nullable: false
       source: displayName
-      aliases: [displayName, nickname]
       default: "''"
 
     - name: region
       dart_type: String
       nullable: false
       source: region
-      aliases: [region]
       default: "''"
 
     - name: shareText
       dart_type: String
       nullable: false
       source: shareText
-      aliases: [shareText]
       default: "''"
 
     - name: expiresAt
       dart_type: DateTime
       nullable: true
       source: expiresAt
-      aliases: [expiresAt]

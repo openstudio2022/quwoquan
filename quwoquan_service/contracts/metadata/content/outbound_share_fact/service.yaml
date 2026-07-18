@@ -1,4 +1,3 @@
-version: 1
 
 service:
   name: content-service
@@ -13,10 +12,10 @@ service:
 
 api_routes:
   - method: POST
-    path: /v1/content/posts/{postId}/outbound-shares
+    path: /content/posts/{postId}/outbound-shares
+
     operation: CreateOutboundShare
     actor: persona_or_device
-    auth: optional
     application:
       kind: command
       facet: OutboundShareAppendFacet

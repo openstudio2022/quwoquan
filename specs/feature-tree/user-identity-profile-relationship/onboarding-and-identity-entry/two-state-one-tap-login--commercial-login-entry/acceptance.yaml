@@ -308,7 +308,8 @@ gwt_acceptance:
     - Header、Logo、Reason、主按钮、协议、其它登录方式位置稳定。
     - 验证码显示为 6 个独立方框，支持数字限制、退格与 6 位粘贴。
     - 输入/验证码不匹配使用字段错误；发送、网络、provider、限流和过期使用操作点附近的 AppFormErrorCard，不用弱 caption 或大弹窗。
-    - 自动降级使用 compact AppFormErrorCard，仅展示一条可换行说明；页面主按钮已承担恢复动作时错误卡不得复制按钮。
+    - AppInlineFieldError 与 AppFormErrorCard 均为透明 16px 圆形感叹号、14px 常规文字、6px 图文间距的单一错误样式；浅色 #E5484D、深色 #FF6B6B，窄屏最多两行。
+    - 自动降级使用 compact AppFormErrorCard，仅展示一条可换行说明；页面主按钮已承担恢复动作时错误行不得复制按钮。
     - 输入 6 位验证码后只进入可提交态，不自动登录。
     - returning account 降级到短信时只预填手机号，不自动发码。
     - 发码成功后隐藏大号手机号输入框，展示脱敏发送摘要和“更换手机号”；主按钮改为“验证并登录”。
@@ -366,6 +367,7 @@ gwt_acceptance:
     - 社交取消由恢复策略吸收且不显示失败；社交失败只显示在其它方式网格上方的唯一反馈槽。
     - 新错误通过 liveRegion 播报一次，编辑、重试或成功后清除且不抢输入焦点。
     - 账号暂停、删除或锁定只显示阻断面，并提供帮助与关闭安全态。
+    - 运营商 hint 的账号暂停、删除或锁定错误不得静默降级为手机号注册路径。
     done_when:
     - 每类 OTP 异常都有明确下一步，并保留用户可恢复路径。
     - 修改手机号会清空验证码与错误，关闭和成功目标态不回环。
@@ -413,7 +415,7 @@ gwt_acceptance:
     when:
     - 用户点击登录。
     then:
-    - App 调用 LoginWithPhone，不调用旧 /v1/auth/login 泛用路由。
+    - App 调用 LoginWithPhone，不调用旧 /auth/login 泛用路由。
     - 服务端校验 OTP 后创建或恢复 owner、primary persona、credential、device、consent record。
     - App 保存 token 与 remembered account summary。
     done_when:
@@ -466,7 +468,7 @@ contract_acceptance:
     - SendOtp response 只可表达 maskedPhone、expiresInSeconds、deliveryStatus、requestId、challengeId、retryAfterSeconds，且不得包含验证码。
     - USER.AUTH carrier/consent/account 状态错误码生成 Dart/Go 常量。
     - USER.AUTH otp_mismatch/otp_expired 与频控错误可映射到手机号 OTP UI 状态。
-    - 旧未登记 /v1/auth/login 与 credentialType/credentialKey 登录兼容口径不得回归。
+    - 旧未登记 /auth/login 与 credentialType/credentialKey 登录兼容口径不得回归。
     - SendOtp / LoginWithPhone / LoginOneTap / ResolveOneTapLoginHint 在 metadata 同源声明 commercial、authorization、安全、隐私、可靠性、遥测、错误码与 SLO，App ContractGraph lock 通过正式 handoff 接受。
     tests:
       planned:

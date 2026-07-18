@@ -51,7 +51,7 @@
 - 事件正文必须是用户语言，围绕“已经为你做了什么 / 正在为你核对什么”表达，**禁止**携带：
   - 原始查询词与 queryVariants
   - tool args
-  - `provider / freshnessHoursMax / contractVersion / assistant_turn / tool_call`
+  - `provider / freshnessHoursMax / schema / assistant_turn / tool_call`
   - 原始 `<think>` 内容和模型自由思维链
 
 ### 3. `answer_delta`

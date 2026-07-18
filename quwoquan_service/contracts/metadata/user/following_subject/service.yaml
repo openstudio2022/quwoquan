@@ -1,4 +1,3 @@
-version: 1
 
 service:
   name: user-service
@@ -12,7 +11,8 @@ service:
 
 api_routes:
   - method: GET
-    path: /v1/user/following-subjects
+    path: /user/following-subjects
+
     operation: ListFollowingSubjects
     actor: persona
     application:
@@ -45,5 +45,5 @@ contract_test:
       data_source: ../test_fixtures/scenarios/user_scenarios.json -> seedSets.following_subject_core
       scenarios:
         - name: list_three_subject_types
-          route: GET /v1/user/following-subjects
+          route: GET /user/following-subjects
           assertions: [contains_user_circle_homepage, unread_flags_present]

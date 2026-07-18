@@ -1,4 +1,4 @@
-schemaVersion: legal-static/v1
+schema: legal-static
 packageKind: legal-static
 currentVersion: "2026-07"
 status: legal-review-required

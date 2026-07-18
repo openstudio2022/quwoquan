@@ -3,7 +3,7 @@ package runtimemedia
 import "context"
 
 const (
-	DefaultGroupAvatarObjectKey = "media/avatar/default/group/v1/default.png"
+	DefaultGroupAvatarObjectKey = "media/avatar/s/default/group/v1/default.png"
 	DefaultGroupAvatarVersion   = 1
 )
 

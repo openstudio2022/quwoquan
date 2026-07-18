@@ -47,7 +47,7 @@
 
 - 云侧无需改动：`CreatePost` writable（`entityRefs/tagRefs/summary`）、`GenerateArticleSummary` 均已就绪。
 - mention 语法/派生规则若需登记 → `contracts/metadata/content/post/`（fields.yaml entityMentions 描述层），不改字段形状。
-- **小趣创作辅助契约（与 WP8 共同冻结）**：`POST /v1/assistant/skills/creation-suggest`（语义名，最终 path 由 WP8 经 assistant metadata 定稿）——请求 `{draftTitle, draftSummary, bodyDigest, boundCircleIds[], primaryHomepageId}`，响应 `{suggestedTagRefs[], suggestedHomepages[{id,type,displayName}], suggestedTitle?, suggestedSummary?}`。本包按此形状写适配层与降级逻辑；形状变更需双包确认。
+- **小趣创作辅助契约（与 WP8 共同冻结）**：`POST /assistant/skills/creation-suggest`（语义名，最终 path 由 WP8 经 assistant metadata 定稿）——请求 `{draftTitle, draftSummary, bodyDigest, boundCircleIds[], primaryHomepageId}`，响应 `{suggestedTagRefs[], suggestedHomepages[{id,type,displayName}], suggestedTitle?, suggestedSummary?}`。本包按此形状写适配层与降级逻辑；形状变更需双包确认。
 - 新增文案 key 追加 `UITextConstants`，登记于此：（细化会话填写）。
 
 ## 4. 改动范围

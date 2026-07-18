@@ -9,7 +9,7 @@ from pathlib import Path
 SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
-from content.release.canonical.object_transaction import validate_canonical_publish
+from content.release.canonical.object_transaction_audit import validate_canonical_publish
 from core.paths import PUBLISH_ROOT
 
 

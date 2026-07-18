@@ -186,7 +186,7 @@ void main() {
   testWidgets('primarySpans 名字片段点击进对象主页（优先于整行）', (tester) async {
     final behaviorRepo = MockBehaviorRepository();
     final tracker = ContentBehaviorTracker(
-      repository: behaviorRepo,
+      reporter: behaviorRepo,
       maxBatchSize: 1,
       enablePeriodicFlush: false,
     );
@@ -250,7 +250,7 @@ void main() {
   testWidgets('primarySpans 数字片段点击进入成员过滤列表并带 sourceRef', (tester) async {
     final behaviorRepo = MockBehaviorRepository();
     final tracker = ContentBehaviorTracker(
-      repository: behaviorRepo,
+      reporter: behaviorRepo,
       maxBatchSize: 1,
       enablePeriodicFlush: false,
     );

@@ -205,9 +205,46 @@ void main() {
     );
 
     expect(semantic.title, UITextConstants.homepageLoadFailedTitle);
-    expect(semantic.message, UITextConstants.contentUnavailableReason);
+    expect(
+      semantic.message,
+      EntityErrorMessages.zh[EntityErrorCode.homepageNotFound],
+    );
     expect(semantic.copyKey, 'homepageLoadFailedTitle');
     expect(semantic.primaryAction, isNull);
+  });
+
+  testWidgets('可重试的首屏网络失败不在说明中重复恢复动作', (tester) async {
+    late BuildContext capturedContext;
+    await tester.pumpWidget(
+      CupertinoApp(
+        home: Builder(
+          builder: (context) {
+            capturedContext = context;
+            return const SizedBox.shrink();
+          },
+        ),
+      ),
+    );
+
+    final semantic = UiErrorSemanticResolver.resolve(
+      capturedContext,
+      error: CloudException(
+        type: CloudErrorType.network,
+        message: 'network',
+        runtimeFailure: testRuntimeFailure(
+          code: 'APP.NETWORK.offline',
+          kind: RuntimeFailureKind.network,
+          nature: RuntimeFailureNature.transient,
+        ),
+      ),
+      category: UiErrorCategory.pageLoad,
+      scope: UiErrorScope.page,
+    );
+
+    expect(semantic.primaryAction?.label, UITextConstants.tryAgain);
+    expect(semantic.message, UITextConstants.pageLoadFailedMessage);
+    expect(semantic.message, isNot(contains('再试一次')));
+    expect(semantic.message, isNot(contains('稍后')));
   });
 
   // 错误展示载体决策矩阵：守护 specs/ux/error-and-permission-semantics.md §1.13.2

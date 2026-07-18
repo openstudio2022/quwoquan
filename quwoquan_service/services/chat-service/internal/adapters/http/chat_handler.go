@@ -37,16 +37,16 @@ func NewChatHandler(
 func (h *ChatHandler) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", h.handleHealthz)
-	mux.HandleFunc("POST /v1/user/sync", h.handlePullUserSync)
-	mux.HandleFunc("GET /v1/chat/conversations/search", h.handleSearchConversations)
-	mux.HandleFunc("GET /v1/chat/messages/search", h.handleSearchMessages)
-	mux.HandleFunc("PATCH /v1/chat/conversations/{conversationId}", h.handleUpdateConversationTitle)
-	mux.HandleFunc("GET /v1/chat/message-home", h.handleListMessageHome)
-	mux.HandleFunc("GET /v1/chat/contact-home", h.handleListContactHome)
-	mux.HandleFunc("GET /v1/chat/groups/{conversationId}/home", h.handleGetGroupHome)
-	mux.HandleFunc("PATCH /v1/chat/conversations/{conversationId}/owner", h.handleTransferOwnership)
-	mux.HandleFunc("PUT /v1/chat/conversations/{conversationId}/admins", h.handleUpdateGroupAdmins)
-	mux.HandleFunc("DELETE /v1/chat/conversations/{conversationId}", h.handleDissolveConversation)
+	mux.HandleFunc("POST /user/sync", h.handlePullUserSync)
+	mux.HandleFunc("GET /chat/conversations/search", h.handleSearchConversations)
+	mux.HandleFunc("GET /chat/messages/search", h.handleSearchMessages)
+	mux.HandleFunc("PATCH /chat/conversations/{conversationId}", h.handleUpdateConversationTitle)
+	mux.HandleFunc("GET /chat/message-home", h.handleListMessageHome)
+	mux.HandleFunc("GET /chat/contact-home", h.handleListContactHome)
+	mux.HandleFunc("GET /chat/groups/{conversationId}/home", h.handleGetGroupHome)
+	mux.HandleFunc("PATCH /chat/conversations/{conversationId}/owner", h.handleTransferOwnership)
+	mux.HandleFunc("PUT /chat/conversations/{conversationId}/admins", h.handleUpdateGroupAdmins)
+	mux.HandleFunc("DELETE /chat/conversations/{conversationId}", h.handleDissolveConversation)
 	RegisterGeneratedRoutes(mux, h)
 	h.registerInternalRoutes(mux)
 	return mux
@@ -149,7 +149,7 @@ func (h *ChatHandler) handleCreateConversation(w http.ResponseWriter, r *http.Re
 }
 
 func (h *ChatHandler) handleGetConversation(w http.ResponseWriter, r *http.Request) {
-	convId := extractPathParam(r.URL.Path, "/v1/chat/conversations/{conversationId}", "conversationId")
+	convId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}", "conversationId")
 	conv, err := h.conversationService.GetConversation(r.Context(), convId)
 	if err != nil {
 		writeHTTPError(w, r, newNotFound("会话", convId))
@@ -159,7 +159,7 @@ func (h *ChatHandler) handleGetConversation(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *ChatHandler) handleUpdateConversationTitle(w http.ResponseWriter, r *http.Request) {
-	convId := extractPathParam(r.URL.Path, "/v1/chat/conversations/{conversationId}", "conversationId")
+	convId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}", "conversationId")
 	var body struct {
 		Title string `json:"title"`
 	}
@@ -182,7 +182,7 @@ func (h *ChatHandler) handleUpdateConversationTitle(w http.ResponseWriter, r *ht
 // ── Messages ─────────────────────────────────────────────────────────────────
 
 func (h *ChatHandler) handleListMessages(w http.ResponseWriter, r *http.Request) {
-	convId := extractPathParam(r.URL.Path, "/v1/chat/conversations/{conversationId}/messages", "conversationId")
+	convId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/messages", "conversationId")
 	limit := queryInt(r, "limit", 20)
 	afterSeq := queryInt64(r, "afterSeq", 0)
 	beforeSeq := queryInt64(r, "beforeSeq", 0)
@@ -210,7 +210,7 @@ func (h *ChatHandler) handleListMessages(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *ChatHandler) handleSendMessage(w http.ResponseWriter, r *http.Request) {
-	convId := extractPathParam(r.URL.Path, "/v1/chat/conversations/{conversationId}/messages", "conversationId")
+	convId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/messages", "conversationId")
 	var body struct {
 		Type                      string                          `json:"type"`
 		Content                   string                          `json:"content"`
@@ -253,8 +253,8 @@ func (h *ChatHandler) handleSendMessage(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *ChatHandler) handleRecallMessage(w http.ResponseWriter, r *http.Request) {
-	convId := extractPathParam(r.URL.Path, "/v1/chat/conversations/{conversationId}/messages/{messageId}/recall", "conversationId")
-	msgId := extractPathParam(r.URL.Path, "/v1/chat/conversations/{conversationId}/messages/{messageId}/recall", "messageId")
+	convId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/messages/{messageId}/recall", "conversationId")
+	msgId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/messages/{messageId}/recall", "messageId")
 
 	err := h.messageService.RecallMessage(r.Context(), convId, msgId, resolvePersonaID(r))
 	if err != nil {
@@ -265,7 +265,7 @@ func (h *ChatHandler) handleRecallMessage(w http.ResponseWriter, r *http.Request
 }
 
 func (h *ChatHandler) handleSyncMessages(w http.ResponseWriter, r *http.Request) {
-	convId := extractPathParam(r.URL.Path, "/v1/chat/conversations/{conversationId}/sync", "conversationId")
+	convId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/sync", "conversationId")
 	var body struct {
 		LastSeq int64 `json:"lastSeq"`
 		Limit   int   `json:"limit"`
@@ -293,8 +293,8 @@ func (h *ChatHandler) handleSyncMessages(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *ChatHandler) handleMarkAsRead(w http.ResponseWriter, r *http.Request) {
-	convId := extractPathParam(r.URL.Path, "/v1/chat/conversations/{conversationId}/messages/{messageId}/read", "conversationId")
-	msgId := extractPathParam(r.URL.Path, "/v1/chat/conversations/{conversationId}/messages/{messageId}/read", "messageId")
+	convId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/messages/{messageId}/read", "conversationId")
+	msgId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/messages/{messageId}/read", "messageId")
 
 	err := h.messageService.MarkAsRead(r.Context(), application.MarkAsReadRequest{
 		ConversationId: convId, MessageId: msgId, UserId: resolvePersonaID(r),
@@ -307,8 +307,8 @@ func (h *ChatHandler) handleMarkAsRead(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ChatHandler) handleGetReceipts(w http.ResponseWriter, r *http.Request) {
-	convId := extractPathParam(r.URL.Path, "/v1/chat/conversations/{conversationId}/messages/{messageId}/receipts", "conversationId")
-	msgId := extractPathParam(r.URL.Path, "/v1/chat/conversations/{conversationId}/messages/{messageId}/receipts", "messageId")
+	convId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/messages/{messageId}/receipts", "conversationId")
+	msgId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/messages/{messageId}/receipts", "messageId")
 	_ = convId
 
 	receipts, err := h.messageService.GetReceipts(r.Context(), convId, msgId, resolvePersonaID(r))
@@ -322,7 +322,7 @@ func (h *ChatHandler) handleGetReceipts(w http.ResponseWriter, r *http.Request) 
 // ── Members ──────────────────────────────────────────────────────────────────
 
 func (h *ChatHandler) handleListMembers(w http.ResponseWriter, r *http.Request) {
-	convId := extractPathParam(r.URL.Path, "/v1/chat/conversations/{conversationId}/members", "conversationId")
+	convId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/members", "conversationId")
 	cursor := r.URL.Query().Get("cursor")
 	limit := queryInt(r, "limit", 20)
 	role := r.URL.Query().Get("role")
@@ -339,7 +339,7 @@ func (h *ChatHandler) handleListMembers(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *ChatHandler) handleAddMembers(w http.ResponseWriter, r *http.Request) {
-	convId := extractPathParam(r.URL.Path, "/v1/chat/conversations/{conversationId}/members", "conversationId")
+	convId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/members", "conversationId")
 	var body struct {
 		UserIds []string `json:"userIds"`
 	}
@@ -359,8 +359,8 @@ func (h *ChatHandler) handleAddMembers(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ChatHandler) handleRemoveMember(w http.ResponseWriter, r *http.Request) {
-	convId := extractPathParam(r.URL.Path, "/v1/chat/conversations/{conversationId}/members/{userId}", "conversationId")
-	userId := extractPathParam(r.URL.Path, "/v1/chat/conversations/{conversationId}/members/{userId}", "userId")
+	convId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/members/{userId}", "conversationId")
+	userId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/members/{userId}", "userId")
 
 	err := h.memberService.RemoveMember(r.Context(), convId, userId)
 	if err != nil {
@@ -371,7 +371,7 @@ func (h *ChatHandler) handleRemoveMember(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *ChatHandler) handleInviteAssistant(w http.ResponseWriter, r *http.Request) {
-	convId := extractPathParam(r.URL.Path, "/v1/chat/conversations/{conversationId}/assistant", "conversationId")
+	convId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/assistant", "conversationId")
 	var body struct {
 		SkillId string `json:"skillId"`
 	}
@@ -388,7 +388,7 @@ func (h *ChatHandler) handleInviteAssistant(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *ChatHandler) handleRemoveAssistant(w http.ResponseWriter, r *http.Request) {
-	convId := extractPathParam(r.URL.Path, "/v1/chat/conversations/{conversationId}/assistant", "conversationId")
+	convId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/assistant", "conversationId")
 
 	err := h.memberService.RemoveAssistant(r.Context(), application.RemoveAssistantRequest{
 		ConversationId: convId,
@@ -402,7 +402,7 @@ func (h *ChatHandler) handleRemoveAssistant(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *ChatHandler) handleUpdateConversationSettings(w http.ResponseWriter, r *http.Request) {
-	convId := extractPathParam(r.URL.Path, "/v1/chat/conversations/{conversationId}/settings", "conversationId")
+	convId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/settings", "conversationId")
 	var body struct {
 		Muted  *bool `json:"muted"`
 		Pinned *bool `json:"pinned"`
@@ -423,7 +423,7 @@ func (h *ChatHandler) handleUpdateConversationSettings(w http.ResponseWriter, r 
 }
 
 func (h *ChatHandler) handleTransferOwnership(w http.ResponseWriter, r *http.Request) {
-	convId := extractPathParam(r.URL.Path, "/v1/chat/conversations/{conversationId}/owner", "conversationId")
+	convId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/owner", "conversationId")
 	var body struct {
 		NewOwnerId string `json:"newOwnerId"`
 	}
@@ -444,7 +444,7 @@ func (h *ChatHandler) handleTransferOwnership(w http.ResponseWriter, r *http.Req
 }
 
 func (h *ChatHandler) handleUpdateGroupAdmins(w http.ResponseWriter, r *http.Request) {
-	convId := extractPathParam(r.URL.Path, "/v1/chat/conversations/{conversationId}/admins", "conversationId")
+	convId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/admins", "conversationId")
 	var body struct {
 		AdminIds []string `json:"adminIds"`
 	}
@@ -465,7 +465,7 @@ func (h *ChatHandler) handleUpdateGroupAdmins(w http.ResponseWriter, r *http.Req
 }
 
 func (h *ChatHandler) handleDissolveConversation(w http.ResponseWriter, r *http.Request) {
-	convId := extractPathParam(r.URL.Path, "/v1/chat/conversations/{conversationId}", "conversationId")
+	convId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}", "conversationId")
 	err := h.conversationService.DissolveConversation(r.Context(), application.DissolveConversationRequest{
 		ConversationId: convId,
 		OperatorId:     resolveUserID(r),
@@ -593,7 +593,7 @@ func (h *ChatHandler) handleListContactHome(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *ChatHandler) handleGetGroupHome(w http.ResponseWriter, r *http.Request) {
-	convId := extractPathParam(r.URL.Path, "/v1/chat/groups/{conversationId}/home", "conversationId")
+	convId := extractPathParam(r.URL.Path, "/chat/groups/{conversationId}/home", "conversationId")
 	conv, err := h.conversationService.GetConversation(r.Context(), convId)
 	if err != nil {
 		writeHTTPError(w, r, newNotFound("会话", convId))

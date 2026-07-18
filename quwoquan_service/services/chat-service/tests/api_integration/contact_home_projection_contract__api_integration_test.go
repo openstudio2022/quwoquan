@@ -14,7 +14,7 @@ func TestContactHomeProjection_CircleListResolverClient(t *testing.T) {
 	t.Parallel()
 
 	circleServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/circles" {
+		if r.URL.Path != "/circles" {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}

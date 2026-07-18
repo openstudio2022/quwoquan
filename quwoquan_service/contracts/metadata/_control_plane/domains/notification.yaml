@@ -1,4 +1,3 @@
-version: 1
 domain: notification
 display_name: Notification
 template_role: replica_ready

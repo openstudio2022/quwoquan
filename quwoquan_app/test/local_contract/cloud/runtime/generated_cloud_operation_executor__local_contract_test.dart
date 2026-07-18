@@ -8,6 +8,7 @@ import 'package:quwoquan_app/cloud/runtime/context/cloud_operation_header_factor
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/executor/generated_cloud_operation_executor.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/integration/integration_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/observability/cloud_operation_telemetry.dart';
 import 'package:quwoquan_app/cloud/runtime/transport/cloud_json_transport.dart';
@@ -23,6 +24,12 @@ void main() {
   final reportOperation =
       appCloudOperationContracts[AppCloudOperationIds
           .contentReportCreateReport]!;
+  final updateCircleGroupOperation =
+      appCloudOperationContracts[AppCloudOperationIds
+          .circleCircleGroupUpdateCircleGroup]!;
+  final executableUpdateCircleGroupOperation = _commerciallyReady(
+    updateCircleGroupOperation,
+  );
   final fixedNow = DateTime.utc(2026, 7, 13, 1, 2, 3);
   const clientContext = _FixedClientContextProvider();
 
@@ -182,7 +189,7 @@ void main() {
       expect(transport.request, isNotNull);
       expect(
         transport.request!.uri.toString(),
-        'https://api.example.test/gateway/v1/integration/location/search?'
+        'https://api.example.test/gateway/integration/location/search?'
         'q=%E5%92%96%E5%95%A1%2F%E8%8C%B6&limit=20',
       );
       expect(telemetry.events, hasLength(1));
@@ -418,9 +425,10 @@ void main() {
         now: () => fixedNow,
       );
       final commandInvocation = CloudOperationInvocationContext(
-        surfaceId: 'homeFeed',
-        clientPageId: 'content.report.create',
-        idempotencyKey: 'report-request-1',
+        surfaceId: 'circleDetail',
+        clientPageId: CircleRequestPageIds.updateCircleGroup,
+        routeId: 'circleDetail',
+        idempotencyKey: 'circle-group-update-1',
         deadlineAt: fixedNow.add(const Duration(seconds: 1)),
         actor: const CloudOperationActorContext(
           accountId: 'account-1',
@@ -429,16 +437,24 @@ void main() {
       );
 
       await executor.send<Object?>(
-        reportOperation,
+        executableUpdateCircleGroupOperation,
         context: commandInvocation,
         responseDecoder: (value) => value,
-        requestEncoder: () => const CloudOperationRequestPayload(
-          headers: <String, String>{'If-Match': '"7"'},
+        requestEncoder: () => encodeUpdateCircleGroupCommand(
+          UpdateCircleGroupCommand(
+            circleId: 'circle-1',
+            groupId: 'group-1',
+            expectedVersion: 7,
+            name: 'updated group',
+          ),
         ),
       );
 
       expect(transport.request!.headers['If-Match'], '"7"');
-      expect(transport.request!.headers['Idempotency-Key'], 'report-request-1');
+      expect(
+        transport.request!.headers['Idempotency-Key'],
+        'circle-group-update-1',
+      );
       expect(transport.request!.headers['X-Client-Persona-Id'], 'persona-1');
 
       final rejectedTransport = _RecordingTransport(response: null);
@@ -451,7 +467,7 @@ void main() {
       );
       await expectLater(
         rejectedExecutor.send<Object?>(
-          reportOperation,
+          executableUpdateCircleGroupOperation,
           context: commandInvocation,
           responseDecoder: (value) => value,
           requestEncoder: () => const CloudOperationRequestPayload(
@@ -913,6 +929,52 @@ void main() {
       expect(success, 'ok');
     });
   });
+}
+
+CloudOperationContract _commerciallyReady(CloudOperationContract source) {
+  return CloudOperationContract(
+    canonicalOperationId: source.canonicalOperationId,
+    localOperationId: source.localOperationId,
+    domain: source.domain,
+    objectId: source.objectId,
+    kind: source.kind,
+    facet: source.facet,
+    facadeMethod: source.facadeMethod,
+    aggregateOwner: source.aggregateOwner,
+    mutationTarget: source.mutationTarget,
+    invariantTarget: source.invariantTarget,
+    method: source.method,
+    pathTemplate: source.pathTemplate,
+    authMode: source.authMode,
+    actorRequirement: source.actorRequirement,
+    principal: source.principal,
+    scopes: source.scopes,
+    permissions: source.permissions,
+    ownershipPolicy: source.ownershipPolicy,
+    commercialStatus: 'ready',
+    commercialBlockReason: '',
+    timeoutMilliseconds: source.timeoutMilliseconds,
+    cancellation: source.cancellation,
+    retryMode: source.retryMode,
+    maxAttempts: source.maxAttempts,
+    idempotency: source.idempotency,
+    versionPrecondition: source.versionPrecondition,
+    errorCodes: source.errorCodes,
+    requestClassification: source.requestClassification,
+    responseClassification: source.responseClassification,
+    logPolicy: source.logPolicy,
+    telemetryMetric: source.telemetryMetric,
+    telemetryTrace: source.telemetryTrace,
+    telemetryAttributes: source.telemetryAttributes,
+    latencyP95Milliseconds: source.latencyP95Milliseconds,
+    availabilityPercent: source.availabilityPercent,
+    requestEntity: source.requestEntity,
+    requestBodyKind: source.requestBodyKind,
+    responseEntity: source.responseEntity,
+    responseBody: source.responseBody,
+    responseBodyKind: source.responseBodyKind,
+    surfaceIds: source.surfaceIds,
+  );
 }
 
 CloudOperationRequestPayload _emptyRequestEncoder() =>

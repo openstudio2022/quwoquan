@@ -8,16 +8,16 @@ import (
 	"testing"
 )
 
-func TestPostCreatedEvent(t *testing.T) {
+func TestAtomicPostPublicationEvent(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 	eventSpy.Reset()
 
-	created := createPost(t, `{"contentType":"image","title":"Event test","mediaUrls":["https://example.com/img.jpg"]}`)
-	postID, _ := created["_id"].(string)
+	created := submitPublishedPost(t, `{"contentType":"image","title":"Event test"}`)
+	postID, _ := created["postId"].(string)
 
-	events := eventSpy.EventsOfType("PostCreated")
+	events := eventSpy.EventsOfType("PostPublished")
 	if len(events) != 1 {
-		t.Fatalf("expected 1 PostCreated event, got %d", len(events))
+		t.Fatalf("expected 1 PostPublished event, got %d", len(events))
 	}
 	ev := events[0]
 	if ev.AggregateType != "Post" {
@@ -44,7 +44,7 @@ func TestCommentDeletedEvent(t *testing.T) {
 	eventSpy.Reset()
 
 	deleted := commentAPIRequest(t, http.MethodDelete,
-		"/v1/content/posts/"+postID+"/comments/"+comment.ID,
+		"/content/posts/"+postID+"/comments/"+comment.ID,
 		"event-comment-owner", map[string]any{"version": comment.Version})
 	if deleted.Code != http.StatusOK {
 		t.Fatalf("delete Comment: %d body=%s", deleted.Code, deleted.Body.String())
@@ -65,22 +65,23 @@ func TestCommentDeletedEvent(t *testing.T) {
 
 func TestPostSettingsUpdatedEvent(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
-	created := createPostWithAuthor(t, "settings_event_author", `{
+	created := submitPublishedPostWithAuthor(t, "settings_event_author", `{
 		"contentType":"article",
 		"title":"Event settings",
 		"body":"正文"
 	}`)
-	postID, _ := created["_id"].(string)
+	postID, _ := created["postId"].(string)
 
 	eventSpy.Reset()
 
 	req := httptest.NewRequest(
 		http.MethodPatch,
-		"/v1/content/posts/"+postID+"/settings",
+		"/content/posts/"+postID+"/settings",
 		strings.NewReader(`{"visibility":"public","assistantUsePolicy":"exclude"}`),
 	)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Client-User-Id", "settings_event_author")
+	ensureIdempotencyHeader(req, "settings-event")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -105,21 +106,22 @@ func TestPostSettingsUpdatedEvent(t *testing.T) {
 
 func TestPostPromotedToWorkEvent(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
-	created := createPostWithAuthor(t, "promote_event_author", `{
+	created := submitPublishedPostWithAuthor(t, "promote_event_author", `{
 		"contentType":"micro",
 		"body":"从点滴升级"
 	}`)
-	postID, _ := created["_id"].(string)
+	postID, _ := created["postId"].(string)
 
 	eventSpy.Reset()
 
 	req := httptest.NewRequest(
 		http.MethodPost,
-		"/v1/content/posts/"+postID+":promoteToWork",
+		"/content/posts/"+postID+":promoteToWork",
 		strings.NewReader(`{"contentType":"image","title":"升级后的作品"}`),
 	)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Client-User-Id", "promote_event_author")
+	ensureIdempotencyHeader(req, "promote-event")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -141,17 +143,17 @@ func TestPostPromotedToWorkEvent(t *testing.T) {
 
 func TestPostDeletedEvent(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
-	created := createPostWithAuthor(t, "delete_event_author", `{
+	created := submitPublishedPostWithAuthor(t, "delete_event_author", `{
 		"contentType":"image",
-		"visibility":"public",
-		"mediaUrls":["https://example.com/img.jpg"]
+		"visibility":"public"
 	}`)
-	postID, _ := created["_id"].(string)
+	postID, _ := created["postId"].(string)
 
 	eventSpy.Reset()
 
-	req := httptest.NewRequest(http.MethodDelete, "/v1/content/posts/"+postID, nil)
+	req := httptest.NewRequest(http.MethodDelete, "/content/posts/"+postID, nil)
 	req.Header.Set("X-Client-User-Id", "delete_event_author")
+	ensureIdempotencyHeader(req, "delete-event")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -180,16 +182,16 @@ func TestPostDeletedEvent(t *testing.T) {
 func TestNoSpuriousEventsOnRead(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	created := createPost(t, `{"contentType":"image","title":"Read no event","mediaUrls":["https://example.com/img.jpg"]}`)
-	postID, _ := created["_id"].(string)
+	created := submitPublishedPost(t, `{"contentType":"image","title":"Read no event"}`)
+	postID, _ := created["postId"].(string)
 
 	eventSpy.Reset()
 
-	getReq := httptest.NewRequest(http.MethodGet, "/v1/content/posts/"+postID, nil)
+	getReq := httptest.NewRequest(http.MethodGet, "/content/posts/"+postID, nil)
 	getRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(getRec, getReq)
 
-	listReq := httptest.NewRequest(http.MethodGet, "/v1/content/posts/"+postID+"/counters", nil)
+	listReq := httptest.NewRequest(http.MethodGet, "/content/posts/"+postID+"/counters", nil)
 	listRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(listRec, listReq)
 

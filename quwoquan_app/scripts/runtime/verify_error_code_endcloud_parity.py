@@ -12,8 +12,8 @@ verify_error_code_endcloud_parity.py
 typed 枚举项，立即阻断，避免端侧 typed 覆盖悄悄落后于云侧（用户核心诉求：
 端云错误码扩展必须可被发现，不能出现端侧无 typed 覆盖的静默缺口）。
 
-注意：前向兼容（未知码仍回退 userMessage/recovery）由运行时保证，由
-verify forward-compat 契约测试单独锁定；本门禁只保证「典型客户端域」的
+注意：未知错误码仍回退 userMessage/recovery 由运行时保证，由
+unknown-code runtime 契约测试单独锁定；本门禁只保证「典型客户端域」的
 typed 全集一致，不强制 server-internal 错误码也生成客户端枚举。
 
 server-internal 域（integration 的 provider/中间件错误码，不直接回给客户端）
@@ -48,6 +48,7 @@ CLIENT_DOMAINS = {
             "quwoquan_service/contracts/metadata/user/contact_discovery/errors.yaml",
             "quwoquan_service/contracts/metadata/user/greeting_request/errors.yaml",
             "quwoquan_service/contracts/metadata/user/invite_record/errors.yaml",
+            "quwoquan_service/contracts/metadata/user/profile_update_proposal/errors.yaml",
         ],
         "dart": "quwoquan_app/lib/cloud/runtime/generated/user/user_errors.g.dart",
     },

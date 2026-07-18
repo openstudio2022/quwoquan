@@ -29,7 +29,7 @@ def apply_object_transaction(
     dry_run_attestation_sha256: str,
 ) -> dict[str, Any]:
     """Atomically replace canonical publish only after the immutable audit attestation."""
-    from content.release.canonical.object_transaction import (
+    from content.release.canonical.object_transaction_audit import (
         _transaction_root,
         _verify_attestation,
         validate_canonical_publish,
@@ -40,7 +40,7 @@ def apply_object_transaction(
     report_path, apply_path = run_root / "audit_report.json", run_root / "apply_report.json"
     if apply_path.is_file():
         applied = _read_json(apply_path)
-        if applied.get("schemaVersion") == APPLY_SCHEMA and tree_integrity_stats(publish_root)["merkleRoot"] == applied.get("afterMerkle"):
+        if applied.get("schema") == APPLY_SCHEMA and tree_integrity_stats(publish_root)["merkleRoot"] == applied.get("afterMerkle"):
             return {**applied, "idempotent": True}
         raise ObjectTransactionError("已有 apply 记录但 canonical 已漂移")
     if not report_path.is_file():
@@ -55,7 +55,6 @@ def apply_object_transaction(
     package = _verify_package(
         package_root,
         canonical_root=publish_root,
-        required_source_policy_revision=str(report["sourcePolicyRevision"]),
         require_target_absent=True,
     )
     if any(package[key] != report.get(key) for key in ("packageSha256", "objectClosureDigest", "executionId")):
@@ -94,7 +93,7 @@ def apply_object_transaction(
     finally:
         lock.unlink(missing_ok=True)
     applied = {
-        "schemaVersion": APPLY_SCHEMA,
+        "schema": APPLY_SCHEMA,
         "transactionId": transaction_id,
         "executionId": report["executionId"],
         "status": "applied",
@@ -114,12 +113,12 @@ def apply_object_transaction(
 
 def rollback_object_transaction(*, publish_root: Path, output_root: Path, transaction_id: str) -> dict[str, Any]:
     """Restore the exact immutable pre-apply snapshot, preserving audit evidence."""
-    from content.release.canonical.object_transaction import _transaction_root
+    from content.release.canonical.object_transaction_audit import _transaction_root
 
     transaction_id = _safe_id(transaction_id, label="transactionId")
     run_root = _transaction_root(output_root, transaction_id)
     apply_report = _read_json(run_root / "apply_report.json")
-    if apply_report.get("schemaVersion") != APPLY_SCHEMA:
+    if apply_report.get("schema") != APPLY_SCHEMA:
         raise ObjectTransactionError("apply report schema 不匹配")
     rollback = Path(str(apply_report.get("rollbackRef") or ""))
     if not rollback.is_dir():
@@ -152,7 +151,7 @@ def rollback_object_transaction(*, publish_root: Path, output_root: Path, transa
         os.replace(displaced, publish_root)
         raise ObjectTransactionError("rollback restore Merkle 不匹配")
     result = {
-        "schemaVersion": ROLLBACK_SCHEMA,
+        "schema": ROLLBACK_SCHEMA,
         "transactionId": transaction_id,
         "status": "rolled_back",
         "rolledBackAt": _now(),

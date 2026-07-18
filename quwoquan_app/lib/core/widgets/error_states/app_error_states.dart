@@ -128,7 +128,11 @@ class AppSectionErrorCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: margin ?? EdgeInsets.all(AppSpacing.containerMd),
-      child: _ErrorSoftCardBody(semantic: semantic, onAction: onAction),
+      child: _ErrorSoftCardBody(
+        semantic: semantic,
+        onAction: onAction,
+        density: AppFormErrorCardDensity.regular,
+      ),
     );
   }
 }
@@ -157,7 +161,7 @@ class AppFormErrorCard extends StatelessWidget {
       container: true,
       child: Padding(
         padding: margin,
-        child: _ErrorSoftCardBody(
+        child: _InlineErrorMessage(
           semantic: semantic,
           onAction: onAction,
           density: density,
@@ -178,14 +182,97 @@ class AppInlineFieldError extends StatelessWidget {
     return Semantics(
       liveRegion: true,
       container: true,
-      child: Text(
-        message,
-        style: TextStyle(
-          color: AppColors.iosDestructive(context),
-          fontSize: AppTypography.iosFootnote,
-          height: AppSpacing.textLineHeightFootnote,
+      child: _InlineErrorMessage(
+        semantic: UiErrorSemantic(
+          category: UiErrorCategory.validation,
+          scope: UiErrorScope.inlineField,
+          title: '',
+          message: message,
+          presentation: UiErrorPresentation.inlineField,
         ),
       ),
+    );
+  }
+}
+
+/// 透明的字段/表单/局部操作错误行。
+///
+/// 视觉只表达“这是错误”；错误位置、恢复动作和业务语义由调用方的
+/// [UiErrorSemantic] 决定，不在这里复制卡片、色块或私有登录分支。
+class _InlineErrorMessage extends StatelessWidget {
+  const _InlineErrorMessage({
+    required this.semantic,
+    this.onAction,
+    this.density = AppFormErrorCardDensity.regular,
+  });
+
+  final UiErrorSemantic semantic;
+  final UiErrorActionCallback? onAction;
+  final AppFormErrorCardDensity density;
+
+  @override
+  Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    final isCompactWidth =
+        mediaQuery.size.width <= AppSpacing.compactBreakpoint ||
+        mediaQuery.textScaler.scale(1) >= 1.5;
+    final action = semantic.primaryAction;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.hairline),
+              child: Icon(
+                CupertinoIcons.exclamationmark_circle,
+                size: AppSpacing.inlineErrorIconSize,
+                color: AppColors.errorForeground(context),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.inlineErrorIconTextGap),
+            Expanded(
+              child: Text(
+                semantic.message,
+                maxLines: isCompactWidth ? 2 : 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: AppColors.errorForeground(context),
+                  fontSize: AppTypography.inlineError,
+                  fontWeight: AppTypography.inlineErrorWeight,
+                  height: AppSpacing.textLineHeightBody,
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (action != null && onAction != null) ...<Widget>[
+          SizedBox(
+            height: density == AppFormErrorCardDensity.compact
+                ? AppSpacing.xs
+                : AppSpacing.sm,
+          ),
+          CupertinoButton(
+            padding: EdgeInsets.zero,
+            minimumSize: const Size(
+              AppSpacing.minInteractiveSize,
+              AppSpacing.minInteractiveSize,
+            ),
+            alignment: Alignment.centerLeft,
+            onPressed: () => unawaited(onAction!(action)),
+            child: Text(
+              action.label,
+              style: TextStyle(
+                color: AppColors.errorForeground(context),
+                fontSize: AppTypography.inlineError,
+                fontWeight: AppTypography.medium,
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
@@ -194,10 +281,12 @@ class AppTransientErrorNotice extends StatelessWidget {
   const AppTransientErrorNotice({
     super.key,
     required this.semantic,
+    this.onAction,
     this.margin,
   });
 
   final UiErrorSemantic semantic;
+  final UiErrorActionCallback? onAction;
   final EdgeInsetsGeometry? margin;
 
   @override
@@ -253,6 +342,22 @@ class AppTransientErrorNotice extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (semantic.primaryAction case final action?
+                    when onAction != null) ...<Widget>[
+                  SizedBox(width: AppSpacing.sm),
+                  CupertinoButton(
+                    minimumSize: const Size(
+                      AppSpacing.minInteractiveSize,
+                      AppSpacing.minInteractiveSize,
+                    ),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm,
+                      vertical: AppSpacing.xs,
+                    ),
+                    onPressed: () => unawaited(onAction!(action)),
+                    child: Text(action.label),
+                  ),
+                ],
               ],
             ),
           ),
@@ -338,6 +443,7 @@ class AppInlineGateState extends StatelessWidget {
         semantic: semantic,
         onAction: onAction,
         gate: true,
+        density: AppFormErrorCardDensity.regular,
       ),
     );
   }

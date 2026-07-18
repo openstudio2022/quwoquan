@@ -18,8 +18,8 @@ func TestCommentPinContractApiIntegration(t *testing.T) {
 		target := createCommentThroughAPI(t, postID, "commenter-b", "pin target", "")
 
 		pinnedRecorder := commentAPIRequest(t, http.MethodPost,
-			"/v1/content/posts/"+postID+"/comments/"+target.ID+"/pin",
-			postOwner, map[string]any{"version": target.Version})
+			"/content/posts/"+postID+"/comments/"+target.ID+"/pin",
+			postOwner, nil)
 		if pinnedRecorder.Code != http.StatusOK {
 			t.Fatalf("pin Comment status=%d body=%s", pinnedRecorder.Code, pinnedRecorder.Body.String())
 		}
@@ -33,15 +33,9 @@ func TestCommentPinContractApiIntegration(t *testing.T) {
 			t.Fatalf("pinned Comment must lead the page: %+v", page)
 		}
 
-		stale := commentAPIRequest(t, http.MethodDelete,
-			"/v1/content/posts/"+postID+"/comments/"+target.ID+"/pin",
-			postOwner, map[string]any{"version": target.Version})
-		if stale.Code != http.StatusConflict {
-			t.Fatalf("stale unpin status=%d body=%s", stale.Code, stale.Body.String())
-		}
 		unpinnedRecorder := commentAPIRequest(t, http.MethodDelete,
-			"/v1/content/posts/"+postID+"/comments/"+target.ID+"/pin",
-			postOwner, map[string]any{"version": pinned.Version})
+			"/content/posts/"+postID+"/comments/"+target.ID+"/pin",
+			postOwner, nil)
 		if unpinnedRecorder.Code != http.StatusOK {
 			t.Fatalf("unpin Comment status=%d body=%s", unpinnedRecorder.Code, unpinnedRecorder.Body.String())
 		}
@@ -65,16 +59,16 @@ func TestCommentPinContractApiIntegration(t *testing.T) {
 		parent := createCommentThroughAPI(t, postID, "parent-author", "parent", "")
 
 		forbidden := commentAPIRequest(t, http.MethodPost,
-			"/v1/content/posts/"+postID+"/comments/"+parent.ID+"/pin",
-			"not-post-owner", map[string]any{"version": parent.Version})
+			"/content/posts/"+postID+"/comments/"+parent.ID+"/pin",
+			"not-post-owner", nil)
 		if forbidden.Code != http.StatusForbidden {
 			t.Fatalf("non-owner pin status=%d body=%s", forbidden.Code, forbidden.Body.String())
 		}
 
 		reply := createCommentThroughAPI(t, postID, "reply-author", "reply", parent.ID)
 		invalid := commentAPIRequest(t, http.MethodPost,
-			"/v1/content/posts/"+postID+"/comments/"+reply.ID+"/pin",
-			postOwner, map[string]any{"version": reply.Version})
+			"/content/posts/"+postID+"/comments/"+reply.ID+"/pin",
+			postOwner, nil)
 		if invalid.Code != http.StatusBadRequest {
 			t.Fatalf("reply pin status=%d body=%s", invalid.Code, invalid.Body.String())
 		}

@@ -20,10 +20,8 @@ import 'package:quwoquan_app/ui/discovery/pages/home_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
 import 'package:quwoquan_app/ui/user/pages/my_profile_page.dart';
 import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_bottom_nav_tap_meta.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_page_browse_payload.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_page_browse_summary.g.dart';
-import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
+import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
 
 /// 主 App 壳
 ///
@@ -50,10 +48,9 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
   late DateTime _currentPageEnterAt;
   late final Set<MainTabDestination> _initializedTabDestinations;
 
-  /// 供 [dispose] 使用；卸载时 [ref] 不可用，须在 [build] 中刷新。
-  OpsEventRepository? _pageAccessOpsRepository;
-  String _pageAccessCurrentUserId = '';
-  String _pageAccessExperimentBucket = '';
+  /// 供 [dispose] 使用；卸载时 [ref] 不可用，须在每帧 build 后刷新。
+  AppTelemetryRecorder? _pageAccessTelemetryReporter;
+  bool _pageAccessDependenciesRefreshScheduled = false;
 
   /// 全局来电协调器当前绑定的登录用户；空串表示未启动。
   /// 用作幂等守卫，避免重复 start / 漏 stop。
@@ -99,11 +96,20 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
   }
 
   void _cachePageAccessDependencies() {
-    _pageAccessOpsRepository = ref.read(opsEventRepositoryProvider);
-    _pageAccessCurrentUserId = ref.read(currentUserIdProvider);
-    _pageAccessExperimentBucket = ref
-        .read(contentRuntimeConfigProvider)
-        .experimentBucket;
+    if (_pageAccessDependenciesRefreshScheduled) {
+      return;
+    }
+    _pageAccessDependenciesRefreshScheduled = true;
+    // 部分 provider 在首次 read 时会完成异步状态水合。build 期间触发这类
+    // 刷新会让 Riverpod 尝试标记 ProviderScope 脏状态，违反 Flutter 的 build
+    // 阶段约束；将仅用于 dispose 页面访问事件的缓存延后到当前帧完成后。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _pageAccessDependenciesRefreshScheduled = false;
+      if (!mounted) {
+        return;
+      }
+      _pageAccessTelemetryReporter = ref.read(appTelemetryReporterProvider);
+    });
   }
 
   @override
@@ -122,11 +128,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
         location: _currentLocation,
         pageVisitId: _currentPageVisitId,
         visitRecorder: ref.read(visitRecorderServiceProvider),
-        eventRepository: ref.read(opsEventRepositoryProvider),
-        currentUserId: ref.read(currentUserIdProvider),
-        experimentBucket: ref
-            .read(contentRuntimeConfigProvider)
-            .experimentBucket,
+        telemetryReporter: ref.read(appTelemetryReporterProvider),
       );
       _syncIncomingCallCoordinator();
     });
@@ -142,11 +144,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
         location: _currentLocation,
         pageVisitId: _currentPageVisitId,
         enterAt: _currentPageEnterAt,
-        eventRepository: ref.read(opsEventRepositoryProvider),
-        currentUserId: ref.read(currentUserIdProvider),
-        experimentBucket: ref
-            .read(contentRuntimeConfigProvider)
-            .experimentBucket,
+        telemetryReporter: ref.read(appTelemetryReporterProvider),
       );
       _currentLocation = widget.currentLocation;
       _currentPageVisitId = AppTraceContextStore.instance.newPageVisitId();
@@ -155,11 +153,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
         location: _currentLocation,
         pageVisitId: _currentPageVisitId,
         visitRecorder: ref.read(visitRecorderServiceProvider),
-        eventRepository: ref.read(opsEventRepositoryProvider),
-        currentUserId: ref.read(currentUserIdProvider),
-        experimentBucket: ref
-            .read(contentRuntimeConfigProvider)
-            .experimentBucket,
+        telemetryReporter: ref.read(appTelemetryReporterProvider),
       );
     }
   }
@@ -170,9 +164,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
       location: _currentLocation,
       pageVisitId: _currentPageVisitId,
       enterAt: _currentPageEnterAt,
-      eventRepository: _pageAccessOpsRepository,
-      currentUserId: _pageAccessCurrentUserId,
-      experimentBucket: _pageAccessExperimentBucket,
+      telemetryReporter: _pageAccessTelemetryReporter,
     );
     super.dispose();
   }
@@ -277,6 +269,9 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                                     destination: MainTabDestination.home,
                                     child: HomePage(
                                       routeLocation: _currentLocation,
+                                      isStartupHomeActive:
+                                          _currentDestination ==
+                                          MainTabDestination.home,
                                     ),
                                   ),
                                   _buildTabBody(
@@ -333,10 +328,8 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     final nextTab = mainTabFromBottomNavIndex(index);
     _logBrowseEvent(
       action: 'bottom_nav_tap',
-      bottomNavTap: AppLogBottomNavTapMeta(
-        fromIndex: previousIndex,
-        toIndex: index,
-      ),
+      fromIndex: previousIndex,
+      toIndex: index,
     );
     if (nextTab == MainTabDestination.create) {
       // 加号入口后置登录：先无条件打开动作面板，登录拦截下沉到具体动作
@@ -371,10 +364,8 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     final previousIndex = _currentDestination.primaryNavigationIndex;
     _logBrowseEvent(
       action: 'web_primary_tap',
-      bottomNavTap: AppLogBottomNavTapMeta(
-        fromIndex: previousIndex,
-        toIndex: nextTab.primaryNavigationIndex,
-      ),
+      fromIndex: previousIndex,
+      toIndex: nextTab.primaryNavigationIndex,
     );
 
     if (nextTab == MainTabDestination.create) {
@@ -482,7 +473,8 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
 
   Future<void> _logBrowseEvent({
     required String action,
-    AppLogBottomNavTapMeta? bottomNavTap,
+    int? fromIndex,
+    int? toIndex,
   }) async {
     final trace = AppTraceContextStore.instance;
     await AppLogService.instance.writeEvent(
@@ -492,19 +484,37 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
         sessionId: trace.sessionId,
         pageVisitId: _currentPageVisitId,
       ),
-      payload: AppLogPageBrowsePayload(
-        event: 'browse',
-        route: _currentLocation,
-        pageName: pageNameFromRouteLocation(_currentLocation),
-        action: action,
-        actionMeta: bottomNavTap?.toMap(),
-      ).toMap(),
-      summaryPayload: AppLogPageBrowseSummaryPayload(
-        event: 'browse',
-        route: _currentLocation,
-        action: action,
-      ).toMap(),
+      payload: <String, Object?>{
+        'event': 'browse',
+        'route': _currentLocation,
+        'pageName': pageNameFromRouteLocation(_currentLocation),
+        'action': action,
+        if (fromIndex != null && toIndex != null)
+          'actionMeta': <String, int>{
+            'fromIndex': fromIndex,
+            'toIndex': toIndex,
+          },
+      },
+      summaryPayload: <String, Object?>{
+        'event': 'browse',
+        'route': _currentLocation,
+        'action': action,
+      },
     );
+    final pageName = pageNameFromRouteLocation(_currentLocation);
+    if (pageName.isNotEmpty) {
+      unawaited(
+        ref
+            .read(appTelemetryReporterProvider)
+            .record(
+              AppTelemetryPayload.productAction(
+                journey: 'main_navigation',
+                action: action,
+              ),
+              pageName: pageName,
+            ),
+      );
+    }
   }
 }
 

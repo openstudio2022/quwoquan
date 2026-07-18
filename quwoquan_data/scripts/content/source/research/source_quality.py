@@ -1,7 +1,6 @@
 """Source and image quality gates for auto research plans."""
 from __future__ import annotations
 
-import os
 import math
 import re
 import urllib.parse
@@ -12,6 +11,7 @@ from core.qunar_template import QUNAR_PAGE_SEARCH_RESULT, qunar_page_type
 from governance.coverage.license import validate_image_rights
 
 from core.image_rules import image_caption_quality_issue
+from core.media_processing_policy import MEDIA_PROCESSING_POLICY
 from content.source.research.text_match import (
     _normalized_title,
     _text_mentions_entity,
@@ -43,9 +43,8 @@ _SUPPORTING_ONLY_CATEGORIES = {
     "lodging",
 }
 
-_MAX_PUBLISHABLE_IMAGE_PIXELS = max(
-    1_000_000,
-    int(os.environ.get("QWQ_MAX_PUBLISHABLE_IMAGE_PIXELS", "80000000")),
+_MAX_PUBLISHABLE_IMAGE_PIXELS = (
+    MEDIA_PROCESSING_POLICY.max_publishable_image_pixels
 )
 
 def _image_pixel_issue(spec: Mapping[str, Any]) -> str:

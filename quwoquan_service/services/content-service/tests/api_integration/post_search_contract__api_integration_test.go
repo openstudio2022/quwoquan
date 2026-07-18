@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"strings"
 	"testing"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -15,7 +14,7 @@ import (
 func TestPostSearchUsesCanonicalSearchSignals(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	createPostWithAuthor(t, "search_author_a", `{
+	submitPublishedPostWithAuthor(t, "search_author_a", `{
 		"contentType":"article",
 		"contentIdentity":"work",
 		"title":"四川露营旅行攻略",
@@ -27,7 +26,7 @@ func TestPostSearchUsesCanonicalSearchSignals(t *testing.T) {
 		],
 		"visibility":"public"
 	}`)
-	createPostWithAuthor(t, "search_author_b", `{
+	submitPublishedPostWithAuthor(t, "search_author_b", `{
 		"contentType":"article",
 		"contentIdentity":"work",
 		"title":"城市散步记录",
@@ -58,7 +57,7 @@ func TestPostSearchUsesCanonicalSearchSignals(t *testing.T) {
 
 func TestPostSearchBlocksSensitiveQuery(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
-	createPost(t, `{"contentType":"micro","body":"普通公开内容","visibility":"public"}`)
+	submitPublishedPost(t, `{"contentType":"micro","body":"普通公开内容","visibility":"public"}`)
 
 	body := searchPosts(t, "博彩")
 	items := asSlice(t, body["items"])
@@ -69,7 +68,7 @@ func TestPostSearchBlocksSensitiveQuery(t *testing.T) {
 
 func TestPendingSemanticMentionRemainsFullTextOnly(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
-	created := createDraftPostWithAuthor(t, "semantic_search_author", `{
+	created := submitPublishedPostWithAuthor(t, "semantic_search_author", `{
 		"contentType":"article",
 		"title":"高原旅行笔记",
 		"body":"神秘雪谷仍在候选治理中，但这段普通正文应当可以搜索。",
@@ -79,8 +78,7 @@ func TestPendingSemanticMentionRemainsFullTextOnly(t *testing.T) {
 		],
 		"visibility":"public"
 	}`)
-	postID, _ := created["_id"].(string)
-	publishPostWithAuthor(t, "semantic_search_author", postID, `{"visibility":"public"}`)
+	postID, _ := created["postId"].(string)
 
 	body := searchPosts(t, "神秘雪谷")
 	items := asSlice(t, body["items"])
@@ -127,19 +125,17 @@ func TestPendingSemanticMentionRemainsFullTextOnly(t *testing.T) {
 	}
 }
 
-func TestCreatePostRejectsManualActiveRefs(t *testing.T) {
-	req := httptest.NewRequest(
-		http.MethodPost,
-		"/v1/content/posts",
-		strings.NewReader(`{
+func TestSubmitPostPublicationRejectsManualActiveRefs(t *testing.T) {
+	req := newPostPublicationRequestForTest(
+		t,
+		"semantic_reject_author",
+		`{
 			"contentType":"article",
 			"title":"非法候选引用",
 			"body":"候选只应作为普通文字",
 			"entityRefs":["candidate:entity:1"]
-		}`),
+		}`,
 	)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Client-User-Id", "semantic_reject_author")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadRequest {
@@ -151,7 +147,7 @@ func searchPosts(t *testing.T, query string) map[string]any {
 	t.Helper()
 	req := httptest.NewRequest(
 		http.MethodGet,
-		"/v1/content/posts/search?query="+url.QueryEscape(query)+"&limit=10",
+		"/content/posts/search?query="+url.QueryEscape(query)+"&limit=10",
 		nil,
 	)
 	rec := httptest.NewRecorder()

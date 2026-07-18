@@ -1,4 +1,4 @@
-schemaVersion: app-runtime-config
+schema: app-runtime-config
 runtime:
   appRuntimeEnv: gamma
   appDataSource: remote

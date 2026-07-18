@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "local-env-port-manifest/v1",
+  "schema": "local-env-port-manifest",
   "planes": {
     "edge": {
       "offsetStart": 0,

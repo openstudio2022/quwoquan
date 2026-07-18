@@ -8,7 +8,7 @@ import 'package:quwoquan_app/cloud/services/content/mock/content_mock_data.dart'
 ///
 /// 三维度覆盖：
 ///   常规契约  — 四类内容 canonical 字段正确解析
-///   兼容性契约 — alias 字段解析；toMap round-trip；copyWith 偏更新
+///   单轨契约 — 拒绝旧字段/alias；toMap round-trip；copyWith 偏更新
 ///   异常/边界契约 — 缺字段降级为零值；全字段缺失不崩溃
 void main() {
   // ──────────────────────────────────────────────────────────────────
@@ -105,12 +105,12 @@ void main() {
 
     test('subAccount alias 不再覆盖 authorId 真相源', () {
       const serverRaw = <String, dynamic>{
-        'postId': 'v_subject',
-        'contentType': 'video',
+        'id': 'v_subject',
+        'type': 'video',
         'authorId': 'current_author',
         'subAccountId': 'persona_author',
-        'authorNickname': 'Server Author',
-        'authorAvatarUrl': 'https://example.com/avatar.jpg',
+        'displayName': 'Server Author',
+        'avatarUrl': 'https://example.com/avatar.jpg',
         'thumbnailUrl': 'https://example.com/thumb.jpg',
         'publishedAt': '2025-06-01T00:00:00Z',
       };
@@ -121,35 +121,33 @@ void main() {
   });
 
   // ──────────────────────────────────────────────────────────────────
-  // 兼容性契约：旧字段/alias 仍正确解析；round-trip 稳定
+  // 单轨契约：拒绝旧字段/alias；round-trip 只输出 canonical 字段
   // ──────────────────────────────────────────────────────────────────
-  group('PostFeedDto — 兼容性契约', () {
-    test(
-      'resolves server-side alias fields: postId, authorNickname, likesCount',
-      () {
-        const serverRaw = <String, dynamic>{
-          'postId': 'v_server',
-          'contentType': 'video',
-          'authorId': 'a_server',
-          'authorNickname': 'Server Author',
-          'authorAvatarUrl': 'https://example.com/avatar.jpg',
-          'thumbnailUrl': 'https://example.com/thumb.jpg',
-          'likesCount': 200,
-          'commentsCount': 20,
-          'savesCount': 5,
-          'createdAt': '2025-05-01T00:00:00Z',
-          'publishedAt': '2025-06-01T00:00:00Z',
-        };
-        final dto = FeedItemDto.fromMap(serverRaw);
-        expect(dto.id, equals('v_server'));
-        expect(dto.displayName, equals('Server Author'));
-        expect(dto.likeCount, equals(200));
-        expect(dto.commentCount, equals(20));
-        expect(dto.createdAt.year, equals(2025));
-        expect(dto.createdAt.month, equals(5));
-        expect(dto.publishedAt?.month, equals(6));
-      },
-    );
+  group('PostFeedDto — 单轨契约', () {
+    test('解析 canonical wire 字段', () {
+      const serverRaw = <String, dynamic>{
+        'id': 'v_server',
+        'type': 'video',
+        'authorId': 'a_server',
+        'displayName': 'Server Author',
+        'avatarUrl': 'https://example.com/avatar.jpg',
+        'thumbnailUrl': 'https://example.com/thumb.jpg',
+        'likeCount': 200,
+        'commentCount': 20,
+        'shareCount': 5,
+        'createdAt': '2025-05-01T00:00:00Z',
+        'publishedAt': '2025-06-01T00:00:00Z',
+      };
+      final dto = FeedItemDto.fromMap(serverRaw);
+      expect(dto.id, equals('v_server'));
+      expect(dto.displayName, equals('Server Author'));
+      expect(dto.likeCount, equals(200));
+      expect(dto.commentCount, equals(20));
+      expect(dto.shareCount, equals(5));
+      expect(dto.createdAt.year, equals(2025));
+      expect(dto.createdAt.month, equals(5));
+      expect(dto.publishedAt?.month, equals(6));
+    });
 
     test('toMap round-trips canonical fields correctly', () {
       final dto = ContentMockData.discoveryPhotoData.first;
@@ -165,11 +163,11 @@ void main() {
 
     test('toDiscoveryWireMap 不再用 createdAt 伪造 publishedAt', () {
       const raw = <String, dynamic>{
-        'postId': 'wire_only_created',
-        'contentType': 'article',
+        'id': 'wire_only_created',
+        'type': 'article',
         'authorId': 'writer',
-        'authorNickname': 'Writer',
-        'authorAvatarUrl': 'https://example.com/avatar.jpg',
+        'displayName': 'Writer',
+        'avatarUrl': 'https://example.com/avatar.jpg',
         'title': '仅创作时间',
         'body': '正文',
         'coverUrl': 'https://example.com/cover.jpg',
@@ -204,11 +202,11 @@ void main() {
   group('PostFeedDto — 异常/边界契约', () {
     test('missing count fields fall back to zero', () {
       const minimalRaw = <String, dynamic>{
-        'postId': 'x1',
-        'contentType': 'image',
+        'id': 'x1',
+        'type': 'image',
         'authorId': 'u1',
         'displayName': 'Test',
-        'authorAvatarUrl': 'https://example.com/a.jpg',
+        'avatarUrl': 'https://example.com/a.jpg',
         'thumbnailUrl': 'https://example.com/t.jpg',
         'createdAt': '2025-01-01T00:00:00Z',
       };
@@ -257,11 +255,11 @@ void main() {
 
     test('null imageUrls field returns empty list (not null)', () {
       const raw = <String, dynamic>{
-        'postId': 'x2',
-        'contentType': 'image',
+        'id': 'x2',
+        'type': 'image',
         'authorId': 'u1',
         'displayName': 'Test',
-        'authorAvatarUrl': '',
+        'avatarUrl': '',
         'imageUrls': null,
         'publishedAt': '2025-01-01T00:00:00Z',
       };

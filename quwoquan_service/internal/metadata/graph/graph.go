@@ -393,7 +393,7 @@ func (g *ContractGraph) Coverage() Coverage {
 				}
 			}
 		}
-		if strings.HasPrefix(operation.PathTemplate, "/v1/") {
+		if isPublicTransportPath(operation.PathTemplate) {
 			result.PublicOperations++
 		}
 	}
@@ -413,4 +413,15 @@ func (g *ContractGraph) Coverage() Coverage {
 		}
 	}
 	return result
+}
+
+func isPublicTransportPath(path string) bool {
+	switch path {
+	case "", "/health", "/healthz", "/metrics", "/livez", "/startupz":
+		return false
+	}
+	if strings.HasPrefix(path, "/internal/") || strings.HasPrefix(path, "/callbacks/") {
+		return false
+	}
+	return strings.HasPrefix(path, "/")
 }

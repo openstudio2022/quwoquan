@@ -140,13 +140,13 @@ def test_batch_scoring_uses_same_authoritative_reader() -> None:
 
 def test_retired_score_route_is_not_compatible() -> None:
     response = client.post(
-        "/v1/score",
+        "/score",
         json={"scenario": "content_feed", "userId": "u1", "sessionId": "s1", "candidates": []},
     )
     assert response.status_code == 404
 
 
-@pytest.mark.parametrize("path", ["/v1/model/reload", "/v1/model/status"])
+@pytest.mark.parametrize("path", ["/model/reload", "/model/status"])
 def test_undocumented_model_lifecycle_routes_do_not_exist(path: str) -> None:
     response = client.post(path) if path.endswith("reload") else client.get(path)
     assert response.status_code == 404

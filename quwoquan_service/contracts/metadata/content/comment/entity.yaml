@@ -1,4 +1,3 @@
-version: 1
 domain: content
 entity: Comment
 object_kind: aggregate_root

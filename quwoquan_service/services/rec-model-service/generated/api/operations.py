@@ -2,13 +2,13 @@
 
 """Operation descriptors generated from ContractGraph metadata."""
 
-STAGE_RECOMMENDATION_MODEL_RELEASE_PATH = "/internal/v1/recommendation/model-releases"
+STAGE_RECOMMENDATION_MODEL_RELEASE_PATH = "/internal/recommendation/model-releases"
 STAGE_RECOMMENDATION_MODEL_RELEASE_METHOD = "POST"
-ACTIVATE_RECOMMENDATION_MODEL_RELEASE_PATH = "/internal/v1/recommendation/model-releases/{releaseId}:activate"
+ACTIVATE_RECOMMENDATION_MODEL_RELEASE_PATH = "/internal/recommendation/model-releases/{releaseId}:activate"
 ACTIVATE_RECOMMENDATION_MODEL_RELEASE_METHOD = "POST"
-ROLLBACK_RECOMMENDATION_MODEL_RELEASE_PATH = "/internal/v1/recommendation/model-releases/{releaseId}:rollback"
+ROLLBACK_RECOMMENDATION_MODEL_RELEASE_PATH = "/internal/recommendation/model-releases/{releaseId}:rollback"
 ROLLBACK_RECOMMENDATION_MODEL_RELEASE_METHOD = "POST"
-SCORE_RECOMMENDATION_CANDIDATES_PATH = "/internal/v1/recommendation/model-releases:score"
+SCORE_RECOMMENDATION_CANDIDATES_PATH = "/internal/recommendation/model-releases:score"
 SCORE_RECOMMENDATION_CANDIDATES_METHOD = "POST"
-BATCH_SCORE_RECOMMENDATION_CANDIDATES_PATH = "/internal/v1/recommendation/model-releases:batch-score"
+BATCH_SCORE_RECOMMENDATION_CANDIDATES_PATH = "/internal/recommendation/model-releases:batch-score"
 BATCH_SCORE_RECOMMENDATION_CANDIDATES_METHOD = "POST"

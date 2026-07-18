@@ -1,4 +1,4 @@
-"""Workflow service extracted from the retired monolithic runner."""
+"""Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
 from content.execution.coverage import coverage_entity_type
 from content.execution.support import Any, DataIssue, DataIssueCode, DataIssueStage, DataIssueLane, DataRecoveryAction, ExecutionContext, Mapping, Path, Sequence, _download_diagnostic_image_repair_hints, _download_issue_repair_hints, _research_image_repair_hints, data_issue, execution_command_root, execution_root, issue_messages, read_json, store, write_json
@@ -122,22 +122,10 @@ def _record_download_repair(ctx: ExecutionContext, issues: Sequence[DataIssue]) 
     write_json(
         path,
         {
-            "schemaVersion": "quwoquan.download_repair",
+            "schema": "quwoquan.download_repair",
             "executionId": ctx.execution_id,
             "createdAt": store.now_iso(),
             "entities": entities,
         },
     )
     return path
-
-def _apply_download_fast_fail(
-    ctx: ExecutionContext,
-    issues: list[DataIssue],
-) -> list[DataIssue]:
-    """Preserve typed failures for the immutable target set.
-
-    A failed source or media contract must remain visible to recovery and the
-    release gate. Frozen rollout targets are never abandoned or substituted.
-    """
-    del ctx
-    return list(issues)

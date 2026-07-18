@@ -182,9 +182,7 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
       isDark,
       ColorType.backgroundPrimary,
     );
-    final trailingInset = state.isLoading
-        ? AppSpacing.appChromeActionButtonSize + AppSpacing.intraGroupSm
-        : AppSpacing.containerSm;
+    const trailingInset = AppSpacing.containerSm;
     final hasSearchText = state.query.trim().isNotEmpty;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -201,37 +199,20 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
         ),
         SizedBox(width: AppSpacing.intraGroupXs),
         Expanded(
-          child: Stack(
-            alignment: Alignment.centerRight,
-            children: [
-              AppSearchField(
-                key: const ValueKey<String>('global_search_field'),
-                controller: _controller,
-                focusNode: _focusNode,
-                autofocus: true,
-                placeholder: UITextConstants.globalSearchTitle,
-                onChanged: (value) => _coordinator.updateQuery(value),
-                onSubmitted: _handleSearchSubmitted,
-                backgroundColor: fieldBackground,
-                elevated: false,
-                padding: EdgeInsetsDirectional.only(
-                  start: AppSpacing.containerSm,
-                  end: trailingInset,
-                ),
-              ),
-              if (state.isLoading)
-                PositionedDirectional(
-                  end: 0,
-                  top: 0,
-                  bottom: 0,
-                  child: Center(
-                    child: SizedBox(
-                      width: AppSpacing.appChromeActionButtonSize,
-                      child: CupertinoActivityIndicator(radius: 8),
-                    ),
-                  ),
-                ),
-            ],
+          child: AppSearchField(
+            key: const ValueKey<String>('global_search_field'),
+            controller: _controller,
+            focusNode: _focusNode,
+            autofocus: true,
+            placeholder: UITextConstants.globalSearchTitle,
+            onChanged: (value) => _coordinator.updateQuery(value),
+            onSubmitted: _handleSearchSubmitted,
+            backgroundColor: fieldBackground,
+            elevated: false,
+            padding: const EdgeInsetsDirectional.only(
+              start: AppSpacing.containerSm,
+              end: trailingInset,
+            ),
           ),
         ),
         AnimatedSwitcher(
@@ -433,7 +414,37 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
     required bool isDark,
   }) {
     if (state.isLoading && state.suggestionSections.isEmpty) {
-      return const Center(child: CupertinoActivityIndicator());
+      return AppRequestFeedback.page(
+        key: const ValueKey<String>('global_search_primary_progress'),
+        showSlowHint: state.isSlow,
+        loadingLabel: UITextConstants.loading,
+        slowLabel: UITextConstants.searchWaitSlow,
+      );
+    }
+    if (state.failure case final failure?
+        when state.suggestionSections.isEmpty) {
+      final semantic = runtimeErrorSemantic(
+        context,
+        error: failure,
+        category: state.isPartial
+            ? UiErrorCategory.sectionLoad
+            : UiErrorCategory.pageLoad,
+        scope: state.isPartial ? UiErrorScope.section : UiErrorScope.page,
+        sourceRouteId: AppRoutePaths.globalSearch,
+        sourceSurfaceId: 'globalSearch',
+      );
+      if (state.isPartial) {
+        return AppSectionErrorState(
+          key: key,
+          semantic: semantic,
+          onAction: (_) async => _coordinator.scheduleSearch(immediate: true),
+        );
+      }
+      return AppPageErrorState(
+        key: key,
+        semantic: semantic,
+        onAction: (_) async => _coordinator.scheduleSearch(immediate: true),
+      );
     }
     if (state.suggestionSections.isEmpty) {
       return Center(
@@ -441,7 +452,7 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
         child: Padding(
           padding: EdgeInsets.all(AppSpacing.containerLg),
           child: Text(
-            '没有找到匹配结果',
+            UITextConstants.searchEmptyResult,
             style: TextStyle(
               fontSize: AppTypography.iosBody,
               color: fgSecondary,
@@ -450,30 +461,56 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
         ),
       );
     }
-    return ListView.builder(
+    return ListView(
       key: key,
       padding: EdgeInsets.only(
         top: AppSpacing.containerXs,
         bottom: AppSpacing.containerMd,
       ),
-      itemCount: state.suggestionSections.length,
-      itemBuilder: (context, index) {
-        final section = state.suggestionSections[index];
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: index == state.suggestionSections.length - 1
-                ? 0
-                : _SearchTokens.sectionGap,
+      children: <Widget>[
+        if (state.isPartial)
+          AppTransientErrorNotice(
+            semantic: const UiErrorSemantic(
+              category: UiErrorCategory.sectionLoad,
+              scope: UiErrorScope.section,
+              title: UITextConstants.searchPartialResult,
+              message: UITextConstants.searchPartialResult,
+              presentation: UiErrorPresentation.transientNotice,
+              tone: UiErrorTone.caution,
+              primaryAction: UiErrorAction(
+                type: UiErrorActionType.retry,
+                label: UITextConstants.tryAgain,
+              ),
+              sourceRouteId: AppRoutePaths.globalSearch,
+              sourceSurfaceId: 'globalSearch',
+            ),
+            onAction: (_) async => _coordinator.scheduleSearch(immediate: true),
           ),
-          child: _buildSuggestionSection(
-            section: section,
-            query: state.query.trim(),
-            fgPrimary: fgPrimary,
-            fgSecondary: fgSecondary,
-            isDark: isDark,
+        for (var index = 0; index < state.suggestionSections.length; index++)
+          Padding(
+            padding: EdgeInsets.only(
+              bottom:
+                  index == state.suggestionSections.length - 1 &&
+                      !state.isNetworkLoading
+                  ? 0
+                  : _SearchTokens.sectionGap,
+            ),
+            child: _buildSuggestionSection(
+              section: state.suggestionSections[index],
+              query: state.query.trim(),
+              fgPrimary: fgPrimary,
+              fgSecondary: fgSecondary,
+              isDark: isDark,
+            ),
           ),
-        );
-      },
+        if (state.isNetworkLoading)
+          AppRequestFeedback.section(
+            key: const ValueKey<String>('global_search_network_progress'),
+            showSlowHint: state.isSlow,
+            loadingLabel: UITextConstants.loading,
+            slowLabel: UITextConstants.searchWaitSlow,
+          ),
+      ],
     );
   }
 
@@ -582,7 +619,14 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
         _openUserProfile(person.subAccountId);
       case SearchSuggestionEntryKind.network:
         final network = entry.cast<NetworkSearchSuggestion>();
-        _openNetworkResults(network.query, initialTabId: network.initialTabId);
+        if (network.isHomepagePreview) {
+          _openHomepage(network.homepageId!);
+        } else {
+          _openNetworkResults(
+            network.query,
+            initialTabId: network.initialTabId,
+          );
+        }
     }
   }
 
@@ -752,10 +796,12 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
             color: fgSecondary,
             size: AppSpacing.iconSmall,
           ),
-          onTap: () => _openNetworkResults(
-            network.query,
-            initialTabId: network.initialTabId,
-          ),
+          onTap: () => network.isHomepagePreview
+              ? _openHomepage(network.homepageId!)
+              : _openNetworkResults(
+                  network.query,
+                  initialTabId: network.initialTabId,
+                ),
         );
     }
   }
@@ -785,6 +831,13 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
     }
     unawaited(_coordinator.rememberCurrentQuery());
     context.push(AppRoutePaths.userProfile(username: normalized));
+  }
+
+  void _openHomepage(String homepageId) {
+    final normalized = homepageId.trim();
+    if (normalized.isEmpty) return;
+    unawaited(_coordinator.rememberCurrentQuery());
+    context.push(AppRoutePaths.homepageDetail(id: normalized));
   }
 
   void _openNetworkResults(String query, {String? initialTabId}) {

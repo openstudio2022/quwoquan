@@ -15,7 +15,7 @@ class RuntimeErrorResponse {
   }) {
     final failureJson = <String, dynamic>{
       'code': json['code'],
-      'semanticReason': json['reason'] ?? json['semanticReason'],
+      'semanticReason': json['reason'],
       'transportStatus': transportStatus ?? json['transportStatus'],
       'origin': json['origin'],
       'kind': _camelKind(json['kind']),

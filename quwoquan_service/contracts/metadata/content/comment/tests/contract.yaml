@@ -1,4 +1,3 @@
-version: 1
 entity: Comment
 
 scenarios:
@@ -28,29 +27,29 @@ scenarios:
       - 回复只允许同 Post active Comment 目标
       - parentCommentId 归一为一级线程根
 
-  - name: comment_delete_version_cas
+  - name: comment_delete_server_owned_cas
     operation: DeleteComment
     go_func: TestDeleteComment
     evidence: api_integration
     assertions:
-      - request 必须携带当前 Comment version
-      - stale version 返回 CONTENT.USER.version_conflict
+      - request 不携带 Comment version
+      - 服务端纯 CAS 冲突重载聚合并重放删除意图
       - 成功软删产生 CommentDeleted 且 active reader 与 Post count projection 收敛
 
-  - name: comment_pin_version_cas
+  - name: comment_pin_server_owned_cas
     operation: PinComment
     go_func: TestCommentPinContractApiIntegration
     evidence: api_integration
     assertions:
       - 仅被引用 Post 作者可置顶一级 Comment
-      - stale version、非作者与回复目标均 fail closed
+      - 服务端重放纯 CAS 冲突，非作者与回复目标仍 fail closed
 
-  - name: comment_unpin_version_cas
+  - name: comment_unpin_server_owned_cas
     operation: UnpinComment
     go_func: TestCommentPinContractApiIntegration
     evidence: api_integration
     assertions:
-      - unpin 使用 PinComment 返回的新版本
+      - unpin 不要求调用方传递 PinComment 返回版本
       - 成功后 CommentPage 不再包含 isPinned=true
 
   - name: comment_author_page

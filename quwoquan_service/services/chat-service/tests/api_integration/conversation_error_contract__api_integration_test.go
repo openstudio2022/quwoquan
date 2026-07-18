@@ -8,7 +8,7 @@ import (
 func TestConversation_NotFound_Returns404(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
-	code, _ := doGet(t, "/v1/chat/conversations/nonexistent_conv_id_12345", "user_test_001")
+	code, _ := doGet(t, "/chat/conversations/nonexistent_conv_id_12345", "user_test_001")
 	if code != 404 {
 		t.Fatalf("expected 404 for non-existent conversation, got %d", code)
 	}
@@ -18,9 +18,9 @@ func TestSendMessage_InvalidBody_Returns400(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"direct","title":"error test","initialMemberIds":["user_test_002"]}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 
-	req := doPost(t, "/v1/chat/conversations/"+convId+"/messages",
+	req := doPost(t, "/chat/conversations/"+convId+"/messages",
 		`{invalid json`, "user_test_001", 400)
 	_ = req
 }
@@ -29,12 +29,12 @@ func TestAddMembers_ExceedsMaxGroupSize(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"group","title":"max size test","maxGroupSize":2}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 
-	doPost(t, "/v1/chat/conversations/"+convId+"/members",
+	doPost(t, "/chat/conversations/"+convId+"/members",
 		`{"userIds":["user_b","user_c","user_d"]}`, "user_test_001", http.StatusBadRequest)
 
-	code, result := doGet(t, "/v1/chat/conversations/"+convId+"/members?limit=50", "user_test_001")
+	code, result := doGet(t, "/chat/conversations/"+convId+"/members?limit=50", "user_test_001")
 	if code != 200 {
 		t.Fatalf("expected 200, got %d", code)
 	}
@@ -50,7 +50,7 @@ func TestAddMembers_ExceedsMaxGroupSize(t *testing.T) {
 func TestListContacts_Empty(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
-	code, result := doGet(t, "/v1/chat/contacts", "user_test_001")
+	code, result := doGet(t, "/chat/contacts", "user_test_001")
 	if code != 200 {
 		t.Fatalf("expected 200, got %d", code)
 	}
@@ -64,7 +64,7 @@ func TestListContacts_Empty(t *testing.T) {
 func TestListGroupCandidates_Empty(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
-	code, result := doGet(t, "/v1/chat/group-candidates?limit=20", "user_test_001")
+	code, result := doGet(t, "/chat/group-candidates?limit=20", "user_test_001")
 	if code != 200 {
 		t.Fatalf("expected 200, got %d", code)
 	}
@@ -80,7 +80,7 @@ func TestListGroupCandidates_Empty(t *testing.T) {
 func TestSearchContacts_Empty(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
-	code, result := doGet(t, "/v1/chat/contacts/search?q=test", "user_test_001")
+	code, result := doGet(t, "/chat/contacts/search?q=test", "user_test_001")
 	if code != 200 {
 		t.Fatalf("expected 200, got %d", code)
 	}

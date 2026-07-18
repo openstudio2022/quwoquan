@@ -4,10 +4,10 @@ import json
 from types import SimpleNamespace
 
 from content.execution.agent import agent_managed
-from content.execution.pipeline import checkpoints
+from content.execution.controller import checkpoints
 from content.execution.recovery import download_gate
 from content.execution.recovery import download_unresolved
-from content.execution.pipeline import homepage_authoring
+from content.execution.controller import homepage_authoring
 from content.source import source_unit
 
 
@@ -16,7 +16,7 @@ def test_managed_homepage_repair_budget_includes_initial_authoring_pass__contrac
     assert agent_managed._managed_checkpoint_repair_budget_exhausted(0) is False
     assert agent_managed._managed_checkpoint_repair_budget_exhausted(agent_managed.MAX_REACT_REWINDS) is False
     assert agent_managed._managed_checkpoint_repair_budget_exhausted(agent_managed.MAX_REACT_REWINDS + 1) is True
-from content.source.research import plan_state
+from content.source.research import reject_memory as plan_state
 
 
 def test_source_failure_is_typed_and_rewinds_before_another_author_attempt(
@@ -53,7 +53,7 @@ def test_source_failure_is_typed_and_rewinds_before_another_author_attempt(
     (draft_dir / "failure.json").write_text(
         json.dumps(
             {
-                "schemaVersion": "quwoquan_data.entity_page_failure/1",
+                "schema": "quwoquan_data.entity_page_failure",
                 "targetEntity": entity,
                 "failureKind": "source_entity_mismatch",
                 "reasons": ["MediaWiki resolved title points to 雁荡山"],
@@ -138,7 +138,7 @@ def test_typed_source_failure_url_enters_research_reject_memory(tmp_path, monkey
     (draft_dir / "failure.json").write_text(
         json.dumps(
             {
-                "schemaVersion": "quwoquan_data.entity_page_failure/1",
+                "schema": "quwoquan_data.entity_page_failure",
                 "targetEntity": entity,
                 "failureKind": "source_entity_mismatch",
                 "reasons": ["resolved page describes a different entity"],

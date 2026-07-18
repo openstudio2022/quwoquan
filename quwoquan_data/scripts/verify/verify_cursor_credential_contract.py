@@ -13,16 +13,20 @@ from core.cursor_credentials import cursor_key_file_issues
 from core.paths import REPO_ROOT
 
 
-RETIRED_ALIAS = "QWQ_CURSOR_API_KEYFILE"
+RETIRED_ALIAS = "QWQ_CURSOR_API_KEY" + "FILE"
 
 
-def cursor_credential_contract_issues(*, require_configured_file: bool = False) -> list[str]:
+def cursor_credential_contract_issues(
+    *,
+    require_configured_file: bool = False,
+    repo_root: Path = REPO_ROOT,
+) -> list[str]:
     issues: list[str] = []
     if require_configured_file:
         issues.extend(cursor_key_file_issues())
     tracked = subprocess.run(
         ["git", "grep", "-n", "-I", "-e", RETIRED_ALIAS, "--", "."],
-        cwd=REPO_ROOT,
+        cwd=repo_root,
         capture_output=True,
         text=True,
         check=False,
@@ -41,4 +45,3 @@ def main() -> int:
         return 1
     print("[verify_cursor_credential_contract] OK")
     return 0
-

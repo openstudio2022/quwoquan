@@ -1,5 +1,4 @@
 templateId: 榜单_Top榜单
-version: 1
 subject: { kind: topic, type: 旅行/榜单, minEntityRefs: 5, subjectTagRef: Format/内容角度/盘点/Top榜单 }
 vertical: travel
 category: travel

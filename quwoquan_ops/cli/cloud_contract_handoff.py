@@ -91,7 +91,7 @@ def compiler_digest() -> str:
 
 
 def validate_graph(graph: dict[str, Any]) -> None:
-    for retired_field in ("version", "schemaVersion", "registryRevision"):
+    for retired_field in ("version", "schema", "registryRevision"):
         if retired_field in graph:
             raise ValueError(f"ContractGraph 禁止退休字段: {retired_field}")
     if not isinstance(graph.get("businessObjectMaps"), list):
@@ -299,6 +299,7 @@ def operation_snapshots(
                 ),
                 "commercial": operation.get("commercial", {}),
                 "reliability": operation.get("reliability", {}),
+                "concurrency": operation.get("concurrency", {}),
                 "errorCodes": list(operation.get("errorCodes", [])),
                 "privacy": operation.get("privacy", {}),
                 "telemetry": operation.get("telemetry", {}),
@@ -354,6 +355,7 @@ def compare_operations(
         "ownershipPolicy",
         "commercial",
         "reliability",
+        "concurrency",
         "errorCodes",
         "privacy",
         "telemetry",
@@ -427,7 +429,6 @@ class Lease:
 
         token = secrets.token_hex(16)
         payload = {
-            "schemaVersion": 1,
             "resource": resource,
             "owner": owner,
             "pid": os.getpid(),
@@ -498,7 +499,7 @@ def accept(args: argparse.Namespace) -> int:
 
     previous = read_json(lock_path) if lock_path.exists() else {}
     if previous:
-        for retired_field in ("version", "schemaVersion", "registryRevision"):
+        for retired_field in ("version", "schema", "registryRevision"):
             if retired_field in previous:
                 raise ValueError(
                     f"现有 App handoff lock 含退休字段 {retired_field}；"

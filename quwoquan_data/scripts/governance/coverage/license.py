@@ -31,11 +31,11 @@ def load_vertical_license_policy(vertical: str) -> dict[str, Any]:
         raise FileNotFoundError(f"missing {vertical} license policy: {path}")
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     expected = {
-        "photography": "quwoquan.photography_license_policy.v1",
-        "travel": "quwoquan.travel_license_policy.v1",
+        "photography": "quwoquan.photography_license_policy",
+        "travel": "quwoquan.travel_license_policy",
     }[vertical]
-    if data.get("schemaVersion") != expected:
-        raise ValueError(f"{path}: invalid schemaVersion")
+    if data.get("schema") != expected:
+        raise ValueError(f"{path}: invalid schema")
     if data.get("vertical") != vertical:
         raise ValueError(f"{path}: vertical mismatch")
     return data

@@ -2,7 +2,6 @@ dart_class: ToolAssessmentDto
 library_path: assistant/contracts/tool_assessment.dart
 output_path: assistant/generated/contracts/tool_assessment.g.dart
 contract: tool_assessment
-version: v1
 kind: runtime_policy_contract
 fields:
   - { name: assessmentType, type: enum, enum_ref: AssessmentType, required: true }

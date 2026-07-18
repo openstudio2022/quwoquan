@@ -5,7 +5,7 @@
   "description": "ship_report.json 唯一字段定义（写入口 ship/handler._write_batch_ship_report / write_release_only_ship_report）。release_only 闭环 envs 必须为空且 importRequested=false。",
   "type": "object",
   "required": [
-    "schemaVersion",
+    "schema",
     "executionId",
     "dataReleaseId",
     "sourceReleaseId",
@@ -18,16 +18,53 @@
   ],
   "additionalProperties": false,
   "properties": {
-    "schemaVersion": { "const": "quwoquan_data.ship_report/1" },
-    "closureType": { "type": "string", "enum": ["release_only"] },
-    "executionId": { "type": "string", "minLength": 1 },
-    "dataReleaseId": { "type": "string", "minLength": 1 },
-    "sourceReleaseId": { "type": "string" },
-    "envs": { "type": "array", "items": { "type": "string" } },
-    "importRequested": { "type": "boolean" },
-    "dryRun": { "type": "boolean" },
-    "summary": { "type": "array", "items": { "type": "object" } },
-    "importReports": { "type": "array", "items": { "type": "string" } },
-    "writtenAt": { "type": "string", "minLength": 1 }
+    "closureType": {
+      "type": "string",
+      "enum": [
+        "release_only"
+      ]
+    },
+    "executionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "dataReleaseId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceReleaseId": {
+      "type": "string"
+    },
+    "envs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "importRequested": {
+      "type": "boolean"
+    },
+    "dryRun": {
+      "type": "boolean"
+    },
+    "summary": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "importReports": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "writtenAt": {
+      "type": "string",
+      "minLength": 1
+    },
+    "schema": {
+      "const": "quwoquan_data.ship_report"
+    }
   }
 }

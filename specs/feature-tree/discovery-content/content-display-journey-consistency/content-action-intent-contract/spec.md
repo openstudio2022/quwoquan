@@ -8,7 +8,7 @@
 
 - **负责**：
   - Discovery 侧反馈入口统一接入 Provider/Repository（Works + Moment）。
-  - `POST /v1/content/behaviors`（批量行为）与专用路由（like/favorite/comment/report）边界清晰化。
+  - `POST /content/behaviors`（批量行为）与专用路由（like/favorite/comment/report）边界清晰化。
   - 用户域反馈（`block user`、`block keywords`）与推荐过滤语义对齐。
   - metadata 对齐：`behaviors.yaml`、`user_profile/fields.yaml`、相关 service/events 契约。
 - **不负责**：

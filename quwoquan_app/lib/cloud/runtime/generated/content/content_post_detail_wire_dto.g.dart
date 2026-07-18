@@ -9,7 +9,7 @@ class ContentPostDetailWireDto {
   final String? articleTemplate;
   final String? articleFontPreset;
   final String? articleMarkdown;
-  final String? articleMarkdownVersion;
+  final String? markdownDialect;
   final String? articleMarkdownDigest;
   final Map<String, dynamic>? articleAssetManifest;
   final Map<String, dynamic>? articleRenderProfile;
@@ -27,7 +27,7 @@ class ContentPostDetailWireDto {
     this.articleTemplate,
     this.articleFontPreset,
     this.articleMarkdown,
-    this.articleMarkdownVersion,
+    this.markdownDialect,
     this.articleMarkdownDigest,
     this.articleAssetManifest,
     this.articleRenderProfile,
@@ -47,18 +47,39 @@ class ContentPostDetailWireDto {
       articleTemplate: m['articleTemplate']?.toString() ?? null,
       articleFontPreset: m['articleFontPreset']?.toString() ?? null,
       articleMarkdown: m['articleMarkdown']?.toString() ?? null,
-      articleMarkdownVersion: m['articleMarkdownVersion']?.toString() ?? null,
+      markdownDialect: m['markdownDialect']?.toString() ?? null,
       articleMarkdownDigest: m['articleMarkdownDigest']?.toString() ?? null,
       articleAssetManifest: _parseStringKeyMap(m['articleAssetManifest']) ?? null,
       articleRenderProfile: _parseStringKeyMap(m['articleRenderProfile']) ?? null,
-      contentVertical: m['contentVertical']?.toString() ?? m['categoryId']?.toString() ?? m['category']?.toString() ?? m['vertical']?.toString() ?? null,
+      contentVertical: m['contentVertical']?.toString() ?? null,
       paperThemeMode: m['paperThemeMode']?.toString() ?? null,
-      paperTexture: m['paperTexture']?.toString() ?? m['articlePaperTexture']?.toString() ?? null,
+      paperTexture: m['paperTexture']?.toString() ?? null,
       entityMentions: _parseProjectionDtoList(m['entityMentions'], ArticleEntityMentionDto.fromMap),
-      coverUrlWire: m['coverUrl']?.toString() ?? null,
+      coverUrlWire: m['coverUrlWire']?.toString() ?? null,
       tagRefs: _parseStringList(m['tagRefs']) ?? null,
       visibility: m['visibility']?.toString() ?? null,
     );
+  }
+
+  factory ContentPostDetailWireDto.fromReadModelMap(Map<String, dynamic> source) {
+    return ContentPostDetailWireDto.fromMap(<String, dynamic>{
+      'isOfficial': source['isOfficial'],
+      'badge': source['badge'],
+      'articleTemplate': source['articleTemplate'],
+      'articleFontPreset': source['articleFontPreset'],
+      'articleMarkdown': source['articleMarkdown'],
+      'markdownDialect': source['markdownDialect'],
+      'articleMarkdownDigest': source['articleMarkdownDigest'],
+      'articleAssetManifest': source['articleAssetManifest'],
+      'articleRenderProfile': source['articleRenderProfile'],
+      'contentVertical': source['contentVertical'],
+      'paperThemeMode': source['paperThemeMode'],
+      'paperTexture': source['paperTexture'],
+      'entityMentions': source['entityMentions'],
+      'coverUrlWire': source['coverUrl'],
+      'tagRefs': source['tagRefs'],
+      'visibility': source['visibility'],
+    });
   }
 
   Map<String, dynamic> toMap() {
@@ -68,7 +89,7 @@ class ContentPostDetailWireDto {
       'articleTemplate': articleTemplate,
       'articleFontPreset': articleFontPreset,
       'articleMarkdown': articleMarkdown,
-      'articleMarkdownVersion': articleMarkdownVersion,
+      'markdownDialect': markdownDialect,
       'articleMarkdownDigest': articleMarkdownDigest,
       'articleAssetManifest': articleAssetManifest,
       'articleRenderProfile': articleRenderProfile,
@@ -88,7 +109,7 @@ class ContentPostDetailWireDto {
     String? articleTemplate,
     String? articleFontPreset,
     String? articleMarkdown,
-    String? articleMarkdownVersion,
+    String? markdownDialect,
     String? articleMarkdownDigest,
     Map<String, dynamic>? articleAssetManifest,
     Map<String, dynamic>? articleRenderProfile,
@@ -106,7 +127,7 @@ class ContentPostDetailWireDto {
       articleTemplate: articleTemplate ?? this.articleTemplate,
       articleFontPreset: articleFontPreset ?? this.articleFontPreset,
       articleMarkdown: articleMarkdown ?? this.articleMarkdown,
-      articleMarkdownVersion: articleMarkdownVersion ?? this.articleMarkdownVersion,
+      markdownDialect: markdownDialect ?? this.markdownDialect,
       articleMarkdownDigest: articleMarkdownDigest ?? this.articleMarkdownDigest,
       articleAssetManifest: articleAssetManifest ?? this.articleAssetManifest,
       articleRenderProfile: articleRenderProfile ?? this.articleRenderProfile,

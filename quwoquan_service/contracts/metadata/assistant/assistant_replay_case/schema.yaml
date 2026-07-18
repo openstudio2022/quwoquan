@@ -2,7 +2,6 @@ dart_class: AssistantReplayCaseWire
 library_path: assistant/generated/contracts/assistant_replay_case.g.dart
 output_path: assistant/generated/contracts/assistant_replay_case.g.dart
 contract: assistant_replay_case
-version: assistant_replay_case.m5
 kind: test_fixture_contract
 imports:
   - package:quwoquan_app/assistant/generated/contracts/assistant_run_response.g.dart

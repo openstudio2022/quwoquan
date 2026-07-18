@@ -12,58 +12,65 @@ func newServerMux(service *productService, healthChecker *health.Checker) *http.
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", healthChecker.Handler())
 	mux.Handle("/metrics", rtmetrics.Handler())
-	mux.HandleFunc("/v1/ops/experiments/", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/ops/experiments/", func(w http.ResponseWriter, r *http.Request) {
 		service.experimentHTTP.ServeHTTP(w, r)
 	})
-	mux.HandleFunc("/v1/ops/visits", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/ops/visits", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			writeRuntimeNotFound(w, r)
 			return
 		}
 		service.handleRecordVisit(w, r)
 	})
-	mux.HandleFunc("/v1/ops/visits/stats", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/ops/visits/stats", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeRuntimeNotFound(w, r)
 			return
 		}
 		service.handleGetVisitStats(w, r)
 	})
-	mux.HandleFunc("/v1/ops/events", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/ops/events", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			writeRuntimeNotFound(w, r)
 			return
 		}
 		service.handleReportEventBatch(w, r)
 	})
-	mux.HandleFunc("/v1/ops/events/summary", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/ops/startup-events", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeRuntimeNotFound(w, r)
+			return
+		}
+		service.handleReportStartupEventBatch(w, r)
+	})
+	mux.HandleFunc("/ops/events/summary", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeRuntimeNotFound(w, r)
 			return
 		}
 		service.handleGetEventSummary(w, r)
 	})
-	mux.HandleFunc("/v1/ops/events/drilldown", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/ops/events/drilldown", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeRuntimeNotFound(w, r)
 			return
 		}
 		service.handleGetEventDrilldown(w, r)
 	})
-	mux.HandleFunc("/v1/control-plane/product/experiments", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/control-plane/product/experiments", func(w http.ResponseWriter, r *http.Request) {
 		service.experimentHTTP.ServeHTTP(w, r)
 	})
-	mux.HandleFunc("/v1/control-plane/product/experiments/", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/control-plane/product/experiments/", func(w http.ResponseWriter, r *http.Request) {
 		service.experimentHTTP.ServeHTTP(w, r)
 	})
-	mux.HandleFunc("/v1/control-plane/product/moderation/cases", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/control-plane/product/moderation/cases", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeRuntimeNotFound(w, r)
 			return
 		}
 		service.handleListModerationCases(w, r)
 	})
-	mux.HandleFunc("/v1/control-plane/product/moderation/cases/", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/control-plane/product/moderation/cases/", func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet:
 			service.handleGetModerationCase(w, r)
@@ -75,14 +82,14 @@ func newServerMux(service *productService, healthChecker *health.Checker) *http.
 			writeRuntimeNotFound(w, r)
 		}
 	})
-	mux.HandleFunc("/v1/control-plane/product/recovery/cases", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/control-plane/product/recovery/cases", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeRuntimeNotFound(w, r)
 			return
 		}
 		service.handleListRecoveryCases(w, r)
 	})
-	mux.HandleFunc("/v1/control-plane/product/recovery/cases/", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/control-plane/product/recovery/cases/", func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet:
 			service.handleGetRecoveryCase(w, r)
@@ -92,14 +99,14 @@ func newServerMux(service *productService, healthChecker *health.Checker) *http.
 			writeRuntimeNotFound(w, r)
 		}
 	})
-	mux.HandleFunc("/v1/control-plane/product/appeal/cases", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/control-plane/product/appeal/cases", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeRuntimeNotFound(w, r)
 			return
 		}
 		service.handleListAppealCases(w, r)
 	})
-	mux.HandleFunc("/v1/control-plane/product/appeal/cases/", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/control-plane/product/appeal/cases/", func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet:
 			service.handleGetAppealCase(w, r)
@@ -109,14 +116,14 @@ func newServerMux(service *productService, healthChecker *health.Checker) *http.
 			writeRuntimeNotFound(w, r)
 		}
 	})
-	mux.HandleFunc("/v1/control-plane/product/recommendation/policies", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/control-plane/product/recommendation/policies", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeRuntimeNotFound(w, r)
 			return
 		}
 		service.handleListRecommendationPolicies(w, r)
 	})
-	mux.HandleFunc("/v1/control-plane/product/recommendation/policies/", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/control-plane/product/recommendation/policies/", func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, ":simulate"):
 			service.handleSimulateRecommendationPolicy(w, r)
@@ -126,7 +133,7 @@ func newServerMux(service *productService, healthChecker *health.Checker) *http.
 			writeRuntimeNotFound(w, r)
 		}
 	})
-	mux.HandleFunc("/v1/control-plane/product/recommendation/premium-pool", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/control-plane/product/recommendation/premium-pool", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
 			service.handleListPremiumPool(w, r)
@@ -136,7 +143,7 @@ func newServerMux(service *productService, healthChecker *health.Checker) *http.
 			writeRuntimeNotFound(w, r)
 		}
 	})
-	mux.HandleFunc("/v1/control-plane/product/recommendation/premium-pool/", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/control-plane/product/recommendation/premium-pool/", func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, ":rollback"):
 			service.handleRollbackPremiumPool(w, r)
@@ -146,42 +153,42 @@ func newServerMux(service *productService, healthChecker *health.Checker) *http.
 			writeRuntimeNotFound(w, r)
 		}
 	})
-	mux.HandleFunc("/v1/control-plane/product/workflows", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/control-plane/product/workflows", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeRuntimeNotFound(w, r)
 			return
 		}
 		service.handleListWorkflows(w, r)
 	})
-	mux.HandleFunc("/v1/control-plane/product/audits", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/control-plane/product/audits", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeRuntimeNotFound(w, r)
 			return
 		}
 		service.handleListAudits(w, r)
 	})
-	mux.HandleFunc("/v1/control-plane/product/approvals", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/control-plane/product/approvals", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeRuntimeNotFound(w, r)
 			return
 		}
 		service.handleListApprovals(w, r)
 	})
-	mux.HandleFunc("/v1/control-plane/product/projections/summary", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/control-plane/product/projections/summary", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeRuntimeNotFound(w, r)
 			return
 		}
 		service.handleProjectionSummary(w, r)
 	})
-	mux.HandleFunc("/v1/control-plane/product/triage/summary", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/control-plane/product/triage/summary", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeRuntimeNotFound(w, r)
 			return
 		}
 		service.handleGetTriageSummary(w, r)
 	})
-	mux.HandleFunc("/v1/control-plane/product/metrics/l1l4", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/control-plane/product/metrics/l1l4", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeRuntimeNotFound(w, r)
 			return

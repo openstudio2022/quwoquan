@@ -1,4 +1,3 @@
-version: 1
 domain: circle
 aggregate_root: CirclePostPlacement
 object_kind: aggregate_root
@@ -11,7 +10,7 @@ business_rules:
   - groupId 非空时必须属于同一 circleId
   - 只有 post owner 或 circle moderator 可以创建和移除放置
   - pinned 与 featured 只能作用于 active placement
-  - 所有命令使用 expectedVersion 与 idempotency receipt
+  - 所有命令使用服务端内部 CAS 与 idempotency receipt，公开接口不接收调用方版本字段
 lifecycle:
   states: [active, removed]
   transitions:

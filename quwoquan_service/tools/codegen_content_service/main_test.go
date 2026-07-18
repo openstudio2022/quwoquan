@@ -31,7 +31,7 @@ func TestContentServiceRoutePacketIncludesEveryObjectService(t *testing.T) {
 		operations[route.Operation] = struct{}{}
 	}
 	for _, operation := range []string{
-		"CreatePost",
+		"SubmitPostPublication",
 		"CreateComment",
 		"LikePost",
 		"InitMediaUpload",
@@ -88,6 +88,10 @@ func TestContentServiceReadyOperationsDispatchDirectly(t *testing.T) {
 		"PinComment":                     "handleSetCommentPinned",
 		"ReactToComment":                 "handleReactToComment",
 		"ResolveReport":                  "handleResolveReport",
+		"SubmitPostPublication":          "handleSubmitPostPublication",
+		"UpdatePostSettings":             "handleUpdatePostSettings",
+		"PromotePostToWork":              "handlePromotePostToWork",
+		"DeletePost":                     "handleDeletePost",
 		"UnpinComment":                   "handleSetCommentPinned",
 	} {
 		block := generatedOperationDispatchBlock(t, string(generated), operation)
@@ -102,6 +106,38 @@ func TestContentServiceReadyOperationsDispatchDirectly(t *testing.T) {
 		if strings.Contains(block, "handleNotImplemented") {
 			t.Errorf(
 				"%s dispatch must not route through handleNotImplemented:\n%s",
+				operation,
+				block,
+			)
+		}
+	}
+
+	for operation, parameters := range map[string][]string{
+		"BindMediaAssetsToComment": {"commentId"},
+		"CreateComment":            {"postId"},
+		"DeleteComment":            {"postId", "commentId"},
+		"ListCommentReplies":       {"postId", "commentId"},
+		"ListComments":             {"postId"},
+		"PinComment":               {"postId", "commentId"},
+		"ReactToComment":           {"commentId"},
+		"UnpinComment":             {"postId", "commentId"},
+	} {
+		block := generatedOperationDispatchBlock(t, string(generated), operation)
+		for _, parameter := range parameters {
+			want := `r.PathValue("` + parameter + `")`
+			if !strings.Contains(block, want) {
+				t.Errorf(
+					"%s dispatch must consume generated %s path value directly:\n%s",
+					operation,
+					parameter,
+					block,
+				)
+			}
+		}
+		if strings.Contains(block, "postIDFromPath") ||
+			strings.Contains(block, "commentIDFromPath") {
+			t.Errorf(
+				"%s dispatch must not re-parse the path after generated routing:\n%s",
 				operation,
 				block,
 			)

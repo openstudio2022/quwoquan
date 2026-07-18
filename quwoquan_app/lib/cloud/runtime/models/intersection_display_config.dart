@@ -1,7 +1,7 @@
-/// 交集展示控制配置（应用级，来自 `GET /v1/config/app`）。
+/// 交集展示控制配置（应用级，来自 `GET /config/app`）。
 ///
 /// 设计约束（必读要求 1 / 接口剖离）：
-/// - 展示控制（就地展开几行、推荐候选窗）是应用骨架级系统配置，下沉到 /v1/config/app，
+/// - 展示控制（就地展开几行、推荐候选窗）是应用骨架级系统配置，下沉到 /config/app，
 ///   交集列表接口只回数据，禁止把展示控制混进列表契约。
 /// - 解析失败 / 缺失 → 回落端默认值，启动一次加载、全局共享。
 class IntersectionDisplayConfig {
@@ -21,8 +21,8 @@ class IntersectionDisplayConfig {
 
   static const IntersectionDisplayConfig fallback = IntersectionDisplayConfig();
 
-  /// 从 `/v1/config/app` 响应根（wireRoot）解析 `intersection` 子节点；
-  /// 兼容 snake_case / camelCase；缺失字段回落默认值。
+  /// 从 `/config/app` 响应根（wireRoot）解析 `intersection` 子节点；
+  /// 仅消费 canonical camelCase wire key；缺失字段回落默认值。
   factory IntersectionDisplayConfig.fromAppConfigRoot(
     Map<String, Object?> root,
   ) {
@@ -33,14 +33,9 @@ class IntersectionDisplayConfig {
     if (raw == null) return fallback;
     return IntersectionDisplayConfig(
       inlineExpandCount:
-          _asPositiveInt(
-            raw['inline_expand_count'] ?? raw['inlineExpandCount'],
-          ) ??
-          defaultInlineExpandCount,
+          _asPositiveInt(raw['inlineExpandCount']) ?? defaultInlineExpandCount,
       maxCandidateWindow:
-          _asPositiveInt(
-            raw['max_candidate_window'] ?? raw['maxCandidateWindow'],
-          ) ??
+          _asPositiveInt(raw['maxCandidateWindow']) ??
           defaultMaxCandidateWindow,
     );
   }

@@ -1,4 +1,3 @@
-version: 1
 domain: assistant
 aggregate_root: AssistantRun
 object_kind: aggregate_root

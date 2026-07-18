@@ -1,4 +1,3 @@
-version: 1
 aggregate: CallRecording
 backend: mongodb
 collections:

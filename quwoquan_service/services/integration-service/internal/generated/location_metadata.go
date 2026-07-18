@@ -5,8 +5,8 @@ package generated
 const ResponseListKey = "items"
 
 // API 路径（来自 api_routes）
-const NearbyPath = "/v1/integration/location/nearby"
-const SearchPath = "/v1/integration/location/search"
+const NearbyPath = "/integration/location/nearby"
+const SearchPath = "/integration/location/search"
 
 // Query 参数名（来自 api_routes query_params）
 const QueryParamLat = "lat"

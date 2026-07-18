@@ -10,11 +10,14 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
+import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_search_field.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
+import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/ui/user/models/contact_candidate_vm.dart';
 import 'package:quwoquan_app/ui/user/widgets/contact_candidate_row.dart';
 
@@ -134,9 +137,23 @@ class _ContactSearchResultPageState
             .toList(growable: false);
       });
       AppToast.show(context, UITextConstants.addContactConfirmedToast);
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
-        AppToast.show(context, UITextConstants.addContactFailedMessage);
+        await AppActionErrorFeedback.show(
+          context,
+          semantic: runtimeErrorSemantic(
+            context,
+            error: error,
+            category: UiErrorCategory.submit,
+            scope: UiErrorScope.dialog,
+          ),
+          onAction: (action) async {
+            if (action.type == UiErrorActionType.retry ||
+                action.type == UiErrorActionType.resubmit) {
+              await _add(candidate);
+            }
+          },
+        );
       }
     } finally {
       if (mounted) {

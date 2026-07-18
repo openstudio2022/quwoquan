@@ -304,10 +304,8 @@ StopPolicy parseStopPolicy(String raw) {
     case "balanced":
       return StopPolicy.balanced;
     case "strict":
-    case "fast_exit":
       return StopPolicy.fastExit;
     case "explore":
-    case "exhaustive":
       return StopPolicy.exhaustive;
     default:
       return StopPolicy.balanced;
@@ -935,7 +933,6 @@ enum TraceVisibility {
 TraceVisibility parseTraceVisibility(String raw) {
   switch (raw.trim()) {
     case "user_visible":
-    case "userVisible":
       return TraceVisibility.userVisible;
     case "system":
       return TraceVisibility.system;
@@ -1072,7 +1069,6 @@ SlotSource parseSlotSource(String raw) {
     case "session_history":
       return SlotSource.sessionHistory;
     case "default":
-    case "default_value":
       return SlotSource.defaultValue;
     default:
       return SlotSource.unknown;
@@ -1455,13 +1451,10 @@ AssessmentType parseAssessmentType(String raw) {
     case "sufficient":
       return AssessmentType.sufficient;
     case "need_more_search":
-    case "needMoreSearch":
       return AssessmentType.needMoreSearch;
     case "budget_exhausted":
-    case "budgetExhausted":
       return AssessmentType.budgetExhausted;
     case "tool_failed":
-    case "toolFailed":
       return AssessmentType.toolFailed;
     default:
       return AssessmentType.unknown;
@@ -1655,8 +1648,6 @@ enum ContextScopeExpansionPolicy {
 
 ContextScopeExpansionPolicy parseContextScopeExpansionPolicy(String raw) {
   switch (raw.trim()) {
-    case "":
-      return ContextScopeExpansionPolicy.none;
     case "expand_time_window":
       return ContextScopeExpansionPolicy.expandTimeWindow;
     case "expand_scope_and_requery":
@@ -1693,7 +1684,6 @@ enum ContextRetryPolicy {
 ContextRetryPolicy parseContextRetryPolicy(String raw) {
   switch (raw.trim()) {
     case "single_retry":
-    case "":
       return ContextRetryPolicy.singleRetry;
     default:
       return ContextRetryPolicy.unknown;

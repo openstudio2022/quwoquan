@@ -60,12 +60,12 @@ func renderStandaloneDtoDart(proj clientProjection, sourcePath string) string {
 		b.WriteString(fmt.Sprintf("      %s: %s,\n", f.Name, resolver))
 	}
 	b.WriteString("    );\n  }\n\n")
+	writeProjectionSourceFactory(&b, className, proj.Fields)
 	b.WriteString("  Map<String, dynamic> toMap() {\n    return <String, dynamic>{\n")
 	for _, f := range proj.Fields {
-		key := f.Name
+		key := projectionWireKey(f)
 		value := f.Name
 		if proj.Strict {
-			key = projectionWireKey(f)
 			value = strictProjectionToWireValue(f)
 		}
 		b.WriteString(fmt.Sprintf("      '%s': %s,\n", key, value))
@@ -113,23 +113,17 @@ func renderStandaloneDtoDart(proj clientProjection, sourcePath string) string {
 	needsStringList := false
 	needsMapList := false
 	needsProjectionDtoList := false
-	needsFirstNonEmptyMapList := false
-	needsFirstNonEmptyWireString := false
 	for _, f := range proj.Fields {
 		dt := normalizeDartType(f.DartType)
 		switch dt {
 		case "Map<String, dynamic>":
 			needsStringKeyMap = true
 		case "DateTime":
-			needsDateTime = true
+			needsDateTime = !proj.Strict
 		case "List<String>":
-			needsStringList = true
+			needsStringList = !proj.Strict
 		case "List<Map<String, dynamic>>":
 			needsMapList = true
-			keys := projectionFieldAliasKeys(f)
-			if len(keys) > 1 {
-				needsFirstNonEmptyMapList = true
-			}
 		}
 		if f.ListElementDartClass != "" && strings.HasPrefix(dt, "List<") && strings.HasSuffix(dt, ">") {
 			needsProjectionDtoList = true
@@ -137,18 +131,6 @@ func renderStandaloneDtoDart(proj clientProjection, sourcePath string) string {
 		if f.MapFromStringKeyClass != "" {
 			needsStringKeyMap = true
 		}
-		if dt == "String" && f.SkipEmptyStringAliases {
-			needsFirstNonEmptyWireString = true
-		}
-	}
-	if needsFirstNonEmptyWireString {
-		b.WriteString("String? _firstNonEmptyWireString(Map<String, dynamic> m, List<String> keys) {\n")
-		b.WriteString("  for (final k in keys) {\n")
-		b.WriteString("    final v = m[k]?.toString();\n")
-		b.WriteString("    if (v != null && v.isNotEmpty) return v;\n")
-		b.WriteString("  }\n")
-		b.WriteString("  return null;\n")
-		b.WriteString("}\n\n")
 	}
 	if needsDateTime {
 		b.WriteString("DateTime? _parseDateTime(dynamic v) {\n")
@@ -196,15 +178,6 @@ func renderStandaloneDtoDart(proj clientProjection, sourcePath string) string {
 		b.WriteString("  return out;\n")
 		b.WriteString("}\n\n")
 	}
-	if needsFirstNonEmptyMapList {
-		b.WriteString("List<Map<String, dynamic>> _firstNonEmptyMapList(Map<String, dynamic> m, List<String> keys) {\n")
-		b.WriteString("  for (final k in keys) {\n")
-		b.WriteString("    final parsed = _parseMapList(m[k]);\n")
-		b.WriteString("    if (parsed.isNotEmpty) return parsed;\n")
-		b.WriteString("  }\n")
-		b.WriteString("  return const <Map<String, dynamic>>[];\n")
-		b.WriteString("}\n\n")
-	}
 	if needsStringKeyMap {
 		b.WriteString("\nMap<String, dynamic>? _parseStringKeyMap(dynamic v) {\n")
 		b.WriteString("  if (v == null) return null;\n")
@@ -220,10 +193,10 @@ func renderStandaloneDtoDart(proj clientProjection, sourcePath string) string {
 	return strings.TrimRight(b.String(), "\n") + "\n"
 }
 
+// projectionWireKey is the JSON wire key for client projections.
+// Always use field name; source only describes the storage/projection origin
+// (e.g. Mongo `_id`) and must never appear as a client wire key.
 func projectionWireKey(f projectionFieldDef) string {
-	if key := strings.TrimSpace(f.Source); key != "" {
-		return key
-	}
 	return strings.TrimSpace(f.Name)
 }
 
@@ -312,7 +285,7 @@ func strictProjectionInvalidCondition(f projectionFieldDef, key string) string {
 	if f.MapFromStringKeyClass != "" {
 		typeCheck = fmt.Sprintf("%s is! Map || (%s as Map).keys.any((key) => key is! String)", presentValue, presentValue)
 	} else if f.ListElementDartClass != "" {
-		typeCheck = fmt.Sprintf("%s is! List || (%s as List).any((value) => value is! Map || (value as Map).keys.any((key) => key is! String))", presentValue, presentValue)
+		typeCheck = fmt.Sprintf("%s is! List || (%s as List).any((value) => value is! Map || value.keys.any((key) => key is! String))", presentValue, presentValue)
 	}
 	if typeCheck != "" {
 		if f.Nullable {
@@ -390,12 +363,13 @@ func renderFeedItemDtoDart(proj clientProjection) string {
 	}
 	b.WriteString("    );\n")
 	b.WriteString("  }\n\n")
+	writeProjectionSourceFactory(&b, className, proj.Fields)
 
 	// toMap
 	b.WriteString("  Map<String, dynamic> toMap() {\n")
 	b.WriteString("    return <String, dynamic>{\n")
 	for _, f := range proj.Fields {
-		b.WriteString(fmt.Sprintf("      '%s': %s,\n", f.Name, f.Name))
+		b.WriteString(fmt.Sprintf("      '%s': %s,\n", projectionWireKey(f), f.Name))
 	}
 	b.WriteString("    };\n")
 	b.WriteString("  }\n\n")
@@ -453,7 +427,6 @@ func renderFeedItemDtoDart(proj clientProjection) string {
 	b.WriteString("}\n")
 
 	needsMapList := false
-	needsFirstNonEmptyMapList := false
 	needsStringKeyMap := false
 	needsProjectionDtoList := false
 	for _, f := range proj.Fields {
@@ -461,9 +434,6 @@ func renderFeedItemDtoDart(proj clientProjection) string {
 		switch dt {
 		case "List<Map<String, dynamic>>":
 			needsMapList = true
-			if len(projectionFieldAliasKeys(f)) > 1 {
-				needsFirstNonEmptyMapList = true
-			}
 		case "Map<String, dynamic>":
 			needsStringKeyMap = true
 		}
@@ -485,15 +455,6 @@ func renderFeedItemDtoDart(proj clientProjection) string {
 		b.WriteString("    }\n")
 		b.WriteString("  }\n")
 		b.WriteString("  return out;\n")
-		b.WriteString("}\n")
-	}
-	if needsFirstNonEmptyMapList {
-		b.WriteString("\nList<Map<String, dynamic>> _firstNonEmptyMapList(Map<String, dynamic> m, List<String> keys) {\n")
-		b.WriteString("  for (final k in keys) {\n")
-		b.WriteString("    final parsed = _parseMapList(m[k]);\n")
-		b.WriteString("    if (parsed.isNotEmpty) return parsed;\n")
-		b.WriteString("  }\n")
-		b.WriteString("  return const <Map<String, dynamic>>[];\n")
 		b.WriteString("}\n")
 	}
 	if needsProjectionDtoList {
@@ -629,13 +590,14 @@ func renderTypedPostDtoDart(proj clientProjection, sourceFile string) string {
 	}
 	b.WriteString("    );\n")
 	b.WriteString("  }\n\n")
+	writeProjectionSourceFactory(&b, className, proj.Fields)
 
 	// toMap override
 	b.WriteString("  @override\n")
 	b.WriteString("  Map<String, dynamic> toMap() {\n")
 	b.WriteString("    return <String, dynamic>{\n")
 	for _, f := range proj.Fields {
-		b.WriteString(fmt.Sprintf("      '%s': %s,\n", f.Name, f.Name))
+		b.WriteString(fmt.Sprintf("      '%s': %s,\n", projectionWireKey(f), f.Name))
 	}
 	b.WriteString("    };\n")
 	b.WriteString("  }\n\n")
@@ -733,27 +695,7 @@ func renderTypedPostDtoDart(proj clientProjection, sourceFile string) string {
 	return b.String()
 }
 
-// projectionFieldAliasKeys returns source + aliases for a field, deduplicated.
-func projectionFieldAliasKeys(f projectionFieldDef) []string {
-	allKeys := []string{f.Source}
-	for _, a := range f.Aliases {
-		if a != f.Source {
-			allKeys = append(allKeys, a)
-		}
-	}
-	seen := map[string]bool{}
-	deduped := []string{}
-	for _, k := range allKeys {
-		if !seen[k] {
-			seen[k] = true
-			deduped = append(deduped, k)
-		}
-	}
-	return deduped
-}
-
-// buildAliasResolver generates the fromMap expression for a single field,
-// trying each alias key in order until a non-null value is found.
+// buildAliasResolver generates the fromMap expression for a single canonical wire key.
 func buildAliasResolver(f projectionFieldDef) string {
 	dartType := normalizeDartType(f.DartType)
 	defaultVal := f.Default
@@ -765,13 +707,16 @@ func buildAliasResolver(f projectionFieldDef) string {
 		}
 	}
 
-	deduped := projectionFieldAliasKeys(f)
+	key := projectionWireKey(f)
+	deduped := []string{}
+	if key != "" {
+		deduped = []string{key}
+	}
 
 	if f.ListElementDartClass != "" && strings.HasPrefix(dartType, "List<") && strings.HasSuffix(dartType, ">") {
 		if len(deduped) == 0 {
 			return defaultVal
 		}
-		key := deduped[0]
 		if f.Nullable {
 			return fmt.Sprintf(
 				"m['%s'] == null ? null : _parseProjectionDtoList(m['%s'], %s.fromMap)",
@@ -789,7 +734,6 @@ func buildAliasResolver(f projectionFieldDef) string {
 		if len(deduped) == 0 {
 			return defaultVal
 		}
-		key := deduped[0]
 		cls := f.MapFromStringKeyClass
 		if f.Nullable {
 			return fmt.Sprintf(
@@ -805,22 +749,14 @@ func buildAliasResolver(f projectionFieldDef) string {
 
 	switch dartType {
 	case "String":
-		if f.SkipEmptyStringAliases && len(deduped) > 0 {
-			quoted := make([]string, len(deduped))
-			for i, k := range deduped {
-				quoted[i] = fmt.Sprintf("'%s'", k)
-			}
-			return fmt.Sprintf(
-				"_firstNonEmptyWireString(m, <String>[%s]) ?? %s",
-				strings.Join(quoted, ", "),
-				defaultVal,
-			)
-		}
 		parts := make([]string, len(deduped))
 		for i, k := range deduped {
 			parts[i] = fmt.Sprintf("m['%s']?.toString()", k)
 		}
-		return strings.Join(parts, " ?? ") + fmt.Sprintf(" ?? %s", defaultVal)
+		if len(parts) == 0 {
+			return defaultVal
+		}
+		return parts[0] + fmt.Sprintf(" ?? %s", defaultVal)
 
 	case "int":
 		parts := make([]string, len(deduped))
@@ -861,14 +797,7 @@ func buildAliasResolver(f projectionFieldDef) string {
 		if len(deduped) == 0 {
 			return defaultVal
 		}
-		if len(deduped) == 1 {
-			return fmt.Sprintf("_parseMapList(m['%s'])", deduped[0])
-		}
-		quoted := make([]string, len(deduped))
-		for i, k := range deduped {
-			quoted[i] = fmt.Sprintf("'%s'", k)
-		}
-		return fmt.Sprintf("_firstNonEmptyMapList(m, <String>[%s])", strings.Join(quoted, ", "))
+		return fmt.Sprintf("_parseMapList(m['%s'])", deduped[0])
 
 	case "Map<String, dynamic>":
 		if len(deduped) == 0 {
@@ -887,6 +816,44 @@ func buildAliasResolver(f projectionFieldDef) string {
 		}
 		return fmt.Sprintf("m['%s'] as %s? ?? %s", deduped[0], dartType, defaultVal)
 	}
+}
+
+// writeProjectionSourceFactory emits the metadata-owned read-model projection
+// boundary. Public client wire continues to use field names; source names are
+// accepted only by this explicit factory so fixtures and adapters do not copy
+// field mappings into hand-written code.
+func writeProjectionSourceFactory(
+	b *strings.Builder,
+	className string,
+	fields []projectionFieldDef,
+) {
+	hasDistinctSource := false
+	for _, field := range fields {
+		source := strings.TrimSpace(field.Source)
+		if source != "" && source != strings.TrimSpace(field.Name) {
+			hasDistinctSource = true
+			break
+		}
+	}
+	if !hasDistinctSource {
+		return
+	}
+
+	b.WriteString(fmt.Sprintf(
+		"  factory %s.fromReadModelMap(Map<String, dynamic> source) {\n",
+		className,
+	))
+	b.WriteString(fmt.Sprintf("    return %s.fromMap(<String, dynamic>{\n", className))
+	for _, field := range fields {
+		key := strings.TrimSpace(field.Name)
+		source := strings.TrimSpace(field.Source)
+		if source == "" {
+			source = key
+		}
+		b.WriteString(fmt.Sprintf("      '%s': source['%s'],\n", key, source))
+	}
+	b.WriteString("    });\n")
+	b.WriteString("  }\n\n")
 }
 
 func normalizeDartType(t string) string {

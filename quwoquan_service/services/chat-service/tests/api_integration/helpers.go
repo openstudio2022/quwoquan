@@ -78,22 +78,22 @@ func writeTestUserNotFound(w http.ResponseWriter, r *http.Request, debugMessage 
 
 func createConversation(t *testing.T, payload string) map[string]any {
 	t.Helper()
-	return doPost(t, "/v1/chat/conversations", payload, "user_test_001", http.StatusCreated)
+	return doPost(t, "/chat/conversations", payload, "user_test_001", http.StatusCreated)
 }
 
 func createConversationAs(t *testing.T, userId, payload string) map[string]any {
 	t.Helper()
-	return doPost(t, "/v1/chat/conversations", payload, userId, http.StatusCreated)
+	return doPost(t, "/chat/conversations", payload, userId, http.StatusCreated)
 }
 
 func sendMessage(t *testing.T, conversationId, payload string) map[string]any {
 	t.Helper()
-	return doPost(t, "/v1/chat/conversations/"+conversationId+"/messages", payload, "user_test_001", http.StatusCreated)
+	return doPost(t, "/chat/conversations/"+conversationId+"/messages", payload, "user_test_001", http.StatusCreated)
 }
 
 func sendMessageAs(t *testing.T, userId, conversationId, payload string) map[string]any {
 	t.Helper()
-	return doPost(t, "/v1/chat/conversations/"+conversationId+"/messages", payload, userId, http.StatusCreated)
+	return doPost(t, "/chat/conversations/"+conversationId+"/messages", payload, userId, http.StatusCreated)
 }
 
 func doPost(t *testing.T, path, payload, userId string, expectedStatus int) map[string]any {

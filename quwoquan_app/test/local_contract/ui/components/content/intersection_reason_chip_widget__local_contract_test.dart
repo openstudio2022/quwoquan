@@ -344,7 +344,7 @@ void main() {
     testWidgets('点击对象 span → 经统一导航跳转 + trackTagClick 全归因回流', (tester) async {
       final repo = MockBehaviorRepository();
       final tracker = ContentBehaviorTracker(
-        repository: repo,
+        reporter: repo,
         maxBatchSize: 1,
         enablePeriodicFlush: false,
       );

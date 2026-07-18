@@ -1,5 +1,4 @@
 {
-  "contractVersion": "geo_resolution_config_v1",
   "timezoneCountryCodes": {
     "Asia/Shanghai": "CN",
     "Asia/Chongqing": "CN",
@@ -12,5 +11,6 @@
     "CN": "中国",
     "HK": "中国香港",
     "US": "美国"
-  }
+  },
+  "schema": "geo_resolution_config"
 }

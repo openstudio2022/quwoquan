@@ -1,4 +1,3 @@
-version: 1
 aggregate: DeviceRegistration
 
 entities:
@@ -6,6 +5,7 @@ entities:
     description: 设备绑定与推送 token
     fields:
       - name: id
+        source: id
         type: string
         constraints: [PK]
         classification: PUBLIC
@@ -14,6 +14,7 @@ entities:
         ops_exposure: read
 
       - name: userId
+        source: userId
         type: string
         constraints: [FK_user_profiles_CASCADE]
         classification: PUBLIC
@@ -22,6 +23,7 @@ entities:
         ops_exposure: read
 
       - name: deviceId
+        source: deviceId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -30,6 +32,7 @@ entities:
         ops_exposure: read
 
       - name: platform
+        source: platform
         type: enum
         enum_ref: Platform
         constraints: [NOT_NULL]
@@ -39,6 +42,7 @@ entities:
         ops_exposure: read
 
       - name: pushToken
+        source: pushToken
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -47,6 +51,7 @@ entities:
         ops_exposure: drop
 
       - name: appVersion
+        source: appVersion
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -55,6 +60,7 @@ entities:
         ops_exposure: read
 
       - name: lastActiveAt
+        source: lastActiveAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -63,6 +69,7 @@ entities:
         ops_exposure: read
 
       - name: createdAt
+        source: createdAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC

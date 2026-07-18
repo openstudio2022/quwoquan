@@ -1,19 +1,21 @@
 import 'dart:async';
 
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:quwoquan_app/app/app_startup_runtime.dart';
+import 'package:quwoquan_app/app/navigation/app_router_module.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
-import 'package:quwoquan_app/app/navigation/app_router_module.dart';
 import 'package:quwoquan_app/app/shell/main_app_shell.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
+import 'package:quwoquan_app/core/platform/startup_native_bridge.dart';
 import 'package:quwoquan_app/core/platform/platform_target.dart';
-import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import 'package:quwoquan_app/quwoquan_app_shell.dart';
@@ -21,6 +23,7 @@ import 'package:quwoquan_app/ui/user/pages/login_page.dart';
 import 'package:quwoquan_app/ui/welcome/pages/welcome_screen.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import '../../support/runtime_failure_fixtures.dart';
+import '../../support/recording_app_telemetry_recorder.dart';
 
 AuthSessionRefreshExecutor _refreshExecutor(
   Future<AuthLoginResultDto> Function(
@@ -34,10 +37,6 @@ AuthSessionRefreshExecutor _refreshExecutor(
 }
 
 void main() {
-  setUpAll(() async {
-    await ensureAppRouterLibraryLoaded();
-  });
-
   Widget wrapRoot(Widget child) {
     return ScreenUtilInit(designSize: const Size(393, 852), child: child);
   }
@@ -62,9 +61,28 @@ void main() {
     return [
       appDataSourceModeProvider.overrideWith(_StartupMockDataSource.new),
       authSessionStoreProvider.overrideWithValue(authStore),
-      opsEventRepositoryProvider.overrideWithValue(MockOpsEventRepository()),
+      appTelemetryReporterProvider.overrideWithValue(
+        RecordingAppTelemetryRecorder(),
+      ),
       ...extra,
     ];
+  }
+
+  Future<void> pumpStartupThroughWelcome(WidgetTester tester) async {
+    // 正常路径一轮约 1.04s；3s 内应进入主壳，6s 仅是异常硬门。
+    for (var i = 0; i < 60; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+      if (find.byType(MainAppShell).evaluate().isNotEmpty) {
+        break;
+      }
+    }
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 20));
+      if (find.byType(WelcomeScreen).evaluate().isEmpty) {
+        break;
+      }
+    }
+    await tester.pump();
   }
 
   testWidgets('启动首帧直接展示欢迎页，不等待认证恢复完成', (tester) async {
@@ -93,22 +111,46 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
   });
 
-  Future<void> pumpStartupThroughWelcome(WidgetTester tester) async {
-    // 正常路径一轮约 1.04s；3s 内应进入主壳，6s 仅是异常硬门。
-    for (var i = 0; i < 60; i++) {
-      await tester.pump(const Duration(milliseconds: 50));
-      if (find.byType(MainAppShell).evaluate().isNotEmpty) {
-        break;
-      }
-    }
-    for (var i = 0; i < 10; i++) {
-      await tester.pump(const Duration(milliseconds: 20));
-      if (find.byType(WelcomeScreen).evaluate().isEmpty) {
-        break;
-      }
-    }
+  testWidgets('原生时钟晚于 Dart 启动时立即收紧 Root 绝对 deadline', (tester) async {
+    suppressExpectedErrors();
+    final routerNeverCompletes = Completer<void>();
+    AppStartupRuntime.instance.resetForTesting();
+    AppStartupRuntime.overrideNativeTimingsBridgeForTesting(
+      _FixedNativeTimingBridge(
+        const NativeStartupProcessSegments(
+          elapsedSinceProcessStartMs: 5950,
+          deadlineOrigin: 'android_process',
+        ),
+      ),
+    );
+    resetAppRouterLibraryLoaderForTesting();
+    overrideAppRouterLibraryLoaderForTesting(() => routerNeverCompletes.future);
+    addTearDown(() {
+      AppStartupRuntime.resetNativeTimingsBridgeForTesting();
+      AppStartupRuntime.instance.resetForTesting();
+      resetAppRouterLibraryLoaderForTesting();
+    });
+
+    await tester.pumpWidget(
+      wrapRoot(
+        ProviderScope(
+          overrides: startupOverrides(authStore: _BlockingAuthSessionStore()),
+          child: const QuWoQuanAppRoot(),
+        ),
+      ),
+    );
     await tester.pump();
-  }
+    // native 时钟在欢迎序列结束、router 载入时回填；按真实动画节拍推进到
+    // router loading，才能验证 5950ms 已耗尽剩余 6 秒预算。
+    await pumpStartupThroughWelcome(tester);
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text(UITextConstants.startupRecoveryTitle), findsOneWidget);
+    expect(find.byKey(const ValueKey('startup-welcome-frozen')), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 50));
+  });
 
   testWidgets('欢迎序列结束但认证仍未恢复时也进入主壳，由页面承接加载态', (tester) async {
     suppressExpectedErrors();
@@ -136,7 +178,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
   });
 
-  testWidgets('debug 环境前置任务未完成也不触发欢迎重放或阻断安全主壳', (tester) async {
+  testWidgets('debug 环境前置任务不阻断安全主壳但会阻止认证网络任务抢跑', (tester) async {
     suppressExpectedErrors();
     final prerequisites = Completer<void>();
     final store = _BlockingAuthSessionStore();
@@ -145,7 +187,9 @@ void main() {
       wrapRoot(
         ProviderScope(
           overrides: startupOverrides(authStore: store),
-          child: QuWoQuanAppRoot(startupPrerequisites: prerequisites.future),
+          child: QuWoQuanAppRoot(
+            authNetworkPrerequisites: () => prerequisites.future,
+          ),
         ),
       ),
     );
@@ -153,13 +197,86 @@ void main() {
     await pumpStartupThroughWelcome(tester);
 
     expect(prerequisites.isCompleted, isFalse);
+    expect(store.readStarted, isFalse);
     expect(find.byType(WelcomeScreen), findsNothing);
     expect(find.byType(MainAppShell), findsOneWidget);
     expect(find.text(UITextConstants.startupStillStartingInline), findsNothing);
 
     prerequisites.complete();
+    await tester.pump();
+    expect(store.readStarted, isTrue);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 50));
+  });
+
+  testWidgets('产品水合前置任务超时或永久 pending 不得阻断认证恢复', (
+    tester,
+  ) async {
+    suppressExpectedErrors();
+    final productHydrateNeverCompletes = Completer<void>();
+    final store = _BlockingAuthSessionStore();
+
+    await tester.pumpWidget(
+      wrapRoot(
+        ProviderScope(
+          overrides: startupOverrides(authStore: store),
+          child: QuWoQuanAppRoot(
+            postFirstFrameTasks: () => productHydrateNeverCompletes.future,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    // release 没有本地 HTTPS trust gate；遥测/session 水合无论多慢都只能
+    // best-effort，不能让认证或安全 Shell 永久 pending。
+    expect(store.readStarted, isTrue);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 50));
+  });
+
+  testWidgets('post-frame plugin barrier 与产品水合不得在安全终态前启动', (
+    tester,
+  ) async {
+    suppressExpectedErrors();
+    const deferredPluginsChannel = MethodChannel(
+      'quwoquan/startup/deferred_plugins',
+    );
+    var barrierCalls = 0;
+    var productTaskCalls = 0;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(deferredPluginsChannel, (call) async {
+          expect(call.method, 'ensureStartupPostFirstFrame');
+          barrierCalls++;
+          return null;
+        });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(deferredPluginsChannel, null),
+    );
+
+    await tester.pumpWidget(
+      wrapRoot(
+        ProviderScope(
+          overrides: startupOverrides(authStore: _BlockingAuthSessionStore()),
+          child: QuWoQuanAppRoot(
+            postFirstFrameTasks: () {
+              productTaskCalls++;
+              return Future<void>.value();
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(barrierCalls, 0);
+    expect(productTaskCalls, 0);
+
+    await pumpStartupThroughWelcome(tester);
+    await tester.pump();
+    expect(barrierCalls, 1);
+    expect(productTaskCalls, 1);
+    await tester.pumpWidget(const SizedBox.shrink());
   });
 
   testWidgets('启动条件满足后，欢迎页在并行动效序列后进入主壳首页', (tester) async {
@@ -345,6 +462,16 @@ void main() {
 final class _StartupMockDataSource extends AppDataSourceModeNotifier {
   @override
   AppDataSourceMode build() => AppDataSourceMode.mock;
+}
+
+final class _FixedNativeTimingBridge implements StartupTimingsNativeBridge {
+  const _FixedNativeTimingBridge(this._segments);
+
+  final NativeStartupProcessSegments _segments;
+
+  @override
+  Future<NativeStartupProcessSegments?> readProcessSegments() async =>
+      _segments;
 }
 
 final class _BlockingAuthSessionStore implements AuthSessionStore {

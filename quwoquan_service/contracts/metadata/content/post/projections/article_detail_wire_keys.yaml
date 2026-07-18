@@ -1,6 +1,5 @@
 # 文章详情投影仍消费的 wire Map 键（尚未全部进入 Post DTO 的扩展字段）。
 # 生成 ArticleDetailWireKeys — UI 禁止手写重复字符串键。
-version: 1
 dart_class: ArticleDetailWireKeys
 description: "文章详情顶层 wire Map 扩展键名 SSOT"
 keys:
@@ -14,8 +13,8 @@ keys:
     json_key: articleFontPreset
   - const_name: articleMarkdown
     json_key: articleMarkdown
-  - const_name: articleMarkdownVersion
-    json_key: articleMarkdownVersion
+  - const_name: markdownDialect
+    json_key: markdownDialect
   - const_name: articleMarkdownDigest
     json_key: articleMarkdownDigest
   - const_name: articleAssetManifest

@@ -25,12 +25,12 @@ func TestAddMembersUpdatesCount(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"group","title":"member test","maxGroupSize":100}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 
-	doPost(t, "/v1/chat/conversations/"+convId+"/members",
+	doPost(t, "/chat/conversations/"+convId+"/members",
 		`{"userIds":["user_b","user_c"]}`, "user_test_001", 200)
 
-	code, result := doGet(t, "/v1/chat/conversations/"+convId+"/members?limit=50", "user_test_001")
+	code, result := doGet(t, "/chat/conversations/"+convId+"/members?limit=50", "user_test_001")
 	if code != 200 {
 		t.Fatalf("expected 200, got %d", code)
 	}
@@ -47,12 +47,12 @@ func TestRemoveMember(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"group","title":"remove test"}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 
-	doPost(t, "/v1/chat/conversations/"+convId+"/members",
+	doPost(t, "/chat/conversations/"+convId+"/members",
 		`{"userIds":["user_to_remove"]}`, "user_test_001", 200)
 
-	code, _ := doDelete(t, "/v1/chat/conversations/"+convId+"/members/user_to_remove", "user_test_001")
+	code, _ := doDelete(t, "/chat/conversations/"+convId+"/members/user_to_remove", "user_test_001")
 	if code != 200 {
 		t.Fatalf("expected 200, got %d", code)
 	}
@@ -62,9 +62,9 @@ func TestListMembers(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"group","title":"list member test"}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 
-	code, result := doGet(t, "/v1/chat/conversations/"+convId+"/members?limit=50", "user_test_001")
+	code, result := doGet(t, "/chat/conversations/"+convId+"/members?limit=50", "user_test_001")
 	if code != 200 {
 		t.Fatalf("expected 200, got %d", code)
 	}
@@ -81,12 +81,12 @@ func TestInviteAssistant(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"group","title":"assistant test"}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 
-	doPost(t, "/v1/chat/conversations/"+convId+"/assistant",
+	doPost(t, "/chat/conversations/"+convId+"/assistant",
 		`{"skillId":"general"}`, "user_test_001", 200)
 
-	code, result := doGet(t, "/v1/chat/conversations/"+convId+"/members?limit=50", "user_test_001")
+	code, result := doGet(t, "/chat/conversations/"+convId+"/members?limit=50", "user_test_001")
 	if code != 200 {
 		t.Fatalf("expected 200, got %d", code)
 	}
@@ -114,7 +114,7 @@ func TestRemoveAssistant(t *testing.T) {
 	convId := "fixture_remove_assistant_conv"
 	seedConversationWithAssistantMember(t, convId, "user_test_001", "rm assistant test", "general")
 
-	code, _ := doDelete(t, "/v1/chat/conversations/"+convId+"/assistant", "user_test_001")
+	code, _ := doDelete(t, "/chat/conversations/"+convId+"/assistant", "user_test_001")
 	if code != 200 {
 		t.Fatalf("expected 200, got %d", code)
 	}
@@ -124,12 +124,12 @@ func TestListMembers_SortJoinedAsc(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"group","title":"sort joined"}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 
-	doPost(t, "/v1/chat/conversations/"+convId+"/members",
+	doPost(t, "/chat/conversations/"+convId+"/members",
 		`{"userIds":["user_join_second","user_join_third"]}`, "user_test_001", 200)
 
-	code, result := doGet(t, "/v1/chat/conversations/"+convId+"/members?limit=50&sort=joined_asc", "user_test_001")
+	code, result := doGet(t, "/chat/conversations/"+convId+"/members?limit=50&sort=joined_asc", "user_test_001")
 	if code != 200 {
 		t.Fatalf("expected 200, got %d", code)
 	}
@@ -153,13 +153,13 @@ func TestListMembers_SortDisplayNameAsc(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"group","title":"sort display"}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 
 	// Join order: zebra then apple — display_name_asc should still order apple before zebra.
-	doPost(t, "/v1/chat/conversations/"+convId+"/members",
+	doPost(t, "/chat/conversations/"+convId+"/members",
 		`{"userIds":["user_zebra","user_apple"]}`, "user_test_001", 200)
 
-	code, result := doGet(t, "/v1/chat/conversations/"+convId+"/members?limit=50&sort=display_name_asc", "user_test_001")
+	code, result := doGet(t, "/chat/conversations/"+convId+"/members?limit=50&sort=display_name_asc", "user_test_001")
 	if code != 200 {
 		t.Fatalf("expected 200, got %d", code)
 	}
@@ -184,12 +184,12 @@ func TestListMembers_DisplayNameFromResolver(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"group","title":"resolver dn"}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 
-	doPost(t, "/v1/chat/conversations/"+convId+"/members",
+	doPost(t, "/chat/conversations/"+convId+"/members",
 		`{"userIds":["user_dn_check"]}`, "user_test_001", 200)
 
-	code, result := doGet(t, "/v1/chat/conversations/"+convId+"/members?limit=50", "user_test_001")
+	code, result := doGet(t, "/chat/conversations/"+convId+"/members?limit=50", "user_test_001")
 	if code != 200 {
 		t.Fatalf("expected 200, got %d", code)
 	}
@@ -213,9 +213,9 @@ func TestMembersRosterRevision_BumpsOnAdd(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"group","title":"revision bump"}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 
-	code, c0 := doGet(t, "/v1/chat/conversations/"+convId, "user_test_001")
+	code, c0 := doGet(t, "/chat/conversations/"+convId, "user_test_001")
 	if code != 200 {
 		t.Fatalf("get conversation: %d", code)
 	}
@@ -227,10 +227,10 @@ func TestMembersRosterRevision_BumpsOnAdd(t *testing.T) {
 		t.Fatalf("expected initial revision 1, got %v", rev0)
 	}
 
-	doPost(t, "/v1/chat/conversations/"+convId+"/members",
+	doPost(t, "/chat/conversations/"+convId+"/members",
 		`{"userIds":["user_rev_bump"]}`, "user_test_001", 200)
 
-	code, c1 := doGet(t, "/v1/chat/conversations/"+convId, "user_test_001")
+	code, c1 := doGet(t, "/chat/conversations/"+convId, "user_test_001")
 	if code != 200 {
 		t.Fatalf("get conversation after add: %d", code)
 	}

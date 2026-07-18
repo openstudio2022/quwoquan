@@ -1,4 +1,3 @@
-version: 2
 read_model: SelectableGroupConversationRow
 description: |
   ListSelectableGroupConversations 返回的群行（wire），用于「从群聊中选择联系人」群列表（图四）。
@@ -14,33 +13,28 @@ client_projection:
       dart_type: String
       nullable: false
       source: conversationId
-      aliases: [conversationId, id, _id]
       default: "''"
 
     - name: title
       dart_type: String
       nullable: false
       source: title
-      aliases: [title]
       default: "''"
 
     - name: avatarUrl
       dart_type: String
       nullable: false
       source: avatarUrl
-      aliases: [avatarUrl, avatar]
       default: "''"
 
     - name: friendMemberCount
       dart_type: int
       nullable: false
       source: friendMemberCount
-      aliases: [friendMemberCount, friendCount]
       default: "0"
 
     - name: memberCount
       dart_type: int
       nullable: false
       source: memberCount
-      aliases: [memberCount]
       default: "0"

@@ -1,5 +1,5 @@
 name: io_access_log_baseline
-contractVersion: 2
+schema: 2
 description: Short access log schema; run/service context comes from path, collector labels or manifest.
 enums:
   origin:
@@ -43,7 +43,7 @@ collector_context:
     - runId
     - releaseId
 forbidden_fields:
-  - schemaVersion
+  - schema
   - signal
   - logKind
   - env

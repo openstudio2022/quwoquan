@@ -17,6 +17,8 @@ alwaysApply: true
 - UI、Repository、Router、埋点和文档不得维护第二套 IA、path、surface、operation 或 decoder 规则表。
 - Mock 数据必须隔离；生产包默认 Remote，无 Mock/Remote 切换入口。
 - 涉及页面数据、Repository、Remote API、人工 beta 或端云测试时，先补 fixture/seed manifest。
+- 契约单轨：禁止协议版本信封（`schemaVersion` / `_vN` / 数字 schema）、wire 多键双读、客户端 JSON `_id` 出站/解码与正向 alias 兼容测试；门禁 `python3 quwoquan_ops/gate/verify_single_track_contracts.py` 为 GATE_BLOCK。
+- 存储 `_id`（bson/Mongo seed）≠ wire `_id`；wire 只认业务键；projection `source: _id` 合法，codegen 不得把 source 当成 JSON 键。
 
 ## 阻断
 
@@ -26,6 +28,7 @@ alwaysApply: true
 - 用户可见能力缺 SLO/KPI、权限、生命周期、灰度、回滚或观测。
 - `implemented/completed` 但无测试证据。
 - 跨 App / Service / Data / Ops 任意两个以上区域却没有端到端证据闭环。
+- 协议版本分支、wire 双读、`--warn-only`/`mode=compat` 逃逸、正向「旧键仍可解析」测试。
 
 ## 交付
 

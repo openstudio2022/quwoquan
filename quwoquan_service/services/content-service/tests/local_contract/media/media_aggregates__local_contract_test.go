@@ -165,6 +165,74 @@ func TestMediaCompleteIsIdempotentAndOutboxVersionsAreAtomic(t *testing.T) {
 	}
 }
 
+func TestReadyVideoRequiresAndPersistsTrustedProcessingDescriptor(t *testing.T) {
+	now := time.Date(2030, time.February, 4, 4, 5, 6, 0, time.UTC)
+	service, _, _ := newMediaService(now)
+	created, err := service.InitMediaUpload(
+		mediaContext("init-video"),
+		mediaapp.InitMediaUploadCommand{
+			OwnerID:        "persona-owner",
+			MediaType:      "video",
+			ContentType:    "video/mp4",
+			FileSize:       1024,
+			ExpectedSHA256: digestAtomic,
+		},
+	)
+	if err != nil {
+		t.Fatalf("init video upload: %v", err)
+	}
+	completed, err := service.CompleteMediaUpload(
+		mediaContext("complete-video"),
+		mediaapp.CompleteMediaUploadCommand{
+			SessionID: created.SessionID, OwnerID: "persona-owner",
+			AccessPolicy: mediamodel.AccessPolicyOwnerOnly,
+		},
+	)
+	if err != nil {
+		t.Fatalf("complete video upload: %v", err)
+	}
+	if _, err := service.RecordMediaProcessingResult(
+		mediaContext("ready-video-without-descriptor"),
+		mediaapp.RecordMediaProcessingResultCommand{
+			AssetID: completed.AssetID, Processing: mediamodel.ProcessingStatusReady,
+		},
+	); err == nil {
+		t.Fatal("ready video without a VOD descriptor must be rejected")
+	}
+
+	command := mediaapp.RecordMediaProcessingResultCommand{
+		AssetID:    completed.AssetID,
+		Processing: mediamodel.ProcessingStatusReady,
+		Descriptor: mediamodel.VideoProcessingDescriptor{
+			ProcessorProfile:             "vod_h264_main",
+			VerifiedDurationMs:           12500,
+			VideoWidth:                   1080,
+			VideoHeight:                  1920,
+			VideoCodec:                   "h264",
+			VideoContainer:               "mp4",
+			VideoPublicSliceKey:          "media/video/mas-2/v2/main.mp4",
+			CoverPublicSliceKey:          "media/video/mas-2/v2/cover.jpg",
+			PreviewTrackVersion:          1,
+			PreviewTrackManifestSliceKey: "media/video/mas-2/v2/storyboard.json",
+		},
+	}
+	ctx := mediaContext("ready-video-with-descriptor")
+	result, err := service.RecordMediaProcessingResult(ctx, command)
+	if err != nil {
+		t.Fatalf("record trusted processing result: %v", err)
+	}
+	if result.ProcessingStatus != mediamodel.ProcessingStatusReady ||
+		result.VerifiedDurationMs != 12500 ||
+		result.VideoWidth != 1080 ||
+		result.PreviewTrackVersion != 1 {
+		t.Fatalf("trusted descriptor was not returned: %+v", result)
+	}
+	replayed, err := service.RecordMediaProcessingResult(ctx, command)
+	if err != nil || !replayed.Replayed || replayed.VerifiedDurationMs != 12500 {
+		t.Fatalf("processing result replay must be exact: result=%+v err=%v", replayed, err)
+	}
+}
+
 func TestOriginalMediaAccessAppendsOneFactAndKeepsAbsoluteExpiryOnReplay(t *testing.T) {
 	now := time.Date(2030, time.March, 4, 5, 6, 7, 0, time.UTC)
 	service, store, _ := newMediaService(now)
@@ -256,6 +324,14 @@ func (g *mediaObjectGateway) CompleteUpload(_ context.Context, params mediaapp.C
 		SHA256:      params.ExpectedSHA256,
 		DeliveryURL: "https://cdn.example.test/media",
 	}, nil
+}
+
+func (g *mediaObjectGateway) PublishPublicSlice(
+	_ context.Context,
+	_ string,
+	_ string,
+) error {
+	return nil
 }
 
 func (g *mediaObjectGateway) DeliveryURL(_ context.Context, objectKey string) (string, error) {

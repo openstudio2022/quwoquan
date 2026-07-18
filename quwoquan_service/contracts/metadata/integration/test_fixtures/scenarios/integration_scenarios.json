@@ -1,5 +1,4 @@
 {
-  "schemaVersion": "integration.scenario-fixtures",
   "description": "集成域 alpha/beta/gamma 共享测试场景，首批覆盖发布位置选择。",
   "repositoryExpectations": {
     "alpha": "mock",
@@ -68,18 +67,40 @@
       "title": "发布位置选择契约种子",
       "type": "location_poi",
       "domainId": "integration",
-      "seedRefs": ["location_poi_core"],
+      "seedRefs": [
+        "location_poi_core"
+      ],
       "uiExpectations": {
-        "poiIds": ["fixture_poi_west_lake", "fixture_poi_coffee"],
-        "textFragments": ["杭州西湖", "契约咖啡馆"]
+        "poiIds": [
+          "fixture_poi_west_lake",
+          "fixture_poi_coffee"
+        ],
+        "textFragments": [
+          "杭州西湖",
+          "契约咖啡馆"
+        ]
       },
       "remoteExpectations": {
-        "poiIds": ["fixture_poi_west_lake", "fixture_poi_coffee"]
+        "poiIds": [
+          "fixture_poi_west_lake",
+          "fixture_poi_coffee"
+        ]
       },
       "environments": {
-        "alpha": { "enabled": true, "repository": "mock" },
-        "beta": { "enabled": true, "repository": "remote", "requiresSeedReset": true },
-        "gamma": { "enabled": true, "repository": "remote", "requiresSeedReset": true }
+        "alpha": {
+          "enabled": true,
+          "repository": "mock"
+        },
+        "beta": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        },
+        "gamma": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        }
       }
     },
     {
@@ -87,17 +108,36 @@
       "title": "短信验证码可靠异步发送契约种子",
       "type": "external_interaction",
       "domainId": "integration",
-      "seedRefs": ["external_interaction_core"],
+      "seedRefs": [
+        "external_interaction_core"
+      ],
       "remoteExpectations": {
-        "requestIds": ["fixture_ext_sms_otp_001"],
-        "operations": ["sms_otp.send"],
+        "requestIds": [
+          "fixture_ext_sms_otp_001"
+        ],
+        "operations": [
+          "sms_otp.send"
+        ],
         "acceptedStatus": 202,
-        "callbackEvents": ["SmsOtpDeliverySucceeded"]
+        "callbackEvents": [
+          "SmsOtpDeliverySucceeded"
+        ]
       },
       "environments": {
-        "alpha": { "enabled": true, "repository": "mock" },
-        "beta": { "enabled": true, "repository": "remote", "requiresSeedReset": true },
-        "gamma": { "enabled": true, "repository": "remote", "requiresSeedReset": true }
+        "alpha": {
+          "enabled": true,
+          "repository": "mock"
+        },
+        "beta": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        },
+        "gamma": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        }
       }
     },
     {
@@ -105,18 +145,38 @@
       "title": "手机推送可靠异步发送契约种子",
       "type": "push_delivery",
       "domainId": "integration",
-      "seedRefs": ["external_interaction_core"],
+      "seedRefs": [
+        "external_interaction_core"
+      ],
       "remoteExpectations": {
-        "requestIds": ["fixture_ext_push_001"],
-        "operations": ["push_delivery.send"],
+        "requestIds": [
+          "fixture_ext_push_001"
+        ],
+        "operations": [
+          "push_delivery.send"
+        ],
         "acceptedStatus": 202,
-        "callbackEvents": ["PushDeliverySucceeded"]
+        "callbackEvents": [
+          "PushDeliverySucceeded"
+        ]
       },
       "environments": {
-        "alpha": { "enabled": true, "repository": "mock" },
-        "beta": { "enabled": true, "repository": "remote", "requiresSeedReset": true },
-        "gamma": { "enabled": true, "repository": "remote", "requiresSeedReset": true }
+        "alpha": {
+          "enabled": true,
+          "repository": "mock"
+        },
+        "beta": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        },
+        "gamma": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        }
       }
     }
-  ]
+  ],
+  "schema": "integration.scenario-fixtures"
 }

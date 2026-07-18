@@ -1,4 +1,3 @@
-version: 1
 read_model: IntersectionActorEvidence
 description: |
   交集人数句背后的逐人证据项。用于解释首页内容卡 / spotlight / 对象页交集句里
@@ -27,107 +26,89 @@ client_projection:
       dart_type: String
       nullable: false
       source: actorId
-      aliases: [actorId]
       default: "''"
     - name: displayName
       dart_type: String
       nullable: false
       source: displayName
-      aliases: [displayName]
       default: "''"
     - name: avatarUrl
       dart_type: String
       nullable: false
       source: avatarUrl
-      aliases: [avatarUrl]
       default: "''"
     - name: relationLabel
       dart_type: String
       nullable: false
       source: relationLabel
-      aliases: [relationLabel]
       default: "''"
     - name: relationSourceRef
       dart_type: String
       nullable: false
       source: relationSourceRef
-      aliases: [relationSourceRef]
       default: "''"
     - name: relationObjectId
       dart_type: String
       nullable: false
       source: relationObjectId
-      aliases: [relationObjectId]
       default: "''"
     - name: relationObjectName
       dart_type: String
       nullable: false
       source: relationObjectName
-      aliases: [relationObjectName]
       default: "''"
     - name: sourcePointId
       dart_type: String
       nullable: false
       source: sourcePointId
-      aliases: [sourcePointId]
       default: "''"
     - name: sourceRef
       dart_type: String
       nullable: false
       source: sourceRef
-      aliases: [sourceRef, kind, intersectionKind]
       default: "''"
     - name: actionSummaryText
       dart_type: String
       nullable: false
       source: actionSummaryText
-      aliases: [actionSummaryText]
       default: "''"
     - name: likeCount
       dart_type: int
       nullable: false
       source: likeCount
-      aliases: [likeCount]
       default: "0"
     - name: commentCount
       dart_type: int
       nullable: false
       source: commentCount
-      aliases: [commentCount]
       default: "0"
     - name: shareCount
       dart_type: int
       nullable: false
       source: shareCount
-      aliases: [shareCount]
       default: "0"
     - name: privacyState
       dart_type: String
       nullable: false
       source: privacyState
-      aliases: [privacyState]
       default: "'visible'"
     - name: target
       dart_type: IntersectionTarget
       nullable: true
       source: target
-      aliases: [target]
       map_from_string_key_class: IntersectionTarget
     - name: evidenceRank
       dart_type: int
       nullable: false
       source: evidenceRank
-      aliases: [evidenceRank]
       default: "0"
     - name: snapshotVersion
       dart_type: String
       nullable: false
       source: snapshotVersion
-      aliases: [snapshotVersion, pointSummarySnapshotId]
       default: "''"
     - name: sortKey
       dart_type: int
       nullable: false
       source: sortKey
-      aliases: [sortKey]
       default: "0"

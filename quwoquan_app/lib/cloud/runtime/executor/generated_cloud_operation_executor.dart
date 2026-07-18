@@ -81,6 +81,7 @@ final class AppGeneratedCloudOperationExecutor
     try {
       payload = requestEncoder();
       encodedHeaders = _validatedEncodedHeaders(payload.headers, operation);
+      _validateVersionPrecondition(operation, encodedHeaders);
     } catch (error, stackTrace) {
       Error.throwWithStackTrace(
         _asCloudException(error, operation),
@@ -290,6 +291,38 @@ final class AppGeneratedCloudOperationExecutor
     return Map<String, String>.unmodifiable(normalized);
   }
 
+  void _validateVersionPrecondition(
+    CloudOperationContract operation,
+    Map<String, String> headers,
+  ) {
+    String? ifMatch;
+    for (final entry in headers.entries) {
+      if (entry.key.toLowerCase() == 'if-match') {
+        ifMatch = entry.value.trim();
+        break;
+      }
+    }
+    if (operation.versionPrecondition == 'if_match') {
+      if (ifMatch == null || !RegExp(r'^"[1-9][0-9]*"$').hasMatch(ifMatch)) {
+        throw CloudErrorMapper.invalidResponse(
+          message:
+              '${operation.canonicalOperationId} requires a quoted positive If-Match version',
+          requestPath: operation.pathTemplate,
+          functionModule: 'generated_cloud_operation_executor',
+        );
+      }
+      return;
+    }
+    if (ifMatch != null) {
+      throw CloudErrorMapper.invalidResponse(
+        message:
+            '${operation.canonicalOperationId} forbids caller version negotiation',
+        requestPath: operation.pathTemplate,
+        functionModule: 'generated_cloud_operation_executor',
+      );
+    }
+  }
+
   Uri _resolveUri(
     String pathTemplate,
     Map<String, String> pathParameters,
@@ -417,7 +450,8 @@ final class AppGeneratedCloudOperationExecutor
     if (method == 'GET' || method == 'HEAD' || method == 'OPTIONS') {
       return true;
     }
-    return operation.idempotency == 'required' &&
+    return (operation.idempotency == 'required' ||
+            operation.idempotency == 'optional') &&
         (context.idempotencyKey?.trim().isNotEmpty ?? false);
   }
 

@@ -21,35 +21,35 @@ class AssistantTranscriptBubbleEnvelope {
         .toList(growable: false);
   }
 
-  String get imageUrl =>
-      (raw['imageUrl'] as String?)?.trim() ??
-      (raw['thumbnailUrl'] as String?)?.trim() ??
-      '';
+  String get imageUrl {
+    final primary = (raw['imageUrl'] as String?)?.trim() ?? '';
+    if (primary.isNotEmpty) {
+      return primary;
+    }
+    return (raw['thumbnailUrl'] as String?)?.trim() ?? '';
+  }
 
-  Map<String, dynamic> get audioMedia =>
-      raw['media'] is Map
-          ? (raw['media'] as Map).cast<String, dynamic>()
-          : <String, dynamic>{};
+  Map<String, dynamic> get audioMedia => raw['media'] is Map
+      ? (raw['media'] as Map).cast<String, dynamic>()
+      : <String, dynamic>{};
 
-  String get audioMediaUrl =>
-      (audioMedia['url'] as String?) ??
-      (raw['mediaUrl'] as String?) ??
-      '';
+  String get audioMediaUrl => (audioMedia['url'] as String?) ?? '';
 
-  int get audioDurationMs =>
-      (audioMedia['durationMs'] as num?)?.toInt() ?? 0;
+  int get audioDurationMs => (audioMedia['durationMs'] as num?)?.toInt() ?? 0;
 
   List<double> get audioWaveform {
     final waveformRaw = audioMedia['waveform'];
     if (waveformRaw is! List) return const <double>[];
-    return waveformRaw.map((e) => (e as num).toDouble()).toList(growable: false);
+    return waveformRaw
+        .map((e) => (e as num).toDouble())
+        .toList(growable: false);
   }
 
-  String get audioMessageId =>
-      (raw['_id'] ?? raw['id'] ?? '').toString();
+  String get audioMessageId {
+    return (raw['id'] ?? '').toString().trim();
+  }
 
-  String get audioMessageStatus =>
-      (raw['messageStatus'] ?? raw['status'] ?? 'sent').toString();
+  String get audioMessageStatus => (raw['messageStatus'] ?? 'sent').toString();
 
   bool get audioIsRead => raw['isRead'] == true;
 }

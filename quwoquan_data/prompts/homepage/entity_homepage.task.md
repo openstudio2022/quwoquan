@@ -16,7 +16,7 @@
 
 ```json
 {
-  "schemaVersion": "quwoquan_data.entity_page_failure/1",
+  "schema": "quwoquan_data.entity_page_failure",
   "targetEntity": "{{name}}",
   "failureKind": "source_entity_mismatch | source_insufficient | source_page_type_invalid | other",
   "reasons": ["说明为什么失败"],

@@ -22,18 +22,20 @@ from core.homepage_source_judge import (  # noqa: E402
     ADMISSION_PENDING_JUDGE,
     ADMISSION_PRIMARY,
     ADMISSION_REJECT,
-    ENTITY_PAGE_FAILURE_SCHEMA_VERSION,
     PRESCREEN_AUTO_PRIMARY,
     PRESCREEN_AUTO_REJECT,
     PRESCREEN_NEEDS_MODEL,
-    SOURCE_JUDGE_SCHEMA_VERSION,
+    SOURCE_JUDGE_SCHEMA,
     SOURCE_JUDGE_VERDICT_FILE,
     build_judge_request,
     deterministic_prescreen,
-    entity_page_failure_issues,
     judge_verdict_issues,
     render_judge_prompt,
     source_judge_admission,
+)
+from core.homepage_source_failure import (  # noqa: E402
+    ENTITY_PAGE_FAILURE_SCHEMA,
+    entity_page_failure_issues,
 )
 
 _WIKI_ENC_META = {
@@ -101,7 +103,7 @@ def test_prescreen_gray_zone_needs_model() -> None:
 
 def _valid_verdict(entity: str = "东沙古镇") -> dict:
     return {
-        "schemaVersion": SOURCE_JUDGE_SCHEMA_VERSION,
+        "schema": SOURCE_JUDGE_SCHEMA,
         "targetEntity": entity,
         "sourcePageType": "entity_homepage",
         "entityMatch": "exact",
@@ -188,7 +190,7 @@ def test_judge_request_and_prompt_render() -> None:
         unit_ref="sources/摩星山__official__x/source.md",
         prescreen=prescreen,
     )
-    assert request["schemaVersion"] == SOURCE_JUDGE_SCHEMA_VERSION
+    assert request["schema"] == SOURCE_JUDGE_SCHEMA
     assert request["source"]["headText"].startswith("摩星山景区")
     prompt = render_judge_prompt(request)
     assert "摩星山（岱山）" in prompt
@@ -198,7 +200,7 @@ def test_judge_request_and_prompt_render() -> None:
 
 def test_entity_page_failure_schema() -> None:
     failure = {
-        "schemaVersion": ENTITY_PAGE_FAILURE_SCHEMA_VERSION,
+        "schema": ENTITY_PAGE_FAILURE_SCHEMA,
         "targetEntity": "东沙古镇",
         "failureKind": "source_entity_mismatch",
         "reasons": ["底稿是岱山县整县概况"],

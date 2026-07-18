@@ -18,20 +18,20 @@ func TestHomepageCandidatePublishAndShell(t *testing.T) {
 	)
 	defer server.Close()
 
-	candidate := requestJSON(t, server.Client(), http.MethodPost, server.URL+"/v1/homepages/candidates", map[string]any{
+	candidate := requestJSON(t, server.Client(), http.MethodPost, server.URL+"/homepages/candidates", map[string]any{
 		"title":        "测试发布主页",
 		"subtitle":     "候选发布验证",
 		"homepageType": "sight",
 		"city":         "杭州",
 		"address":      "西湖边",
 	}, http.StatusCreated)
-	homepageID := stringField(t, candidate, "_id")
+	homepageID := stringField(t, candidate, "homepageId")
 
 	published := requestJSON(
 		t,
 		server.Client(),
 		http.MethodPost,
-		server.URL+"/v1/homepages/candidates/"+homepageID+":publish",
+		server.URL+"/homepages/candidates/"+homepageID+":publish",
 		nil,
 		http.StatusOK,
 	)
@@ -43,7 +43,7 @@ func TestHomepageCandidatePublishAndShell(t *testing.T) {
 		t,
 		server.Client(),
 		http.MethodGet,
-		server.URL+"/v1/homepages/search?query=测试发布主页&status=published",
+		server.URL+"/homepages/search?query=测试发布主页&status=published",
 		nil,
 		http.StatusOK,
 	)
@@ -56,7 +56,7 @@ func TestHomepageCandidatePublishAndShell(t *testing.T) {
 		t,
 		server.Client(),
 		http.MethodGet,
-		server.URL+"/v1/homepages/"+homepageID+"/shell",
+		server.URL+"/homepages/"+homepageID+"/shell",
 		nil,
 		http.StatusOK,
 	)
@@ -71,7 +71,7 @@ func TestHomepageCandidatePublishAndShell(t *testing.T) {
 		t,
 		server.Client(),
 		http.MethodGet,
-		server.URL+"/v1/homepages/"+homepageID+"/object-page-bundle?referralSource=test&feedRequestId=feed-1&recommendationTraceId=trace-1&experimentBucket=A&rolloutCohort=cohort-a",
+		server.URL+"/homepages/"+homepageID+"/object-page-bundle?referralSource=test&feedRequestId=feed-1&recommendationTraceId=trace-1&experimentBucket=A&rolloutCohort=cohort-a",
 		nil,
 		http.StatusOK,
 	)
@@ -126,7 +126,7 @@ func TestHomepageTypeSupportsCampusAndTravelPhoto(t *testing.T) {
 			t,
 			server.Client(),
 			http.MethodGet,
-			server.URL+"/v1/homepages/"+item.id+"/object-page-bundle",
+			server.URL+"/homepages/"+item.id+"/object-page-bundle",
 			nil,
 			http.StatusOK,
 		)
@@ -140,7 +140,7 @@ func TestHomepageTypeSupportsCampusAndTravelPhoto(t *testing.T) {
 			t,
 			server.Client(),
 			http.MethodGet,
-			server.URL+"/v1/homepages/"+item.id,
+			server.URL+"/homepages/"+item.id,
 			nil,
 			http.StatusOK,
 		)
@@ -162,11 +162,11 @@ func TestHomepageDetailSupportsSemanticCanonicalLookup(t *testing.T) {
 		t,
 		server.Client(),
 		http.MethodGet,
-		server.URL+"/v1/homepages/"+canonicalID,
+		server.URL+"/homepages/"+canonicalID,
 		nil,
 		http.StatusOK,
 	)
-	if got := stringField(t, detail, "_id"); got != "homepage_sight_west_lake" {
+	if got := stringField(t, detail, "homepageId"); got != "homepage_sight_west_lake" {
 		t.Fatalf("expected semantic canonical detail to resolve west lake, got %q", got)
 	}
 
@@ -174,7 +174,7 @@ func TestHomepageDetailSupportsSemanticCanonicalLookup(t *testing.T) {
 		t,
 		server.Client(),
 		http.MethodGet,
-		server.URL+"/v1/homepages/"+canonicalID+"/introduction",
+		server.URL+"/homepages/"+canonicalID+"/introduction",
 		nil,
 		http.StatusOK,
 	)
@@ -186,7 +186,7 @@ func TestHomepageDetailSupportsSemanticCanonicalLookup(t *testing.T) {
 		t,
 		server.Client(),
 		http.MethodGet,
-		server.URL+"/v1/homepages/"+canonicalID+"/object-page-bundle",
+		server.URL+"/homepages/"+canonicalID+"/object-page-bundle",
 		nil,
 		http.StatusOK,
 	)
@@ -208,7 +208,7 @@ func TestHomepageImpactReturnsStructuredSummary(t *testing.T) {
 		t,
 		server.Client(),
 		http.MethodGet,
-		server.URL+"/v1/homepages/homepage_sight_west_lake/impact",
+		server.URL+"/homepages/homepage_sight_west_lake/impact",
 		nil,
 		http.StatusOK,
 	)
@@ -348,7 +348,7 @@ func TestHomepageObjectPageBundleRequestsCanonicalEntityScopedIntersections(t *t
 
 	req, err := http.NewRequest(
 		http.MethodGet,
-		server.URL+"/v1/homepages/homepage_sight_west_lake/object-page-bundle",
+		server.URL+"/homepages/homepage_sight_west_lake/object-page-bundle",
 		nil,
 	)
 	if err != nil {
@@ -405,7 +405,7 @@ func TestHomepageObjectPageBundleFallbackSatisfiesStrictPrimaryContract(t *testi
 		t,
 		server.Client(),
 		http.MethodGet,
-		server.URL+"/v1/homepages/homepage_sight_west_lake/object-page-bundle",
+		server.URL+"/homepages/homepage_sight_west_lake/object-page-bundle",
 		nil,
 		http.StatusOK,
 	)
@@ -473,7 +473,7 @@ func TestHomepageIntroductionReturnsStructuredLongFormContent(t *testing.T) {
 		t,
 		server.Client(),
 		http.MethodGet,
-		server.URL+"/v1/homepages/homepage_sight_west_lake/introduction",
+		server.URL+"/homepages/homepage_sight_west_lake/introduction",
 		nil,
 		http.StatusOK,
 	)
@@ -534,7 +534,7 @@ func TestHomepageIntroductionProjectsIntakenPageMarkdown(t *testing.T) {
 		"## 历史沿革\n\n李冰父子主持修建。\n\n" +
 		":::figure id=\"fig_01\" layout=\"fullWidth\" caption=\"鱼嘴分水堤\"\nasset://inline_asset_1\n:::\n\n" +
 		"## 相关图片\n\n:::gallery layout=\"grid\"\nasset://related_asset_1\n:::\n"
-	candidate := requestJSON(t, server.Client(), http.MethodPost, server.URL+"/v1/homepages/candidates", map[string]any{
+	candidate := requestJSON(t, server.Client(), http.MethodPost, server.URL+"/homepages/candidates", map[string]any{
 		"title":                "都江堰",
 		"homepageType":         "sight",
 		"introductionMarkdown": pageMarkdown,
@@ -544,7 +544,7 @@ func TestHomepageIntroductionProjectsIntakenPageMarkdown(t *testing.T) {
 			{"assetId": "related_asset_1", "url": "https://cdn.example.com/rel1.jpg"},
 		},
 	}, http.StatusCreated)
-	homepageID := stringField(t, candidate, "_id")
+	homepageID := stringField(t, candidate, "homepageId")
 	if got := stringField(t, candidate, "coverUrl"); got != "https://cdn.example.com/cover.jpg" {
 		t.Fatalf("expected cover derived from role=cover asset, got %q", got)
 	}
@@ -553,7 +553,7 @@ func TestHomepageIntroductionProjectsIntakenPageMarkdown(t *testing.T) {
 		t,
 		server.Client(),
 		http.MethodGet,
-		server.URL+"/v1/homepages/"+homepageID+"/introduction",
+		server.URL+"/homepages/"+homepageID+"/introduction",
 		nil,
 		http.StatusOK,
 	)
@@ -610,7 +610,7 @@ func TestHomepageIntroductionReturnsNotFoundForUnknownHomepage(t *testing.T) {
 	)
 	defer server.Close()
 
-	resp, err := server.Client().Get(server.URL + "/v1/homepages/missing-homepage/introduction")
+	resp, err := server.Client().Get(server.URL + "/homepages/missing-homepage/introduction")
 	if err != nil {
 		t.Fatalf("get introduction: %v", err)
 	}
@@ -626,19 +626,19 @@ func TestHomepageGovernanceLifecycle(t *testing.T) {
 	)
 	defer server.Close()
 
-	candidate := requestJSON(t, server.Client(), http.MethodPost, server.URL+"/v1/homepages/candidates", map[string]any{
+	candidate := requestJSON(t, server.Client(), http.MethodPost, server.URL+"/homepages/candidates", map[string]any{
 		"title":        "测试治理主页",
 		"subtitle":     "认领与下线验证",
 		"homepageType": "hotel",
 		"city":         "杭州",
 		"address":      "龙井路 18 号",
 	}, http.StatusCreated)
-	homepageID := stringField(t, candidate, "_id")
+	homepageID := stringField(t, candidate, "homepageId")
 	requestJSON(
 		t,
 		server.Client(),
 		http.MethodPost,
-		server.URL+"/v1/homepages/candidates/"+homepageID+":publish",
+		server.URL+"/homepages/candidates/"+homepageID+":publish",
 		nil,
 		http.StatusOK,
 	)
@@ -647,7 +647,7 @@ func TestHomepageGovernanceLifecycle(t *testing.T) {
 		t,
 		server.Client(),
 		http.MethodPost,
-		server.URL+"/v1/homepages/"+homepageID+"/claim-requests",
+		server.URL+"/homepages/"+homepageID+"/claim-requests",
 		map[string]any{
 			"claimTier":    "verified",
 			"contactPhone": "13800000000",
@@ -655,7 +655,7 @@ func TestHomepageGovernanceLifecycle(t *testing.T) {
 		},
 		http.StatusCreated,
 	)
-	claimID := stringField(t, claim, "_id")
+	claimID := stringField(t, claim, "id")
 	if got := stringField(t, claim, "status"); got != "pending_review" {
 		t.Fatalf("expected pending_review claim, got %q", got)
 	}
@@ -664,7 +664,7 @@ func TestHomepageGovernanceLifecycle(t *testing.T) {
 		t,
 		server.Client(),
 		http.MethodPost,
-		server.URL+"/v1/homepages/"+homepageID+"/claim-requests/"+claimID+":review",
+		server.URL+"/homepages/"+homepageID+"/claim-requests/"+claimID+":review",
 		map[string]any{
 			"status":     "approved",
 			"reviewNote": "ok",
@@ -679,7 +679,7 @@ func TestHomepageGovernanceLifecycle(t *testing.T) {
 		t,
 		server.Client(),
 		http.MethodPatch,
-		server.URL+"/v1/homepages/"+homepageID+"/claimed-basics",
+		server.URL+"/homepages/"+homepageID+"/claimed-basics",
 		map[string]any{
 			"subtitle":     "已认领并更新",
 			"categoryTags": []string{"酒店", "已认领"},
@@ -694,14 +694,14 @@ func TestHomepageGovernanceLifecycle(t *testing.T) {
 		t,
 		server.Client(),
 		http.MethodPost,
-		server.URL+"/v1/homepages/"+homepageID+"/status-reports",
+		server.URL+"/homepages/"+homepageID+"/status-reports",
 		map[string]any{
 			"reason":      "offline",
 			"description": "confirm soft offline",
 		},
 		http.StatusCreated,
 	)
-	reportID := stringField(t, report, "_id")
+	reportID := stringField(t, report, "id")
 	if got := stringField(t, report, "status"); got != "pending_review" {
 		t.Fatalf("expected pending_review status report, got %q", got)
 	}
@@ -710,7 +710,7 @@ func TestHomepageGovernanceLifecycle(t *testing.T) {
 		t,
 		server.Client(),
 		http.MethodPost,
-		server.URL+"/v1/homepages/"+homepageID+"/status-reports/"+reportID+":review",
+		server.URL+"/homepages/"+homepageID+"/status-reports/"+reportID+":review",
 		map[string]any{
 			"status":     "confirmed_offline",
 			"reviewNote": "offline confirmed",
@@ -725,7 +725,7 @@ func TestHomepageGovernanceLifecycle(t *testing.T) {
 		t,
 		server.Client(),
 		http.MethodGet,
-		server.URL+"/v1/homepages/"+homepageID,
+		server.URL+"/homepages/"+homepageID,
 		nil,
 		http.StatusGone,
 	)
@@ -753,7 +753,7 @@ func TestHomepageInvalidJSONUsesRuntimeErrorResponse(t *testing.T) {
 
 	req, err := http.NewRequest(
 		http.MethodPost,
-		server.URL+"/v1/homepages/candidates",
+		server.URL+"/homepages/candidates",
 		bytes.NewReader([]byte("{")),
 	)
 	if err != nil {
@@ -799,7 +799,7 @@ func TestHomepageRouteNotFoundUsesRuntimeNotFound(t *testing.T) {
 
 	req, err := http.NewRequest(
 		http.MethodGet,
-		server.URL+"/v1/homepages/unknown/not-a-route",
+		server.URL+"/homepages/unknown/not-a-route",
 		nil,
 	)
 	if err != nil {

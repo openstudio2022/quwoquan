@@ -58,6 +58,7 @@ def test_materialize_release_media_reads_closed_cas_only() -> None:
     assert report["assets"][0]["objectKey"] == object_key
     path = release_root / "release-a/payload/media_manifest.json"
     assert read_json(path)["assets"] == report["assets"]
+    assert (release_root / "release-a/payload" / object_key).read_bytes() == b"canonical-cas-asset"
     assert not (canonical / post_ref / "manifest.json").exists()
 
 

@@ -8,25 +8,36 @@ class TagApiMetadata {
 
   static const String domain = 'tag';
   static const List<String> apiPrefixes = <String>[
-    '/internal/v1',
-    '/v1/tag',
+    '/internal/tag',
+    '/tag/children',
+    '/tag/dimensions',
+    '/tag/graph',
+    '/tag/inverted',
+    '/tag/related',
+    '/tag/related-objects',
+    '/tag/resolve',
+    '/tag/search',
+    '/tag/search-by-tags',
+    '/tag/shared-tags',
+    '/tag/suggest',
+    '/tag/validate',
   ];
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
-    'ActivateTagTaxonomyRelease': '/internal/v1/tag/taxonomy-releases/{releaseId}:activate',
-    'InvertedObjects': '/v1/tag/inverted',
-    'ListDimensions': '/v1/tag/dimensions',
-    'ListTagChildren': '/v1/tag/children',
-    'RelatedObjects': '/v1/tag/related-objects',
-    'RelatedTags': '/v1/tag/related',
-    'ResolveTag': '/v1/tag/resolve',
-    'SearchByTags': '/v1/tag/search-by-tags',
-    'SearchTags': '/v1/tag/search',
-    'SharedTags': '/v1/tag/shared-tags',
-    'StageTagTaxonomyRelease': '/internal/v1/tag/taxonomy-releases',
-    'SuggestTags': '/v1/tag/suggest',
-    'TagCooccurrence': '/v1/tag/graph/cooccurrence',
-    'ValidateTagRefs': '/v1/tag/validate',
+    'ActivateTagTaxonomyRelease': '/internal/tag/taxonomy-releases/{releaseId}:activate',
+    'InvertedObjects': '/tag/inverted',
+    'ListDimensions': '/tag/dimensions',
+    'ListTagChildren': '/tag/children',
+    'RelatedObjects': '/tag/related-objects',
+    'RelatedTags': '/tag/related',
+    'ResolveTag': '/tag/resolve',
+    'SearchByTags': '/tag/search-by-tags',
+    'SearchTags': '/tag/search',
+    'SharedTags': '/tag/shared-tags',
+    'StageTagTaxonomyRelease': '/internal/tag/taxonomy-releases',
+    'SuggestTags': '/tag/suggest',
+    'TagCooccurrence': '/tag/graph/cooccurrence',
+    'ValidateTagRefs': '/tag/validate',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
@@ -87,25 +98,25 @@ class TagApiMetadata {
   static const String tagCooccurrenceOperation = 'TagCooccurrence';
   static const String validateTagRefsOperation = 'ValidateTagRefs';
 
-  static const String activateTagTaxonomyReleasePathTemplate = '/internal/v1/tag/taxonomy-releases/{releaseId}:activate';
+  static const String activateTagTaxonomyReleasePathTemplate = '/internal/tag/taxonomy-releases/{releaseId}:activate';
   static String activateTagTaxonomyReleasePath({required String releaseId}) {
     return _fillPath(activateTagTaxonomyReleasePathTemplate, <String, String>{
       'releaseId': releaseId,
     });
   }
-  static const String invertedObjectsPath = '/v1/tag/inverted';
-  static const String listDimensionsPath = '/v1/tag/dimensions';
-  static const String listTagChildrenPath = '/v1/tag/children';
-  static const String relatedObjectsPath = '/v1/tag/related-objects';
-  static const String relatedTagsPath = '/v1/tag/related';
-  static const String resolveTagPath = '/v1/tag/resolve';
-  static const String searchByTagsPath = '/v1/tag/search-by-tags';
-  static const String searchTagsPath = '/v1/tag/search';
-  static const String sharedTagsPath = '/v1/tag/shared-tags';
-  static const String stageTagTaxonomyReleasePath = '/internal/v1/tag/taxonomy-releases';
-  static const String suggestTagsPath = '/v1/tag/suggest';
-  static const String tagCooccurrencePath = '/v1/tag/graph/cooccurrence';
-  static const String validateTagRefsPath = '/v1/tag/validate';
+  static const String invertedObjectsPath = '/tag/inverted';
+  static const String listDimensionsPath = '/tag/dimensions';
+  static const String listTagChildrenPath = '/tag/children';
+  static const String relatedObjectsPath = '/tag/related-objects';
+  static const String relatedTagsPath = '/tag/related';
+  static const String resolveTagPath = '/tag/resolve';
+  static const String searchByTagsPath = '/tag/search-by-tags';
+  static const String searchTagsPath = '/tag/search';
+  static const String sharedTagsPath = '/tag/shared-tags';
+  static const String stageTagTaxonomyReleasePath = '/internal/tag/taxonomy-releases';
+  static const String suggestTagsPath = '/tag/suggest';
+  static const String tagCooccurrencePath = '/tag/graph/cooccurrence';
+  static const String validateTagRefsPath = '/tag/validate';
 
   static String _fillPath(String template, Map<String, String> params) {
     var path = template;

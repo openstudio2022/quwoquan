@@ -64,7 +64,7 @@ const (
 
 // CircleBehaviorFact domain model.
 type CircleBehaviorFact struct {
-	ID            string            `json:"_id" bson:"_id"`
+	ID            string            `json:"id" bson:"_id"`
 	ActorKind     string            `json:"actorKind" bson:"actorKind"`
 	PersonaID     string            `json:"personaId" bson:"personaId"`
 	DeviceActorID string            `json:"deviceActorId" bson:"deviceActorId"`

@@ -116,7 +116,7 @@ class FeedRealtimePatchNotifier extends Notifier<FeedRealtimePatchState> {
 
   /// 消费一条已解析的强类型实时 patch。
   ///
-  /// 上游（realtime 层）负责 `parseFeedRealtimePatch`（schema 不符返回 null 已忽略）；
+  /// 上游（realtime 层）负责 `parseFeedRealtimePatch`（schema 不符时 fail-closed 抛错并记录）；
   /// 此处完成鉴权门、幂等去重、feed 对齐与按类型的安全合并。
   void applyPatch(FeedRealtimePatch patch) {
     // 1) 鉴权门：游客不消费；patch.userId 与当前用户不一致则忽略（防串号）。

@@ -1,4 +1,3 @@
-version: 1
 
 service:
   name: entity-service
@@ -13,7 +12,8 @@ service:
 
 api_routes:
   - method: POST
-    path: /v1/homepages/{homepageId}/status-reports
+    path: /homepages/{homepageId}/status-reports
+
     operation: CreateHomepageStatusReport
     actor: persona
     application:
@@ -26,10 +26,11 @@ api_routes:
     description: 提交主页下线/纠错上报
     request_entity: HomepageStatusReport
     writable_fields: [reason, description, evidenceUrls]
-    auth: required
-
+    security:
+      auth_mode: required
   - method: POST
-    path: /v1/homepages/{homepageId}/status-reports/{reportId}:review
+    path: /homepages/{homepageId}/status-reports/{reportId}:review
+
     operation: ReviewHomepageStatusReport
     actor: account
     application:
@@ -41,8 +42,8 @@ api_routes:
       invariant_target: HomepageStatusReport
     description: 审核主页下线/纠错上报
     writable_fields: [status, reviewNote]
-    auth: required
-
+    security:
+      auth_mode: required
 consumers:
   - name: app
     capabilities: [create_homepage_status_report]

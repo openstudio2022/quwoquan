@@ -22,7 +22,7 @@ func (s *platformService) handleListConfigInstanceReports(w http.ResponseWriter,
 }
 
 func (s *platformService) handleReportConfigInstance(w http.ResponseWriter, r *http.Request) {
-	instanceID := segmentBetween(r.URL.Path, "/v1/control-plane/platform/configs/instances/", ":report")
+	instanceID := segmentBetween(r.URL.Path, "/control-plane/platform/configs/instances/", ":report")
 	current, _, _ := s.store.GetDocument("config_instance_reports", instanceID)
 	before := cloneMap(current)
 	var body map[string]any

@@ -24,13 +24,13 @@ from governance.coverage.source_registry import (  # noqa: E402
 
 def test_repository_travel_source_registry_is_valid():
     data = load_travel_source_registry()
-    assert data["schemaVersion"] == "quwoquan.travel_source_registry"
+    assert data["schema"] == "quwoquan.travel_source_registry"
     assert data["vertical"] == "travel"
     assert verify_travel_source_registry(
         allowed_extractors={
             "wikipedia_api",
-            "baidu_baike_html",
-            "sogou_baike_html",
+            "baidu_baike_openapi",
+            "toutiao_baike_html",
             "qunar_html",
             "static_official_html",
             "generic_html",
@@ -39,7 +39,7 @@ def test_repository_travel_source_registry_is_valid():
 
 
 def test_registry_rejects_unknown_extractor():
-    text = """schemaVersion: quwoquan.travel_source_registry
+    text = """schema: quwoquan.travel_source_registry
 vertical: travel
 qualityTiers: [A]
 licensePolicies: [factual_citation_only]
@@ -78,8 +78,14 @@ def test_registry_matches_runtime_sites_and_extractors():
     assert resolve_travel_source_runtime("https://zh.wikipedia.org/wiki/九寨沟")["extractor"] == "wikipedia_api"
     wikivoyage = resolve_travel_source_runtime("https://zh.wikivoyage.org/wiki/九寨沟")
     assert wikivoyage["articleCommercialAdmission"] == "commercial_release", wikivoyage
-    assert resolve_travel_source_runtime("https://baike.baidu.com/item/稻城亚丁")["extractor"] == "baidu_baike_html"
-    assert resolve_travel_source_runtime("https://baike.sogou.com/v123")["extractor"] == "sogou_baike_html"
+    baidu = resolve_travel_source_runtime(
+        "https://baike.baidu.com/item/稻城亚丁"
+    )
+    assert baidu["extractor"] == "baidu_baike_openapi"
+    assert baidu["fetchable"] is True
+    assert resolve_travel_source_runtime(
+        "https://www.baike.com/wikiid/7360066735180479986"
+    )["extractor"] == "toutiao_baike_html"
     official = resolve_travel_source_runtime("https://www.aba.gov.cn/scenic/detail.html")
     assert official["extractor"] == "static_official_html", official
     ems = resolve_travel_source_runtime("http://www.ems517.com/new/visitor?preferential=1")

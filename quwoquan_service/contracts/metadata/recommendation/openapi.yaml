@@ -4,7 +4,7 @@ info:
     title: quwoquan recommendation API
     version: v1
 paths:
-    /internal/v1/recommendation/model-releases:
+    /internal/recommendation/model-releases:
         post:
             operationId: StageRecommendationModelRelease
             x-contract-operation-id: recommendation.model_release.StageRecommendationModelRelease
@@ -15,6 +15,13 @@ paths:
                 facet: RecommendationModelReleaseCommandFacade
                 method: stage
                 aggregateOwner: RecommendationModelRelease
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: true
                 content:
@@ -36,7 +43,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /internal/v1/recommendation/model-releases/{releaseId}:activate:
+    /internal/recommendation/model-releases/{releaseId}:activate:
         post:
             operationId: ActivateRecommendationModelRelease
             x-contract-operation-id: recommendation.model_release.ActivateRecommendationModelRelease
@@ -51,6 +58,12 @@ paths:
                 - name: releaseId
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
             requestBody:
@@ -74,7 +87,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /internal/v1/recommendation/model-releases/{releaseId}:rollback:
+    /internal/recommendation/model-releases/{releaseId}:rollback:
         post:
             operationId: RollbackRecommendationModelRelease
             x-contract-operation-id: recommendation.model_release.RollbackRecommendationModelRelease
@@ -89,6 +102,12 @@ paths:
                 - name: releaseId
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
             requestBody:
@@ -112,7 +131,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /internal/v1/recommendation/model-releases:batch-score:
+    /internal/recommendation/model-releases:batch-score:
         post:
             operationId: BatchScoreRecommendationCandidates
             x-contract-operation-id: recommendation.model_release.BatchScoreRecommendationCandidates
@@ -145,7 +164,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /internal/v1/recommendation/model-releases:score:
+    /internal/recommendation/model-releases:score:
         post:
             operationId: ScoreRecommendationCandidates
             x-contract-operation-id: recommendation.model_release.ScoreRecommendationCandidates
@@ -178,7 +197,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/recommendation/intersections/visit:
+    /recommendation/intersections/visit:
         post:
             operationId: MarkRecommendationIntersectionsVisited
             x-contract-operation-id: recommendation.recommendation_intersection_visit_state.MarkRecommendationIntersectionsVisited
@@ -189,6 +208,13 @@ paths:
                 facet: RecommendationIntersectionVisitCommandFacade
                 method: markVisited
                 aggregateOwner: RecommendationIntersectionVisitState
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:

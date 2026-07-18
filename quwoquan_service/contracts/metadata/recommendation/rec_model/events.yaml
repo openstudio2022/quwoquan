@@ -1,4 +1,3 @@
-version: 1
 # 推荐模型服务为 API 门面；唯一对外领域事件是兴趣画像派生结果，由托管推荐运行时的
 # content-service 在行为投影后发布(Redis direct)，经 user-service 投影到
 # rm_user_profile_view.interestProfile(user 域单一真相源)。

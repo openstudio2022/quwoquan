@@ -195,22 +195,26 @@ gwt_acceptance:
     - 2026-06-23 冻结高保拍照相机：黑色沉浸式、九宫格、滤镜/快门/翻转底栏、闪光灯单击 on/off 开关、前置置灰、拍后统一进图片编辑页，再按 picker/create 来源追加；新增 fake camera local_contract、几何约束与两条 user_acceptance 旅程证据。
     - 2026-06-28 图片专用调用继续 photoOnly；全局 capture 改为 switchable，但拍照结果仍进入图片确认、编辑和发布子流程。
   GWT3:
-    title: 图片发布远端媒体引用与展示回读一致
+    title: 图片发布以本地草稿和一次性 PublishIntent 可靠提交
     given:
     - 用户已在创作编辑器中完成图片排序和发布设置。
     - App 处于 Remote 数据源，content media upload API 可用。
     when:
-    - 用户点击发布图片作品。
+    - 用户只点击一次发布图片作品，并在上传或 acceptance 响应期间经历断网、App 杀进程或重启。
     then:
-    - "发布前本地图片路径先转换为 content media 远端引用，最终 `CreatePost` payload 的 `mediaUrls` / `coverUrl` 不包含本地文件路径。"
-    - "`coverUrl` 默认使用排序后的第一张图片远端引用。"
-    - "`BindMediaAssetsToPost` 把已完成的媒体资产绑定到创建出的 post。"
+    - 发布前草稿已按 actor + localDraftId 自动持久化；除非用户显式放弃，返回、切后台、断网、杀进程和重启都不删除草稿。
+    - 首次点击冻结一个不可变 PostPublicationIntent；恢复与重试始终复用同一 publishIntentId、payload digest、媒体顺序和 Idempotency-Key。
+    - 本地图片先转换为服务端 MediaAsset 引用，SubmitPostPublication wire 不包含本地路径、客户端 URL 或调用方版本字段。
+    - 服务端首次 acceptance 原子创建一个 Post、一个永久 PostPublicationReceipt 和一组 outbox facts；重复请求返回首个 receipt。
+    - "`coverUrl` 由服务端根据排序后的第一张可发布图片派生。"
     - 发布成功后发现流、个人主页作品列表与详情页按同一顺序回读展示图片。
     done_when:
-    - Mock/Remote 的图片 payload 形态在 local contract 对齐，Remote/API 在 api_integration 证明上传、绑定、发布、回读闭环。
+    - local_contract 证明自动保存、显式放弃、单 intent 和崩溃恢复；api_integration 证明并发重复/响应丢失均只创建一个 Post；user_acceptance 证明用户无需再次点击即可完成发布与回读。
     edge_cases:
-    - 上传失败时中止发布并提供可恢复动作，不能创建带本地路径的 post。
-    - 部分图片上传失败时不得发布半成品图片顺序。
+    - 可重试网络/超时/503 进入 retry_wait 并展示“正在安全提交”，不要求用户再次点击。
+    - 素材丢失、权限或内容校验失败进入 blocked 并保留草稿，不能发布半成品图片顺序。
+    - acceptance 响应丢失后重试必须返回同一 receipt；同一 actor + localDraftId 以首次成功为准，后续即使误生成新 intent 或改变 payload 也只返回首个 receipt，绝不覆盖或再建 Post。
+    - 同一 actor + publishIntentId 若被复用于另一个 localDraftId，返回 idempotency conflict 且仍只有首次 Post/receipt/outbox。
     - 私密发布时仍遵守 visibility/circle 现有契约。
     contract_refs:
     - quwoquan_service/contracts/metadata/content/post/service.yaml
@@ -218,36 +222,38 @@ gwt_acceptance:
     - quwoquan_app/lib/ui/content/entry/services/create_page_remote_helpers.dart
     tests:
       planned:
-      - file: quwoquan_app/test/local_contract/ui/content/create/photo_publish_payload_media_refs__local_contract_test.dart
-      - file: quwoquan_app/test/api_integration/ui/content/photo_publish_upload_bind_roundtrip__api_integration_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/content/create/photo_creation_publish_roundtrip__user_acceptance_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/entry/post_publication_intent_queue__local_contract_test.dart
+      - file: quwoquan_service/services/content-service/tests/api_integration/post_publication_intent__api_integration_test.go
+      - file: quwoquan_app/test/user_acceptance/pages/content/create/post_publication_recovery__user_acceptance_test.dart
       recorded:
-      - file: quwoquan_app/test/local_contract/ui/content/create/photo_publish_payload_media_refs__local_contract_test.dart
-      - file: quwoquan_app/test/api_integration/ui/content/photo_publish_upload_bind_roundtrip__api_integration_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/content/create/photo_creation_publish_roundtrip__user_acceptance_test.dart
-    status: completed
+      - file: quwoquan_app/test/local_contract/ui/content/create/create_local_draft_repository__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/entry/post_publication_intent_queue__local_contract_test.dart
+      - file: quwoquan_service/services/content-service/tests/api_integration/post_publication_intent__api_integration_test.go
+      - file: quwoquan_app/test/user_acceptance/pages/content/create/post_publication_recovery__user_acceptance_test.dart
+    status: partial
     test_evidence:
       primary:
       - layer: local_contract
-        suite: photo_publish_payload_media_refs
+        suite: post_publication_intent_queue
         cases:
-        - local_contract.discovery_content.publish_comment_reaction.post_create_update.photo_publish_payload_uses_remote_media_refs
+        - local_contract.discovery_content.publish_comment_reaction.post_create_update.single_intent_survives_restart
         envs: *id001
       - layer: api_integration
-        suite: photo_publish_upload_bind_roundtrip
+        suite: post_publication_intent
         cases:
-        - api_integration.discovery_content.publish_comment_reaction.post_create_update.photo_upload_bind_publish_roundtrip
+        - api_integration.discovery_content.publish_comment_reaction.post_create_update.concurrent_replay_creates_one_post
         envs:
         - gamma
       supporting:
       - layer: user_acceptance
-        suite: photo_creation_journey
+        suite: post_publication_recovery
         cases:
-        - user_acceptance.discovery_content.publish_comment_reaction.post_create_update.photo_creation_publish_roundtrip
+        - user_acceptance.discovery_content.publish_comment_reaction.post_create_update.offline_kill_restart_auto_resumes
         envs:
         - gamma_local
     notes:
-    - 2026-06-22 已记录本地图片上传转换、失败 abort、content-service init/complete/create/bind API 合同，以及发布旅程的远端 URL 顺序、首图 coverUrl 与 bind assetIds 顺序。
+    - 2026-07-17 废止 CreatePost + BindMediaAssetsToPost + PublishPost 三段公开流程，改为本地草稿 + 单一 PublishIntent + receipt 语义；gamma_local 崩溃恢复 UAT 仍需运行证据。
+    - 2026-07-17 已补本地草稿索引损坏恢复、进程重启自动重放 UAT 测试并在本地通过；因尚未取得 gamma_local 运行制品，本项诚实保持 partial。
   GWT4:
     title: 视频选择与拍摄进入深色视频选封面主链路
     given:
@@ -355,7 +361,7 @@ gwt_acceptance:
     - 2026-06-28 视频专用调用继续 videoOnly；全局 gallery/capture 得到视频结果后也进入视频编辑/选封面主链路。
     - 2026-07-02 一键成片迁回图片入口；视频选择器取消大 hero 后只保留 `拍视频` 与全部视频资源。
   GWT5:
-    title: 视频选封面与发布 payload 使用同源远端封面契约
+    title: 视频选封面与一次性 PublishIntent 使用同源远端封面契约
     given:
     - 用户已在视频编辑页选择一个视频，默认封面候选可用。
     - App 处于 Remote 数据源，content media upload API 可用。
@@ -364,8 +370,8 @@ gwt_acceptance:
     then:
     - 未手工选封面时默认 `coverStrategy=first_frame` 且 `coverFrameTimeMs=0`。
     - 手工选封面时 `coverStrategy=manual`，`coverFrameTimeMs` 与当前预览帧一致。
-    - 最终 `CreatePost` payload 显式携带 `videoUrl`、`thumbnailUrl`、`coverUrl`、`durationMs` 和可得的 `width/height`，且不包含本地文件路径。
-    - "`thumbnailUrl` 与 `coverUrl` 指向远端可访问封面；无真实转码 worker 时由 App 本地选帧封面上传或媒体资产封面 URL 提供。"
+    - 最终 `SubmitPostPublication` 只携带服务端 MediaAsset 引用、`durationMs`、可得的 `width/height` 和封面策略，不包含本地文件路径、客户端 URL 或 expectedVersion。
+    - "`thumbnailUrl` 与 `coverUrl` 由服务端根据视频资产及封面资产派生；无真实转码 worker 时由 App 本地选帧并作为 MediaAsset 上传。"
     done_when:
     - Mock/Remote 的视频 payload 形态在 local contract 对齐，Remote/API 在 api_integration 证明创建与回读闭环。
     edge_cases:

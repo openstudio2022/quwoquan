@@ -20,12 +20,12 @@ class ArticleEntityMentionDto {
 
   factory ArticleEntityMentionDto.fromMap(Map<String, dynamic> m) {
     return ArticleEntityMentionDto(
-      subjectType: m['subjectType']?.toString() ?? m['type']?.toString() ?? '',
-      subjectId: m['subjectId']?.toString() ?? m['id']?.toString() ?? '',
+      subjectType: m['subjectType']?.toString() ?? '',
+      subjectId: m['subjectId']?.toString() ?? '',
       homepageId: m['homepageId']?.toString() ?? '',
-      displayName: m['displayName']?.toString() ?? m['label']?.toString() ?? m['name']?.toString() ?? '',
-      rangeStart: (m['rangeStart'] as num?)?.toInt() ?? (m['start'] as num?)?.toInt() ?? 0,
-      rangeEnd: (m['rangeEnd'] as num?)?.toInt() ?? (m['end'] as num?)?.toInt() ?? 0,
+      displayName: m['displayName']?.toString() ?? '',
+      rangeStart: (m['rangeStart'] as num?)?.toInt() ?? 0,
+      rangeEnd: (m['rangeEnd'] as num?)?.toInt() ?? 0,
     );
   }
 

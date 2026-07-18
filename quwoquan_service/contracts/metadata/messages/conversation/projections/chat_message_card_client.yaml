@@ -1,4 +1,3 @@
-version: 1
 read_model: ChatMessageCardClient
 description: Message 聚合内 MessageCard 值对象的强类型客户端投影。
 

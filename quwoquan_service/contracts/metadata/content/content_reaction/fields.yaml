@@ -1,8 +1,8 @@
-version: 1
 entity: ContentReaction
 
 fields:
   - name: id
+    source: id
     type: string
     constraints: [PK]
     classification: INTERNAL
@@ -11,6 +11,7 @@ fields:
     ops_exposure: read
 
   - name: version
+    source: version
     type: int
     constraints: [NOT_NULL, DEFAULT_1]
     classification: INTERNAL
@@ -19,6 +20,7 @@ fields:
     ops_exposure: read
 
   - name: targetKind
+    source: targetKind
     type: string
     constraints: [NOT_NULL]
     classification: PUBLIC
@@ -28,6 +30,7 @@ fields:
     description: 封闭目标类型，当前只允许 post 或 comment。
 
   - name: targetId
+    source: targetId
     type: string
     constraints: [NOT_NULL]
     classification: PUBLIC
@@ -36,6 +39,7 @@ fields:
     ops_exposure: read
 
   - name: actorDimension
+    source: actorDimension
     type: string
     constraints: [NOT_NULL]
     classification: INTERNAL
@@ -44,6 +48,7 @@ fields:
     ops_exposure: read
 
   - name: actorId
+    source: actorId
     type: string
     constraints: [NOT_NULL]
     classification: PII
@@ -52,6 +57,7 @@ fields:
     ops_exposure: read
 
   - name: reaction
+    source: reaction
     type: string
     constraints: [NOT_NULL]
     classification: INTERNAL
@@ -62,6 +68,7 @@ fields:
     description: none/like/dislike；post 目标禁止 dislike。
 
   - name: reactedAt
+    source: reactedAt
     type: timestamp
     constraints: [NULLABLE]
     classification: INTERNAL
@@ -70,6 +77,7 @@ fields:
     ops_exposure: read
 
   - name: createdAt
+    source: createdAt
     type: timestamp
     constraints: [NOT_NULL]
     classification: INTERNAL
@@ -78,6 +86,7 @@ fields:
     ops_exposure: read
 
   - name: updatedAt
+    source: updatedAt
     type: timestamp
     constraints: [NOT_NULL]
     classification: INTERNAL

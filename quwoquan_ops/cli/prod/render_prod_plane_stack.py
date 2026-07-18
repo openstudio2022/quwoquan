@@ -436,7 +436,7 @@ prod-api.quwoquan-env.test {
 \thandle /healthz {
 \t\treverse_proxy content-service:18080
 \t}
-\thandle /v1/config/app {
+\thandle /config/app {
 \t\treverse_proxy content-service:18080
 \t}
 \thandle /livez {
@@ -445,34 +445,34 @@ prod-api.quwoquan-env.test {
 \thandle /startupz {
 \t\treverse_proxy content-service:18080
 \t}
-\t@api_content path /v1/content*
+\t@api_content path /content*
 \thandle @api_content {
 \t\treverse_proxy content-service:18080
 \t}
-\t@api_chat path /v1/chat*
+\t@api_chat path /chat*
 \thandle @api_chat {
 \t\treverse_proxy chat-service:18081
 \t}
-\t@api_user path /v1/auth* /v1/owner* /v1/user* /v1/me /v1/me/*
+\t@api_user path /auth* /owner* /user* /me /me/*
 \thandle @api_user {
 \t\treverse_proxy user-service:18082
 \t}
-\t@api_assistant path /v1/assistant*
+\t@api_assistant path /assistant*
 \thandle @api_assistant {
 \t\treverse_proxy assistant-service:18087
 \t}
-\t@api_tag path /v1/tag*
+\t@api_tag path /tag*
 \thandle @api_tag {
 \t\treverse_proxy tag-service:18092
 \t}
-\t@api_entity path /v1/homepages*
+\t@api_entity path /homepages*
 \thandle @api_entity {
 \t\treverse_proxy entity-service:18084
 \t}
-\thandle /v1/ops/* {
+\thandle /ops/* {
 \t\treverse_proxy product-ops-service:18086
 \t}
-\thandle /v1/control-plane/product/* {
+\thandle /control-plane/product/* {
 \t\treverse_proxy product-ops-service:18086
 \t}
 \thandle /legal/manifest.json {
@@ -507,7 +507,7 @@ prod-product-ops.quwoquan-env.test {
 \thandle /healthz {
 \t\treverse_proxy product-ops-service:18086
 \t}
-\thandle /v1/ops/* {
+\thandle /ops/* {
 \t\treverse_proxy product-ops-service:18086
 \t}
 \thandle {
@@ -529,37 +529,37 @@ prod-upload.quwoquan-env.test {
 \thandle /healthz {
 \t\treverse_proxy content-service:18080
 \t}
-\thandle /v1/config/app {
+\thandle /config/app {
 \t\treverse_proxy content-service:18080
 \t}
-\t@pub_content path /v1/content*
+\t@pub_content path /content*
 \thandle @pub_content {
 \t\treverse_proxy content-service:18080
 \t}
-\t@pub_chat path /v1/chat*
+\t@pub_chat path /chat*
 \thandle @pub_chat {
 \t\treverse_proxy chat-service:18081
 \t}
-\t@pub_user path /v1/auth* /v1/owner* /v1/user* /v1/me /v1/me/*
+\t@pub_user path /auth* /owner* /user* /me /me/*
 \thandle @pub_user {
 \t\treverse_proxy user-service:18082
 \t}
-\t@pub_assistant path /v1/assistant*
+\t@pub_assistant path /assistant*
 \thandle @pub_assistant {
 \t\treverse_proxy assistant-service:18087
 \t}
-\t@pub_tag path /v1/tag*
+\t@pub_tag path /tag*
 \thandle @pub_tag {
 \t\treverse_proxy tag-service:18092
 \t}
-\t@pub_entity path /v1/homepages*
+\t@pub_entity path /homepages*
 \thandle @pub_entity {
 \t\treverse_proxy entity-service:18084
 \t}
-\thandle /v1/ops/* {
+\thandle /ops/* {
 \t\treverse_proxy product-ops-service:18086
 \t}
-\thandle /v1/control-plane/product/* {
+\thandle /control-plane/product/* {
 \t\treverse_proxy product-ops-service:18086
 \t}
 \thandle /legal/manifest.json {

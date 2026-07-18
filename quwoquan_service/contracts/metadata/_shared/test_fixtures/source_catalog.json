@@ -1,5 +1,4 @@
 {
-  "schemaVersion": "shared-media-source-catalog",
   "description": "共享池真实图片来源目录。优先使用可再分发图片，并把现有外链固化为本地原图后再派生到统一 objectKey。",
   "entries": [
     {
@@ -971,5 +970,6 @@
         "quwoquan_app/lib/cloud/services/content/mock/content_mock_data.dart"
       ]
     }
-  ]
+  ],
+  "schema": "shared-media-source-catalog"
 }

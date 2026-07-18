@@ -1,25 +1,19 @@
-version: 1
 domain: ops
 entity: EventRecord
 object_kind: append_only_fact
 
 description: |
-  统一只追加事件明细。承载 page access、perf、analytics façade、behavior/learning 桥接后的统一事实源，
-  用于运营看板、实验复盘、学习反馈回放与冷/热分层分析。
+  App 产品事件与异常的严格目录化明细。公共信封固定为九字段，具体 eventType
+  只允许 event_catalog.yaml 声明的强类型扩展。原始明细写入阿里云 SLS 三天，
+  Portal 只能经 product-ops 查询门面访问；推荐反馈不属于本对象。
 
-storage_backend: mongodb
-cache_layer: redis
-capabilities:
-  - queryable
-  - aggregatable
-  - replayable
-
+storage_backend: aliyun_sls
+cache_layer: none
+capabilities: [queryable, aggregatable]
 taggable: false
 vector_enabled: false
 
 ddd_layer_mapping:
-  domain_model: internal/domain/ops/model
-  repository: internal/domain/ops/repository
-  application: internal/application/ops
-  adapter_rest: internal/adapter/rest/ops
-  adapter_event: internal/adapter/event/ops
+  application_port: services/product-ops-service/internal/application/EventLogStore
+  adapter_rest: services/product-ops-service/internal/api
+  adapter_storage: services/product-ops-service/internal/infrastructure/sls

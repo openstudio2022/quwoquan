@@ -1,4 +1,3 @@
-version: 1
 domain: user
 aggregate_root: FollowedSubjectVisitState
 object_kind: aggregate_root

@@ -105,7 +105,6 @@ _DOMAIN_ONBOARDING_SCHEMA_JSON = r'''{
       "replica_ready",
       "backlog_candidate"
     ]
-  },
-  "version": 1
+  }
 }'''
 DOMAIN_ONBOARDING_SCHEMA = json.loads(_DOMAIN_ONBOARDING_SCHEMA_JSON)

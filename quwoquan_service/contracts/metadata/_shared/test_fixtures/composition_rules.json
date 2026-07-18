@@ -1,5 +1,4 @@
 {
-  "schemaVersion": "shared-media-composition-rules",
   "description": "共享池真实图片扩容的规模、角色、内容和环境一致性规则。",
   "targets": {
     "themeCount": 12,
@@ -53,12 +52,30 @@
     "currentUserVariant": 0
   },
   "crossThemePairs": [
-    ["photography", "travel"],
-    ["cityWalk", "coffee"],
-    ["food", "lifestyle"],
-    ["tech", "designWriting"],
-    ["outdoor", "pet"],
-    ["fitness", "lifestyle"]
+    [
+      "photography",
+      "travel"
+    ],
+    [
+      "cityWalk",
+      "coffee"
+    ],
+    [
+      "food",
+      "lifestyle"
+    ],
+    [
+      "tech",
+      "designWriting"
+    ],
+    [
+      "outdoor",
+      "pet"
+    ],
+    [
+      "fitness",
+      "lifestyle"
+    ]
   ],
   "associationRules": {
     "userThemeTags": "user.primaryTheme + user.secondaryThemes",
@@ -127,5 +144,6 @@
         "gateway-cdn-url-derivation"
       ]
     }
-  }
+  },
+  "schema": "shared-media-composition-rules"
 }

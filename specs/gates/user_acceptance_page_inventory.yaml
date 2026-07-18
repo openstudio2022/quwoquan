@@ -8,10 +8,16 @@ policy:
   - empty_permission_error
   - primary_cta
   - trace_context
+  - request_wait_recovery
 surfaces:
 - surface_id: chatList
   owner: chat
   route_id: chat
+  wait_modes:
+  - foreground
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/chat/widgets/chat_page_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/chat/widgets/chat_page_widget__local_contract_test.dart
   - quwoquan_app/test/user_acceptance/journeys/chat/chat_conversation_list_journey__user_acceptance_test.dart
@@ -21,6 +27,12 @@ surfaces:
 - surface_id: startGroupChat
   owner: chat
   route_id: startGroupChat
+  wait_modes:
+  - foreground
+  - action
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/chat/widgets/start_group_chat_page_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/chat/widgets/start_group_chat_page_widget__local_contract_test.dart
   - quwoquan_app/test/user_acceptance/journeys/chat/chat_group_management_journey__user_acceptance_test.dart
@@ -30,6 +42,12 @@ surfaces:
 - surface_id: chatDetail
   owner: chat
   route_id: chatDetail
+  wait_modes:
+  - foreground
+  - action
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/chat/widgets/chat_conversation_page_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/chat/widgets/chat_conversation_page_widget__local_contract_test.dart
   - quwoquan_app/test/user_acceptance/pages/chat/chat_conversation/chat_conversation_page__user_acceptance_test.dart
@@ -41,6 +59,12 @@ surfaces:
 - surface_id: chatSettings
   owner: chat
   route_id: chatSettings
+  wait_modes:
+  - foreground
+  - action
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/chat/widgets/chat_settings_page_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/chat/widgets/chat_settings_page_widget__local_contract_test.dart
   - quwoquan_app/test/user_acceptance/journeys/chat/chat_group_management_journey__user_acceptance_test.dart
@@ -50,6 +74,12 @@ surfaces:
 - surface_id: chatManage
   owner: chat
   route_id: chatManage
+  wait_modes:
+  - foreground
+  - action
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/chat/widgets/group_manage_page_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/chat/widgets/group_manage_page_widget__local_contract_test.dart
   - quwoquan_app/test/user_acceptance/journeys/chat/chat_group_management_journey__user_acceptance_test.dart
@@ -59,6 +89,12 @@ surfaces:
 - surface_id: chatAddMembers
   owner: chat
   route_id: chatAddMembers
+  wait_modes:
+  - foreground
+  - action
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/chat/widgets/start_group_chat_page_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/chat/widgets/start_group_chat_page_widget__local_contract_test.dart
   - quwoquan_app/test/user_acceptance/journeys/chat/chat_search_navigation_journey__user_acceptance_test.dart
@@ -68,6 +104,12 @@ surfaces:
 - surface_id: chatTransferOwnership
   owner: chat
   route_id: chatTransferOwnership
+  wait_modes:
+  - foreground
+  - action
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/chat/widgets/transfer_ownership_page_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/chat/widgets/transfer_ownership_page_widget__local_contract_test.dart
   - quwoquan_app/test/user_acceptance/journeys/chat/chat_group_management_journey__user_acceptance_test.dart
@@ -77,6 +119,12 @@ surfaces:
 - surface_id: chatAdmins
   owner: chat
   route_id: chatAdmins
+  wait_modes:
+  - foreground
+  - action
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/chat/widgets/group_admins_page_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/chat/widgets/group_admins_page_widget__local_contract_test.dart
   - quwoquan_app/test/user_acceptance/journeys/chat/chat_group_management_journey__user_acceptance_test.dart
@@ -86,6 +134,11 @@ surfaces:
 - surface_id: chatMemberSearch
   owner: chat
   route_id: chatMemberSearch
+  wait_modes:
+  - foreground
+  request_wait_tests:
+  - quwoquan_app/test/user_acceptance/journeys/chat/chat_search_navigation_journey__user_acceptance_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/user_acceptance/journeys/chat/chat_search_navigation_journey__user_acceptance_test.dart
   - quwoquan_app/test/local_contract/ui/chat/widgets/chat_page_widget__local_contract_test.dart
@@ -95,6 +148,12 @@ surfaces:
 - surface_id: assistantHalfSheet
   owner: assistant
   route_id: assistantPersonal
+  wait_modes:
+  - foreground
+  - long_task
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/assistant/widgets/assistant_half_sheet_personalization_provider__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/assistant/widgets/assistant_half_sheet_personalization_provider__local_contract_test.dart
   - quwoquan_app/test/local_contract/ui/chat/widgets/chat_assistant_ui_widget__local_contract_test.dart
@@ -104,6 +163,12 @@ surfaces:
 - surface_id: personalAssistantDialog
   owner: assistant
   route_id: assistantPersonal
+  wait_modes:
+  - foreground
+  - long_task
+  request_wait_tests:
+  - quwoquan_app/test/user_acceptance/journeys/chat/chat_assistant_journey__user_acceptance_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/user_acceptance/journeys/chat/chat_assistant_journey__user_acceptance_test.dart
   - quwoquan_app/test/local_contract/ui/assistant/personal_assistant_stream_controller__local_contract_test.dart
@@ -113,6 +178,12 @@ surfaces:
 - surface_id: assistantSettings
   owner: assistant
   route_id: chatDetail
+  wait_modes:
+  - foreground
+  - action
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/chat/widgets/assistant_message_bubble_regression__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/chat/widgets/assistant_message_bubble_regression__local_contract_test.dart
   - quwoquan_app/test/local_contract/ui/assistant/assistant_management_page_consent__local_contract_test.dart
@@ -122,6 +193,12 @@ surfaces:
 - surface_id: assistantHistory
   owner: assistant
   route_id: chatDetail
+  wait_modes:
+  - foreground
+  - long_task
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/assistant/personal_assistant_stream_controller__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/assistant/personal_assistant_stream_controller__local_contract_test.dart
   - quwoquan_app/test/user_acceptance/journeys/chat/chat_assistant_journey__user_acceptance_test.dart
@@ -131,6 +208,12 @@ surfaces:
 - surface_id: assistantFeedback
   owner: assistant
   route_id: chatDetail
+  wait_modes:
+  - foreground
+  - action
+  request_wait_tests:
+  - quwoquan_app/test/user_acceptance/journeys/chat/chat_assistant_journey__user_acceptance_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/user_acceptance/journeys/chat/chat_assistant_journey__user_acceptance_test.dart
   - quwoquan_app/test/local_contract/ui/assistant/assistant_turn_message_resolver_transcript_row__local_contract_test.dart
@@ -140,6 +223,11 @@ surfaces:
 - surface_id: globalSearchLanding
   owner: search
   route_id: globalSearch
+  wait_modes:
+  - foreground
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/search/pages/global_search_page_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/search/pages/global_search_page_widget__local_contract_test.dart
   - quwoquan_app/test/user_acceptance/journeys/search/cross_domain_search_journey__user_acceptance_test.dart
@@ -149,6 +237,11 @@ surfaces:
 - surface_id: globalSearchSuggestions
   owner: search
   route_id: globalSearch
+  wait_modes:
+  - foreground
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/search/pages/global_search_page_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/search/pages/global_search_page_widget__local_contract_test.dart
   - quwoquan_app/test/user_acceptance/journeys/search/cross_domain_search_journey__user_acceptance_test.dart
@@ -158,6 +251,11 @@ surfaces:
 - surface_id: globalSearchNetworkResults
   owner: search
   route_id: globalSearchNetworkResults
+  wait_modes:
+  - foreground
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/search/pages/search_network_results_page_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/search/pages/search_network_results_page_widget__local_contract_test.dart
   - quwoquan_app/test/user_acceptance/journeys/search/cross_domain_search_journey__user_acceptance_test.dart
@@ -167,6 +265,11 @@ surfaces:
 - surface_id: locationPlaceLanding
   owner: search
   route_id: locationPlaceLanding
+  wait_modes:
+  - foreground
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/search/pages/location_place_landing_page_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/search/pages/location_place_landing_page_widget__local_contract_test.dart
   - quwoquan_app/test/user_acceptance/journeys/search/cross_domain_search_journey__user_acceptance_test.dart
@@ -176,6 +279,11 @@ surfaces:
 - surface_id: homepagePicker
   owner: entity
   route_id: homepagePicker
+  wait_modes:
+  - foreground
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/entity/pages/homepage_picker_page_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/entity/pages/homepage_picker_page_widget__local_contract_test.dart
   - quwoquan_app/test/local_contract/ui/entity/pages/suggest_homepage_page_widget__local_contract_test.dart
@@ -185,6 +293,12 @@ surfaces:
 - surface_id: suggestHomepage
   owner: entity
   route_id: suggestHomepage
+  wait_modes:
+  - foreground
+  - action
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/entity/pages/suggest_homepage_page_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/entity/pages/suggest_homepage_page_widget__local_contract_test.dart
   - quwoquan_app/test/local_contract/ui/entity/pages/homepage_picker_page_widget__local_contract_test.dart
@@ -194,6 +308,11 @@ surfaces:
 - surface_id: homepageDetail
   owner: entity
   route_id: homepageDetail
+  wait_modes:
+  - foreground
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
   - quwoquan_app/test/local_contract/ui/components/object_page/object_page_shell__local_contract_test.dart
@@ -203,6 +322,11 @@ surfaces:
 - surface_id: homepageIntroduction
   owner: entity
   route_id: homepageIntroduction
+  wait_modes:
+  - foreground
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/entity/pages/homepage_introduction_page_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/entity/pages/homepage_introduction_page_widget__local_contract_test.dart
   - quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
@@ -212,6 +336,12 @@ surfaces:
 - surface_id: homepageClaim
   owner: entity
   route_id: homepageClaim
+  wait_modes:
+  - foreground
+  - action
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
   - quwoquan_app/test/local_contract/ui/entity/pages/suggest_homepage_page_widget__local_contract_test.dart
@@ -221,6 +351,12 @@ surfaces:
 - surface_id: homepageMaintenance
   owner: entity
   route_id: homepageMaintenance
+  wait_modes:
+  - foreground
+  - action
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/entity/pages/homepage_maintenance_page_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/entity/pages/homepage_maintenance_page_widget__local_contract_test.dart
   - quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
@@ -230,6 +366,11 @@ surfaces:
 - surface_id: homepageStatusReport
   owner: entity
   route_id: homepageStatusReport
+  wait_modes:
+  - foreground
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/entity/pages/homepage_maintenance_page_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/entity/pages/homepage_maintenance_page_widget__local_contract_test.dart
   - quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
@@ -239,6 +380,12 @@ surfaces:
 - surface_id: circleDetail
   owner: circle
   route_id: circleDetail
+  wait_modes:
+  - foreground
+  - action
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/circle/widgets/circle_detail_page_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/circle/widgets/circle_detail_page_widget__local_contract_test.dart
   - quwoquan_app/test/user_acceptance/journeys/circle/circle_detail_journey__user_acceptance_test.dart
@@ -248,6 +395,11 @@ surfaces:
 - surface_id: myFootprint
   owner: content
   route_id: myFootprint
+  wait_modes:
+  - foreground
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/user/pages/my_footprint_page__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/user/pages/my_footprint_page__local_contract_test.dart
   - quwoquan_app/test/user_acceptance/journeys/user/my_profile_journey__user_acceptance_test.dart
@@ -257,6 +409,11 @@ surfaces:
 - surface_id: localDrafts
   owner: content
   route_id: localDrafts
+  wait_modes:
+  - foreground
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/content/entry/draft_recovery_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/content/entry/draft_recovery_widget__local_contract_test.dart
   - quwoquan_app/test/local_contract/ui/content/entry/widgets/create_entry_sheet_widget__local_contract_test.dart
@@ -266,6 +423,11 @@ surfaces:
 - surface_id: userProfile
   owner: user
   route_id: userProfile
+  wait_modes:
+  - foreground
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/user/pages/my_profile_page__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/user/pages/my_profile_page__local_contract_test.dart
   - quwoquan_app/test/local_contract/ui/user/pages/other_profile_page__local_contract_test.dart
@@ -277,6 +439,12 @@ surfaces:
 - surface_id: profileCareerInterests
   owner: user
   route_id: profileCareerInterests
+  wait_modes:
+  - foreground
+  - action
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/app/navigation/app_route_page_factory__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/app/navigation/app_route_page_factory__local_contract_test.dart
   - quwoquan_app/test/local_contract/ui/user/pages/my_profile_page__local_contract_test.dart
@@ -286,6 +454,12 @@ surfaces:
 - surface_id: addContact
   owner: user
   route_id: addContact
+  wait_modes:
+  - foreground
+  - action
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/user/pages/my_profile_page__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/user/pages/my_profile_page__local_contract_test.dart
   - quwoquan_app/test/user_acceptance/journeys/user/my_profile_journey__user_acceptance_test.dart
@@ -295,6 +469,12 @@ surfaces:
 - surface_id: addContactSearch
   owner: user
   route_id: addContactSearch
+  wait_modes:
+  - foreground
+  - action
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/user/pages/other_profile_page__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/user/pages/other_profile_page__local_contract_test.dart
   - quwoquan_app/test/user_acceptance/journeys/user/other_profile_journey__user_acceptance_test.dart
@@ -304,6 +484,12 @@ surfaces:
 - surface_id: addContactScan
   owner: user
   route_id: addContactScan
+  wait_modes:
+  - foreground
+  - action
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/user/pages/my_profile_page__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/user/pages/my_profile_page__local_contract_test.dart
   - quwoquan_app/test/user_acceptance/journeys/user/other_profile_journey__user_acceptance_test.dart
@@ -313,6 +499,12 @@ surfaces:
 - surface_id: addContactPhone
   owner: user
   route_id: addContactPhone
+  wait_modes:
+  - foreground
+  - action
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/user/pages/my_profile_page__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/user/pages/my_profile_page__local_contract_test.dart
   - quwoquan_app/test/user_acceptance/journeys/user/my_profile_journey__user_acceptance_test.dart
@@ -322,6 +514,12 @@ surfaces:
 - surface_id: addContactConfirm
   owner: user
   route_id: addContactConfirm
+  wait_modes:
+  - foreground
+  - action
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/user/pages/other_profile_page__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/user/pages/other_profile_page__local_contract_test.dart
   - quwoquan_app/test/user_acceptance/journeys/user/other_profile_journey__user_acceptance_test.dart
@@ -331,6 +529,8 @@ surfaces:
 - surface_id: myQrCode
   owner: user
   route_id: myQrCode
+  wait_modes: []
+  request_wait_tests: []
   source_tests:
   - quwoquan_app/test/local_contract/ui/user/pages/my_profile_page__local_contract_test.dart
   - quwoquan_app/test/user_acceptance/journeys/user/my_profile_journey__user_acceptance_test.dart
@@ -340,6 +540,11 @@ surfaces:
 - surface_id: appShell
   owner: app
   route_id: home
+  wait_modes:
+  - foreground
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/app/shell/main_app_shell_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/app/shell/main_app_shell_widget__local_contract_test.dart
   - quwoquan_app/test/user_acceptance/patrol/discovery/home_recommendation_journey__user_acceptance_test.dart
@@ -349,6 +554,11 @@ surfaces:
 - surface_id: circlesList
   owner: circle
   route_id: circles
+  wait_modes:
+  - foreground
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/circle/widgets/circles_page_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/circle/widgets/circles_page_widget__local_contract_test.dart
   - quwoquan_app/test/user_acceptance/journeys/circle/circle_navigation_journey__user_acceptance_test.dart
@@ -358,6 +568,11 @@ surfaces:
 - surface_id: circleStats
   owner: circle
   route_id: circleStats
+  wait_modes:
+  - foreground
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/circle/widgets/circle_header_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/circle/widgets/circle_header_widget__local_contract_test.dart
   - quwoquan_app/test/user_acceptance/journeys/circle/circle_detail_journey__user_acceptance_test.dart
@@ -367,6 +582,11 @@ surfaces:
 - surface_id: assistantManagement
   owner: assistant
   route_id: assistantManagement
+  wait_modes:
+  - foreground
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/assistant/assistant_management_page_consent__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/assistant/assistant_management_page_consent__local_contract_test.dart
   - quwoquan_app/test/user_acceptance/journeys/chat/chat_assistant_journey__user_acceptance_test.dart
@@ -376,6 +596,12 @@ surfaces:
 - surface_id: assistantSkills
   owner: assistant
   route_id: assistantSkills
+  wait_modes:
+  - foreground
+  - long_task
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/assistant/pages/assistant_skill_center_page_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/assistant/pages/assistant_skill_center_page_widget__local_contract_test.dart
   - quwoquan_app/test/user_acceptance/journeys/chat/chat_assistant_journey__user_acceptance_test.dart
@@ -385,6 +611,11 @@ surfaces:
 - surface_id: homeFeed
   owner: content
   route_id: home
+  wait_modes:
+  - foreground
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/discovery/home_page_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/discovery/home_page_widget__local_contract_test.dart
   - quwoquan_app/test/user_acceptance/journeys/discovery/post/discovery_post_feed_load_journey__user_acceptance_test.dart
@@ -394,6 +625,8 @@ surfaces:
 - surface_id: welcome
   owner: app
   route_id: welcome
+  wait_modes: []
+  request_wait_tests: []
   source_tests:
   - quwoquan_app/test/local_contract/ui/welcome/welcome_screen__local_contract_test.dart
   - quwoquan_app/test/local_contract/app/app_startup_welcome__local_contract_test.dart
@@ -402,6 +635,11 @@ surfaces:
 - surface_id: profileHome
   owner: user
   route_id: profile
+  wait_modes:
+  - foreground
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/user/pages/my_profile_page__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/user/pages/my_profile_page__local_contract_test.dart
   - quwoquan_app/test/user_acceptance/journeys/user/my_profile_journey__user_acceptance_test.dart
@@ -411,6 +649,12 @@ surfaces:
 - surface_id: interestMatch
   owner: interest_match
   route_id: interestMatch
+  wait_modes:
+  - foreground
+  - action
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/interest_match/interest_match_page__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/interest_match/interest_match_page__local_contract_test.dart
   api_integration_tests:
@@ -419,6 +663,12 @@ surfaces:
 - surface_id: login
   owner: user
   route_id: login
+  wait_modes:
+  - foreground
+  - action
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart
   api_integration_tests:
@@ -427,6 +677,8 @@ surfaces:
 - surface_id: legalUserAgreement
   owner: legal
   route_id: legalUserAgreement
+  wait_modes: []
+  request_wait_tests: []
   source_tests:
   - quwoquan_app/test/local_contract/ui/user/legal_document_page__local_contract_test.dart
   api_integration_tests:
@@ -434,6 +686,8 @@ surfaces:
 - surface_id: legalPrivacyPolicy
   owner: legal
   route_id: legalPrivacyPolicy
+  wait_modes: []
+  request_wait_tests: []
   source_tests:
   - quwoquan_app/test/local_contract/ui/user/legal_document_page__local_contract_test.dart
   api_integration_tests:
@@ -441,6 +695,8 @@ surfaces:
 - surface_id: legalPermissions
   owner: legal
   route_id: legalPermissions
+  wait_modes: []
+  request_wait_tests: []
   source_tests:
   - quwoquan_app/test/local_contract/ui/settings/pages/settings_page_appearance__local_contract_test.dart
   api_integration_tests:
@@ -448,6 +704,8 @@ surfaces:
 - surface_id: legalThirdPartySdkList
   owner: legal
   route_id: legalThirdPartySdkList
+  wait_modes: []
+  request_wait_tests: []
   source_tests:
   - quwoquan_app/test/local_contract/ui/settings/pages/settings_page_appearance__local_contract_test.dart
   api_integration_tests:
@@ -455,22 +713,40 @@ surfaces:
 - surface_id: createWorkspace
   owner: content
   route_id: create
+  wait_modes:
+  - foreground
+  - action
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/content/entry/create_entry_information_architecture_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/content/entry/create_entry_information_architecture_widget__local_contract_test.dart
   api_integration_tests:
-  - quwoquan_app/test/api_integration/ui/content/photo_publish_upload_bind_roundtrip__api_integration_test.dart
+  - quwoquan_app/test/api_integration/ui/content/photo_publish_atomic_publication_roundtrip__api_integration_test.dart
   - quwoquan_service/services/content-service/tests/api_integration/post_crud_contract__api_integration_test.go
 - surface_id: imageEditor
   owner: content
   route_id: createEditImage
+  wait_modes:
+  - foreground
+  - action
+  - long_task
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/content/entry/article_edit_preview_chrome_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/content/entry/article_edit_preview_chrome_widget__local_contract_test.dart
   api_integration_tests:
-  - quwoquan_app/test/api_integration/ui/content/photo_publish_upload_bind_roundtrip__api_integration_test.dart
+  - quwoquan_app/test/api_integration/ui/content/photo_publish_atomic_publication_roundtrip__api_integration_test.dart
   - quwoquan_service/services/content-service/tests/api_integration/post_crud_contract__api_integration_test.go
 - surface_id: workBrowser
   owner: content
   route_id: workBrowser
+  wait_modes:
+  - foreground
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/discovery/pages/work_browser_entry_page__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/discovery/pages/work_browser_entry_page__local_contract_test.dart
   api_integration_tests:
@@ -479,6 +755,12 @@ surfaces:
 - surface_id: personalAssistantChatAlias
   owner: assistant
   route_id: chatDetail
+  wait_modes:
+  - foreground
+  - long_task
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/chat/widgets/assistant_message_bubble_regression__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/chat/widgets/assistant_message_bubble_regression__local_contract_test.dart
   - quwoquan_app/test/user_acceptance/journeys/chat/chat_assistant_journey__user_acceptance_test.dart
@@ -488,6 +770,12 @@ surfaces:
 - surface_id: settingsHome
   owner: settings
   route_id: settings
+  wait_modes:
+  - foreground
+  - action
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/app/navigation/app_route_page_factory__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/app/navigation/app_route_page_factory__local_contract_test.dart
   api_integration_tests:
@@ -495,6 +783,12 @@ surfaces:
 - surface_id: settingsPermissions
   owner: settings
   route_id: settingsPermissions
+  wait_modes:
+  - foreground
+  - action
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/app/navigation/app_route_page_factory__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/app/navigation/app_route_page_factory__local_contract_test.dart
   api_integration_tests:
@@ -502,6 +796,12 @@ surfaces:
 - surface_id: settingsDarkMode
   owner: settings
   route_id: settingsDarkMode
+  wait_modes:
+  - foreground
+  - action
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/app/navigation/app_route_page_factory__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/app/navigation/app_route_page_factory__local_contract_test.dart
   api_integration_tests:
@@ -509,6 +809,12 @@ surfaces:
 - surface_id: settingsAbout
   owner: settings
   route_id: settingsAbout
+  wait_modes:
+  - foreground
+  - action
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/app/navigation/app_route_page_factory__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/app/navigation/app_route_page_factory__local_contract_test.dart
   api_integration_tests:
@@ -516,6 +822,12 @@ surfaces:
 - surface_id: profileEdit
   owner: user
   route_id: profileEdit
+  wait_modes:
+  - foreground
+  - action
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/user/pages/my_profile_page__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/user/pages/my_profile_page__local_contract_test.dart
   - quwoquan_app/test/user_acceptance/journeys/user/edit_profile_journey__user_acceptance_test.dart
@@ -525,6 +837,12 @@ surfaces:
 - surface_id: profilePersonas
   owner: user
   route_id: profilePersonas
+  wait_modes:
+  - foreground
+  - action
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/user/widgets/persona_management_page__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/user/widgets/persona_management_page__local_contract_test.dart
   - quwoquan_app/test/local_contract/ui/user/providers/persona_management_provider__local_contract_test.dart
@@ -534,6 +852,11 @@ surfaces:
 - surface_id: profileComments
   owner: user
   route_id: profileComments
+  wait_modes:
+  - foreground
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/user/pages/profile_comments_page__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/user/pages/profile_comments_page__local_contract_test.dart
   api_integration_tests:
@@ -542,6 +865,11 @@ surfaces:
 - surface_id: profileStats
   owner: user
   route_id: profileStats
+  wait_modes:
+  - foreground
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/user/pages/profile_stats_page__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/user/pages/profile_stats_page__local_contract_test.dart
   - quwoquan_app/test/local_contract/ui/user/widgets/profile_stats_row__local_contract_test.dart
@@ -551,6 +879,11 @@ surfaces:
 - surface_id: myIntersections
   owner: user
   route_id: myIntersections
+  wait_modes:
+  - foreground
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/user/pages/my_intersection_inbox_page__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/user/pages/my_intersection_inbox_page__local_contract_test.dart
   api_integration_tests:
@@ -559,6 +892,11 @@ surfaces:
 - surface_id: objectIntersections
   owner: recommendation
   route_id: objectIntersections
+  wait_modes:
+  - foreground
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/intersection/pages/object_intersection_list_page__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/intersection/pages/object_intersection_list_page__local_contract_test.dart
   api_integration_tests:
@@ -567,6 +905,11 @@ surfaces:
 - surface_id: rtcOutgoing
   owner: rtc
   route_id: rtcOutgoing
+  wait_modes:
+  - long_task
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/rtc/widgets/call_participant_picker_page_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/rtc/widgets/call_participant_picker_page_widget__local_contract_test.dart
   api_integration_tests:
@@ -575,6 +918,11 @@ surfaces:
 - surface_id: rtcIncoming
   owner: rtc
   route_id: rtcIncoming
+  wait_modes:
+  - long_task
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/rtc/widgets/call_participant_picker_page_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/rtc/widgets/call_participant_picker_page_widget__local_contract_test.dart
   api_integration_tests:
@@ -583,6 +931,11 @@ surfaces:
 - surface_id: rtcVoice
   owner: rtc
   route_id: rtcVoice
+  wait_modes:
+  - long_task
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/rtc/widgets/call_participant_picker_page_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/rtc/widgets/call_participant_picker_page_widget__local_contract_test.dart
   api_integration_tests:
@@ -591,6 +944,11 @@ surfaces:
 - surface_id: rtcVideo
   owner: rtc
   route_id: rtcVideo
+  wait_modes:
+  - long_task
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/rtc/widgets/call_participant_picker_page_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/rtc/widgets/call_participant_picker_page_widget__local_contract_test.dart
   api_integration_tests:
@@ -599,6 +957,11 @@ surfaces:
 - surface_id: rtcPickParticipants
   owner: rtc
   route_id: rtcPickParticipants
+  wait_modes:
+  - long_task
+  request_wait_tests:
+  - quwoquan_app/test/local_contract/ui/rtc/widgets/call_participant_picker_page_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
   source_tests:
   - quwoquan_app/test/local_contract/ui/rtc/widgets/call_participant_picker_page_widget__local_contract_test.dart
   api_integration_tests:

@@ -363,22 +363,22 @@ func assistantWireFromJsonExpr(ff *fieldsFile, entityName string, f fieldDef) st
 
 	switch n {
 	case "queryEcho":
-		return `(json['queryEcho'] ?? json['userQuery'] ?? '').toString().trim()`
+		return `(json['queryEcho'] ?? '').toString().trim()`
 	case "taskId":
-		return `(json['taskId'] ?? json['task_id'] ?? json['id'] ?? '').toString()`
+		return `(json['taskId'] ?? '').toString()`
 	case "memoryId":
-		return `(json['memoryId'] ?? json['memory_id'] ?? json['id'] ?? '').toString()`
+		return `(json['memoryId'] ?? '').toString()`
 	case "skillId":
-		return `(json['skillId'] ?? json['skill_id'] ?? json['id'] ?? '').toString()`
+		return `(json['skillId'] ?? '').toString()`
 	case "displayName":
-		return `(json['displayName'] ?? json['display_name'] ?? json['name'] ?? '').toString()`
+		return `(json['displayName'] ?? '').toString()`
 	case "description":
 		if entityName == "AssistantSkillCatalogItemView" {
-			return `json['description']?.toString() ?? json['desc']?.toString()`
+			return `json['description']?.toString()`
 		}
 	case "requiresConsent":
 		if entityName == "AssistantSkillCatalogItemView" {
-			return `json['requiresConsent'] == true || json['requires_consent'] == true`
+			return `json['requiresConsent'] == true`
 		}
 	case "accepted":
 		if entityName == "AssistantInteractionReportBatchAck" || entityName == "AssistantScorecardReportBatchAck" {
@@ -398,27 +398,27 @@ func assistantWireFromJsonExpr(ff *fieldsFile, entityName string, f fieldDef) st
 		}
 	case "sourceType":
 		if entityName == "AssistantUserMemoryView" {
-			return `json['sourceType']?.toString() ?? json['source_type']?.toString()`
+			return `json['sourceType']?.toString()`
 		}
 	case "createdAt":
 		if entityName == "AssistantUserMemoryView" {
-			return `json['createdAt']?.toString() ?? json['created_at']?.toString()`
+			return `json['createdAt']?.toString()`
 		}
 	case "updatedAt":
 		if entityName == "AssistantUserMemoryView" || entityName == "AssistantUserTaskView" {
-			return `json['updatedAt']?.toString() ?? json['updated_at']?.toString()`
+			return `json['updatedAt']?.toString()`
 		}
 	case "dueAt":
 		if entityName == "AssistantUserTaskView" {
-			return `json['dueAt']?.toString() ?? json['due_at']?.toString()`
+			return `json['dueAt']?.toString()`
 		}
 	case "sourceSkillId":
 		if entityName == "AssistantUserTaskView" {
-			return `json['sourceSkillId']?.toString() ?? json['source_skill_id']?.toString()`
+			return `json['sourceSkillId']?.toString()`
 		}
 	case "iconHint":
 		if entityName == "AssistantSkillCatalogItemView" {
-			return `json['iconHint']?.toString() ?? json['icon_hint']?.toString()`
+			return `json['iconHint']?.toString()`
 		}
 	}
 
@@ -444,7 +444,8 @@ func assistantWireFromJsonExpr(ff *fieldsFile, entityName string, f fieldDef) st
 		}
 		return `(json['` + n + `'] as num?)?.toDouble() ?? 0.0`
 	case "timestamp":
-		return `json['` + n + `']?.toString() ?? json['` + assistantWireSnake(n) + `']?.toString()`
+		// Single-track: only camelCase wire keys; no snake_case dual-read.
+		return `json['` + n + `']?.toString()`
 	case "object", "jsonb":
 		if nul {
 			return `(json['` + n + `'] as Map?)?.cast<String, dynamic>()`
@@ -455,19 +456,4 @@ func assistantWireFromJsonExpr(ff *fieldsFile, entityName string, f fieldDef) st
 	default:
 		return `json['` + n + `']`
 	}
-}
-
-func assistantWireSnake(name string) string {
-	var b strings.Builder
-	for i, r := range name {
-		if i > 0 && r >= 'A' && r <= 'Z' {
-			b.WriteByte('_')
-		}
-		if r >= 'A' && r <= 'Z' {
-			b.WriteRune(r - 'A' + 'a')
-		} else {
-			b.WriteRune(r)
-		}
-	}
-	return b.String()
 }

@@ -1,4 +1,3 @@
-version: 1
 domain: entity
 display_name: Entity
 template_role: replica_ready

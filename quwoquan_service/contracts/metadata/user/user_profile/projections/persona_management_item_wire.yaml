@@ -1,4 +1,3 @@
-version: 1
 read_model: PersonaManagementItemWire
 
 description: |
@@ -19,152 +18,130 @@ client_projection:
       dart_type: String
       nullable: false
       source: subAccountId
-      aliases: [subAccountId, id]
       default: "''"
 
     - name: displayName
       dart_type: String
       nullable: false
       source: displayName
-      aliases: [displayName, nickname]
       default: "''"
 
     - name: userHandle
       dart_type: String
       nullable: false
       source: userHandle
-      aliases: [userHandle]
       default: "''"
 
     - name: phone
       dart_type: String
       nullable: false
       source: phone
-      aliases: [phone]
       default: "''"
 
     - name: email
       dart_type: String
       nullable: false
       source: email
-      aliases: [email]
       default: "''"
 
     - name: avatarUrl
       dart_type: String
       nullable: false
       source: avatarUrl
-      aliases: [avatarUrl, avatar]
       default: "''"
 
     - name: avatarVersion
       dart_type: int
       nullable: false
       source: avatarVersion
-      aliases: [avatarVersion]
       default: "0"
 
     - name: isolationLevel
       dart_type: String
       nullable: false
       source: isolationLevel
-      aliases: [isolationLevel]
       default: "'open'"
 
     - name: profileVisibility
       dart_type: String
       nullable: false
       source: profileVisibility
-      aliases: [profileVisibility]
       default: "'public'"
 
     - name: isPrimary
       dart_type: bool
       nullable: false
       source: isPrimary
-      aliases: [isPrimary]
       default: "false"
 
     - name: isActive
       dart_type: bool
       nullable: false
       source: isActive
-      aliases: [isActive]
       default: "false"
 
     - name: status
       dart_type: String
       nullable: false
       source: status
-      aliases: [status]
       default: "'active'"
 
     - name: retiredAt
       dart_type: DateTime
       nullable: true
       source: retiredAt
-      aliases: [retiredAt]
       default: "null"
 
     - name: hasAttributedHistory
       dart_type: bool
       nullable: false
       source: hasAttributedHistory
-      aliases: [hasAttributedHistory]
       default: "false"
 
     - name: hasPublishedContent
       dart_type: bool
       nullable: false
       source: hasPublishedContent
-      aliases: [hasPublishedContent]
       default: "false"
 
     - name: inheritsProfileFromOwner
       dart_type: bool
       nullable: false
       source: inheritsProfileFromOwner
-      aliases: [inheritsProfileFromOwner, inheritsFromOwner]
       default: "true"
 
     - name: overriddenProfileFields
       dart_type: List<String>
       nullable: false
       source: overriddenProfileFields
-      aliases: [overriddenProfileFields]
       default: "const <String>[]"
 
     - name: lastProfileSyncAt
       dart_type: DateTime
       nullable: true
       source: lastProfileSyncAt
-      aliases: [lastProfileSyncAt]
       default: "null"
 
     - name: lastProfileSyncSource
       dart_type: String
       nullable: false
       source: lastProfileSyncSource
-      aliases: [lastProfileSyncSource]
       default: "''"
 
     - name: lastActivatedAt
       dart_type: DateTime
       nullable: true
       source: lastActivatedAt
-      aliases: [lastActivatedAt]
       default: "null"
 
     - name: subjectType
       dart_type: String
       nullable: false
       source: subjectType
-      aliases: [subjectType]
       default: "'persona'"
 
     - name: version
       dart_type: int
       nullable: false
       source: version
-      aliases: [version]
       default: "1"

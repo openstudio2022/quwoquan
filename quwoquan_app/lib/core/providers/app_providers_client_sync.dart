@@ -414,9 +414,46 @@ final homepageRepositoryProvider = Provider<HomepageRepository>((ref) {
   return cloudRepositoryImplForMode(
     mode,
     remote: () => RemoteHomepageRepository(
+      queryAdapter: ref.watch(_homepageQueryAdapterProvider),
       httpClient: ref.watch(cloudHttpClientProvider),
     ),
     mock: MockHomepageRepository.new,
+  );
+});
+
+final homepageQueryActorContextProvider = Provider<CloudOperationActorContext>((
+  ref,
+) {
+  final session = ref.watch(authSessionControllerProvider);
+  final accountId = ref.watch(resolvedOwnerUserIdProvider).trim();
+  final personaId = session.activeSubAccountId.trim();
+  return CloudOperationActorContext(
+    accountId: accountId.isEmpty ? null : accountId,
+    personaId: personaId.isEmpty ? null : personaId,
+  );
+});
+
+final _homepageQueryAdapterProvider = Provider<RemoteHomepageQueryAdapter>((
+  ref,
+) {
+  final actorContext = ref.watch(homepageQueryActorContextProvider);
+  return RemoteHomepageQueryAdapter(
+    client: ref.watch(generatedCloudOperationClientProvider),
+    invocationContext: (clientPageId, surface, {cancellation, deadlineAt}) {
+      final appSurface = switch (surface) {
+        HomepageQuerySurface.picker => AppUiSurfaces.homepagePicker,
+        HomepageQuerySurface.detail => AppUiSurfaces.homepageDetail,
+        HomepageQuerySurface.introduction => AppUiSurfaces.homepageIntroduction,
+      };
+      return CloudOperationInvocationContext(
+        surfaceId: appSurface.id,
+        routeId: appSurface.routeId,
+        clientPageId: clientPageId,
+        cancellation: cancellation,
+        deadlineAt: deadlineAt,
+        actor: actorContext,
+      );
+    },
   );
 });
 
@@ -649,8 +686,6 @@ final behaviorRepositoryProvider = Provider<BehaviorRepository>((ref) {
     final personaId = ref.watch(currentUserIdProvider).trim();
     final repo = RemoteBehaviorRepository(
       httpClient: ref.watch(cloudHttpClientProvider),
-      eventRepository: ref.watch(opsEventRepositoryProvider),
-      currentUserId: personaId,
       queuePartition: ActorQueuePartition(
         environment: CloudRuntimeConfig.appRuntimeEnv,
         accountId: accountId,
@@ -658,9 +693,6 @@ final behaviorRepositoryProvider = Provider<BehaviorRepository>((ref) {
         deviceId: CloudRequestHeaders.deviceActorId ?? '',
       ),
       queueStorage: ref.watch(actorQueueStorageProvider),
-      experimentBucket: ref
-          .watch(contentRuntimeConfigProvider)
-          .experimentBucket,
       feedSessionIdProvider: () => feedSessionNotifier.sessionId,
     );
     ref.onDispose(repo.dispose);
@@ -669,12 +701,17 @@ final behaviorRepositoryProvider = Provider<BehaviorRepository>((ref) {
   return MockBehaviorRepository();
 });
 
+/// 推荐反馈唯一上报端口。采集/计算 Tracker 只能依赖该端口。
+final behaviorReporterProvider = Provider<BehaviorReporter>(
+  (ref) => ref.watch(behaviorRepositoryProvider),
+);
+
 /// Content Engagement Tracker（统一深度行为追踪 SDK）
 final contentEngagementTrackerProvider = Provider<ContentEngagementTracker>((
   ref,
 ) {
   final tracker = ContentEngagementTracker(
-    repository: ref.watch(behaviorRepositoryProvider),
+    reporter: ref.watch(behaviorReporterProvider),
   );
   ref.onDispose(() => tracker.dispose());
   return tracker;
@@ -683,7 +720,7 @@ final contentEngagementTrackerProvider = Provider<ContentEngagementTracker>((
 /// Lightweight OpsEvent journey funnel tracker（无完整 Behavior schema 的页面场景）
 final journeyEventTrackerProvider = Provider<JourneyEventTracker>((ref) {
   return JourneyEventTracker(
-    eventRepository: ref.watch(opsEventRepositoryProvider),
+    telemetryReporter: ref.watch(appTelemetryReporterProvider),
   );
 });
 
@@ -757,13 +794,14 @@ final localChatSearchSyncProvider = Provider<LocalChatSearchSyncService>((ref) {
     conversationCache: ref.watch(conversationCacheProvider),
     store: ref.watch(localChatSearchStoreProvider),
     personaContextLoader: ref.watch(activePersonaContextLoaderProvider),
+    telemetrySink: ref.watch(cacheTelemetrySinkProvider),
   );
 });
 
 final searchRepositoryProvider = Provider<SearchRepository>((ref) {
   // 本地扇出 composite：内部子仓库（content/circle/user/entity/integration）在 remote
   // 模式下本身即 Remote 实现，叠加 chat/circle.group 本地命名空间检索。suggest 模式与
-  // mock 模式都复用它；remote 结果模式由 RemoteSearchRepository 接管云侧 /v1/search。
+  // mock 模式都复用它；remote 结果模式由 RemoteSearchRepository 接管云侧 /search。
   final localFanout = buildAppSearchRepository(
     circleRepository: ref.watch(circleRepositoryProvider),
     circleGroupQuery: ref.watch(globalSearchCircleGroupQueryProvider),

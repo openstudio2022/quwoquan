@@ -1,4 +1,4 @@
-schemaVersion: 1
+schema: 1
 codes:
   - code: ASSISTANT.MIDDLEWARE.llm_timeout
     origin: remoteDependency
@@ -28,6 +28,76 @@ codes:
     defaultLocation:
       businessObject: app_request
       functionModule: network_client
+  - code: APP.NETWORK.secure_connection_failed
+    origin: environment
+    kind: network
+    nature: permanent
+    defaultLocation:
+      businessObject: app_request
+      functionModule: secure_transport
+  - code: APP.TIMEOUT.request_timeout
+    origin: environment
+    kind: timeout
+    nature: transient
+    defaultLocation:
+      businessObject: app_request
+      functionModule: network_client
+  - code: APP.CANCELLED.operation_cancelled
+    origin: user
+    kind: cancelled
+    nature: permanent
+    defaultLocation:
+      businessObject: app_request
+      functionModule: request_lifecycle
+  - code: APP.CONTRACT.invalid_response
+    origin: remoteDependency
+    kind: contract
+    nature: bug
+    defaultLocation:
+      businessObject: app_response
+      functionModule: response_decoder
+  - code: APP.CONTRACT.invalid_json
+    origin: remoteDependency
+    kind: parsing
+    nature: bug
+    defaultLocation:
+      businessObject: app_response
+      functionModule: response_decoder
+  - code: APP.SYSTEM.unknown_error
+    origin: localClient
+    kind: internal
+    nature: bug
+    defaultLocation:
+      businessObject: app_runtime
+      functionModule: error_mapper
+  - code: APP.USER.unauthorized
+    origin: user
+    kind: auth
+    nature: requiresUserAction
+    defaultLocation:
+      businessObject: app_request
+      functionModule: authentication
+  - code: APP.USER.forbidden
+    origin: user
+    kind: permission
+    nature: requiresPermission
+    defaultLocation:
+      businessObject: app_request
+      functionModule: authorization
+  - code: APP.USER.not_found
+    origin: user
+    kind: notFound
+    nature: permanent
+    defaultLocation:
+      businessObject: app_request
+      functionModule: resource_lookup
+  - code: CLOUD.SYSTEM.unavailable
+    origin: remoteDependency
+    kind: unavailable
+    nature: transient
+    defaultLocation:
+      businessObject: cloud_request
+      functionModule: error_mapper
   - code: APP.USER.permission_required
     origin: user
     kind: permission

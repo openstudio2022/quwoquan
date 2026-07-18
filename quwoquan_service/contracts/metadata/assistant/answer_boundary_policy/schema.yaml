@@ -2,7 +2,6 @@ dart_class: AnswerBoundaryPolicyDto
 library_path: assistant/contracts/answer_boundary_policy.dart
 output_path: assistant/generated/contracts/answer_boundary_policy.g.dart
 contract: answer_boundary_policy
-version: v1
 kind: runtime_policy_contract
 fields:
   - { name: evidenceRequired, type: bool, default: false }

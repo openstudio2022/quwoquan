@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from core.tree_integrity import tree_integrity_stats
-from content.release.canonical import object_transaction as transaction
+from content.release.canonical import object_transaction_audit as transaction
 from content.release.canonical.application import (
     apply_object_transaction,
     rollback_object_transaction,

@@ -14,7 +14,6 @@ import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_bundle.g
 import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_context.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_rollout_context.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';

@@ -1,4 +1,4 @@
-"""Reusable multimodal target selection and execution audit helpers."""
+"""Reusable single-carrier target selection and execution audit helpers."""
 from __future__ import annotations
 import hashlib
 import json
@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 from governance.coverage.entity_extract import require_domain_etype
 from core.data_issue import DataIssue
+from core.control_types import ExecutionStateStatus
 from core.image_asset_strategy import COMMERCIAL_SCALE_TARGET_THRESHOLD
 from core.execution_branch import stamp_execution_branch
 from core.io import read_json, write_json
@@ -19,17 +20,9 @@ from core.paths import (
 from content.execution import store
 from content.execution import validate_execution_id
 from content.execution.identity import SelectionPolicy
+from content.execution.contracts import ExecutionStateTransition
 from content.execution.selection_materialization import write_selected_task
 DEFAULT_ARTICLE_ANGLES = ["planning_consultation", "decision_experience", "route_transport", "seasonal_timing"]
-SOURCE_PRECHECK_MIN_ARTICLE_BASE_SOURCES = 4
-SOURCE_PRECHECK_MIN_IMAGE_SOURCE_COLLECTIONS = 2
-SOURCE_PRECHECK_MIN_SOURCE_CATEGORIES = 3
-SOURCE_PRECHECK_MIN_TARGET_ENTITIES = 15
-_SOURCE_PRECHECK_ARTICLE_CATEGORIES = {
-    "travelogue", "guidebook", "travel_guide", "wikivoyage", "official_article", "vertical_professional",
-    "ugc_longform", "community_post", "media_article", "platform_article", "forum_thread", "review_note",
-}
-_SOURCE_PRECHECK_OFF_ENTITY_MARKERS = ("off_entity_no_anchor", "off entity no anchor", "off-entity-no-anchor")
 
 
 @dataclass(frozen=True)
@@ -47,20 +40,24 @@ class SelectionRequest:
     title: str
     intent_label: str | None
     preset_ref: str | None
-    entity_articles_per_target: int = 0
-    entity_homepages_per_target: int = 1
-    image_works_per_target: int = 0
-    created_by: str = "geo-homepages"
+    entity_articles_per_target: int
+    entity_homepages_per_target: int
+    image_works_per_target: int
+    video_works_per_target: int
+    created_by: str = "execute"
     selection_policy: SelectionPolicy = SelectionPolicy.FROZEN
     force: bool = False
 
 
-def workflow_failure_items(state: Mapping[str, Any]) -> list[dict[str, Any]]:
-    status = str(state.get("status") or "").strip()
-    if status in ("", "succeeded", "stopped_at_until"):
+def execution_failure_items(state: ExecutionStateTransition) -> list[dict[str, Any]]:
+    status = state.status
+    if status in {
+        ExecutionStateStatus.SUCCEEDED,
+        ExecutionStateStatus.STOPPED_AT_UNTIL,
+    }:
         return []
     items: list[dict[str, Any]] = []
-    records = state.get("failedIssueRecords")
+    records = state.failed_issue_records
     for raw in records if isinstance(records, list) else []:
         if not isinstance(raw, Mapping):
             continue
@@ -72,19 +69,19 @@ def workflow_failure_items(state: Mapping[str, Any]) -> list[dict[str, Any]]:
         items.append(
             {
                 "entity": entity,
-                "lane": "workflow" if issue.lane.value == "all" else issue.lane.value,
+                "lane": "execution" if issue.lane.value == "all" else issue.lane.value,
                 "issues": [str(issue)],
             }
         )
     if not items:
         failed_objects = [
-            str(item) for item in state.get("failedObjects") or [] if str(item).strip()
+            str(item) for item in state.failed_objects or [] if str(item).strip()
         ]
         items.append(
             {
                 "entity": "__execution__",
-                "lane": "workflow",
-                "issues": failed_objects or [f"workflow status={status}"],
+                "lane": "execution",
+                "issues": failed_objects or [f"execution status={status.value}"],
             }
         )
     return items
@@ -134,6 +131,11 @@ def _apply_master_list_fields(row: dict[str, Any], leaf: Mapping[str, Any]) -> d
         row["geoTagRef"] = geo_tag_ref
     for list_field in _MASTER_LIST_LIST_FIELDS:
         values = [str(v).strip() for v in (leaf.get(list_field) or []) if str(v).strip()]
+        if list_field == "aliases":
+            source_name = str(leaf.get("name") or "").strip()
+            canonical_name = str(leaf.get("canonicalName") or source_name).strip()
+            if source_name and source_name != canonical_name and source_name not in values:
+                values.insert(0, source_name)
         if values:
             row[list_field] = values
     return row
@@ -231,7 +233,7 @@ def select_targets(
             f"excluded={len(excluded)} may leave too few candidates"
         )
     report = {
-        "schemaVersion": "quwoquan_data.target_selection",
+        "schema": "quwoquan_data.target_selection",
         "strategy": "mandatory targets plus deterministic round-robin regional coverage",
         "discoveryPath": str(discovery_path),
         "limit": limit,
@@ -242,7 +244,13 @@ def select_targets(
         "targets": selected,
     }
     return selected, report
-def build_multimodal_spec(
+def _validated_quota(value: int, *, field: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError(f"{field} must be a non-negative integer")
+    return value
+
+
+def build_execution_spec(
     *,
     execution_id: str,
     name: str,
@@ -251,11 +259,12 @@ def build_multimodal_spec(
     category: str,
     targets: list[dict[str, str]],
     created_by: str,
+    entity_articles_per_target: int,
+    entity_homepages_per_target: int,
+    image_works_per_target: int,
+    video_works_per_target: int,
     intent_label: str | None = None,
     preset_ref: str | None = None,
-    entity_articles_per_target: int = 4,
-    entity_homepages_per_target: int = 1,
-    image_works_per_target: int = 1,
     target_entity_count: int | None = None,
     selection_policy: SelectionPolicy = SelectionPolicy.FROZEN,
 ) -> dict[str, Any]:
@@ -264,24 +273,21 @@ def build_multimodal_spec(
         raise TypeError("selection_policy must be SelectionPolicy")
     if selection_policy is not SelectionPolicy.FROZEN:
         raise ValueError("content executions require frozen target selection")
-    entity_articles_per_target = max(0, int(entity_articles_per_target))
-    entity_homepages_per_target = max(0, int(entity_homepages_per_target))
-    image_works_per_target = max(0, int(image_works_per_target))
-    target_entity_count = max(0, int(target_entity_count if target_entity_count is not None else len(targets)))
-    homepage_only_delivery = (
-        entity_homepages_per_target > 0
-        and entity_articles_per_target <= 0
-        and image_works_per_target <= 0
+    entity_articles_per_target = _validated_quota(
+        entity_articles_per_target, field="entityArticlesPerTarget"
     )
-    target_object_count = (
-        target_entity_count * entity_homepages_per_target
-        if homepage_only_delivery
-        else target_entity_count * (entity_articles_per_target + image_works_per_target)
+    entity_homepages_per_target = _validated_quota(
+        entity_homepages_per_target, field="entityHomepagesPerTarget"
     )
-    min_posts_per_entity = (
-        entity_homepages_per_target
-        if homepage_only_delivery
-        else entity_articles_per_target + image_works_per_target
+    image_works_per_target = _validated_quota(
+        image_works_per_target, field="imageWorksPerTarget"
+    )
+    video_works_per_target = _validated_quota(
+        video_works_per_target, field="videoWorksPerTarget"
+    )
+    resolved_target_count = len(targets) if target_entity_count is None else target_entity_count
+    target_entity_count = _validated_quota(
+        resolved_target_count, field="targetEntityCount"
     )
     required_article_angles = DEFAULT_ARTICLE_ANGLES[:entity_articles_per_target]
     research_lanes = []
@@ -291,17 +297,36 @@ def build_multimodal_spec(
         research_lanes.append("article")
     if image_works_per_target > 0:
         research_lanes.append("image")
+    if video_works_per_target > 0:
+        research_lanes.append("video")
     runtime_policy = active_runtime_policy()
     lane_concurrency = {
         "homepage": runtime_policy.research_workers,
         "article": runtime_policy.research_workers,
         "image": runtime_policy.research_workers,
+        "video": runtime_policy.research_workers,
     }
     carriers = []
+    if entity_homepages_per_target > 0:
+        carriers.append("homepage")
     if entity_articles_per_target > 0:
         carriers.append("article")
     if image_works_per_target > 0:
         carriers.append("image")
+    if video_works_per_target > 0:
+        carriers.append("video")
+    if len(carriers) != 1:
+        raise ValueError(
+            "execution must enable exactly one carrier; split homepage, article, "
+            "image, and video through separate executions"
+        )
+    objects_per_target = (
+        entity_homepages_per_target
+        + entity_articles_per_target
+        + image_works_per_target
+        + video_works_per_target
+    )
+    target_object_count = target_entity_count * objects_per_target
     selected_entity_types = sorted(
         {
             str(row.get("entityType") or "").strip()
@@ -309,10 +334,10 @@ def build_multimodal_spec(
             if str(row.get("entityType") or "").strip()
         }
     )
-    # presetRef：显式传入优先；homepage-only 形态默认绑定 homepage 家族基线。
+    # presetRef：显式传入优先；否则由唯一 carrier 绑定对应家族基线。
     resolved_preset = str(preset_ref or "").strip().strip("/")
-    if not resolved_preset and homepage_only_delivery:
-        candidate = "content/travel/homepage/base"
+    if not resolved_preset:
+        candidate = f"content/travel/{carriers[0]}/base"
         if preset_path(candidate).is_file():
             resolved_preset = candidate
     spec = store.scaffold_spec(
@@ -343,21 +368,19 @@ def build_multimodal_spec(
                 "lanes": research_lanes,
                 "maxConcurrency": runtime_policy.download_concurrency,
                 "laneConcurrency": {lane: lane_concurrency[lane] for lane in research_lanes},
-                "imageAssetStrategy": "open_license_publish",
-                "imageCountPolicy": "score_bonus",
-                "allowAiImages": False,
             },
             "carriers": carriers,
             "quotas": {
                 "entityArticlesPerTarget": entity_articles_per_target,
                 "imageWorksPerTarget": image_works_per_target,
+                "videoWorksPerTarget": video_works_per_target,
                 "entityHomepagesPerTarget": entity_homepages_per_target,
                 "routeArticles": 0,
             },
         },
         acceptance={
             "minEntities": target_entity_count,
-            "minPostsPerEntity": min_posts_per_entity,
+            "minPostsPerEntity": objects_per_target,
             "requiredAngles": required_article_angles,
             "scoredAngles": (["image"] if image_works_per_target else []),
         },
@@ -365,7 +388,7 @@ def build_multimodal_spec(
     )
     spec["status"] = "active"
     spec.setdefault("acceptance", {})["requiredAngles"] = required_article_angles
-    spec["workflowPolicy"] = {
+    spec["executionPolicy"] = {
         "selectionPolicy": selection_policy.value,
         "targetEntityCount": target_entity_count,
         "targetObjectCount": target_object_count,
@@ -412,200 +435,6 @@ def execution_planned_entity_ids(execution_id: str) -> list[str]:
             ids.append(text)
             seen.add(text)
     return ids
-def _source_precheck_thresholds(spec: Mapping[str, Any]) -> dict[str, Any]:
-    content = spec.get("content") if isinstance(spec.get("content"), Mapping) else {}
-    quotas = content.get("quotas") if isinstance(content.get("quotas"), Mapping) else {}
-    workflow = spec.get("workflowPolicy") if isinstance(spec.get("workflowPolicy"), Mapping) else {}
-    article_quota = int(quotas.get("entityArticlesPerTarget") or 0)
-    homepage_quota = int(quotas.get("entityHomepagesPerTarget") or 0)
-    image_quota = int(quotas.get("imageWorksPerTarget") or 0)
-    target_object_count = int(workflow.get("targetObjectCount") or 0)
-    target_entity_count = int(workflow.get("targetEntityCount") or 0)
-    enabled = image_quota >= SOURCE_PRECHECK_MIN_IMAGE_SOURCE_COLLECTIONS
-    enabled = (
-        enabled
-        or target_object_count >= COMMERCIAL_SCALE_TARGET_THRESHOLD
-        or target_entity_count >= SOURCE_PRECHECK_MIN_TARGET_ENTITIES
-    )
-    return {
-        "enabled": bool(enabled),
-        "minArticleBaseSources": (
-            max(SOURCE_PRECHECK_MIN_ARTICLE_BASE_SOURCES, article_quota)
-            if enabled and article_quota > 0
-            else 0
-        ),
-        "minImageSourceCollections": (
-            max(SOURCE_PRECHECK_MIN_IMAGE_SOURCE_COLLECTIONS, image_quota)
-            if enabled and image_quota > 0
-            else 0
-        ),
-        "minSourceCategories": (
-            SOURCE_PRECHECK_MIN_SOURCE_CATEGORIES
-            if enabled and article_quota > 0
-            else 0
-        ),
-        "requireHomepageBaseDraft": bool(enabled and homepage_quota > 0),
-        "requireSameSourcePublishableImage": bool(enabled and image_quota > 0),
-    }
-def _source_category(source: Mapping[str, Any]) -> str:
-    from core.source_catalog import platform_category
-    explicit = str(source.get("category") or "").strip()
-    if explicit:
-        return explicit
-    return platform_category(str(source.get("platform") or "")) or ""
-def _source_precheck_major_off_entity_issues(source: Mapping[str, Any]) -> list[str]:
-    gate = source.get("candidateGate") if isinstance(source.get("candidateGate"), Mapping) else {}
-    if gate and gate.get("passed") is False:
-        return []
-    rows: list[str] = []
-    for issue in gate.get("issues") or []:
-        text = str(issue or "").strip()
-        lower = text.casefold()
-        if text and any(marker in lower for marker in _SOURCE_PRECHECK_OFF_ENTITY_MARKERS):
-            rows.append(text)
-    return rows
-def _source_precheck_diag_off_entity_count(diagnostics: Mapping[str, Any], entity: str) -> int:
-    targets = diagnostics.get("targets") if isinstance(diagnostics.get("targets"), Mapping) else {}
-    row = targets.get(entity) if isinstance(targets.get(entity), Mapping) else {}
-    rejects = row.get("articleRejects") if isinstance(row.get("articleRejects"), Mapping) else {}
-    count = 0
-    for key, value in rejects.items():
-        lower = str(key or "").casefold()
-        if not any(marker in lower for marker in _SOURCE_PRECHECK_OFF_ENTITY_MARKERS):
-            continue
-        try:
-            count += int(value or 0)
-        except (TypeError, ValueError):
-            count += 1
-    return count
-def source_precheck_report(
-    *,
-    execution_id: str,
-    spec: Mapping[str, Any],
-    entity_ids: Iterable[str],
-    etype: str,
-    homepage_failed_entities: set[str],
-) -> dict[str, Any]:
-    from content.source.source_inputs import curated_images_for_entity, curated_sources_for_entity
-    from governance.coverage.license import validate_image_rights
-    from content.execution.coverage import coverage_entity_type_for_entity
-    thresholds = _source_precheck_thresholds(spec)
-    article_precheck_enabled = int(thresholds.get("minArticleBaseSources") or 0) > 0
-    rows: list[dict[str, Any]] = []
-    failed_lanes: list[dict[str, Any]] = []
-    diagnostics_path = execution_root(execution_id) / "_shared" / "content_plan_source_diagnostics.json"
-    diagnostics = read_json(diagnostics_path) if diagnostics_path.is_file() else {}
-    vertical = str(spec.get("vertical") or "travel")
-    entity_list = [str(entity).strip() for entity in entity_ids if str(entity).strip()]
-    execution_etype = etype
-    for entity in entity_list:
-        # 与 audit 主循环同源：多类型分区空 execution etype 必须 per-entity 校正。
-        etype = coverage_entity_type_for_entity(dict(spec), entity) or execution_etype
-        homepage_sources = curated_sources_for_entity(
-            execution_id,
-            entity,
-            etype,
-            research_lane="homepage",
-        )
-        article_sources = curated_sources_for_entity(
-            execution_id,
-            entity,
-            etype,
-            research_lane="article",
-        )
-        image_specs = [
-            image for image in curated_images_for_entity(execution_id, entity, etype)
-            if str(image.get("researchLane") or "image") == "image"
-        ]
-        article_base_sources = [
-            source for source in article_sources
-            if str(source.get("sourceRole") or "") == "base"
-            or _source_category(source) in _SOURCE_PRECHECK_ARTICLE_CATEGORIES
-        ]
-        source_categories = {
-            category
-            for category in [_source_category(source) for source in (homepage_sources + article_sources)]
-            if category
-        }
-        publishable_images: list[Mapping[str, Any]] = []
-        publishable_collections: set[str] = set()
-        for image in image_specs:
-            collection = str(image.get("sourceCollectionId") or "").strip()
-            if not collection:
-                continue
-            if validate_image_rights(image, vertical=vertical):
-                continue
-            publishable_images.append(image)
-            publishable_collections.add(collection)
-            category = _source_category(
-                {
-                    "platform": image.get("platform") or "",
-                    "category": image.get("category") or "",
-                }
-            )
-            if category:
-                source_categories.add(category)
-        off_entity_issues: list[str] = []
-        for source in article_sources:
-            off_entity_issues.extend(_source_precheck_major_off_entity_issues(source))
-        off_entity_diag_count = _source_precheck_diag_off_entity_count(diagnostics, entity)
-        issues_by_lane: dict[str, list[str]] = {}
-        if thresholds["enabled"] and thresholds["requireHomepageBaseDraft"] and entity in homepage_failed_entities:
-            issues_by_lane.setdefault("homepage", []).append(
-                "source precheck homepage baseDraft/publishable homepage image gate is not ready"
-            )
-        min_article = int(thresholds["minArticleBaseSources"] or 0)
-        if min_article and len(article_base_sources) < min_article:
-            issues_by_lane.setdefault("article", []).append(
-                f"source precheck article base sources={len(article_base_sources)} need>={min_article}"
-            )
-        min_categories = int(thresholds["minSourceCategories"] or 0)
-        if min_categories and len(source_categories) < min_categories:
-            issues_by_lane.setdefault("article", []).append(
-                "source precheck source categories "
-                f"{len(source_categories)} < required {min_categories} "
-                f"(covered={sorted(source_categories)})"
-            )
-        if article_precheck_enabled and off_entity_issues:
-            issues_by_lane.setdefault("article", []).append(
-                "source precheck major off_entity_no_anchor rejects="
-                f"{len(off_entity_issues)}"
-            )
-        min_image = int(thresholds["minImageSourceCollections"] or 0)
-        if min_image and len(publishable_collections) < min_image:
-            issues_by_lane.setdefault("image", []).append(
-                "source precheck publishable image source collections="
-                f"{len(publishable_collections)} need>={min_image}"
-            )
-        if thresholds["requireSameSourcePublishableImage"] and not publishable_images:
-            issues_by_lane.setdefault("image", []).append(
-                "source precheck same-source publishable image is missing"
-            )
-        row = {
-            "entity": entity,
-            "passed": not issues_by_lane,
-            "homepageSourceCount": len(homepage_sources),
-            "articleSourceCount": len(article_sources),
-            "articleBaseSourceCount": len(article_base_sources),
-            "imageSourceCollectionCount": len(publishable_collections),
-            "publishableImageCount": len(publishable_images),
-            "sourceCategoryCount": len(source_categories),
-            "sourceCategories": sorted(source_categories),
-            "majorOffEntityNoAnchorRejectCount": len(off_entity_issues) + off_entity_diag_count,
-            "issuesByLane": issues_by_lane,
-        }
-        rows.append(row)
-        for lane, issues in issues_by_lane.items():
-            failed_lanes.append({"entity": entity, "lane": lane, "issues": issues})
-    failed_entities = [str(row["entity"]) for row in rows if not row["passed"]]
-    return {
-        "enabled": bool(thresholds["enabled"]),
-        "thresholds": thresholds,
-        "failedEntityCount": len(failed_entities),
-        "failedEntities": failed_entities,
-        "failedLanes": failed_lanes,
-        "entities": rows,
-    }
 
 def create_execution_selection(request: SelectionRequest) -> tuple[dict[str, Any], dict[str, Any]]:
     """Select targets and write the sole execution manifest/specification."""
@@ -624,7 +453,7 @@ def create_execution_selection(request: SelectionRequest) -> tuple[dict[str, Any
         mandatory=mandatory,
         excluded=excluded,
     )
-    spec = build_multimodal_spec(
+    spec = build_execution_spec(
         execution_id=execution_id,
         name=request.name,
         title=request.title or request.name,
@@ -637,6 +466,7 @@ def create_execution_selection(request: SelectionRequest) -> tuple[dict[str, Any
         entity_articles_per_target=int(request.entity_articles_per_target or 0),
         entity_homepages_per_target=int(request.entity_homepages_per_target or 0),
         image_works_per_target=int(request.image_works_per_target or 0),
+        video_works_per_target=int(request.video_works_per_target or 0),
         target_entity_count=requested_limit,
         selection_policy=request.selection_policy,
     )

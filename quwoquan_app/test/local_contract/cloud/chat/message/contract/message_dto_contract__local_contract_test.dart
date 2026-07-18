@@ -15,8 +15,8 @@ Map<String, dynamic> validMessageWire({
     'seq': 42,
     'clientMsgId': 'client_001',
     'senderId': 'persona_001',
-    'senderDisplayNameSnapshot': '契约发送者',
-    'senderAvatarUrlSnapshot': 'https://cdn.example.com/avatar.png',
+    'senderName': '契约发送者',
+    'senderAvatar': 'https://cdn.example.com/avatar.png',
     'type': type,
     'content': type == 'text' ? 'hello' : '',
     'mediaAssetId': mediaAssetId,
@@ -62,10 +62,10 @@ void main() {
       final wire = original.toMap();
 
       expect(wire['id'], 'msg_001');
-      expect(wire['senderDisplayNameSnapshot'], '契约发送者');
+      expect(wire['senderName'], '契约发送者');
       expect(wire['timestamp'], '2026-07-15T08:00:00.000Z');
       expect(wire.containsKey('_id'), isFalse);
-      expect(wire.containsKey('senderName'), isFalse);
+      expect(wire.containsKey('senderDisplayNameSnapshot'), isFalse);
 
       final decoded = MessageDto.fromMap(wire);
       expect(decoded.id, original.id);
@@ -96,8 +96,8 @@ void main() {
       for (final removedField in <String>[
         '_id',
         'messageId',
-        'senderName',
-        'senderAvatar',
+        'senderDisplayNameSnapshot',
+        'senderAvatarUrlSnapshot',
         'mediaUrl',
         'media',
         'cardPayload',

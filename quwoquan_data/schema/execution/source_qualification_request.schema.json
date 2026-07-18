@@ -3,11 +3,10 @@
   "description": "Execution-owned homepage source qualification input. Static coverage supplies identity only; source facts are runtime evidence.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["contractVersion", "executionId", "policyRevision", "createdAt", "targets"],
+  "required": ["executionId", "policyRevision", "createdAt", "targets"],
   "properties": {
-    "contractVersion": {"const": "execution-source-qualification-v1"},
     "executionId": {"type": "string", "minLength": 1},
-    "policyRevision": {"const": "encyclopedia-primary-v2"},
+    "policyRevision": {"const": "encyclopedia-primary"},
     "createdAt": {"type": "string", "minLength": 1},
     "targets": {
       "type": "array",

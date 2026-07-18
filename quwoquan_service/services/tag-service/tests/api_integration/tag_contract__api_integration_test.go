@@ -120,7 +120,7 @@ func displayLabelForTest(label string) string {
 func TestResolveReturnsDefinition(t *testing.T) {
 	seedLaunchSubset(t)
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/v1/tag/resolve?tagRef=Topic/旅行", nil)
+	req := httptest.NewRequest(http.MethodGet, "/tag/resolve?tagRef=Topic/旅行", nil)
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -140,7 +140,7 @@ func TestResolveReturnsDefinition(t *testing.T) {
 func TestResolveUnknownReturns404(t *testing.T) {
 	seedLaunchSubset(t)
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/v1/tag/resolve?tagRef=Topic/不存在", nil)
+	req := httptest.NewRequest(http.MethodGet, "/tag/resolve?tagRef=Topic/不存在", nil)
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 for unknown tagRef, got %d", rec.Code)
@@ -149,7 +149,7 @@ func TestResolveUnknownReturns404(t *testing.T) {
 
 func TestListDimensions(t *testing.T) {
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/v1/tag/dimensions", nil)
+	req := httptest.NewRequest(http.MethodGet, "/tag/dimensions", nil)
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -172,7 +172,7 @@ func TestListDimensions(t *testing.T) {
 func TestListTagChildrenReturnsDirectAdminRegionChildren(t *testing.T) {
 	seedAdminRegionSubset(t)
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/v1/tag/children?parentTagRef=Topic/地理/行政区/中国&limit=500", nil)
+	req := httptest.NewRequest(http.MethodGet, "/tag/children?parentTagRef=Topic/地理/行政区/中国&limit=500", nil)
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -226,7 +226,7 @@ func TestListTagChildrenGuangdongAndBeijingAreCompleteDirectLevel(t *testing.T) 
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := httptest.NewRecorder()
-			req := httptest.NewRequest(http.MethodGet, "/v1/tag/children?parentTagRef="+tc.parentRef+"&limit=500", nil)
+			req := httptest.NewRequest(http.MethodGet, "/tag/children?parentTagRef="+tc.parentRef+"&limit=500", nil)
 			testHandler.ServeHTTP(rec, req)
 			if rec.Code != http.StatusOK {
 				t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -261,7 +261,7 @@ func TestListTagChildrenGuangdongAndBeijingAreCompleteDirectLevel(t *testing.T) 
 func TestListTagChildrenUnknownParentReturns404(t *testing.T) {
 	seedAdminRegionSubset(t)
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/v1/tag/children?parentTagRef=Topic/地理/行政区/中国/不存在", nil)
+	req := httptest.NewRequest(http.MethodGet, "/tag/children?parentTagRef=Topic/地理/行政区/中国/不存在", nil)
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 for unknown parent, got %d: %s", rec.Code, rec.Body.String())
@@ -271,7 +271,7 @@ func TestListTagChildrenUnknownParentReturns404(t *testing.T) {
 func TestSuggestTags(t *testing.T) {
 	seedLaunchSubset(t)
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/v1/tag/suggest?q=旅", nil)
+	req := httptest.NewRequest(http.MethodGet, "/tag/suggest?q=旅", nil)
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -295,7 +295,7 @@ func TestSuggestTags(t *testing.T) {
 func TestValidateTagRefs(t *testing.T) {
 	seedLaunchSubset(t)
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/tag/validate", bytes.NewBufferString(`{"tagRefs":["Topic/旅行","Topic/不存在"]}`))
+	req := httptest.NewRequest(http.MethodPost, "/tag/validate", bytes.NewBufferString(`{"tagRefs":["Topic/旅行","Topic/不存在"]}`))
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -320,7 +320,7 @@ func TestSharedTagsTwoObjects(t *testing.T) {
 	seedLaunchSubset(t)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet,
-		"/v1/tag/shared-tags?objectAId=u1&objectAType=user&objectBId=u2&objectBType=user", nil)
+		"/tag/shared-tags?objectAId=u1&objectAType=user&objectBId=u2&objectBType=user", nil)
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -347,7 +347,7 @@ func TestSharedTagsTwoObjects(t *testing.T) {
 func TestInvertedObjects(t *testing.T) {
 	seedLaunchSubset(t)
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/v1/tag/inverted?tagRef=Topic/摄影", nil)
+	req := httptest.NewRequest(http.MethodGet, "/tag/inverted?tagRef=Topic/摄影", nil)
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -369,7 +369,7 @@ func TestInvertedObjects(t *testing.T) {
 func TestInvertedFilterByType(t *testing.T) {
 	seedLaunchSubset(t)
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/v1/tag/inverted?tagRef=Topic/旅行&objectType=post", nil)
+	req := httptest.NewRequest(http.MethodGet, "/tag/inverted?tagRef=Topic/旅行&objectType=post", nil)
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
@@ -388,7 +388,7 @@ func TestInvertedFilterByType(t *testing.T) {
 func TestSearchTags(t *testing.T) {
 	seedLaunchSubset(t)
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/v1/tag/search?q=旅", nil)
+	req := httptest.NewRequest(http.MethodGet, "/tag/search?q=旅", nil)
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -413,7 +413,7 @@ func TestSearchTags(t *testing.T) {
 func TestRelatedTags(t *testing.T) {
 	seedLaunchSubset(t)
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/v1/tag/related?tagRef=Topic/摄影", nil)
+	req := httptest.NewRequest(http.MethodGet, "/tag/related?tagRef=Topic/摄影", nil)
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -436,7 +436,7 @@ func TestRelatedTags(t *testing.T) {
 func TestSearchByTags(t *testing.T) {
 	seedLaunchSubset(t)
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/tag/search-by-tags",
+	req := httptest.NewRequest(http.MethodPost, "/tag/search-by-tags",
 		bytes.NewBufferString(`{"tagRefs":["Topic/摄影","Entity/机构/学校/北京大学"]}`))
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -463,7 +463,7 @@ func TestSearchByTags(t *testing.T) {
 func TestTagCooccurrence(t *testing.T) {
 	seedLaunchSubset(t)
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/v1/tag/graph/cooccurrence?tagRef=Topic/摄影&minCount=2", nil)
+	req := httptest.NewRequest(http.MethodGet, "/tag/graph/cooccurrence?tagRef=Topic/摄影&minCount=2", nil)
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -486,7 +486,7 @@ func TestTagCooccurrence(t *testing.T) {
 func TestRelatedObjects(t *testing.T) {
 	seedLaunchSubset(t)
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/v1/tag/related-objects?objectId=u1&objectType=user", nil)
+	req := httptest.NewRequest(http.MethodGet, "/tag/related-objects?objectId=u1&objectType=user", nil)
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())

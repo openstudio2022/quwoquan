@@ -329,16 +329,13 @@ G1 校验结果：
 
 ### 迁移 / 回填
 
-- metadata phase：新增 canonical 字段，不立即删除旧字段。
-- App phase：
-  - provider key 优先使用 canonical key
-  - DTO 解析保留旧字段 fallback
-- cleanup phase：
-  - 所有 viewer / profile / feed 改完后，再清理 `authorId` 作为状态 key 的记录逻辑
+- metadata phase：只声明 canonical 字段；禁止保留旧字段作为第二真相源。
+- App phase：provider / DTO / UI 只认 canonical key（如 `authorProfileSubjectId`）。
+- cleanup phase：`authorId` 不得再作为状态 key 或 wire 别名。
 
 ### 双读 / 双写
 
-- 双读：允许 `authorProfileSubjectId` 缺失时回退读 `authorId`
+- **禁止 wire 双读**：不得以 `authorId` 回退补全 `authorProfileSubjectId`。
 - 双写：本次不做长期双写云端实体；只做本地 pending state + 云端单真相写入
 
 ## feature flag、观测、SLO 验证与回滚
@@ -409,3 +406,85 @@ G1 校验结果：
 - 收缩 `DiscoveryState` 这类记录页面态容器，完全迁移到对象级 provider。
 - 在 metadata 稳定后移除 `authorId` 作为内部状态 key 的兼容读链路。
 - 若后续需要跨进程更强保证，可把 outbox 从本地轻量持久化升级为更正式的 runtime sync queue。
+
+## KD8：商用视频播放会话与交互状态
+
+### 目标与范围
+
+本决策把视频展示统一为两个、且只有两个 profile：
+
+- `feedInline`：首页和频道的内嵌视频；
+- `immersiveWorkBrowser`：`workBrowser` 内容详情与视频集的沉浸播放。
+
+它们共享同一播放会话、媒体描述符、错误语义和行为口径；不得按页面各自持有
+`VideoPlayerController` 或各自演进自动播放/生命周期规则。剪辑、特效、RTC 和端侧远端
+临时抽帧不在此决策范围内。
+
+### 单一会话所有权
+
+`VideoPlaybackSession` 是唯一播放命令入口，标识由
+`surfaceId + postId + mediaAssetId + assetVersion + episodeIndex` 组成。它串行处理：
+
+- `initialize`、`playByUser`、`pauseByUser`、`beginScrub`、`updateScrubTarget`、`endScrub`；
+- 焦点、可见度、前后台、音频中断、切作品、切集和销毁；
+- generation 递增与过期异步回调拒绝。
+
+页面、WorkBrowser 控件、首页焦点协调器和时间轴只消费 `PlaybackSnapshot` 并向 session
+发命令；不得直接调用 `play`、`pause`、`seekTo` 或保留已释放的 controller。原生 surface
+只向 session 回报初始化、首帧、缓冲、位置、时长、结束和失败事件。`VideoPlayerWidget`
+不再是控制器的跨页面出口。
+
+`PlaybackSnapshot` 固定包含：
+
+| 维度 | 枚举 / 数据 | 规则 |
+| --- | --- | --- |
+| `transport` | `initializing` / `ready` / `playing` / `paused` / `scrubbing` / `buffering` / `ended` / `failure` | 原生事件唯一驱动，页面不自行推断第二状态机 |
+| `playIntent` | `manualPlay` / `manualPause` / `autoEligible` / `interrupted` / `awaitingUserGesture` | `manualPause` 永远压过焦点、前后台和自动恢复 |
+| `controls` | `hidden` / `transient` / `pinned` | transient 固定 5 秒，暂停和拖动固定为 pinned |
+| `pauseReason` | `user` / `focusLost` / `offscreen` / `appLifecycle` / `audioInterruption` / `episodeChange` / `failure` | 仅用于恢复判定与受限观测 |
+| 时间 | native position、buffered、native duration、verified duration、scrub target | verified duration 为媒体真相；native duration 只用于 seek 边界和一致性校验 |
+
+### profile × transport × controls 视觉矩阵
+
+四级视觉必须由 `VideoTimelineVisualLevel` 及 `AppColors`、`AppSpacing`、`AppTypography`
+语义 token 提供；视觉细轨和最小 `44dp` 触控热区必须分离，禁止页面写独立尺寸常量。
+
+| 场景 | 轨道/圆点 | 时间文案 | 控制与位置 |
+| --- | --- | --- | --- |
+| `feedInline + playing + transient` | `2dp` / 无视觉圆点 | 真实总时长右对齐于视频右 rail，首帧后 5 秒淡出 | 半透明细轨贴视频底边；背景不使用黑色胶囊 |
+| `immersiveWorkBrowser + playingIdle` | `3dp` / 小圆点 | 首次入详情不显示；视频集在首帧、恢复、切集后 transient 5 秒 | 时间轴位于底部互动工具栏上方，左右与 caption rail 对齐 |
+| `paused` | `4dp` / `8dp` | 不额外显示总时长 | 控制 pinned，媒体中央显示半透明播放按钮，非控件区域可续播 |
+| `scrubbing` | `6dp` / `12dp` | 显示“目标时间 / 有效总时长” | 只变更虚拟 target；上方按 descriptor 的 storyboard 显示预览帧 |
+
+`durationUnknown` 禁用拖动；`buffering` 冻结最后位置并轻量提示；`ended` 停在末帧显示
+replay；`failure` 保留同源封面和结构化恢复动作。轨道、文本和预览均不得压住互动栏、
+safe area 或跨越 rail。
+
+### 手势、声音和生命周期
+
+- feed 的媒体区 tap 是暂停/续播；标题、作者和卡片非媒体区才进入 `workBrowser`。时间轴、
+  互动、视频集横滑和作品纵滑是互斥 hit region；超过 touch-slop 后取消 tap，单次意图只记录一次。
+- 拖动期间不得连续 seek；释放时只提交一次 seek，取消回到拖动前位置。进入拖动前正在播放，
+  仅在 seek settle 成功且仍前台可见时恢复；原本暂停始终保持暂停。
+- Android/iOS 默认开声播放，申请短暂音频焦点；失焦、来电、离屏、后台和切集立即暂停。
+  短暂中断只有 session 仍可见、仍获焦点且不是 `manualPause` 时恢复。
+- Web 被浏览器拒绝的有声自动播放进入 `awaitingUserGesture`，不是 RuntimeFailure。平台能力
+  必须经 `PlatformCapabilities` / platform port 暴露；业务层不得使用 `Platform.is*` 或
+  `kIsWeb`。
+
+### 可访问性与性能边界
+
+播放/暂停、重播、静音和时间轴必须具有 button/slider role、当前/总时长 value、操作 hint、
+固定步长键盘 seek 与可见焦点。TalkBack/VoiceOver 状态播报、动态字体、Reduce Motion、
+横竖屏与 Web 键盘属于同一 UAT。position 更新只能重建局部 controls，不能重建整个 feed
+或 `WorksImmersiveViewer`。
+
+### 推荐行为与 QoE 分轨
+
+内容行为仅发送满足服务端 policy 的、每会话每内容一次的 `effective_play`；它只包含推荐
+归因与经校验的真实有效播放时长/比例。seek、后台、离屏、buffering 和 wall-clock dwell
+不得充当有效观看。原始 TTFF、ready、rebuffer、seek、时长偏差和设备/网络维度只进入 Ops
+强类型 QoE 事件，禁止进入推荐热路径或以 `AnalyticsEvent.properties` 偷渡。
+
+具体 VOD 资产、storyboard、处理状态和 QoE 存储/告警合同由
+`runtime/runtime-media` 统一定义；本 L2 只规定展示、会话和用户旅程边界。

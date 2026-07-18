@@ -54,7 +54,7 @@ func ResolveGroupAvatarURL(conv model.Conversation) string {
 		conv.GroupAvatarSourceHash,
 		groupAvatarCDNBase(),
 	)
-	return ref.URL
+	return ref.DeliveryReference().DeliveryURI
 }
 
 func ResolveConversationAvatarURL(conv model.Conversation) string {
@@ -216,13 +216,13 @@ func RecomputeGroupAvatar(
 	conv.GroupAvatarAssetId = asset.Ref.AssetID
 	conv.GroupAvatarVersion = asset.Ref.Version
 	conv.GroupAvatarSourceHash = sourceHash
-	conv.AvatarUrl = asset.Ref.URL
+	conv.AvatarUrl = asset.Ref.DeliveryURI
 	conv.UpdatedAt = time.Now()
 
 	avatarPatchEnabled := runtimegovernance.FeatureEnabled("runtime.avatar_patch_enabled", true)
 	payload := map[string]any{
 		"conversationId":        conv.ID,
-		"avatarUrl":             asset.Ref.URL,
+		"avatarUrl":             asset.Ref.DeliveryURI,
 		"groupAvatarAssetId":    conv.GroupAvatarAssetId,
 		"groupAvatarVersion":    conv.GroupAvatarVersion,
 		"groupAvatarSourceHash": conv.GroupAvatarSourceHash,

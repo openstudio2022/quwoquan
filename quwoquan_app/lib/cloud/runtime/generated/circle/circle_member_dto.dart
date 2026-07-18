@@ -22,7 +22,7 @@ class CircleMemberDto {
 
   factory CircleMemberDto.fromMap(Map<String, dynamic> m) {
     return CircleMemberDto(
-      id: (m['_id'] ?? m['id'] ?? '').toString(),
+      id: (m['id'] ?? '').toString(),
       circleId: (m['circleId'] ?? '').toString(),
       userId: (m['userId'] ?? '').toString(),
       role: (m['role'] ?? 'member').toString(),

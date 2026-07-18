@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "source": "WelcomeAppIconPainter",
   "assets": {
     "assets/brand/app_icon_1024.png": "2ee24d67a433f66df37ab33d27f8c2a8d81760761751cbee74359fdbb4f2216a",
@@ -29,5 +28,6 @@
     "web/icons/Icon-maskable-192.png": "49b8cca764f15c55890ea811207a1b29b8f05c6ac51d0de7283466fcf05afee4",
     "web/icons/Icon-maskable-512.png": "809ebbb765a2e13dcc59c651a0463e7409c7d3d94c8423ef1a11ab77cf796583",
     "web/favicon.png": "2fb70be5a68c4b2835c9c0da2af12fdcd55760d3f83f2b8103928c92324592ec"
-  }
+  },
+  "schema": "app-icon-asset-manifest"
 }

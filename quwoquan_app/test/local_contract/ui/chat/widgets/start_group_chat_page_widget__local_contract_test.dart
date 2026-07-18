@@ -12,7 +12,6 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_crea
 import 'package:quwoquan_app/cloud/runtime/generated/chat/selectable_group_conversation_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
-import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/core/models/start_group_chat_route_extra.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -22,6 +21,7 @@ import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import '../../../../support/fixtures/chat/chat_mock_seed_refs.dart';
 import '../../../../support/runtime_failure_fixtures.dart';
+import '../../../../support/recording_app_telemetry_recorder.dart';
 
 void _suppressImageErrors() {
   final original = FlutterError.onError;
@@ -90,7 +90,7 @@ class _RecordingAnalyticsService extends AnalyticsService {
 ProviderContainer _buildContainer(
   MockChatRepository repository, {
   AnalyticsService? analytics,
-  OpsEventRepository? ops,
+  RecordingAppTelemetryRecorder? telemetryRecorder,
 }) {
   final container = ProviderContainer(
     overrides: [
@@ -99,7 +99,8 @@ ProviderContainer _buildContainer(
         const MockUserProfileRepository(),
       ),
       if (analytics != null) analyticsProvider.overrideWithValue(analytics),
-      if (ops != null) opsEventRepositoryProvider.overrideWithValue(ops),
+      if (telemetryRecorder != null)
+        appTelemetryReporterProvider.overrideWithValue(telemetryRecorder),
     ],
   );
   addTearDown(container.dispose);
@@ -114,9 +115,7 @@ Map<String, dynamic> _groupConversation(
 }) {
   final now = DateTime.utc(2026, 1, 1).toIso8601String();
   return <String, dynamic>{
-    '_id': id,
     'id': id,
-    'conversationId': id,
     'type': 'group',
     'title': title,
     'avatarUrl': avatarUrl,
@@ -327,8 +326,11 @@ void main() {
   testWidgets('交集结伴入口展示上下文并将 target/source 写入 journey 事件', (tester) async {
     _suppressImageErrors();
 
-    final ops = MockOpsEventRepository();
-    final container = _buildContainer(MockChatRepository(), ops: ops);
+    final ops = RecordingAppTelemetryRecorder();
+    final container = _buildContainer(
+      MockChatRepository(),
+      telemetryRecorder: ops,
+    );
     const extra = StartGroupChatRouteExtra(
       actionKey: 'start_companion',
       actionLabel: '发起结伴',
@@ -357,20 +359,11 @@ void main() {
     );
     await tester.pumpAndSettle();
     final enterEvents = ops.recorded
-        .where(
-          (event) =>
-              event.eventName == 'start_group_chat.companion_context_enter',
-        )
+        .where((event) => event.action == 'companion_context_enter')
         .toList(growable: false);
     expect(enterEvents, isNotEmpty);
-    expect(
-      enterEvents.last.payload['targetObjectId'],
-      'fixture_homepage_travel_photo_west_lake',
-    );
-    expect(
-      enterEvents.last.payload['intersectionSourceRef'],
-      'coWishlistedEntity',
-    );
+    expect(enterEvents.last.extensions['journey'], 'start_group_chat');
+    expect(enterEvents.last.extensions.containsKey('targetObjectId'), isFalse);
 
     await tester.tap(find.byIcon(CupertinoIcons.circle).first);
     await tester.pumpAndSettle();
@@ -378,16 +371,13 @@ void main() {
     await tester.pumpAndSettle();
 
     final createEvents = ops.recorded
-        .where((event) => event.eventName == 'start_group_chat.create_success')
+        .where((event) => event.action == 'create_success')
         .toList(growable: false);
     expect(createEvents, isNotEmpty);
+    expect(createEvents.last.extensions['journey'], 'start_group_chat');
     expect(
-      createEvents.last.payload['targetObjectId'],
-      'fixture_homepage_travel_photo_west_lake',
-    );
-    expect(
-      createEvents.last.payload['intersectionEvidenceId'],
-      'ev_wishlist_1',
+      createEvents.last.extensions.containsKey('intersectionEvidenceId'),
+      isFalse,
     );
     await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();

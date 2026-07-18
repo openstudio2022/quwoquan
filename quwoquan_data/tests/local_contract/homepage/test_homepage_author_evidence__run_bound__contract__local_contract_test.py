@@ -11,7 +11,7 @@ SCRIPTS_ROOT = DATA_ROOT / "scripts"
 if str(SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_ROOT))
 
-from content.execution.pipeline.homepage_authoring import _write_homepage_author_evidence  # noqa: E402
+from content.execution.controller.homepage_author_evidence import _write_homepage_author_evidence  # noqa: E402
 from content.execution.production_contracts import sha256_file, sha256_text, validate_agent_result_envelope  # noqa: E402
 from core.io import read_json, write_json  # noqa: E402
 from core.schema import assert_valid  # noqa: E402

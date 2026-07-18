@@ -1,4 +1,3 @@
-version: 1
 domain: content
 aggregate_root: Post
 object_kind: aggregate_root
@@ -25,21 +24,20 @@ taggable: true
 vector_enabled: true
 
 business_rules:
-  - draft 仅能由 author persona 修改、发布或删除
-  - PublishPost 必须绑定当前 postVersion + contentDigest 的 approved moderation case
-  - mediaAssetIds 必须全部 ready 且调用者拥有访问权限
+  - 用户发布前内容只存在于端侧 LocalPostDraft；远端 Post 不承载编辑中的草稿
+  - SubmitPostPublication 只接受本地草稿唯一且不可变的 publishIntentId，同一意图的任意重放返回同一 Post
+  - mediaAssetIds 必须全部 ready、归调用者所有并在 Post 提交前完成公开 slice 物化
   - sourcePostId 仅表达引用发布，不复制或修改源 Post
   - Post 不保存互动计数、Circle placement、审核状态、搜索向量或 URL 投影真相
-  - 所有命令使用 expectedVersion 与 idempotency receipt，并与 outbox 原子提交
+  - 首次发布不接受调用方版本字段；服务端按 publishIntentId/localDraftId 唯一约束、聚合 CAS、永久字段和事务 outbox 保证幂等
+  - 发布后设置修改由服务端内部 version CAS 保护；只有确有多写者覆盖写的操作才可显式声明 If-Match
 lifecycle:
-  states: [draft, published, deleted]
+  states: [published, deleted]
   transitions:
-    - { from: none, command: CreatePost, to: draft }
-    - { from: draft, command: PublishPost, to: published }
-    - { from: draft, command: DeletePost, to: deleted }
+    - { from: none, command: SubmitPostPublication, to: published }
     - { from: published, command: DeletePost, to: deleted }
-  optimistic_concurrency: version
-  idempotency: command_receipt
+  optimistic_concurrency: server_owned_version
+  idempotency: publish_intent_unique_fields_plus_command_receipt
 
 ddd_layer_mapping:
   domain_model: internal/domain/post/model

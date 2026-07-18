@@ -1,4 +1,3 @@
-version: 1
 registry: IntersectionKindRegistry
 description: |
   交集 kind 机器可读唯一注册表（Phase 0 漂移收口 §20d；架构基线 v2 §21）。

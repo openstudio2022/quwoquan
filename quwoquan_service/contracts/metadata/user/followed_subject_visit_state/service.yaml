@@ -1,4 +1,3 @@
-version: 1
 
 service:
   name: user-service
@@ -13,7 +12,8 @@ service:
 
 api_routes:
   - method: POST
-    path: /v1/user/followed-subjects/{subjectType}/{subjectId}:mark-visited
+    path: /user/followed-subjects/{subjectType}/{subjectId}:mark-visited
+
     operation: MarkFollowedSubjectVisited
     actor: persona
     application:

@@ -20,13 +20,12 @@ final class LocationPoiDto {
 
   factory LocationPoiDto.fromMap(Map<String, Object?> map) {
     return LocationPoiDto(
-      id: (map['_id'] ?? map['id'] ?? '').toString(),
+      id: (map['id'] ?? '').toString(),
       name: (map['name'] ?? '').toString(),
-      latitude: ((map['latitude'] ?? map['lat']) as num?)?.toDouble() ?? 0,
-      longitude: ((map['longitude'] ?? map['lng']) as num?)?.toDouble() ?? 0,
+      latitude: (map['latitude'] as num?)?.toDouble() ?? 0,
+      longitude: (map['longitude'] as num?)?.toDouble() ?? 0,
       address: map['address']?.toString() ?? '',
-      distanceMeters: ((map['distanceMeters'] ?? map['distance']) as num?)
-          ?.toInt(),
+      distanceMeters: (map['distanceMeters'] as num?)?.toInt(),
     );
   }
 

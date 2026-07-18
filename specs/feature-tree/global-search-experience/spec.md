@@ -33,12 +33,12 @@
 
 ## 2026-06-15 架构决定：独立 search-service + 专用 ES/OpenSearch 集群
 
-本节为最新冻结决定。凡与上文/本 L1 下属 L2、L3 中“本期不新增统一 `/v1/search`”“不指定搜索引擎/向量库”“统一高性能读库不在本期落地”等表述冲突处，一律以本节为准（零历史兼容、单一真相源、当前按未上线处理）。
+本节为最新冻结决定。凡与上文/本 L1 下属 L2、L3 中“本期不新增统一 `/search`”“不指定搜索引擎/向量库”“统一高性能读库不在本期落地”等表述冲突处，一律以本节为准（零历史兼容、单一真相源、当前按未上线处理）。
 
 1. 统一搜索读库本期落地为**专用 ES/OpenSearch 集群**（复用 `quwoquan_service/runtime/search/es`），作为派生读模型，**不承担业务主存储**真相源。
-2. 新建**独立可部署 `search-service`**（`domain=search`，经 `/qwq-extend new-service` 脚手架创建），承载 canonical `search(request)` 的云侧统一入口 `POST /v1/search`（`mode=suggest|result`）与 `POST /v1/search/feedback`，复用 `runtime/search.Retrieve` 作为唯一跨类型排序真相源。
+2. 新建**独立可部署 `search-service`**（`domain=search`，经 `/qwq-extend new-service` 脚手架创建），承载 canonical `search(request)` 的云侧统一入口 `POST /search`（`mode=suggest|result`）与 `POST /search/feedback`，复用 `runtime/search.Retrieve` 作为唯一跨类型排序真相源。
 3. 召回后端：**ES 为主、native store 为透明回退**（`FallbackBackend`，Primary=ES，Fallback=native），对所有调用方透明；ES 故障整体降级 native，不阻塞主路径。
-4. 各域（`content/entity/circle/user/integration`）数据经统一 indexer 灌入同一 ES 索引 `quwoquan_objects`；原各域 `/v1/.../search` 只读路由保留为 indexer 数据源/内部回退，**不再作为 App 主搜索路径**。
+4. 各域（`content/entity/circle/user/integration`）数据经统一 indexer 灌入同一 ES 索引 `quwoquan_objects`；原各域 `/.../search` 只读路由保留为 indexer 数据源/内部回退，**不再作为 App 主搜索路径**。
 5. 部署：alpha/beta/gamma/prod 四环境声明专用搜索 ES 集群与 `search-service` 进程，`beta=gamma=prod` 拓扑逐字一致。
 6. 不变量：canonical contract 与 object taxonomy 不变；ES 仅替换读侧实现；私有对象（`chat.*`）仍 `local_only`，绝不上云做跨用户召回。
 
@@ -48,9 +48,9 @@
 
 ### 已落地主链路（来自 backlog 已验证证据）
 
-1. 独立可部署 `search-service`（`domain=search`，`POST /v1/search`、`POST /v1/search/feedback`，端口 18095）已实例化进 local-gamma，ES-enabled，经网关真实冒烟 200，返回信封含 `requestId / rankingVersion / experimentBucket` 与 hit 级 `rankReasons / rankPosition`；feedback 返回 202（R-S03/R-S06-S）。
+1. 独立可部署 `search-service`（`domain=search`，`POST /search`、`POST /search/feedback`，端口 18095）已实例化进 local-gamma，ES-enabled，经网关真实冒烟 200，返回信封含 `requestId / rankingVersion / experimentBucket` 与 hit 级 `rankReasons / rankPosition`；feedback 返回 202（R-S03/R-S06-S）。
 2. 各域灌数完成（R-S05a~e）：`content.post / entity.homepage / circle.circle / circle.group / user.profile` 经统一 indexer 灌入 `quwoquan_objects`；新增第一方地点对象 `location.place`（复用 geo 维度，与 `entity.homepage` 互斥单源）。
-3. App remote `/v1/search` 接线完成（R-S06）：`RemoteSearchRepository` 走 `CloudHttpClient` + codegen path，透传 `rankReasons / rankPosition / coverWidth / coverHeight / connectionState / intersectionReason / relatedTerms`，`searchRepositoryProvider` 按数据源切换。
+3. App remote `/search` 接线完成（R-S06）：`RemoteSearchRepository` 走 `CloudHttpClient` + codegen path，透传 `rankReasons / rankPosition / coverWidth / coverHeight / connectionState / intersectionReason / relatedTerms`，`searchRepositoryProvider` 按数据源切换。
 4. 反馈/热力/排序完成（R-S07）：`FeedbackSink / QueryLogSink`、`queryheat` term-heat 派生读模型 `rm_search_term_heat`(TTL 86400)、排序透明化、SLO/告警/AB 切桶。
 5. 搜索信号注入推荐 Feed 完成（R-S07-5，local_contract + 真实 Redis 双服务 api_integration 已证明）：search → Redis Stream `events.search.recommendation_signals` → content-service consumer → `rm_recommend_feature` → FeatureStore → RuleScorer；线上 AB 收益显著性与真集群差异为长稳观察项，不再作为链路闭环缺口。
 
@@ -97,7 +97,7 @@
 
 #### D. 搜索词热力与推荐闭环规格
 
-1. `/v1/search` 成功后记录 query log（best-effort，不阻塞主路径）；`/v1/search/feedback` 记录点击/曝光/反馈。
+1. `/search` 成功后记录 query log（best-effort，不阻塞主路径）；`/search/feedback` 记录点击/曝光/反馈。
 2. `queryheat` 基于查询次数、点击、共现、时间衰减计算 `rm_search_term_heat`，TTL 与索引在 metadata/storage 中声明。
 3. term-heat 同时用于搜索结果页排序和相关搜索词生成；`experimentBucket=control|term_heat` 必须可分桶查询。
 4. 搜索信号经 Redis Stream 投影到 `rm_recommend_feature.userFeatures.searchTermAffinity`，并被 Feed scorer 消费；线上 AB 收益为发布后观察项，但链路可消费性必须在 api_integration/local_contract 中证明。
@@ -108,7 +108,7 @@
 
 - `chat.contact / chat.conversation / chat.message`：`local_only`，只在 `suggest` 本地命名空间出现，绝不进 `result` 云侧最终结果。
 - `circle.group`：`hybrid_remote_fallback_local`，作为 suggest 本地命名空间与发现区消费对象，不作为 result 最终独立对象类目的新增项。
-- `integration.location_poi`：澄清为**创作 / 附近场景的外部 gateway 数据源**（POI picker、发布定位、附近搜索），**不作为统一 result 对象**进入 canonical `/v1/search` 召回；第一方地点 result 对象由 `location.place` 承载（同一地点只出现一次，单一真相源）。
+- `integration.location_poi`：澄清为**创作 / 附近场景的外部 gateway 数据源**（POI picker、发布定位、附近搜索），**不作为统一 result 对象**进入 canonical `/search` 召回；第一方地点 result 对象由 `location.place` 承载（同一地点只出现一次，单一真相源）。
 
 ## 目标用户
 
@@ -306,7 +306,7 @@ alpha 阶段由 **mock/remote provider 回灌** 完整字段，不得用客户�
 | `entity` | 提供共享主页搜索对象与 picker 场景结果真相源 |
 | `integration` | 提供位置搜索对象与外部 POI 查询能力 |
 | `assistant` | 提供 `小趣搜` assistant 结果、摘要与引用 |
-| `search-service` | 承载云侧统一 `POST /v1/search`、`POST /v1/search/feedback`；装配 ES 主 + native 回退后端，运行统一 indexer 灌数到 `quwoquan_objects` 索引 |
+| `search-service` | 承载云侧统一 `POST /search`、`POST /search/feedback`；装配 ES 主 + native 回退后端，运行统一 indexer 灌数到 `quwoquan_objects` 索引 |
 | `_shared` metadata | 承载路由、surface、request context、search contract 真相源 |
 
 ## 既有 Story 覆盖矩阵

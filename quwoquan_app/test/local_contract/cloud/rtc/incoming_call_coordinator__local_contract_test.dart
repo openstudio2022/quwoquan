@@ -14,10 +14,7 @@ void main() {
     ProviderContainer makeContainer(PlatformCapabilities caps) {
       final router = GoRouter(
         routes: [
-          GoRoute(
-            path: '/',
-            builder: (context, state) => const _Empty(),
-          ),
+          GoRoute(path: '/', builder: (context, state) => const _Empty()),
         ],
       );
       return ProviderContainer(
@@ -50,10 +47,7 @@ void main() {
       final container = makeContainer(CapabilityProfile.ohos);
       addTearDown(container.dispose);
       final caps = container.read(platformCapabilitiesProvider);
-      expect(
-        resolveIncomingCallChannel(caps),
-        IncomingCallChannel.unsupported,
-      );
+      expect(resolveIncomingCallChannel(caps), IncomingCallChannel.unsupported);
       expect(
         container.read(incomingCallCoordinatorProvider),
         isA<IncomingCallCoordinator>(),

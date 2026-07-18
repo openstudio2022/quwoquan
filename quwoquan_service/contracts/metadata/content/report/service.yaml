@@ -26,7 +26,8 @@ api_routes:
   - CONTENT.SYSTEM.storage_write_failed
   method: POST
   operation: CreateReport
-  path: /v1/content/reports
+  path: /content/reports
+
   privacy:
     log_policy: metadata_only
     request_classification: SENSITIVE
@@ -72,7 +73,8 @@ api_routes:
   - CONTENT.SYSTEM.storage_read_failed
   method: GET
   operation: ListReports
-  path: /v1/content/reports
+  path: /content/reports
+
   privacy:
     log_policy: redacted
     request_classification: INTERNAL
@@ -123,7 +125,8 @@ api_routes:
   - CONTENT.SYSTEM.storage_read_failed
   method: GET
   operation: GetReport
-  path: /v1/content/reports/{reportId}
+  path: /content/reports/{reportId}
+
   privacy:
     log_policy: redacted
     request_classification: INTERNAL
@@ -176,7 +179,8 @@ api_routes:
   - CONTENT.SYSTEM.storage_write_failed
   method: POST
   operation: BeginReportReview
-  path: /v1/content/reports/{reportId}/review
+  path: /content/reports/{reportId}/review
+
   privacy:
     log_policy: redacted
     request_classification: INTERNAL
@@ -230,7 +234,8 @@ api_routes:
   - CONTENT.SYSTEM.storage_write_failed
   method: PATCH
   operation: ResolveReport
-  path: /v1/content/reports/{reportId}
+  path: /content/reports/{reportId}
+
   privacy:
     log_policy: redacted
     request_classification: INTERNAL
@@ -282,7 +287,7 @@ contract_test:
         - status_204
         - empty_response_body
         name: submit_report
-        route: POST /v1/content/reports
+        route: POST /content/reports
         variants:
         - post
         - comment
@@ -327,4 +332,3 @@ service:
   domain: content
   name: content-service
   owner: backend-team
-version: 1

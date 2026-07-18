@@ -1,8 +1,8 @@
-version: 1
 entity: InviteRecord
 
 fields:
   - name: id
+    source: id
     type: string
     constraints: [PK]
     classification: PUBLIC
@@ -11,6 +11,7 @@ fields:
     ops_exposure: read
 
   - name: inviterSubAccountId
+    source: inviterSubAccountId
     type: string
     constraints: [NOT_NULL]
     classification: PUBLIC
@@ -20,6 +21,7 @@ fields:
     description: 发起邀请的子账号 ID（归因主体）
 
   - name: inviterOwnerAccountId
+    source: inviterOwnerAccountId
     type: string
     constraints: [NOT_NULL]
     classification: SECRET
@@ -29,6 +31,7 @@ fields:
     description: 内部审计字段——发起邀请的主控账号 ID（不对外暴露）
 
   - name: channel
+    source: channel
     type: enum
     enum_ref: InviteChannel
     constraints: [NOT_NULL]
@@ -39,6 +42,7 @@ fields:
     description: "邀请渠道：link / qrcode / contact / sms"
 
   - name: linkCode
+    source: linkCode
     type: string
     constraints: [NOT_NULL, UK]
     classification: PUBLIC
@@ -48,6 +52,7 @@ fields:
     description: 邀请码（URL path 参数，全局唯一）
 
   - name: inviteePhoneHash
+    source: inviteePhoneHash
     type: string
     constraints: [NULLABLE]
     classification: PII
@@ -57,6 +62,7 @@ fields:
     description: 被邀请人手机号哈希（仅 contact/sms 渠道存在，原文不存储）
 
   - name: status
+    source: status
     type: enum
     enum_ref: InviteStatus
     constraints: [NOT_NULL]
@@ -66,6 +72,7 @@ fields:
     ops_exposure: read
 
   - name: expireAt
+    source: expireAt
     type: timestamp
     constraints: [NOT_NULL]
     classification: PUBLIC
@@ -74,6 +81,7 @@ fields:
     ops_exposure: read
 
   - name: generatedAt
+    source: generatedAt
     type: timestamp
     constraints: [NOT_NULL]
     classification: PUBLIC
@@ -82,6 +90,7 @@ fields:
     ops_exposure: read
 
   - name: deliveredAt
+    source: deliveredAt
     type: timestamp
     constraints: [NULLABLE]
     classification: PUBLIC
@@ -91,6 +100,7 @@ fields:
     description: 邀请链接被首次点击时间
 
   - name: viewedAt
+    source: viewedAt
     type: timestamp
     constraints: [NULLABLE]
     classification: PUBLIC
@@ -99,6 +109,7 @@ fields:
     ops_exposure: read
 
   - name: acceptedAt
+    source: acceptedAt
     type: timestamp
     constraints: [NULLABLE]
     classification: PUBLIC
@@ -108,6 +119,7 @@ fields:
     description: 被邀请人注册成功时间
 
   - name: convertedAt
+    source: convertedAt
     type: timestamp
     constraints: [NULLABLE]
     classification: PUBLIC

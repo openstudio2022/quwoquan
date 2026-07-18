@@ -578,7 +578,7 @@ object_types:
     operations:
       - operation: UpdateServiceConfig
         method: POST
-        path: /v1/control-plane/platform/configs/{configKey}:update
+        path: /control-plane/platform/configs/{configKey}:update
         scopes: [ops.platform.config.write]
         danger_level: high
         approval_mode: `+opts.platformApprovalMode+`
@@ -613,7 +613,7 @@ object_types:
     operations:
       - operation: ApplyEnforcementAction
         method: POST
-        path: /v1/control-plane/product/moderation/cases/{caseId}:applyAction
+        path: /control-plane/product/moderation/cases/{caseId}:applyAction
         scopes: [ops.case.write]
         danger_level: high
         approval_mode: dual
@@ -775,7 +775,6 @@ func mustWriteFixtureObject(
 	t.Helper()
 	baseDir := filepath.Join(metadataRoot, domain, objectDir)
 	mustWriteFixtureFile(t, filepath.Join(baseDir, "aggregate.yaml"), strings.TrimSpace(`
-version: 1
 domain: `+domain+`
 aggregate_root: `+aggregateRoot+`
 object_kind: aggregate_root
@@ -784,7 +783,6 @@ storage_backend: mongodb
 members: []
 `)+"\n")
 	mustWriteFixtureFile(t, filepath.Join(baseDir, "service.yaml"), strings.TrimSpace(`
-version: 1
 aggregate: `+aggregateRoot+`
 service:
   name: `+domain+`-service

@@ -1,8 +1,7 @@
 package main
 
 type sharedControlPlaneDefinition struct {
-	Version int `yaml:"version"`
-	Planes  []struct {
+	Planes []struct {
 		ID                      string `yaml:"id"`
 		Description             string `yaml:"description"`
 		TrafficProfile          string `yaml:"traffic_profile"`

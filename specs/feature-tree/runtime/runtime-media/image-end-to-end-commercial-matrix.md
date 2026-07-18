@@ -31,7 +31,7 @@ Dry-run / CI 契约回归 / 本地 mock onebox **不计入**该结论；它们�
 
 - **禁止**：`pending`、`pending_device_lab`、`placeholder`、`dry-run` 报告作为商用矩阵 passed 依据。
 - **必须**：每条报告含环境（网关 base、media base、`commitSha` / `githubRunId`）、设备维度、`postId`/`mediaId` 锚点、服务端摘录（资产状态或 API 摘录，最小侵入）、UI 摘录（截图或结构化断言导出）。
-- **统一 schema**：复用群头像 E2E 报告的顶层字段约定（`schemaVersion`、`scenario`、`status`、`environment`、`serviceEvidence`、`uiEvidence`、`steps`）；图片场景扩展 `media`/`post`/`originalAccess` 块，不与现有格式冲突。
+- **统一 schema**：复用群头像 E2E 报告的顶层字段约定（`schema`、`scenario`、`status`、`environment`、`serviceEvidence`、`uiEvidence`、`steps`）；图片场景扩展 `media`/`post`/`originalAccess` 块，不与现有格式冲突；禁止数字/后缀协议版本身份。
 - **`make gate-runtime-media` / `make gate-runtime-media-full`**：**不**等价于本节全矩阵完成（与视频矩阵声明一致）。
 
 ## 仓库内可自动化闭环（不冒充商用矩阵）
@@ -83,6 +83,6 @@ python3 scripts/check_image_commercial_matrix_prereqs.py --strict
 
 - **云端**：阿里云 ECS onebox 由 `quwoquan_ops/cli/gamma/deploy_gamma_ecs.sh` 与 [`.github/workflows/deploy-gamma-ecs.yml`](../../../../.github/workflows/deploy-gamma-ecs.yml) 驱动；默认公网宿主参见 `quwoquan_ops/cli/gamma/deploy_gamma_ecs.sh` 中的 `GAMMA_ECS_HOST`。
 - **self-hosted 端侧**：可为 **开发者本机**（`flutter devices` 含 Android/iOS）或注册为 `self-hosted` 的 GitHub Runner，与手册 [`commercial-e2e-matrix-runbook.md`](../runtime-messaging/reliable-async-task-channel/commercial-e2e-matrix-runbook.md) 一致。
-- **关键**：`GAMMA_BASE_URL` 必须指向 **gamma-proxy（Caddy）** 端口（compose 中 `LOCAL_GAMMA_HTTP_PORT`，ECS 常见 `18000`），并先用 `quwoquan_service/scripts/gamma/verify_gamma_public_gateway_routing.py` 验证 `/v1/chat`、`/v1/content` 已反代；误用 content 直出端口会得到 `route_not_found` 或 Caddy 占位明文，**不能**作为矩阵 passed 依据。
+- **关键**：`GAMMA_BASE_URL` 必须指向 **gamma-proxy（Caddy）** 端口（compose 中 `LOCAL_GAMMA_HTTP_PORT`，ECS 常见 `18000`），并先用 `quwoquan_service/scripts/gamma/verify_gamma_public_gateway_routing.py` 验证 `/chat`、`/content` 已反代；误用 content 直出端口会得到 `route_not_found` 或 Caddy 占位明文，**不能**作为矩阵 passed 依据。
 
 **诚实结论**：本节不宣称「全矩阵已完成」——须按 Q1–Q4 归档四条环境 **非 dry-run** JSON+UI 证据后方得解除 `GATE_BLOCK`。此前结论若写「仅因无 ECS 即无法矩阵」为**表述过时**，应以 **URL/路由是否正确 + 证据是否齐备** 为准。

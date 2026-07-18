@@ -36,7 +36,7 @@ alwaysApply: false
 ## 4. 优雅降级语义端到端一致（GATE_BLOCK）
 
 - `allowContentQuotaShortfall` / `allowPartialContent` / 弃稿 的语义必须在 `content_plan → produce → finalize → release_integrity` 全链同源：来源不足时**诚实少注册 / 弃稿**，不得在任一层硬失败或强凑配额。
-- 派生分区（fanout）必须继承源任务的 `workflowPolicy` 与 `acceptance`；丢失降级策略导致分区硬失败＝缺陷。
+- 派生分区（fanout）必须继承源任务的 `executionPolicy` 与 `acceptance`；丢失降级策略导致分区硬失败＝缺陷。
 - **载体一致 one-source-one-work（不再有 image 豁免）**：`article`/`image`/`video` 统一一源一作品——每个作品绑定**单一 source unit**（图片/视频作品的 `baseSourceRef` = 其素材所属来源单元，`sourceCollectionId` 仍为同一来源单元内的集合），**禁止跨 source unit 拼接素材或正文**。`base_draft_ledger` 对 image/video 同样登记一源一稿。图片治理（安全/授权/去重 `media_check`）仍按载体特性把关，但**素材来源单一性与文章一致**，不得用 article-centric 假设跳过 image 的单源约束。
 
 ## 5. 版本控制契约 / 系统内置资产跟代码走（GATE_BLOCK）

@@ -44,7 +44,6 @@ final class AlphaCircleGroupMembershipFacet
     circleId: command.circleId,
     groupId: command.groupId,
     personaId: _personaId,
-    expectedVersion: command.expectedVersion,
     state: CircleGroupMembershipState.left,
   );
 
@@ -55,7 +54,6 @@ final class AlphaCircleGroupMembershipFacet
     circleId: command.circleId,
     groupId: command.groupId,
     personaId: command.personaId,
-    expectedVersion: command.expectedVersion,
     state: CircleGroupMembershipState.active,
   );
 
@@ -66,7 +64,6 @@ final class AlphaCircleGroupMembershipFacet
     circleId: command.circleId,
     groupId: command.groupId,
     personaId: command.personaId,
-    expectedVersion: command.expectedVersion,
     state: CircleGroupMembershipState.rejected,
   );
 
@@ -77,7 +74,6 @@ final class AlphaCircleGroupMembershipFacet
     circleId: command.circleId,
     groupId: command.groupId,
     personaId: command.personaId,
-    expectedVersion: command.expectedVersion,
     state: CircleGroupMembershipState.removed,
   );
 
@@ -86,7 +82,7 @@ final class AlphaCircleGroupMembershipFacet
     UpdateCircleGroupMembershipRoleCommand command,
   ) async {
     final key = _key(command.circleId, command.groupId, command.personaId);
-    final current = _required(key, command.expectedVersion);
+    final current = _required(key);
     if (current.state != CircleGroupMembershipState.active) {
       throw StateError('alpha CircleGroupMembership is not active');
     }
@@ -127,11 +123,10 @@ final class AlphaCircleGroupMembershipFacet
     required String circleId,
     required String groupId,
     required String personaId,
-    required int expectedVersion,
     required CircleGroupMembershipState state,
   }) async {
     final key = _key(circleId, groupId, personaId);
-    final current = _required(key, expectedVersion);
+    final current = _required(key);
     final updated = _copy(
       current,
       version: current.version + 1,

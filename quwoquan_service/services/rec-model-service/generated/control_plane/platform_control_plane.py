@@ -23,7 +23,7 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
         {
           "method": "GET",
           "operation": "ListServiceCatalogEntries",
-          "path": "/v1/control-plane/platform/catalog/services",
+          "path": "/control-plane/platform/catalog/services",
           "scopes": [
             "ops.platform.catalog.read"
           ]
@@ -42,7 +42,7 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
         {
           "method": "GET",
           "operation": "ListPlaneBindings",
-          "path": "/v1/control-plane/platform/topology/planes",
+          "path": "/control-plane/platform/topology/planes",
           "scopes": [
             "ops.platform.catalog.read"
           ]
@@ -52,7 +52,7 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
           "danger_level": "high",
           "method": "POST",
           "operation": "UpdatePlaneBinding",
-          "path": "/v1/control-plane/platform/topology/planes/{bindingId}:update",
+          "path": "/control-plane/platform/topology/planes/{bindingId}:update",
           "scopes": [
             "ops.platform.catalog.write"
           ]
@@ -82,7 +82,7 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
           "contract_operation_id": "ops.config_layer.ListServiceConfigs",
           "method": "GET",
           "operation": "ListServiceConfigs",
-          "path": "/v1/control-plane/platform/configs",
+          "path": "/control-plane/platform/configs",
           "scopes": [
             "ops.platform.config.read"
           ]
@@ -93,7 +93,7 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
           "danger_level": "high",
           "method": "POST",
           "operation": "UpdateServiceConfig",
-          "path": "/v1/control-plane/platform/configs/{configKey}:update",
+          "path": "/control-plane/platform/configs/{configKey}:update",
           "scopes": [
             "ops.platform.config.write"
           ]
@@ -113,7 +113,7 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
           "contract_operation_id": "ops.config_layer.ListConfigLayers",
           "method": "GET",
           "operation": "ListConfigLayers",
-          "path": "/v1/control-plane/platform/configs/layers",
+          "path": "/control-plane/platform/configs/layers",
           "scopes": [
             "ops.platform.config.read"
           ]
@@ -122,7 +122,7 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
           "contract_operation_id": "ops.config_layer.ResolveEffectiveConfig",
           "method": "GET",
           "operation": "ResolveEffectiveConfig",
-          "path": "/v1/control-plane/platform/configs/resolve",
+          "path": "/control-plane/platform/configs/resolve",
           "scopes": [
             "ops.platform.config.read"
           ]
@@ -141,7 +141,7 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
         {
           "method": "GET",
           "operation": "ListConfigPackages",
-          "path": "/v1/control-plane/platform/configs/packages",
+          "path": "/control-plane/platform/configs/packages",
           "scopes": [
             "ops.platform.config.read"
           ]
@@ -160,7 +160,7 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
         {
           "method": "GET",
           "operation": "ListConfigInstanceReports",
-          "path": "/v1/control-plane/platform/configs/instances",
+          "path": "/control-plane/platform/configs/instances",
           "scopes": [
             "ops.platform.config.read"
           ]
@@ -168,7 +168,7 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
         {
           "method": "POST",
           "operation": "ReportConfigInstance",
-          "path": "/v1/control-plane/platform/configs/instances/{instanceId}:report",
+          "path": "/control-plane/platform/configs/instances/{instanceId}:report",
           "scopes": [
             "ops.platform.config.write"
           ]
@@ -187,7 +187,7 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
         {
           "method": "GET",
           "operation": "ListGovernancePolicyTemplates",
-          "path": "/v1/control-plane/platform/governance/templates",
+          "path": "/control-plane/platform/governance/templates",
           "scopes": [
             "ops.platform.governance.read"
           ]
@@ -206,7 +206,7 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
         {
           "method": "GET",
           "operation": "ListGovernancePolicyBindings",
-          "path": "/v1/control-plane/platform/governance/bindings",
+          "path": "/control-plane/platform/governance/bindings",
           "scopes": [
             "ops.platform.governance.read"
           ]
@@ -216,7 +216,7 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
           "danger_level": "high",
           "method": "POST",
           "operation": "UpdateGovernancePolicyBinding",
-          "path": "/v1/control-plane/platform/governance/bindings/{bindingId}:update",
+          "path": "/control-plane/platform/governance/bindings/{bindingId}:update",
           "scopes": [
             "ops.platform.governance.write"
           ]
@@ -246,7 +246,7 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
         {
           "method": "GET",
           "operation": "ListConfigReleases",
-          "path": "/v1/control-plane/platform/releases",
+          "path": "/control-plane/platform/releases",
           "scopes": [
             "ops.platform.rollout.read"
           ]
@@ -256,7 +256,7 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
           "danger_level": "critical",
           "method": "POST",
           "operation": "ApplyConfigRelease",
-          "path": "/v1/control-plane/platform/releases/{releaseId}:apply",
+          "path": "/control-plane/platform/releases/{releaseId}:apply",
           "scopes": [
             "ops.platform.rollout.write"
           ]
@@ -266,7 +266,7 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
           "danger_level": "critical",
           "method": "POST",
           "operation": "RollbackConfigRelease",
-          "path": "/v1/control-plane/platform/releases/{releaseId}:rollback",
+          "path": "/control-plane/platform/releases/{releaseId}:rollback",
           "scopes": [
             "ops.platform.rollout.write"
           ]
@@ -285,7 +285,7 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
         {
           "method": "GET",
           "operation": "ListEnvironmentTopologies",
-          "path": "/v1/control-plane/platform/topology/environments",
+          "path": "/control-plane/platform/topology/environments",
           "scopes": [
             "ops.platform.dependency.read"
           ]
@@ -304,7 +304,7 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
         {
           "method": "GET",
           "operation": "ListRuntimeClusters",
-          "path": "/v1/control-plane/platform/topology/clusters",
+          "path": "/control-plane/platform/topology/clusters",
           "scopes": [
             "ops.platform.dependency.read"
           ]
@@ -323,7 +323,7 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
         {
           "method": "GET",
           "operation": "ListRuntimeServices",
-          "path": "/v1/control-plane/platform/topology/services",
+          "path": "/control-plane/platform/topology/services",
           "scopes": [
             "ops.platform.dependency.read"
           ]
@@ -342,7 +342,7 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
         {
           "method": "GET",
           "operation": "ListRuntimeInstances",
-          "path": "/v1/control-plane/platform/topology/instances",
+          "path": "/control-plane/platform/topology/instances",
           "scopes": [
             "ops.platform.dependency.read"
           ]
@@ -361,7 +361,7 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
         {
           "method": "GET",
           "operation": "ListDependencyProfiles",
-          "path": "/v1/control-plane/platform/topology/dependencies",
+          "path": "/control-plane/platform/topology/dependencies",
           "scopes": [
             "ops.platform.dependency.read"
           ]
@@ -380,7 +380,7 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
         {
           "method": "GET",
           "operation": "ListCapacityProfiles",
-          "path": "/v1/control-plane/platform/topology/capacity",
+          "path": "/control-plane/platform/topology/capacity",
           "scopes": [
             "ops.platform.dependency.read"
           ]
@@ -399,7 +399,7 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
         {
           "method": "GET",
           "operation": "ListSLOPolicies",
-          "path": "/v1/control-plane/platform/observability/slos",
+          "path": "/control-plane/platform/observability/slos",
           "scopes": [
             "ops.platform.observability.read"
           ]
@@ -418,7 +418,7 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
         {
           "method": "GET",
           "operation": "ListAlertTemplates",
-          "path": "/v1/control-plane/platform/observability/alerts",
+          "path": "/control-plane/platform/observability/alerts",
           "scopes": [
             "ops.platform.observability.read"
           ]
@@ -437,7 +437,7 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
         {
           "method": "GET",
           "operation": "ListDashboardCards",
-          "path": "/v1/control-plane/platform/observability/dashboards/cards",
+          "path": "/control-plane/platform/observability/dashboards/cards",
           "scopes": [
             "ops.platform.observability.read"
           ]
@@ -456,7 +456,7 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
         {
           "method": "GET",
           "operation": "ListRunbooks",
-          "path": "/v1/control-plane/platform/runbooks",
+          "path": "/control-plane/platform/runbooks",
           "scopes": [
             "ops.platform.runbook.read"
           ]
@@ -466,7 +466,7 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
           "danger_level": "medium",
           "method": "POST",
           "operation": "RunDrill",
-          "path": "/v1/control-plane/platform/runbooks/{runbookId}:runDrill",
+          "path": "/control-plane/platform/runbooks/{runbookId}:runDrill",
           "scopes": [
             "ops.platform.runbook.write"
           ]
@@ -485,7 +485,7 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
         {
           "method": "GET",
           "operation": "ListGateRules",
-          "path": "/v1/control-plane/platform/gates",
+          "path": "/control-plane/platform/gates",
           "scopes": [
             "ops.platform.gate.read"
           ]
@@ -495,7 +495,7 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
           "danger_level": "high",
           "method": "POST",
           "operation": "OverrideGateRule",
-          "path": "/v1/control-plane/platform/gates/{gateId}:override",
+          "path": "/control-plane/platform/gates/{gateId}:override",
           "scopes": [
             "ops.platform.gate.write"
           ]
@@ -514,7 +514,7 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
         {
           "method": "GET",
           "operation": "ListProdPlaneAccessIsolation",
-          "path": "/v1/control-plane/platform/topology/prod-plane-access-isolation",
+          "path": "/control-plane/platform/topology/prod-plane-access-isolation",
           "scopes": [
             "ops.platform.dependency.read"
           ]
@@ -525,7 +525,6 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
       "view_model": "ProdPlaneAccessIsolation"
     }
   ],
-  "plane": "platform-control-plane",
-  "version": 1
+  "plane": "platform-control-plane"
 }'''
 PLATFORM_CONTROL_PLANE = json.loads(_PLATFORM_CONTROL_PLANE_JSON)

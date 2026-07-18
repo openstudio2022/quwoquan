@@ -66,6 +66,19 @@ func (s *PostStore) Commit(_ context.Context, commit postports.Commit) (postport
 	}
 	current, exists := s.posts[commit.Post.ID]
 	if commit.ExpectedVersion == 0 {
+		for _, existing := range s.posts {
+			sameAuthor := existing.AuthorId == commit.Post.AuthorId
+			sameIntent := commit.Post.PublishIntentId != "" &&
+				existing.PublishIntentId == commit.Post.PublishIntentId
+			sameDraft := commit.Post.LocalDraftId != "" &&
+				existing.LocalDraftId == commit.Post.LocalDraftId
+			if sameAuthor && (sameIntent || sameDraft) {
+				return postports.CommitResult{},
+					contentgenerated.AppErrorFromIdempotencyConflict(
+						"post publication identity already committed",
+					)
+			}
+		}
 		if exists {
 			return postports.CommitResult{}, contentgenerated.AppErrorFromVersionConflict("post already exists")
 		}
@@ -101,6 +114,23 @@ func (s *PostStore) FindByID(_ context.Context, postID string) (*postmodel.Post,
 	}
 	copyPost := post
 	return &copyPost, true
+}
+
+func (s *PostStore) FindByPublicationIntent(
+	_ context.Context,
+	authorID string,
+	publishIntentID string,
+) (*postmodel.Post, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, post := range s.posts {
+		if post.AuthorId == strings.TrimSpace(authorID) &&
+			post.PublishIntentId == strings.TrimSpace(publishIntentID) {
+			copyPost := post
+			return &copyPost, true
+		}
+	}
+	return nil, false
 }
 
 func (s *PostStore) AdjustCommentCount(_ context.Context, postID string, delta int64) (int64, bool, error) {

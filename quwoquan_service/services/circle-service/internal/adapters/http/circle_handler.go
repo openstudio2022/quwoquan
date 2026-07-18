@@ -64,13 +64,13 @@ func (h *CircleHandler) Routes() http.Handler {
 	mux.HandleFunc("/healthz", h.handleHealthz)
 
 	// Circles CRUD
-	mux.HandleFunc("/v1/circles", h.handleCircles)
-	mux.HandleFunc("GET /v1/circles/search", h.handleSearchCircles)
-	mux.HandleFunc("/v1/circles/behaviors", h.handleBehaviors)
-	mux.HandleFunc("/v1/circles/", h.handleCircleSubRoutes)
+	mux.HandleFunc("/circles", h.handleCircles)
+	mux.HandleFunc("GET /circles/search", h.handleSearchCircles)
+	mux.HandleFunc("/circles/behaviors", h.handleBehaviors)
+	mux.HandleFunc("/circles/", h.handleCircleSubRoutes)
 
 	// Persona membership projection
-	mux.HandleFunc("/v1/personas/", h.handlePersonaCircles)
+	mux.HandleFunc("/personas/", h.handlePersonaCircles)
 
 	return mux
 }
@@ -79,7 +79,7 @@ func (h *CircleHandler) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
 }
 
-// --- /v1/circles ---
+// --- /circles ---
 
 func (h *CircleHandler) handleCircles(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
@@ -141,10 +141,10 @@ func (h *CircleHandler) handleCreateCircle(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusCreated, map[string]any{"data": circle})
 }
 
-// --- /v1/circles/{circleId}/... ---
+// --- /circles/{circleId}/... ---
 
 func (h *CircleHandler) handleCircleSubRoutes(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, "/v1/circles/")
+	path := strings.TrimPrefix(r.URL.Path, "/circles/")
 	parts := strings.Split(path, "/")
 	if len(parts) == 0 {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "无效路径", "missing circleId"))
@@ -240,7 +240,7 @@ func (h *CircleHandler) handleFeed(w http.ResponseWriter, r *http.Request, circl
 		return
 	}
 
-	// /v1/circles/{circleId}/feed/{postId}/pin or /feature
+	// /circles/{circleId}/feed/{postId}/pin or /feature
 	if len(rest) >= 2 {
 		postID := rest[0]
 		action := rest[1]

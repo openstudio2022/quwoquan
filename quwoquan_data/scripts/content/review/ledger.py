@@ -213,7 +213,7 @@ class ReviewLedger:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "schemaVersion": "quwoquan_data.review_ledger",
+            "schema": "quwoquan_data.review_ledger",
             "executionId": self.executionId,
             "ref": self.ref,
             "policy": self.policy,

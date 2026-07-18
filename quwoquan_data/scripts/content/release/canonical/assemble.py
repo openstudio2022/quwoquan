@@ -76,7 +76,7 @@ def assemble_release(execution_id: str, release_id: str) -> Path:
             verdict.write_into(release_post)
 
         write_json(root / "release_manifest.json", {
-            "schemaVersion": "quwoquan_data.release_manifest/2",
+            "schema": "quwoquan_data.release_manifest",
             "releaseId": release_id,
             "executionId": execution_id,
             "status": "assembled",
@@ -84,7 +84,7 @@ def assemble_release(execution_id: str, release_id: str) -> Path:
         write_json(
             root / "evidence_index.json",
             {
-                "schemaVersion": "quwoquan_data.release_evidence_index/1",
+                "schema": "quwoquan_data.release_evidence_index",
                 "releaseId": release_id,
                 "executionId": execution_id,
                 "executionRef": f"data/tasks/{execution_id}",

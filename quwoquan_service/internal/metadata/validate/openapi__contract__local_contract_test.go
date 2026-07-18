@@ -19,7 +19,7 @@ func TestCommercialProfileRejectsStaleAndOrphanOpenAPISnapshots(t *testing.T) {
 				Domain:       "content",
 				ObjectID:     "content.post",
 				Method:       "GET",
-				PathTemplate: "/v1/content/posts/{postId}",
+				PathTemplate: "/content/posts/{postId}",
 				SourcePath:   "content/post/service.yaml",
 				Kind:         ast.OperationKindQuery,
 			},

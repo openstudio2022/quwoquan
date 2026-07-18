@@ -4,7 +4,7 @@ info:
     title: quwoquan rtc API
     version: v1
 paths:
-    /v1/rtc/call-recordings/{recordingId}:stop:
+    /rtc/call-recordings/{recordingId}:stop:
         post:
             operationId: StopCallRecording
             x-contract-operation-id: rtc.call_recording.StopCallRecording
@@ -38,7 +38,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/rtc/calls:
+    /rtc/calls:
         get:
             operationId: ListCalls
             x-contract-operation-id: rtc.call_session.ListCalls
@@ -92,7 +92,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/rtc/calls/{callId}:
+    /rtc/calls/{callId}:
         get:
             operationId: GetCall
             x-contract-operation-id: rtc.call_session.GetCall
@@ -125,7 +125,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/rtc/calls/{callId}/answer:
+    /rtc/calls/{callId}/answer:
         post:
             operationId: AnswerCall
             x-contract-operation-id: rtc.call_session.AnswerCall
@@ -159,7 +159,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/rtc/calls/{callId}/camera:
+    /rtc/calls/{callId}/camera:
         post:
             operationId: ToggleCamera
             x-contract-operation-id: rtc.call_session.ToggleCamera
@@ -193,7 +193,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/rtc/calls/{callId}/cancel:
+    /rtc/calls/{callId}/cancel:
         post:
             operationId: CancelCall
             x-contract-operation-id: rtc.call_session.CancelCall
@@ -227,7 +227,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/rtc/calls/{callId}/hangup:
+    /rtc/calls/{callId}/hangup:
         post:
             operationId: HangupCall
             x-contract-operation-id: rtc.call_session.HangupCall
@@ -261,7 +261,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/rtc/calls/{callId}/invite:
+    /rtc/calls/{callId}/invite:
         post:
             operationId: InviteToCall
             x-contract-operation-id: rtc.call_session.InviteToCall
@@ -295,7 +295,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/rtc/calls/{callId}/join:
+    /rtc/calls/{callId}/join:
         post:
             operationId: JoinCall
             x-contract-operation-id: rtc.call_session.JoinCall
@@ -329,7 +329,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/rtc/calls/{callId}/leave:
+    /rtc/calls/{callId}/leave:
         post:
             operationId: LeaveCall
             x-contract-operation-id: rtc.call_session.LeaveCall
@@ -363,7 +363,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/rtc/calls/{callId}/mute:
+    /rtc/calls/{callId}/mute:
         post:
             operationId: ToggleMute
             x-contract-operation-id: rtc.call_session.ToggleMute
@@ -397,7 +397,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/rtc/calls/{callId}/recordings:
+    /rtc/calls/{callId}/recordings:
         post:
             operationId: StartCallRecording
             x-contract-operation-id: rtc.call_recording.StartCallRecording
@@ -431,7 +431,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/rtc/calls/{callId}/reject:
+    /rtc/calls/{callId}/reject:
         post:
             operationId: RejectCall
             x-contract-operation-id: rtc.call_session.RejectCall
@@ -465,7 +465,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/rtc/calls/{callId}/screen-share/start:
+    /rtc/calls/{callId}/screen-share/start:
         post:
             operationId: StartScreenShare
             x-contract-operation-id: rtc.call_session.StartScreenShare
@@ -499,7 +499,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/rtc/calls/{callId}/screen-share/stop:
+    /rtc/calls/{callId}/screen-share/stop:
         post:
             operationId: StopScreenShare
             x-contract-operation-id: rtc.call_session.StopScreenShare

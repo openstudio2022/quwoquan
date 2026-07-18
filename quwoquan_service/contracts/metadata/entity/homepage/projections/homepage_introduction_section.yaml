@@ -1,4 +1,3 @@
-version: 1
 read_model: HomepageIntroductionSection
 
 description: |
@@ -27,32 +26,26 @@ client_projection:
       dart_type: String
       nullable: false
       source: kind
-      aliases: [kind]
       default: "'overview'"
 
     - name: title
       dart_type: String
       nullable: false
       source: title
-      aliases: [title]
       default: "''"
 
     - name: bodyMarkdown
       dart_type: String
       nullable: true
       source: bodyMarkdown
-      aliases: [bodyMarkdown, body, markdown]
-
     - name: assets
       dart_type: List<HomepageIntroductionAsset>
       nullable: false
       source: assets
-      aliases: [assets]
       list_element_dart_class: HomepageIntroductionAsset
 
     - name: timelineItems
       dart_type: List<HomepageIntroductionTimelineItem>
       nullable: false
       source: timelineItems
-      aliases: [timelineItems, items]
       list_element_dart_class: HomepageIntroductionTimelineItem

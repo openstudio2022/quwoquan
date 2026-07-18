@@ -2,9 +2,9 @@
 
 ## 背景与目标
 
-当前 App 启动基础配置走 `app_runtime.yaml -> --dart-define -> CloudRuntimeConfig`，远程运营配置走内容域 `/v1/config/app -> contentRuntimeConfigProvider`。两条链路职责不同，但现状容易混称为“启动配置”，并且远程配置仍存在懒加载、重复拉取、无磁盘 LKG、无统一发布闭环等问题。
+当前 App 启动基础配置走 `app_runtime.yaml -> --dart-define -> CloudRuntimeConfig`，远程运营配置走内容域 `/config/app -> contentRuntimeConfigProvider`。两条链路职责不同，但现状容易混称为“启动配置”，并且远程配置仍存在懒加载、重复拉取、无磁盘 LKG、无统一发布闭环等问题。
 
-本 L3 的目标是建立 `AppRemoteConfig` 主线：以本地默认与最近稳定快照保障启动可用，以 `/v1/config/app` 下发可运营参数，以控制面配置包保障审计、灰度、回滚与生效率可见。
+本 L3 的目标是建立 `AppRemoteConfig` 主线：以本地默认与最近稳定快照保障启动可用，以 `/config/app` 下发可运营参数，以控制面配置包保障审计、灰度、回滚与生效率可见。
 
 ## In Scope
 
@@ -13,7 +13,7 @@
    - `AppRemoteConfig`：App 可公开消费的运营参数、轻系统参数、feature flag、kill switch。
    - `ServiceRuntimeConfig`：服务实例内部配置，只经服务端 runtime-config 消费。
    - `PageDataBundle`：页面业务数据，不混入全局配置。
-2. 建立 `AppRemoteConfigSnapshot` 契约：`schemaVersion`、`packageVersion`、`configHash`、`fetchedAt`、`maxAgeSec`、`activationPolicy` 与业务 payload。
+2. 建立 `AppRemoteConfigSnapshot` 契约：`schema`、`packageVersion`、`configHash`、`fetchedAt`、`maxAgeSec`、`activationPolicy` 与业务 payload（单轨当前形状，禁止 `schemaVersion` 信封或协议版本分支）。
 3. 端侧支持 default / disk LKG / network fresh 三层来源，启动不阻塞首帧。
 4. 收口现有 `comment`、`home_channels`、`intersection`、`client_state_sync`、`feature_flags`、`gray_release` 到统一 provider。
 5. 为配置字段建立 owner、risk、reload、activation、expiry、fallback 与验收口径。
@@ -27,11 +27,11 @@
 
 ## 核心契约
 
-`/v1/config/app` 目标响应必须至少包含：
+`/config/app` 目标响应必须至少包含：
 
 ```json
 {
-  "schemaVersion": "app_remote_config.v1",
+  "schema": "app_remote_config",
   "packageVersion": "cfg_2026_06_06_001",
   "configHash": "sha256:...",
   "fetchedAt": "2026-06-06T01:00:00Z",
@@ -65,7 +65,7 @@
 - 无网络、配置接口失败、schema 不兼容时，App 必须使用 LKG 或 codegen defaults。
 - 会话级字段默认 next-session 生效，避免频道、骨架、实验 bucket 中途跳变。
 - kill switch 可 immediate 生效，但必须有最小 payload、短 TTL、审计与回滚。
-- `/v1/config/app` 应支持 `ETag` / `If-None-Match`、多级缓存与预计算快照。
+- `/config/app` 应支持 `ETag` / `If-None-Match`、多级缓存与预计算快照。
 
 ## 验收摘要
 

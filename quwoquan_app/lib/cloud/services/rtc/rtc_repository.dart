@@ -79,7 +79,7 @@ class MockRtcRepository implements RtcRepository {
   @override
   Future<CallSessionDto> getCallSession(String callId) async {
     for (final session in kMockCallSessions) {
-      if (session.id == callId) {
+      if (session.callId == callId) {
         return session;
       }
     }
@@ -141,7 +141,7 @@ class MockRtcRepository implements RtcRepository {
   @override
   Future<List<CallParticipantDto>> listParticipants(String callId) async {
     for (final session in kMockCallSessions) {
-      if (session.id == callId) {
+      if (session.callId == callId) {
         return session.participants;
       }
     }
@@ -189,7 +189,7 @@ class RemoteRtcRepository implements RtcRepository {
           : Map<String, dynamic>.from(raw);
       items.add(CallSessionDto.fromMap(m));
     }
-    final nextRaw = obj['nextCursor']?.toString() ?? obj['cursor']?.toString();
+    final nextRaw = obj['nextCursor']?.toString();
     final nextCursor = nextRaw != null && nextRaw.isEmpty ? null : nextRaw;
     return CursorPage<CallSessionDto>(items: items, nextCursor: nextCursor);
   }
@@ -336,9 +336,7 @@ class RemoteRtcRepository implements RtcRepository {
       decoded,
       context: RtcRequestPageIds.startCallRecording,
     );
-    final recordingId = (response['recordingId'] ?? response['id'] ?? '')
-        .toString()
-        .trim();
+    final recordingId = (response['recordingId'] ?? '').toString().trim();
     if (recordingId.isEmpty) {
       throw StateError('StartCallRecording response missing recordingId');
     }
@@ -349,9 +347,7 @@ class RemoteRtcRepository implements RtcRepository {
   Future<void> stopRecording(String recordingId) async {
     await _http.postJson(
       _uri(RtcApiMetadata.stopCallRecordingPath(recordingId: recordingId)),
-      headers: CloudRequestHeaders.forPage(
-        RtcRequestPageIds.stopCallRecording,
-      ),
+      headers: CloudRequestHeaders.forPage(RtcRequestPageIds.stopCallRecording),
       body: _emptyPost.toJson(),
     );
   }

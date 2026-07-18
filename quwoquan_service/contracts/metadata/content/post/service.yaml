@@ -1,4 +1,3 @@
-version: 1
 
 service:
   name: content-service
@@ -13,7 +12,8 @@ service:
 
 api_routes:
   - method: GET
-    path: /v1/content/feed
+    path: /content/feed
+
     operation: GetFeed
     # Anonymous discovery is intentionally supported. A signed account/device
     # enriches ranking, but cannot be a prerequisite for the public route.
@@ -66,7 +66,8 @@ api_routes:
       visibility: public
 
   - method: GET
-    path: /v1/content/posts/search
+    path: /content/posts/search
+
     operation: SearchPosts
     actor: persona
     application:
@@ -121,13 +122,14 @@ api_routes:
       visibility: private
 
   - method: POST
-    path: /v1/content/posts
-    operation: CreatePost
+    path: /content/posts:publish
+
+    operation: SubmitPostPublication
     actor: persona
     application:
       kind: command
-      facet: PostLifecycleCommandFacet
-      method: createPost
+      facet: PostPublicationCommandFacet
+      method: submitPostPublication
       aggregate_owner: Post
       mutation_target: Post
       invariant_target: Post
@@ -154,21 +156,23 @@ api_routes:
       response_classification: PII
       log_policy: metadata_only
     telemetry:
-      metric: content_post_create
+      metric: content_post_publication_submit
       trace: true
       attributes: [content_type, outcome]
     slo:
       latency_p95_ms: 800
       availability_percent: 99.9
     client_contract:
-      dart_import: ../content/post_commands.dart
-      request_type: CreateContentPostCommand
-      response_type: ContentPostLifecycleCommandResult
-      request_encoder: encodeCreateContentPostCommand
-      response_decoder: decodeContentPostLifecycleCommandResult
-    description: 创建内容（可草稿或直发）
+      dart_import: ../content/post_publication_contracts.dart
+      request_type: SubmitContentPostPublicationCommand
+      response_type: ContentPostPublicationReceipt
+      request_encoder: encodeSubmitContentPostPublicationCommand
+      response_decoder: decodeContentPostPublicationReceipt
+    description: 以本地草稿唯一的一次性 PublishIntent 提交发布；服务端按意图永久去重并原子创建已发布 Post，同一意图的后续请求只返回原回执
     request_entity: Post
-    writable_fields: [contentType, contentIdentity, title, body, summary, semanticMentions, mediaUrls, mediaItems, coverUrl, thumbnailUrl, articleMarkdown, articleMarkdownVersion, articleAssetManifest, articleRenderProfile, videoUrl, coverStrategy, coverFrameTimeMs, illustrationAssetId, location, locationName, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, assistantUsePolicy, sourcePostId, sourceType, deviceInfo, publishLocation, authorDisplayNameSnapshot, authorAvatarUrlSnapshot, personaContextVersion]
+    request_fields: [publishIntentId, localDraftId, contentType, contentIdentity, title, body, summary, semanticMentions, mediaAssetIds, mediaItems, articleMarkdown, markdownDialect, articleAssetManifest, articleRenderProfile, coverStrategy, coverFrameTimeMs, illustrationAssetId, location, locationName, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, assistantUsePolicy, sourcePostId, sourceType, deviceInfo, publishLocation, authorDisplayNameSnapshot, authorAvatarUrlSnapshot, personaContextVersion]
+    writable_fields: [publishIntentId, localDraftId, contentType, contentIdentity, title, body, summary, semanticMentions, mediaAssetIds, mediaItems, articleMarkdown, markdownDialect, articleAssetManifest, articleRenderProfile, coverStrategy, coverFrameTimeMs, illustrationAssetId, location, locationName, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, assistantUsePolicy, sourcePostId, sourceType, deviceInfo, publishLocation, authorDisplayNameSnapshot, authorAvatarUrlSnapshot, personaContextVersion]
+    response_fields: [publishIntentId, localDraftId, postId, state, committedVersion, acceptedAt]
     security:
       auth_mode: required
       principal: owner
@@ -177,7 +181,8 @@ api_routes:
       visibility: private
 
   - method: GET
-    path: /v1/content/sub-accounts/{subAccountId}/posts
+    path: /content/sub-accounts/{subAccountId}/posts
+
     operation: ListUserPosts
     actor: none
     application:
@@ -231,7 +236,8 @@ api_routes:
       visibility: public
 
   - method: GET
-    path: /v1/content/posts/{postId}
+    path: /content/posts/{postId}
+
     operation: GetPost
     actor: none
     application:
@@ -284,83 +290,9 @@ api_routes:
       anonymous_policy: allow
       visibility: public
 
-  - method: PATCH
-    path: /v1/content/posts/{postId}
-    operation: UpdatePost
-    actor: persona
-    application:
-      kind: command
-      facet: PostLifecycleCommandFacet
-      method: updatePost
-      aggregate_owner: Post
-      mutation_target: Post
-      invariant_target: Post
-    description: 更新内容（仅 draft 可改；published 后不可变）
-    writable_fields: [contentType, contentIdentity, title, body, summary, semanticMentions, mediaUrls, mediaItems, coverUrl, thumbnailUrl, articleMarkdown, articleMarkdownVersion, articleAssetManifest, articleRenderProfile, videoUrl, coverStrategy, coverFrameTimeMs, illustrationAssetId, location, locationName, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, assistantUsePolicy]
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-
-  - method: POST
-    path: /v1/content/posts/{postId}/publish
-    operation: PublishPost
-    actor: persona
-    application:
-      kind: command
-      facet: PostLifecycleCommandFacet
-      method: publishPost
-      aggregate_owner: Post
-      mutation_target: Post
-      invariant_target: Post
-    authorization:
-      principal: persona
-      ownership_policy: owner_only
-    commercial:
-      status: ready
-    reliability:
-      timeout_ms: 5000
-      cancellation: supported
-      retry_mode: idempotent
-      max_attempts: 2
-      idempotency: required
-    error_codes:
-      - CONTENT.USER.unauthorized
-      - CONTENT.USER.post_not_found
-      - CONTENT.USER.invalid_argument
-      - CONTENT.USER.idempotency_conflict
-      - CONTENT.SYSTEM.storage_write_failed
-      - CONTENT.SYSTEM.internal_error
-    privacy:
-      request_classification: PII
-      response_classification: PII
-      log_policy: metadata_only
-    telemetry:
-      metric: content_post_publish
-      trace: true
-      attributes: [content_type, visibility, outcome]
-    slo:
-      latency_p95_ms: 800
-      availability_percent: 99.9
-    client_contract:
-      dart_import: ../content/post_commands.dart
-      request_type: PublishContentPostCommand
-      response_type: ContentPostLifecycleCommandResult
-      request_encoder: encodePublishContentPostCommand
-      response_decoder: decodeContentPostLifecycleCommandResult
-    description: 发布草稿（发布后内容本体不可修改）
-    writable_fields: [contentIdentity, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, assistantUsePolicy]
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-
   - method: DELETE
-    path: /v1/content/posts/{postId}
+    path: /content/posts/{postId}
+
     operation: DeletePost
     actor: persona
     application:
@@ -370,6 +302,21 @@ api_routes:
       aggregate_owner: Post
       mutation_target: Post
       invariant_target: Post
+    authorization:
+      principal: persona
+      ownership_policy: post_owner
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 5000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes: [CONTENT.USER.unauthorized, CONTENT.USER.post_not_found, CONTENT.USER.forbidden_delete, CONTENT.USER.idempotency_conflict, CONTENT.SYSTEM.storage_write_failed, CONTENT.SYSTEM.internal_error]
+    privacy: { request_classification: PII, response_classification: INTERNAL, log_policy: metadata_only }
+    telemetry: { metric: content_post_delete, trace: true, attributes: [outcome] }
+    slo: { latency_p95_ms: 800, availability_percent: 99.9 }
     description: 删除内容（级联下架作者分发与用户转发并写入墓碑）
     security:
       auth_mode: required
@@ -379,7 +326,8 @@ api_routes:
       visibility: private
 
   - method: PATCH
-    path: /v1/content/posts/{postId}/settings
+    path: /content/posts/{postId}/settings
+
     operation: UpdatePostSettings
     actor: persona
     application:
@@ -389,12 +337,28 @@ api_routes:
       aggregate_owner: Post
       mutation_target: Post
       invariant_target: Post
+    authorization:
+      principal: persona
+      ownership_policy: post_owner
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 5000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes: [CONTENT.USER.unauthorized, CONTENT.USER.post_not_found, CONTENT.USER.forbidden_edit, CONTENT.USER.invalid_argument, CONTENT.USER.idempotency_conflict, CONTENT.SYSTEM.storage_write_failed, CONTENT.SYSTEM.internal_error]
+    privacy: { request_classification: PII, response_classification: PII, log_policy: metadata_only }
+    telemetry: { metric: content_post_settings_update, trace: true, attributes: [outcome] }
+    slo: { latency_p95_ms: 800, availability_percent: 99.9 }
     description: 更新发布后仍可调整的 Post 设置（visibility / assistantUsePolicy / homepage reference）；Circle 分发只经 CirclePostPlacement command
     writable_fields: [visibility, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, assistantUsePolicy]
-    auth: required
-
+    security:
+      auth_mode: required
   - method: POST
-    path: /v1/content/posts/{postId}:promoteToWork
+    path: /content/posts/{postId}:promoteToWork
+
     operation: PromotePostToWork
     actor: persona
     application:
@@ -404,12 +368,28 @@ api_routes:
       aggregate_owner: Post
       mutation_target: Post
       invariant_target: Post
+    authorization:
+      principal: persona
+      ownership_policy: post_owner
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 5000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes: [CONTENT.USER.unauthorized, CONTENT.USER.post_not_found, CONTENT.USER.forbidden_edit, CONTENT.USER.invalid_argument, CONTENT.USER.invalid_content_type, CONTENT.USER.idempotency_conflict, CONTENT.SYSTEM.storage_write_failed, CONTENT.SYSTEM.internal_error]
+    privacy: { request_classification: PII, response_classification: PII, log_policy: metadata_only }
+    telemetry: { metric: content_post_promote_to_work, trace: true, attributes: [outcome] }
+    slo: { latency_p95_ms: 800, availability_percent: 99.9 }
     description: 点滴升级为作品（原地升级，保持 postId 与 deeplink 不变）
-    writable_fields: [contentType, title, summary, semanticMentions, coverUrl, articleMarkdown, articleMarkdownVersion, articleAssetManifest, articleRenderProfile, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, assistantUsePolicy]
-    auth: required
-
+    writable_fields: [contentType, title, summary, semanticMentions, coverUrl, articleMarkdown, markdownDialect, articleAssetManifest, articleRenderProfile, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, assistantUsePolicy]
+    security:
+      auth_mode: required
   - method: GET
-    path: /v1/content/sub-accounts/{subAccountId}/interactions/received
+    path: /content/sub-accounts/{subAccountId}/interactions/received
+
     operation: ListProfileInteractionActivitiesReceived
     actor: persona
     application:
@@ -452,10 +432,11 @@ api_routes:
     # 响应契约（框架级 response_body）：分页列表，items 承载 ProfileInteractionActivityWire；附 nextCursor/hasMore。
     response_body: ProfileInteractionActivityWire
     response_body_kind: page
-    auth: required
-
+    security:
+      auth_mode: required
   - method: GET
-    path: /v1/content/sub-accounts/{subAccountId}/interactions/sent
+    path: /content/sub-accounts/{subAccountId}/interactions/sent
+
     operation: ListProfileInteractionActivitiesSent
     actor: persona
     application:
@@ -498,10 +479,11 @@ api_routes:
     # 响应契约（框架级 response_body）：分页列表，items 承载 ProfileInteractionActivityWire；附 nextCursor/hasMore。
     response_body: ProfileInteractionActivityWire
     response_body_kind: page
-    auth: required
-
+    security:
+      auth_mode: required
   - method: PATCH
-    path: /v1/content/sub-accounts/{subAccountId}/interactions/{interactionId}/state
+    path: /content/sub-accounts/{subAccountId}/interactions/{interactionId}/state
+
     operation: UpdateProfileInteractionState
     actor: persona
     application:
@@ -513,10 +495,11 @@ api_routes:
       invariant_target: Post
     description: 当前 owner 对 received 互动逐条写入 seen/read 幂等状态；state 仅允许 seen/read，initiated 不接受状态写入
     query_params: [state]
-    auth: required
-
+    security:
+      auth_mode: required
   - method: GET
-    path: /v1/content/sub-accounts/{subAccountId}/author-impact
+    path: /content/sub-accounts/{subAccountId}/author-impact
+
     operation: GetAuthorImpact
     actor: persona
     application:
@@ -532,10 +515,11 @@ api_routes:
     # 响应契约（框架级 response_body）：整页为单读模型对象（端 _decodeObject → AuthorImpactSummary.fromMap）。
     response_body: AuthorImpactSummary
     response_body_kind: object
-    auth: required
-
+    security:
+      auth_mode: required
   - method: GET
-    path: /v1/content/sub-accounts/{subAccountId}/author-impact/evidence
+    path: /content/sub-accounts/{subAccountId}/author-impact/evidence
+
     operation: ListAuthorImpactEvidence
     actor: persona
     application:
@@ -554,10 +538,11 @@ api_routes:
     # R-ID02：显式声明响应契约。整页为单读模型对象（端 _decodeObject → AuthorImpactEvidencePage.fromMap）。
     response_body: AuthorImpactEvidencePage
     response_body_kind: object
-    auth: required
-
+    security:
+      auth_mode: required
   - method: GET
-    path: /v1/config/app
+    path: /config/app
+
     operation: GetAppConfig
     actor: none
     application:
@@ -600,7 +585,8 @@ api_routes:
       visibility: public
 
   - method: GET
-    path: /v1/content/posts/{postId}/counters
+    path: /content/posts/{postId}/counters
+
     operation: GetCounters
     actor: none
     application:
@@ -612,7 +598,8 @@ api_routes:
     description: 聚合计数
 
   - method: GET
-    path: /v1/content/footprint
+    path: /content/footprint
+
     operation: GetMyFootprint
     actor: persona
     application:
@@ -667,7 +654,8 @@ api_routes:
       visibility: private
 
   - method: POST
-    path: /v1/content/behaviors
+    path: /content/behaviors
+
     operation: ReportBehaviors
     actor: persona_or_device
     application:
@@ -713,67 +701,8 @@ api_routes:
       visibility: private
 
   - method: POST
-    path: /v1/content/posts/{postId}/media:bind
-    operation: BindMediaAssetsToPost
-    actor: persona
-    application:
-      kind: command
-      facet: MediaBindingCommandFacet
-      method: bindMediaAssetsToPost
-      aggregate_owner: Post
-      mutation_target: Post
-      invariant_target: Post
-    description: 将 draft/cold_start 素材绑定到帖子，供 Markdown 长文发布和回读使用
-    authorization:
-      principal: persona
-      ownership_policy: post_author
-    commercial:
-      status: blocked
-      block_reason: App typed Media Facet and Post aggregate binding are complete; Gamma create-publish convergence evidence remains required
-      gap_id: CONTENT_MEDIA_GAMMA_UAT
-      target_story: app-cloud-business-object-commercial-closure
-    reliability:
-      timeout_ms: 5000
-      cancellation: supported
-      retry_mode: idempotent
-      max_attempts: 2
-      idempotency: required
-    error_codes:
-      - CONTENT.USER.unauthorized
-      - CONTENT.USER.media_not_found
-      - CONTENT.USER.invalid_argument
-      - CONTENT.USER.idempotency_conflict
-      - CONTENT.USER.version_conflict
-      - CONTENT.SYSTEM.storage_read_failed
-      - CONTENT.SYSTEM.storage_write_failed
-    privacy:
-      request_classification: INTERNAL
-      response_classification: INTERNAL
-      log_policy: metadata_only
-    telemetry:
-      metric: content_post_media_bind
-      trace: true
-      attributes: [outcome, asset_count]
-    slo:
-      latency_p95_ms: 800
-      availability_percent: 99.9
-    request_fields: [assetIds]
-    response_fields: [postId, boundAssetIds, boundCount]
-    client_contract:
-      dart_import: ../content/media_contracts.dart
-      request_type: BindContentPostMediaAssetsCommand
-      response_type: BindContentPostMediaAssetsResult
-      request_encoder: encodeBindContentPostMediaAssetsCommand
-      response_decoder: decodeBindContentPostMediaAssetsResult
-    security:
-      auth_mode: required
-      principal: persona
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
+    path: /content/articles/summary:generate
 
-  - method: POST
-    path: /v1/content/articles/summary:generate
     operation: GenerateArticleSummary
     actor: persona
     application:
@@ -784,10 +713,11 @@ api_routes:
       mutation_target: Post
       invariant_target: Post
     description: 为文章生成摘要草案（用户可编辑）
-    auth: required
-
+    security:
+      auth_mode: required
   - method: GET
-    path: /v1/content/helper-read/{contentId}
+    path: /content/helper-read/{contentId}
+
     operation: GetHelperRead
     actor: none
     application:
@@ -799,7 +729,8 @@ api_routes:
     description: 帮读摘要
 
   - method: GET
-    path: /v1/content/intersections/summary
+    path: /content/intersections/summary
+
     operation: GetMyIntersectionSummary
     actor: persona
     authorization:
@@ -846,7 +777,8 @@ api_routes:
       visibility: private
 
   - method: GET
-    path: /v1/content/intersections
+    path: /content/intersections
+
     operation: ListMyIntersections
     actor: persona
     authorization:
@@ -895,7 +827,8 @@ api_routes:
       visibility: private
 
   - method: GET
-    path: /v1/content/intersections/object
+    path: /content/intersections/object
+
     operation: GetObjectIntersections
     actor: persona
     authorization:

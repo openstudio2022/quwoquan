@@ -1,5 +1,5 @@
 // Package userprofile implements the assistant ProactiveInterestReader port by
-// calling user-service's GET /v1/users/{userId}/interest-profile. It is the only
+// calling user-service's GET /users/{userId}/interest-profile. It is the only
 // assistant egress to the user domain (assistant and user are always separate
 // processes, per quwoquan_ops/environments/process_domain_mapping.yaml), so reads must go
 // over HTTP rather than in-process.
@@ -60,7 +60,7 @@ func (c *Client) GetInterestProfile(ctx context.Context, userID string) (*applic
 	if c == nil || c.http == nil || c.baseURL == "" || userID == "" {
 		return nil, nil
 	}
-	endpoint := c.baseURL + "/v1/users/" + url.PathEscape(userID) + "/interest-profile"
+	endpoint := c.baseURL + "/users/" + url.PathEscape(userID) + "/interest-profile"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, fmt.Errorf("interest profile build request: %w", err)

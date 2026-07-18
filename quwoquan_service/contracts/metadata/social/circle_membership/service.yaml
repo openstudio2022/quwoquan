@@ -1,4 +1,3 @@
-version: 1
 service:
   name: circle-service
   domain: circle
@@ -11,7 +10,8 @@ service:
     target_story: app-cloud-business-object-commercial-closure
 api_routes:
   - method: GET
-    path: /v1/personas/{personaId}/circles
+    path: /personas/{personaId}/circles
+
     operation: ListPersonaCircles
     actor: none
     application:
@@ -22,7 +22,8 @@ api_routes:
       slice: PersonaCirclePageSlice
     query_params: [cursor, limit]
     response_entity: PersonaCircleSlice
-    auth: public
+    security:
+      auth_mode: public
     authorization: { principal: public, ownership_policy: public_circle_membership_projection }
     reliability: { timeout_ms: 1500, cancellation: supported, retry_mode: none, max_attempts: 1, idempotency: none }
     error_codes: [CIRCLE.USER.invalid_argument, CIRCLE.SYSTEM.membership_storage_write_failed]
@@ -37,10 +38,12 @@ api_routes:
       response_decoder: decodePersonaCirclePageSlice
 
   - method: POST
-    path: /v1/circles/{circleId}/memberships
+    path: /circles/{circleId}/memberships
+
     operation: JoinCircle
     actor: persona
-    auth: required
+    security:
+      auth_mode: required
     application:
       kind: command
       facet: CircleMembershipCommandFacet
@@ -63,10 +66,12 @@ api_routes:
       response_decoder: decodeCircleMembershipCommandResult
 
   - method: DELETE
-    path: /v1/circles/{circleId}/memberships/self
+    path: /circles/{circleId}/memberships/self
+
     operation: LeaveCircle
     actor: persona
-    auth: required
+    security:
+      auth_mode: required
     application:
       kind: command
       facet: CircleMembershipCommandFacet
@@ -74,7 +79,7 @@ api_routes:
       aggregate_owner: CircleMembership
       mutation_target: CircleMembership
       invariant_target: CircleMembership
-    headers: [If-Match, Idempotency-Key]
+    headers: [Idempotency-Key]
     authorization: { principal: persona, ownership_policy: self_membership_only }
     reliability: { timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required }
     error_codes: [CIRCLE.USER.invalid_argument, CIRCLE.USER.membership_not_found, CIRCLE.USER.membership_owner_cannot_leave, CIRCLE.USER.membership_version_conflict, CIRCLE.USER.membership_idempotency_conflict, CIRCLE.SYSTEM.membership_storage_write_failed]
@@ -90,10 +95,12 @@ api_routes:
       response_decoder: decodeCircleMembershipCommandResult
 
   - method: GET
-    path: /v1/circles/{circleId}/memberships/self
+    path: /circles/{circleId}/memberships/self
+
     operation: GetMyCircleMembership
     actor: persona
-    auth: required
+    security:
+      auth_mode: required
     application:
       kind: query
       facet: CircleMembershipQueryFacet
@@ -115,7 +122,8 @@ api_routes:
       response_decoder: decodeCircleMembershipSlice
 
   - method: GET
-    path: /v1/circles/{circleId}/memberships
+    path: /circles/{circleId}/memberships
+
     operation: ListCircleMemberships
     actor: none
     application:
@@ -126,7 +134,8 @@ api_routes:
       slice: CircleMembershipPageSlice
     query_params: [cursor, limit]
     response_entity: CircleMembershipSlice
-    auth: public
+    security:
+      auth_mode: public
     authorization: { principal: public, ownership_policy: public_circle_roster }
     reliability: { timeout_ms: 1500, cancellation: supported, retry_mode: none, max_attempts: 1, idempotency: none }
     error_codes: [CIRCLE.USER.invalid_argument, CIRCLE.SYSTEM.membership_storage_write_failed]
@@ -141,7 +150,8 @@ api_routes:
       response_decoder: decodeCircleMembershipPageSlice
 
   - method: PATCH
-    path: /v1/circles/{circleId}/memberships/{personaId}/role
+    path: /circles/{circleId}/memberships/{personaId}/role
+
     operation: UpdateCircleMembershipRole
     actor: persona
     application:
@@ -153,7 +163,9 @@ api_routes:
       invariant_target: CircleMembership
     request_entity: UpdateCircleMembershipRoleRequest
     response_entity: CircleMembershipCommandResult
-    auth: required
+    security:
+      auth_mode: required
+    headers: [Idempotency-Key]
     authorization: { principal: persona, ownership_policy: circle_moderator_only }
     reliability: { timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required }
     error_codes: [CIRCLE.USER.invalid_argument, CIRCLE.USER.permission_denied, CIRCLE.USER.membership_not_found, CIRCLE.USER.membership_role_invalid, CIRCLE.USER.membership_version_conflict, CIRCLE.USER.membership_idempotency_conflict, CIRCLE.SYSTEM.membership_storage_write_failed]

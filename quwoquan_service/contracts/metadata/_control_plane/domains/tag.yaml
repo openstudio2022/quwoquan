@@ -1,4 +1,3 @@
-version: 1
 domain: tag
 display_name: Tag
 template_role: replica_ready

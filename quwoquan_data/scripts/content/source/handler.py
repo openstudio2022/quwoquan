@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from core.data_issue import (
-    DataIssueCode, DataIssueStage,
+    DataIssue, DataIssueCode, DataIssueError, DataIssueStage,
     DataIssueLane,
     DataRecoveryAction,
     data_issue,
@@ -132,7 +132,7 @@ def handle_download(
     entity_ids: list[str],
     entity_type: str = "",
     lane: str = "all",
-    max_workers: int = 1,
+    max_workers: int | None = None,
     defer_gate: bool = False,
 ) -> None:
     """Orchestrate download: source_plan → fetch → source_screen.
@@ -144,7 +144,10 @@ def handle_download(
 
     Output: entities/*/1.download/source_refs.json plus source-unit evidence.
     """
+    from core.runtime_policy import active_runtime_policy
+
     entity_ids = [str(entity_id).strip() for entity_id in entity_ids if str(entity_id).strip()]
+    max_workers = max_workers or active_runtime_policy().download_concurrency
     selected_lanes = selected_download_lanes(lane)
 
     ensure_execution_command_layout(execution_id, "source")
@@ -166,7 +169,7 @@ def handle_download(
     effective_lanes = selected_lanes
     if effective_lanes is None:
         effective_lanes = active_download_lanes(execution_id)
-    text_lane_selected = effective_lanes is None or bool(effective_lanes & {"homepage", "article"})
+    text_lane_selected = bool(effective_lanes & {"homepage", "article"})
     # 类型以 coverageTargets canonical 为真相源校正（WP5 漂移修复）；
     # 全体同类型时同步收敛单值 entity_type，避免 CLI 传错类型造成目录/后续步骤分叉。
     from content.source.prepare import resolve_research_entity_types
@@ -221,7 +224,7 @@ def handle_download(
             {
                 "entityId": entity["entityId"],
                 "entityName": entity["canonicalName"],
-                "policyRevision": "encyclopedia-primary-v2",
+                "policyRevision": "encyclopedia-primary",
                 "sources": planned_sources,
                 "dispatchByContentType": dispatch_by_content_type,
             },
@@ -267,6 +270,7 @@ def handle_download(
     fetched_sources: list[dict] = []
     quality_by_entity: dict[str, list[dict]] = defaultdict(list)
     failed_image_entities: list[str] = []
+    typed_fetch_issues: list[DataIssue] = []
     _write_download_progress(
         execution_id,
         status="running",
@@ -294,19 +298,51 @@ def handle_download(
         if result.get("failedImage"):
             failed_image_entities.append(entity_id)
 
+    def _record_typed_fetch_failure(
+        entity_id: str,
+        entity_index: int,
+        error: DataIssueError,
+    ) -> None:
+        typed_fetch_issues.extend(error.issues)
+        write_gate_report(
+            execution_id=execution_id,
+            command="source",
+            step="download_fetch",
+            ref=entity_id,
+            passed=False,
+            issues=list(error.issues),
+            evidence_summary={
+                "entityIndex": entity_index,
+                "issueCodes": [issue.code.value for issue in error.issues],
+            },
+            next_step="typed_repair_queue",
+        )
+        _write_download_progress(
+            execution_id,
+            status="running",
+            entity_id=entity_id,
+            entity_index=entity_index,
+            entity_count=len(entity_ids),
+            message="typed source fetch failure recorded",
+        )
+
     if max_workers == 1 or len(entity_ids) <= 1:
         for entity_index, entity_id in enumerate(entity_ids, start=1):
-            result = _fetch_download_entity(
-                execution_id=execution_id,
-                entity_type=entity_type,
-                vertical=vertical,
-                domain=domain,
-                etype=etype,
-                entity_id=entity_id,
-                entity_index=entity_index,
-                entity_count=len(entity_ids),
-                selected_lanes=selected_lanes,
-            )
+            try:
+                result = _fetch_download_entity(
+                    execution_id=execution_id,
+                    entity_type=entity_type,
+                    vertical=vertical,
+                    domain=domain,
+                    etype=etype,
+                    entity_id=entity_id,
+                    entity_index=entity_index,
+                    entity_count=len(entity_ids),
+                    selected_lanes=selected_lanes,
+                )
+            except DataIssueError as exc:
+                _record_typed_fetch_failure(entity_id, entity_index, exc)
+                continue
             _merge_fetch_result(result)
     else:
         print(
@@ -336,6 +372,9 @@ def handle_download(
                 entity_index, entity_id = futures[future]
                 try:
                     result = future.result()
+                except DataIssueError as exc:
+                    _record_typed_fetch_failure(entity_id, entity_index, exc)
+                    continue
                 except Exception as exc:  # noqa: BLE001
                     issue = f"downloadFetch: {entity_id} raised {type(exc).__name__}: {exc}"
                     print(f"[download] Entity failed {entity_index}/{len(entity_ids)}: {issue}", file=sys.stderr, flush=True)
@@ -483,6 +522,7 @@ def handle_download(
         print("[source] Execution gate deferred until all entity-type groups finish", flush=True)
         return
     gate_issues = gate_download(execution_id, target_entities=set(entity_ids))
+    gate_issues.extend(typed_fetch_issues)
     gate_issues.extend(
         data_issue(
             DataIssueCode.MEDIA_FETCH_FAILED,

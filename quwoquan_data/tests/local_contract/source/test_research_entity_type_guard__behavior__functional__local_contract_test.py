@@ -33,34 +33,23 @@ from content.source.prepare import (  # noqa: E402
     resolve_research_entity_types,
 )
 from content.execution import store  # noqa: E402
+from support.execution_manifest_fixture import ExecutionFixtureBuilder  # noqa: E402
 
 EXECUTION_ID = "20260711--travel-homepage-research-type--cn-zhejiang--canary-001"
 
 
 def _mixed_type_task() -> str:
-    spec = store.scaffold_spec(
-        execution_id=EXECUTION_ID,
-        vertical="travel",
-        organize_by="地域",
-        key="岱山县",
-        name="类型守卫混类型批",
-        category="景区",
-        scope={
-            "region": "中国/浙江省/舟山市/岱山县",
-            "entityTypes": ["地点/古镇", "地点/自然景观"],
-            "coverageTargets": [
-                {"entityType": "地点/古镇", "name": "东沙古镇", "aliases": ["东沙古渔镇"]},
-                {"entityType": "地点/自然景观", "name": "秀山岛"},
-            ],
-        },
-        content={"quotas": {"entityHomepagesPerTarget": 1}},
-        created_by="test",
-    )
-    spec.update(
-        acceptance={"minEntities": 2},
-        workflowPolicy={},
-        queuePolicy={},
-    )
+    spec = ExecutionFixtureBuilder(
+        EXECUTION_ID,
+        targets=(
+            {
+                "entityType": "地点/古镇",
+                "name": "东沙古镇",
+                "aliases": ["东沙古渔镇"],
+            },
+            {"entityType": "地点/自然景观", "name": "秀山岛"},
+        ),
+    ).spec_payload()
     store.save_spec(spec)
     return spec["executionId"]
 

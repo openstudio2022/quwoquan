@@ -54,7 +54,7 @@ sit_acceptance:
     - user_acceptance journey 已 recorded：cross_domain_search_journey_test.dart 覆盖
       suggest 本地两阶段、result 云侧固定 Tab、本地对象不进 result、最近搜索水合、单域降级不阻塞整页、整页错误态可重试、默认页/结果页
       referralSource=search + feedRequestId 归因链。
-    - api_integration 远端集成：local-gamma `/v1/search` 冒烟 + search-service contract test
+    - api_integration 远端集成：local-gamma `/search` 冒烟 + search-service contract test
       + runtime retrieve test 已 recorded；故障/回滚演练已 recorded（`.qwq_output/env/gamma/runs/search_rollback_rehearsal.md`）。真集群容量/性能为
       WP-G/SLO 与 R-S06-S-1 发布前阻断，不阻塞本能力 SIT。
     - '[migrated_from_recorded_noncanonical] quwoquan_service/runtime/search/retrieve_test.go'

@@ -10,6 +10,7 @@ import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/media/app_image_cache_controller.dart';
 import 'package:quwoquan_app/core/media/content_media_url.dart';
 import 'package:quwoquan_app/core/media/media_candidate_failure.dart';
+import 'package:quwoquan_app/core/media/media_load_failure_cache.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
@@ -151,6 +152,21 @@ class AppCachedNetworkImage extends ConsumerWidget {
         child: errorWidget ?? _buildErrorWidget(context),
       );
     }
+    final primaryIdentity = candidates.first;
+    if (MediaLoadFailureCache.instance.shouldSkipNetwork(primaryIdentity)) {
+      final record = MediaLoadFailureCache.instance.activeFailure(
+        primaryIdentity,
+      );
+      final error = StateError(
+        'media negative cache active '
+        '(kind=${record?.kind.name ?? 'other'}; '
+        'status=${record?.statusCode ?? 'n/a'})',
+      );
+      return _ImageLoadFailureReporter(
+        onReport: () => onLoadFailed?.call(error),
+        child: errorWidget ?? _buildErrorWidget(context),
+      );
+    }
     return _buildCandidateImage(context, ref, candidates, 0);
   }
 
@@ -192,6 +208,7 @@ class AppCachedNetworkImage extends ConsumerWidget {
             context,
           ),
           imageBuilder: (context, imageProvider) {
+            MediaLoadFailureCache.instance.clearIdentity(candidates[index]);
             ref
                 .read(pageLifecycleObservabilityProvider)
                 .recordMediaLoad(
@@ -226,20 +243,34 @@ class AppCachedNetworkImage extends ConsumerWidget {
             if (nextIndex < candidates.length) {
               return _buildCandidateImage(context, ref, candidates, nextIndex);
             }
-            developer.log(
-              'image load failed after ${candidates.length} candidate(s); '
-              'last=${_summarizeImageUrl(url)}; '
-              '(kind=${classifyMediaCandidateLoadFailure(error, candidateUrl: url).name})',
-              name: 'AppCachedNetworkImage',
-              error: error.runtimeType,
+            final failureIdentity = candidates.first;
+            MediaLoadFailureCache.instance.recordFailure(
+              failureIdentity,
+              error: error,
+              candidateUrl: url,
             );
-            debugPrint(
-              '[AppCachedNetworkImage] image load failed after '
-              '${candidates.length} candidate(s); '
-              'last=${_summarizeImageUrl(url)}; '
-              'kind=${classifyMediaCandidateLoadFailure(error, candidateUrl: url).name}; '
-              'errorType=${error.runtimeType}',
+            final kind = classifyMediaCandidateLoadFailure(
+              error,
+              candidateUrl: url,
             );
+            if (MediaLoadFailureCache.instance.shouldLogFailure(
+              failureIdentity,
+            )) {
+              developer.log(
+                'image load failed after ${candidates.length} candidate(s); '
+                'last=${_summarizeImageUrl(url)}; '
+                '(kind=${kind.name})',
+                name: 'AppCachedNetworkImage',
+                error: error.runtimeType,
+              );
+              debugPrint(
+                '[AppCachedNetworkImage] image load failed after '
+                '${candidates.length} candidate(s); '
+                'last=${_summarizeImageUrl(url)}; '
+                'kind=${kind.name}; '
+                'errorType=${error.runtimeType}',
+              );
+            }
             ref
                 .read(pageLifecycleObservabilityProvider)
                 .recordMediaLoad(

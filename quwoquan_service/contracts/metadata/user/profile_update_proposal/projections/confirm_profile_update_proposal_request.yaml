@@ -1,7 +1,0 @@
-version: 1
-read_model: ConfirmProfileUpdateProposalRequest
-description: 确认提案只提交提案 expectedVersion；目标 Persona 版本由 named Reader 读取。
-source_entities: [ProfileUpdateProposal]
-consumers: [app]
-fields:
-  - { name: expectedProposalVersion, type: int }

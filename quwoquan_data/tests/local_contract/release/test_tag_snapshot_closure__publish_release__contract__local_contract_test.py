@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from content.release.canonical.object_transaction import validate_canonical_publish
+from content.release.canonical.object_transaction_audit import validate_canonical_publish
 from content.release.canonical.object_transaction_contract import refresh_canonical_tag_snapshots
 
 

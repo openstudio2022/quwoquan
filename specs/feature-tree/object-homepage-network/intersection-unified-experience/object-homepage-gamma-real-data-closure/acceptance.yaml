@@ -42,7 +42,7 @@ commercial_readiness_review:
     - "实体主页 agent 内容生成默认经 cursor_sdk 使用最新 composer 执行；缺少 env preflight、task_workflow_state、authoritative token ledger、firstPassRate 任一真实证据时，不得宣称百级完成。"
     - "实体主页正文主源闭集固定为 Wikipedia + 百度百科 + 搜狗百科 + 今日头条百科，rank=0/1/2/2；Wikidata/OSM/百科搜索仅做候选发现，Wikivoyage/360/官网/政府/门户/媒体/OTA 不得进入 source plan/source unit/writing pack/primaryEvidenceRef。"
     - "下一轮允许进入开发，但必须先修 P0 gamma health 与 P1 manifest/seed/probe，不能先做 App UI 或新增并行 API。"
-    - "继续复用 /v1/homepages/*、/v1/circles/*、/v1/content/intersections/object；只有 metadata 缺字段时才扩 read model。"
+    - "继续复用 /homepages/*、/circles/*、/content/intersections/object；只有 metadata 缺字段时才扩 read model。"
     - "本 Story 仍是 gamma-local 商用准入门，不宣称 prod-ready。"
 implementation_backlog:
   P0_scope_freeze:
@@ -239,7 +239,7 @@ gwt_acceptance:
             - gamma_local
       supporting: []
     notes:
-      - "2026-07-06 continue-dev: `python3 quwoquan_app/scripts/gamma/run_local_gamma_t3.py --strict-all --verification-scope object-homepage-gamma-real-data-closure` passed（已迁移 canonical run evidence：`t3_report.json`），当前 strict 已覆盖 `/v1/homepages/{homepageId}/object-page-bundle`、`/introduction`、`/review-summary`、`/related-groups`、`/impact` 的 typed + populated 断言。"
+      - "2026-07-06 continue-dev: `python3 quwoquan_app/scripts/gamma/run_local_gamma_t3.py --strict-all --verification-scope object-homepage-gamma-real-data-closure` passed（已迁移 canonical run evidence：`t3_report.json`），当前 strict 已覆盖 `/homepages/{homepageId}/object-page-bundle`、`/introduction`、`/review-summary`、`/related-groups`、`/impact` 的 typed + populated 断言。"
       - "2026-07-06 continue-dev: `flutter test test/user_acceptance/pages/entity/homepageDetail/homepageDetail_page__user_acceptance_test.dart` 全绿，实体主页壳层、介绍导流与相关对象旅程保持可用；关注状态 refresh 的 gamma 远端实操仍待 prod-hosted gray。"
   GWT3_circle_homepage_real_detail:
     title: "圈子主页真实 detail、impact、成员、讨论与加入状态闭环"
@@ -284,14 +284,14 @@ gwt_acceptance:
             - gamma_local
       supporting: []
     notes:
-      - "2026-07-06 continue-dev: `python3 quwoquan_app/scripts/gamma/run_local_gamma_t3.py --strict-all --verification-scope object-homepage-gamma-real-data-closure` passed（已迁移 canonical run evidence：`t3_report.json`），当前 strict 已覆盖 `/v1/circles/{circleId}`、`/impact`、`/members`、`/feed` 的 typed + populated 断言。"
+      - "2026-07-06 continue-dev: `python3 quwoquan_app/scripts/gamma/run_local_gamma_t3.py --strict-all --verification-scope object-homepage-gamma-real-data-closure` passed（已迁移 canonical run evidence：`t3_report.json`），当前 strict 已覆盖 `/circles/{circleId}`、`/impact`、`/members`、`/feed` 的 typed + populated 断言。"
       - "2026-07-06 continue-dev: `flutter test test/user_acceptance/pages/circle/circleDetail/circleDetail_page__user_acceptance_test.dart test/user_acceptance/journeys/circle/circle_detail_journey__user_acceptance_test.dart` 全绿，圈子 detail 基本旅程、错误态与幂等往返保持通过；join/leave 的 prod-hosted 真实远端刷新仍待 gray smoke。"
   GWT4_object_intersection_reason_contract:
     title: "对象交集理由的真实事实行契约"
     given:
       - "homepage 和 circle 都有可校验 viewer relation、sample visuals、span target 与 action hints。"
     when:
-      - "请求 /v1/content/intersections/object?objectType=homepage|circle&objectId={id}。"
+      - "请求 /content/intersections/object?objectType=homepage|circle&objectId={id}。"
     then:
       - "每条商用可见理由有 primaryText、primarySpans、target、reasonId、iconKey 或可解析 icon。"
       - "join(primarySpans.text) == primaryText；无 primaryText 的理由不渲染。"

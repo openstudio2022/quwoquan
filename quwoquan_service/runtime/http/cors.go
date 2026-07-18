@@ -35,6 +35,8 @@ func DefaultCORSOptions() CORSOptions {
 			"Accept",
 			"Authorization",
 			"Content-Type",
+			"Idempotency-Key",
+			"If-Match",
 			"Origin",
 			"X-Client-Account-Id",
 			"X-Client-App-Version",
@@ -58,6 +60,7 @@ func DefaultCORSOptions() CORSOptions {
 			"X-Referral-Source",
 			"X-Request-Id",
 			"X-Share-Id",
+			"X-Qwq-Startup-Proof",
 			"X-Trace-Id",
 		},
 		ExposeHeaders: []string{

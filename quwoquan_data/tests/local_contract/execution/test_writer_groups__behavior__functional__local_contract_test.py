@@ -40,7 +40,7 @@ from content.execution.writer_groups import (  # noqa: E402
     write_writer_group,
 )
 from content.post import object_index as content_object  # noqa: E402
-from content.post.draft_io import (  # noqa: E402
+from content.post.article.draft_io import (  # noqa: E402
     write_agent_draft,
     write_placeholder_draft,
     write_writing_pack,

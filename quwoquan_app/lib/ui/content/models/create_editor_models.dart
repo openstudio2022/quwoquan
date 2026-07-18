@@ -947,9 +947,7 @@ class CreateDraft {
         map['articleFontPreset']?.toString(),
       ),
     );
-    final storedCover = (map['articleCoverImagePath'] ?? map['coverUrl'] ?? '')
-        .toString()
-        .trim();
+    final storedCover = (map['articleCoverImagePath'] ?? '').toString().trim();
     final draftType = (map['type'] ?? editorKind.name).toString().trim();
     final draftFlowKind = _draftFlowKindFromStorage(
       rawDraftFlowKind: map['draftFlowKind']?.toString(),
@@ -968,8 +966,7 @@ class CreateDraft {
             ? extractArticleImagePaths(normalizedBlocks)
             : storedImagePaths,
         videoPath: (map['videoPath'] ?? '').toString(),
-        originalVideoPath:
-            ((map['originalVideoPath'] ?? map['videoPath']) ?? '').toString(),
+        originalVideoPath: (map['originalVideoPath'] ?? '').toString(),
         videoThumbnail: (map['videoThumbnail'] ?? '').toString(),
         videoDurationMs: (map['videoDurationMs'] as num?)?.toInt() ?? 0,
         videoTrimStartMs: (map['videoTrimStartMs'] as num?)?.toInt() ?? 0,
@@ -1057,7 +1054,7 @@ class CreateDraft {
       'title': state.title,
       'body': state.body,
       'articleMarkdown': articleMarkdown,
-      'articleMarkdownVersion': qwqRichMarkdownVersion,
+      'markdownDialect': qwqRichMarkdownVersion,
       'articleAssetManifest': articleAssetManifest,
       'articleRenderProfile': articleRenderProfile,
       'activeArticlePageId': state.activeArticlePageId,
@@ -1111,7 +1108,7 @@ class CreateDraft {
       'title': state.title,
       'body': state.body,
       'articleMarkdown': articleMarkdown,
-      'articleMarkdownVersion': qwqRichMarkdownVersion,
+      'markdownDialect': qwqRichMarkdownVersion,
       'articleAssetManifest': articleAssetManifest,
       'articleRenderProfile': articleRenderProfile,
       'articleTemplate': state.articleTemplate.name,
@@ -1167,7 +1164,7 @@ class CreateDraft {
       assets.add(_articleDraftManifestRow(assetId, imageUrl, role: 'figure'));
     }
     return <String, dynamic>{
-      'schemaVersion': 1,
+      'schema': 'article-asset-manifest',
       'markdownVersion': qwqRichMarkdownVersion,
       'assets': assets,
     };

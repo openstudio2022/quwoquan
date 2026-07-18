@@ -94,13 +94,8 @@ func (handler *CircleHandler) handleFiles(w http.ResponseWriter, request *http.R
 		}
 		writeJSON(w, http.StatusOK, result)
 	case http.MethodDelete:
-		expectedVersion, err := parseExpectedVersion(request.Header.Get("If-Match"))
-		if err != nil {
-			writeHTTPError(w, request, rterr.NewInvalidArgument(rterr.ModuleCircle, "请求缺少有效版本", err.Error()))
-			return
-		}
 		result, err := handler.fileCommands.Delete(request.Context(), fileapp.DeleteCommand{
-			CircleID: circleID, FileID: fileID, ExpectedVersion: expectedVersion,
+			CircleID: circleID, FileID: fileID,
 		})
 		if err != nil {
 			writeHTTPError(w, request, err)

@@ -22,6 +22,8 @@ void main() {
           return <String, Object?>{
             'postId': 'post-1',
             'contentType': 'article',
+            'authorDisplayName': '内容作者',
+            'authorAvatarUrl': 'media/avatar/s/author/v1/avatar.png',
             'title': '正文标题',
             'body': '正文',
             'articleMarkdown': '# 正文标题',
@@ -33,7 +35,7 @@ void main() {
       final result = await adapter.getPost(postId: 'post-1');
 
       expect(captured.method, 'GET');
-      expect(captured.url.path, '/v1/content/posts/post-1');
+      expect(captured.url.path, '/content/posts/post-1');
       expect(captured.headers['X-Client-Page-Id'], 'content.post.get');
       expect(
         captured.headers['X-Client-Operation-Id'],
@@ -44,7 +46,73 @@ void main() {
         AppUiSurfaces.workBrowser.id,
       );
       expect(result.post.id, 'post-1');
+      expect(result.post.displayName, '内容作者');
+      expect(result.post.avatarUrl, 'media/avatar/s/author/v1/avatar.png');
       expect(result.detailWire.articleMarkdown, '# 正文标题');
+    });
+
+    test('GetPost 保留视频 canary 的播放投影字段', () async {
+      final adapter = RemoteContentPostReaderAdapter(
+        client: _client((_) {
+          return <String, Object?>{
+            'postId': 'fixture_video_001',
+            'contentType': 'video',
+            'contentIdentity': 'work',
+            'authorId': 'fixture_user_travel',
+            'authorDisplayName': '契约旅行家',
+            'authorAvatarUrl':
+                'media/avatar/s/archived-avatar/user/fixture_user_travel/v1/avatar.png',
+            'imageUrls': <String>[
+              'media/image/s/archived-image/post/fixture_video_001/v1/cover.png',
+            ],
+            'coverUrl':
+                'media/image/s/archived-image/post/fixture_video_001/v1/cover.png',
+            'thumbnailUrl':
+                'media/image/s/archived-image/post/fixture_video_001/v1/cover.png',
+            'videoUrl':
+                'media/video/s/video-primary-0001/post/video-content-0001/source.mp4',
+            'width': 1280,
+            'height': 720,
+            'durationMs': 45000,
+            'mediaItems': <Object?>[
+              <String, Object?>{
+                'kind': 'video',
+                'url':
+                    'media/video/s/video-primary-0001/post/video-content-0001/source.mp4',
+                'coverUrl':
+                    'media/image/s/archived-image/post/fixture_video_001/v1/cover.png',
+                'durationMs': 45000,
+                'width': 1280,
+                'height': 720,
+              },
+            ],
+          };
+        }),
+        invocationContext: _contextFor(AppUiSurfaces.workBrowser),
+      );
+
+      final result = await adapter.getPost(postId: 'fixture_video_001');
+      final post = result.post;
+
+      expect(post.id, 'fixture_video_001');
+      expect(post.type, 'video');
+      expect(post.displayName, '契约旅行家');
+      expect(post.avatarUrl, isNotEmpty);
+      expect(post.videoUrl, isNotEmpty);
+      expect(post.thumbnailUrl, isNotEmpty);
+      expect(post.durationMs, 45000);
+      expect(result.mergedArticleWireMap['mediaItems'], <Object?>[
+        <String, dynamic>{
+          'kind': 'video',
+          'url':
+              'media/video/s/video-primary-0001/post/video-content-0001/source.mp4',
+          'coverUrl':
+              'media/image/s/archived-image/post/fixture_video_001/v1/cover.png',
+          'durationMs': 45000,
+          'width': 1280,
+          'height': 720,
+        },
+      ]);
     });
 
     test('ListUserPosts 经 generated client 使用 userProfile surface', () async {
@@ -77,7 +145,7 @@ void main() {
       );
 
       expect(captured.method, 'GET');
-      expect(captured.url.path, '/v1/content/sub-accounts/author-1/posts');
+      expect(captured.url.path, '/content/sub-accounts/author-1/posts');
       expect(captured.url.queryParameters, <String, String>{
         'identity': 'work',
         'type': 'image',
@@ -95,6 +163,9 @@ void main() {
         AppUiSurfaces.userProfile.id,
       );
       expect(result.items.single.id, 'post-1');
+      expect(result.items.single.imageUrls, <String>[
+        'https://example.test/p.jpg',
+      ]);
       expect(result.nextCursor, 'cursor-2');
     });
   });

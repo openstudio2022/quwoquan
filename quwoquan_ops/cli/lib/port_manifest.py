@@ -20,8 +20,8 @@ def load_port_manifest(path: Path | None = None) -> dict[str, Any]:
 
 def validate_port_manifest(manifest: dict[str, Any]) -> list[str]:
     issues: list[str] = []
-    if manifest.get("schemaVersion") != "local-env-port-manifest/v1":
-        issues.append("schemaVersion must be local-env-port-manifest/v1")
+    if manifest.get("schema") != "local-env-port-manifest":
+        issues.append("schema must be local-env-port-manifest")
 
     planes = manifest.get("planes")
     roles = manifest.get("roles")

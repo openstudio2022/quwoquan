@@ -10,7 +10,7 @@ def article_commercial_closure_enabled(
     spec: Mapping[str, Any] | None = None,
 ) -> bool:
     candidate: Mapping[str, Any] | None = spec if isinstance(spec, Mapping) else None
-    workflow = candidate.get("workflowPolicy") if isinstance(candidate, Mapping) else {}
+    workflow = candidate.get("executionPolicy") if isinstance(candidate, Mapping) else {}
     workflow = workflow if isinstance(workflow, Mapping) else {}
     return bool(workflow.get(ARTICLE_COMMERCIAL_CLOSURE_FLAG) is True)
 

@@ -1,24 +1,24 @@
 """Execution-spec coverage targets 的强边界解析。"""
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any, Mapping
 
+from content.execution.spec_contract import CoverageTarget, ExecutionSpec
 from governance.coverage.entity_extract import require_domain_etype
 
 
-@dataclass(frozen=True)
-class CoverageTarget:
-    name: str
-    entity_type: str
-    aliases: tuple[str, ...]
-
-
-def coverage_targets(spec: Mapping[str, Any]) -> tuple[CoverageTarget, ...]:
-    """Decode the frozen targets from the validated execution boundary."""
+def _scope(spec: ExecutionSpec | Mapping[str, Any]) -> Mapping[str, Any]:
+    if isinstance(spec, ExecutionSpec):
+        return spec.scope.to_dict()
     scope = spec.get("scope")
-    if not isinstance(scope, Mapping):
-        return ()
+    return scope if isinstance(scope, Mapping) else {}
+
+
+def coverage_targets(spec: ExecutionSpec | Mapping[str, Any]) -> tuple[CoverageTarget, ...]:
+    """Decode the frozen targets from the validated execution boundary."""
+    if isinstance(spec, ExecutionSpec):
+        return spec.scope.coverage_targets
+    scope = _scope(spec)
     rows = scope.get("coverageTargets") or []
     targets: list[CoverageTarget] = []
     for row in rows:
@@ -38,11 +38,11 @@ def coverage_targets(spec: Mapping[str, Any]) -> tuple[CoverageTarget, ...]:
     return tuple(targets)
 
 
-def coverage_entity_ids(spec: Mapping[str, Any]) -> list[str]:
+def coverage_entity_ids(spec: ExecutionSpec | Mapping[str, Any]) -> list[str]:
     """Return primary coverage target names in declaration order."""
-    scope = spec.get("scope")
-    if not isinstance(scope, Mapping):
-        return []
+    if isinstance(spec, ExecutionSpec):
+        return [target.name for target in spec.scope.coverage_targets]
+    scope = _scope(spec)
     entity_ids: list[str] = []
     for row in scope.get("coverageTargets") or []:
         if not isinstance(row, Mapping):
@@ -53,7 +53,9 @@ def coverage_entity_ids(spec: Mapping[str, Any]) -> list[str]:
     return entity_ids
 
 
-def coverage_entity_type_for_entity(spec: Mapping[str, Any], entity_id: str) -> str:
+def coverage_entity_type_for_entity(
+    spec: ExecutionSpec | Mapping[str, Any], entity_id: str
+) -> str:
     """Resolve a frozen target or alias to its declared domain type."""
     normalized = str(entity_id or "").strip()
     for target in coverage_targets(spec):
@@ -62,7 +64,7 @@ def coverage_entity_type_for_entity(spec: Mapping[str, Any], entity_id: str) -> 
     return coverage_entity_type(spec)
 
 
-def coverage_entity_type(spec: Mapping[str, Any]) -> str:
+def coverage_entity_type(spec: ExecutionSpec | Mapping[str, Any]) -> str:
     """Return the batch type only for a homogeneous target set."""
     primary_ids = set(coverage_entity_ids(spec))
     types = {
@@ -74,10 +76,15 @@ def coverage_entity_type(spec: Mapping[str, Any]) -> str:
         return next(iter(types))
     if types:
         return ""
-    scope = spec.get("scope")
-    if not isinstance(scope, Mapping):
-        return ""
-    declared = [str(value).strip() for value in (scope.get("entityTypes") or []) if str(value).strip()]
+    declared = (
+        list(spec.scope.entity_types)
+        if isinstance(spec, ExecutionSpec)
+        else [
+            str(value).strip()
+            for value in (_scope(spec).get("entityTypes") or [])
+            if str(value).strip()
+        ]
+    )
     if len(declared) != 1:
         return ""
     require_domain_etype(declared[0], context="scope.entityTypes[0]")

@@ -25,7 +25,7 @@ def _run(
         sys.executable,
         str(CLI),
         "task",
-        "geo-homepages",
+        "execute",
         "--execution-id",
         execution_id,
         "--rollout",
@@ -77,7 +77,7 @@ def test_operator_creates_resumes_and_retries_one_work_package(tmp_path: Path):
 
     drifted = _run(tmp_path, EXECUTION_ID, forbidden_limit_override=1)
     assert drifted.returncode != 0
-    assert "governed rollout rejects selection overrides: limit" in drifted.stderr + drifted.stdout
+    assert "unrecognized arguments: --limit" in drifted.stderr + drifted.stdout
 
     retried = _run(tmp_path, RETRY_ID, retry_of=EXECUTION_ID)
     assert retried.returncode == 0, retried.stdout + retried.stderr

@@ -1,12 +1,12 @@
 # L3：页面横向质量矩阵（page-horizontal-quality）
 
 > **索引**：规格与全量矩阵在父目录平铺，便于与 `ios-native-page-enforcement`、`dual-theme-page-coverage` 并列检索。  
-> **命名**：**不叫「支柱」**；合规项为可扩展 **横向维度 P1–Pn**（当前 **P1–P8**，**P7 布局 / P8 语义 token 分列**）。
+> **命名**：**不叫「支柱」**；合规项为可扩展 **横向维度 P1–Pn**（当前 **P1–P9**；P9 为异步等待与恢复，不改变既有 P1–P8 边界）。
 
 | 文档 | 路径 |
 |------|------|
 | 横向维度定义、页面类型 local_contract–T7、强制校验 v1/v2 | [page-horizontal-quality-spec.md](../page-horizontal-quality-spec.md) |
-| 领域 × 类型 × P1–P8 矩阵 | [page-horizontal-quality-matrix.md](../page-horizontal-quality-matrix.md) |
+| 领域 × 类型 × P1–P9 矩阵 | [page-horizontal-quality-matrix.md](../page-horizontal-quality-matrix.md) |
 | PR 自检清单 | [page_horizontal_quality_pr_checklist.md](../../../../gates/page_horizontal_quality_pr_checklist.md) |
 | v1 自动化校验 | 仓库根 `quwoquan_app/scripts/runtime/verify_page_horizontal_quality_matrix.py` + `verify_page_matrix_scan_complete.py`；**`make verify-app-page-horizontal-quality`** |
 | Cursor 治理规则 | [`.cursor/rules/09-page-horizontal-content.review.quality.mdc`](../../../../../.cursor/rules/09-page-horizontal-content.review.quality.mdc)（`alwaysApply`） |
@@ -23,6 +23,7 @@
 | **实施波次 B**（S1–S9 之后） | [nine-session-rollout-content.execution.planning.md §实施波次 B](./nine-session-rollout-content.execution.planning.md) + [`树内任务文档` M8](./树内任务文档) |
 | CR-20260330-010（实施波次 B） | [`CR-20260330-010-mock-isolation-implementation-wave.md`](../../../../changelog/CR-20260330-010-mock-isolation-implementation-wave.md)（YAML 副本可与实施首 PR 一并补） |
 | **S8（P8 语义 token）子 L3** | [`../s8-p8-semantic-token/spec.md`](../s8-p8-semantic-token/spec.md) · [`CR-20260330-012`](../../../../changelog/CR-20260330-012-s8-p8-semantic-token-baseline.yaml) |
+| **P9（异步等待与恢复）** | 三种等待模式、1.5/3/6 秒语义、单一进度与必达终态；页面模式和证据登记于 `specs/gates/user_acceptance_page_inventory.yaml` |
 
 ## L1 / L2 / L3 映射
 

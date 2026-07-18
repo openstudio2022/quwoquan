@@ -14,7 +14,7 @@ import (
 //
 //   - Graph 边权真算：edgeWeight = relationStrength × interactionFrequency × recencyDecay。
 //     三个因子全部来自交集理由自身已携带的真实信号（关系强度 / 多跳证据绝对计数 / 新鲜度），
-//     纯确定性算术，不调用任何同步评分服务（/v1/score）。因此「物化写路径」与「读穿透热路径」
+//     纯确定性算术，不调用任何同步评分服务（/score）。因此「物化写路径」与「读穿透热路径」
 //     均零同步打分，不变量保持。
 //   - Lifecycle 状态机真算：以「上一次物化快照」为基线对边权做增量比对，按 delta 落
 //     new / strengthened / stable / weakened / reactivated 弱标，并回填 previousStrength / strengthDelta。

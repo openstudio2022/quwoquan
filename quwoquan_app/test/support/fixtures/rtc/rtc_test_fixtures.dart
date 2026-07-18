@@ -1,11 +1,11 @@
 import 'dart:convert';
 
-/// 与 rtc-service `GET /v1/rtc/calls` 响应形状一致（`items` + `cursor`），供 wire 单测复用。
+/// 与 rtc-service `GET /rtc/calls` 响应形状一致（`items` + `cursor`），供 wire 单测复用。
 String rtcListCallsResponseJsonWithCursor() {
   return jsonEncode({
     'items': [
       {
-        '_id': 'call_x',
+        'callId': 'call_x',
         'callType': 'audio',
         'status': 'ended',
         'initiatorId': 'u1',

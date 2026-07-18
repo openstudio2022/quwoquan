@@ -18,7 +18,7 @@ func TestBlockCascade_ClearsFollowAndPendingGreeting(t *testing.T) {
 	// mutual followers — mutual followers are already contacts, so a greeting is
 	// (correctly) rejected as already_contact. Blocking must still cascade-clear
 	// this remaining follow edge.
-	followRec := doRequest(t, http.MethodPost, "/v1/user/sub-accounts/sa_bc_blocked/follow", "", authHeadersForPersona("bc_blocker", "sa_bc_blocker"))
+	followRec := doRequest(t, http.MethodPost, "/user/sub-accounts/sa_bc_blocked/follow", "", authHeadersForPersona("bc_blocker", "sa_bc_blocker"))
 	if followRec.Code != http.StatusOK {
 		t.Fatalf("seed follow edge: expected 200, got %d: %s", followRec.Code, followRec.Body.String())
 	}
@@ -26,7 +26,7 @@ func TestBlockCascade_ClearsFollowAndPendingGreeting(t *testing.T) {
 	sendRec := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/greeting-request",
+		"/user/greeting-request",
 		`{"targetSubAccountId":"sa_bc_blocked","requestMessage":"hi","source":"profile"}`,
 		authHeadersForPersona("bc_blocker", "sa_bc_blocker"),
 	)
@@ -37,7 +37,7 @@ func TestBlockCascade_ClearsFollowAndPendingGreeting(t *testing.T) {
 	blockRec := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/sub-accounts/sa_bc_blocked/block",
+		"/user/sub-accounts/sa_bc_blocked/block",
 		"",
 		authHeadersForPersona("bc_blocker", "sa_bc_blocker"),
 	)
@@ -48,7 +48,7 @@ func TestBlockCascade_ClearsFollowAndPendingGreeting(t *testing.T) {
 	capRec := doRequest(
 		t,
 		http.MethodGet,
-		"/v1/user/sub-accounts/sa_bc_blocked/relationship/capability",
+		"/user/sub-accounts/sa_bc_blocked/relationship/capability",
 		"",
 		authHeadersForPersona("bc_blocker", "sa_bc_blocker"),
 	)
@@ -64,7 +64,7 @@ func TestBlockCascade_ClearsFollowAndPendingGreeting(t *testing.T) {
 	relRec := doRequest(
 		t,
 		http.MethodGet,
-		"/v1/user/sub-accounts/sa_bc_blocked/relationship",
+		"/user/sub-accounts/sa_bc_blocked/relationship",
 		"",
 		authHeadersForPersona("bc_blocker", "sa_bc_blocker"),
 	)

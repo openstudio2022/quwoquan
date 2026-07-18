@@ -1,18 +1,19 @@
-version: 2
 aggregate: CallSession
 
 events:
   - name: CallInitiated
+    source: CallInitiated
     description: 通话发起（发起方创建 CallSession + LiveKit Room）
     producer: rtc-service
     consumers: [realtime-gateway, notification-service]
     channel: event_store
     client_ws_type: call.initiated
     payload_entity: CallSession
-    payload_fields: [_id, callType, initiatorId, initiatorRingtoneId, conversationId, circleId, maxParticipants, createdAt]
+    payload_fields: [callId, callType, initiatorId, initiatorRingtoneId, conversationId, circleId, maxParticipants, createdAt]
     realtime_channel: "rt:rtc:call:{callId}"
 
   - name: CallRinging
+    source: CallRinging
     description: 来电振铃（被邀请人收到来电通知）
     producer: rtc-service
     consumers: [realtime-gateway, notification-service]
@@ -36,6 +37,7 @@ events:
         trustRelation（known/possibly_unknown 信任标记）、expiresAt（过期时间，端侧幂等去重）。
 
   - name: CallAnswered
+    source: CallAnswered
     description: 通话接听（参与者进入 connecting 状态）
     producer: rtc-service
     consumers: [realtime-gateway]
@@ -45,6 +47,7 @@ events:
     realtime_channel: "rt:rtc:call:{callId}"
 
   - name: CallConnected
+    source: CallConnected
     description: 媒体建连成功（ICE+DTLS 完成，参与者 connected）
     producer: rtc-service
     consumers: [realtime-gateway]
@@ -54,18 +57,20 @@ events:
     realtime_channel: "rt:rtc:call:{callId}"
 
   - name: CallEnded
+    source: CallEnded
     description: 通话结束（所有参与者离开或主动挂断）
     producer: rtc-service
     consumers: [realtime-gateway, chat-service, notification-service]
     channel: event_store
     client_ws_type: call.ended
     payload_entity: CallSession
-    payload_fields: [_id, callType, initiatorId, conversationId, endReason, durationMs, participantCount, startedAt, endedAt]
+    payload_fields: [callId, callType, initiatorId, conversationId, endReason, durationMs, participantCount, startedAt, endedAt]
     realtime_channel: "rt:rtc:call:{callId}"
     chat_integration:
       description: chat-service 消费此事件，在关联会话中插入通话记录消息（type=system_call_log）
 
   - name: ParticipantJoined
+    source: ParticipantJoined
     description: 参与者加入通话（多人模式）
     producer: rtc-service
     consumers: [realtime-gateway]
@@ -75,6 +80,7 @@ events:
     realtime_channel: "rt:rtc:call:{callId}"
 
   - name: ParticipantLeft
+    source: ParticipantLeft
     description: 参与者离开通话
     producer: rtc-service
     consumers: [realtime-gateway]
@@ -84,6 +90,7 @@ events:
     realtime_channel: "rt:rtc:call:{callId}"
 
   - name: CallRecordingStarted
+    source: CallRecordingStarted
     description: 通话录制开始（LiveKit Egress 触发）
     producer: rtc-service
     consumers: [realtime-gateway]
@@ -93,6 +100,7 @@ events:
     realtime_channel: "rt:rtc:call:{callId}"
 
   - name: CallRecordingStopped
+    source: CallRecordingStopped
     description: 通话录制停止
     producer: rtc-service
     consumers: [realtime-gateway]
@@ -102,6 +110,7 @@ events:
     realtime_channel: "rt:rtc:call:{callId}"
 
   - name: ScreenShareStarted
+    source: ScreenShareStarted
     description: 屏幕共享开始
     producer: rtc-service
     consumers: [realtime-gateway]
@@ -111,6 +120,7 @@ events:
     realtime_channel: "rt:rtc:call:{callId}"
 
   - name: ScreenShareStopped
+    source: ScreenShareStopped
     description: 屏幕共享停止
     producer: rtc-service
     consumers: [realtime-gateway]

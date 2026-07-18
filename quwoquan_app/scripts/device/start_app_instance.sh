@@ -10,7 +10,6 @@ ENV_NAME=""
 DEVICE_ID=""
 GATEWAY_BASE_URL=""
 LEGAL_BASE_URL=""
-MEDIA_BASE_URL=""
 MEDIA_AVATAR_BASE_URL=""
 MEDIA_IMAGE_BASE_URL=""
 MEDIA_VIDEO_BASE_URL=""
@@ -29,7 +28,6 @@ Usage:
 Options:
   --gateway-base-url <url>        Override CLOUD_GATEWAY_BASE_URL.
   --legal-base-url <url>          Override APP_LEGAL_BASE_URL.
-  --media-base-url <url>          Override all MEDIA_* base URLs.
   --media-avatar-base-url <url>   Override MEDIA_AVATAR_CDN_BASE_URL only.
   --media-image-base-url <url>    Override MEDIA_IMAGE_CDN_BASE_URL only.
   --media-video-base-url <url>    Override MEDIA_VIDEO_CDN_BASE_URL only.
@@ -64,10 +62,6 @@ while [[ $# -gt 0 ]]; do
       ;;
     --legal-base-url)
       LEGAL_BASE_URL="${2:-}"
-      shift 2
-      ;;
-    --media-base-url)
-      MEDIA_BASE_URL="${2:-}"
       shift 2
       ;;
     --media-avatar-base-url)
@@ -131,6 +125,84 @@ if [[ -z "$DEVICE_ID" ]]; then
   exit 2
 fi
 
+install_requested_local_simulator_ca() {
+  local target=""
+  case "$ENV_NAME" in
+    alpha) target="alpha-local" ;;
+    beta) target="beta-local" ;;
+    gamma) target="gamma-local" ;;
+    prod)
+      # `prod` may point to prod-hosted. Only the local prod-sim authority has
+      # a Simulator root CA to install.
+      if [[ "$GATEWAY_BASE_URL" == *".quwoquan-env.test"* ]]; then
+        target="prod-sim"
+      fi
+      ;;
+  esac
+  if [[ -n "$target" && -z "${QWQ_IOS_SIMULATOR_UDID:-}" ]] && \
+    python3 "$ROOT_DIR/quwoquan_ops/cli/lib/local_target_tls.py" \
+      is-ios-simulator \
+      --device-id "$DEVICE_ID" >/dev/null; then
+    export QWQ_IOS_SIMULATOR_UDID="$DEVICE_ID"
+  fi
+  if [[ -z "$target" || -z "${QWQ_IOS_SIMULATOR_UDID:-}" ]]; then
+    return 0
+  fi
+  python3 "$ROOT_DIR/quwoquan_ops/cli/lib/local_target_tls.py" \
+    install-ios-simulator-ca \
+    --target "$target" \
+    --simulator-udid "$QWQ_IOS_SIMULATOR_UDID"
+}
+
+prepare_android_local_tls() {
+  eval "$(
+    PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" \
+      python3 - "$ENV_NAME" "$DEVICE_ID" "$GATEWAY_BASE_URL" <<'PY'
+import shlex
+import sys
+
+from quwoquan_ops.cli.lib.dev_up import (
+    detect_device_kind,
+    enable_android_adb_reverse,
+    find_device,
+    load_environment_topology,
+    local_target_android_debug_ca_cert,
+)
+
+env_name, device_id, gateway_base_url = sys.argv[1:]
+target_by_env = {
+    "alpha": "alpha-local",
+    "beta": "beta-local",
+    "gamma": "gamma-local",
+}
+target = target_by_env.get(env_name, "")
+if env_name == "prod" and ".quwoquan-env.test" in gateway_base_url:
+    target = "prod-sim"
+if not target:
+    raise SystemExit(0)
+
+device = find_device(device_id, include_desktop=False) or {}
+device_kind = detect_device_kind(
+    device_id,
+    target_platform=str(device.get("targetPlatform", "")),
+    emulator=bool(device.get("emulator", False)) if device else None,
+)
+if not device_kind.startswith("android"):
+    raise SystemExit(0)
+
+topology = load_environment_topology()
+enable_android_adb_reverse(device_id, target, topology=topology)
+print("export QWQ_ANDROID_LOCAL_ENV_CA_PATH=" + shlex.quote(
+    str(local_target_android_debug_ca_cert(target))
+))
+print("export QWQ_ANDROID_LOCAL_ENV_CA_REQUIRED=1")
+PY
+  )"
+}
+
+prepare_android_local_tls
+install_requested_local_simulator_ca
+
 sanitize_device_id() {
   python3 - "$1" <<'PY'
 import re
@@ -161,9 +233,6 @@ if [[ -n "$GATEWAY_BASE_URL" ]]; then
 fi
 if [[ -n "$LEGAL_BASE_URL" ]]; then
   define_cmd+=(--legal-base-url "$LEGAL_BASE_URL")
-fi
-if [[ -n "$MEDIA_BASE_URL" ]]; then
-  define_cmd+=(--media-base-url "$MEDIA_BASE_URL")
 fi
 if [[ -n "$MEDIA_AVATAR_BASE_URL" ]]; then
   define_cmd+=(--media-avatar-base-url "$MEDIA_AVATAR_BASE_URL")
@@ -243,7 +312,7 @@ try:
         start_new_session=True,
     )
     payload = {
-        "schemaVersion": 1,
+        "schema": "app-instance-state",
         "env": env_name,
         "deviceId": device_id,
         "instanceId": instance_id,

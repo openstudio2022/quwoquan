@@ -13,7 +13,7 @@ class ChatContactTabCircleRowDto {
   final String subtitle;
 
   factory ChatContactTabCircleRowDto.fromMap(Map<String, dynamic> m) {
-    final id = (m['circleId'] ?? m['id'] ?? '').toString();
+    final id = (m['circleId'] ?? '').toString();
     return ChatContactTabCircleRowDto(
       circleId: id,
       displayName: (m['displayName'] ?? '').toString(),
@@ -23,12 +23,11 @@ class ChatContactTabCircleRowDto {
   }
 
   Map<String, dynamic> toMap() => <String, dynamic>{
-        'circleId': circleId,
-        'id': circleId,
-        'displayName': displayName,
-        'avatarUrl': avatarUrl,
-        'subtitle': subtitle,
-      };
+    'circleId': circleId,
+    'displayName': displayName,
+    'avatarUrl': avatarUrl,
+    'subtitle': subtitle,
+  };
 }
 
 /// 联系人 Tab「趣群」占位行。
@@ -46,7 +45,7 @@ class ChatContactTabFunGroupRowDto {
   final String subtitle;
 
   factory ChatContactTabFunGroupRowDto.fromMap(Map<String, dynamic> m) {
-    final id = (m['conversationId'] ?? m['id'] ?? '').toString();
+    final id = (m['conversationId'] ?? '').toString();
     return ChatContactTabFunGroupRowDto(
       conversationId: id,
       displayName: (m['displayName'] ?? '').toString(),
@@ -56,10 +55,9 @@ class ChatContactTabFunGroupRowDto {
   }
 
   Map<String, dynamic> toMap() => <String, dynamic>{
-        'conversationId': conversationId,
-        'id': conversationId,
-        'displayName': displayName,
-        'avatarUrl': avatarUrl,
-        'subtitle': subtitle,
-      };
+    'conversationId': conversationId,
+    'displayName': displayName,
+    'avatarUrl': avatarUrl,
+    'subtitle': subtitle,
+  };
 }

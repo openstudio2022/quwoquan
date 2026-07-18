@@ -6,7 +6,7 @@ no province, date, entity, batch, or execution instance values.
 Use the single content facade:
 
 ```bash
-python3 quwoquan_data/scripts/cli.py task geo-homepages \
+python3 quwoquan_data/scripts/cli.py task execute \
   --execution-id YYYYMMDD--travel-homepage-coverage--cn-scope--canary-001 \
   --milestone canary --province <province> --discovery <coverage-path>
 ```

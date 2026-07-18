@@ -1,4 +1,3 @@
-version: 1
 read_model: ContentFootprintEntry
 description: |
   GetMyFootprint 分页结果的单项私有读模型。分页 envelope 只包含 items、

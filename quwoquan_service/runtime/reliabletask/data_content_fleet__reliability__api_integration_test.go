@@ -144,7 +144,7 @@ func TestDataContentFleetMongoRedisEndToEnd(t *testing.T) {
 	if reportOut := os.Getenv("QWQ_RELIABLETASK_REPORT_OUT"); reportOut != "" {
 		elapsed := time.Since(startedAt)
 		report := map[string]any{
-			"schemaVersion":                     "quwoquan.reliabletask_fleet_report/1",
+			"schema":                     "quwoquan.reliabletask_fleet_report",
 			"passed":                            true,
 			"backend":                           "mongodb+redis",
 			"total":                             total,

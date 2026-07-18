@@ -282,7 +282,7 @@ report = {
     "disabledModules": [],
     "catalogVersion": catalog_version,
     "retentionPolicyVersion": retention_version,
-    "topologySchemaVersion": topology.get("schemaVersion"),
+    "topologySchemaVersion": topology.get("schema"),
     "artifactPolicy": artifact_policy,
     "provenance": {
         "gitRevision": revision,

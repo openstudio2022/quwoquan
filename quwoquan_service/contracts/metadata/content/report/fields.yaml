@@ -1,8 +1,8 @@
-version: 1
 entity: Report
 
 fields:
   - name: id
+    source: id
     type: string
     constraints: [PK]
     classification: PUBLIC
@@ -11,6 +11,7 @@ fields:
     ops_exposure: read
 
   - name: version
+    source: version
     type: int
     constraints: [NOT_NULL, DEFAULT_1]
     classification: INTERNAL
@@ -20,6 +21,7 @@ fields:
     description: Report 乐观并发版本；每次状态迁移原子递增
 
   - name: reporterId
+    source: reporterId
     type: string
     constraints: [NOT_NULL]
     classification: PUBLIC
@@ -28,6 +30,7 @@ fields:
     ops_exposure: read
 
   - name: targetType
+    source: targetType
     type: enum
     enum_ref: ReportTargetType
     constraints: [NOT_NULL]
@@ -37,6 +40,7 @@ fields:
     ops_exposure: read
 
   - name: targetId
+    source: targetId
     type: string
     constraints: [NOT_NULL]
     classification: PUBLIC
@@ -45,6 +49,7 @@ fields:
     ops_exposure: read
 
   - name: reason
+    source: reason
     type: enum
     enum_ref: ReportReason
     constraints: [NOT_NULL]
@@ -54,6 +59,7 @@ fields:
     ops_exposure: read
 
   - name: description
+    source: description
     type: string
     constraints: [NULLABLE]
     classification: PUBLIC
@@ -62,6 +68,7 @@ fields:
     ops_exposure: read
 
   - name: status
+    source: status
     type: enum
     enum_ref: ReportStatus
     constraints: [NOT_NULL]
@@ -71,6 +78,7 @@ fields:
     ops_exposure: read_write
 
   - name: reviewerId
+    source: reviewerId
     type: string
     constraints: [NULLABLE]
     classification: PUBLIC
@@ -79,6 +87,7 @@ fields:
     ops_exposure: read
 
   - name: resolution
+    source: resolution
     type: enum
     enum_ref: ReportResolution
     constraints: [NULLABLE]
@@ -88,6 +97,7 @@ fields:
     ops_exposure: read_write
 
   - name: createdAt
+    source: createdAt
     type: timestamp
     constraints: [NOT_NULL]
     classification: PUBLIC
@@ -96,6 +106,7 @@ fields:
     ops_exposure: read
 
   - name: updatedAt
+    source: updatedAt
     type: timestamp
     constraints: [NOT_NULL]
     classification: PUBLIC
@@ -104,6 +115,7 @@ fields:
     ops_exposure: read
 
   - name: resolvedAt
+    source: resolvedAt
     type: timestamp
     constraints: [NULLABLE]
     classification: PUBLIC

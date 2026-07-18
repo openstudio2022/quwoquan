@@ -151,15 +151,6 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
       coverUrl: url,
     );
   }
-
-  @override
-  Future<BindContentPostMediaAssetsResult> bindPostMediaAssets(
-    BindContentPostMediaAssetsCommand command,
-  ) async => BindContentPostMediaAssetsResult(
-    postId: command.postId,
-    boundAssetIds: command.assetIds,
-    boundCount: command.assetIds.length,
-  );
 }
 
 final class _AlphaUpload {

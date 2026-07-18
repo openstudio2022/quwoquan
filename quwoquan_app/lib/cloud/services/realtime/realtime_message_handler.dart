@@ -39,8 +39,7 @@ class RealtimeMessageHandler {
     final conversationId = event['conversationId'] as String? ?? '';
     final payload = event['payload'] as Map<String, dynamic>? ?? event;
 
-    // 推荐实时 patch（以 schema_version 标识，与 chat 事件的 `type` 分流）：
-    // 解析为强类型后交给 discovery patch 安全消费者；schema 不符则前向兼容忽略。
+    // 推荐实时 patch 以 canonical envelope 字段识别，解析失败直接拒绝。
     if (_routeFeedRealtimePatch(event, payload)) {
       return;
     }
@@ -171,29 +170,19 @@ class RealtimeMessageHandler {
       return false;
     }
     final patch = parseFeedRealtimePatch(candidate);
-    if (patch == null) {
-      // schema 不符 / 未来版本：结构化记录后忽略（不解析未知 schema）。
-      developer.log(
-        'ignored feed realtime patch with unsupported schema_version',
-        name: 'RealtimeMessageHandler',
-      );
-      return true;
-    }
     _read(feedRealtimePatchProvider.notifier).applyPatch(patch);
     return true;
   }
 
-  /// feed patch 候选载荷：顶层或 payload 内带 `feed_patch*` schema 标识。
+  /// feed patch 候选载荷：顶层或 payload 内带 canonical patch 标识。
   Map<String, dynamic>? _feedPatchCandidate(
     Map<String, dynamic> event,
     Map<String, dynamic> payload,
   ) {
-    final topSchema = event['schemaVersion'];
-    if (topSchema is String && topSchema.startsWith('feed_patch')) {
+    if (event['patchId'] is String && event['patchType'] is String) {
       return event;
     }
-    final payloadSchema = payload['schemaVersion'];
-    if (payloadSchema is String && payloadSchema.startsWith('feed_patch')) {
+    if (payload['patchId'] is String && payload['patchType'] is String) {
       return payload;
     }
     return null;
@@ -389,14 +378,8 @@ MessageDto _decodeMessageSentEvent(
     'seq': seq,
     'clientMsgId': clientMsgId,
     'senderId': senderId,
-    'senderDisplayNameSnapshot': ?_optionalEventText(
-      payload,
-      'senderDisplayNameSnapshot',
-    ),
-    'senderAvatarUrlSnapshot': ?_optionalEventText(
-      payload,
-      'senderAvatarUrlSnapshot',
-    ),
+    'senderName': ?_optionalEventText(payload, 'senderDisplayNameSnapshot'),
+    'senderAvatar': ?_optionalEventText(payload, 'senderAvatarUrlSnapshot'),
     'type': type,
     'content': ?_optionalEventText(payload, 'content'),
     'mediaAssetId': ?mediaAssetId,

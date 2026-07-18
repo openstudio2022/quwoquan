@@ -23,7 +23,7 @@ func TestActivePersonaContext_CarriesAvatarVersionedUrl(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodGet,
-		"/v1/user/personas/active",
+		"/user/personas/active",
 		"",
 		authHeaders("owner_active_context"),
 	)

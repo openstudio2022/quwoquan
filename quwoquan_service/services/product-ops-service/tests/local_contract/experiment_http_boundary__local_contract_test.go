@@ -27,7 +27,7 @@ func TestExperimentAssignmentHTTPBoundaryUsesOnlyTrustedActorAndImmutableReplay(
 	if err != nil {
 		t.Fatalf("build experiment handler: %v", err)
 	}
-	path := "/v1/ops/experiments/discovery_feed_v3/assignment"
+	path := "/ops/experiments/discovery_feed_v3/assignment"
 
 	spoofed := requestWithPersona(http.MethodPost, path, []byte(`{"subjectKey":"persona:attacker"}`))
 	spoofedResponse := httptest.NewRecorder()

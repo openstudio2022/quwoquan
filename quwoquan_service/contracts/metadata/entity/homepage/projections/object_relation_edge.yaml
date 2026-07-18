@@ -1,4 +1,3 @@
-version: 1
 read_model: ObjectRelationEdge
 
 description: |
@@ -24,62 +23,51 @@ client_projection:
       dart_type: String
       nullable: false
       source: edgeId
-      aliases: [edgeId]
       default: "''"
     - name: edgeType
       dart_type: String
       nullable: false
       source: edgeType
-      aliases: [edgeType]
       default: "''"
     - name: sourceObjectType
       dart_type: String
       nullable: false
       source: sourceObjectType
-      aliases: [sourceObjectType]
       default: "''"
     - name: sourceObjectId
       dart_type: String
       nullable: false
       source: sourceObjectId
-      aliases: [sourceObjectId]
       default: "''"
     - name: targetObjectType
       dart_type: String
       nullable: false
       source: targetObjectType
-      aliases: [targetObjectType]
       default: "''"
     - name: targetObjectId
       dart_type: String
       nullable: false
       source: targetObjectId
-      aliases: [targetObjectId]
       default: "''"
     - name: canonicalEntityId
       dart_type: String
       nullable: false
       source: canonicalEntityId
-      aliases: [canonicalEntityId]
       default: "''"
     - name: tagRefs
       dart_type: List<String>
       nullable: false
       source: tagRefs
-      aliases: [tagRefs]
     - name: evidenceRefs
       dart_type: List<String>
       nullable: false
       source: evidenceRefs
-      aliases: [evidenceRefs]
     - name: confidence
       dart_type: double
       nullable: false
       source: confidence
-      aliases: [confidence]
       default: "0.0"
     - name: createdAt
       dart_type: DateTime?
       nullable: true
       source: createdAt
-      aliases: [createdAt]

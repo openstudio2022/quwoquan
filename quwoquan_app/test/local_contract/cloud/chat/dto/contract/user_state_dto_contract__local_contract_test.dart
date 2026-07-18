@@ -8,7 +8,7 @@ void main() {
   group('ConversationUserStateDto — 常规契约', () {
     test('fromMap 解析全字段', () {
       final raw = <String, dynamic>{
-        '_id': 'cus_001',
+        'id': 'cus_001',
         'userId': 'user_001',
         'conversationId': 'conv_001',
         'readSeq': 40,
@@ -50,7 +50,7 @@ void main() {
 
     test('toMap round-trip 保持字段完整', () {
       final raw = <String, dynamic>{
-        '_id': 'cus_rt',
+        'id': 'cus_rt',
         'userId': 'u1',
         'conversationId': 'conv_001',
         'readSeq': 20,
@@ -73,12 +73,12 @@ void main() {
   });
 
   // ──────────────────────────────────────────────────────────────────
-  // 兼容性契约
+  // 单轨契约
   // ──────────────────────────────────────────────────────────────────
-  group('ConversationUserStateDto — 兼容性契约', () {
+  group('ConversationUserStateDto — 单轨契约', () {
     test('缺少 readSeq 降级为 0', () {
       final raw = <String, dynamic>{
-        '_id': 'cus_old',
+        'id': 'cus_old',
         'userId': 'u1',
         'conversationId': 'conv_001',
         'unreadCount': 5,
@@ -92,7 +92,7 @@ void main() {
 
     test('缺少 unreadCount 降级为 0', () {
       final raw = <String, dynamic>{
-        '_id': 'cus_no_unread',
+        'id': 'cus_no_unread',
         'userId': 'u1',
         'conversationId': 'conv_001',
         'readSeq': 10,
@@ -106,7 +106,7 @@ void main() {
 
     test('缺少 muted/pinned 默认为 false', () {
       final raw = <String, dynamic>{
-        '_id': 'cus_no_flags',
+        'id': 'cus_no_flags',
         'userId': 'u1',
         'conversationId': 'conv_001',
         'updatedAt': '2026-01-01T00:00:00Z',
@@ -116,8 +116,8 @@ void main() {
       expect(dto.pinned, isFalse);
     });
 
-    test('_id alias → id round-trip 稳定', () {
-      final raw = <String, dynamic>{
+    test('拒绝 _id alias，只认 id', () {
+      final retired = ConversationUserStateDto.fromMap(<String, dynamic>{
         '_id': 'cus_alias_rt',
         'userId': 'u1',
         'conversationId': 'conv_001',
@@ -126,13 +126,19 @@ void main() {
         'muted': true,
         'pinned': false,
         'updatedAt': '2026-01-01T00:00:00.000Z',
-      };
-      final dto = ConversationUserStateDto.fromMap(raw);
-      final map = dto.toMap();
-      final dto2 = ConversationUserStateDto.fromMap(map);
-      expect(dto2.id, equals(dto.id));
-      expect(dto2.readSeq, equals(dto.readSeq));
-      expect(dto2.muted, equals(dto.muted));
+      });
+      final canonical = ConversationUserStateDto.fromMap(<String, dynamic>{
+        'id': 'cus_canonical',
+        'userId': 'u1',
+        'conversationId': 'conv_001',
+        'readSeq': 10,
+        'unreadCount': 0,
+        'muted': true,
+        'pinned': false,
+        'updatedAt': '2026-01-01T00:00:00.000Z',
+      });
+      expect(retired.id, isEmpty);
+      expect(canonical.id, equals('cus_canonical'));
     });
   });
 
@@ -141,10 +147,7 @@ void main() {
   // ──────────────────────────────────────────────────────────────────
   group('ConversationUserStateDto — 异常/边界契约', () {
     test('空 map 不崩溃', () {
-      expect(
-        () => ConversationUserStateDto.fromMap(const {}),
-        returnsNormally,
-      );
+      expect(() => ConversationUserStateDto.fromMap(const {}), returnsNormally);
       final dto = ConversationUserStateDto.fromMap(const {});
       expect(dto.id, isEmpty);
       expect(dto.userId, isEmpty);
@@ -158,7 +161,7 @@ void main() {
 
     test('null 值字段安全', () {
       final raw = <String, dynamic>{
-        '_id': null,
+        'id': null,
         'userId': null,
         'conversationId': null,
         'readSeq': null,
@@ -180,7 +183,7 @@ void main() {
 
     test('toMap 省略 null lastReadAt', () {
       final raw = <String, dynamic>{
-        '_id': 'cus_no_last_read',
+        'id': 'cus_no_last_read',
         'userId': 'u1',
         'conversationId': 'conv_001',
         'readSeq': 0,

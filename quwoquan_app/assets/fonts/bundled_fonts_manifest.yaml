@@ -1,4 +1,4 @@
-schemaVersion: bundled-fonts-manifest
+schema: bundled-fonts-manifest
 manifestVersion: 1
 fonts:
 - family: Roboto

@@ -26,12 +26,13 @@ for _path in (DATA_ROOT, SCRIPTS_ROOT):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
-from content.post import object_index as content_object, content_plan as cp
+from content.post import object_index as content_object
+from content.post import content_plan_validation as cp
 from content.post import content_plan_state
 
 from core import ops_governance as og
 
-from content.post.base_draft import assign_base_draft, base_draft_candidates, extract_base_draft_body, load_base_draft_text
+from content.post.article.base_draft import assign_base_draft, base_draft_candidates, extract_base_draft_body, load_base_draft_text
 from content.post.fidelity import base_draft_fidelity_issues
 
 from core.io import write_json
@@ -124,7 +125,7 @@ def _seed():
     write_json(reject_dir / "reject1.json", {"sourceId": "reject1", "decision": "reject"})
     write_json(reject_dir / "keep1.json", {"sourceId": "keep1", "decision": "retain"})
     packet = {
-        "schemaVersion": cp.CONTENT_PLAN_SCHEMA,
+        "schema": cp.CONTENT_PLAN_SCHEMA,
         "items": [
             {
                 "ref": "x",

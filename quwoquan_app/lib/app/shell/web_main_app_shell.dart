@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/app_startup_runtime.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/navigation/main_tab_registry.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
@@ -591,7 +592,14 @@ class _WebHomeWorkspace extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _WebDesktopFrame(child: _WebContentFeed(channelId: channelId));
+    return _WebDesktopFrame(
+      child: _WebContentFeed(
+        channelId: channelId,
+        onInitialContentPainted: channelId == 'recommend'
+            ? AppStartupRuntime.instance.markHomeFeedContentPainted
+            : null,
+      ),
+    );
   }
 }
 
@@ -616,9 +624,13 @@ class _WebFeaturedWorkspace extends StatelessWidget {
 /// Web 宽屏内容流：复用移动端 [HomeMultiFormFeed]（多列瀑布 + 同源埋点 +
 /// 四态），只在 Web 侧用主内容区宽度驱动列数，post 点击经统一动作进沉浸 viewer。
 class _WebContentFeed extends ConsumerWidget {
-  const _WebContentFeed({required this.channelId});
+  const _WebContentFeed({
+    required this.channelId,
+    this.onInitialContentPainted,
+  });
 
   final String channelId;
+  final VoidCallback? onInitialContentPainted;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -635,6 +647,7 @@ class _WebContentFeed extends ConsumerWidget {
             key: ValueKey<String>('web-content-feed-$channelId'),
             isDark: isDark,
             channelId: channelId,
+            onInitialContentPainted: onInitialContentPainted,
             onUserTap:
                 (
                   userId, {

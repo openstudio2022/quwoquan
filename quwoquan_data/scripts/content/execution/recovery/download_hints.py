@@ -1,4 +1,4 @@
-"""Download repair hint strategies for task workflow runs."""
+"""Download repair hint strategies for task execution runs."""
 from __future__ import annotations
 
 import re
@@ -117,7 +117,6 @@ def _research_image_repair_hints(
     for lane in ("homepage", "article"):
         for source in curated_sources_for_entity(
             ctx.execution_id,
-            ctx.execution_id,
             entity_id,
             etype,
             research_lane=lane,
@@ -128,7 +127,7 @@ def _research_image_repair_hints(
                     image,
                     validate_image_rights(
                         image,
-                        vertical=str(ctx.spec.get("vertical") or "travel"),
+                        vertical=ctx.spec.vertical,
                     ),
                     lane=lane,
                     entity_id=entity_id,
@@ -160,7 +159,7 @@ def _research_image_repair_hints(
             image,
             validate_image_rights(
                 image,
-                vertical=str(ctx.spec.get("vertical") or "travel"),
+                vertical=ctx.spec.vertical,
             ),
             lane="image",
             entity_id=entity_id,

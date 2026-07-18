@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+sys.dont_write_bytecode = True
 
 ROOT = Path(__file__).resolve().parents[4]
 METADATA_ROOT = ROOT / "quwoquan_service" / "contracts" / "metadata"
@@ -36,6 +37,8 @@ LITE_REFS: dict[str, list[str]] = {
     "messages/chat/test_fixtures/scenarios/chat_scenarios.json": [
         "chat_core",
         "chat_contacts_core",
+        "chat_group_flow_core",
+        "chat_realtime_fixture_core",
     ],
     "user/test_fixtures/scenarios/user_scenarios.json": [
         "user_profile_core",
@@ -203,9 +206,10 @@ def prune_seed_payload(relative_path: str, payload: dict[str, Any]) -> dict[str,
             row for row in profile_seed.get("stats", [])
             if row_id(row, "circleId") in LITE_CIRCLE_IDS
         ]
-        profile_seed["postIds"] = [
-            row for row in profile_seed.get("postIds", [])
-            if str(row) in LITE_CONTENT_POST_IDS
+        profile_seed["placements"] = [
+            row for row in profile_seed.get("placements", [])
+            if row_id(row, "circleId") in LITE_CIRCLE_IDS
+            and row_id(row, "postId") in LITE_CONTENT_POST_IDS
         ]
 
     if relative_path == "messages/chat/test_fixtures/scenarios/chat_scenarios.json":
@@ -241,6 +245,10 @@ def prune_seed_payload(relative_path: str, payload: dict[str, Any]) -> dict[str,
             row for row in contacts.get("groupConversationIds", [])
             if str(row) in LITE_CHAT_CONVERSATION_IDS
         ]
+        realtime = seed_sets["chat_realtime_fixture_core"]
+        seed_sets["chat_realtime_fixture_core"] = {
+            "realtimeEvents": realtime.get("realtimeEvents", {}),
+        }
 
     return payload
 

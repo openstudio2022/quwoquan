@@ -1,4 +1,4 @@
-"""Workflow service extracted from the retired monolithic runner."""
+"""Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
 from core.control_types import ExecutionStage, StageStatus
 from content.execution.coverage import coverage_entity_type, coverage_entity_type_for_entity
@@ -88,7 +88,7 @@ def _download_fetch_stale_entity_ids(ctx: ExecutionContext) -> list[str]:
     return stale
 
 def _content_plan_source_shortfall_entity_ids(ctx: ExecutionContext) -> list[str]:
-    if article_commercial_closure_enabled(ctx.spec):
+    if article_commercial_closure_enabled(ctx.spec.to_dict()):
         return []
     diagnostics_path = execution_root(ctx.execution_id) / "_shared" / "content_plan_source_diagnostics.json"
     if not diagnostics_path.is_file():
@@ -98,12 +98,12 @@ def _content_plan_source_shortfall_entity_ids(ctx: ExecutionContext) -> list[str
     except (OSError, ValueError, TypeError):
         return []
     targets = diagnostics.get("targets") if isinstance(diagnostics.get("targets"), dict) else {}
-    quotas = ((ctx.spec.get("content") or {}).get("quotas") or {})
-    required_articles = int(quotas.get("entityArticlesPerTarget") or 0)
+    quotas = ctx.spec.content.quotas
+    required_articles = quotas.entity_articles_per_target
     required_images = (
-        int(quotas.get("imageWorksPerTarget") or 0)
-        if image_count_is_hard_quota(ctx.spec)
-        else minimum_publishable_images_per_target(ctx.spec)
+        quotas.image_works_per_target
+        if image_count_is_hard_quota(ctx.spec.to_dict())
+        else minimum_publishable_images_per_target(ctx.spec.to_dict())
     )
     shortfall: set[str] = set()
     for entity_id, row in targets.items():
@@ -117,7 +117,7 @@ def _content_plan_source_shortfall_entity_ids(ctx: ExecutionContext) -> list[str
 
 def _download_content_capacity_preflight(ctx: ExecutionContext) -> list[DataIssue]:
     """Run content-plan source capacity gate immediately after download_fetch."""
-    from content.execution.pipeline.content_plan_prep import _content_capacity_gate_for_entity
+    from content.execution.controller.content_plan_prep import _content_capacity_gate_for_entity
     active_spec = _active_spec(ctx)
     quotas = (active_spec.get("content") or {}).get("quotas") or {}
     required_articles = int(quotas.get("entityArticlesPerTarget") or 0)
@@ -125,7 +125,7 @@ def _download_content_capacity_preflight(ctx: ExecutionContext) -> list[DataIssu
     if required_articles <= 0 and required_images <= 0:
         return []
     diagnostics: dict[str, Any] = {
-        "schemaVersion": "quwoquan_data.content_plan_source_diagnostics",
+        "schema": "quwoquan_data.content_plan_source_diagnostics",
         "executionId": ctx.execution_id,
         "generatedBy": "download_fetch_content_capacity_preflight",
         "targets": {},

@@ -3,7 +3,7 @@
 gamma_rec_patrol.py — Gamma environment recommendation quality probes.
 
 Probes:
-1. Feed non-empty: GET /v1/content/feed returns items
+1. Feed non-empty: GET /content/feed returns items
 2. Model path hit: /metrics/rec shows model usage > 0
 3. AB bucket distribution: chi-square test for fairness
 4. recommendation-service health: /health returns ok
@@ -42,9 +42,9 @@ def _post_json(url: str, body: dict, timeout: int = 10) -> dict | None:
 
 
 def probe_feed_nonempty(gateway: str) -> bool:
-    """GET /v1/content/feed → items array is non-empty."""
+    """GET /content/feed → items array is non-empty."""
     print("[probe] Feed non-empty")
-    url = f"{gateway}/v1/content/feed?userId=patrol_test&limit=5"
+    url = f"{gateway}/content/feed?userId=patrol_test&limit=5"
     result = _get_json(url)
     if result is None:
         print("  FAIL: no response")

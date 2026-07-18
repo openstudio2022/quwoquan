@@ -1,11 +1,10 @@
 {
-  "schemaVersion": "app-seed-manifest",
   "environment": "gamma",
   "acceptancePrincipal": {
     "ownerId": "fixture_user_current",
     "personaId": "fixture_user_current"
   },
-  "description": "gamma 云侧精简清单：当前 gamma 只装载约 100 图内的 curated 业务子集，alpha/beta 继续保持全量共享池。",
+  "description": "gamma 云侧精简清单：只装载声明的 curated 业务对象及其完整媒体闭包，alpha/beta 继续保持全量共享池。",
   "seedRefs": [
     {
       "domain": "assistant",
@@ -17,8 +16,8 @@
       "resetScope": "fixture_assistant_*",
       "targetStore": "mongodb:assistant.skill_subscriptions+redis:assistant-runtime",
       "verifiedEndpoints": [
-        "/v1/assistant/conversations",
-        "/v1/assistant/skill-subscriptions"
+        "/assistant/conversations",
+        "/assistant/skill-subscriptions"
       ]
     },
     {
@@ -36,13 +35,13 @@
       "resetScope": "fixture_content_*",
       "targetStore": "content-service:gamma_test_namespace",
       "verifiedEndpoints": [
-        "/v1/content/feed",
-        "/v1/content/posts/fixture_photo_001",
-        "/v1/content/posts/fixture_photo_001/comments",
-        "/v1/content/posts/fixture_photo_001/comments?sort=recommended",
-        "/v1/content/posts/fixture_photo_001/comments/fixture_comment_parent_001/replies",
-        "/v1/content/sub-accounts/{activePersonaId}/interactions/received?type=share",
-        "/v1/content/sub-accounts/{activePersonaId}/interactions/sent?type=share"
+        "/content/feed",
+        "/content/posts/fixture_photo_001",
+        "/content/posts/fixture_photo_001/comments",
+        "/content/posts/fixture_photo_001/comments?sort=recommended",
+        "/content/posts/fixture_photo_001/comments/fixture_comment_parent_001/replies",
+        "/content/sub-accounts/{activePersonaId}/interactions/received?type=share",
+        "/content/sub-accounts/{activePersonaId}/interactions/sent?type=share"
       ]
     },
     {
@@ -58,8 +57,8 @@
       "resetScope": "fixture_circle_*",
       "targetStore": "circle-service:gamma_test_namespace",
       "verifiedEndpoints": [
-        "/v1/circles",
-        "/v1/circles/fixture_circle_photo"
+        "/circles",
+        "/circles/fixture_circle_photo"
       ]
     },
     {
@@ -73,8 +72,8 @@
       "resetScope": "fixture_chat_*",
       "targetStore": "chat-service:gamma_test_namespace",
       "verifiedEndpoints": [
-        "/v1/chat/inbox",
-        "/v1/chat/conversations/fixture_conv_direct/messages"
+        "/chat/inbox",
+        "/chat/conversations/fixture_conv_direct/messages"
       ]
     },
     {
@@ -92,22 +91,8 @@
       "resetScope": "fixture_user_*",
       "targetStore": "user-service:gamma_test_namespace",
       "verifiedEndpoints": [
-        "/v1/user/profile/fixture_user_current",
-        "/v1/me"
-      ]
-    },
-    {
-      "domain": "creator_pool",
-      "fixturePath": "_shared/test_fixtures/creator_pool/creator_pool_scenarios.json",
-      "refs": [
-        "creator_travel_photo_1k_v1",
-        "creator_travel_photo_1k_v1_core"
-      ],
-      "resetScope": "fixture_creator_pool_*",
-      "targetStore": "user-service:gamma_test_namespace",
-      "verifiedEndpoints": [
-        "/v1/user/{subAccountId}",
-        "/v1/user/sub-accounts/{subAccountId}/homepage-bundle"
+        "/user/profile/fixture_user_current",
+        "/me"
       ]
     },
     {
@@ -124,9 +109,9 @@
       "resetScope": "fixture_entity_*",
       "targetStore": "entity-service:gamma_test_namespace",
       "verifiedEndpoints": [
-        "/v1/homepages/search",
-        "/v1/homepages/{homepageId}/object-page-bundle",
-        "/v1/homepages/{homepageId}/introduction"
+        "/homepages/search",
+        "/homepages/{homepageId}/object-page-bundle",
+        "/homepages/{homepageId}/introduction"
       ]
     },
     {
@@ -138,7 +123,7 @@
       "resetScope": "fixture_integration_*",
       "targetStore": "integration-service:gamma_test_namespace",
       "verifiedEndpoints": [
-        "/v1/integration/locations/pois"
+        "/integration/locations/pois"
       ]
     },
     {
@@ -150,7 +135,7 @@
       "resetScope": "fixture_notification_*",
       "targetStore": "notification-service:gamma_test_namespace",
       "verifiedEndpoints": [
-        "/v1/app-messages"
+        "/app-messages"
       ]
     },
     {
@@ -162,7 +147,7 @@
       "resetScope": "fixture_rtc_*",
       "targetStore": "rtc-service:gamma_test_namespace",
       "verifiedEndpoints": [
-        "/v1/rtc/calls"
+        "/rtc/calls"
       ]
     }
   ],
@@ -183,57 +168,57 @@
       "strictEndpoints": [
         {
           "domain": "entity",
-          "path": "/v1/homepages/{homepageId}/object-page-bundle",
+          "path": "/homepages/{homepageId}/object-page-bundle",
           "assertion": "entity_homepage_bundle"
         },
         {
           "domain": "entity",
-          "path": "/v1/homepages/{seededHomepageId}/introduction",
+          "path": "/homepages/{seededHomepageId}/introduction",
           "assertion": "homepage_introduction"
         },
         {
           "domain": "entity",
-          "path": "/v1/homepages/{homepageId}/review-summary",
+          "path": "/homepages/{homepageId}/review-summary",
           "assertion": "homepage_review_summary"
         },
         {
           "domain": "entity",
-          "path": "/v1/homepages/{homepageId}/related-groups",
+          "path": "/homepages/{homepageId}/related-groups",
           "assertion": "homepage_related_groups"
         },
         {
           "domain": "entity",
-          "path": "/v1/homepages/{homepageId}/impact",
+          "path": "/homepages/{homepageId}/impact",
           "assertion": "entity_impact_summary"
         },
         {
           "domain": "circle",
-          "path": "/v1/circles/{circleId}",
+          "path": "/circles/{circleId}",
           "assertion": "circle_detail"
         },
         {
           "domain": "circle",
-          "path": "/v1/circles/{circleId}/impact",
+          "path": "/circles/{circleId}/impact",
           "assertion": "circle_impact_summary"
         },
         {
           "domain": "circle",
-          "path": "/v1/circles/{circleId}/members",
+          "path": "/circles/{circleId}/members",
           "assertion": "circle_members_page"
         },
         {
           "domain": "circle",
-          "path": "/v1/circles/{circleId}/feed",
+          "path": "/circles/{circleId}/feed",
           "assertion": "circle_feed_page"
         },
         {
           "domain": "content",
-          "path": "/v1/content/intersections/object?objectType=homepage&objectId={homepageId}",
+          "path": "/content/intersections/object?objectType=homepage&objectId={homepageId}",
           "assertion": "object_intersections_homepage"
         },
         {
           "domain": "content",
-          "path": "/v1/content/intersections/object?objectType=circle&objectId={circleId}",
+          "path": "/content/intersections/object?objectType=circle&objectId={circleId}",
           "assertion": "object_intersections_circle"
         }
       ]
@@ -245,55 +230,56 @@
   "gateway": {
     "routes": [
       {
-        "prefix": "/v1/assistant",
+        "prefix": "/assistant",
         "service": "assistant-service",
         "port": 443
       },
       {
-        "prefix": "/v1/content",
+        "prefix": "/content",
         "service": "content-service",
         "port": 443
       },
       {
-        "prefix": "/v1/circles",
+        "prefix": "/circles",
         "service": "circle-service",
         "port": 443
       },
       {
-        "prefix": "/v1/chat",
+        "prefix": "/chat",
         "service": "chat-service",
         "port": 443
       },
       {
-        "prefix": "/v1/user",
+        "prefix": "/user",
         "service": "user-service",
         "port": 443
       },
       {
-        "prefix": "/v1/me",
+        "prefix": "/me",
         "service": "user-service",
         "port": 443
       },
       {
-        "prefix": "/v1/homepages",
+        "prefix": "/homepages",
         "service": "entity-service",
         "port": 443
       },
       {
-        "prefix": "/v1/integration",
+        "prefix": "/integration",
         "service": "integration-service",
         "port": 443
       },
       {
-        "prefix": "/v1/app-messages",
+        "prefix": "/app-messages",
         "service": "notification-service",
         "port": 443
       },
       {
-        "prefix": "/v1/rtc",
+        "prefix": "/rtc",
         "service": "rtc-service",
         "port": 443
       }
     ]
-  }
+  },
+  "schema": "app-seed-manifest"
 }

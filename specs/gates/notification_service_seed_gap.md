@@ -6,14 +6,14 @@
 
 - `quwoquan_service/contracts/metadata/notification/test_fixtures/scenarios/notification_scenarios.json`
 - `quwoquan_service/contracts/metadata/_shared/test_fixtures/app_beta_seed_manifest.json`
-- `quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/smoke/dev_assistant_beta_gateway.py` 的 `/v1/app-messages` fixture route
+- `quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/smoke/dev_assistant_beta_gateway.py` 的 `/app-messages` fixture route
 
 但 `quwoquan_service/services/` 下暂无独立 `notification-service` 目录，因此不能声称已完成真实 Go service 的 reset+seed。
 
 ## 当前验收口径
 
 - alpha：端侧 mock/fixture 读取 `notification_core`。
-- beta/gamma：本地 gateway fixture harness 提供 `/v1/app-messages` smoke。
+- beta/gamma：本地 gateway fixture harness 提供 `/app-messages` smoke。
 - prod：禁止 test fixture 与 seedRefs。
 
 ## 后续补齐条件

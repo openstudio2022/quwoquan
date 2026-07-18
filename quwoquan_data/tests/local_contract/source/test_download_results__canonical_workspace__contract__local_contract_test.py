@@ -14,6 +14,7 @@ from core.io import write_json
 from content.execution.recovery import download_gate
 from content.execution.context import ExecutionContext
 from content.source import gate
+from support.execution_manifest_fixture import ExecutionFixtureBuilder
 
 
 def test_all_download_gate_readers_use_canonical_workspace(
@@ -59,7 +60,12 @@ def test_all_download_gate_readers_use_canonical_workspace(
     ctx = ExecutionContext(
         execution_id=execution_id,
         entity_ids=["歌斐颂巧克力小镇"],
-        spec={},
+        spec=ExecutionFixtureBuilder(
+            execution_id,
+            targets=(
+                {"name": "歌斐颂巧克力小镇", "entityType": "地点/景区"},
+            ),
+        ).spec(),
     )
 
     workflow_issues = download_gate._download_stage_gate_issues(ctx)

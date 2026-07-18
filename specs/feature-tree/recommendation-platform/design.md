@@ -13,10 +13,10 @@
 | 部署物 | 形态 | 调度/运行方式 | 对接方 |
 |--------|------|----------------|--------|
 | **训练镜像** | 批处理/任务 | PAI-DLC、火山 ML 工作流、cron 或事件驱动 | 多训练场景（content_feed / circle_discovery / friend_suggestion）；产出写入 ModelRegistry + OSS/TOS |
-| **推理服务** | 常驻在线服务 | K8s/PAI-EAS/自建 7×24 运行 | Go 业务服务（content-service 等）通过 HTTP 调用 POST /v1/score |
+| **推理服务** | 常驻在线服务 | K8s/PAI-EAS/自建 7×24 运行 | Go 业务服务（content-service 等）通过 HTTP 调用 POST /score |
 
 - **训练侧**：SampleJoiner → rec_training_samples，DatasetManager → rec_datasets，FeatureTransformer + 训练脚本 → 模型文件 + 元信息，ModelRegistry → rec_model_registry + OSS/TOS。运行方式为**任务/作业**（定时或按需），非常驻 HTTP 服务。
-- **推理侧**：FastAPI 应用，POST /v1/score、GET /health，按 scenario 加载 production 模型并返回 scores，需满足 Go 侧延迟预算（如 30–50ms）。
+- **推理侧**：FastAPI 应用，POST /score、GET /health，按 scenario 加载 production 模型并返回 scores，需满足 Go 侧延迟预算（如 30–50ms）。
 
 因此存在**两个可独立部署、独立扩缩的单元**：
 1. **训练工程/训练集部署工程**：对接多 scenario、多数据集，产出写入 ModelRegistry，供下游加载。
@@ -50,7 +50,7 @@
 
 ## 4. 未来演进
 
-- **目标态**：支持双塔等深度排序模型、TikTok/Facebook 式信息流重度深度学习（序列/多目标/实时特征），训练与推理仍为两 L3，契约保持 POST /v1/score 与 CandidateInput/CandidateScore 稳定。
+- **目标态**：支持双塔等深度排序模型、TikTok/Facebook 式信息流重度深度学习（序列/多目标/实时特征），训练与推理仍为两 L3，契约保持 POST /score 与 CandidateInput/CandidateScore 稳定。
 - **当前差距**：模型形态为 LightGBM/规则；深度模型的特征管线、训练样本格式、模型注册格式需扩展；未提供「提交训练任务」等训练侧 API。
 - **前置/触发条件**：业务需要更高排序效果、特征与样本管线就绪、训练/推理资源与延迟预算允许 heavier 模型时，在 tasks 的「未来演进任务」中逐项落地；对应 design 与 tasks 在对应 L4/L5 节点细化。
 - **与 tasks 对应**：搁置任务见 [树内任务文档#搁置任务带规划](树内任务文档)；未来演进任务见 [树内任务文档#未来演进任务](树内任务文档)。
@@ -64,9 +64,9 @@
 | 维度 | 说明 |
 |------|------|
 | **部署拓扑** | 训练 = 批/任务（短生命周期或按调度）；模型服务 = 长驻进程、高可用与延迟 SLA。扩缩与故障域不同。 |
-| **职责边界** | 训练工程：样本、数据集、特征、训练、注册；模型服务：仅读 Registry/OSS，暴露 /v1/score。 |
+| **职责边界** | 训练工程：样本、数据集、特征、训练、注册；模型服务：仅读 Registry/OSS，暴露 /score。 |
 | **SLA 与归属** | 训练关注吞吐、数据正确性、评估通过再打 production；模型服务关注延迟、可用性，与 content-service 等同属在线链路。 |
-| **契约与元数据** | 模型服务对应 rec_model_service（POST /v1/score）；训练可先无对外 HTTP API（仅作业），或后续单独「提交训练任务」API。 |
+| **契约与元数据** | 模型服务对应 rec_model_service（POST /score）；训练可先无对外 HTTP API（仅作业），或后续单独「提交训练任务」API。 |
 | **服务清单** | 拆成 rec-model-training + rec-model-service，与架构图一致，运维与排障边界清晰。 |
 
 ### 5.2 保持共享的部分
@@ -89,7 +89,7 @@ recommendation-platform (L1)
 │       └── docker-and-cloud (L5)
 │
 └── rec-model-service (L3)    # 模型服务
-    ├── inference-api (L4)         # POST /v1/score、scenario 路由、模型加载
+    ├── inference-api (L4)         # POST /score、scenario 路由、模型加载
     │   └── scenario-router-and-models (L5)
     ├── go-integration (L4)        # HTTP 契约、CascadeScorer 兜底
     │   └── http-contract-and-client (L5)
@@ -105,8 +105,8 @@ recommendation-platform (L1)
 
 | 服务名 | 职责摘要 | 部署形态 | 对外契约（当前） |
 |--------|----------|----------|------------------|
-| **rec-model-training** | 多场景训练：样本→数据集→训练→注册 | 任务/作业 + 训练镜像 | 可选：无对外 API，或后续 POST /v1/jobs（提交训练任务） |
-| **rec-model-service** | 多场景推理：装载模型、POST /v1/score | 常驻推理服务 | 已有：POST /v1/score、GET /health（contracts/metadata/rec_model_service、OpenAPI） |
+| **rec-model-training** | 多场景训练：样本→数据集→训练→注册 | 任务/作业 + 训练镜像 | 可选：无对外 API，或后续 POST /jobs（提交训练任务） |
+| **rec-model-service** | 多场景推理：装载模型、POST /score | 常驻推理服务 | 已有：POST /score、GET /health（contracts/metadata/rec_model_service、OpenAPI） |
 
 - **contracts/metadata/rec_model_service**、**entity_catalog**、**endpoint_catalog**、**OpenAPI rec-model-service.v1.yaml** 以及 Go 侧 **ModelServiceClient** 均归属 **rec-model-service**。
 - 若未来为训练工程增加「提交训练任务」等 API，再为 **rec-model-training** 单独建 metadata/OpenAPI 与 endpoint 条目。

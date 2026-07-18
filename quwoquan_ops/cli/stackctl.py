@@ -42,11 +42,20 @@ from quwoquan_ops.cli.lib.environment_topology import (
     get_target,
     load_environment_topology,
 )
-from quwoquan_ops.cli.lib.local_gamma_auth import (
-    open_local_gamma_acceptance_session,
-    prepare_local_gamma_auth,
+from quwoquan_ops.cli.lib.media_delivery_manifest import (
+    build_media_delivery_url,
+    load_media_delivery_manifest,
+)
+from quwoquan_ops.cli.lib.local_environment_auth import (
+    open_local_acceptance_session,
+    prepare_local_environment_auth,
 )
 from quwoquan_ops.cli.lib.local_gamma_object_storage import prepare_local_gamma_object_storage
+from quwoquan_ops.cli.lib.product_telemetry_sls import load_product_telemetry_sls
+from quwoquan_ops.cli.lib.local_gamma_media import (
+    LocalGammaMediaError,
+    materialize_local_gamma_media,
+)
 from quwoquan_ops.cli.lib.dev_up import (
     DEV_UP_ENVS,
     DEV_UP_STACK_TARGETS,
@@ -72,6 +81,7 @@ from quwoquan_ops.cli.lib.output_paths import (
     env_runs_root,
     repo_local_dir,
     service_release_dir,
+    target_cache_dir,
     target_process_dir,
 )
 
@@ -86,6 +96,7 @@ VERIFY_COMMAND_GROUPS = {
     "config": [
         ["python3", "quwoquan_app/scripts/env/verify_public_vs_upstream_url_contract.py"],
         ["python3", "quwoquan_ops/gate/verify_prod_rollout_stackctl_contract.py"],
+        ["python3", "quwoquan_ops/gate/verify_media_delivery_contract.py"],
     ],
     "packaging": [
         ["python3", "quwoquan_ops/gate/verify_environment_packaging_contract.py"],
@@ -133,7 +144,7 @@ def _build_runtime_shared_package(env_name: str) -> Path:
     write_json(
         package_dir / "manifest.json",
         {
-            "schemaVersion": "qwq.runtime_shared_package/v1",
+            "schema": "qwq.runtime_shared_package",
             "environment": env_name,
             "createdAt": utc_now(),
             "files": files,
@@ -198,18 +209,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--output-format", choices=["text", "json"], default="text")
     parser.add_argument("--report-dir", default="")
-    report_dir_compat_parser = argparse.ArgumentParser(add_help=False)
-    report_dir_compat_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    package_parser = subparsers.add_parser("package", parents=[report_dir_compat_parser])
+    package_parser = subparsers.add_parser("package")
+    package_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
     package_parser.add_argument("--env", choices=ENVIRONMENTS, required=True)
     package_parser.add_argument("--kind", choices=["runtime", "legal-static"], default="runtime")
     package_parser.add_argument("--service", default="")
     package_parser.add_argument("--include-services", action="store_true")
     package_parser.add_argument("--target", choices=TARGETS, default="")
 
-    verify_parser = subparsers.add_parser("verify", parents=[report_dir_compat_parser])
+    verify_parser = subparsers.add_parser("verify")
+    verify_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
     verify_parser.add_argument("--env", choices=ENVIRONMENTS, default="")
     verify_parser.add_argument("--target", choices=TARGETS, default="")
     verify_parser.add_argument(
@@ -223,7 +234,8 @@ def build_parser() -> argparse.ArgumentParser:
         default="t1",
     )
 
-    up_parser = subparsers.add_parser("up", parents=[report_dir_compat_parser])
+    up_parser = subparsers.add_parser("up")
+    up_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
     up_parser.add_argument("--target", choices=TARGETS, default="")
     up_parser.add_argument("--env", choices=DEV_UP_ENVS, default="")
     up_parser.add_argument("--device-id", default="")
@@ -231,13 +243,16 @@ def build_parser() -> argparse.ArgumentParser:
     up_parser.add_argument("--skip-build", action="store_true")
     up_parser.add_argument("--rollout-mode", choices=["gray-initial", "carry-on", "full"], default="")
 
-    down_parser = subparsers.add_parser("down", parents=[report_dir_compat_parser])
+    down_parser = subparsers.add_parser("down")
+    down_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
     down_parser.add_argument("--target", choices=TARGETS, required=True)
 
-    status_parser = subparsers.add_parser("status", parents=[report_dir_compat_parser])
+    status_parser = subparsers.add_parser("status")
+    status_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
     status_parser.add_argument("--target", choices=TARGETS, required=True)
 
-    health_parser = subparsers.add_parser("health", parents=[report_dir_compat_parser])
+    health_parser = subparsers.add_parser("health")
+    health_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
     health_parser.add_argument("--target", choices=TARGETS, required=True)
     health_parser.add_argument(
         "--scope",
@@ -248,7 +263,8 @@ def build_parser() -> argparse.ArgumentParser:
     health_parser.add_argument("--retry-attempts", type=int, default=0)
     health_parser.add_argument("--retry-sleep-seconds", type=float, default=-1.0)
 
-    inspect_parser = subparsers.add_parser("inspect", parents=[report_dir_compat_parser])
+    inspect_parser = subparsers.add_parser("inspect")
+    inspect_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
     inspect_parser.add_argument("--target", choices=TARGETS, required=True)
     inspect_parser.add_argument(
         "--scope",
@@ -261,18 +277,26 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["logs", "network", "data", "metrics", "config", "security", "all"],
     )
 
-    doctor_parser = subparsers.add_parser("doctor", parents=[report_dir_compat_parser])
+    doctor_parser = subparsers.add_parser("doctor")
+    doctor_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
     doctor_parser.add_argument("--target", choices=TARGETS, required=True)
 
-    repair_parser = subparsers.add_parser("repair", parents=[report_dir_compat_parser])
+    repair_parser = subparsers.add_parser("repair")
+    repair_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
     repair_parser.add_argument("--target", choices=TARGETS, required=True)
     repair_parser.add_argument(
         "--fix",
-        choices=["rebuild-packages", "restart-stack", "reclaim-ports"],
+        choices=[
+            "rebuild-packages",
+            "restart-stack",
+            "reclaim-ports",
+            "materialize-media",
+        ],
         required=True,
     )
 
-    roll_parser = subparsers.add_parser("roll", parents=[report_dir_compat_parser])
+    roll_parser = subparsers.add_parser("roll")
+    roll_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
     roll_parser.add_argument(
         "--target",
         choices=("alpha-local", "beta-local", "gamma-local"),
@@ -291,7 +315,8 @@ def build_parser() -> argparse.ArgumentParser:
     roll_parser.add_argument("--registry-username", default="")
     roll_parser.add_argument("--registry-password", default="")
 
-    deploy_parser = subparsers.add_parser("deploy", parents=[report_dir_compat_parser])
+    deploy_parser = subparsers.add_parser("deploy")
+    deploy_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
     deploy_parser.add_argument("--target", choices=("prod-hosted",), required=True)
     deploy_parser.add_argument("--mode", choices=("restart", "rollout", "cold-build"), default="")
     deploy_parser.add_argument("--stage", default="")
@@ -1017,6 +1042,16 @@ def _selected_tier_commands(
                 }
             )
     if tier in {"t4", "all"}:
+        media_preflight_command = _target_media_preflight_tier_command(
+            target_name,
+            report_dir,
+        )
+        if media_preflight_command is not None:
+            commands.append(media_preflight_command)
+        media_surface_command = _seeded_media_surface_tier_command(env_name, target_name)
+        if media_surface_command is not None:
+            media_surface_command["stopOnFailure"] = True
+            commands.append(media_surface_command)
         smoke_command = _environment_page_smoke_tier_command(
             env_name,
             target_name,
@@ -1024,9 +1059,6 @@ def _selected_tier_commands(
         )
         if smoke_command is not None:
             commands.append(smoke_command)
-        media_surface_command = _seeded_media_surface_tier_command(env_name, target_name)
-        if media_surface_command is not None:
-            commands.append(media_surface_command)
         commands.append(
             {
                 "name": "prod-rollout-stackctl-contract",
@@ -1036,16 +1068,290 @@ def _selected_tier_commands(
     return commands
 
 
+def _target_media_preflight_tier_command(
+    target_name: str,
+    report_dir: Path | None,
+) -> dict[str, Any] | None:
+    """在设备 Patrol 之前验证 canonical media 的 Range/MIME。"""
+
+    if target_name == "prod-hosted":
+        return {
+            "name": "prod-hosted-release-video-canary-preflight",
+            "argv": [
+                "python3",
+                "quwoquan_ops/cli/smoke/verify_video_playback_canary.py",
+                "--target",
+                "prod-hosted",
+            ],
+            "stopOnFailure": True,
+        }
+    if target_name not in {"alpha-local", "beta-local", "gamma-local", "prod-sim"}:
+        return None
+    health_report_dir = (
+        report_dir / "video-range-mime-preflight"
+        if report_dir is not None
+        else env_runs_root(get_target(load_environment_topology(), target_name)["env"])
+        / "device-matrix"
+        / "video-range-mime-preflight"
+        / target_name
+    )
+    return {
+        "name": f"{target_name}-video-range-mime-preflight",
+        "argv": [
+            "python3",
+            "quwoquan_ops/cli/stackctl.py",
+            "--output-format",
+            "json",
+            "--report-dir",
+            str(health_report_dir),
+            "health",
+            "--target",
+            target_name,
+            "--scope",
+            "media",
+        ],
+        "stopOnFailure": True,
+        "reportPath": relpath(health_report_dir / "report.json"),
+    }
+
+
+def _read_json_object(path_value: str) -> dict[str, Any]:
+    path = Path(path_value)
+    if not path.is_absolute():
+        path = ROOT / path
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _current_commit_sha() -> str:
+    configured = os.environ.get("GITHUB_SHA", "").strip()
+    if configured:
+        return configured
+    result = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    return result.stdout.strip() if result.returncode == 0 else ""
+
+
+def _runtime_media_config_hash(target_name: str) -> str:
+    """将当前 target 的 topology 与 App runtime 配置绑定到 T4 证据。"""
+
+    topology = load_environment_topology()
+    target = get_target(topology, target_name)
+    env_name = str(target.get("env") or "").strip()
+    config_path = ROOT / "quwoquan_app" / "configs" / env_name / "app_runtime.yaml"
+    digest = hashlib.sha256()
+    digest.update(
+        json.dumps(target, ensure_ascii=False, sort_keys=True).encode("utf-8"),
+    )
+    if config_path.is_file():
+        digest.update(config_path.read_bytes())
+    return f"sha256:{digest.hexdigest()}"
+
+
+def _local_video_canary_slice_key() -> str:
+    try:
+        assets = load_media_delivery_manifest()
+    except ValueError:
+        return ""
+    for asset in assets:
+        if str(asset.get("logicalAssetId") or "").strip() == "content-video-primary":
+            return str(asset.get("publicSliceKey") or "").strip().lstrip("/")
+    return ""
+
+
+def _tier_step(steps: list[dict[str, Any]], name_fragment: str) -> dict[str, Any]:
+    for step in steps:
+        if name_fragment in str(step.get("name") or ""):
+            return step
+    return {}
+
+
+def _video_range_evidence_from_preflight(
+    steps: list[dict[str, Any]],
+    target_name: str,
+) -> dict[str, Any]:
+    """从同一次 T4 preflight 的结构化 health/report 取 Range 与 MIME。"""
+
+    if target_name == "prod-hosted":
+        step = _tier_step(steps, "release-video-canary-preflight")
+        try:
+            payload = json.loads(str(step.get("stdout") or ""))
+        except json.JSONDecodeError:
+            payload = {}
+        if isinstance(payload, dict):
+            return {
+                "statusCode": payload.get("rangeStatus"),
+                "mimeType": payload.get("contentType"),
+                "reportPath": "",
+            }
+        return {}
+
+    step = _tier_step(steps, "video-range-mime-preflight")
+    report = _read_json_object(str(step.get("reportPath") or ""))
+    checks = report.get("checks")
+    if not isinstance(checks, list):
+        return {}
+    for check in checks:
+        if not isinstance(check, dict):
+            continue
+        if str(check.get("name") or "") != "media-public-content-video-primary":
+            continue
+        return {
+            "statusCode": check.get("statusCode"),
+            "mimeType": check.get("contentType"),
+            "reportPath": str(step.get("reportPath") or ""),
+        }
+    return {}
+
+
+def _video_ui_evidence_from_smoke(steps: list[dict[str, Any]]) -> dict[str, Any]:
+    step = _tier_step(steps, "environment-page-smoke")
+    report_path = str(step.get("reportPath") or "")
+    report = _read_json_object(report_path)
+    runs = report.get("runs")
+    if not isinstance(runs, list):
+        runs = []
+    successful_runs = [
+        item
+        for item in runs
+        if isinstance(item, dict) and item.get("exitCode") == 0
+    ]
+    screenshot_path = ""
+    for run_item in successful_runs:
+        evidence = run_item.get("evidence")
+        if not isinstance(evidence, dict):
+            continue
+        screenshot = evidence.get("afterScreenshot")
+        if not isinstance(screenshot, dict):
+            continue
+        candidate = str(screenshot.get("path") or "").strip()
+        if candidate:
+            screenshot_path = candidate
+            break
+    passed = (
+        str(report.get("status") or "").strip().lower() == "passed"
+        and bool(successful_runs)
+    )
+    output_summaries = "\n".join(
+        str(item.get("outputSummary") or "")
+        for item in runs
+        if isinstance(item, dict)
+    )
+    if passed:
+        stage_rendered: bool | None = True
+        player_ready = True
+        player_error: bool | None = False
+        player_state = "ready"
+    elif "configured video canary stage should render" in output_summaries:
+        stage_rendered = False
+        player_ready = False
+        player_error = None
+        player_state = "stage-not-rendered"
+    elif "native video player entered its explicit error state" in output_summaries:
+        stage_rendered = True
+        player_ready = False
+        player_error = True
+        player_state = "explicit-error"
+    elif "native video player must reach ready state" in output_summaries:
+        stage_rendered = True
+        player_ready = False
+        player_error = None
+        player_state = "ready-timeout"
+    else:
+        stage_rendered = None
+        player_ready = False
+        player_error = None
+        player_state = "unverified"
+    return {
+        "stageRendered": stage_rendered,
+        "playerReady": player_ready,
+        "playerError": player_error,
+        "playerState": player_state,
+        "reportPath": report_path,
+        "screenshotPath": screenshot_path,
+    }
+
+
+def _runtime_media_t4_evidence(
+    *,
+    target_name: str,
+    steps: list[dict[str, Any]],
+    started_at: str,
+    ended_at: str,
+) -> dict[str, Any]:
+    topology = load_environment_topology()
+    target = get_target(topology, target_name)
+    env_name = str(target.get("env") or "").strip()
+    public_bases = target.get("publicBases")
+    public_bases = public_bases if isinstance(public_bases, dict) else {}
+    public_slice_key = (
+        os.environ.get("VIDEO_PLAYBACK_CANARY_PUBLIC_SLICE_KEY", "").strip().lstrip("/")
+        if target_name == "prod-hosted"
+        else _local_video_canary_slice_key()
+    )
+    service_evidence = {
+        "videoRange": _video_range_evidence_from_preflight(steps, target_name),
+    }
+    ui_evidence = _video_ui_evidence_from_smoke(steps)
+    video_range = service_evidence["videoRange"]
+    dry_run = os.environ.get("STACKCTL_PAGE_SMOKE_DRY_RUN", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+    is_passed = (
+        bool(public_slice_key)
+        and not dry_run
+        and video_range.get("statusCode") == 206
+        and str(video_range.get("mimeType") or "").lower().startswith("video/")
+        and ui_evidence["playerReady"] is True
+        and ui_evidence["playerError"] is False
+    )
+    return {
+        "schema": "runtime-media-video-playback-t4-report",
+        "scenario": "runtime_media.video_playback_t4",
+        "status": "passed" if is_passed else "failed",
+        "dryRun": dry_run,
+        "startedAt": started_at,
+        "endedAt": ended_at,
+        "environment": {
+            "env": env_name,
+            "target": target_name,
+            "rolloutStage": (
+                os.environ.get("PROD_ROLLOUT_STAGE", "").strip()
+                if target_name == "prod-hosted"
+                else "local"
+            ),
+            "mediaVideoBaseUrl": str(public_bases.get("mediaVideo") or "").rstrip("/"),
+            "commitSha": _current_commit_sha(),
+            "configHash": _runtime_media_config_hash(target_name),
+        },
+        "media": {
+            "publicSliceKey": public_slice_key,
+        },
+        "serviceEvidence": service_evidence,
+        "uiEvidence": ui_evidence,
+    }
+
+
 def _seeded_media_surface_tier_command(
     env_name: str,
     target_name: str,
 ) -> dict[str, Any] | None:
-    if target_name not in {"alpha-local", "beta-local", "gamma-local"}:
+    if target_name not in {"alpha-local", "beta-local", "gamma-local", "prod-sim"}:
         return None
     topology = load_environment_topology()
     target = get_target(topology, target_name)
     runtime_env = str(target.get("env") or env_name or "")
-    if runtime_env not in {"alpha", "beta", "gamma"}:
+    if runtime_env not in {"alpha", "beta", "gamma", "prod"}:
         return None
     public_bases = target.get("publicBases") or {}
     required = {"mediaAvatar", "mediaImage", "mediaVideo"}
@@ -1080,12 +1386,35 @@ def _environment_page_smoke_tier_command(
     topology = load_environment_topology()
     target = get_target(topology, target_name)
     public_bases = target.get("publicBases") or {}
-    if not {"api", "productOps", "mediaImage"}.issubset(public_bases):
+    required_bases = {
+        "api",
+        "productOps",
+        "mediaAvatar",
+        "mediaImage",
+        "mediaVideo",
+        "mediaUpload",
+    }
+    if not required_bases.issubset(public_bases):
         return None
     runtime_env = str(target.get("env") or env_name or "alpha")
     if target_name in {"prod-sim", "prod-hosted"}:
         runtime_env = "prod"
     data_source = "mock" if target_name == "alpha-local" else "remote"
+    playback_canary = target.get("playbackCanary")
+    configured_canary_work_id = (
+        str(playback_canary.get("workId") or "").strip()
+        if isinstance(playback_canary, dict)
+        else ""
+    )
+    canary_work_id_env = (
+        str(playback_canary.get("workIdEnv") or "").strip()
+        if isinstance(playback_canary, dict)
+        else ""
+    ) or "VIDEO_PLAYBACK_CANARY_WORK_ID"
+    video_playback_canary_work_id = (
+        configured_canary_work_id
+        or os.environ.get(canary_work_id_env, "").strip()
+    )
     token = "" if target_name == "gamma-local" else _resolve_test_auth_token(runtime_env)
     smoke_report = (
         report_dir / "environment-page-smoke" / "report.json"
@@ -1109,10 +1438,18 @@ def _environment_page_smoke_tier_command(
         str(public_bases["api"]),
         "--product-ops-base-url",
         str(public_bases["productOps"]),
-        "--media-base-url",
+        "--media-avatar-base-url",
+        str(public_bases["mediaAvatar"]),
+        "--media-image-base-url",
         str(public_bases["mediaImage"]),
+        "--media-video-base-url",
+        str(public_bases["mediaVideo"]),
+        "--media-upload-base-url",
+        str(public_bases["mediaUpload"]),
+        "--video-playback-canary-work-id",
+        video_playback_canary_work_id,
         "--target",
-        "test/user_acceptance/patrol/environment/basic_viability__user_acceptance_test.dart",
+        "test/user_acceptance/patrol/environment/video_playback_canary__user_acceptance_test.dart",
     ]
     platform = os.environ.get("STACKCTL_PAGE_SMOKE_PLATFORM", "").strip()
     if platform:
@@ -1154,7 +1491,7 @@ def fetch_url(
     retry_sleep_seconds: float = 2.0,
     headers: dict[str, str] | None = None,
     resolve_host: str = "",
-) -> tuple[bool, int | None, str]:
+) -> tuple[bool, int | None, str, str]:
     retry_markers = (
         "timed out",
         "Remote end closed connection without response",
@@ -1180,16 +1517,21 @@ def fetch_url(
                     )
             with response:
                 body = response.read().decode("utf-8", errors="replace")
-                return True, int(response.status), body[:500]
+                return (
+                    True,
+                    int(response.status),
+                    body[:500],
+                    str(response.headers.get("Content-Type") or ""),
+                )
         except urllib.error.HTTPError as exc:
             body = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
-            return False, int(exc.code), body[:500]
+            return False, int(exc.code), body[:500], str(exc.headers.get("Content-Type") or "")
         except Exception as exc:
             message = str(exc)
             if attempt >= total_attempts or not any(marker in message for marker in retry_markers):
-                return False, None, message
+                return False, None, message, ""
             time.sleep(max(0.0, retry_sleep_seconds) * attempt)
-    return False, None, "unknown fetch failure"
+    return False, None, "unknown fetch failure", ""
 
 
 @contextlib.contextmanager
@@ -1219,10 +1561,11 @@ def _local_public_connect_host(
     target_name: str,
     url: str,
 ) -> str:
-    if target_name != "gamma-local":
+    target = get_target(topology, target_name)
+    if str(target.get("backend") or "").strip() != "local":
         return ""
     hostname = urllib.parse.urlparse(url).hostname or ""
-    public_bases = get_target(topology, target_name).get("publicBases") or {}
+    public_bases = target.get("publicBases") or {}
     public_hosts = {
         urllib.parse.urlparse(str(base)).hostname
         for base in public_bases.values()
@@ -1335,17 +1678,24 @@ def _run_environment_integration_probe(
     product_ops = str(public_bases.get("productOps") or "").strip()
     if product_ops:
         argv.extend(["--product-ops-base-url", product_ops])
-    if target_name == "gamma-local":
-        argv.extend(["--resolve-host", "127.0.0.1"])
+    resolve_host = _local_public_connect_host(
+        topology,
+        target_name,
+        str(public_bases["api"]),
+    )
+    if resolve_host:
+        argv.extend(["--resolve-host", resolve_host])
     token = _resolve_test_auth_token(env_name)
-    if target_name == "gamma-local" and not token:
+    if env_name in {"beta", "gamma"} and not token:
         try:
-            token = open_local_gamma_acceptance_session(
+            token = open_local_acceptance_session(
                 str(public_bases["api"]),
-                resolve_host="127.0.0.1",
+                environment=env_name,
+                target_name=target_name,
+                resolve_host=resolve_host,
             ).access_token
         except (RuntimeError, ValueError) as exc:
-            finding = f"gamma-local integration auth failed: {exc}"
+            finding = f"{target_name} integration auth failed: {exc}"
             return (
                 {
                     "name": "integration-readonly",
@@ -1972,7 +2322,29 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
                 f"{tier_command['name']} failed: "
                 + (result.stderr.strip() or result.stdout.strip() or "unknown tier failure")
             )
+            if tier_command.get("stopOnFailure"):
+                break
     timing = _finish_timing(started_monotonic, started_at)
+    t4_evidence_path = ""
+    if (
+        args.tier in {"t4", "all"}
+        and target_name
+        in {"alpha-local", "beta-local", "gamma-local", "prod-sim", "prod-hosted"}
+    ):
+        t4_evidence = _runtime_media_t4_evidence(
+            target_name=target_name,
+            steps=steps,
+            started_at=timing["startedAt"],
+            ended_at=timing["endedAt"],
+        )
+        t4_evidence_file = report_dir / "runtime_media_t4_evidence.json"
+        write_json(t4_evidence_file, t4_evidence)
+        t4_evidence_path = relpath(t4_evidence_file)
+        if t4_evidence["status"] != "passed":
+            issues.append(
+                "runtime media T4 evidence is incomplete; "
+                f"inspect {t4_evidence_path}",
+            )
     payload = {
         "status": "ok" if not issues else "failed",
         "command": "verify",
@@ -1980,6 +2352,7 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
         "kind": args.kind,
         "tier": args.tier,
         "steps": steps,
+        "runtimeMediaT4EvidencePath": t4_evidence_path,
         **timing,
     }
     write_json(report_dir / "report.json", payload)
@@ -2163,8 +2536,15 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
         cmd = ["bash", "quwoquan_ops/cli/beta/start_beta_stack.sh", "up"]
         env = _beta_env_from_port_manifest()
         env["START_APP"] = "0"
-        result = run_stage("beta-local", cmd, env=env, live_prefix="[beta] ")
-        background_tail = tail_beta_background_logs()
+        try:
+            env.update(
+                load_product_telemetry_sls("beta", "beta-local").environment
+            )
+        except RuntimeError as exc:
+            result = subprocess.CompletedProcess(cmd, 2, stdout="", stderr=str(exc))
+        else:
+            result = run_stage("beta-local", cmd, env=env, live_prefix="[beta] ")
+        background_tail = tail_beta_background_logs() if result.returncode != 2 else {}
         steps.append(
             {
                 "kind": "beta-background-tail",
@@ -2293,7 +2673,19 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
             "gamma",
             "--include-services",
         ]
-        package_result = run(package_cmd, env=env)
+        try:
+            env.update(
+                load_product_telemetry_sls("gamma", "gamma-local").environment
+            )
+        except RuntimeError as exc:
+            package_result = subprocess.CompletedProcess(
+                package_cmd,
+                2,
+                stdout="",
+                stderr=str(exc),
+            )
+        else:
+            package_result = run(package_cmd, env=env)
         steps.append(
             {
                 "name": "gamma-package",
@@ -2797,7 +3189,7 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
                 }
             )
             continue
-        ok, status_code, body = fetch_url(
+        ok, status_code, body, content_type = fetch_url(
             item["url"],
             timeout=timeout_seconds,
             retry_attempts=retry_attempts,
@@ -2809,6 +3201,17 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
         if ok and expected_status is not None and status_code != int(expected_status):
             ok = False
             body = f"expected HTTP {expected_status}, got {status_code}"
+        expected_content_type_prefix = str(item.get("expectedContentTypePrefix") or "")
+        if (
+            ok
+            and expected_content_type_prefix
+            and not content_type.lower().startswith(expected_content_type_prefix.lower())
+        ):
+            ok = False
+            body = (
+                f"expected Content-Type {expected_content_type_prefix}*, "
+                f"got {content_type or '<empty>'}"
+            )
         if not ok:
             findings.append(f"{item['scope']}/{item['name']} failed: {status_code or 'ERR'} {item['url']}")
         statuses.append(
@@ -2818,6 +3221,7 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
                 "url": item["url"],
                 "ok": ok,
                 "statusCode": status_code,
+                "contentType": content_type,
                 "bodyPreview": body,
                 "skipped": False,
             }
@@ -2890,6 +3294,7 @@ def command_inspect(args: argparse.Namespace) -> dict[str, Any]:
         else [args.scope]
     )
     inspection: dict[str, Any] = {}
+    findings: list[str] = []
     if "network" in scopes:
         inspection["network"] = _network_report(args.target)
     if "config" in scopes:
@@ -2905,10 +3310,13 @@ def command_inspect(args: argparse.Namespace) -> dict[str, Any]:
             ),
         }
         if args.target == "prod-hosted":
-            inspection["config"]["rootlessRuntime"] = _prod_plane_runtime_report(
+            runtime = _prod_plane_runtime_report(
                 "service",
                 report_dir / "prod_rootless_service_runtime.json",
             )
+            inspection["config"]["rootlessRuntime"] = runtime
+            if runtime.get("error") or int(runtime.get("exitCode", 0) or 0) != 0:
+                findings.append("prod service plane rootless runtime inspect failed")
     if "logs" in scopes:
         inspection["logs"] = _local_log_report(args.target)
     if "data" in scopes:
@@ -2918,23 +3326,41 @@ def command_inspect(args: argparse.Namespace) -> dict[str, Any]:
     if "security" in scopes:
         inspection["security"] = _security_report(topology, args.target)
     timing = _finish_timing(started_monotonic, started_at)
-    write_json(report_dir / "report.json", {"command": "inspect", "inspection": inspection, **timing})
+    write_json(
+        report_dir / "report.json",
+        {
+            "command": "inspect",
+            "inspection": inspection,
+            "findings": findings,
+            **timing,
+        },
+    )
     for key, value in inspection.items():
         write_json(report_dir / f"{key}.json", value)
-    details = [f"{key}: collected" for key in inspection]
+    write_json(
+        report_dir / "findings.json",
+        {"target": args.target, "scope": args.scope, "issues": findings},
+    )
+    details = findings or [f"{key}: collected" for key in inspection]
+    status = "failed" if findings else "ok"
+    summary = (
+        f"stackctl inspect failed for {args.target}"
+        if findings
+        else f"stackctl inspect completed for {args.target}"
+    )
     _write_summary_bundle(
         report_dir,
         command="inspect",
         target=args.target,
-        status="ok",
-        summary=f"stackctl inspect completed for {args.target}",
+        status=status,
+        summary=summary,
         details=details,
         extra={"scope": args.scope},
         timing=timing,
     )
     return {
-        "exitCode": 0,
-        "summary": f"stackctl inspect completed for {args.target}",
+        "exitCode": 1 if findings else 0,
+        "summary": summary,
         "details": details,
         "reportDir": relpath(report_dir),
         **timing,
@@ -2949,6 +3375,13 @@ def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
     started_monotonic, started_at = _start_timing()
     findings: list[str] = []
     advisories: list[str] = []
+    deployment_prerequisite_failed = False
+    if args.target in {"beta-local", "gamma-local"}:
+        try:
+            load_product_telemetry_sls(env_name, args.target)
+        except (RuntimeError, ValueError) as exc:
+            deployment_prerequisite_failed = True
+            findings.append(f"deployment prerequisite failed: {exc}")
     health_args = argparse.Namespace(
         command="health",
         target=args.target,
@@ -2997,9 +3430,15 @@ def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
         findings.append("packaged app artifact is missing")
     repair_plan = []
     if findings:
+        if deployment_prerequisite_failed:
+            repair_plan.append(
+                "provision the external product telemetry SLS deployment secret and rerun `stackctl doctor`"
+            )
         if any("health checks" in item for item in findings):
             repair_plan.append("run `stackctl health --target <target> --scope full` to confirm failing probes")
-        if any("ports not listening" in item for item in findings):
+        if not deployment_prerequisite_failed and any(
+            "ports not listening" in item for item in findings
+        ):
             repair_plan.append("run `stackctl repair --target <target> --fix restart-stack` for local targets")
         if any("artifact" in item for item in findings):
             repair_plan.append("run `stackctl repair --target <target> --fix rebuild-packages`")
@@ -3062,6 +3501,83 @@ def command_repair(args: argparse.Namespace) -> dict[str, Any]:
             {"target": args.target, "fix": args.fix, "actions": ["rebuild environment packages"]},
         )
         return payload
+    if args.fix == "materialize-media":
+        if args.target != "gamma-local":
+            summary = (
+                "materialize-media is only available for gamma-local curated "
+                "media; prod uses a published release canary"
+            )
+            write_json(
+                report_dir / "repair_plan.json",
+                {"target": args.target, "fix": args.fix, "actions": [], "error": summary},
+            )
+            _write_summary_bundle(
+                report_dir,
+                command="repair",
+                target=args.target,
+                status="failed",
+                summary=summary,
+                details=[summary],
+            )
+            return {
+                "exitCode": 2,
+                "summary": summary,
+                "details": [summary],
+                "reportDir": relpath(report_dir),
+            }
+        try:
+            materialized = materialize_local_gamma_media(
+                target_cache_dir(args.target) / "media",
+            )
+        except (LocalGammaMediaError, OSError) as exc:
+            summary = f"gamma local media materialization failed: {exc}"
+            write_json(
+                report_dir / "repair_plan.json",
+                {"target": args.target, "fix": args.fix, "actions": [], "error": summary},
+            )
+            _write_summary_bundle(
+                report_dir,
+                command="repair",
+                target=args.target,
+                status="failed",
+                summary=summary,
+                details=[summary],
+            )
+            return {
+                "exitCode": 1,
+                "summary": summary,
+                "details": [summary],
+                "reportDir": relpath(report_dir),
+            }
+        write_json(report_dir / "media_materialization.json", materialized)
+        write_json(
+            report_dir / "repair_plan.json",
+            {
+                "target": args.target,
+                "fix": args.fix,
+                "actions": ["materialize canonical local-gamma media cache"],
+            },
+        )
+        _write_summary_bundle(
+            report_dir,
+            command="repair",
+            target=args.target,
+            status="ok",
+            summary="gamma local canonical media materialized",
+            details=[
+                f"copied files: {materialized['copiedFiles']}",
+                f"canonical video: {materialized['publicSliceKey']}",
+            ],
+        )
+        return {
+            "exitCode": 0,
+            "summary": "gamma local canonical media materialized",
+            "details": [
+                f"copied files: {materialized['copiedFiles']}",
+                f"canonical video: {materialized['publicSliceKey']}",
+            ],
+            "reportDir": relpath(report_dir),
+        }
     if args.fix == "restart-stack":
         down_args = argparse.Namespace(command="down", target=args.target, output_format="json", report_dir=str(report_dir / "down"))
         up_args = argparse.Namespace(
@@ -3542,6 +4058,10 @@ def _gamma_env_from_port_manifest(topology: dict[str, Any], target_name: str) ->
         "LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT": str(ports["object-storage-edge"]),
         "LOCAL_GAMMA_MEDIA_PUBLIC_BASE_URL": str(public_bases["mediaImage"]),
         "LOCAL_GAMMA_MEDIA_BASE_URL": str(public_bases["mediaImage"]),
+        "LOCAL_GAMMA_MEDIA_AVATAR_BASE_URL": str(public_bases["mediaAvatar"]),
+        "LOCAL_GAMMA_MEDIA_IMAGE_BASE_URL": str(public_bases["mediaImage"]),
+        "LOCAL_GAMMA_MEDIA_VIDEO_BASE_URL": str(public_bases["mediaVideo"]),
+        "LOCAL_GAMMA_MEDIA_UPLOAD_BASE_URL": str(public_bases["mediaUpload"]),
         "LOCAL_GAMMA_CONTENT_PORT": str(ports["content-service"]),
         "LOCAL_GAMMA_CHAT_PORT": str(ports["chat-service"]),
         "LOCAL_GAMMA_USER_PORT": str(ports["user-service"]),
@@ -3559,7 +4079,7 @@ def _gamma_env_from_port_manifest(topology: dict[str, Any], target_name: str) ->
         "LOCAL_GAMMA_ES_PORT": str(ports["elasticsearch"]),
     }
     environment.update(
-        prepare_local_gamma_auth().environment
+        prepare_local_environment_auth("gamma", "gamma-local").environment
     )
     environment.update(
         prepare_local_gamma_object_storage(
@@ -3599,40 +4119,41 @@ def _health_checks_for_target(topology: dict[str, Any], target_name: str, scope:
             }
         )
         if allow_fixture_refs:
-            checks.append(
-                {
-                    "name": "media-public-sample",
+            for asset in load_media_delivery_manifest():
+                url = build_media_delivery_url(public_bases, asset)
+                check = {
+                    "name": f"media-public-{asset['logicalAssetId']}",
                     "scope": "media",
-                    "url": f"{str(public_bases['mediaImage']).rstrip('/')}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+                    "url": url,
                 }
-            )
-            checks.append(
-                {
-                    "name": "media-video-range-sample",
-                    "scope": "media",
-                    "url": f"{str(public_bases.get('mediaVideo', public_bases['mediaImage'])).rstrip('/')}/media/video/s/archived-video/beta-sample.mp4",
-                    "headers": {"Range": "bytes=0-1"},
-                    "expectedStatus": 206,
-                }
-            )
+                if asset["mediaType"] == "video":
+                    check["headers"] = {"Range": "bytes=0-1"}
+                    check["expectedStatus"] = 206
+                    check["expectedContentTypePrefix"] = "video/"
+                checks.append(check)
         media_origin = str(origins.get("mediaOrigin") or "").rstrip("/")
         if media_origin and allow_fixture_refs:
-            checks.append(
-                {
-                    "name": "media-origin-sample",
+            origin_bases = {
+                "mediaAvatar": media_origin,
+                "mediaImage": media_origin,
+                "mediaVideo": media_origin,
+            }
+            for asset in load_media_delivery_manifest():
+                url = build_media_delivery_url(
+                    origin_bases,
+                    asset,
+                    require_https=False,
+                )
+                check = {
+                    "name": f"media-origin-{asset['logicalAssetId']}",
                     "scope": "media",
-                    "url": f"{media_origin}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+                    "url": url,
                 }
-            )
-            checks.append(
-                {
-                    "name": "media-origin-video-range-sample",
-                    "scope": "media",
-                    "url": f"{media_origin}/media/video/s/archived-video/beta-sample.mp4",
-                    "headers": {"Range": "bytes=0-1"},
-                    "expectedStatus": 206,
-                }
-            )
+                if asset["mediaType"] == "video":
+                    check["headers"] = {"Range": "bytes=0-1"}
+                    check["expectedStatus"] = 206
+                    check["expectedContentTypePrefix"] = "video/"
+                checks.append(check)
     if scope in {"service", "full"}:
         checks.extend(_service_health_checks_for_target(target_name))
     if scope == "full":
@@ -3689,7 +4210,7 @@ def _full_scope_health_checks(
             {
                 "name": "app-config",
                 "scope": "full",
-                "url": f"{str(public_bases['api']).rstrip('/')}/v1/config/app",
+                "url": f"{str(public_bases['api']).rstrip('/')}/config/app",
             }
         )
         checks.extend(
@@ -3697,24 +4218,24 @@ def _full_scope_health_checks(
                 {
                     "name": "content-feed",
                     "scope": "full",
-                    "url": f"{str(public_bases['api']).rstrip('/')}/v1/content/feed",
+                    "url": f"{str(public_bases['api']).rstrip('/')}/content/feed",
                 },
                 {
                     "name": "chat-contacts",
                     "scope": "full",
-                    "url": f"{str(public_bases['api']).rstrip('/')}/v1/chat/contacts",
+                    "url": f"{str(public_bases['api']).rstrip('/')}/chat/contacts",
                 },
                 {
                     "name": "app-messages-unread-count",
                     "scope": "full",
-                    "url": f"{str(public_bases['api']).rstrip('/')}/v1/app-messages/unread-count",
+                    "url": f"{str(public_bases['api']).rstrip('/')}/app-messages/unread-count",
                 },
                 {
                     "name": "feed-intersections",
                     "scope": "full",
                     "url": (
                         f"{str(public_bases['api']).rstrip('/')}"
-                        "/v1/content/feed/intersections?limit=4&channel=recommend"
+                        "/content/feed/intersections?limit=4&channel=recommend"
                     ),
                 },
             ]
@@ -3725,19 +4246,19 @@ def _full_scope_health_checks(
                 {
                     "name": "app-config",
                     "scope": "full",
-                    "url": f"{str(public_bases['api']).rstrip('/')}/v1/config/app",
+                    "url": f"{str(public_bases['api']).rstrip('/')}/config/app",
                 },
                 {
                     "name": "gamma-route-smoke",
                     "scope": "full",
-                    "url": f"{str(public_bases['api']).rstrip('/')}/v1/content/feed?limit=1",
+                    "url": f"{str(public_bases['api']).rstrip('/')}/content/feed?limit=1",
                 },
                 {
                     "name": "tag-shared-tags-smoke",
                     "scope": "full",
                     "url": (
                         f"{str(public_bases['api']).rstrip('/')}"
-                        "/v1/tag/shared-tags?objectAId=u1&objectAType=user&objectBId=u2&objectBType=user"
+                        "/tag/shared-tags?objectAId=u1&objectAType=user&objectBId=u2&objectBType=user"
                     ),
                 },
             ]
@@ -3748,12 +4269,12 @@ def _full_scope_health_checks(
                 {
                     "name": "app-config",
                     "scope": "full",
-                    "url": f"{str(public_bases['api']).rstrip('/')}/v1/config/app",
+                    "url": f"{str(public_bases['api']).rstrip('/')}/config/app",
                 },
                 {
                     "name": "prod-sim-route-smoke",
                     "scope": "full",
-                    "url": f"{str(public_bases['api']).rstrip('/')}/v1/content/feed?limit=1",
+                    "url": f"{str(public_bases['api']).rstrip('/')}/content/feed?limit=1",
                 },
             ]
         )

@@ -64,7 +64,7 @@ type circleFixtureCircle struct {
 }
 
 type circleFixtureGroup struct {
-	ID                   string `json:"_id"`
+	ID                   string `json:"id"`
 	Version              int64  `json:"version"`
 	CircleID             string `json:"circleId"`
 	ParentGroupID        string `json:"parentGroupId"`
@@ -85,7 +85,7 @@ type circleFixtureGroup struct {
 }
 
 type circleFixtureMember struct {
-	ID           string `json:"_id"`
+	ID           string `json:"id"`
 	CircleID     string `json:"circleId"`
 	PersonaID    string `json:"personaId"`
 	Role         string `json:"role"`
@@ -95,7 +95,7 @@ type circleFixtureMember struct {
 }
 
 type circleFixtureFile struct {
-	ID                string `json:"_id"`
+	ID                string `json:"id"`
 	Version           int64  `json:"version"`
 	CircleID          string `json:"circleId"`
 	GroupID           string `json:"groupId"`

@@ -5,7 +5,7 @@
 - **ChangeStreamWatcher**：监听 MongoDB 集合变更（Change Stream），将变更事件转换为 SSE 推送或内部事件。
 - **背压机制**：慢客户端缓冲区上限 + 超时断开，防止阻塞服务端。
 - **重连机制**：基于 Last-Event-ID 的断线续传，不丢失消息。
-- **HTTP 集成**：GET /v1/stream/events 注册 SSE 连接，需认证。
+- **HTTP 集成**：GET /stream/events 注册 SSE 连接，需认证。
 
 ## 实现要点
 - **SSEServer**：连接池按 userId 索引；Push 时广播给该用户所有连接；支持 Last-Event-ID 续传。

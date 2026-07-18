@@ -241,7 +241,7 @@ def stop_process(process: subprocess.Popen[str] | None) -> None:
 
 def wait_for_gateway(base_url: str, timeout_seconds: int) -> bool:
     deadline = time.monotonic() + timeout_seconds
-    url = base_url.rstrip("/") + "/v1/assistant/skill-subscriptions"
+    url = base_url.rstrip("/") + "/assistant/skill-subscriptions"
     while time.monotonic() < deadline:
         try:
             with urllib.request.urlopen(url, timeout=3) as response:

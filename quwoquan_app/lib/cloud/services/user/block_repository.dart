@@ -7,8 +7,8 @@ import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 /// 用户拉黑 Repository（三层模式：Abstract → Mock → Remote）
 ///
 /// 对应云侧路由（contracts/metadata/user/block_edge/service.yaml）：
-///   POST   /v1/user/block/{targetUserId}
-///   DELETE /v1/user/block/{targetUserId}
+///   POST   /user/block/{targetUserId}
+///   DELETE /user/block/{targetUserId}
 abstract class BlockRepository {
   Future<void> blockUser(String targetUserId);
   Future<void> unblockUser(String targetUserId);

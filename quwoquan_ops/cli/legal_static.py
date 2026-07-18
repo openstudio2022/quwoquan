@@ -25,6 +25,7 @@ from quwoquan_ops.cli.lib.environment_topology import (
 
 DEFAULT_MANIFEST = ROOT / "quwoquan_service" / "services" / "legal-static" / "source" / "manifest.yaml"
 DEFAULT_OUTPUT_ROOT = ROOT / ".qwq_output" / "env"
+LEGAL_STATIC_SOURCE_SCHEMA = "legal-static"
 REQUIRED_DOCUMENTS = {
     "user-agreement",
     "privacy-policy",
@@ -180,8 +181,8 @@ def validate_manifest(
 ) -> tuple[dict[str, Any], list[str]]:
     manifest = _load_manifest(manifest_path)
     issues: list[str] = []
-    if manifest.get("schemaVersion") != "legal-static/v1":
-        issues.append("schemaVersion must be legal-static/v1")
+    if manifest.get("schema") != LEGAL_STATIC_SOURCE_SCHEMA:
+        issues.append(f"schema must be {LEGAL_STATIC_SOURCE_SCHEMA}")
     if manifest.get("packageKind") != "legal-static":
         issues.append("packageKind must be legal-static")
     current_version = str(manifest.get("currentVersion") or "").strip()
@@ -321,7 +322,7 @@ def build_package(
             )
 
         public_manifest = {
-            "schemaVersion": "legal-static-public/v1",
+            "schema": "legal-static-public",
             "packageKind": "legal-static",
             "env": env_name,
             "currentVersion": version,
@@ -333,7 +334,7 @@ def build_package(
         write_json(public_legal_root / "manifest.json", public_manifest)
 
         release_metadata = {
-            "schemaVersion": "legal-static-release/v1",
+            "schema": "legal-static-release",
             "packageKind": "legal-static",
             "env": env_name,
             "version": version,

@@ -125,7 +125,7 @@ def build_provenance(
             "articleMarkdownDigest"
         )
     return {
-        "schemaVersion": PROVENANCE_SCHEMA,
+        "schema": PROVENANCE_SCHEMA,
         "ref": ref,
         "final": final,
         "agentInput": {
@@ -157,8 +157,8 @@ def provenance_issues(post_dir: Path, manifest: Mapping[str, Any]) -> list[str]:
     except Exception as exc:  # noqa: BLE001
         return [f"{post_dir}: provenance.json unreadable: {exc}"]
     issues: list[str] = []
-    if data.get("schemaVersion") != PROVENANCE_SCHEMA:
-        issues.append(f"{post_dir}: provenance.schemaVersion invalid")
+    if data.get("schema") != PROVENANCE_SCHEMA:
+        issues.append(f"{post_dir}: provenance.schema invalid")
     final = data.get("final") or {}
     is_image = str(manifest.get("contentType") or "") == "image" or str(
         manifest.get("carrier") or ""

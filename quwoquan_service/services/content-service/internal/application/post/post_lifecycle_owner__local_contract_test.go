@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"quwoquan_service/services/content-service/internal/application/commandmeta"
+	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
 	"quwoquan_service/services/content-service/internal/testsupport"
 )
 
@@ -12,25 +13,29 @@ func TestPostLifecycleCommandsRequireAuthorPersona(t *testing.T) {
 	t.Parallel()
 
 	service := NewPostService(BindDataPorts(testsupport.NewPostStore(nil)))
-	created, err := service.CreatePost(
-		commandmeta.WithIdempotencyKey(context.Background(), "post-owner-create"),
-		map[string]any{
-			"contentType": "micro",
-			"authorId":    "persona-owner",
-			"body":        "owner-only draft",
+	receipt, err := service.SubmitPostPublication(
+		commandmeta.WithIdempotencyKey(context.Background(), "post-owner-publish"),
+		SubmitPostPublicationCommand{
+			PublishIntentID: "post-owner-publish",
+			LocalDraftID:    "post-owner-draft",
+			AuthorID:        "persona-owner",
+			Content: postmodel.Post{
+				ContentType: "micro",
+				Body:        "owner-only publication",
+			},
 		},
 	)
 	if err != nil {
-		t.Fatalf("CreatePost() error = %v", err)
+		t.Fatalf("SubmitPostPublication() error = %v", err)
 	}
 
-	_, err = service.UpdatePost(
+	_, err = service.UpdatePostSettings(
 		commandmeta.WithIdempotencyKey(context.Background(), "post-owner-update"),
-		created.ID,
+		receipt.PostID,
 		"persona-outsider",
-		map[string]any{"body": "attempted takeover"},
+		map[string]any{"visibility": "private"},
 	)
 	if err == nil {
-		t.Fatal("UpdatePost() must reject a non-owner persona")
+		t.Fatal("UpdatePostSettings() must reject a non-owner persona")
 	}
 }

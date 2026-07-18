@@ -1,4 +1,3 @@
-version: 1
 service:
   name: platform-ops-service
   domain: ops
@@ -10,10 +9,12 @@ service:
     target_story: app-cloud-business-object-commercial-closure
 api_routes:
   - method: GET
-    path: /v1/control-plane/platform/configs
+    path: /control-plane/platform/configs
+
     operation: ListServiceConfigs
     actor: account
-    auth: required
+    security:
+      auth_mode: required
     response_entity: ConfigKeyCatalogSlice
     authorization: { principal: operator, scopes: [ops.platform.config.read], ownership_policy: operator_scope }
     reliability: { timeout_ms: 1000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none }
@@ -24,10 +25,12 @@ api_routes:
     commercial: { status: ready }
     application: { kind: query, facet: ConfigLayerQueryFacade, method: listConfigKeys, reader: ConfigKeyCatalogReader, slice: ConfigKeyCatalogSlice }
   - method: GET
-    path: /v1/control-plane/platform/configs/layers
+    path: /control-plane/platform/configs/layers
+
     operation: ListConfigLayers
     actor: account
-    auth: required
+    security:
+      auth_mode: required
     response_entity: ConfigLayerSlice
     authorization: { principal: operator, scopes: [ops.platform.config.read], ownership_policy: operator_scope }
     reliability: { timeout_ms: 1000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none }
@@ -38,10 +41,12 @@ api_routes:
     commercial: { status: ready }
     application: { kind: query, facet: ConfigLayerQueryFacade, method: listLayers, reader: ConfigLayerReader, slice: ConfigLayerSlice }
   - method: GET
-    path: /v1/control-plane/platform/configs/resolve
+    path: /control-plane/platform/configs/resolve
+
     operation: ResolveEffectiveConfig
     actor: account
-    auth: required
+    security:
+      auth_mode: required
     response_entity: EffectiveConfigSlice
     authorization: { principal: operator, scopes: [ops.platform.config.read], ownership_policy: operator_scope }
     reliability: { timeout_ms: 1200, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none }
@@ -52,10 +57,14 @@ api_routes:
     commercial: { status: ready }
     application: { kind: query, facet: ConfigLayerQueryFacade, method: resolveEffectiveConfig, reader: EffectiveConfigReader, slice: EffectiveConfigSlice }
   - method: POST
-    path: /v1/control-plane/platform/configs/{configKey}:update
+    path: /control-plane/platform/configs/{configKey}:update
+
     operation: UpdateServiceConfig
     actor: account
-    auth: required
+    security:
+      auth_mode: required
+    headers: [If-Match, Idempotency-Key]
+    concurrency: { version_precondition: if_match }
     request_entity: SetConfigLayerValueRequest
     request_body_kind: object
     response_entity: SetConfigLayerValueResult
@@ -73,7 +82,7 @@ consumers:
 contract_test:
   coverage_requirements:
     - typed value kind and metadata key type must match
-    - create/update requires expectedVersion and idempotency receipt
+    - create/update requires If-Match and idempotency receipt
     - aggregate, receipt and ConfigLayerValueSet outbox commit atomically
     - resolve precedence is global then environment then cluster then service
   current_evidence:

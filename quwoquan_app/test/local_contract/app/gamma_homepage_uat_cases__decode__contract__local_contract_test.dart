@@ -9,7 +9,7 @@ void main() {
     final encoded = base64.encode(
       utf8.encode(
         jsonEncode(<String, Object?>{
-          'schemaVersion': 'quwoquan_data.gamma_app_uat_case_manifest/1',
+          'schema': 'quwoquan_data.homepage_verification_case_manifest',
           'environment': 'gamma',
           'releaseId':
               '20260714--travel-homepage-coverage--cn-zhejiang-sichuan--canary-002',
@@ -38,7 +38,7 @@ void main() {
     final encoded = base64.encode(
       utf8.encode(
         jsonEncode(<String, Object?>{
-          'schemaVersion': 'quwoquan_data.gamma_app_uat_case_manifest/1',
+          'schema': 'quwoquan_data.homepage_verification_case_manifest',
           'environment': 'gamma',
           'releaseId': 'release',
           'runId': 'run',

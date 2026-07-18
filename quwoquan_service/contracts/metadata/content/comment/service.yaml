@@ -1,4 +1,3 @@
-version: 1
 
 service:
   name: content-service
@@ -13,7 +12,8 @@ service:
 
 api_routes:
   - method: POST
-    path: /v1/content/posts/{postId}/comments
+    path: /content/posts/{postId}/comments
+
     operation: CreateComment
     actor: persona
     application:
@@ -71,7 +71,8 @@ api_routes:
       visibility: private
 
   - method: DELETE
-    path: /v1/content/posts/{postId}/comments/{commentId}
+    path: /content/posts/{postId}/comments/{commentId}
+
     operation: DeleteComment
     actor: persona
     application:
@@ -111,7 +112,7 @@ api_routes:
       latency_p95_ms: 800
       availability_percent: 99.9
     description: 评论作者软删自己的评论；写入 CommentDeleted outbox 事实。
-    request_fields: [version]
+    request_fields: []
     client_contract:
       dart_import: ../content/comment_contracts.dart
       request_type: DeleteContentCommentCommand
@@ -126,7 +127,8 @@ api_routes:
       visibility: private
 
   - method: POST
-    path: /v1/content/posts/{postId}/comments/{commentId}/pin
+    path: /content/posts/{postId}/comments/{commentId}/pin
+
     operation: PinComment
     actor: persona
     application:
@@ -167,7 +169,7 @@ api_routes:
       latency_p95_ms: 800
       availability_percent: 99.9
     description: 被引用 Post 作者置顶一级评论；不直接修改 Post 聚合。
-    request_fields: [version]
+    request_fields: []
     client_contract:
       dart_import: ../content/comment_contracts.dart
       request_type: ChangeContentCommentPinCommand
@@ -182,7 +184,8 @@ api_routes:
       visibility: private
 
   - method: DELETE
-    path: /v1/content/posts/{postId}/comments/{commentId}/pin
+    path: /content/posts/{postId}/comments/{commentId}/pin
+
     operation: UnpinComment
     actor: persona
     application:
@@ -223,7 +226,7 @@ api_routes:
       latency_p95_ms: 800
       availability_percent: 99.9
     description: 被引用 Post 作者取消置顶一级评论。
-    request_fields: [version]
+    request_fields: []
     client_contract:
       dart_import: ../content/comment_contracts.dart
       request_type: ChangeContentCommentPinCommand
@@ -238,7 +241,8 @@ api_routes:
       visibility: private
 
   - method: POST
-    path: /v1/content/comments/{commentId}/media:bind
+    path: /content/comments/{commentId}/media:bind
+
     operation: BindMediaAssetsToComment
     actor: persona
     application:
@@ -278,7 +282,7 @@ api_routes:
       latency_p95_ms: 800
       availability_percent: 99.9
     description: 绑定已验证的 comment_attachment MediaAsset 引用。
-    request_fields: [version, attachmentMediaIds]
+    request_fields: [attachmentMediaIds]
     client_contract:
       dart_import: ../content/comment_contracts.dart
       request_type: BindContentCommentAttachmentsCommand
@@ -293,7 +297,8 @@ api_routes:
       visibility: private
 
   - method: GET
-    path: /v1/content/posts/{postId}/comments
+    path: /content/posts/{postId}/comments
+
     operation: ListComments
     actor: none
     application:
@@ -346,7 +351,8 @@ api_routes:
       visibility: public
 
   - method: GET
-    path: /v1/content/posts/{postId}/comments/{commentId}/replies
+    path: /content/posts/{postId}/comments/{commentId}/replies
+
     operation: ListCommentReplies
     actor: none
     application:
@@ -399,7 +405,8 @@ api_routes:
       visibility: public
 
   - method: GET
-    path: /v1/content/users/me/comments
+    path: /content/users/me/comments
+
     operation: ListCommentsByAuthor
     actor: persona
     application:
@@ -452,7 +459,8 @@ api_routes:
       visibility: private
 
   - method: GET
-    path: /v1/content/users/me/received-comments
+    path: /content/users/me/received-comments
+
     operation: ListCommentsForPostAuthor
     actor: persona
     application:

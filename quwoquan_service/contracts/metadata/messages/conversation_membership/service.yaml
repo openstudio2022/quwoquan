@@ -1,4 +1,3 @@
-version: 1
 service:
   name: chat-service
   domain: chat
@@ -11,7 +10,8 @@ service:
     target_story: app-cloud-business-object-commercial-closure
 api_routes:
   - method: POST
-    path: /v1/chat/conversations/{conversationId}/members
+    path: /chat/conversations/{conversationId}/members
+
     operation: AddMembers
     actor: persona
     application:
@@ -22,10 +22,11 @@ api_routes:
       mutation_target: ConversationMembership
       invariant_target: ConversationMembership
     description: 添加成员（批量，检查 maxGroupSize 上限）
-    auth: required
-
+    security:
+      auth_mode: required
   - method: DELETE
-    path: /v1/chat/conversations/{conversationId}/members/{userId}
+    path: /chat/conversations/{conversationId}/members/{userId}
+
     operation: RemoveMember
     actor: persona
     application:
@@ -36,12 +37,13 @@ api_routes:
       mutation_target: ConversationMembership
       invariant_target: ConversationMembership
     description: 移除成员
-    auth: required
-
+    security:
+      auth_mode: required
   # ── 助手参与 ──────────────────────────────────
 
   - method: POST
-    path: /v1/chat/conversations/{conversationId}/assistant
+    path: /chat/conversations/{conversationId}/assistant
+
     operation: InviteAssistant
     actor: persona
     application:
@@ -52,10 +54,11 @@ api_routes:
       mutation_target: ConversationMembership
       invariant_target: ConversationMembership
     description: 邀请小趣助手加入会话（创建 memberType=assistant 的 ConversationMember），可指定 skillId
-    auth: required
-
+    security:
+      auth_mode: required
   - method: DELETE
-    path: /v1/chat/conversations/{conversationId}/assistant
+    path: /chat/conversations/{conversationId}/assistant
+
     operation: RemoveAssistant
     actor: persona
     application:
@@ -66,12 +69,13 @@ api_routes:
       mutation_target: ConversationMembership
       invariant_target: ConversationMembership
     description: 移除小趣助手（删除 memberType=assistant 的成员）
-    auth: required
-
+    security:
+      auth_mode: required
   # ── 用户设置 ──────────────────────────────────
 
   - method: PATCH
-    path: /v1/chat/conversations/{conversationId}/owner
+    path: /chat/conversations/{conversationId}/owner
+
     operation: TransferOwnership
     actor: persona
     application:
@@ -82,10 +86,11 @@ api_routes:
       mutation_target: ConversationMembership
       invariant_target: ConversationMembership
     description: 转让群主
-    auth: required
-
+    security:
+      auth_mode: required
   - method: PUT
-    path: /v1/chat/conversations/{conversationId}/admins
+    path: /chat/conversations/{conversationId}/admins
+
     operation: UpdateGroupAdmins
     actor: persona
     application:
@@ -96,10 +101,11 @@ api_routes:
       mutation_target: ConversationMembership
       invariant_target: ConversationMembership
     description: 设置管理员列表
-    auth: required
-
+    security:
+      auth_mode: required
   - method: GET
-    path: /v1/chat/conversations/{conversationId}/members
+    path: /chat/conversations/{conversationId}/members
+
     operation: ListMembers
     actor: persona
     application:
@@ -113,4 +119,5 @@ api_routes:
       排序由 query `sort` 控制，默认 joined_asc；可选 display_name_asc。
     query_params: [cursor, limit, role, sort]
     response_entity: ConversationMember
-    auth: required
+    security:
+      auth_mode: required

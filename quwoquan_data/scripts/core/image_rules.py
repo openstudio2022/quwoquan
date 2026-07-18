@@ -3,7 +3,7 @@
 与对象证据链规格一致：每张图必须能说清「与检索对象的真实相关性」，禁止通用模板串
 （如 "{实体} 实景主图"）。像素门保证内容页不会出现糊图；数量门由当前
 ContentSupplyTask 的载体配额决定，图片作品允许单张高质量图。
-真相源：docs/pipeline_directory_layout_spec.md + 用户图片下载要求。
+真相源：specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/execution.md + 用户图片下载要求。
 """
 from __future__ import annotations
 

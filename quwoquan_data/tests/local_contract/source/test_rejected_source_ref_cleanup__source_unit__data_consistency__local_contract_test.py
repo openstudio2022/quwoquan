@@ -32,7 +32,7 @@ def test_rejected_source_unit_removes_consumable_object_ref(tmp_path: Path) -> N
     write_json(
         object_dir / "1.download" / "source_refs.json",
         {
-            "schemaVersion": "quwoquan_data.object_source_refs/1",
+            "schema": "quwoquan_data.object_source_refs",
             "objectRef": "entities/地点/景区/测试景区",
             "sources": [
                 {

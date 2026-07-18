@@ -2,13 +2,24 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "rubric 评审（LLM-as-judge）软轨结果 — 与确定性硬门并行的双轨之一。会话模型按固定 rubric 多次评分写回；rubric_consistency 校验判官稳定性，低分转 revision 或人审。见整改计划第六阶段（算法专家视角：判定双轨）。",
   "type": "object",
-  "required": ["schemaVersion", "ref", "dimensions", "decision"],
+  "required": [
+    "schema",
+    "ref",
+    "dimensions",
+    "decision"
+  ],
   "properties": {
-    "schemaVersion": { "type": "string", "const": "quwoquan_data.rubric_review/1" },
-    "ref": { "type": "string", "description": "内容对象 ref（单篇隔离）" },
+    "ref": {
+      "type": "string",
+      "description": "内容对象 ref（单篇隔离）"
+    },
     "writingIntent": {
       "type": "string",
-      "enum": ["planning_consultation", "decision_experience", "post_trip_journal"]
+      "enum": [
+        "planning_consultation",
+        "decision_experience",
+        "post_trip_journal"
+      ]
     },
     "generationModelFamily": {
       "type": "string",
@@ -19,12 +30,25 @@
       "description": "判官清单（jury-of-judges 多数表决）；高风险维度需 >= 3 个不同族判官。pin modelId/promptHash/temperature 作为 eval 合约。",
       "items": {
         "type": "object",
-        "required": ["modelId", "promptHash", "temperature"],
+        "required": [
+          "modelId",
+          "promptHash",
+          "temperature"
+        ],
         "properties": {
-          "modelId": { "type": "string" },
-          "modelFamily": { "type": "string" },
-          "promptHash": { "type": "string", "description": "judge system prompt 的稳定哈希（pin 版本可复算）" },
-          "temperature": { "type": "number" }
+          "modelId": {
+            "type": "string"
+          },
+          "modelFamily": {
+            "type": "string"
+          },
+          "promptHash": {
+            "type": "string",
+            "description": "judge system prompt 的稳定哈希（pin 版本可复算）"
+          },
+          "temperature": {
+            "type": "number"
+          }
         }
       }
     },
@@ -32,8 +56,12 @@
       "type": "object",
       "description": "偏差缓解声明：position（双序）+ verbosity（控长度）",
       "properties": {
-        "positionSwapApplied": { "type": "boolean" },
-        "lengthControlApplied": { "type": "boolean" }
+        "positionSwapApplied": {
+          "type": "boolean"
+        },
+        "lengthControlApplied": {
+          "type": "boolean"
+        }
       }
     },
     "dimensions": {
@@ -42,36 +70,66 @@
       "minItems": 1,
       "items": {
         "type": "object",
-        "required": ["name", "scores"],
+        "required": [
+          "name",
+          "scores"
+        ],
         "properties": {
           "name": {
             "type": "string",
-            "enum": ["mainlineConsistency", "professionalism", "readability", "informationDensity", "clicheDensity", "originalityFidelity"],
+            "enum": [
+              "mainlineConsistency",
+              "professionalism",
+              "readability",
+              "informationDensity",
+              "clicheDensity",
+              "originalityFidelity"
+            ],
             "description": "主线一致性 | 专业度 | 可读性 | 信息密度 | 套话密度（越低越好）| 原创忠实度（对比最高质量底稿与证据链：是否遵从原创事实骨架、是否基于底稿补充去语病而非直接总结/综述、是否无虚构情节与编造数据；语义判定不依赖文字相似度，对 licensed_adaptation 与 factual_reference_only 均生效）"
           },
           "scores": {
             "type": "array",
             "description": "同输入固定 prompt 多次评分（>=2 才校验方差），0-10",
-            "items": { "type": "number", "minimum": 0, "maximum": 10 }
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 10
+            }
           },
           "verdict": {
             "type": "string",
-            "enum": ["pass", "fail"],
+            "enum": [
+              "pass",
+              "fail"
+            ],
             "description": "二元判决（避免 Likert 聚中无信号）；rubric_judge 强制必填"
           },
-          "rationale": { "type": "string", "description": "判决理由（reason-before-score，留审计轨迹）" }
+          "rationale": {
+            "type": "string",
+            "description": "判决理由（reason-before-score，留审计轨迹）"
+          }
         }
       }
     },
     "decision": {
       "type": "string",
-      "enum": ["approved", "revision_needed", "human_review"],
+      "enum": [
+        "approved",
+        "revision_needed",
+        "human_review"
+      ],
       "description": "软轨结论：低分或判官不稳定 → revision_needed/human_review，不直接放行"
     },
     "judgeUnstableDimensions": {
       "type": "array",
-      "items": { "type": "string" },
+      "items": {
+        "type": "string"
+      },
       "description": "rubric_consistency 判定方差过大的维度（门失效，需人审）"
+    },
+    "schema": {
+      "type": "string",
+      "const": "quwoquan_data.rubric_review"
     }
   }
 }

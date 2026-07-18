@@ -39,8 +39,9 @@ D0 以 [应用根设计](../../design.md) 为全局合同，并要求 metadata �
   修改 aggregate 状态。wire DTO、projection Slice 与 persistence record 分离生成或映射。
 - `CQRS-COMMAND-003`：每个 command 只绑定一个 canonical aggregate owner。Command
   Facet 接收 typed command 与可信 invocation context，调用 aggregate 行为后只执行一次
-  对象专属 `Commit(expectedVersion, receipt, events)`；成功结果只返回 ID、version、status
-  或必要 ack。
+  对象专属 `Commit(internalExpectedVersion, receipt, events)`；`internalExpectedVersion`
+  来自服务端本次 Load，仅用于 Store CAS，不等于公开 API 必须接收 `expectedVersion`。
+  成功结果只返回 ID、committed version、status 或必要 ack。
 - `CQRS-QUERY-004`：每个 query 只绑定一个按用例命名的 Reader 与 typed Slice，不加载
   aggregate、不调用 command service。只有授权、跨 Reader 组合或业务策略存在时才增加
   query coordinator；简单查询允许 Reader adapter 直接实现 Query Facet。
@@ -60,6 +61,38 @@ D0 以 [应用根设计](../../design.md) 为全局合同，并要求 metadata �
 - `LEASE-009`：业务对象会话写 metadata/domain/application，App Cloud 会话只消费已签收
   Graph bundle，环境会话写 topology。未含 source/compiler/output digest、breaking
   report 与 commercial profile 结果的 object packet 不得进入客户端迁移。
+
+### 按真实写入场景裁剪并发与幂等
+
+- 默认不向调用方暴露 `expectedVersion`。服务端 aggregate command 使用内部 CAS，并在
+  纯技术冲突时重载最新 aggregate、重放同一领域意图；最终返回业务结果，不把版本冲突当
+  作用户失败。
+- 只有“多写者对同一快照做覆盖式编辑，且无法以命名行为、set/append、唯一约束、状态机
+  或服务端自动合并安全解决”时，operation 才显式声明
+  `concurrency.version_precondition: if_match` 并要求 `If-Match`。该条件不得用于一次创建、
+  一次发布、关系 set/unset、追加事实、投影、外部查询或 runtime session。
+- 单次提交（如 Post 发布）使用稳定 intent + 永久 receipt + aggregate/receipt/outbox
+  原子事务。相同 intent 重放返回首个结果；用户不会因超时再次创建业务对象。
+- owned entity 继承 root 的内部 CAS；value object 无版本；append-only fact 使用唯一
+  dedupe key；projection 使用每个 source 的单调 version/sequence；external reference
+  query 不持有并发状态；runtime session 使用逐连接 lease + fencing token。
+- aggregate root 的公开写入再按意图分三类：一次创建/发布使用稳定 intent、唯一约束和
+  receipt；审批、离开、删除、归档、角色设定等命名状态迁移/set 操作由服务端加载当前
+  version 并对纯 CAS 竞态做有限重放；只有多人基于旧快照覆盖多个可编辑字段时才使用
+  `If-Match`。当前全仓校准后仅 `UpdateCircleGroup`、`UpdateCircleFile`、
+  `UpdateExperimentRollout` 与 `UpdateServiceConfig` 属于第三类，
+  `operation_concurrency_calibration__contract__local_contract_test.go` 固定该显式清单。
+- 命名状态迁移/set 的目标状态若已满足，首次到达的 `Idempotency-Key` 仍须持久化 no-op
+  receipt，但不得递增 aggregate version 或产生“状态已变更”的伪 outbox 事件；后续状态
+  即使继续演进，相同 key 也只重放该次 no-op 的原始结果。
+- 跨 aggregate 工作流不得用“先写 A、再写 B”伪装原子提交。只有确有跨 aggregate
+  写入时才增加对象专属的最小持久化阶段，不引入通用 Saga 框架。例如
+  `ProfileUpdateProposal.Apply` 先以内部 CAS 从 `confirmed` 进入 `applying`，阻断并发
+  `Reject`，再按 `proposalId` 幂等写 Persona，最后进入 `applied`；崩溃可从
+  `applying` 续作，目标 Persona 快照已失效则进入 `expired`。
+- `Idempotency-Key` 是业务重放身份，`X-Request-Id` 只用于观测关联，二者不得互相回退。
+  unsafe method 只有声明 `idempotency: required|optional` 且实际携带稳定 key 时才可自动
+  重试。
 - `RUNTIME-SESSION-010`：建立或推进短生命周期连接的操作使用
   `application.kind=session`，只绑定同 packet 的 `runtime_session` owner，不伪装为
   aggregate command，也不声明 AggregateStore/outbox 或 query Reader/Slice。外部 ingress
@@ -308,7 +341,7 @@ flowchart TB
   seedBox --> dataPlane
   ops --> dataPlane
   seedBox -->|"optional score"| recommendation
-  seedBox -->|"proxy /v1/search"| search
+  seedBox -->|"proxy /search"| search
 ```
 
 ## seed-box 子进程契约
@@ -330,16 +363,16 @@ flowchart TB
 - `quwoquan_service/services/seed-box/deploy/Dockerfile`
 - 控制面 `_control_plane/domains/*.yaml`
 
-`product-ops-service` 是管理/运营/运维面独立 workload；`seed_box_entrypoint.py` 与 `seed-box` 镜像不得再包含 `product-ops-service` 子进程或 `/v1/ops` 分发。`/v1/ops*` 与 `/v1/control-plane/product*` 由 product-ops 独立 Service、prod-hosted Caddy/网关和 stackctl package 承载。
+`product-ops-service` 是管理/运营/运维面独立 workload；`seed_box_entrypoint.py` 与 `seed-box` 镜像不得再包含 `product-ops-service` 子进程或 `/ops` 分发。`/ops*` 与 `/control-plane/product*` 由 product-ops 独立 Service、prod-hosted Caddy/网关和 stackctl package 承载。
 
 ## 路由不变量
 
-Strangler 拆分不再假设 `route_prefix == /v1/<domain>/`。真实路由前缀来自 `quwoquan_service/contracts/metadata/**/service.yaml`：
+Strangler 拆分不再假设 `route_prefix == /<domain>/`。真实路由前缀来自 `quwoquan_service/contracts/metadata/**/service.yaml`：
 
-- `entity` 的对外前缀是 `/v1/homepages/`。
-- `circle` 的主要前缀是 `/v1/circles/`。
-- `notification` 的前缀包含 `/v1/notifications/` 与 `/v1/app-messages/`，split candidate 采用主通知前缀 `/v1/notifications/`，entrypoint 必须同时代理两组路径。
-- `ops` 已从 split candidate 提升为 `product-ops-service` 独立 workload；对外 `/v1/ops/` 与 product control-plane 路径保持不变。
+- `entity` 的对外前缀是 `/homepages/`。
+- `circle` 的主要前缀是 `/circles/`。
+- `notification` 的前缀包含 `/notifications/` 与 `/app-messages/`，split candidate 采用主通知前缀 `/notifications/`，entrypoint 必须同时代理两组路径。
+- `ops` 已从 split candidate 提升为 `product-ops-service` 独立 workload；对外 `/ops/` 与 product control-plane 路径保持不变。
 
 ## 拆分路径
 

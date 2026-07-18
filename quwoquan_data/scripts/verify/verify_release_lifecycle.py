@@ -14,6 +14,11 @@ sys.path.insert(0, str(SCRIPTS_ROOT))
 from core.paths import RELEASE_ROOT
 from core.release_layout import attestation_root, payload_digest, payload_file
 from core.schema import assert_valid
+from core.source_digest import SourceDigest, SourceDigestError
+from content.release.canonical.release_attestation import (
+    ReleaseAttestation,
+    ReleaseAttestationError,
+)
 
 
 AGGREGATE_ATTESTATION = "aggregate.json"
@@ -60,6 +65,11 @@ def release_lifecycle_issues(release_id: str, *, release_root: Path | None = Non
     except (FileNotFoundError, ValueError) as exc:
         issues.append(str(exc))
         return issues
+    try:
+        typed_attestation = ReleaseAttestation.from_document(aggregate)
+    except ReleaseAttestationError as exc:
+        issues.append(f"{aggregate_file}: {exc}")
+        return issues
 
     if header.get("releaseId") != release_id:
         issues.append(f"{release_file}: releaseId does not match directory")
@@ -75,26 +85,41 @@ def release_lifecycle_issues(release_id: str, *, release_root: Path | None = Non
         issues.append(f"{desired_file}: desiredRefs must be an object")
         desired_refs = {}
     entity_refs = desired_refs.get("entities")
+    post_refs = desired_refs.get("posts")
+    creator_refs = desired_refs.get("creators")
     tag_refs = desired_refs.get("tags")
-    if not isinstance(entity_refs, list) or not isinstance(tag_refs, list):
-        issues.append(f"{desired_file}: desiredRefs.entities/tags must be arrays")
+    if not all(isinstance(refs, list) for refs in (entity_refs, post_refs, creator_refs, tag_refs)):
+        issues.append(f"{desired_file}: all desiredRefs kinds must be arrays")
         return issues
-    if aggregate.get("releaseId") != release_id:
+    if typed_attestation.release_id != release_id:
         issues.append(f"{aggregate_file}: releaseId does not match directory")
-    if aggregate.get("releaseKind") != release_kind:
+    if typed_attestation.release_kind.value != release_kind:
         issues.append(f"{aggregate_file}: releaseKind drift from release header")
-    if sorted(aggregate.get("executionIds") or []) != sorted(header_execution_ids):
+    if sorted(typed_attestation.execution_ids) != sorted(header_execution_ids):
         issues.append(f"{aggregate_file}: executionIds drift from release header")
-    if aggregate.get("canonicalMerkle") != header.get("canonicalMerkle"):
+    if typed_attestation.canonical_merkle != header.get("canonicalMerkle"):
         issues.append(f"{aggregate_file}: canonicalMerkle drift from release header")
-    if aggregate.get("entityCount") != len(entity_refs):
+    try:
+        header_source_digest = SourceDigest.from_document(header.get("sourceDigest"))
+    except SourceDigestError as exc:
+        issues.append(f"{release_file}: {exc}")
+    else:
+        if aggregate.get("sourceDigest") != header_source_digest.to_document():
+            issues.append(f"{aggregate_file}: sourceDigest drift from release header")
+    if typed_attestation.entity_count != len(entity_refs):
         issues.append(f"{aggregate_file}: entityCount drift from desired state")
-    if aggregate.get("tagCount") != len(tag_refs):
+    if typed_attestation.post_count != len(post_refs):
+        issues.append(f"{aggregate_file}: postCount drift from desired state")
+    if typed_attestation.creator_count != len(creator_refs):
+        issues.append(f"{aggregate_file}: creatorCount drift from desired state")
+    if typed_attestation.tag_count != len(tag_refs):
         issues.append(f"{aggregate_file}: tagCount drift from desired state")
     if release_kind == "content" and (not header_execution_ids or not entity_refs):
         issues.append(f"{release_file}: content release requires executionIds and entity refs")
-    if release_kind == "empty_baseline" and (header_execution_ids or entity_refs or tag_refs):
-        issues.append(f"{release_file}: empty baseline must have no executions, entities, or tags")
+    if release_kind == "empty_baseline" and (
+        header_execution_ids or entity_refs or post_refs or creator_refs or tag_refs
+    ):
+        issues.append(f"{release_file}: empty baseline must have no executions or desired refs")
     try:
         actual_payload_digest = payload_digest(root)
     except (FileNotFoundError, OSError, ValueError) as exc:

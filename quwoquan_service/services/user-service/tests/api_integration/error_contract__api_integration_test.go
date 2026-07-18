@@ -11,7 +11,7 @@ func TestErrorCode_UserNotFound(t *testing.T) {
 		"X-Request-Id": "user-req-1",
 		"X-Trace-Id":   "user-trace-1",
 	}
-	rec := doRequest(t, http.MethodGet, "/v1/user/profile/nonexistent_user", "", headers)
+	rec := doRequest(t, http.MethodGet, "/user/profile/nonexistent_user", "", headers)
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", rec.Code)
 	}
@@ -35,7 +35,7 @@ func TestErrorCode_InvalidArgument(t *testing.T) {
 		"X-Request-Id": "user-req-invalid-1",
 		"X-Trace-Id":   "user-trace-invalid-1",
 	}
-	rec := doRequest(t, http.MethodGet, "/v1/user/blocked", "", headers)
+	rec := doRequest(t, http.MethodGet, "/user/blocked", "", headers)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -58,7 +58,7 @@ func TestErrorCode_PrimaryGuard_DeletePrimary(t *testing.T) {
 	createTestPersona(t, "err_pa_primary", "err_user_1", "Primary", true, true)
 
 	createTestPersonaFull(t, "err_pa_other", "err_user_1", "err_pa_other_sa", "Other", "open", false, false)
-	rec := doRequest(t, http.MethodDelete, "/v1/user/personas/err_pa_primary_sa/delete-empty", "", authHeaders("err_user_1"))
+	rec := doRequest(t, http.MethodDelete, "/user/personas/err_pa_primary_sa/delete-empty", "", authHeaders("err_user_1"))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rec.Code)
 	}

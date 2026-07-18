@@ -1,5 +1,4 @@
 templateId: 景区_专业导览
-version: 1
 subject: { kind: entity, type: 地点/景区 }
 vertical: travel
 category: travel

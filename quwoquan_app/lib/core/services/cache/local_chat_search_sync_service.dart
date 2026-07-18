@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import 'package:quwoquan_app/core/services/cache/cache_telemetry_sink.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
+import 'package:quwoquan_app/core/services/cache/local_chat_search_contact_record.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_message_record.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_service.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_store.dart';
@@ -12,43 +16,66 @@ class LocalChatSearchSyncService {
     required this._conversationCache,
     required this._store,
     required this._personaContextLoader,
+    required this._telemetrySink,
   });
 
   final ChatRepository _chatRepository;
   final ConversationCacheService _conversationCache;
   final LocalChatSearchStore _store;
   final PersonaContextLoader _personaContextLoader;
+  final CacheTelemetrySink _telemetrySink;
 
   bool _syncing = false;
+  Completer<void>? _activeSyncCompleter;
   final Map<String, DateTime> _lastSuccessfulSyncAtByNamespace =
       <String, DateTime>{};
   String? _activeNamespaceKey;
   static const _minSyncInterval = Duration(seconds: 30);
+  static const _contactPageSize = 200;
+  static const _conversationBatchSize = 40;
+  static const _messagePageSize = 200;
+  static const _maxMessagePages = 20;
+  static const _telemetryEventName = 'local_chat_search_sync';
+  static const _telemetryOperationKey = 'operation';
+  static const _telemetryResultKey = 'result';
+  static const _telemetryErrorTypeKey = 'errorType';
+
+  Future<void> waitUntilIdle() async {
+    await _activeSyncCompleter?.future;
+  }
 
   Future<bool> sync({bool force = false}) async {
     if (_syncing) {
       return false;
     }
-    final namespace = await _resolveNamespace();
-    if (namespace == null) {
-      return false;
-    }
-    _activateNamespace(namespace);
-    final lastSuccessfulSyncAt =
-        _lastSuccessfulSyncAtByNamespace[namespace.key];
-    if (!force &&
-        lastSuccessfulSyncAt != null &&
-        DateTime.now().difference(lastSuccessfulSyncAt) < _minSyncInterval) {
-      return false;
-    }
     _syncing = true;
+    final activeSyncCompleter = Completer<void>();
+    _activeSyncCompleter = activeSyncCompleter;
     try {
+      final namespace = await _resolveNamespace();
+      if (namespace == null) {
+        _record(
+          operation: LocalChatSearchSyncOperation.fullSync,
+          result: LocalChatSearchSyncResult.skipped,
+        );
+        return false;
+      }
+      _activateNamespace(namespace);
+      final lastSuccessfulSyncAt =
+          _lastSuccessfulSyncAtByNamespace[namespace.key];
+      if (!force &&
+          lastSuccessfulSyncAt != null &&
+          DateTime.now().difference(lastSuccessfulSyncAt) < _minSyncInterval) {
+        return false;
+      }
       await _store.ensureReady();
-      final contactDtos = await _chatRepository.listContacts(limit: 200);
+      final contactDtos = await _chatRepository.listContacts(
+        limit: _contactPageSize,
+      );
       await _store.upsertContacts(
         namespace: namespace,
         contacts: contactDtos
-            .map((c) => Map<String, Object?>.from(c.toMap()))
+            .map(LocalChatSearchContactRecord.fromChatContactRowDto)
             .toList(growable: false),
       );
 
@@ -117,11 +144,10 @@ class LocalChatSearchSyncService {
       }
 
       if (needFetchIds.isNotEmpty) {
-        const batchSize = 40;
-        for (var i = 0; i < needFetchIds.length; i += batchSize) {
-          final end = i + batchSize > needFetchIds.length
+        for (var i = 0; i < needFetchIds.length; i += _conversationBatchSize) {
+          final end = i + _conversationBatchSize > needFetchIds.length
               ? needFetchIds.length
-              : i + batchSize;
+              : i + _conversationBatchSize;
           final batchIds = needFetchIds.sublist(i, end);
           final conversations = await _chatRepository.batchGetConversations(
             batchIds,
@@ -168,22 +194,35 @@ class LocalChatSearchSyncService {
         );
       }
       _lastSuccessfulSyncAtByNamespace[namespace.key] = DateTime.now();
+      _record(
+        operation: LocalChatSearchSyncOperation.fullSync,
+        result: LocalChatSearchSyncResult.succeeded,
+      );
       return true;
-    } catch (_) {
+    } on Object catch (error) {
+      _recordFailure(LocalChatSearchSyncOperation.fullSync, error);
       return false;
     } finally {
       _syncing = false;
+      activeSyncCompleter.complete();
+      if (identical(_activeSyncCompleter, activeSyncCompleter)) {
+        _activeSyncCompleter = null;
+      }
     }
   }
 
-  Future<void> syncConversation({
+  Future<bool> syncConversation({
     required String conversationId,
     bool forceFull = false,
   }) async {
     try {
       final namespace = await _resolveNamespace();
       if (namespace == null || conversationId.trim().isEmpty) {
-        return;
+        _record(
+          operation: LocalChatSearchSyncOperation.conversation,
+          result: LocalChatSearchSyncResult.skipped,
+        );
+        return false;
       }
       _activateNamespace(namespace);
       final conversationDto = await _chatRepository.getConversation(
@@ -202,19 +241,29 @@ class LocalChatSearchSyncService {
         conversation: conversation,
         forceFull: forceFull,
       );
-    } catch (_) {
-      /* best-effort: 本地搜索索引同步失败不影响在线聊天，下次同步或全量重建会补齐 */
+      _record(
+        operation: LocalChatSearchSyncOperation.conversation,
+        result: LocalChatSearchSyncResult.succeeded,
+      );
+      return true;
+    } on Object catch (error) {
+      _recordFailure(LocalChatSearchSyncOperation.conversation, error);
+      return false;
     }
   }
 
-  Future<void> ingestRealtimeMessage({
+  Future<bool> ingestRealtimeMessage({
     required String conversationId,
     required MessageDto message,
   }) async {
     try {
       final namespace = await _resolveNamespace();
       if (namespace == null || conversationId.trim().isEmpty) {
-        return;
+        _record(
+          operation: LocalChatSearchSyncOperation.realtimeMessage,
+          result: LocalChatSearchSyncResult.skipped,
+        );
+        return false;
       }
       _activateNamespace(namespace);
       ConversationCacheRecord? conversation = _conversationCache.get(
@@ -229,8 +278,11 @@ class LocalChatSearchSyncService {
             namespace: namespace,
             conversations: <ConversationCacheRecord>[conversation],
           );
-        } catch (_) {
-          /* best-effort: 补拉会话元数据失败时仍以无会话上下文索引该消息，元数据后续同步补齐 */
+        } on Object catch (error) {
+          _recordFailure(
+            LocalChatSearchSyncOperation.conversationHydration,
+            error,
+          );
         }
       }
       final messageRecord = LocalChatSearchMessageRecord.fromMessageDto(
@@ -259,8 +311,14 @@ class LocalChatSearchSyncService {
           conversations: <ConversationCacheRecord>[updatedConversation],
         );
       }
-    } catch (_) {
-      /* best-effort: 实时消息入索引失败不影响消息展示，全量同步会重建本地搜索库 */
+      _record(
+        operation: LocalChatSearchSyncOperation.realtimeMessage,
+        result: LocalChatSearchSyncResult.succeeded,
+      );
+      return true;
+    } on Object catch (error) {
+      _recordFailure(LocalChatSearchSyncOperation.realtimeMessage, error);
+      return false;
     }
   }
 
@@ -275,19 +333,19 @@ class LocalChatSearchSyncService {
     _activateNamespace(namespace);
     await _store.removeMessage(namespace: namespace, messageId: messageId);
     if (conversationId.trim().isNotEmpty) {
-      try {
-        await syncConversation(conversationId: conversationId, forceFull: true);
-      } catch (_) {
-        /* best-effort: 撤回后重建会话索引失败不影响撤回本身，下次同步会补齐索引 */
-      }
+      await syncConversation(conversationId: conversationId, forceFull: true);
     }
   }
 
-  Future<void> removeConversation(String conversationId) async {
+  Future<bool> removeConversation(String conversationId) async {
     try {
       final namespace = await _resolveNamespace();
       if (namespace == null || conversationId.trim().isEmpty) {
-        return;
+        _record(
+          operation: LocalChatSearchSyncOperation.removal,
+          result: LocalChatSearchSyncResult.skipped,
+        );
+        return false;
       }
       _activateNamespace(namespace);
       _conversationCache.remove(conversationId);
@@ -295,8 +353,14 @@ class LocalChatSearchSyncService {
         namespace: namespace,
         conversationId: conversationId,
       );
-    } catch (_) {
-      /* best-effort: 从本地搜索库移除会话失败不影响主流程，残留索引会在全量重建时清理 */
+      _record(
+        operation: LocalChatSearchSyncOperation.removal,
+        result: LocalChatSearchSyncResult.succeeded,
+      );
+      return true;
+    } on Object catch (error) {
+      _recordFailure(LocalChatSearchSyncOperation.removal, error);
+      return false;
     }
   }
 
@@ -304,7 +368,8 @@ class LocalChatSearchSyncService {
     try {
       final context = await _personaContextLoader();
       return LocalSearchNamespace.fromActivePersonaContext(context);
-    } catch (_) {
+    } on Object catch (error) {
+      _recordFailure(LocalChatSearchSyncOperation.personaContext, error);
       return null;
     }
   }
@@ -335,12 +400,12 @@ class LocalChatSearchSyncService {
     final aggregatedMessages = <LocalChatSearchMessageRecord>[];
     var hasMore = true;
     var guard = 0;
-    while (hasMore && guard < 20) {
+    while (hasMore && guard < _maxMessagePages) {
       guard += 1;
       final delta = await _chatRepository.syncMessages(
         conversationId: conversationId,
         lastSeq: lastSeq,
-        limit: 200,
+        limit: _messagePageSize,
       );
       final messages = delta.messages
           .map(
@@ -366,7 +431,7 @@ class LocalChatSearchSyncService {
     if (aggregatedMessages.isEmpty && forceFull) {
       final fallbackMessages = await _chatRepository.listMessages(
         conversationId: conversationId,
-        limit: 200,
+        limit: _messagePageSize,
       );
       aggregatedMessages.addAll(
         fallbackMessages.map(
@@ -411,4 +476,35 @@ class LocalChatSearchSyncService {
   String _string(Object? value) {
     return value?.toString().trim() ?? '';
   }
+
+  void _record({
+    required LocalChatSearchSyncOperation operation,
+    required LocalChatSearchSyncResult result,
+    String? errorType,
+  }) {
+    _telemetrySink.record(_telemetryEventName, <String, Object?>{
+      _telemetryOperationKey: operation.name,
+      _telemetryResultKey: result.name,
+      _telemetryErrorTypeKey: ?errorType,
+    });
+  }
+
+  void _recordFailure(LocalChatSearchSyncOperation operation, Object error) {
+    _record(
+      operation: operation,
+      result: LocalChatSearchSyncResult.failed,
+      errorType: error.runtimeType.toString(),
+    );
+  }
 }
+
+enum LocalChatSearchSyncOperation {
+  fullSync,
+  conversation,
+  conversationHydration,
+  realtimeMessage,
+  removal,
+  personaContext,
+}
+
+enum LocalChatSearchSyncResult { succeeded, failed, skipped }

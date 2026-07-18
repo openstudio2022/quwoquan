@@ -1,4 +1,3 @@
-version: 1
 read_model: UserProfileStatsWire
 
 description: |
@@ -21,29 +20,24 @@ client_projection:
       dart_type: int
       nullable: false
       source: followingCount
-      aliases: [followingCount]
       default: "0"
     - name: circleCount
       dart_type: int
       nullable: false
       source: circleCount
-      aliases: [circleCount]
       default: "0"
     - name: followerCount
       dart_type: int
       nullable: false
       source: followerCount
-      aliases: [followerCount]
       default: "0"
     - name: likeCount
       dart_type: int
       nullable: false
       source: likeCount
-      aliases: [likeCount]
       default: "0"
     - name: postCount
       dart_type: int
       nullable: false
       source: postCount
-      aliases: [postCount]
       default: "0"

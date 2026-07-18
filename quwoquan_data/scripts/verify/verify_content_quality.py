@@ -123,7 +123,7 @@ def verify_posts(
         # 不受正文长度门约束；article 长文需≥600，图文混排正文≥200且有足量内联图/图注。
         carrier = str(manifest.get("carrier") or "")
         if carrier != "image":
-            from content.post.base_draft import base_draft_readiness
+            from content.post.article.base_draft import base_draft_readiness
 
             readiness = base_draft_readiness(
                 article,
@@ -179,6 +179,31 @@ def verify_posts(
             peer_hashes=peer_hashes,
         ):
             issues.append(f"{path}: {msg}")
+    for manifest_path in sorted(posts_root.rglob("manifest.json")):
+        post_dir = manifest_path.parent
+        if not _post_allowed(posts_root, post_dir, post_rels):
+            continue
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if str(manifest.get("contentType") or manifest.get("carrier") or "") != "video":
+            continue
+        from content.post.video.package import validate_video_work_package
+
+        issues.extend(
+            f"{post_dir}: {issue}" for issue in validate_video_work_package(post_dir)
+        )
+        tag_refs = manifest.get("tagRefs") or []
+        if not isinstance(tag_refs, list) or len(tag_refs) < 2:
+            issues.append(f"{manifest_path}: tagRefs must contain at least 2 refs")
+        issues.extend(_normalized_entity_ref_issues(manifest_path, manifest))
+        if not manifest.get("executionId"):
+            issues.append(f"{manifest_path}: missing executionId provenance")
+        if manifest.get("reviewDecision") != "approved":
+            issues.append(f"{manifest_path}: reviewDecision must be approved")
+        if not manifest.get("storySpine"):
+            issues.append(f"{manifest_path}: storySpine is required")
+        if not (post_dir / "5.review" / "provenance.json").is_file():
+            issues.append(f"{post_dir}: missing 5.review/provenance.json")
+        issues.extend(intersection_hint_issues(manifest.get("intersectionHints"), manifest))
     return issues
 
 
@@ -274,7 +299,11 @@ def asset_closure_issues(post_dir: Path, manifest: dict) -> list[str]:
         if not file_name:
             issues.append(f"{post_dir}: asset {asset_id} missing fileName in manifest")
             continue
-        physical = assets_dir / file_name
+        physical = (
+            post_dir / file_name
+            if Path(file_name).parts[:1] == ("assets",)
+            else assets_dir / file_name
+        )
         if not physical.is_file():
             issues.append(f"{post_dir}: asset file missing on disk: assets/{file_name} (assetId={asset_id})")
             continue

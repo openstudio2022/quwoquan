@@ -7,45 +7,9 @@
     "refresh": "1m",
     "panels": [
       {
-        "title": "页面打开量 (OpsEvent page_open)",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
-        "description": "来源: OpsEvent eventName=page_open，按 pageName 聚合",
-        "targets": [
-          {
-            "expr": "sum(rate(ops_events_total{event_name=\"page_open\"}[5m])) by (page_name)",
-            "legendFormat": "{{ page_name }}"
-          }
-        ]
-      },
-      {
-        "title": "页面停留时长 (OpsEvent page_return durationMs)",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
-        "description": "来源: OpsEvent eventName=page_return，按 pageName P50/P95",
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(ops_event_metrics_bucket{event_name=\"page_return\",metric=\"durationMs\"}[5m])) by (le, page_name))",
-            "legendFormat": "P95 {{ page_name }}"
-          }
-        ]
-      },
-      {
-        "title": "端侧 API 延迟 (从 AppLog api_latency)",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
-        "description": "由 cloudHttpClientProvider ApiLatencyObserver 写入 AppLog → OpsEvent 上传",
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(app_api_latency_ms_bucket[5m])) by (le, path))",
-            "legendFormat": "P95 {{ path }}"
-          }
-        ]
-      },
-      {
         "title": "用户行为漏斗 (impression → click → deep_engage)",
         "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
         "targets": [
           {
             "expr": "sum(rate(rec_engagement_impression_total[5m]))",
@@ -62,55 +26,42 @@
         ]
       },
       {
-        "title": "启动 Shell 首帧 P50/P95",
+        "title": "启动阶段时长 P50/P95（匿名可靠性遥测）",
         "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
-        "description": "startup_welcome_sequence shellFirstPaintMs；正常目标 3s",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+        "description": "真实 producer: product-ops-service ops_startup_phase_duration_seconds；attemptId 不进入指标标签。",
         "targets": [
           {
-            "expr": "histogram_quantile(0.50, sum(rate(ops_event_metrics_bucket{event_name=\"startup_welcome_sequence\",metric=\"shellFirstPaintMs\"}[10m])) by (le, platform))",
-            "legendFormat": "P50 {{ platform }}"
+            "expr": "histogram_quantile(0.50, sum(rate(ops_startup_phase_duration_seconds_bucket[10m])) by (le, phase, platform, runtime_env))",
+            "legendFormat": "P50 {{ platform }} {{ phase }}"
           },
           {
-            "expr": "histogram_quantile(0.95, sum(rate(ops_event_metrics_bucket{event_name=\"startup_welcome_sequence\",metric=\"shellFirstPaintMs\"}[10m])) by (le, platform))",
-            "legendFormat": "P95 {{ platform }}"
+            "expr": "histogram_quantile(0.95, sum(rate(ops_startup_phase_duration_seconds_bucket[10m])) by (le, phase, platform, runtime_env))",
+            "legendFormat": "P95 {{ platform }} {{ phase }}"
           }
         ]
       },
       {
-        "title": "欢迎退出/移除 P95 与 6s 硬门",
+        "title": "启动漏斗、恢复面与可靠投影",
         "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+        "description": "native_pre_flutter → flutter_first_frame → shell_first_paint → terminal；恢复、journal 溢出和 Mongo embedded outbox 投影结果均来自受限启动遥测。",
         "targets": [
           {
-            "expr": "histogram_quantile(0.95, sum(rate(ops_event_metrics_bucket{event_name=\"startup_welcome_sequence\",metric=\"welcomeExitMs\"}[10m])) by (le, platform))",
-            "legendFormat": "退出 P95 {{ platform }}"
+            "expr": "sum(rate(ops_startup_phase_total{phase=~\"native_pre_flutter|flutter_first_frame|shell_first_paint|terminal\"}[10m])) by (phase, platform)",
+            "legendFormat": "{{ platform }} {{ phase }}"
           },
           {
-            "expr": "histogram_quantile(0.95, sum(rate(ops_event_metrics_bucket{event_name=\"startup_welcome_sequence\",metric=\"overlayRemovedMs\"}[10m])) by (le, platform))",
-            "legendFormat": "移除 P95 {{ platform }}"
-          }
-        ]
-      },
-      {
-        "title": "启动重放与降级比例",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
-        "targets": [
+            "expr": "sum(rate(ops_startup_phase_total{phase=\"recovery\"}[10m])) by (outcome, recovery_surface, platform)",
+            "legendFormat": "恢复 {{ platform }} {{ recovery_surface }} {{ outcome }}"
+          },
           {
-            "expr": "sum(rate(ops_events_total{event_name=\"startup_welcome_sequence\",phase=\"finished\"}[10m])) by (replay_count, exit_reason, platform)",
-            "legendFormat": "{{ platform }} replay={{ replay_count }} {{ exit_reason }}"
-          }
-        ]
-      },
-      {
-        "title": "欢迎动效 Build/Raster P95",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
-        "targets": [
+            "expr": "sum(rate(ops_startup_phase_total{phase=\"terminal\",outcome=\"journal_drop\"}[10m])) by (platform, runtime_env)",
+            "legendFormat": "journal_drop {{ platform }} {{ runtime_env }}"
+          },
           {
-            "expr": "histogram_quantile(0.95, sum(rate(ops_event_metrics_bucket{event_name=\"startup_welcome_sequence\",metric=~\"buildFrameP95Ms|rasterFrameP95Ms\"}[10m])) by (le, metric, platform))",
-            "legendFormat": "{{ platform }} {{ metric }}"
+            "expr": "sum(rate(ops_startup_projection_total[10m])) by (result)",
+            "legendFormat": "投影 {{ result }}"
           }
         ]
       }

@@ -1,6 +1,5 @@
 """Entity homepage prompt and placeholder construction."""
 from __future__ import annotations
-import os
 import shutil
 import re
 from pathlib import Path
@@ -9,11 +8,12 @@ import yaml
 from core.io import read_json, write_assistant_task, write_json
 from content.execution.runtime_contract import canonical_sha256, stage_execution_context
 from core.article_package import compute_document_sha256, sha256_file, sha256_text
-from content.post.draft_io import PLACEHOLDER_MARKER, is_placeholder
+from content.post.article.draft_io import PLACEHOLDER_MARKER, is_placeholder
 from core.entity_page_quality import entity_page_quality_issues
 from core.localization import fold_to_simplified
 from core.prompt_render import render
 from content.execution.prompt_snapshot import prompt_bundle_revision, write_prompt_snapshot
+from content.execution.model_contract import execution_model_pair_for_execution
 from core.baike_source_contract import HOMEPAGE_SOURCE_POLICY_REVISION
 from core.template_fingerprints import template_fingerprint_issues
 from core.post_evidence_chain import build_finalization_report
@@ -76,7 +76,9 @@ HOMEPAGE_FIDELITY_MAX = 0.92
 # 实体主页底稿下发上限：取消旧的 4000 截断（旧值会把维基百科页在中段截断，
 # Agent 看不到「技术变革 / 相关古迹」等后段章节，导致多级目录与章节缺失）。
 # 放宽到覆盖绝大多数百科页全文，仅兜底极端超长源避免 token 失控。
-HOMEPAGE_BASE_DRAFT_MAX_CHARS = max(4000, int(os.environ.get("QWQ_HOMEPAGE_BASE_DRAFT_MAX_CHARS", "12000")))
+from core.media_processing_policy import MEDIA_PROCESSING_POLICY
+
+HOMEPAGE_BASE_DRAFT_MAX_CHARS = MEDIA_PROCESSING_POLICY.homepage_base_draft_max_chars
 # 计入 sectionOutline 的关键章节最小去空白正文字数（短于此视为占位/导语碎片）。
 HOMEPAGE_SECTION_MIN_CHARS = 120
 # 发布态 _entity.json 必填集（结构契约唯一定义 = schema/publish/entity.schema.json）。
@@ -479,21 +481,20 @@ def _write_entity_page_prompt_and_placeholder(
     run_id = "author_" + canonical_sha256(
         {"executionId": execution["executionId"], "objectRef": object_ref}
     ).removeprefix("sha256:")[:20]
-    provider = os.environ.get("QWQ_AUTHOR_PROVIDER", "local_cursor_sdk")
-    model = os.environ.get("QWQ_AUTHOR_MODEL", "composer")
+    author_model = execution_model_pair_for_execution(execution_id).author
     prompt_sha = sha256_text(prompt_text)
     write_json(
         draft_dir / "author_job_packet.json",
         {
-            "schemaVersion": "quwoquan_data.author_job_packet/1",
+            "schema": "quwoquan_data.author_job_packet",
             "stage": "4.draft",
             **execution,
             "objectRef": object_ref,
             "composePacketRef": "3.compose/entity_page_input.json",
             "promptRef": "4.draft/prompt.md",
             "promptSnapshotRef": "4.draft/prompt_snapshot.json",
-            "provider": provider,
-            "model": model,
+            "provider": author_model.provider.value,
+            "model": author_model.model_id,
             "runId": run_id,
             "outputRefs": [
                 "4.draft/page.md",
@@ -510,8 +511,8 @@ def _write_entity_page_prompt_and_placeholder(
         template_family="entity_homepage",
         variables={"payload": payload},
         rendered_prompt=prompt_text,
-        provider=provider,
-        model=model,
+        provider=author_model.provider.value,
+        model=author_model.model_id,
         run_id=run_id,
         output_refs=[
             "4.draft/page.md",
@@ -523,13 +524,13 @@ def _write_entity_page_prompt_and_placeholder(
     write_json(
         draft_dir / "draft_meta.json",
         {
-            "schemaVersion": "quwoquan_data.draft_meta/1",
+            "schema": "quwoquan_data.draft_meta",
             "stage": "4.draft",
             **execution,
             "objectRef": object_ref,
             "status": "pending_agent",
-            "provider": provider,
-            "model": model,
+            "provider": author_model.provider.value,
+            "model": author_model.model_id,
             "agentRunId": run_id,
             "promptSha256": prompt_sha,
             "draftSha256": None,

@@ -1,5 +1,5 @@
-version: 1
 contract_id: app_page_object_contract
+schema: app_page_object_contract
 source_path_root: quwoquan_app
 description: |
   App 页面扫描路径到业务对象、生产路由、Surface、Query Slice、强类型展示、

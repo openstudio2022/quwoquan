@@ -12,7 +12,7 @@ void main() {
   group('Conversation avatar cloud chain', () {
     test('ConversationDto -> cache record preserves group avatar fields', () {
       final dto = ConversationDto.fromMap(const <String, dynamic>{
-        '_id': 'conv_cloud_group',
+        'id': 'conv_cloud_group',
         'type': 'group',
         'title': '云侧群头像',
         'avatarUrl': 'https://cdn.example.com/groups/conv_cloud_group.png',
@@ -22,6 +22,9 @@ void main() {
         'maxSeq': 12,
         'memberCount': 5,
         'maxGroupSize': 1000,
+        'receiptEnabled': true,
+        'messageCount': 12,
+        'status': 'active',
         'createdAt': '2026-05-19T00:00:00Z',
         'updatedAt': '2026-05-19T01:00:00Z',
       });

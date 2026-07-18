@@ -1,11 +1,11 @@
-version: 1
 aggregate: Homepage
 
 entities:
   Homepage:
     description: 共享主页主档
     fields:
-      - name: _id
+      - name: homepageId
+        source: _id
         type: ObjectId
         constraints: [PK]
         classification: PUBLIC
@@ -14,6 +14,7 @@ entities:
         ops_exposure: read
 
       - name: title
+        source: title
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -22,6 +23,7 @@ entities:
         ops_exposure: read
 
       - name: subtitle
+        source: subtitle
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -30,6 +32,7 @@ entities:
         ops_exposure: read
 
       - name: homepageType
+        source: homepageType
         type: enum
         enum_ref: HomepageType
         constraints: [NOT_NULL]
@@ -39,6 +42,7 @@ entities:
         ops_exposure: read
 
       - name: canonicalEntityId
+        source: canonicalEntityId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -49,6 +53,7 @@ entities:
         description: 数据工程实体归一 ID；Homepage 与离线实体页的单一对象键
 
       - name: objectPageTemplate
+        source: objectPageTemplate
         type: string
         constraints: [NOT_NULL, DEFAULT_STANDARD]
         classification: PUBLIC
@@ -58,6 +63,7 @@ entities:
         description: 对象主页展示模板，如 standard、campus、travel_photo；由 homepageType 与运营配置共同决定
 
       - name: status
+        source: status
         type: enum
         enum_ref: HomepageStatus
         constraints: [NOT_NULL]
@@ -67,6 +73,7 @@ entities:
         ops_exposure: read_write
 
       - name: sourceType
+        source: sourceType
         type: enum
         enum_ref: HomepageSourceType
         constraints: [NOT_NULL]
@@ -76,6 +83,7 @@ entities:
         ops_exposure: read
 
       - name: sourceOwner
+        source: sourceOwner
         type: string
         constraints: [NULLABLE]
         classification: INTERNAL
@@ -85,6 +93,7 @@ entities:
         description: 写入主页投影的受控来源所有者；仅用于 release sync 的归属隔离
 
       - name: sourceEntityRef
+        source: sourceEntityRef
         type: string
         constraints: [NULLABLE]
         classification: INTERNAL
@@ -94,6 +103,7 @@ entities:
         description: 来源系统内的稳定实体引用；同 sourceOwner 下唯一定位导入主页
 
       - name: sourceReleaseId
+        source: sourceReleaseId
         type: string
         constraints: [NULLABLE]
         classification: INTERNAL
@@ -103,6 +113,7 @@ entities:
         description: 最近一次写入该主页投影的不可变数据发布批次
 
       - name: claimStatus
+        source: claimStatus
         type: enum
         enum_ref: HomepageClaimStatus
         constraints: [NOT_NULL, DEFAULT_UNCLAIMED]
@@ -112,6 +123,7 @@ entities:
         ops_exposure: read_write
 
       - name: categoryTags
+        source: categoryTags
         type: "[]string"
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -123,6 +135,7 @@ entities:
         description: 路径制 tagRef 列表（对象类目锚点）；真相源 control_plane/governance/taxonomy（Entity/Topic 分组）
 
       - name: coverUrl
+        source: coverUrl
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -131,6 +144,7 @@ entities:
         ops_exposure: read
 
       - name: address
+        source: address
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -139,6 +153,7 @@ entities:
         ops_exposure: read
 
       - name: city
+        source: city
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -147,6 +162,7 @@ entities:
         ops_exposure: read
 
       - name: location
+        source: location
         type: GeoPoint
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -155,6 +171,7 @@ entities:
         ops_exposure: read
 
       - name: ownerUserId
+        source: ownerUserId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -163,6 +180,7 @@ entities:
         ops_exposure: read
 
       - name: ownerSubAccountId
+        source: ownerSubAccountId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -172,6 +190,7 @@ entities:
         description: 已认领主页的可私信公开主体 ID，端侧私信复用 user→user direct 会话
 
       - name: viewerFollowsHomepage
+        source: viewerFollowsHomepage
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -181,6 +200,7 @@ entities:
         description: 当前 viewer 是否关注该实体主页；为空 viewer 时恒为 false
 
       - name: followerCount
+        source: followerCount
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -190,6 +210,7 @@ entities:
         description: 关注该实体主页的人数；实体页统计前台展示为「关注」，不作为数据面板主视觉（禁止使用「关注者」）
 
       - name: verified
+        source: verified
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -199,6 +220,7 @@ entities:
         description: 实体主页是否官方认证（端侧头部认证标识），缺省 false 不展示
 
       - name: establishedYear
+        source: establishedYear
         type: int
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -208,6 +230,7 @@ entities:
         description: 成立年份（基础信息行展示），缺省不展示
 
       - name: averageRating
+        source: averageRating
         type: float64
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -216,6 +239,7 @@ entities:
         ops_exposure: read
 
       - name: ratingCount
+        source: ratingCount
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -224,6 +248,7 @@ entities:
         ops_exposure: read
 
       - name: reviewSummary
+        source: reviewSummary
         type: object
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -232,6 +257,7 @@ entities:
         ops_exposure: read
 
       - name: contentPreview
+        source: contentPreview
         type: "[]object"
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -240,6 +266,7 @@ entities:
         ops_exposure: read
 
       - name: questionPreview
+        source: questionPreview
         type: "[]object"
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -248,6 +275,7 @@ entities:
         ops_exposure: read
 
       - name: relatedGroups
+        source: relatedGroups
         type: "[]object"
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -256,6 +284,7 @@ entities:
         ops_exposure: read
 
       - name: relationEdges
+        source: relationEdges
         type: "[]object"
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -265,6 +294,7 @@ entities:
         description: 对象主页关系边快照，用于交集、推荐和小趣解释
 
       - name: assistantContext
+        source: assistantContext
         type: object
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -274,6 +304,7 @@ entities:
         description: 小趣对象页上下文快照，由后端投影生成，端侧只读
 
       - name: createdAt
+        source: createdAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -282,6 +313,7 @@ entities:
         ops_exposure: read
 
       - name: updatedAt
+        source: updatedAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -290,6 +322,7 @@ entities:
         ops_exposure: read
 
       - name: publishedAt
+        source: publishedAt
         type: timestamp
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -298,6 +331,7 @@ entities:
         ops_exposure: read
 
       - name: offlineAt
+        source: offlineAt
         type: timestamp
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -309,6 +343,7 @@ entities:
     description: 共享主页搜索结果项
     fields:
       - name: homepageId
+        source: homepageId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -317,6 +352,7 @@ entities:
         ops_exposure: read
 
       - name: canonicalEntityId
+        source: canonicalEntityId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -325,6 +361,7 @@ entities:
         ops_exposure: read
 
       - name: title
+        source: title
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -333,6 +370,7 @@ entities:
         ops_exposure: read
 
       - name: subtitle
+        source: subtitle
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -341,6 +379,7 @@ entities:
         ops_exposure: read
 
       - name: homepageType
+        source: homepageType
         type: enum
         enum_ref: HomepageType
         constraints: [NOT_NULL]
@@ -350,6 +389,7 @@ entities:
         ops_exposure: read
 
       - name: coverUrl
+        source: coverUrl
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -358,6 +398,7 @@ entities:
         ops_exposure: read
 
       - name: city
+        source: city
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -366,6 +407,7 @@ entities:
         ops_exposure: read
 
       - name: address
+        source: address
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -374,6 +416,7 @@ entities:
         ops_exposure: read
 
       - name: status
+        source: status
         type: enum
         enum_ref: HomepageStatus
         constraints: [NOT_NULL]
@@ -383,6 +426,7 @@ entities:
         ops_exposure: read
 
       - name: averageRating
+        source: averageRating
         type: float64
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -391,6 +435,7 @@ entities:
         ops_exposure: read
 
       - name: ratingCount
+        source: ratingCount
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -402,6 +447,7 @@ entities:
     description: 共享主页阅读壳层视图
     fields:
       - name: homepage
+        source: homepage
         type: object
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -410,6 +456,7 @@ entities:
         ops_exposure: read
 
       - name: reviewSummary
+        source: reviewSummary
         type: object
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -418,6 +465,7 @@ entities:
         ops_exposure: read
 
       - name: contentPreview
+        source: contentPreview
         type: "[]object"
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -426,6 +474,7 @@ entities:
         ops_exposure: read
 
       - name: questionPreview
+        source: questionPreview
         type: "[]object"
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -434,6 +483,7 @@ entities:
         ops_exposure: read
 
       - name: relatedGroups
+        source: relatedGroups
         type: "[]object"
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -445,6 +495,7 @@ entities:
     description: 共享主页评分与口碑摘要
     fields:
       - name: averageRating
+        source: averageRating
         type: float64
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -453,6 +504,7 @@ entities:
         ops_exposure: read
 
       - name: ratingCount
+        source: ratingCount
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -461,6 +513,7 @@ entities:
         ops_exposure: read
 
       - name: highlightTags
+        source: highlightTags
         type: "[]string"
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -471,6 +524,7 @@ entities:
         description: 路径制 tagRef 列表（对象亮点锚点）；真相源 control_plane/governance/taxonomy
 
       - name: dimensionScores
+        source: dimensionScores
         type: "[]object"
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -482,6 +536,7 @@ entities:
     description: 共享主页下相关群组摘要
     fields:
       - name: groups
+        source: groups
         type: "[]object"
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -493,6 +548,7 @@ entities:
     description: 共享主页认领申请
     fields:
       - name: _id
+        source: _id
         type: ObjectId
         constraints: [PK]
         classification: PUBLIC
@@ -501,6 +557,7 @@ entities:
         ops_exposure: read
 
       - name: homepageId
+        source: homepageId
         type: ObjectId
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -509,6 +566,7 @@ entities:
         ops_exposure: read
 
       - name: requesterUserId
+        source: requesterUserId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -517,6 +575,7 @@ entities:
         ops_exposure: read
 
       - name: claimTier
+        source: claimTier
         type: enum
         enum_ref: HomepageClaimTier
         constraints: [NOT_NULL]
@@ -526,6 +585,7 @@ entities:
         ops_exposure: read
 
       - name: businessLicenseUrl
+        source: businessLicenseUrl
         type: string
         constraints: [NULLABLE]
         classification: SENSITIVE
@@ -534,6 +594,7 @@ entities:
         ops_exposure: read
 
       - name: contactPhone
+        source: contactPhone
         type: string
         constraints: [NULLABLE]
         classification: PII
@@ -542,6 +603,7 @@ entities:
         ops_exposure: read
 
       - name: identityCardFrontUrl
+        source: identityCardFrontUrl
         type: string
         constraints: [NULLABLE]
         classification: SENSITIVE
@@ -550,6 +612,7 @@ entities:
         ops_exposure: read
 
       - name: identityCardBackUrl
+        source: identityCardBackUrl
         type: string
         constraints: [NULLABLE]
         classification: SENSITIVE
@@ -558,6 +621,7 @@ entities:
         ops_exposure: read
 
       - name: note
+        source: note
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -566,6 +630,7 @@ entities:
         ops_exposure: read
 
       - name: status
+        source: status
         type: enum
         enum_ref: HomepageClaimReviewStatus
         constraints: [NOT_NULL, DEFAULT_PENDING_REVIEW]
@@ -575,6 +640,7 @@ entities:
         ops_exposure: read_write
 
       - name: reviewNote
+        source: reviewNote
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -583,6 +649,7 @@ entities:
         ops_exposure: read_write
 
       - name: createdAt
+        source: createdAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -591,6 +658,7 @@ entities:
         ops_exposure: read
 
       - name: reviewedAt
+        source: reviewedAt
         type: timestamp
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -602,6 +670,7 @@ entities:
     description: 共享主页下线与纠错上报
     fields:
       - name: _id
+        source: _id
         type: ObjectId
         constraints: [PK]
         classification: PUBLIC
@@ -610,6 +679,7 @@ entities:
         ops_exposure: read
 
       - name: homepageId
+        source: homepageId
         type: ObjectId
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -618,6 +688,7 @@ entities:
         ops_exposure: read
 
       - name: reporterUserId
+        source: reporterUserId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -626,6 +697,7 @@ entities:
         ops_exposure: read
 
       - name: reason
+        source: reason
         type: enum
         enum_ref: HomepageStatusReportReason
         constraints: [NOT_NULL]
@@ -635,6 +707,7 @@ entities:
         ops_exposure: read
 
       - name: description
+        source: description
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -643,6 +716,7 @@ entities:
         ops_exposure: read
 
       - name: evidenceUrls
+        source: evidenceUrls
         type: "[]string"
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -651,6 +725,7 @@ entities:
         ops_exposure: read
 
       - name: status
+        source: status
         type: enum
         enum_ref: HomepageStatusReportStatus
         constraints: [NOT_NULL, DEFAULT_PENDING_REVIEW]
@@ -660,6 +735,7 @@ entities:
         ops_exposure: read_write
 
       - name: reviewNote
+        source: reviewNote
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -668,6 +744,7 @@ entities:
         ops_exposure: read_write
 
       - name: createdAt
+        source: createdAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -676,6 +753,7 @@ entities:
         ops_exposure: read
 
       - name: reviewedAt
+        source: reviewedAt
         type: timestamp
         constraints: [NULLABLE]
         classification: PUBLIC

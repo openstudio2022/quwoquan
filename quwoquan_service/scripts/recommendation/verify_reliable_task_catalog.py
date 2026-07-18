@@ -40,8 +40,8 @@ def main() -> None:
 
     if not catalog.get("compatibleRuntimeVersion"):
         fail("catalog.compatibleRuntimeVersion is required")
-    if not catalog.get("schemaVersion"):
-        fail("catalog.schemaVersion is required")
+    if not catalog.get("schema"):
+        fail("catalog.schema is required")
     if not isinstance(modules, dict) or not modules:
         fail("catalog.modules must be a non-empty map")
     if not isinstance(tasks, dict) or not tasks:

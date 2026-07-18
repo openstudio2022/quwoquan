@@ -31,18 +31,18 @@ func RequireSensitiveOperationPrincipal(next http.Handler) http.Handler {
 }
 
 func isSensitiveOperation(method, path string) bool {
-	if method == http.MethodPost && path == "/v1/content/behaviors" {
+	if method == http.MethodPost && path == "/content/behaviors" {
 		return true
 	}
-	if strings.HasPrefix(path, "/v1/content/media/") {
+	if strings.HasPrefix(path, "/content/media/") {
 		return true
 	}
 	if method != http.MethodPost {
 		return false
 	}
 	return strings.HasSuffix(path, "/media:bind") &&
-		(strings.HasPrefix(path, "/v1/content/posts/") ||
-			strings.HasPrefix(path, "/v1/content/comments/"))
+		(strings.HasPrefix(path, "/content/posts/") ||
+			strings.HasPrefix(path, "/content/comments/"))
 }
 
 func verifiedOperationActorID(r *http.Request) (string, bool) {

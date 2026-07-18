@@ -1,0 +1,64 @@
+id: CR-20260718-118-android-media-delivery-and-startup-reliability
+title: Android 媒体交付单轨与冷启动恢复可靠性
+slug: android-media-delivery-and-startup-reliability
+revision: 1
+status: in_progress
+
+affected_nodes:
+  - specs/feature-tree/runtime/runtime-media
+  - specs/feature-tree/runtime/runtime-media/media-upload-and-storage--upload-session-and-cdn-delivery
+  - specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance
+
+entries:
+  - timestamp: "2026-07-18T22:50:00+08:00"
+    summary: |
+      将媒体传输拆分为服务内部 storageOrigin、设备可达 uploadIngress 与按 avatar/image/video
+      区分的 deliveryBase。Android 本地调试 APK、Dart HttpClient 与 ExoPlayer 使用同一
+      alpha TLS 根；启动 watchdog 仅在 renderer 首帧缺失时显示原生恢复，首帧后的慢安全
+      终态由 Flutter 接管并以 attemptId 和固定时钟 origin 诊断。
+    reason: |
+      alpha Android APK 打入的根证书与 TLS 代理签发根不一致，图片与视频同时发生证书校验
+      失败。gamma 将上传对象存储 authority 复用为全部公开媒体交付地址，且 S3 预签名 URL
+      与移动端 local target host 不一致；直接 host 改写会破坏签名。Android 还将已有 Flutter
+      首帧但 safe terminal 较慢误判为原生恢复，并在同一启动尝试中切换时钟。
+    change_type:
+      - specification
+      - metadata
+      - codegen
+      - app
+      - service
+      - ops
+      - local_contract
+      - api_integration
+      - user_acceptance
+    changed_documents:
+      - path: specs/feature-tree/runtime/runtime-media/media-upload-and-storage--upload-session-and-cdn-delivery/spec.md
+        sections: [功能范围, 约束]
+      - path: specs/feature-tree/runtime/runtime-media/media-upload-and-storage--upload-session-and-cdn-delivery/acceptance.yaml
+        sections: [GWT1]
+      - path: specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/spec.md
+        sections: [启动故障终态合同]
+      - path: specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/acceptance.yaml
+        sections: [GWT6]
+    tests:
+      - layer: local_contract
+        intent: authority_and_watchdog_contract
+        evidence:
+          - quwoquan_service/services/content-service/internal/infrastructure/content/media/object_gateway__local_contract_test.go
+          - quwoquan_app/test/local_contract/core/media/media_delivery_reference__local_contract_test.dart
+          - quwoquan_app/test/local_contract/app/startup_native_watchdog__local_contract_test.dart
+      - layer: api_integration
+        intent: upload_to_public_slice
+        evidence:
+          - quwoquan_service/services/content-service/tests/api_integration/media_object_storage__api_integration_test.go
+      - layer: user_acceptance
+        intent: android_ios_media_and_cold_start
+        evidence:
+          - quwoquan_app/test/user_acceptance/patrol/environment/basic_viability__user_acceptance_test.dart
+          - quwoquan_app/test/user_acceptance/patrol/environment/video_playback_canary__user_acceptance_test.dart
+          - quwoquan_app/scripts/device/verify_startup_first_frame.py
+    gates:
+      - make -C quwoquan_service verify-metadata
+      - make codegen-app
+      - make gate-runtime-media
+      - make verify-app-startup-ttid

@@ -15,7 +15,7 @@ func TestUpdateProfile_AvatarVersionAndSyncPatch(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodPatch,
-		"/v1/user/profile",
+		"/user/profile",
 		`{"avatarAssetId":"ua_user_avatar_sync","avatarUrl":"https://cdn.example.com/u1.png?v=2"}`,
 		authHeaders("user_avatar_sync"),
 	)
@@ -34,7 +34,7 @@ func TestUpdateProfile_AvatarVersionAndSyncPatch(t *testing.T) {
 	syncRec := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/sync",
+		"/user/sync",
 		`{"afterSeq":0,"limit":10}`,
 		authHeaders("user_avatar_sync"),
 	)
@@ -73,7 +73,7 @@ func TestUpdateProfile_PublishesUserAvatarUpdatedEvent(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodPatch,
-		"/v1/user/profile",
+		"/user/profile",
 		`{"avatarAssetId":"ua_user_avatar_event","avatarUrl":"https://cdn.example.com/u2.png?v=3"}`,
 		authHeaders("user_avatar_event"),
 	)

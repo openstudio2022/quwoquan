@@ -6,6 +6,11 @@
 
 ## 约束
 - 提案状态流转必须强一致并具备幂等控制。
+- 调用方只提交命名意图与稳定 `Idempotency-Key`，不提交 proposal version。
+- 应用路径固定为 `confirmed -> applying -> applied|expired`：`applying` 是持久化检查点，
+  会阻断并发拒绝；Persona 写入按 `proposalId` 幂等，进程重启可安全续作。
+- 目标 Persona version 是提案确认时保存的服务端内部快照，仅用于防止把旧提案覆盖到
+  已发生新修改的 Persona，不进入公开请求或响应。
 - 所有提案操作必须产生日志审计与追踪标识。
 
 ## 验收标准

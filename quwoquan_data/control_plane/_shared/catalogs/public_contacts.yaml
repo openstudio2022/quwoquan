@@ -1,4 +1,4 @@
-schemaVersion: quwoquan_data.public_contacts/1
+schema: quwoquan_data.public_contacts
 # 公共可公示联系方式白名单（唯一真相源）。
 # 规则：正文默认拦截一切电话/微信/QQ 等私人联系方式；仅以下公共号码、
 # 以及在 source 证据中核实的"景区官方接待电话"（经 entity 级显式放行）可出现。

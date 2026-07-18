@@ -16,7 +16,7 @@ abstract final class ArticleDetailWireKeys {
 
   static const String articleMarkdown = 'articleMarkdown';
 
-  static const String articleMarkdownVersion = 'articleMarkdownVersion';
+  static const String markdownDialect = 'markdownDialect';
 
   static const String articleMarkdownDigest = 'articleMarkdownDigest';
 

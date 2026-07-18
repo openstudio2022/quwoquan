@@ -3,8 +3,8 @@
 source_root 是 canonical publish 根，唯一 CAS 布局：
   media/objects/sha256/{aa}/{bb}/{fullhash}.{ext}
 
-环境媒体根（gamma-local: `env/gamma/local/gamma-local/process/media`；prod-hosted: host bind 的
-`env/prod/local/prod-hosted/process/media`，边缘 root=/srv/media）以同一相对布局承载对象文件，
+环境媒体根（gamma-local: `env/gamma/local/gamma-local/cache/media`；prod-hosted: host bind 的
+受管媒体目录，边缘 root=/srv/media）以同一相对布局承载对象文件，
 media edge 直接 file_server 提供 `<base>/media/objects/...`。
 
 同步语义（fail closed）：
@@ -23,7 +23,7 @@ from typing import Any
 
 from core.paths import REPO_ROOT, now_iso
 
-MEDIA_SYNC_SCHEMA_VERSION = "quwoquan_data.media_library_sync/1"
+MEDIA_SYNC_SCHEMA_VERSION = "quwoquan_data.media_library_sync"
 _CAS_RELATIVE_ROOT = Path("media") / "objects" / "sha256"
 
 
@@ -61,8 +61,9 @@ def sync_media_library(
     source_root = Path(source_root)
     dest_root = Path(dest_root)
     cas_root = source_root / _CAS_RELATIVE_ROOT
+    selected_keys = tuple(object_keys) if object_keys is not None else None
     report: dict[str, Any] = {
-        "schemaVersion": MEDIA_SYNC_SCHEMA_VERSION,
+        "schema": MEDIA_SYNC_SCHEMA_VERSION,
         "sourceRoot": _portable_path(source_root),
         "destRoot": _portable_path(dest_root),
         "copied": 0,
@@ -71,23 +72,25 @@ def sync_media_library(
         "failed": 0,
         "bytesCopied": 0,
         "objects": 0,
-        "scope": "selected" if object_keys is not None else "all",
+        "scope": "selected" if selected_keys is not None else "all",
         "requestedObjects": 0,
         "issues": [],
         "syncedAt": now_iso(),
     }
+    if selected_keys == ():
+        return report
     if not cas_root.is_dir():
         report["issues"].append(f"source CAS root missing: {cas_root}")
         return report
 
-    if object_keys is None:
+    if selected_keys is None:
         source_files = [
             path for path in sorted(cas_root.rglob("*"))
             if path.is_file() and not path.name.endswith(".sync-tmp")
         ]
     else:
         selected: set[Path] = set()
-        for raw_key in object_keys:
+        for raw_key in selected_keys:
             key = str(raw_key or "").strip()
             candidate = Path(key)
             if (

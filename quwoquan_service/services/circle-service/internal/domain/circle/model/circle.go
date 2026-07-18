@@ -126,7 +126,7 @@ const (
 
 // Circle domain model.
 type Circle struct {
-	ID                       string                   `json:"_id" bson:"_id"`
+	ID                       string                   `json:"id" bson:"_id"`
 	Name                     string                   `json:"name" bson:"name"`
 	Description              string                   `json:"description" bson:"description"`
 	CoverUrl                 string                   `json:"coverUrl" bson:"coverUrl"`

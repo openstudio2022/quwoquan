@@ -1,4 +1,3 @@
-version: 2
 
 service:
   name: chat-service
@@ -14,7 +13,8 @@ service:
 api_routes:
   # ── 会话 ──────────────────────────────────────
   - method: GET
-    path: /v1/chat/conversations
+    path: /chat/conversations
+
     operation: ListConversations
     actor: persona
     application:
@@ -34,7 +34,8 @@ api_routes:
       visibility: private
 
   - method: GET
-    path: /v1/chat/conversations/timestamps
+    path: /chat/conversations/timestamps
+
     operation: ListConversationTimestamps
     actor: persona
     application:
@@ -47,7 +48,8 @@ api_routes:
     response_entity: Conversation
 
   - method: POST
-    path: /v1/chat/conversations
+    path: /chat/conversations
+
     operation: CreateConversation
     actor: persona
     application:
@@ -62,7 +64,8 @@ api_routes:
     writable_fields: [type, title, circleId, circleGroupId, originType, bindingType, lifecyclePolicy, maxGroupSize, initialMemberIds]
 
   - method: POST
-    path: /v1/chat/conversations/batch
+    path: /chat/conversations/batch
+
     operation: BatchGetConversations
     actor: persona
     application:
@@ -75,7 +78,8 @@ api_routes:
     response_entity: Conversation
 
   - method: GET
-    path: /v1/chat/conversations/{conversationId}
+    path: /chat/conversations/{conversationId}
+
     operation: GetConversation
     actor: persona
     application:
@@ -94,7 +98,8 @@ api_routes:
       visibility: private
 
   - method: PATCH
-    path: /v1/chat/conversations/{conversationId}
+    path: /chat/conversations/{conversationId}
+
     operation: UpdateConversationTitle
     actor: persona
     application:
@@ -107,11 +112,12 @@ api_routes:
     description: 更新会话展示标题。商用路径只允许更新标题；群来源、成员数、头像和绑定对象由服务端投影维护。
     writable_fields: [title]
     response_entity: Conversation
-    auth: required
-
+    security:
+      auth_mode: required
   # ── 已读回执 ──────────────────────────────────
   - method: GET
-    path: /v1/chat/conversations/{conversationId}/messages/{messageId}/receipts
+    path: /chat/conversations/{conversationId}/messages/{messageId}/receipts
+
     operation: GetReceipts
     actor: persona
     application:
@@ -131,7 +137,8 @@ api_routes:
       visibility: private
 
   - method: DELETE
-    path: /v1/chat/conversations/{conversationId}
+    path: /chat/conversations/{conversationId}
+
     operation: DissolveConversation
     actor: persona
     application:
@@ -142,11 +149,12 @@ api_routes:
       mutation_target: Conversation
       invariant_target: Conversation
     description: 解散讨论
-    auth: required
-
+    security:
+      auth_mode: required
   # ── 收件箱 ──────────────────────────────────
   - method: GET
-    path: /v1/chat/inbox
+    path: /chat/inbox
+
     operation: ListInbox
     actor: persona
     authorization:
@@ -187,7 +195,8 @@ api_routes:
       visibility: private
 
   - method: GET
-    path: /v1/chat/message-home
+    path: /chat/message-home
+
     operation: ListMessageHome
     actor: persona
     application:
@@ -199,11 +208,12 @@ api_routes:
     description: 商用消息首页聚合行。conversation 行来自 ChatInboxProjection/read watermark，MarkAsRead 后 all/unread/group/direct 中同一会话的 unreadCount 必须一致；notification 行来自 notification-service/AppMessage inbox；App 不得自行拼接通知。
     query_params: [filter, cursor, limit]
     response_entity: MessageHomeRow
-    auth: required
-
+    security:
+      auth_mode: required
   # ── 聊天媒体上传 ──────────────────────────────
   - method: GET
-    path: /v1/chat/contacts
+    path: /chat/contacts
+
     operation: ListContacts
     actor: persona
     application:
@@ -216,7 +226,8 @@ api_routes:
     response_entity: ChatContactListRow
 
   - method: GET
-    path: /v1/chat/contact-home
+    path: /chat/contact-home
+
     operation: ListContactHome
     actor: persona
     application:
@@ -228,10 +239,11 @@ api_routes:
     description: 商用联系首页聚合行，覆盖全部/互关/圈子/讨论。来源、交集、成员数、最近互动均由云端 read model 提供；wire filter 仍为 group。
     query_params: [filter, cursor, limit]
     response_entity: ContactHomeRow
-    auth: required
-
+    security:
+      auth_mode: required
   - method: GET
-    path: /v1/chat/groups/{conversationId}/home
+    path: /chat/groups/{conversationId}/home
+
     operation: GetGroupHome
     actor: persona
     application:
@@ -242,10 +254,11 @@ api_routes:
       slice: GroupHomeSlice
     description: 商用讨论主页 / 聊天信息页统一事实源，供聊天页顶部和聊天信息页消费。
     response_entity: GroupHome
-    auth: required
-
+    security:
+      auth_mode: required
   - method: GET
-    path: /v1/chat/group-candidates
+    path: /chat/group-candidates
+
     operation: ListGroupCandidates
     actor: persona
     application:
@@ -257,10 +270,11 @@ api_routes:
     description: 发起讨论/添加成员候选源，由 chat-service 聚合互关联系人、可复用 group 会话成员，并排除当前会话已有成员；前端不得再自行拼装 inbox + contacts + circles
     query_params: [conversationId, cursor, limit]
     response_entity: ChatContactListRow
-    auth: required
-
+    security:
+      auth_mode: required
   - method: GET
-    path: /v1/chat/selectable-group-conversations
+    path: /chat/selectable-group-conversations
+
     operation: ListSelectableGroupConversations
     actor: persona
     application:
@@ -274,10 +288,11 @@ api_routes:
       由 chat-service 聚合会话成员与关系能力（relationship gate）计算交集，friendMemberCount==0 的群不返回；前端不得再自行多次拉取成员逐群求交集。
     query_params: [cursor, limit, query]
     response_entity: SelectableGroupConversationRow
-    auth: required
-
+    security:
+      auth_mode: required
   - method: GET
-    path: /v1/chat/selectable-group-conversations/{conversationId}/contact-members
+    path: /chat/selectable-group-conversations/{conversationId}/contact-members
+
     operation: ListSelectableGroupContactMembers
     actor: persona
     application:
@@ -291,10 +306,11 @@ api_routes:
       与 ListSelectableGroupConversations 同源使用 relationship gate 判定 mutual；行形状复用联系人行。
     query_params: [cursor, limit, query]
     response_entity: ChatContactListRow
-    auth: required
-
+    security:
+      auth_mode: required
   - method: GET
-    path: /v1/chat/contacts/search
+    path: /chat/contacts/search
+
     operation: SearchContacts
     actor: persona
     application:
@@ -306,10 +322,11 @@ api_routes:
     description: 全局搜索联系人结果，直接承接“联系人”联想分组
     query_params: [query, cursor, limit]
     response_entity: ContactSearchItemView
-    auth: required
-
+    security:
+      auth_mode: required
   - method: GET
-    path: /v1/chat/conversations/search
+    path: /chat/conversations/search
+
     operation: SearchConversations
     actor: persona
     application:
@@ -321,8 +338,8 @@ api_routes:
     description: 全局搜索会话结果
     query_params: [query, cursor, limit]
     response_entity: ConversationSearchItemView
-    auth: required
-
+    security:
+      auth_mode: required
 consumers:
   - name: app
     capabilities: [list_conversations, list_inbox, list_message_home, list_contact_home, get_group_home, create_conversation, update_conversation_title, send_message, recall_message, sync_messages, mark_as_read, get_receipts, list_members, manage_members, update_settings, invite_assistant, remove_assistant, list_contacts, search_contacts, search_conversations, search_messages]
@@ -342,43 +359,43 @@ contract_test:
       data_source: fields.yaml
       scenarios:
         - name: conversation_list
-          route: GET /v1/chat/conversations
+          route: GET /chat/conversations
           assertions: [status_200, items_match_schema, sorted_by_last_message_time, maxSeq_present]
 
         - name: inbox_list
-          route: GET /v1/chat/inbox
+          route: GET /chat/inbox
           assertions: [status_200, items_match_schema, sorted_by_pinned_then_last_message_time, unread_and_mention_counts_present]
 
         - name: send_message_with_seq
-          route: POST /v1/chat/conversations/{id}/messages
+          route: POST /chat/conversations/{id}/messages
           variants: [text, image, video, card]
           assertions: [status_201, message_id_returned, seq_returned, seq_monotonic]
 
         - name: send_message_idempotent
-          route: POST /v1/chat/conversations/{id}/messages
+          route: POST /chat/conversations/{id}/messages
           assertions: [duplicate_clientMsgId_returns_same_id_and_seq]
 
         - name: recall_message
-          route: POST /v1/chat/conversations/{id}/messages/{msgId}/recall
+          route: POST /chat/conversations/{id}/messages/{msgId}/recall
           assertions: [status_200, message_status_recalled]
 
         - name: sync_messages_gap_fill
-          route: POST /v1/chat/conversations/{id}/sync
+          route: POST /chat/conversations/{id}/sync
           assertions: [returns_messages_after_lastSeq, hasMore_flag_correct]
 
         - name: mark_as_read
-          route: POST /v1/chat/conversations/{id}/messages/{msgId}/read
+          route: POST /chat/conversations/{id}/messages/{msgId}/read
           assertions: [readSeq_updated, unreadCount_decremented]
 
         - name: list_members
-          route: GET /v1/chat/conversations/{id}/members
+          route: GET /chat/conversations/{id}/members
           assertions: [status_200, items_match_schema, pagination_works]
 
         - name: group_chat_lifecycle
           routes:
-            - POST /v1/chat/conversations
-            - POST /v1/chat/conversations/{id}/members
-            - DELETE /v1/chat/conversations/{id}/members/{uid}
+            - POST /chat/conversations
+            - POST /chat/conversations/{id}/members
+            - DELETE /chat/conversations/{id}/members/{uid}
           assertions: [group_created, member_added, member_removed, memberCount_updated]
 
     service_side:

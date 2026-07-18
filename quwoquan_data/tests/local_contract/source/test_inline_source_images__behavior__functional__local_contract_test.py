@@ -22,9 +22,9 @@ import tempfile  # noqa: E402
 import numpy as np  # noqa: E402
 from PIL import Image  # noqa: E402
 
-import content.source.handler_images as hi  # noqa: E402
+import content.source.image_download as hi  # noqa: E402
 from content.source.inline_images import build_inline_image_candidates  # noqa: E402
-from content.source.fetch_text import _html_to_plain_text_with_inline_images  # noqa: E402
+from content.source.html_text import _html_to_plain_text_with_inline_images  # noqa: E402
 
 
 def test_inline_extractor_prefers_lazy_data_attr_over_placeholder_src():

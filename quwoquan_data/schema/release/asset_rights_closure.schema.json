@@ -5,19 +5,19 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "schemaVersion",
+    "schema",
     "assets"
   ],
   "properties": {
-    "schemaVersion": {
-      "const": "quwoquan_data.asset_rights_closure/1"
-    },
     "assets": {
       "type": "array",
       "minItems": 1,
       "items": {
         "$ref": "#/$defs/assetRights"
       }
+    },
+    "schema": {
+      "const": "quwoquan_data.asset_rights_closure"
     }
   },
   "$defs": {
@@ -90,7 +90,10 @@
           "minLength": 1
         },
         "sourceUseMode": {
-          "const": "licensed_adaptation"
+          "enum": [
+            "licensed_adaptation",
+            "self_generated_original"
+          ]
         },
         "canonicalFilePage": {
           "type": "string",
@@ -171,7 +174,7 @@
               "properties": {
                 "mimeType": {
                   "type": "string",
-                  "pattern": "^image/"
+                  "pattern": "^(image|video)/"
                 },
                 "width": {
                   "type": "integer",

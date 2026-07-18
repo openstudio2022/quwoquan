@@ -9,12 +9,15 @@ import sys
 from pathlib import Path
 from typing import Any
 
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[4]
 METADATA_ROOT = ROOT / "quwoquan_service" / "contracts" / "metadata"
 SHARED = METADATA_ROOT / "_shared" / "test_fixtures"
 MEDIA_ROOT = SHARED / "media"
 GAMMA_MANIFEST = SHARED / "app_gamma_seed_manifest.json"
 GAMMA_MEDIA_BUNDLE = ROOT / "quwoquan_ops" / "environments" / "gamma_curated_media_bundle.json"
+MEDIA_DELIVERY_MANIFEST = ROOT / "quwoquan_ops" / "environments" / "media_delivery_manifest.json"
 
 # 复用内容域评论计数门禁的对齐口径（单一真相源），避免在裁剪后另写一套统计逻辑。
 _CONTRACT_DIR = ROOT / "quwoquan_service" / "scripts" / "contract"
@@ -69,8 +72,6 @@ CURATED_CONTENT_POST_IDS = {
 CURATED_CONTENT_COMMENT_IDS = {"fixture_comment_photo_001"}
 # alpha-dev-lite 专用对象交集夹具 id（intersection_object_evidence 契约测试），不进 gamma。
 CURATED_OBJECT_INTERSECTION_DROP_IDS = {"u_lin", "c_photo", "e_pku"}
-CURATED_MAX_IMAGES_PER_POST = 4
-CURATED_MAX_CIRCLE_MEMBERS = 5
 CURATED_USER_IDS = {
     "fixture_user_current",
     "fixture_user_photo",
@@ -124,6 +125,7 @@ MEDIA_FIELD_NAMES = {
     "coverUrl",
     "thumbnailUrl",
     "videoUrl",
+    "mediaDeliveryUrl",
 }
 
 
@@ -172,29 +174,23 @@ def prune_seed_payload(relative_path: str, payload: dict[str, Any]) -> dict[str,
         seed = seed_sets.get("content_discovery_core") or {}
         seed["posts"] = [
             row for row in seed.get("posts", [])
-            if row_id(row, "id", "postId") in CURATED_CONTENT_POST_IDS
+            if row_id(row, "postId") in CURATED_CONTENT_POST_IDS
         ]
-        # gamma curated 子集对单帖图片列表限幅，守住 100 图预算。
-        for row in seed["posts"]:
-            for field in ("imageUrls", "mediaUrls", "imageObjectKeys", "mediaObjectKeys"):
-                values = row.get(field)
-                if isinstance(values, list) and len(values) > CURATED_MAX_IMAGES_PER_POST:
-                    row[field] = values[:CURATED_MAX_IMAGES_PER_POST]
         seed["reactions"] = [
             row for row in seed.get("reactions", [])
-            if row_id(row, "postId", "contentId", "post_id") in CURATED_CONTENT_POST_IDS
+            if row_id(row, "postId") in CURATED_CONTENT_POST_IDS
         ]
         seed["comments"] = [
             row for row in seed.get("comments", [])
-            if row_id(row, "id", "commentId") in CURATED_CONTENT_COMMENT_IDS
-            or row_id(row, "postId", "contentId", "post_id") in CURATED_CONTENT_POST_IDS
+            if row_id(row, "commentId") in CURATED_CONTENT_COMMENT_IDS
+            or row_id(row, "postId") in CURATED_CONTENT_POST_IDS
         ]
 
     if relative_path == USER_SCENARIO:
         profile_seed = seed_sets.get("user_profile_core") or {}
         profile_seed["profiles"] = [
             row for row in profile_seed.get("profiles", [])
-            if row_id(row, "userId", "id") in CURATED_USER_IDS
+            if row_id(row, "userId") in CURATED_USER_IDS
         ]
         feed_seed = seed_sets.get("profile_feed_core") or {}
         feed_seed["myPostIds"] = [
@@ -220,7 +216,7 @@ def prune_seed_payload(relative_path: str, payload: dict[str, Any]) -> dict[str,
         seed = seed_sets.get("circle_core") or {}
         seed["circles"] = [
             row for row in seed.get("circles", [])
-            if row_id(row, "id", "circleId") in CURATED_CIRCLE_IDS
+            if row_id(row, "id") in CURATED_CIRCLE_IDS
         ]
         seed["groups"] = {
             key: value
@@ -228,7 +224,7 @@ def prune_seed_payload(relative_path: str, payload: dict[str, Any]) -> dict[str,
             if key in CURATED_CIRCLE_IDS
         }
         seed["members"] = {
-            key: value[:CURATED_MAX_CIRCLE_MEMBERS]
+            key: value
             for key, value in (seed.get("members") or {}).items()
             if key in CURATED_CIRCLE_IDS
         }
@@ -247,7 +243,7 @@ def prune_seed_payload(relative_path: str, payload: dict[str, Any]) -> dict[str,
         core = seed_sets.get("chat_core") or {}
         core["conversations"] = [
             row for row in core.get("conversations", [])
-            if row_id(row, "conversationId", "id", "_id") in CURATED_CHAT_CONVERSATION_IDS
+            if row_id(row, "id") in CURATED_CHAT_CONVERSATION_IDS
         ]
         core["members"] = {
             key: value
@@ -266,7 +262,7 @@ def prune_seed_payload(relative_path: str, payload: dict[str, Any]) -> dict[str,
         contacts = seed_sets.get("chat_contacts_core") or {}
         contacts["contacts"] = [
             row for row in contacts.get("contacts", [])
-            if row_id(row, "userId", "id", "contactId") in CURATED_CONTACT_USER_IDS
+            if row_id(row, "userId") in CURATED_CONTACT_USER_IDS
         ]
         contacts["circleIds"] = [
             row for row in contacts.get("circleIds", [])
@@ -337,12 +333,25 @@ def build_gamma_manifest() -> dict[str, Any]:
         seed_refs.append(next_entry)
     next_manifest = dict(manifest)
     next_manifest["description"] = (
-        "gamma 云侧精简清单：当前 gamma 只装载约 100 图内的 curated 业务子集，"
+        "gamma 云侧精简清单：只装载声明的 curated 业务对象及其完整媒体闭包，"
         "alpha/beta 继续保持全量共享池。"
     )
     next_manifest["seedRefs"] = seed_refs
     next_manifest["appAssets"] = {"alphaOnlyFixtureAllowlist": []}
     return next_manifest
+
+
+def gamma_fixture_paths(manifest: dict[str, Any]) -> list[str]:
+    paths: list[str] = []
+    for entry in manifest.get("seedRefs", []):
+        fixture_path = str(entry.get("fixturePath") or "").strip()
+        if not fixture_path:
+            continue
+        path = METADATA_ROOT / fixture_path
+        if not path.is_file():
+            raise SystemExit(f"gamma fixture missing: {path.relative_to(ROOT)}")
+        paths.append(str(path.relative_to(ROOT)))
+    return paths
 
 
 def walk_media_refs(value: Any, field_name: str = "") -> list[str]:
@@ -366,13 +375,18 @@ def walk_media_refs(value: Any, field_name: str = "") -> list[str]:
 
 
 def build_media_bundle(curated_paths: list[str]) -> dict[str, Any]:
-    object_keys = sorted(
-        {
+    manifest = read_json(MEDIA_DELIVERY_MANIFEST)
+    manifest_keys = {
+        str(item.get("publicSliceKey") or "").strip()
+        for item in manifest.get("assets") or []
+        if isinstance(item, dict) and str(item.get("publicSliceKey") or "").strip()
+    }
+    fixture_keys = {
             ref
             for relative_path in curated_paths
             for ref in walk_media_refs(read_json(ROOT / relative_path))
-        }
-    )
+    }
+    object_keys = sorted(manifest_keys | fixture_keys)
     media_objects: list[dict[str, Any]] = []
     image_count = 0
     for object_key in object_keys:
@@ -387,6 +401,8 @@ def build_media_bundle(curated_paths: list[str]) -> dict[str, Any]:
             mime_type = "image/webp"
         elif path.suffix.lower() == ".mp4":
             mime_type = "video/mp4"
+        elif path.suffix.lower() == ".txt":
+            mime_type = "text/plain"
         if mime_type.startswith("image/"):
             image_count += 1
         media_objects.append(
@@ -398,13 +414,10 @@ def build_media_bundle(curated_paths: list[str]) -> dict[str, Any]:
                 "sizeBytes": len(raw),
             }
         )
-    if image_count > 100:
-        raise SystemExit(f"gamma curated image count exceeds 100: {image_count}")
     return {
-        "schemaVersion": "gamma-curated-media-bundle",
+        "schema": "gamma-curated-media-bundle",
         "environment": "gamma",
-        "selectionProfile": "gamma-curated-core-100",
-        "maxImageObjectCount": 100,
+        "selectionProfile": "gamma-curated-core",
         "imageObjectCount": image_count,
         "totalObjectCount": len(media_objects),
         "mediaObjects": media_objects,
@@ -463,7 +476,7 @@ def main() -> int:
         return 0
     gamma_manifest = build_gamma_manifest()
     write_json(GAMMA_MANIFEST, gamma_manifest)
-    bundle = build_media_bundle(curated_paths)
+    bundle = build_media_bundle(gamma_fixture_paths(gamma_manifest))
     write_json(GAMMA_MEDIA_BUNDLE, bundle)
     if args.output_media_root.strip():
         output_root = Path(args.output_media_root)

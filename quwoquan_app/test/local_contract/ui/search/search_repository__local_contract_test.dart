@@ -14,6 +14,8 @@ import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_service.dart';
+import 'package:quwoquan_app/core/services/cache/cache_telemetry_sink.dart';
+import 'package:quwoquan_app/core/services/cache/local_chat_search_contact_record.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_store.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_sync_service.dart';
 import 'package:quwoquan_app/core/services/cache/local_circle_group_snapshot_record.dart';
@@ -65,16 +67,22 @@ void main() {
             personaContextVersion: namespace.personaContextVersion,
           );
         },
+        telemetrySink: const NoopCacheTelemetrySink(),
       );
     });
 
     tearDown(() async {
+      await chatSyncService.waitUntilIdle();
+      await circleStore.waitUntilIdle();
+      await chatStore.close();
+      await circleStore.close();
       if (await tempDir.exists()) {
         await tempDir.delete(recursive: true);
       }
     });
 
     test('uses local contact filtering for suggest search', () async {
+      await chatSyncService.sync(force: true);
       final repo = AppSearchRepository(
         circleRepository: MockCircleRepository(),
         circleGroupQuery: const _FixtureCircleGroupQuery(),
@@ -118,7 +126,7 @@ void main() {
     });
 
     test(
-      'falls back to local group results when remote returns empty',
+      'uses persisted local group results without waiting for remote search',
       () async {
         final seedCircleId = CircleMockData.catalogCircleDtos.first.id;
         final seedGroup = _fixtureCircleGroup(seedCircleId);
@@ -166,19 +174,19 @@ void main() {
         expect(response.sections.first.id, equals('groups'));
         expect(
           response.sections.first.resolvedFrom,
-          equals(SearchResolvedFrom.localFallback),
+          equals(SearchResolvedFrom.local),
         );
         expect(
           response.degradeSignals.any(
             (signal) => signal.code == 'circle_group_remote_empty',
           ),
-          isTrue,
+          isFalse,
         );
       },
     );
 
     test(
-      'falls back to persisted local group snapshot when remote search fails',
+      'does not invoke failing remote group search during suggestions',
       () async {
         final seedCircleId = CircleMockData.catalogCircleDtos.first.id;
         final seedGroup = _fixtureCircleGroup(seedCircleId);
@@ -225,19 +233,19 @@ void main() {
         expect(response.sections, isNotEmpty);
         expect(
           response.sections.first.resolvedFrom,
-          equals(SearchResolvedFrom.localFallback),
+          equals(SearchResolvedFrom.local),
         );
         expect(
           response.degradeSignals.any(
             (signal) => signal.code == 'circle_group_remote_failed',
           ),
-          isTrue,
+          isFalse,
         );
       },
     );
 
     test(
-      'fails closed with degrade signals when circle fallback path has no cache',
+      'settles an empty local group domain without waiting for background seed',
       () async {
         final repo = AppSearchRepository(
           circleRepository: _ThrowingCircleRepository(),
@@ -274,13 +282,13 @@ void main() {
           response.degradeSignals.any(
             (signal) => signal.code == 'circle_group_snapshot_seed_failed',
           ),
-          isTrue,
+          isFalse,
         );
         expect(
           response.degradeSignals.any(
             (signal) => signal.code == 'circle_group_remote_failed',
           ),
-          isTrue,
+          isFalse,
         );
       },
     );
@@ -545,11 +553,11 @@ void main() {
       );
       await chatStore.upsertContacts(
         namespace: otherNamespace,
-        contacts: <Map<String, Object?>>[
-          <String, Object?>{
-            'contactId': 'hidden_contact',
-            'displayName': '隔离联系人',
-          },
+        contacts: const <LocalChatSearchContactRecord>[
+          LocalChatSearchContactRecord(
+            contactId: 'hidden_contact',
+            displayName: '隔离联系人',
+          ),
         ],
       );
 
@@ -658,6 +666,8 @@ class _ThrowingHomepageRepository extends MockHomepageRepository {
     String? city,
     String? status,
     int limit = 20,
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
   }) async {
     throw StateError('homepage unavailable');
   }

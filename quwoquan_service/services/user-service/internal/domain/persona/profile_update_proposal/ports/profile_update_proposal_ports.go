@@ -24,6 +24,12 @@ type CommitReceipt struct {
 type AggregateStore interface {
 	Load(context.Context, string) (model.ProfileUpdateProposal, error)
 	Replay(context.Context, string, string, string) (CommitReceipt, bool, error)
+	RecordNoopReceipt(
+		context.Context,
+		model.ProfileUpdateProposal,
+		string,
+		string,
+	) (CommitReceipt, error)
 	Commit(context.Context, int64, ChangeSet) (CommitReceipt, error)
 }
 

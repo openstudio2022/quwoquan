@@ -1,5 +1,7 @@
+// ignore_for_file: prefer_initializing_formals
+
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
-    show BehaviorAction, BehaviorEvent, BehaviorRepository, ReferralSource;
+    show BehaviorAction, BehaviorEvent, BehaviorReporter, ReferralSource;
 
 /// Content type for engagement depth calculation.
 enum ContentType {
@@ -53,9 +55,10 @@ class _ContentSession {
 /// Unified content engagement tracker that handles all content types with
 /// differentiated depth calculation and referral source attribution.
 class ContentEngagementTracker {
-  ContentEngagementTracker({required this._repository});
+  ContentEngagementTracker({required BehaviorReporter reporter})
+    : _reporter = reporter;
 
-  final BehaviorRepository _repository;
+  final BehaviorReporter _reporter;
   final Map<String, _ContentSession> _activeSessions = {};
   final List<Future<void>> _pendingReports = [];
 
@@ -101,7 +104,7 @@ class ContentEngagementTracker {
     );
 
     _fireAndTrack(
-      _repository.reportEvents(
+      _reporter.reportEvents(
         events: [
           BehaviorEvent(
             contentId: contentId,
@@ -209,13 +212,13 @@ class ContentEngagementTracker {
       ),
     ];
 
-    await _repository.reportEvents(events: events);
+    await _reporter.reportEvents(events: events);
   }
 
   /// Track author profile view.
   void trackAuthorProfileView(String authorId, {required ReferralSource from}) {
     _fireAndTrack(
-      _repository.reportEvents(
+      _reporter.reportEvents(
         events: [
           BehaviorEvent(
             contentId: authorId,
@@ -242,7 +245,7 @@ class ContentEngagementTracker {
   }) {
     final session = _activeSessions[fromContentId];
     _fireAndTrack(
-      _repository.reportEvents(
+      _reporter.reportEvents(
         events: [
           BehaviorEvent(
             contentId: fromContentId,
@@ -269,7 +272,7 @@ class ContentEngagementTracker {
   /// Track entity page navigation.
   void trackEntityPageView(String entityId, {required ReferralSource from}) {
     _fireAndTrack(
-      _repository.reportEvents(
+      _reporter.reportEvents(
         events: [
           BehaviorEvent(
             contentId: entityId,
@@ -314,7 +317,7 @@ class ContentEngagementTracker {
     session.lastReportedPlayThreshold = currentThreshold;
 
     _fireAndTrack(
-      _repository.reportEvents(
+      _reporter.reportEvents(
         events: [
           BehaviorEvent(
             contentId: contentId,

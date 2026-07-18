@@ -224,7 +224,7 @@ gwt_acceptance:
     - '[recorded] local_contract 2026-06-25：`flutter test test/ui/entity/pages/homepage_detail_page_widget_test.dart`
       6/6 green；断言相关圈子「打开圈子」卡片渲染，并断言统一对象键/对象页模板/灰度 cohort/主页管理不外露。'
     - '[recorded] PENDING api_integration 2026-06-25：相关圈子与跳转链路不再缺静态 compose/route，
-      剩余阻断是 gamma-local health、seed viewer 关系、`/v1/homepages/{id}/related-groups`
+      剩余阻断是 gamma-local health、seed viewer 关系、`/homepages/{id}/related-groups`
       与 circle detail populated 探针；由 `object-homepage-gamma-real-data-closure` 与 R-IX05
       继续追踪。'
   GWT6:

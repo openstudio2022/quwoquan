@@ -1,4 +1,4 @@
-schemaVersion: quwoquan.vertical_quality_samples.v1
+schema: quwoquan.vertical_quality_samples
 vertical: photography
 samples:
   - id: photography.sample.portrait

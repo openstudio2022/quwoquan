@@ -57,9 +57,13 @@
 
 ### 发布与展示
 
-- 远端模式下，图片发布不得把本地文件路径写入最终 `mediaUrls` / `coverUrl`；必须先通过 content media upload 契约获得可回读媒体引用。
-- 图片媒体顺序以用户完成时的底部缩略条顺序为准；`coverUrl` 默认取第一张可发布图片。
-- 发布成功后，发现流、个人主页作品列表和详情页必须能按同一顺序展示图片；失败时必须提供结构化错误提示与可恢复动作。
+- 发布前内容只存在于 App 本地 `LocalPostDraft`，默认自动保存；返回、切后台、杀进程和重启不得删除。只有用户显式选择“放弃草稿”才删除草稿及未提交本地媒体。
+- 用户首次点击发布时冻结不可变 `PostPublicationIntent`。同一 intent 的 `publishIntentId`、`localDraftId`、payload digest、媒体槽位及发布设置保持稳定；后续网络重试、前台恢复和进程重启不得生成第二个 intent。
+- 远端模式下，图片发布不得把本地文件路径或客户端 URL 写入 Post；媒体上传子步骤使用稳定幂等身份，最终 publication request 只提交服务端 `MediaAsset` 引用。
+- 对外只暴露一次性 `SubmitPostPublication`。它不接收 `expectedVersion`，以 `Idempotency-Key=publishIntentId` 提交并返回稳定 `PostPublicationReceipt`；App 不再执行 `CreatePost → BindMediaAssetsToPost → PublishPost` 三段远端状态机。
+- 首次 acceptance 必须在一个权威存储事务内创建 Post、永久 publication receipt 与 outbox；相同 actor + intent 重放返回首个 receipt，相同 actor + localDraftId 的后续发布不得创建第二个 Post。
+- 服务暂不可用或响应不确定时，UI 展示“正在安全提交”并自动重试同一 intent；用户无需再次点击发布。receipt 已本地持久化后才能清理草稿。
+- 图片媒体顺序以用户冻结 intent 时的底部缩略条顺序为准；发布后发现流、个人主页作品列表和详情页按同一顺序展示。
 - alpha mock 模式可以保留本地/fixture 语义，但 Mock/Remote 的 payload 形态必须在 local contract 中对齐，不得让 UI 直连 mock。
 
 ## 视频作品商用创作与封面闭环（2026-06-22 冻结）
@@ -101,6 +105,8 @@
 - `article`：标题必填，`summary` 可编辑，`illustrationAssetId` 最多一张可选插图。
 - 发布到任一圈子前提：内容为 `public`。
 - 内容 `published` 后禁止更新正文/标题/媒体，仅允许删除与圈子分发关系变更。
+- Post 发布是单作者、单 intent 的一次性提交，不使用调用方 `expectedVersion`。服务端可使用内部 CAS/唯一约束吸收竞态，但内部技术冲突不得直接暴露给用户。
+- 真正需要调用方 `If-Match` 的能力必须证明存在多写者快照覆盖且无法由领域状态机、唯一约束、服务端重载重试或 set/append 语义安全解决；不得把 `expectedVersion` 作为 aggregate command 的默认参数。
 
 ## 对象级缓存规格
 

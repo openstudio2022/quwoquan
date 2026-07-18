@@ -318,9 +318,6 @@ class _MultiImageContentState extends State<_MultiImageContent> {
       Future.microtask(() {
         if (mounted) {
           final candidates = resolveContentMediaUrlCandidates(imageUrl);
-          if (_shouldSkipLocalPrecache(candidates)) {
-            return;
-          }
           _precacheImageCandidates(candidates);
         }
       });
@@ -342,19 +339,11 @@ class _MultiImageContentState extends State<_MultiImageContent> {
         Future.microtask(() {
           if (mounted) {
             final candidates = resolveContentMediaUrlCandidates(imageUrl);
-            if (_shouldSkipLocalPrecache(candidates)) {
-              return;
-            }
             _precacheImageCandidates(candidates);
           }
         });
       }
     }
-  }
-
-  bool _shouldSkipLocalPrecache(List<String> candidates) {
-    return candidates.isNotEmpty &&
-        candidates.every(isPrivateDevContentMediaUrl);
   }
 
   Future<void> _precacheImageCandidates(List<String> candidates) async {

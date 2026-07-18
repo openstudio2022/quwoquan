@@ -22,7 +22,7 @@ content_post:
         log_policy: allow
         api_exposure: read_write
         ops_exposure: read
-        description: Markdown 规范版本，当前为 `qwq-rich-md/1`。
+        description: Markdown 规范身份，当前为 `qwq-rich-md`（禁止 `/N` 协议版本身份）。
 
       - name: articleMarkdownDigest
         type: string
@@ -152,7 +152,7 @@ media_asset:
       - operation: CompleteMediaUpload
         change: 返回可写入 articleAssetManifest 的 asset descriptor。
       - operation: BindMediaAssetsToPost
-        path: /v1/content/posts/{postId}/media:bind
+        path: /content/posts/{postId}/media:bind
         method: POST
         description: 发布或草稿转正时将素材绑定到 Post。
 

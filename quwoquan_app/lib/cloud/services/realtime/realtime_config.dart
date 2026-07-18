@@ -2,7 +2,7 @@ import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/realtime/realtime_api_metadata.g.dart';
 
 /// Configuration for realtime transport layer.
-/// In production, fetched from `GET /v1/config/realtime`.
+/// In production, fetched from `GET /config/realtime`.
 class RealtimeConfig {
   final String wsUrl;
   final String gatewayBaseUrl;

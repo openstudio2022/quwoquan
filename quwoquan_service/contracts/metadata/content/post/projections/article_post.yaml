@@ -1,4 +1,3 @@
-version: 1
 read_model: ArticlePost
 
 description: |
@@ -19,7 +18,7 @@ fields:
   - { name: contentType,    type: enum,   description: "固定为 article" }
   - { name: contentIdentity, type: enum,  description: "内容身份层。笔记作品固定为 work" }
   - { name: authorId,              type: string }
-  - { name: authorNickname,        type: string, description: 作者昵称（反范式） }
+  - { name: authorDisplayName,     type: string, description: 作者显示名（反范式） }
   - { name: authorAvatarUrl,       type: string, description: 作者头像（反范式） }
   - { name: authorBackgroundUrl,   type: string, nullable: true, description: 作者主页背景图（反范式，null 表示未配置） }
   - { name: authorRoleLabel,       type: string, description: 作者角色短标签（反范式，如「旅行创作者」） }
@@ -49,6 +48,7 @@ client_projection:
     - package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart
   computed_getters:
     - name: displayFormat
+      source: displayFormat
       dart_return_type: String
       nullable: false
       description: "展示格式。作品态 article 在 UI 术语上统一映射为 note。"
@@ -58,56 +58,48 @@ client_projection:
       dart_type: String
       nullable: false
       source: postId
-      aliases: [postId, _id]
       default: "''"
 
     - name: type
       dart_type: String
       nullable: false
       source: contentType
-      aliases: [contentType, category]
       default: "'article'"
 
     - name: identity
       dart_type: String
       nullable: false
       source: contentIdentity
-      aliases: [contentIdentity, identity]
       default: "'work'"
 
     - name: assistantUsePolicy
       dart_type: String
       nullable: false
       source: assistantUsePolicy
-      aliases: [assistantUsePolicy]
       default: "'inherit'"
 
     - name: authorId
       dart_type: String
       nullable: false
       source: authorId
-      aliases: [userId, author_id]
       default: "''"
 
     - name: displayName
       dart_type: String
       nullable: false
-      source: authorNickname
-      aliases: [authorNickname, nickname, username, displayName]
+      source: authorDisplayName
       default: "''"
 
     - name: avatarUrl
       dart_type: String
       nullable: false
       source: authorAvatarUrl
-      aliases: [authorAvatarUrl, avatarUrl, avatar]
       default: "''"
 
     - name: authorBackgroundUrl
       dart_type: String
       nullable: true
       source: authorBackgroundUrl
-      aliases: [authorBackgroundUrl]
       default: "null"
       description: "作者主页背景图（反范式）；null 时 UI 显示默认渐变背景"
 
@@ -115,7 +107,6 @@ client_projection:
       dart_type: String
       nullable: false
       source: authorRoleLabel
-      aliases: [authorRoleLabel, roleLabel, authorRole]
       default: "''"
       description: "作者角色短标签（反范式），首页推荐卡顶部展示"
 
@@ -123,7 +114,6 @@ client_projection:
       dart_type: List<String>
       nullable: false
       source: authorIdentityTags
-      aliases: [authorIdentityTags, identityTags, authorTags]
       default: "<String>[]"
       description: "作者身份标签（反范式），首页推荐卡顶部最多展示 2 个"
 
@@ -131,7 +121,6 @@ client_projection:
       dart_type: bool
       nullable: false
       source: authorVerified
-      aliases: [authorVerified, verified, isVerified]
       default: "false"
       description: "作者认证标记（反范式），驱动卡片认证角标"
 
@@ -139,7 +128,6 @@ client_projection:
       dart_type: String
       nullable: false
       source: title
-      aliases: [title]
       default: "''"
       description: "文章标题"
 
@@ -147,7 +135,6 @@ client_projection:
       dart_type: String
       nullable: false
       source: body
-      aliases: [body, description, content]
       default: "''"
       description: "文章正文快照（由 articleMarkdown 派生）"
 
@@ -155,7 +142,6 @@ client_projection:
       dart_type: String
       nullable: false
       source: summary
-      aliases: [summary]
       default: "''"
       description: "文章分发摘要"
 
@@ -163,7 +149,6 @@ client_projection:
       dart_type: String
       nullable: false
       source: coverUrl
-      aliases: [coverUrl, cover, thumbnail, thumbnailUrl]
       default: "''"
       description: "封面图 URL"
 
@@ -171,7 +156,6 @@ client_projection:
       dart_type: String
       nullable: false
       source: articleTemplate
-      aliases: [articleTemplate]
       default: "'gentle'"
       description: "文章书本模板"
 
@@ -179,7 +163,6 @@ client_projection:
       dart_type: String
       nullable: false
       source: articleFontPreset
-      aliases: [articleFontPreset]
       default: "'clean'"
       description: "文章字体预设"
 
@@ -187,28 +170,24 @@ client_projection:
       dart_type: int
       nullable: false
       source: likeCount
-      aliases: [likeCount, likesCount, likes, like_count]
       default: "0"
 
     - name: commentCount
       dart_type: int
       nullable: false
       source: commentCount
-      aliases: [commentCount, commentsCount, comments, comment_count]
       default: "0"
 
     - name: shareCount
       dart_type: int
       nullable: false
       source: shareCount
-      aliases: [shareCount, shares, share_count]
       default: "0"
 
     - name: createdAt
       dart_type: DateTime
       nullable: false
       source: createdAt
-      aliases: [createdAt, created_at]
       default: "DateTime(0)"
       description: "创作时间（首次进入系统）。唯一源为 createdAt/created_at；不再以 publishedAt 借壳。"
 
@@ -216,7 +195,6 @@ client_projection:
       dart_type: DateTime
       nullable: true
       source: updatedAt
-      aliases: [updatedAt, updated_at]
       default: "null"
       description: "最后实质更新时间；与 createdAt 相等或更早时 UI 只显示创作时间，更晚时显示创作+更新。"
 
@@ -224,7 +202,6 @@ client_projection:
       dart_type: DateTime
       nullable: true
       source: publishedAt
-      aliases: [publishedAt, published_at]
       default: "null"
       description: "首次公开时间（仅首次发布置位）。"
 
@@ -232,7 +209,6 @@ client_projection:
       dart_type: String
       nullable: true
       source: contentVertical
-      aliases: [contentVertical, categoryId, category, vertical]
       default: "null"
       description: "推荐垂类归一结果；端侧行为上报透传，不参与 UI 展示。"
 
@@ -240,7 +216,6 @@ client_projection:
       dart_type: String
       nullable: true
       source: recallPath
-      aliases: [recallPath, recall_path]
       default: "null"
       description: "推荐召回路径；端侧行为上报透传，不参与 UI 展示。"
 
@@ -248,7 +223,6 @@ client_projection:
       dart_type: String
       nullable: true
       source: supplySource
-      aliases: [supplySource, supply_source]
       default: "null"
       description: "内容供给来源；端侧行为上报透传，不参与 UI 展示。"
 
@@ -256,7 +230,6 @@ client_projection:
       dart_type: List<IntersectionReason>
       nullable: true
       source: intersectionReasons
-      aliases: [intersectionReasons]
       list_element_dart_class: IntersectionReason
       default: "null"
       description: "交集理由（云侧推荐管线预生成；端只读展示，无来源时为 null）"

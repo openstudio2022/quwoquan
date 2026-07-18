@@ -30,6 +30,7 @@ type RecordMediaProcessingResultCommand struct {
 	AssetID       string
 	Processing    mediamodel.ProcessingStatus
 	FailureReason string
+	Descriptor    mediamodel.VideoProcessingDescriptor
 }
 
 type UpdateMediaAssetAccessPolicyCommand struct {
@@ -94,15 +95,21 @@ type MediaUploadSessionCommandResult struct {
 }
 
 type MediaAssetCommandResult struct {
-	AssetID            string                      `json:"assetId"`
-	Version            int64                       `json:"version"`
-	ProcessingStatus   mediamodel.ProcessingStatus `json:"processingStatus"`
-	AccessPolicy       mediamodel.AccessPolicy     `json:"accessPolicy"`
-	CoverStrategy      string                      `json:"coverStrategy"`
-	ManualCoverAssetID string                      `json:"manualCoverAssetId,omitempty"`
-	CoverFrameTimeMs   int64                       `json:"coverFrameTimeMs"`
-	CoverURL           string                      `json:"coverUrl,omitempty"`
-	Replayed           bool                        `json:"replayed"`
+	AssetID             string                      `json:"assetId"`
+	Version             int64                       `json:"version"`
+	ProcessingStatus    mediamodel.ProcessingStatus `json:"processingStatus"`
+	AccessPolicy        mediamodel.AccessPolicy     `json:"accessPolicy"`
+	CoverStrategy       string                      `json:"coverStrategy"`
+	ManualCoverAssetID  string                      `json:"manualCoverAssetId,omitempty"`
+	CoverFrameTimeMs    int64                       `json:"coverFrameTimeMs"`
+	VerifiedDurationMs  int64                       `json:"verifiedDurationMs,omitempty"`
+	VideoWidth          int                         `json:"videoWidth,omitempty"`
+	VideoHeight         int                         `json:"videoHeight,omitempty"`
+	VideoCodec          string                      `json:"videoCodec,omitempty"`
+	VideoContainer      string                      `json:"videoContainer,omitempty"`
+	PreviewTrackVersion int                         `json:"previewTrackVersion,omitempty"`
+	CoverURL            string                      `json:"coverUrl,omitempty"`
+	Replayed            bool                        `json:"replayed"`
 }
 
 // MediaUploadSessionSlice contains the owner-scoped projection. The expected
@@ -154,30 +161,41 @@ type MediaObjectGateway interface {
 	PrepareUpload(context.Context, PrepareUploadParams) (UploadGrant, error)
 	UploadURL(context.Context, string, string, string, time.Time) (string, error)
 	CompleteUpload(context.Context, CompleteUploadParams) (CompletedUploadObject, error)
+	PublishPublicSlice(context.Context, string, string) error
 	DeliveryURL(context.Context, string) (string, error)
 	DeliveryURLUntil(context.Context, string, time.Time) (string, error)
 }
 
 // MediaAssetSlice is a typed BSON projection for owner-facing reads.
 type MediaAssetSlice struct {
-	AssetID            string                      `json:"assetId"`
-	Version            int64                       `json:"version"`
-	OwnerID            string                      `json:"-"`
-	SourceSessionID    string                      `json:"-"`
-	ObjectKey          string                      `json:"-"`
-	SHA256             string                      `json:"-"`
-	MediaType          string                      `json:"mediaType"`
-	ContentType        string                      `json:"contentType"`
-	FileSize           int64                       `json:"fileSize"`
-	AccessPolicy       mediamodel.AccessPolicy     `json:"accessPolicy"`
-	ProcessingStatus   mediamodel.ProcessingStatus `json:"status"`
-	CreatedAt          time.Time                   `json:"createdAt"`
-	UpdatedAt          time.Time                   `json:"updatedAt"`
-	ProcessedAt        *time.Time                  `json:"processedAt,omitempty"`
-	CoverStrategy      string                      `json:"coverStrategy"`
-	ManualCoverAssetID string                      `json:"manualCoverAssetId,omitempty"`
-	CoverFrameTimeMs   int64                       `json:"coverFrameTimeMs"`
-	DeliveryURL        string                      `json:"cdnUrl"`
+	AssetID                      string                      `json:"assetId"`
+	Version                      int64                       `json:"version"`
+	OwnerID                      string                      `json:"-"`
+	SourceSessionID              string                      `json:"-"`
+	ObjectKey                    string                      `json:"-"`
+	SHA256                       string                      `json:"-"`
+	MediaType                    string                      `json:"mediaType"`
+	ContentType                  string                      `json:"contentType"`
+	FileSize                     int64                       `json:"fileSize"`
+	AccessPolicy                 mediamodel.AccessPolicy     `json:"accessPolicy"`
+	ProcessingStatus             mediamodel.ProcessingStatus `json:"status"`
+	CreatedAt                    time.Time                   `json:"createdAt"`
+	UpdatedAt                    time.Time                   `json:"updatedAt"`
+	ProcessedAt                  *time.Time                  `json:"processedAt,omitempty"`
+	CoverStrategy                string                      `json:"coverStrategy"`
+	ManualCoverAssetID           string                      `json:"manualCoverAssetId,omitempty"`
+	CoverFrameTimeMs             int64                       `json:"coverFrameTimeMs"`
+	ProcessorProfile             string                      `json:"-"`
+	VerifiedDurationMs           int64                       `json:"verifiedDurationMs,omitempty"`
+	VideoWidth                   int                         `json:"videoWidth,omitempty"`
+	VideoHeight                  int                         `json:"videoHeight,omitempty"`
+	VideoCodec                   string                      `json:"videoCodec,omitempty"`
+	VideoContainer               string                      `json:"videoContainer,omitempty"`
+	VideoPublicSliceKey          string                      `json:"-"`
+	CoverPublicSliceKey          string                      `json:"-"`
+	PreviewTrackVersion          int                         `json:"previewTrackVersion,omitempty"`
+	PreviewTrackManifestSliceKey string                      `json:"-"`
+	DeliveryURL                  string                      `json:"cdnUrl"`
 }
 
 // MediaAssetReferenceSlice is the minimal owner-scoped reference contract
@@ -195,13 +213,22 @@ type MediaAssetReferenceSlice struct {
 // projection used by a bounded context after it has enforced its own access
 // policy. It never exposes an object-storage key or digest.
 type MediaAssetDeliveryReferenceSlice struct {
-	AssetID          string                      `json:"assetId"`
-	OwnerPersonaID   string                      `json:"ownerPersonaId"`
-	ProcessingStatus mediamodel.ProcessingStatus `json:"processingStatus"`
-	MediaType        string                      `json:"mediaType"`
-	ContentType      string                      `json:"contentType"`
-	FileSize         int64                       `json:"fileSize"`
-	DeliveryURL      string                      `json:"cdnUrl"`
+	AssetID                      string                      `json:"assetId"`
+	OwnerPersonaID               string                      `json:"ownerPersonaId"`
+	ProcessingStatus             mediamodel.ProcessingStatus `json:"processingStatus"`
+	MediaType                    string                      `json:"mediaType"`
+	ContentType                  string                      `json:"contentType"`
+	FileSize                     int64                       `json:"fileSize"`
+	PublicSliceKey               string                      `json:"publicSliceKey,omitempty"`
+	DeliveryURL                  string                      `json:"cdnUrl"`
+	VerifiedDurationMs           int64                       `json:"verifiedDurationMs,omitempty"`
+	VideoWidth                   int                         `json:"videoWidth,omitempty"`
+	VideoHeight                  int                         `json:"videoHeight,omitempty"`
+	VideoPublicSliceKey          string                      `json:"videoPublicSliceKey,omitempty"`
+	CoverPublicSliceKey          string                      `json:"coverPublicSliceKey,omitempty"`
+	PreviewTrackVersion          int                         `json:"previewTrackVersion,omitempty"`
+	PreviewTrackManifestSliceKey string                      `json:"previewTrackManifestSliceKey,omitempty"`
+	ExpiresAt                    string                      `json:"expiresAt,omitempty"`
 }
 
 type MediaUploadSessionOwnerReader interface {

@@ -1,20 +1,20 @@
-version: 1
-
 service:
   name: product-ops
   domain: ops
   owner: platform-ops-team
   commercial_defaults:
     status: blocked
-    block_reason: canonical operation awaits object-centered commercial migration
-    gap_id: OPS_EVENT_RECORD_COMMERCIAL_EVIDENCE
-    target_story: app-cloud-business-object-commercial-closure
+    block_reason: real SLS and gamma evidence are required before implemented
+    gap_id: OPS_EVENT_RECORD_SLS_GAMMA_EVIDENCE
+    target_story: event-schema-governance
 
 api_routes:
   - method: POST
-    path: /v1/ops/events
+    path: /ops/events
     operation: ReportEventBatch
     actor: persona_or_device
+    request_fields: [events]
+    response_fields: [acceptedCount, duplicateBatch]
     application:
       kind: command
       facet: EventRecordCommandFacade
@@ -25,8 +25,7 @@ api_routes:
     authorization:
       principal: public
       ownership_policy: authenticated_persona_or_derived_device_actor
-    commercial:
-      status: ready
+    commercial: { status: ready }
     reliability:
       timeout_ms: 1500
       cancellation: supported
@@ -35,8 +34,9 @@ api_routes:
       idempotency: required
     error_codes:
       - OPS.USER.unauthorized
-      - OPS.USER.invalid_argument
-      - OPS.SYSTEM.storage_write_failed
+      - OPS.USER.event_batch_invalid
+      - OPS.USER.idempotency_key_invalid
+      - OPS.SYSTEM.logstore_unavailable
     privacy:
       request_classification: SENSITIVE
       response_classification: PUBLIC
@@ -45,10 +45,8 @@ api_routes:
       metric: ops_event_batch_report
       trace: true
       attributes: [actor_dimension, event_count, outcome]
-    slo:
-      latency_p95_ms: 800
-      availability_percent: 99.9
-    description: 统一事件批量写入；服务端只接受已验证主体，并从主体派生匿名 actor hash。
+    slo: { latency_p95_ms: 800, availability_percent: 99.9 }
+    description: 已验证 persona/device actor 的产品事件与异常单轨入口；严格目录校验并同步等待 SLS ACK。
     security:
       auth_mode: required
       principal: owner
@@ -56,67 +54,122 @@ api_routes:
       anonymous_policy: deny
       visibility: private
 
+  - method: POST
+    path: /ops/startup-events
+    operation: ReportStartupEventBatch
+    actor: device
+    application:
+      kind: command
+      facet: StartupTelemetryCommandFacet
+      method: appendStartupBatch
+      append_sink: EventRecord
+      mutation_target: EventRecord
+      invariant_target: EventRecord
+    authorization:
+      principal: public
+      ownership_policy: restricted_anonymous_startup_proof
+    commercial: { status: ready }
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - OPS.USER.startup_event_invalid
+      - OPS.SYSTEM.startup_telemetry_unavailable
+    privacy:
+      request_classification: SENSITIVE
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: ops_startup_event_batch_report
+      trace: true
+      attributes: [phase, platform, runtime_env, outcome]
+    slo: { latency_p95_ms: 800, availability_percent: 99.9 }
+    description: 唯一匿名 Ops 入口；只接收固定阶段、脱敏字段与 startup proof，禁止产品或身份字段。
+    security:
+      auth_mode: optional
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: allow
+      visibility: public
+
   - method: GET
-    path: /v1/ops/events/summary
+    path: /ops/events/summary
     operation: GetEventSummary
     actor: account
+    query_params: [logType, eventType, pageName, appVersion, networkClass, errorCode, from, to]
     application:
       kind: query
       facet: EventAnalyticsQueryFacade
       method: getSummary
       reader: EventSummaryReader
       slice: EventSummarySlice
-    description: 统一事件聚合摘要
+    authorization:
+      principal: account
+      permissions: [ops.telemetry.read]
+      ownership_policy: ops_telemetry_reader
+    error_codes: [OPS.USER.query_window_invalid, OPS.SYSTEM.logstore_unavailable]
+    description: 只读闭合小时 SLS 聚合；响应声明 source、freshness 与实际窗口。
+    security:
+      auth_mode: required
+      principal: admin
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: GET
-    path: /v1/ops/events/drilldown
+    path: /ops/events/drilldown
     operation: GetEventDrilldown
     actor: account
+    query_params: [logType, eventType, pageName, appVersion, networkClass, errorCode, sessionId, from, to, limit]
     application:
       kind: query
       facet: EventAnalyticsQueryFacade
       method: getDrilldown
       reader: EventDrilldownReader
       slice: EventDrilldownSlice
-    description: 统一事件下钻明细
+    authorization:
+      principal: account
+      permissions: [ops.telemetry.drilldown]
+      ownership_policy: audited_ops_telemetry_drilldown
+    error_codes: [OPS.USER.query_window_invalid, OPS.USER.event_drilldown_forbidden, OPS.SYSTEM.logstore_unavailable]
+    description: 三天内原始明细受限查询；时间范围必填、最多 100 条，sessionId 默认掩码。
+    security:
+      auth_mode: required
+      principal: admin
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
 consumers:
   - name: app
-    capabilities: [report_event_batch]
+    capabilities: [report_event_batch, report_startup_event_batch]
   - name: platform-ops
     capabilities: [read_event_summary, read_event_drilldown]
-  - name: recommendation-engine
-    capabilities: [consume_event_summary]
-  - name: assistant-service
-    capabilities: [consume_event_summary]
 
 contract_test:
   mock_strategy:
     app_side:
       scenarios:
-        - name: report_event_batch
-          route: POST /v1/ops/events
-          assertions: [status_200]
-
+        - { name: report_event_batch, route: POST /ops/events, assertions: [status_200, exact_ack] }
+        - { name: report_startup_event_batch, route: POST /ops/startup-events, assertions: [status_200, exact_ack] }
     service_side:
-      description: 使用真实测试数据库，不 mock 存储层
+      description: 使用可控 SLS 协议服务器与 Redis 幂等状态，不以 Mongo 充当日志 fallback。
       real_engines:
-        mongodb: testcontainers (mongo:7)
+        sls_protocol: httptest_server
         redis: miniredis/v2
-      spy_targets: [event_publisher]
-      data_management:
-        seed: fixture 工厂预制到真实 MongoDB
-        cleanup: "db.event_records.DeleteMany(ctx, bson.D{})"
       scenarios:
         - name: report_batch_idempotent
-          command: ReportEventBatch x2 (same eventId)
-          seed: []
-          assertions:
-            - "db.event_records.CountDocuments({eventId}) → 1"
-            - "eventSpy.AssertPublished('EventBatchReported', {eventId, eventType, eventName})"
-        - name: get_event_summary_by_page
-          command: GetEventSummary
-          seed: [fixture.NewEventRecord(eventName='page_open', pageName='home')]
-          assertions:
-            - "summary.totalCount -> 1"
-            - "summary.dimensions.pageName['home'] -> 1"
+          command: ReportEventBatch x2 with same canonical body and Idempotency-Key
+          assertions: [one_sls_batch, duplicate_batch_ack]
+        - name: report_batch_strict_validation
+          command: ReportEventBatch with unknown event or extension
+          assertions: [whole_batch_rejected, zero_sls_writes]
+        - name: report_startup_batch_anonymous_restricted
+          command: ReportStartupEventBatch with product identity fields
+          assertions: [status_400, zero_product_log_writes, unauthenticated_ops_events_remains_401]
+        - name: query_facade_masks_session
+          command: GetEventDrilldown without elevated identity scope
+          assertions: [source_sls_raw, session_id_masked, max_100_items]

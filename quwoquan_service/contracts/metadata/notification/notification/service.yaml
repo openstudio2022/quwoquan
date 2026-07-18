@@ -1,4 +1,3 @@
-version: 1
 
 response_list_key: items
 
@@ -14,7 +13,8 @@ service:
 
 api_routes:
   - method: POST
-    path: /internal/v1/app-messages
+    path: /internal/app-messages
+
     operation: CreateAppMessage
     actor: none
     application:
@@ -62,7 +62,8 @@ api_routes:
       visibility: internal
 
   - method: GET
-    path: /v1/app-messages
+    path: /app-messages
+
     operation: ListAppMessages
     actor: account
     application:
@@ -81,7 +82,7 @@ api_routes:
       cancellation: supported
       retry_mode: idempotent
       max_attempts: 2
-      idempotency: none
+      idempotency: optional
     error_codes:
       - NOTIFICATION.USER.unauthorized
       - NOTIFICATION.USER.invalid_argument
@@ -115,7 +116,8 @@ api_routes:
       visibility: private
 
   - method: GET
-    path: /v1/app-messages/{messageId}
+    path: /app-messages/{messageId}
+
     operation: GetAppMessage
     actor: account
     application:
@@ -134,7 +136,7 @@ api_routes:
       cancellation: supported
       retry_mode: idempotent
       max_attempts: 2
-      idempotency: none
+      idempotency: optional
     error_codes:
       - NOTIFICATION.USER.unauthorized
       - NOTIFICATION.USER.invalid_argument
@@ -168,7 +170,8 @@ api_routes:
       visibility: private
 
   - method: POST
-    path: /v1/app-messages/{messageId}/ack
+    path: /app-messages/{messageId}/ack
+
     operation: AckAppMessage
     actor: account
     application:
@@ -186,8 +189,8 @@ api_routes:
     reliability:
       timeout_ms: 1500
       cancellation: supported
-      retry_mode: idempotent
-      max_attempts: 2
+      retry_mode: none
+      max_attempts: 1
       idempotency: none
     error_codes:
       - NOTIFICATION.USER.unauthorized
@@ -220,7 +223,8 @@ api_routes:
       visibility: private
 
   - method: POST
-    path: /v1/app-messages/{messageId}/read
+    path: /app-messages/{messageId}/read
+
     operation: ReadAppMessage
     actor: account
     application:
@@ -238,8 +242,8 @@ api_routes:
     reliability:
       timeout_ms: 1500
       cancellation: supported
-      retry_mode: idempotent
-      max_attempts: 2
+      retry_mode: none
+      max_attempts: 1
       idempotency: none
     error_codes:
       - NOTIFICATION.USER.unauthorized
@@ -272,7 +276,8 @@ api_routes:
       visibility: private
 
   - method: GET
-    path: /v1/app-messages/unread-count
+    path: /app-messages/unread-count
+
     operation: GetAppMessageUnreadCount
     actor: account
     application:
@@ -336,11 +341,11 @@ contract_test:
       scenarios:
         - name: app_message_inbox_lifecycle
           routes:
-            - GET /v1/app-messages
-            - GET /v1/app-messages/{messageId}
-            - POST /v1/app-messages/{messageId}/ack
-            - POST /v1/app-messages/{messageId}/read
-            - GET /v1/app-messages/unread-count
+            - GET /app-messages
+            - GET /app-messages/{messageId}
+            - POST /app-messages/{messageId}/ack
+            - POST /app-messages/{messageId}/read
+            - GET /app-messages/unread-count
           assertions: [strict_typed_decode, account_isolation, ack_is_not_read, unread_count_converges]
     service_side:
       description: 使用真实 MongoDB，aggregate 与 delivery outbox 在同一事务中提交。

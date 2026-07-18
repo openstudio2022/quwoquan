@@ -172,7 +172,15 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
   Future<ContentCommentCommandResult> deleteComment(
     DeleteContentCommentCommand command,
   ) async {
-    final current = _requireVersion(command.commentId, command.version);
+    final current = _required(command.commentId);
+    if (current.status == ContentCommentStatus.deleted) {
+      return ContentCommentCommandResult(
+        id: current.id,
+        version: current.version,
+        status: current.status,
+        replayed: true,
+      );
+    }
     final now = DateTime.now().toUtc();
     final updated = current.copyWith(
       version: current.version + 1,
@@ -202,7 +210,15 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
   Future<ContentCommentCommandResult> bindAttachments(
     BindContentCommentAttachmentsCommand command,
   ) async {
-    final current = _requireVersion(command.commentId, command.version);
+    final current = _required(command.commentId);
+    if (_sameStrings(current.attachmentMediaIds, command.attachmentMediaIds)) {
+      return ContentCommentCommandResult(
+        id: current.id,
+        version: current.version,
+        status: current.status,
+        replayed: true,
+      );
+    }
     final updated = current.copyWith(
       version: current.version + 1,
       attachmentMediaIds: command.attachmentMediaIds,
@@ -232,7 +248,15 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
     ChangeContentCommentPinCommand command,
     bool pinned,
   ) async {
-    final current = _requireVersion(command.commentId, command.version);
+    final current = _required(command.commentId);
+    if (current.isPinned == pinned) {
+      return ContentCommentCommandResult(
+        id: current.id,
+        version: current.version,
+        status: current.status,
+        replayed: true,
+      );
+    }
     final updated = current.copyWith(
       version: current.version + 1,
       isPinned: pinned,
@@ -301,11 +325,18 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
     return null;
   }
 
-  ContentCommentListItem _requireVersion(String id, int version) {
+  ContentCommentListItem _required(String id) {
     final item = _find(id);
     if (item == null) throw StateError('Comment not found');
-    if (item.version != version) throw StateError('Comment version conflict');
     return item;
+  }
+
+  bool _sameStrings(List<String> left, List<String> right) {
+    if (left.length != right.length) return false;
+    for (var index = 0; index < left.length; index++) {
+      if (left[index] != right[index]) return false;
+    }
+    return true;
   }
 
   void _replace(ContentCommentListItem updated) {
@@ -352,7 +383,7 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
     Map<String, dynamic> raw,
     String actorId,
   ) {
-    final id = (raw['commentId'] ?? raw['_id']).toString();
+    final id = raw['commentId'].toString();
     final authorId = raw['authorId'].toString();
     final createdAt = DateTime.parse(raw['createdAt'].toString()).toUtc();
     return ContentCommentListItem(

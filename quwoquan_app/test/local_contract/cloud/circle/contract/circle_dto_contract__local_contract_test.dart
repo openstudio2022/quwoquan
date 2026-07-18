@@ -58,7 +58,7 @@ void main() {
       expect(restored.updatedAt, original.updatedAt);
     });
 
-    test('fromMap 支持 _id alias 作为 id', () {
+    test('fromMap 拒绝 _id alias，只认 id', () {
       final dto = CircleDto.fromMap({
         '_id': 'mongo_id',
         'name': 'Test',
@@ -66,10 +66,10 @@ void main() {
         'createdAt': '2025-01-01T00:00:00.000Z',
         'updatedAt': '2025-01-01T00:00:00.000Z',
       });
-      expect(dto.id, 'mongo_id');
+      expect(dto.id, '');
     });
 
-    test('fromMap 支持 cover alias 作为 coverUrl', () {
+    test('fromMap 拒绝 cover alias，只认 coverUrl', () {
       final dto = CircleDto.fromMap({
         'id': 'c1',
         'name': 'Test',
@@ -78,7 +78,7 @@ void main() {
         'createdAt': '2025-01-01T00:00:00.000Z',
         'updatedAt': '2025-01-01T00:00:00.000Z',
       });
-      expect(dto.coverUrl, 'https://example.com/img.jpg');
+      expect(dto.coverUrl, isNull);
     });
 
     test('copyWith 正确修改部分字段', () {
@@ -97,7 +97,7 @@ void main() {
     });
   });
 
-  group('CircleDto — 兼容性契约', () {
+  group('CircleDto — 单轨契约', () {
     test('toMap round-trip 稳定（nullable 字段缺失不输出）', () {
       final dto = CircleDto(
         id: 'c1',
@@ -246,19 +246,27 @@ void main() {
       expect(restored.contribution, member.contribution);
     });
 
-    test('fromMap 支持 _id alias', () {
-      final member = CircleMemberDto.fromMap({
+    test('fromMap 拒绝 _id alias，只认 id', () {
+      final retired = CircleMemberDto.fromMap({
         '_id': 'mongo_member_id',
         'circleId': 'c1',
         'userId': 'u1',
         'role': 'member',
         'joinedAt': '2025-01-01T00:00:00.000Z',
       });
-      expect(member.id, 'mongo_member_id');
+      final canonical = CircleMemberDto.fromMap({
+        'id': 'member_id',
+        'circleId': 'c1',
+        'userId': 'u1',
+        'role': 'member',
+        'joinedAt': '2025-01-01T00:00:00.000Z',
+      });
+      expect(retired.id, isEmpty);
+      expect(canonical.id, 'member_id');
     });
   });
 
-  group('CircleMemberDto — 兼容性契约', () {
+  group('CircleMemberDto — 单轨契约', () {
     test('toMap 中 lastActiveAt 为空时不输出', () {
       final member = CircleMemberDto(
         id: 'm1',
@@ -313,7 +321,7 @@ void main() {
     });
   });
 
-  group('CircleSectionConfigDto — 兼容性契约', () {
+  group('CircleSectionConfigDto — 单轨契约', () {
     test('toMap 中 customTitle 为空时不输出', () {
       final config = CircleSectionConfigDto(
         sectionType: 'storage',
@@ -349,10 +357,10 @@ void main() {
   group('CircleStatsWireDto', () {
     test('fromMap 保留 raw 并可供 CircleStatsViewData 解析', () {
       final dto = CircleStatsWireDto.fromMap({
-        'totalMembers': 10,
-        'weeklyActive': 3,
-        'totalPosts': 20,
-        'totalLikes': 99,
+        'memberCount': 10,
+        'weeklyActiveCount': 3,
+        'postCount': 20,
+        'likeCount': 99,
       });
       final view = CircleStatsViewData.fromStatsWire(dto);
       expect(view.members, 10);
@@ -360,14 +368,30 @@ void main() {
       expect(view.posts, 20);
       expect(view.likes, 99);
     });
+
+    test('fromMap 拒绝 totalMembers/members alias，只认 memberCount', () {
+      final dto = CircleStatsWireDto.fromMap({
+        'totalMembers': 10,
+        'members': 8,
+        'weeklyActive': 3,
+        'totalPosts': 20,
+        'totalLikes': 99,
+      });
+      final view = CircleStatsViewData.fromStatsWire(dto);
+      expect(view.members, 0);
+      expect(view.weeklyActive, 0);
+      expect(view.posts, 0);
+      expect(view.likes, 0);
+    });
   });
 
   group('CircleMemberRosterItemDto', () {
     test('fromMap 解析 Mock 成员展示字段', () {
       final m = CircleMemberRosterItemDto.fromMap({
-        'id': 'u1',
-        'name': '张三',
-        'avatar': 'https://example.com/a.jpg',
+        'id': 'mem1',
+        'userId': 'u1',
+        'displayName': '张三',
+        'avatarUrl': 'https://example.com/a.jpg',
         'role': 'member',
         'joinedAt': '2024-01-15',
       }, circleId: 'c1');
@@ -375,6 +399,32 @@ void main() {
       expect(m.circleId, 'c1');
       expect(m.displayName, '张三');
       expect(m.avatarUrl, 'https://example.com/a.jpg');
+    });
+
+    test('fromMap 拒绝 name/avatar alias，只认 displayName/avatarUrl', () {
+      final m = CircleMemberRosterItemDto.fromMap({
+        'userId': 'u1',
+        'name': '张三',
+        'avatar': 'https://example.com/a.jpg',
+        'role': 'member',
+        'joinedAt': '2024-01-15',
+      }, circleId: 'c1');
+      expect(m.displayName, isNull);
+      expect(m.avatarUrl, isNull);
+    });
+
+    test('fromMap 拒绝 worksCount/fansCount/likesCount alias，只认 *Label', () {
+      final m = CircleMemberRosterItemDto.fromMap({
+        'userId': 'u1',
+        'worksCount': 3,
+        'fansCount': 4,
+        'likesCount': 5,
+        'role': 'member',
+        'joinedAt': '2024-01-15',
+      }, circleId: 'c1');
+      expect(m.worksCountLabel, isNull);
+      expect(m.fansCountLabel, isNull);
+      expect(m.likesCountLabel, isNull);
     });
   });
 }

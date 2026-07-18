@@ -37,7 +37,7 @@ func (c *Client) ListMessages(ctx context.Context, conversationID string, before
 	if limit > 0 {
 		query.Set("limit", strconv.Itoa(limit))
 	}
-	endpoint := c.baseURL + "/v1/chat/conversations/" + url.PathEscape(strings.TrimSpace(conversationID)) + "/messages"
+	endpoint := c.baseURL + "/chat/conversations/" + url.PathEscape(strings.TrimSpace(conversationID)) + "/messages"
 	if encoded := query.Encode(); encoded != "" {
 		endpoint += "?" + encoded
 	}
@@ -70,7 +70,7 @@ func (c *Client) ListMembers(ctx context.Context, conversationID string, limit i
 	if limit > 0 {
 		query.Set("limit", strconv.Itoa(limit))
 	}
-	endpoint := c.baseURL + "/v1/chat/conversations/" + url.PathEscape(strings.TrimSpace(conversationID)) + "/members"
+	endpoint := c.baseURL + "/chat/conversations/" + url.PathEscape(strings.TrimSpace(conversationID)) + "/members"
 	if encoded := query.Encode(); encoded != "" {
 		endpoint += "?" + encoded
 	}
@@ -102,7 +102,7 @@ func (c *Client) SendMessage(ctx context.Context, req application.ChatGroundingS
 		"clientMsgId":        req.ClientMsgID,
 		"senderSubAccountId": req.SenderID,
 	}
-	endpoint := c.baseURL + "/v1/chat/conversations/" + url.PathEscape(strings.TrimSpace(req.ConversationID)) + "/messages"
+	endpoint := c.baseURL + "/chat/conversations/" + url.PathEscape(strings.TrimSpace(req.ConversationID)) + "/messages"
 	return c.doJSON(ctx, http.MethodPost, endpoint, body, nil, req.SenderID)
 }
 

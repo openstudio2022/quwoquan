@@ -268,7 +268,7 @@
   - 先演绎入口理解
   - 再演绎 skill 级推进
   - 最后演绎 aggregation 与成答组织
-- 过程区严禁暴露 `query`、`queryVariants`、`freshnessHoursMax`、`provider`、`contractVersion`、`assistant_turn_v4`、tool args 等内部字段。
+- 过程区严禁暴露 `query`、`queryVariants`、`freshnessHoursMax`、`provider`、`schema`、`assistant_turn_v4`、tool args 等内部字段。
 - 无真实过程数据时，UI 不得显示 seeded 假阶段或空壳过程抽屉。
 - 最终成答只能来自 `answer_delta` 与终态 `assistant_turn/runArtifacts`，不得从过程文本、thinking 文本或 repair 占位文本回填。
 

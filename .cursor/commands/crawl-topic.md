@@ -8,7 +8,7 @@ description: quwoquan_data 单 execution 局部诊断与恢复入口
 ## 目标
 
 诊断一个 `.qwq_output/data/tasks/<executionId>/` 工作包，并通过原始
-`task geo-homepages` 命令 resume。禁止创建 stage runner、退役的双层运行身份、手写阶段产物
+`task execute` 命令 resume。禁止创建 stage runner、退役的双层运行身份、手写阶段产物
 或并行状态根。
 
 ## 自然语言等价触发
@@ -32,7 +32,7 @@ description: quwoquan_data 单 execution 局部诊断与恢复入口
 使用创建该 execution 的同一门面与相同参数再次执行 `--stage run`。新尝试示例：
 
 ```bash
-python3 quwoquan_data/scripts/cli.py task geo-homepages \
+python3 quwoquan_data/scripts/cli.py task execute \
   --execution-id YYYYMMDD--travel-homepage-coverage--cn-zhejiang--canary-002 \
   --retry-of YYYYMMDD--travel-homepage-coverage--cn-zhejiang--canary-001 \
   --milestone canary \

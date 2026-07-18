@@ -1,4 +1,3 @@
-version: 1
 read_model: ActivePersonaContextWire
 
 description: |
@@ -19,66 +18,54 @@ client_projection:
       dart_type: String
       nullable: false
       source: ownerUserId
-      aliases: [ownerUserId, userId]
       default: "''"
-      skip_empty_string_aliases: true
     - name: subAccountId
       dart_type: String
       nullable: false
       source: subAccountId
-      aliases: [subAccountId]
       default: "''"
     - name: subjectType
       dart_type: String
       nullable: false
       source: subjectType
-      aliases: [subjectType]
       default: "''"
     - name: displayName
       dart_type: String
       nullable: false
       source: displayName
-      aliases: [displayName, nickname]
       default: "''"
     - name: avatarUrl
       dart_type: String
       nullable: false
       source: avatarUrl
-      aliases: [avatarUrl, avatar, avatarUrlSnapshot]
       default: "''"
     - name: avatarVersion
       dart_type: int
       nullable: false
       source: avatarVersion
-      aliases: [avatarVersion]
       default: "0"
     - name: personaContextVersion
       dart_type: String
       nullable: false
       source: personaContextVersion
-      aliases: [personaContextVersion, contextVersion]
       default: "''"
     - name: personaSnapshotVersion
       dart_type: int
       nullable: false
       source: personaSnapshotVersion
-      aliases: [personaSnapshotVersion]
       default: "1"
     - name: sourceSurfaceId
       dart_type: String
       nullable: false
       source: sourceSurfaceId
-      aliases: [sourceSurfaceId]
       default: "''"
     - name: explicitOverride
       dart_type: bool
       nullable: false
       source: explicitOverride
-      aliases: [explicitOverride]
       default: "false"
     - name: isPrimary
       dart_type: bool
       nullable: false
       source: isPrimary
-      aliases: [isPrimary]
       default: "false"

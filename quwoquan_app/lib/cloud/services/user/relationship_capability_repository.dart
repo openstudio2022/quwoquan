@@ -9,7 +9,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/user/user_api_metadata.g.da
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_request_page_ids.g.dart';
 
 /// 关系能力位投影 DTO
-/// 对应 GET /v1/user/{userId}/relationship/capability
+/// 对应 GET /user/{userId}/relationship/capability
 /// 端侧消费方：用户主页动作矩阵、RTC 门禁、私信/打招呼入口
 class RelationshipCapabilityDto {
   RelationshipCapabilityDto({

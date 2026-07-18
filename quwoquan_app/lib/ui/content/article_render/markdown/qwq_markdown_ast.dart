@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 
-const String qwqRichMarkdownVersion = 'qwq-rich-md/1';
+const String qwqRichMarkdownVersion = 'qwq-rich-md';
 
 enum QwqMarkdownBlockKind {
   heading,
@@ -122,9 +122,7 @@ class QwqMarkdownFrontMatter {
   });
 
   factory QwqMarkdownFrontMatter.fromMap(Map<String, Object?> map) {
-    final coverAssetId = _stringValue(
-      map['cover_asset_id'] ?? map['coverAssetId'],
-    );
+    final coverAssetId = _stringValue(map['cover_asset_id']);
     final coverImage = _stringValue(map['coverImage']);
     return QwqMarkdownFrontMatter(
       title: _stringValue(map['title']),
@@ -137,9 +135,9 @@ class QwqMarkdownFrontMatter {
           ? coverImage
           : (coverAssetId.isNotEmpty ? 'asset://$coverAssetId' : ''),
       locationName: _stringValue(map['locationName']),
-      entityRefs: _stringListValue(map['entity_refs'] ?? map['entityRefs']),
-      tagRefs: _stringListValue(map['tag_refs'] ?? map['tagRefs']),
-      sourceUrls: _stringListValue(map['source_urls'] ?? map['sourceUrls']),
+      entityRefs: _stringListValue(map['entity_refs']),
+      tagRefs: _stringListValue(map['tag_refs']),
+      sourceUrls: _stringListValue(map['source_urls']),
       visibility: _stringValue(map['visibility']),
       assistantUsePolicy: _stringValue(map['assistantUsePolicy']),
       extra: Map<String, Object?>.fromEntries(
@@ -358,15 +356,11 @@ const Set<String> _knownFrontMatterKeys = <String>{
   'fontPreset',
   'titleStyle',
   'cover_asset_id',
-  'coverAssetId',
   'coverImage',
   'locationName',
   'entity_refs',
-  'entityRefs',
   'tag_refs',
-  'tagRefs',
   'source_urls',
-  'sourceUrls',
   'visibility',
   'assistantUsePolicy',
 };

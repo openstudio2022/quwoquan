@@ -41,11 +41,15 @@ void main() {
 
     test('AuthApiPolicy 辅助判定一致', () {
       expect(
-        AuthApiPolicy.isRequired(AppCloudOperationIds.contentPostCreatePost),
+        AuthApiPolicy.isRequired(
+          AppCloudOperationIds.contentPostSubmitPostPublication,
+        ),
         isTrue,
       );
       expect(
-        AuthApiPolicy.isPublic(AppCloudOperationIds.contentPostCreatePost),
+        AuthApiPolicy.isPublic(
+          AppCloudOperationIds.contentPostSubmitPostPublication,
+        ),
         isFalse,
       );
       expect(

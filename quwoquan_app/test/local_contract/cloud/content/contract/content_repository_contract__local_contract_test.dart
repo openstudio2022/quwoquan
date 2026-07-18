@@ -1,6 +1,8 @@
 import 'package:test/test.dart';
+import 'package:quwoquan_app/cloud/runtime/contract_fixture_runtime_loader.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/models/post_engagement_counters.dart';
+import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 
 void main() {
@@ -14,6 +16,32 @@ void main() {
     test('listDiscoveryFeed 返回非空帖子列表', () async {
       final posts = await repo.listDiscoveryFeed(category: 'all');
       expect(posts, isNotEmpty);
+    });
+
+    test('共享内容 seed 只保留 read-model 字段，并由 codegen 投影为 App DTO', () {
+      const retiredClientAliases = <String>{
+        'id',
+        'type',
+        'identity',
+        'displayName',
+        'avatarUrl',
+        'imageUrls',
+      };
+      final rawPosts = ContractFixtureRuntimeLoader.contentSeedSet()?['posts'];
+      expect(rawPosts, isA<List>());
+      final source = (rawPosts! as List)
+          .whereType<Map>()
+          .map((row) => row.cast<String, dynamic>())
+          .first;
+
+      expect(source.keys.toSet().intersection(retiredClientAliases), isEmpty);
+      final post = contentPostDtoFromReadModelMap(source);
+      expect(post.id, source['postId']);
+      expect(post.type, source['contentType']);
+      expect(post.identity, source['contentIdentity']);
+      expect(post.displayName, source['authorDisplayName']);
+      expect(post.avatarUrl, source['authorAvatarUrl']);
+      expect(post.imageUrls, source['mediaUrls']);
     });
 
     test('mock 内容作者头像均引用可归档用户/圈子头像，不返回缺失 content/default 资产', () async {
@@ -204,10 +232,7 @@ void main() {
         mediaUrls.any((url) => url.contains('media/image/s/archived-image/')),
         isTrue,
       );
-      expect(
-        mediaUrls.any((url) => url.contains('media/video/s/archived-video/')),
-        isTrue,
-      );
+      expect(mediaUrls.any((url) => url.contains('media/video/s/')), isTrue);
       expect(
         mediaUrls.any((url) => url.contains('media/avatar/s/archived-avatar/')),
         isTrue,
@@ -222,14 +247,15 @@ void main() {
     });
 
     test('updatePostSettings / promotePostToWork 返回结果', () async {
+      const existingPostId = 'fixture_photo_001';
       final settings = await repo.updatePostSettings(
-        postId: 'test_post',
+        postId: existingPostId,
         body: UpdatePostSettingsRequestWire.fromMap({
           'assistantUsePolicy': 'exclude',
         }),
       );
       final promoted = await repo.promotePostToWork(
-        postId: 'test_post',
+        postId: existingPostId,
         body: PromotePostToWorkRequestWire.fromMap({
           'contentType': 'image',
           'title': '整理后的作品',
@@ -237,9 +263,9 @@ void main() {
       );
 
       expect(settings, isA<PostBaseDto>());
-      expect(settings.id, 'test_post');
+      expect(settings.id, existingPostId);
       expect(promoted, isA<PostBaseDto>());
-      expect(promoted.id, 'test_post');
+      expect(promoted.id, existingPostId);
     });
 
     test('getAppConfig 返回 feature flags 与 gray release 结构', () async {

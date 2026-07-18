@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import shutil
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
@@ -99,6 +100,8 @@ def build_release_media_manifest(
     post_refs: list[str],
     entity_refs: list[str],
     publish_root: Path | None = None,
+    object_root: Path | None = None,
+    media_root: Path | None = None,
     source_owner: str = "qwq_data",
 ) -> dict[str, Any]:
     """Build the exact CAS closure for one immutable release without writing it.
@@ -108,21 +111,23 @@ def build_release_media_manifest(
     builders use the same contract before their directory is atomically promoted.
     """
     canonical = publish_root or PUBLISH_ROOT
+    objects = object_root or canonical
+    media = media_root or canonical
     assets: dict[str, dict[str, Any]] = {}
     issues: list[str] = []
     for kind, refs in (("posts", post_refs), ("entities", entity_refs)):
         for ref in refs:
-            object_root = _object_root(canonical, kind, ref)
-            if not object_root.is_dir():
+            selected_object = _object_root(objects, kind, ref)
+            if not selected_object.is_dir():
                 issues.append(f"object missing: {kind}/{ref}")
                 continue
-            for row in _asset_rows(object_root):
+            for row in _asset_rows(selected_object):
                 object_key = str(row.get("objectKey") or "")
                 expected = str(row.get("sha256") or "")
                 if not is_cas_media_object_key(object_key):
                     issues.append(f"non-CAS objectKey: {kind}/{ref}:{object_key}")
                     continue
-                physical = canonical / object_key
+                physical = media / object_key
                 if not physical.is_file():
                     issues.append(f"CAS object missing: {object_key}")
                     continue
@@ -142,13 +147,47 @@ def build_release_media_manifest(
                     issues.append(f"CAS metadata collision: {object_key}")
                 assets[object_key] = normalized
     return {
-        "schemaVersion": "quwoquan_data.release_media_manifest/1",
+        "schema": "quwoquan_data.release_media_manifest",
         "releaseId": release_id,
         "sourceOwner": source_owner,
         "assets": [assets[key] for key in sorted(assets)],
         "issues": issues,
         "counts": {"assets": len(assets), "issues": len(issues)},
     }
+
+
+def copy_release_media_objects(
+    *,
+    manifest: Mapping[str, Any],
+    source_root: Path,
+    release_root: Path,
+) -> None:
+    """Copy the exact CAS closure into the immutable release payload."""
+    assets = manifest.get("assets")
+    if not isinstance(assets, list):
+        raise ValueError("release media manifest assets must be an array")
+    for index, row in enumerate(assets):
+        if not isinstance(row, Mapping):
+            raise ValueError(f"release media manifest assets[{index}] must be an object")
+        object_key = str(row.get("objectKey") or "")
+        expected = str(row.get("sha256") or "")
+        if not is_cas_media_object_key(object_key):
+            raise ValueError(f"invalid release media objectKey: {object_key}")
+        source = source_root / object_key
+        if not source.is_file() or sha256_file(source) != expected:
+            raise ValueError(f"release media source is missing or corrupt: {object_key}")
+        target = payload_file(release_root, object_key)
+        if target.is_file():
+            if sha256_file(target) != expected:
+                raise FileExistsError(f"immutable release media conflict: {target}")
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        temporary = target.with_name(target.name + ".copy-tmp")
+        shutil.copy2(source, temporary)
+        if sha256_file(temporary) != expected:
+            temporary.unlink(missing_ok=True)
+            raise ValueError(f"release media post-copy hash mismatch: {object_key}")
+        temporary.replace(target)
 
 
 def materialize_release_media(
@@ -160,7 +199,7 @@ def materialize_release_media(
     release_root: Path | None = None,
     source_owner: str = "qwq_data",
 ) -> dict[str, Any]:
-    """只消费已闭包 CAS refs；绝不改 canonical manifest、复制媒体或生成 CDN URL。"""
+    """Freeze the exact canonical CAS closure into one release payload."""
     release = (release_root or RELEASE_ROOT) / release_id
     manifest = build_release_media_manifest(
         release_id=release_id,
@@ -171,6 +210,11 @@ def materialize_release_media(
     )
     if manifest["issues"]:
         return manifest
+    copy_release_media_objects(
+        manifest=manifest,
+        source_root=publish_root or PUBLISH_ROOT,
+        release_root=release,
+    )
     target = payload_file(release, "media_manifest.json")
     payload = _json_bytes(manifest)
     if target.exists():

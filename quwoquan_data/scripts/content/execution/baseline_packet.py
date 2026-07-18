@@ -13,7 +13,7 @@ def load_baseline_packet(execution_id: str, packet_path: Path | None = None) -> 
     if not path.is_file():
         raise RuntimeError(
             f"missing baseline freeze packet: {path}. "
-            f"Run `qwq-data task geo-homepages --execution-id {execution_id} ...` first."
+            f"Run `qwq-data task execute --execution-id {execution_id} ...` first."
         )
     packet = read_json(path)
     if not isinstance(packet, dict):

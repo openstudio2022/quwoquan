@@ -21,7 +21,8 @@ schema/                   execution、post、publish 等契约
 ```
 
 这些目录只保存跨任务复用的规则，禁止写省份批次、日期、executionId 或运行输出路径。
-`content/travel/{homepage,article,image}` 各自拥有可复用 preset；video 当前仅保留 schema/smoke 契约，未达到放量条件，不放置伪生产 prompt 或 preset。
+`content/travel/{homepage,article,image,video}` 各自拥有可复用 preset、prompt 与强类型执行契约；
+视频正文由 Agent 产出结构化脚本，CLI 只做权利校验、确定性渲染与证据封装。
 
 ### 2. Execution 工作包（`.qwq_output`）
 
@@ -74,7 +75,7 @@ Data 离线流水线使用 `scripts/core/data_issue.py` 与
 
 ```bash
 # 任务门面
-python3 quwoquan_data/scripts/cli.py task geo-homepages --help
+python3 quwoquan_data/scripts/cli.py task execute --help
 
 # 环境与凭证
 python3 quwoquan_data/scripts/cli.py task preflight --json

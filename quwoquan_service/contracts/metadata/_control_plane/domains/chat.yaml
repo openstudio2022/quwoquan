@@ -1,4 +1,3 @@
-version: 1
 domain: chat
 display_name: Chat
 template_role: replica_ready

@@ -72,7 +72,7 @@ def drift_report(
                 alerts.append(f"drift: gate `{g}` firing rate rose {rate - base:.2f} (now {rate}, baseline {base})")
 
     return {
-        "schemaVersion": "quwoquan_data.content_drift_report/1",
+        "schema": "quwoquan_data.content_drift_report",
         "sampled": n,
         "firingRates": firing_rates,
         "alerts": alerts,
@@ -101,7 +101,7 @@ def promote_to_golden(
     golden_dir = Path(golden_dir)
     labels_path = golden_dir / "labels.json"
     labels = json.loads(labels_path.read_text(encoding="utf-8")) if labels_path.is_file() else {
-        "schemaVersion": "quwoquan_data.gate_goldenset/1",
+        "schema": "quwoquan_data.gate_goldenset",
         "items": [],
     }
     items = labels.setdefault("items", [])

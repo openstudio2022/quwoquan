@@ -23,11 +23,8 @@ import (
 func TestMongoPostFeedReaderDecodesCanonicalProjection(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	created := createPost(t, `{"contentType":"image","contentIdentity":"work","title":"Typed feed projection","mediaUrls":["https://example.com/typed.jpg"],"deviceInfo":{"width":1280,"height":720}}`)
-	createdID, _ := created["_id"].(string)
-	if createdID == "" {
-		createdID, _ = created["id"].(string)
-	}
+	created := submitPublishedPost(t, `{"contentType":"image","contentIdentity":"work","title":"Typed feed projection","deviceInfo":{"width":1280,"height":720}}`)
+	createdID, _ := created["postId"].(string)
 	if createdID == "" {
 		t.Fatalf("created post is missing id: %+v", created)
 	}
@@ -60,19 +57,19 @@ func TestGetFeedByType(t *testing.T) {
 
 	// Create mixed content types
 	for i := range 3 {
-		createPost(t, fmt.Sprintf(
-			`{"contentType":"image","title":"Photo post %d","mediaUrls":["https://example.com/img%d.jpg"],"deviceInfo":{"width":1280,"height":720}}`,
-			i, i,
+		submitPublishedPost(t, fmt.Sprintf(
+			`{"contentType":"image","title":"Photo post %d","deviceInfo":{"width":1280,"height":720}}`,
+			i,
 		))
 	}
 	for i := range 2 {
-		createPost(t, fmt.Sprintf(
-			`{"contentType":"video","title":"Video post %d","videoUrl":"https://example.com/vid%d.mp4"}`,
-			i, i,
+		submitPublishedPost(t, fmt.Sprintf(
+			`{"contentType":"video","title":"Video post %d"}`,
+			i,
 		))
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/content/feed?type=image&limit=10", nil)
+	req := httptest.NewRequest(http.MethodGet, "/content/feed?type=image&limit=10", nil)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 
@@ -118,13 +115,13 @@ func TestGetFeedByType(t *testing.T) {
 func TestGetFeedByIdentity(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	createPost(t, `{"contentType":"micro","contentIdentity":"moment","body":"点滴 1"}`)
-	createPost(t, `{"contentType":"micro","contentIdentity":"moment","body":"点滴 2"}`)
-	createPost(t, `{"contentType":"image","contentIdentity":"work","title":"作品 1","mediaUrls":["https://example.com/a.jpg"]}`)
+	submitPublishedPost(t, `{"contentType":"micro","contentIdentity":"moment","body":"点滴 1"}`)
+	submitPublishedPost(t, `{"contentType":"micro","contentIdentity":"moment","body":"点滴 2"}`)
+	submitPublishedPost(t, `{"contentType":"image","contentIdentity":"work","title":"作品 1"}`)
 
 	req := httptest.NewRequest(
 		http.MethodGet,
-		"/v1/content/feed?identity=moment&type=image&limit=10",
+		"/content/feed?identity=moment&type=image&limit=10",
 		nil,
 	)
 	rec := httptest.NewRecorder()
@@ -156,22 +153,18 @@ func TestGetFeedByIdentity(t *testing.T) {
 func TestGetFeedIdentityFilterCannotBeStarvedByNewerWorks(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	moment := createPost(t, `{"contentType":"micro","contentIdentity":"moment","body":"不能被较新作品饿死的点滴"}`)
-	momentID, _ := moment["_id"].(string)
-	if momentID == "" {
-		momentID, _ = moment["id"].(string)
-	}
+	moment := submitPublishedPost(t, `{"contentType":"micro","contentIdentity":"moment","body":"不能被较新作品饿死的点滴"}`)
+	momentID, _ := moment["postId"].(string)
 	for i := range 9 {
-		createPost(t, fmt.Sprintf(
-			`{"contentType":"image","contentIdentity":"work","title":"newer work %d","mediaUrls":["https://example.com/work-%d.jpg"]}`,
-			i,
+		submitPublishedPost(t, fmt.Sprintf(
+			`{"contentType":"image","contentIdentity":"work","title":"newer work %d"}`,
 			i,
 		))
 	}
 
 	req := httptest.NewRequest(
 		http.MethodGet,
-		"/v1/content/feed?identity=moment&type=image&limit=1",
+		"/content/feed?identity=moment&type=image&limit=1",
 		nil,
 	)
 	rec := httptest.NewRecorder()
@@ -188,7 +181,7 @@ func TestGetFeedIdentityFilterCannotBeStarvedByNewerWorks(t *testing.T) {
 	if len(page.Items) != 1 {
 		t.Fatalf("expected the older moment after storage-side identity filtering, got %+v", page.Items)
 	}
-	if page.Items[0]["id"] != momentID {
+	if page.Items[0]["postId"] != momentID {
 		t.Fatalf("expected moment %q, got %+v", momentID, page.Items[0])
 	}
 }
@@ -200,18 +193,15 @@ func TestGetFeedExcludesPrivatePosts(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
 	// Create one public and one private moment
-	pub := createPost(t, `{"contentType":"micro","body":"Public moment","visibility":"public"}`)
-	priv := createPost(t, `{"contentType":"micro","body":"Private moment","visibility":"private"}`)
+	pub := submitPublishedPost(t, `{"contentType":"micro","body":"Public moment","visibility":"public"}`)
+	priv := submitPublishedPost(t, `{"contentType":"micro","body":"Private moment","visibility":"private"}`)
 
-	privateID, _ := priv["_id"].(string)
-	if privateID == "" {
-		privateID, _ = priv["id"].(string)
-	}
+	privateID, _ := priv["postId"].(string)
 	if privateID == "" {
 		t.Fatal("private post missing id")
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/content/feed?type=moment&limit=20", nil)
+	req := httptest.NewRequest(http.MethodGet, "/content/feed?type=moment&limit=20", nil)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 
@@ -225,10 +215,7 @@ func TestGetFeedExcludesPrivatePosts(t *testing.T) {
 		t.Fatalf("decode response: %v", err)
 	}
 	for _, item := range page.Items {
-		id, _ := item["id"].(string)
-		if id == "" {
-			id, _ = item["_id"].(string)
-		}
+		id, _ := item["postId"].(string)
 		if id == privateID {
 			t.Errorf("private post %q must not appear in discovery feed", privateID)
 		}
@@ -245,13 +232,13 @@ func TestGetFeedCursorPagination(t *testing.T) {
 
 	// Create enough posts for two pages
 	for i := range 6 {
-		createPost(t, fmt.Sprintf(
-			`{"contentType":"image","title":"Pager post %d","body":"content %d","mediaUrls":["https://example.com/img%d.jpg"]}`, i, i, i,
+		submitPublishedPost(t, fmt.Sprintf(
+			`{"contentType":"image","title":"Pager post %d","body":"content %d"}`, i, i,
 		))
 	}
 
 	// First page: limit=3
-	req1 := httptest.NewRequest(http.MethodGet, "/v1/content/feed?type=image&limit=3", nil)
+	req1 := httptest.NewRequest(http.MethodGet, "/content/feed?type=image&limit=3", nil)
 	rec1 := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec1, req1)
 
@@ -272,7 +259,7 @@ func TestGetFeedCursorPagination(t *testing.T) {
 	// Collect first page IDs
 	page1IDs := map[any]bool{}
 	for _, item := range page1.Items {
-		page1IDs[item["id"]] = true
+		page1IDs[item["postId"]] = true
 	}
 
 	// Second page using cursor
@@ -283,7 +270,7 @@ func TestGetFeedCursorPagination(t *testing.T) {
 
 	req2 := httptest.NewRequest(
 		http.MethodGet,
-		"/v1/content/feed?type=image&limit=3&cursor="+page1.NextCursor, nil,
+		"/content/feed?type=image&limit=3&cursor="+page1.NextCursor, nil,
 	)
 	rec2 := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec2, req2)
@@ -300,8 +287,8 @@ func TestGetFeedCursorPagination(t *testing.T) {
 
 	// No overlap between pages
 	for _, item := range page2.Items {
-		if page1IDs[item["id"]] {
-			t.Errorf("page 2 item %v also found on page 1 — cursor pagination is broken", item["id"])
+		if page1IDs[item["postId"]] {
+			t.Errorf("page 2 item %v also found on page 1 — cursor pagination is broken", item["postId"])
 		}
 	}
 }
@@ -316,12 +303,12 @@ func TestGetFeedRecommendSortWithCursor(t *testing.T) {
 	// with 4 distinct authors (maxAuthorPerFeed=3) so rerank yields 12 items for cursor.
 	for i := range 12 {
 		authorID := fmt.Sprintf("user_rec_%d", i%4)
-		createPostWithAuthor(t, authorID, fmt.Sprintf(
-			`{"contentType":"image","title":"Recommend Pager %d","body":"content %d","mediaUrls":["https://example.com/img%d.jpg"]}`, i, i, i,
+		submitPublishedPostWithAuthor(t, authorID, fmt.Sprintf(
+			`{"contentType":"image","title":"Recommend Pager %d","body":"content %d"}`, i, i,
 		))
 	}
 
-	req1 := httptest.NewRequest(http.MethodGet, "/v1/content/feed?sort=recommend&limit=4", nil)
+	req1 := httptest.NewRequest(http.MethodGet, "/content/feed?sort=recommend&limit=4", nil)
 	rec1 := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec1, req1)
 	if rec1.Code != http.StatusOK {
@@ -347,12 +334,12 @@ func TestGetFeedRecommendSortWithCursor(t *testing.T) {
 
 	page1IDs := map[any]bool{}
 	for _, item := range page1.Items {
-		page1IDs[item["id"]] = true
+		page1IDs[item["postId"]] = true
 	}
 
 	req2 := httptest.NewRequest(
 		http.MethodGet,
-		"/v1/content/feed?sort=recommend&limit=4&cursor="+url.QueryEscape(page1.NextCursor),
+		"/content/feed?sort=recommend&limit=4&cursor="+url.QueryEscape(page1.NextCursor),
 		nil,
 	)
 	rec2 := httptest.NewRecorder()
@@ -367,8 +354,8 @@ func TestGetFeedRecommendSortWithCursor(t *testing.T) {
 		t.Fatalf("second page decode: %v", err)
 	}
 	for _, item := range page2.Items {
-		if page1IDs[item["id"]] {
-			t.Fatalf("page 2 item %v also found on page 1", item["id"])
+		if page1IDs[item["postId"]] {
+			t.Fatalf("page 2 item %v also found on page 1", item["postId"])
 		}
 	}
 }
@@ -383,12 +370,12 @@ func TestGetFeedFutureWindowChangesOnly(t *testing.T) {
 	// Use distinct authors so rerank (maxAuthorPerFeed=3) allows 4+ items for first page + cursor.
 	for i := range 12 {
 		authorID := fmt.Sprintf("user_fw_%d", i%4)
-		createPostWithAuthor(t, authorID, fmt.Sprintf(
-			`{"contentType":"image","title":"Future Window %d","body":"content %d","mediaUrls":["https://example.com/img%d.jpg"]}`, i, i, i,
+		submitPublishedPostWithAuthor(t, authorID, fmt.Sprintf(
+			`{"contentType":"image","title":"Future Window %d","body":"content %d"}`, i, i,
 		))
 	}
 
-	req1 := httptest.NewRequest(http.MethodGet, "/v1/content/feed?sort=recommend&limit=4", nil)
+	req1 := httptest.NewRequest(http.MethodGet, "/content/feed?sort=recommend&limit=4", nil)
 	req1.Header.Set("X-Client-User-Id", "user_fw_01")
 	req1.Header.Set("X-Client-Session-Id", "session_fw_01")
 	rec1 := httptest.NewRecorder()
@@ -409,7 +396,7 @@ func TestGetFeedFutureWindowChangesOnly(t *testing.T) {
 
 	req2 := httptest.NewRequest(
 		http.MethodGet,
-		"/v1/content/feed?sort=recommend&limit=4&cursor="+url.QueryEscape(page1.NextCursor),
+		"/content/feed?sort=recommend&limit=4&cursor="+url.QueryEscape(page1.NextCursor),
 		nil,
 	)
 	req2.Header.Set("X-Client-User-Id", "user_fw_01")
@@ -429,13 +416,13 @@ func TestGetFeedFutureWindowChangesOnly(t *testing.T) {
 		t.Fatal("page2 should contain items")
 	}
 
-	dislikeID, _ := page2.Items[0]["id"].(string)
+	dislikeID, _ := page2.Items[0]["postId"].(string)
 	if dislikeID == "" {
 		t.Fatal("page2 first item id should not be empty")
 	}
 	behaviorReq := httptest.NewRequest(
 		http.MethodPost,
-		"/v1/content/behaviors",
+		"/content/behaviors",
 		strings.NewReader(fmt.Sprintf(`{"events":[{"contentId":"%s","action":"dislike"}]}`, dislikeID)),
 	)
 	behaviorReq.Header.Set("Content-Type", "application/json")
@@ -449,7 +436,7 @@ func TestGetFeedFutureWindowChangesOnly(t *testing.T) {
 
 	req2After := httptest.NewRequest(
 		http.MethodGet,
-		"/v1/content/feed?sort=recommend&limit=4&cursor="+url.QueryEscape(page1.NextCursor),
+		"/content/feed?sort=recommend&limit=4&cursor="+url.QueryEscape(page1.NextCursor),
 		nil,
 	)
 	req2After.Header.Set("X-Client-User-Id", "user_fw_01")
@@ -466,7 +453,7 @@ func TestGetFeedFutureWindowChangesOnly(t *testing.T) {
 		t.Fatalf("page2 after decode: %v", err)
 	}
 	for _, item := range page2After.Items {
-		if item["id"] == dislikeID {
+		if item["postId"] == dislikeID {
 			t.Fatalf("disliked content %s should be filtered from future window", dislikeID)
 		}
 	}
@@ -482,13 +469,13 @@ func TestGetFeedFutureWindowFiltersHiddenAuthorAndContentType(t *testing.T) {
 			contentType = "video"
 		}
 		payload := fmt.Sprintf(
-			`{"contentType":%q,"title":"Hide Window %d","body":"content %d","mediaUrls":["https://example.com/img%d.jpg"],"videoUrl":"https://example.com/vid%d.mp4"}`,
-			contentType, i, i, i, i,
+			`{"contentType":%q,"title":"Hide Window %d","body":"content %d"}`,
+			contentType, i, i,
 		)
-		createPostWithAuthor(t, authorID, payload)
+		submitPublishedPostWithAuthor(t, authorID, payload)
 	}
 
-	req1 := httptest.NewRequest(http.MethodGet, "/v1/content/feed?sort=recommend&limit=5", nil)
+	req1 := httptest.NewRequest(http.MethodGet, "/content/feed?sort=recommend&limit=5", nil)
 	req1.Header.Set("X-Client-User-Id", "user_hide_01")
 	req1.Header.Set("X-Client-Session-Id", "session_hide_01")
 	rec1 := httptest.NewRecorder()
@@ -509,7 +496,7 @@ func TestGetFeedFutureWindowFiltersHiddenAuthorAndContentType(t *testing.T) {
 
 	req2 := httptest.NewRequest(
 		http.MethodGet,
-		"/v1/content/feed?sort=recommend&limit=8&cursor="+url.QueryEscape(page1.NextCursor),
+		"/content/feed?sort=recommend&limit=8&cursor="+url.QueryEscape(page1.NextCursor),
 		nil,
 	)
 	req2.Header.Set("X-Client-User-Id", "user_hide_01")
@@ -530,13 +517,13 @@ func TestGetFeedFutureWindowFiltersHiddenAuthorAndContentType(t *testing.T) {
 	}
 
 	hideAuthorItem := page2.Items[0]
-	hideAuthorID, _ := hideAuthorItem["id"].(string)
+	hideAuthorID, _ := hideAuthorItem["postId"].(string)
 	hiddenAuthor, _ := hideAuthorItem["authorId"].(string)
 	if hideAuthorID == "" || hiddenAuthor == "" {
 		t.Fatalf("page2 first item should include id/authorId: %+v", hideAuthorItem)
 	}
 	hideTypeItem := page2.Items[1]
-	hideTypeID, _ := hideTypeItem["id"].(string)
+	hideTypeID, _ := hideTypeItem["postId"].(string)
 	hiddenType, _ := hideTypeItem["contentType"].(string)
 	if hiddenType == "" {
 		hiddenType, _ = hideTypeItem["type"].(string)
@@ -547,7 +534,7 @@ func TestGetFeedFutureWindowFiltersHiddenAuthorAndContentType(t *testing.T) {
 
 	behaviorReq := httptest.NewRequest(
 		http.MethodPost,
-		"/v1/content/behaviors",
+		"/content/behaviors",
 		strings.NewReader(fmt.Sprintf(
 			`{"events":[{"contentId":%q,"action":"hide_author","authorId":%q},{"contentId":%q,"action":"hide_content_type","contentType":%q}]}`,
 			hideAuthorID,
@@ -567,7 +554,7 @@ func TestGetFeedFutureWindowFiltersHiddenAuthorAndContentType(t *testing.T) {
 
 	reqAfter := httptest.NewRequest(
 		http.MethodGet,
-		"/v1/content/feed?sort=recommend&limit=8&cursor="+url.QueryEscape(page1.NextCursor),
+		"/content/feed?sort=recommend&limit=8&cursor="+url.QueryEscape(page1.NextCursor),
 		nil,
 	)
 	reqAfter.Header.Set("X-Client-User-Id", "user_hide_01")
@@ -602,8 +589,8 @@ func TestFeedIssuesServerFeedRequestID(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
 	for i := range 10 {
-		createPost(t, fmt.Sprintf(
-			`{"contentType":"image","title":"FRQ post %d","body":"content %d","mediaUrls":["https://example.com/frq%d.jpg"]}`, i, i, i,
+		submitPublishedPost(t, fmt.Sprintf(
+			`{"contentType":"image","title":"FRQ post %d","body":"content %d"}`, i, i,
 		))
 	}
 
@@ -616,7 +603,7 @@ func TestFeedIssuesServerFeedRequestID(t *testing.T) {
 	}
 
 	// First load: no echoed id — server must mint a fresh frq_ id and attach versions.
-	req1 := httptest.NewRequest(http.MethodGet, "/v1/content/feed?sort=recommend&limit=5", nil)
+	req1 := httptest.NewRequest(http.MethodGet, "/content/feed?sort=recommend&limit=5", nil)
 	rec1 := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec1, req1)
 	if rec1.Code != http.StatusOK {
@@ -635,7 +622,7 @@ func TestFeedIssuesServerFeedRequestID(t *testing.T) {
 	}
 
 	// Next page: echo the feedRequestId — server must keep the same attribution id.
-	nextURL := fmt.Sprintf("/v1/content/feed?sort=recommend&limit=5&feedRequestId=%s", url.QueryEscape(page1.FeedRequestID))
+	nextURL := fmt.Sprintf("/content/feed?sort=recommend&limit=5&feedRequestId=%s", url.QueryEscape(page1.FeedRequestID))
 	if page1.NextCursor != "" {
 		nextURL += "&cursor=" + url.QueryEscape(page1.NextCursor)
 	}
@@ -655,17 +642,17 @@ func TestFeedIssuesServerFeedRequestID(t *testing.T) {
 	}
 }
 
-// TestListFeedWithPagination creates image posts then verifies GET /v1/content/feed
+// TestListFeedWithPagination creates image posts then verifies GET /content/feed
 // returns 200 with items array, and that a second page call also succeeds.
 func TestListFeedWithPagination(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
 	for i := range 4 {
-		payload := fmt.Sprintf(`{"contentType":"image","title":"Feed post %d","body":"content %d","mediaUrls":["https://example.com/%d.jpg"]}`, i, i, i)
-		createPost(t, payload)
+		payload := fmt.Sprintf(`{"contentType":"image","title":"Feed post %d","body":"content %d"}`, i, i)
+		submitPublishedPost(t, payload)
 	}
 
-	req1 := httptest.NewRequest(http.MethodGet, "/v1/content/feed?type=image&limit=3", nil)
+	req1 := httptest.NewRequest(http.MethodGet, "/content/feed?type=image&limit=3", nil)
 	rec1 := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec1, req1)
 
@@ -687,7 +674,7 @@ func TestListFeedWithPagination(t *testing.T) {
 // TestGetFeedFiltersBlockedUser verifies recall-post filtering can exclude
 // blocked authors via request header.
 func TestGetFeedFiltersBlockedUser(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/v1/content/feed?limit=10", nil)
+	req := httptest.NewRequest(http.MethodGet, "/content/feed?limit=10", nil)
 	req.Header.Set("X-Blocked-User-Ids", "user_1002")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
@@ -703,7 +690,7 @@ func TestGetFeedFiltersBlockedUser(t *testing.T) {
 	}
 	for _, item := range page.Items {
 		if item["authorId"] == "user_1002" {
-			t.Fatalf("blocked author should be filtered, got item=%v", item["id"])
+			t.Fatalf("blocked author should be filtered, got item=%v", item["postId"])
 		}
 	}
 }
@@ -711,7 +698,7 @@ func TestGetFeedFiltersBlockedUser(t *testing.T) {
 // TestGetFeedFiltersBlockedKeyword verifies recall-post filtering can exclude
 // content whose title/body/tags hit blocked keywords.
 func TestGetFeedFiltersBlockedKeyword(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/v1/content/feed?limit=10", nil)
+	req := httptest.NewRequest(http.MethodGet, "/content/feed?limit=10", nil)
 	req.Header.Set("X-Blocked-Keywords", "winter")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
@@ -726,7 +713,7 @@ func TestGetFeedFiltersBlockedKeyword(t *testing.T) {
 		t.Fatalf("decode response: %v", err)
 	}
 	for _, item := range page.Items {
-		if item["id"] == "post_photo_001" {
+		if item["postId"] == "post_photo_001" {
 			t.Fatalf("keyword-hit post should be filtered, got post_photo_001")
 		}
 	}

@@ -1,16 +1,15 @@
-import 'dart:async';
-import 'dart:convert';
+// ignore_for_file: prefer_initializing_formals
 
-import 'package:crypto/crypto.dart';
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_log_models.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_log_service.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_trace_context_store.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_analytics_event_payload.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_analytics_event_summary.g.dart';
-import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
-import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
 import 'package:quwoquan_app/core/di/ops_event_dependencies.dart';
+import 'package:quwoquan_app/core/telemetry/app_telemetry_context_provider.dart';
+import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
 
 class AnalyticsEvent {
   final String eventType;
@@ -30,31 +29,23 @@ class AnalyticsConfig {
   const AnalyticsConfig({this.enabled = true});
 }
 
+/// 存量 Analytics 调用的收口适配器。动态 properties 只写本地诊断；云端只能
+/// 投影到目录登记的强类型字段，禁止透传自由 Map。
 class AnalyticsService {
   AnalyticsService({
-    required this._mode,
-    required this._eventRepository,
+    required AppTelemetryRecorder telemetryReporter,
     AppLogService? appLogService,
-  }) : _appLogService = appLogService ?? AppLogService.instance;
-
-  AnalyticsService.forTesting({
-    AppDataSourceMode mode = AppDataSourceMode.mock,
-    OpsEventRepository? eventRepository,
-    AppLogService? appLogService,
-  }) : _mode = mode,
-       _eventRepository =
-           eventRepository ??
-           (mode == AppDataSourceMode.remote
-               ? (throw ArgumentError(
-                   'remote analytics test requires an explicit repository',
-                 ))
-               : MockOpsEventRepository()),
+  }) : _telemetryReporter = telemetryReporter,
        _appLogService = appLogService ?? AppLogService.instance;
 
-  final AppDataSourceMode _mode;
-  final OpsEventRepository _eventRepository;
-  final AppLogService _appLogService;
+  AnalyticsService.forTesting({
+    AppTelemetryRecorder? telemetryReporter,
+    AppLogService? appLogService,
+  }) : _telemetryReporter = telemetryReporter,
+       _appLogService = appLogService ?? AppLogService.instance;
 
+  final AppTelemetryRecorder? _telemetryReporter;
+  final AppLogService _appLogService;
   bool _enabled = true;
 
   Future<void> initialize(AnalyticsConfig config) async {
@@ -62,9 +53,7 @@ class AnalyticsService {
   }
 
   Future<void> trackEvent(AnalyticsEvent event) async {
-    if (!_enabled) {
-      return;
-    }
+    if (!_enabled) return;
     final trace = AppTraceContextStore.instance;
     unawaited(
       _appLogService.writeEvent(
@@ -77,98 +66,78 @@ class AnalyticsService {
           target: 'analytics_facade',
           action: event.eventName,
         ),
-        payload: AppLogAnalyticsEventPayload(
-          kind: 'analytics_event',
-          eventType: event.eventType,
-          eventName: event.eventName,
-          properties: event.properties,
-        ).toMap(),
-        summaryPayload: AppLogAnalyticsEventSummaryPayload(
-          kind: 'analytics_event',
-          eventType: event.eventType,
-          eventName: event.eventName,
-        ).toMap(),
+        payload: <String, Object?>{
+          'kind': 'analytics_event',
+          'eventType': event.eventType,
+          'eventName': event.eventName,
+          'properties': event.properties,
+        },
+        summaryPayload: <String, Object?>{
+          'kind': 'analytics_event',
+          'eventType': event.eventType,
+          'eventName': event.eventName,
+        },
       ),
     );
-    if (_mode != AppDataSourceMode.remote) {
-      return;
-    }
-    final occurredAt = DateTime.now().toUtc();
-    unawaited(
-      _eventRepository
-          .reportEventBatch(
-            events: <OpsEventRecordInput>[
-              OpsEventRecordInput(
-                eventId: trace.newRequestId(),
-                eventType: event.eventType,
-                eventName: event.eventName,
-                eventVersion: 'v1',
-                priority: 'P1',
-                producer: 'app.analytics_facade',
-                source: 'analytics_facade',
-                userIdHash: _hashUserId(_resolveUserId(event.properties)),
-                sessionId: trace.sessionId,
-                pageVisitId: trace.newPageVisitId(),
-                requestId: trace.newRequestId(),
-                pageName: (event.properties['pageName'] ?? '').toString(),
-                surfaceId: (event.properties['surfaceId'] ?? '').toString(),
-                routeId: (event.properties['routeId'] ?? '').toString(),
-                operationId: (event.properties['operationId'] ?? '').toString(),
-                targetType: (event.properties['targetType'] ?? 'analytics')
-                    .toString(),
-                targetKey: _targetKeyFor(event),
-                entityType: (event.properties['entityType'] ?? '').toString(),
-                entityId: (event.properties['entityId'] ?? '').toString(),
-                experimentBucket: (event.properties['experimentBucket'] ?? '')
-                    .toString(),
-                occurredAt: occurredAt.toIso8601String(),
-                clientSentAt: occurredAt.toIso8601String(),
-                payload: Map<String, dynamic>.from(event.properties),
-                metrics: _extractMetrics(event.properties),
-              ),
-            ],
+    final reporter = _telemetryReporter;
+    if (reporter == null) return;
+    if (_localOnlyEventNames.contains(event.eventName)) return;
+    final pageName = (event.properties['pageName'] ?? '').toString().trim();
+    final durationMs = _firstInt(event.properties, const <String>[
+      'durationMs',
+      'latencyMs',
+      'elapsedMs',
+    ]);
+    final result = (event.properties['result'] ?? '').toString().trim();
+    final failReasonCode =
+        (event.properties['failReasonCode'] ??
+                event.properties['reason'] ??
+                event.properties['mediaFailureKind'] ??
+                '')
+            .toString()
+            .trim();
+    final isPerformance =
+        event.eventType == 'qoe' ||
+        event.eventType == 'performance' ||
+        durationMs != null;
+    final payload = isPerformance && durationMs != null
+        ? AppTelemetryPayload.performanceSample(
+            operationId: event.eventName,
+            durationMs: durationMs,
+            result: result.isEmpty ? null : result,
+            failReasonCode: failReasonCode.isEmpty ? null : failReasonCode,
           )
-          .catchError((_) {
-            // Best effort: analytics façade must not block product flows.
-            return const OpsEventBatchAck(acceptedCount: 0, duplicateCount: 0);
-          }),
+        : AppTelemetryPayload.productAction(
+            journey: event.eventType,
+            action: event.eventName,
+            result: result.isEmpty ? null : result,
+            failReasonCode: failReasonCode.isEmpty ? null : failReasonCode,
+          );
+    unawaited(
+      reporter.record(
+        payload,
+        pageName: pageName.isEmpty
+            ? AppPageContextStore.instance.pageName
+            : pageName,
+      ),
     );
   }
 
-  String _resolveUserId(Map<String, dynamic> properties) {
-    final raw = (properties['userId'] ?? properties['profileSubjectId'] ?? '')
-        .toString()
-        .trim();
-    if (raw.isNotEmpty) {
-      return raw;
-    }
-    return 'anonymous';
-  }
+  static const Set<String> _localOnlyEventNames = <String>{
+    'home_feed_frame_jank_ratio',
+    'home_feed_image_cache_bytes',
+    'home_feed_active_video_controller_count',
+    'home_feed_media_download_queue',
+    'home_feed_post_cache_hit_source',
+  };
 
-  String _targetKeyFor(AnalyticsEvent event) {
-    final rawTarget = (event.properties['targetKey'] ?? '').toString().trim();
-    if (rawTarget.isNotEmpty) {
-      return rawTarget;
+  int? _firstInt(Map<String, dynamic> values, Iterable<String> keys) {
+    for (final key in keys) {
+      final value = values[key];
+      if (value is int) return value;
+      if (value is num) return value.round();
     }
-    return '${event.eventType}.${event.eventName}'.replaceAll(' ', '_');
-  }
-
-  Map<String, dynamic> _extractMetrics(Map<String, dynamic> properties) {
-    final metrics = <String, dynamic>{};
-    for (final entry in properties.entries) {
-      if (entry.value is num) {
-        metrics[entry.key] = entry.value;
-      }
-    }
-    return metrics;
-  }
-
-  String _hashUserId(String raw) {
-    final trimmed = raw.trim();
-    if (trimmed.isEmpty || trimmed == 'anonymous') {
-      return '';
-    }
-    return sha256.convert(utf8.encode(trimmed)).toString().substring(0, 16);
+    return null;
   }
 }
 
@@ -178,7 +147,6 @@ final analyticsConfigProvider = Provider<AnalyticsConfig>((ref) {
 
 final analyticsProvider = Provider<AnalyticsService>((ref) {
   return AnalyticsService(
-    mode: ref.watch(appDataSourceModeProvider),
-    eventRepository: ref.watch(opsEventRepositoryProvider),
+    telemetryReporter: ref.watch(appTelemetryReporterProvider),
   );
 });

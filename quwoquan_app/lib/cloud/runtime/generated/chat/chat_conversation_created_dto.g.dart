@@ -10,8 +10,14 @@ class ChatConversationCreatedDto {
 
   factory ChatConversationCreatedDto.fromMap(Map<String, dynamic> m) {
     return ChatConversationCreatedDto(
-      conversationId: m['_id']?.toString() ?? m['id']?.toString() ?? m['conversationId']?.toString() ?? '',
+      conversationId: m['conversationId']?.toString() ?? '',
     );
+  }
+
+  factory ChatConversationCreatedDto.fromReadModelMap(Map<String, dynamic> source) {
+    return ChatConversationCreatedDto.fromMap(<String, dynamic>{
+      'conversationId': source['id'],
+    });
   }
 
   Map<String, dynamic> toMap() {

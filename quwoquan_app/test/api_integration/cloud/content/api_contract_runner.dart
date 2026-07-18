@@ -64,7 +64,7 @@ late LocalGammaAnonymousSession _session;
 
 /// 在目标环境上创建一条 image post，返回新建 postId。
 Future<String> _seedPhotoPost() async {
-  final url = Uri.parse('$_apiBase/v1/content/posts');
+  final url = Uri.parse('$_apiBase/content/posts');
   final resp = await _client
       .post(
         url,
@@ -87,8 +87,9 @@ Future<String> _seedPhotoPost() async {
   if (resp.statusCode != 201) {
     throw Exception('_seedPhotoPost failed: ${resp.statusCode} ${resp.body}');
   }
-  final id = (jsonDecode(resp.body) as Map<String, dynamic>)['_id'] as String;
-  final publishUrl = Uri.parse('$_apiBase/v1/content/posts/$id/publish');
+  final seeded = jsonDecode(resp.body) as Map<String, dynamic>;
+  final id = seeded['postId'] as String;
+  final publishUrl = Uri.parse('$_apiBase/content/posts/$id/publish');
   final publishResp = await _client
       .post(publishUrl, headers: _authHeaders('content.post.publish'))
       .timeout(const Duration(seconds: 10));
@@ -102,7 +103,7 @@ Future<String> _seedPhotoPost() async {
 
 /// 删除目标环境上由本次测试创建的 post。
 Future<void> _deletePost(String postId) async {
-  final url = Uri.parse('$_apiBase/v1/content/posts/$postId');
+  final url = Uri.parse('$_apiBase/content/posts/$postId');
   await _client
       .delete(url, headers: _authHeaders('content.post.delete'))
       .timeout(const Duration(seconds: 10));
@@ -172,7 +173,7 @@ void main() {
       if (!_apiAvailable) {
         return markTestSkipped('$_apiContractEnv unavailable');
       }
-      final url = Uri.parse('$_apiBase/v1/content/feed?type=image&limit=20');
+      final url = Uri.parse('$_apiBase/content/feed?type=image&limit=20');
       final sw = Stopwatch()..start();
       final resp = await _client
           .get(url, headers: _authHeaders('content.feed'))
@@ -210,9 +211,7 @@ void main() {
       if (!_apiAvailable) {
         return markTestSkipped('$_apiContractEnv unavailable');
       }
-      final page1Url = Uri.parse(
-        '$_apiBase/v1/content/feed?type=image&limit=20',
-      );
+      final page1Url = Uri.parse('$_apiBase/content/feed?type=image&limit=20');
       final resp1 = await _client
           .get(page1Url, headers: _authHeaders('content.feed'))
           .timeout(const Duration(seconds: 10));
@@ -221,11 +220,11 @@ void main() {
       final body1 = jsonDecode(resp1.body) as Map<String, dynamic>;
       final cursor = body1['cursor'] as String;
       final ids1 = (body1['items'] as List)
-          .map((e) => (e as Map<String, dynamic>)['_id'] as String)
+          .map((e) => (e as Map<String, dynamic>)['postId'] as String)
           .toSet();
 
       final page2Url = Uri.parse(
-        '$_apiBase/v1/content/feed?type=image&limit=20&cursor=$cursor',
+        '$_apiBase/content/feed?type=image&limit=20&cursor=$cursor',
       );
       final resp2 = await _client
           .get(page2Url, headers: _authHeaders('content.feed'))
@@ -233,7 +232,7 @@ void main() {
       expect(resp2.statusCode, 200);
 
       final ids2 = ((jsonDecode(resp2.body) as Map)['items'] as List)
-          .map((e) => (e as Map<String, dynamic>)['_id'] as String)
+          .map((e) => (e as Map<String, dynamic>)['postId'] as String)
           .toSet();
 
       // 语义层：两页无交集
@@ -248,7 +247,7 @@ void main() {
       if (!_apiAvailable) {
         return markTestSkipped('$_apiContractEnv unavailable');
       }
-      final url = Uri.parse('$_apiBase/v1/content/feed?type=image&limit=5');
+      final url = Uri.parse('$_apiBase/content/feed?type=image&limit=5');
       final resp = await _client
           .get(url, headers: _authHeaders('content.feed'))
           .timeout(const Duration(seconds: 10));
@@ -287,24 +286,13 @@ void main() {
   // ── 场景 2：behavior_batch_report_reaches_service ─────────────────────────
   // e2e.yaml: behavior_batch_report_reaches_service [test_type: api_contract]
   group('behavior_batch_report_reaches_service', () {
-    var postId = '';
+    const postId = 'fixture_photo_001';
 
-    setUpAll(() async {
-      if (!_apiAvailable) return;
-      postId = await _seedPhotoPost();
-    });
-
-    tearDownAll(() async {
-      if (!_apiAvailable) return;
-      if (postId.isEmpty) return;
-      await _deletePost(postId);
-    });
-
-    test('POST /v1/content/behaviors 返回 204', () async {
+    test('POST /content/behaviors 返回 204', () async {
       if (!_apiAvailable) {
         return markTestSkipped('$_apiContractEnv unavailable');
       }
-      final url = Uri.parse('$_apiBase/v1/content/behaviors');
+      final url = Uri.parse('$_apiBase/content/behaviors');
       final sw = Stopwatch()..start();
       final resp = await _client
           .post(
@@ -345,7 +333,7 @@ void main() {
       for (final type in validTypes) {
         final resp = await _client
             .post(
-              Uri.parse('$_apiBase/v1/content/behaviors'),
+              Uri.parse('$_apiBase/content/behaviors'),
               headers: {
                 ..._authHeaders('content.behavior'),
                 'Content-Type': 'application/json',
@@ -373,7 +361,7 @@ void main() {
       }
       final resp = await _client
           .post(
-            Uri.parse('$_apiBase/v1/content/behaviors'),
+            Uri.parse('$_apiBase/content/behaviors'),
             headers: {
               ..._authHeaders('content.behavior'),
               'Content-Type': 'application/json',
@@ -410,7 +398,7 @@ void main() {
       }
       final resp = await _client
           .get(
-            Uri.parse('$_apiBase/v1/content/posts/nonexistent_00000000'),
+            Uri.parse('$_apiBase/content/posts/nonexistent_00000000'),
             headers: _authHeaders('content.post'),
           )
           .timeout(const Duration(seconds: 10));
@@ -429,7 +417,7 @@ void main() {
       final exception = CloudErrorMapper.fromStatusCode(
         resp.statusCode,
         body: resp.body,
-        requestPath: '/v1/content/posts/nonexistent',
+        requestPath: '/content/posts/nonexistent',
       );
       expect(exception.domainErrorCode?.value, ContentErrorCode.postNotFound);
       expect(
@@ -451,7 +439,7 @@ void main() {
         // 此 header 仅在非生产 profile 开启，生产不生效
         final resp = await _client
             .post(
-              Uri.parse('$_apiBase/v1/content/posts'),
+              Uri.parse('$_apiBase/content/posts'),
               headers: {
                 ..._authHeaders('content.post.create'),
                 'Content-Type': 'application/json',
@@ -480,26 +468,15 @@ void main() {
 
   // ── 场景 5：dedicated_feedback_and_user_block_contract ────────────────────
   group('dedicated_feedback_and_user_block_contract', () {
-    var postId = '';
+    const postId = 'fixture_photo_001';
 
-    setUpAll(() async {
-      if (!_apiAvailable) return;
-      postId = await _seedPhotoPost();
-    });
-
-    tearDownAll(() async {
-      if (!_apiAvailable) return;
-      if (postId.isEmpty) return;
-      await _deletePost(postId);
-    });
-
-    test('POST /v1/content/reports 可用', () async {
+    test('POST /content/reports 可用', () async {
       if (!_apiAvailable) {
         return markTestSkipped('$_apiContractEnv unavailable');
       }
       final resp = await _client
           .post(
-            Uri.parse('$_apiBase/v1/content/reports'),
+            Uri.parse('$_apiBase/content/reports'),
             headers: {
               ..._authHeaders('content.report.create'),
               'Content-Type': 'application/json',
@@ -518,7 +495,7 @@ void main() {
     });
 
     test(
-      'POST/DELETE /v1/user/sub-accounts/{targetSubAccountId}/block 可用',
+      'POST/DELETE /user/sub-accounts/{targetSubAccountId}/block 可用',
       () async {
         if (!_apiAvailable) {
           return markTestSkipped('$_apiContractEnv unavailable');
@@ -531,7 +508,7 @@ void main() {
         const targetUserId = 'contract_block_target_001';
         final blockResp = await _client
             .post(
-              Uri.parse('$_apiBase/v1/user/sub-accounts/$targetUserId/block'),
+              Uri.parse('$_apiBase/user/sub-accounts/$targetUserId/block'),
               headers: _authHeaders('user.block.create'),
             )
             .timeout(const Duration(seconds: 10));
@@ -543,7 +520,7 @@ void main() {
 
         final unblockResp = await _client
             .delete(
-              Uri.parse('$_apiBase/v1/user/sub-accounts/$targetUserId/block'),
+              Uri.parse('$_apiBase/user/sub-accounts/$targetUserId/block'),
               headers: _authHeaders('user.block.delete'),
             )
             .timeout(const Duration(seconds: 10));
@@ -555,7 +532,7 @@ void main() {
       },
     );
 
-    test('PATCH /v1/user/settings/privacy 可写并回读 blockedKeywords', () async {
+    test('PATCH /user/settings/privacy 可写并回读 blockedKeywords', () async {
       if (!_apiAvailable) {
         return markTestSkipped('$_apiContractEnv unavailable');
       }
@@ -566,7 +543,7 @@ void main() {
       }
       final patchResp = await _client
           .patch(
-            Uri.parse('$_apiBase/v1/user/settings/privacy'),
+            Uri.parse('$_apiBase/user/settings/privacy'),
             headers: {
               ..._authHeaders('user.settings.privacy.patch'),
               'Content-Type': 'application/json',
@@ -584,7 +561,7 @@ void main() {
 
       final getResp = await _client
           .get(
-            Uri.parse('$_apiBase/v1/user/settings/privacy'),
+            Uri.parse('$_apiBase/user/settings/privacy'),
             headers: _authHeaders('user.settings.privacy.get'),
           )
           .timeout(const Duration(seconds: 10));

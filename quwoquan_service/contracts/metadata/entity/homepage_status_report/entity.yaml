@@ -1,4 +1,3 @@
-version: 1
 domain: entity
 entity: HomepageStatusReport
 object_kind: aggregate_root

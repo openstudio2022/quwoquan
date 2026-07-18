@@ -16,6 +16,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection
 import 'package:quwoquan_app/cloud/runtime/models/circle_detail_payload.dart';
 import 'package:quwoquan_app/cloud/services/circle/mock/circle_contract_seed_helpers.dart';
 import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
+import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository_contract.dart'
     show CircleRepository, kHomeCircleDiscoveryFeedDefaultLimit;
 
@@ -41,13 +42,7 @@ String? _normalizeCircleFeedType(String? type) {
 }
 
 List<PostBaseDto> _decodeCircleFeedMaps(Iterable<Map<String, dynamic>> items) {
-  final out = <PostBaseDto>[];
-  for (final m in items) {
-    try {
-      out.add(postBaseDtoFromMap(Map<String, dynamic>.from(m)));
-    } catch (_) {
-      // 跳过无法映射为 PostBaseDto 的 wire 行（与过往版本尽力解析一致）
-    }
-  }
-  return out;
+  return items
+      .map((item) => postBaseDtoFromMap(Map<String, dynamic>.from(item)))
+      .toList(growable: false);
 }

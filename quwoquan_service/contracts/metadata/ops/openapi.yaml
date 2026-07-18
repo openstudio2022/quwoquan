@@ -4,7 +4,7 @@ info:
     title: quwoquan ops API
     version: v1
 paths:
-    /v1/control-plane/platform/configs:
+    /control-plane/platform/configs:
         get:
             operationId: ListServiceConfigs
             x-contract-operation-id: ops.config_layer.ListServiceConfigs
@@ -31,7 +31,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/control-plane/platform/configs/{configKey}:update:
+    /control-plane/platform/configs/{configKey}:update:
         post:
             operationId: UpdateServiceConfig
             x-contract-operation-id: ops.config_layer.UpdateServiceConfig
@@ -46,6 +46,18 @@ paths:
                 - name: configKey
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+                - name: If-Match
+                  in: header
+                  required: true
+                  description: Quoted positive aggregate version for a snapshot overwrite.
                   schema:
                     type: string
             requestBody:
@@ -69,7 +81,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/control-plane/platform/configs/layers:
+    /control-plane/platform/configs/layers:
         get:
             operationId: ListConfigLayers
             x-contract-operation-id: ops.config_layer.ListConfigLayers
@@ -96,7 +108,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/control-plane/platform/configs/resolve:
+    /control-plane/platform/configs/resolve:
         get:
             operationId: ResolveEffectiveConfig
             x-contract-operation-id: ops.config_layer.ResolveEffectiveConfig
@@ -123,7 +135,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/control-plane/product/experiments:
+    /control-plane/product/experiments:
         get:
             operationId: ListExperiments
             x-contract-operation-id: ops.experiment.ListExperiments
@@ -150,7 +162,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/control-plane/product/experiments/{experimentId}:rollout:
+    /control-plane/product/experiments/{experimentId}:rollout:
         post:
             operationId: UpdateExperimentRollout
             x-contract-operation-id: ops.experiment.UpdateExperimentRollout
@@ -165,6 +177,18 @@ paths:
                 - name: experimentId
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+                - name: If-Match
+                  in: header
+                  required: true
+                  description: Quoted positive aggregate version for a snapshot overwrite.
                   schema:
                     type: string
             requestBody:
@@ -188,7 +212,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/ops/events:
+    /ops/events:
         post:
             operationId: ReportEventBatch
             x-contract-operation-id: ops.event_record.ReportEventBatch
@@ -199,6 +223,13 @@ paths:
                 facet: EventRecordCommandFacade
                 method: appendBatch
                 appendSink: EventRecord
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:
@@ -216,7 +247,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/ops/events/drilldown:
+    /ops/events/drilldown:
         get:
             operationId: GetEventDrilldown
             x-contract-operation-id: ops.event_record.GetEventDrilldown
@@ -243,7 +274,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/ops/events/summary:
+    /ops/events/summary:
         get:
             operationId: GetEventSummary
             x-contract-operation-id: ops.event_record.GetEventSummary
@@ -270,7 +301,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/ops/experiments/{experimentId}/assignment:
+    /ops/experiments/{experimentId}/assignment:
         get:
             operationId: GetExperimentAssignment
             x-contract-operation-id: ops.experiment_assignment_fact.GetExperimentAssignment
@@ -286,6 +317,12 @@ paths:
                 - name: experimentId
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
             responses:
@@ -319,6 +356,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -334,7 +377,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/ops/experiments/{experimentId}/stats:
+    /ops/experiments/{experimentId}/stats:
         get:
             operationId: GetExperimentStats
             x-contract-operation-id: ops.experiment_assignment_fact.GetExperimentStats
@@ -367,7 +410,43 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/ops/visits:
+    /ops/startup-events:
+        post:
+            operationId: ReportStartupEventBatch
+            x-contract-operation-id: ops.event_record.ReportStartupEventBatch
+            x-object-id: ops.event_record
+            x-actor: device
+            x-application:
+                kind: command
+                facet: StartupTelemetryCommandFacet
+                method: appendStartupBatch
+                appendSink: EventRecord
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ReportStartupEventBatchRequest'
+            responses:
+                "204":
+                    description: No Content
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+                - {}
+    /ops/visits:
         post:
             operationId: RecordVisit
             x-contract-operation-id: ops.visit_record.RecordVisit
@@ -378,6 +457,13 @@ paths:
                 facet: VisitRecordCommandFacade
                 method: append
                 appendSink: VisitRecord
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:
@@ -395,7 +481,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/ops/visits/stats:
+    /ops/visits/stats:
         get:
             operationId: GetVisitStats
             x-contract-operation-id: ops.visit_record.GetVisitStats
@@ -481,6 +567,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ReportEventBatchRequest
+            x-contract-placeholder: true
+        ReportStartupEventBatchRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ReportStartupEventBatchRequest
             x-contract-placeholder: true
         SetConfigLayerValueRequest:
             type: object

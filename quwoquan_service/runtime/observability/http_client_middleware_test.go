@@ -52,7 +52,7 @@ func TestLoggedRoundTripper_OutboundSuccessAndHeaderInjection(t *testing.T) {
 		},
 	}, ioLogger, processLogger, exceptionLogger)
 
-	req, _ := http.NewRequest(http.MethodGet, "http://content.internal/v1/content/feed", nil)
+	req, _ := http.NewRequest(http.MethodGet, "http://content.internal/content/feed", nil)
 	ctx := WithCorrelationMeta(context.Background(), CorrelationMeta{
 		TraceID:   "SVC.sess.content.feed.list.l9z1y4.2f8k",
 		RequestID: "SVC.content.feed.list.l9z1y4.2f8k",
@@ -108,7 +108,7 @@ func TestLoggedRoundTripper_OutboundFailureToExceptionSink(t *testing.T) {
 		},
 	}, ioLogger, processLogger, exceptionLogger)
 
-	req, _ := http.NewRequest(http.MethodGet, "http://content.internal/v1/content/feed", nil)
+	req, _ := http.NewRequest(http.MethodGet, "http://content.internal/content/feed", nil)
 	_, err := rt.RoundTrip(req)
 	if err == nil {
 		t.Fatalf("expected transport error")

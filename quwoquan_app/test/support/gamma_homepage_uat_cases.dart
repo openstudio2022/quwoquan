@@ -28,7 +28,7 @@ List<GammaHomepageUatCase> parseGammaHomepageUatCases(String encodedPayload) {
     throw StateError('Gamma homepage UAT cases must be an object');
   }
   const rootKeys = <String>{
-    'schemaVersion',
+    'schema',
     'environment',
     'releaseId',
     'runId',
@@ -44,7 +44,7 @@ List<GammaHomepageUatCase> parseGammaHomepageUatCases(String encodedPayload) {
     root[entry.key as String] = entry.value;
   }
   if (!_hasExactKeys(root.keys, rootKeys) ||
-      root['schemaVersion'] != 'quwoquan_data.gamma_app_uat_case_manifest/1' ||
+      root['schema'] != 'quwoquan_data.homepage_verification_case_manifest' ||
       root['environment'] != 'gamma') {
     throw StateError('Gamma homepage UAT manifest contract mismatch');
   }

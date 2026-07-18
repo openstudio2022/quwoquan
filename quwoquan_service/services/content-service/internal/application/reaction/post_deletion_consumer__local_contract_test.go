@@ -97,7 +97,7 @@ func postDeletedOutboxEvent(t *testing.T, postID, eventID string) postports.Outb
 	t.Helper()
 	now := time.Now().UTC().Truncate(time.Millisecond)
 	payload, err := json.Marshal(map[string]any{
-		"_id":             postID,
+		"postId":             postID,
 		"authorId":        "post-owner",
 		"contentType":     "image",
 		"contentIdentity": "work",

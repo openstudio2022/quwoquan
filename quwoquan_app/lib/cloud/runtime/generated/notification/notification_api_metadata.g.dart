@@ -8,20 +8,22 @@ class NotificationApiMetadata {
 
   static const String domain = 'notification';
   static const List<String> apiPrefixes = <String>[
-    '/internal/v1',
-    '/v1/app-messages',
+    '/app-messages/unread-count',
+    '/app-messages/{messageId}',
+    '/internal/app-messages',
+    '/internal/notifications',
   ];
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
-    'AckAppMessage': '/v1/app-messages/{messageId}/ack',
-    'CreateAppMessage': '/internal/v1/app-messages',
-    'GetAppMessage': '/v1/app-messages/{messageId}',
-    'GetAppMessageUnreadCount': '/v1/app-messages/unread-count',
-    'GetNotificationDeliveryJobMetrics': '/internal/v1/notifications/delivery-jobs/metrics',
-    'ListAppMessages': '/v1/app-messages',
-    'ListNotificationDeliveryJobDeadLetters': '/internal/v1/notifications/delivery-jobs/dead-letters',
-    'ReadAppMessage': '/v1/app-messages/{messageId}/read',
-    'RecoverNotificationDeliveryJob': '/internal/v1/notifications/delivery-jobs/{jobId}:recover',
+    'AckAppMessage': '/app-messages/{messageId}/ack',
+    'CreateAppMessage': '/internal/app-messages',
+    'GetAppMessage': '/app-messages/{messageId}',
+    'GetAppMessageUnreadCount': '/app-messages/unread-count',
+    'GetNotificationDeliveryJobMetrics': '/internal/notifications/delivery-jobs/metrics',
+    'ListAppMessages': '/app-messages',
+    'ListNotificationDeliveryJobDeadLetters': '/internal/notifications/delivery-jobs/dead-letters',
+    'ReadAppMessage': '/app-messages/{messageId}/read',
+    'RecoverNotificationDeliveryJob': '/internal/notifications/delivery-jobs/{jobId}:recover',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
@@ -76,30 +78,30 @@ class NotificationApiMetadata {
   static const String readAppMessageOperation = 'ReadAppMessage';
   static const String recoverNotificationDeliveryJobOperation = 'RecoverNotificationDeliveryJob';
 
-  static const String ackAppMessagePathTemplate = '/v1/app-messages/{messageId}/ack';
+  static const String ackAppMessagePathTemplate = '/app-messages/{messageId}/ack';
   static String ackAppMessagePath({required String messageId}) {
     return _fillPath(ackAppMessagePathTemplate, <String, String>{
       'messageId': messageId,
     });
   }
-  static const String createAppMessagePath = '/internal/v1/app-messages';
-  static const String getAppMessagePathTemplate = '/v1/app-messages/{messageId}';
+  static const String createAppMessagePath = '/internal/app-messages';
+  static const String getAppMessagePathTemplate = '/app-messages/{messageId}';
   static String getAppMessagePath({required String messageId}) {
     return _fillPath(getAppMessagePathTemplate, <String, String>{
       'messageId': messageId,
     });
   }
-  static const String getAppMessageUnreadCountPath = '/v1/app-messages/unread-count';
-  static const String getNotificationDeliveryJobMetricsPath = '/internal/v1/notifications/delivery-jobs/metrics';
-  static const String listAppMessagesPath = '/v1/app-messages';
-  static const String listNotificationDeliveryJobDeadLettersPath = '/internal/v1/notifications/delivery-jobs/dead-letters';
-  static const String readAppMessagePathTemplate = '/v1/app-messages/{messageId}/read';
+  static const String getAppMessageUnreadCountPath = '/app-messages/unread-count';
+  static const String getNotificationDeliveryJobMetricsPath = '/internal/notifications/delivery-jobs/metrics';
+  static const String listAppMessagesPath = '/app-messages';
+  static const String listNotificationDeliveryJobDeadLettersPath = '/internal/notifications/delivery-jobs/dead-letters';
+  static const String readAppMessagePathTemplate = '/app-messages/{messageId}/read';
   static String readAppMessagePath({required String messageId}) {
     return _fillPath(readAppMessagePathTemplate, <String, String>{
       'messageId': messageId,
     });
   }
-  static const String recoverNotificationDeliveryJobPathTemplate = '/internal/v1/notifications/delivery-jobs/{jobId}:recover';
+  static const String recoverNotificationDeliveryJobPathTemplate = '/internal/notifications/delivery-jobs/{jobId}:recover';
   static String recoverNotificationDeliveryJobPath({required String jobId}) {
     return _fillPath(recoverNotificationDeliveryJobPathTemplate, <String, String>{
       'jobId': jobId,

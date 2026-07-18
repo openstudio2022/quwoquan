@@ -11,8 +11,8 @@ func TestContract_InitiateCall(t *testing.T) {
 	resp := createTestCall(t, "user_initiator_001")
 	session := extractSession(t, resp)
 
-	if session["_id"] == nil {
-		t.Error("session missing _id")
+	if session["callId"] == nil {
+		t.Error("session missing callId")
 	}
 	if session["callType"] != "audio" {
 		t.Errorf("expected callType=audio, got %v", session["callType"])
@@ -36,7 +36,7 @@ func TestContract_InitiateCall(t *testing.T) {
 func TestContract_InitiateCall_VideoType(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
-	resp := doPost(t, "/v1/rtc/calls",
+	resp := doPost(t, "/rtc/calls",
 		`{"callType":"video","inviteeIds":["user_b"]}`,
 		"user_a", http.StatusCreated)
 	session := extractSession(t, resp)
@@ -51,7 +51,7 @@ func TestContract_InitiateCall_ConflictWhenActive(t *testing.T) {
 
 	createTestCall(t, "user_conflict_001")
 
-	code, _ := doPostAny(t, "/v1/rtc/calls",
+	code, _ := doPostAny(t, "/rtc/calls",
 		`{"callType":"audio","inviteeIds":["user_another"]}`,
 		"user_conflict_001")
 	if code != http.StatusConflict {
@@ -65,7 +65,7 @@ func TestContract_AnswerCall(t *testing.T) {
 	resp := createTestCall(t, "user_caller_001")
 	callID := extractSessionID(t, resp)
 
-	answerResp := doPost(t, "/v1/rtc/calls/"+callID+"/answer", `{}`, "user_invitee_001", http.StatusOK)
+	answerResp := doPost(t, "/rtc/calls/"+callID+"/answer", `{}`, "user_invitee_001", http.StatusOK)
 	session := extractSession(t, answerResp)
 	if session["status"] != "connecting" {
 		t.Errorf("expected status=connecting, got %v", session["status"])
@@ -78,7 +78,7 @@ func TestContract_RejectCall(t *testing.T) {
 	resp := createTestCall(t, "user_caller_002")
 	callID := extractSessionID(t, resp)
 
-	rejectResp := doPost(t, "/v1/rtc/calls/"+callID+"/reject", `{}`, "user_invitee_001", http.StatusOK)
+	rejectResp := doPost(t, "/rtc/calls/"+callID+"/reject", `{}`, "user_invitee_001", http.StatusOK)
 	if rejectResp["status"] != "ended" {
 		t.Errorf("expected status=ended, got %v", rejectResp["status"])
 	}
@@ -93,7 +93,7 @@ func TestContract_CancelCall(t *testing.T) {
 	resp := createTestCall(t, "user_caller_003")
 	callID := extractSessionID(t, resp)
 
-	cancelResp := doPost(t, "/v1/rtc/calls/"+callID+"/cancel", `{}`, "user_caller_003", http.StatusOK)
+	cancelResp := doPost(t, "/rtc/calls/"+callID+"/cancel", `{}`, "user_caller_003", http.StatusOK)
 	if cancelResp["status"] != "ended" {
 		t.Errorf("expected status=ended, got %v", cancelResp["status"])
 	}
@@ -108,7 +108,7 @@ func TestContract_CancelCall_OnlyInitiator(t *testing.T) {
 	resp := createTestCall(t, "user_caller_004")
 	callID := extractSessionID(t, resp)
 
-	code, _ := doPostAny(t, "/v1/rtc/calls/"+callID+"/cancel", `{}`, "user_invitee_001")
+	code, _ := doPostAny(t, "/rtc/calls/"+callID+"/cancel", `{}`, "user_invitee_001")
 	if code == http.StatusOK {
 		t.Error("non-initiator should not be able to cancel")
 	}
@@ -120,14 +120,14 @@ func TestContract_FullLifecycle_InitiateAnswerHangup(t *testing.T) {
 	resp := createTestCall(t, "user_lc_001")
 	callID := extractSessionID(t, resp)
 
-	doPost(t, "/v1/rtc/calls/"+callID+"/answer", `{}`, "user_invitee_001", http.StatusOK)
+	doPost(t, "/rtc/calls/"+callID+"/answer", `{}`, "user_invitee_001", http.StatusOK)
 
-	doPost(t, "/v1/rtc/calls/"+callID+"/join", `{}`, "user_invitee_001", http.StatusOK)
-	doPost(t, "/v1/rtc/calls/"+callID+"/join", `{}`, "user_lc_001", http.StatusOK)
+	doPost(t, "/rtc/calls/"+callID+"/join", `{}`, "user_invitee_001", http.StatusOK)
+	doPost(t, "/rtc/calls/"+callID+"/join", `{}`, "user_lc_001", http.StatusOK)
 
-	hangupResp := doPost(t, "/v1/rtc/calls/"+callID+"/hangup", `{}`, "user_lc_001", http.StatusOK)
+	hangupResp := doPost(t, "/rtc/calls/"+callID+"/hangup", `{}`, "user_lc_001", http.StatusOK)
 
-	leaveResp := doPost(t, "/v1/rtc/calls/"+callID+"/leave", `{}`, "user_invitee_001", http.StatusOK)
+	leaveResp := doPost(t, "/rtc/calls/"+callID+"/leave", `{}`, "user_invitee_001", http.StatusOK)
 	if leaveResp["status"] != "ended" {
 		t.Errorf("expected status=ended after last leave, got %v", leaveResp["status"])
 	}
@@ -140,19 +140,19 @@ func TestContract_GetCall(t *testing.T) {
 	resp := createTestCall(t, "user_get_001")
 	callID := extractSessionID(t, resp)
 
-	code, getResp := doGet(t, "/v1/rtc/calls/"+callID, "user_get_001")
+	code, getResp := doGet(t, "/rtc/calls/"+callID, "user_get_001")
 	if code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", code)
 	}
-	if getResp["_id"] != callID {
-		t.Errorf("expected _id=%s, got %v", callID, getResp["_id"])
+	if getResp["callId"] != callID {
+		t.Errorf("expected callId=%s, got %v", callID, getResp["callId"])
 	}
 }
 
 func TestContract_GetCall_NotFound(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
-	code, _ := doGet(t, "/v1/rtc/calls/nonexistent_call_id", "user_001")
+	code, _ := doGet(t, "/rtc/calls/nonexistent_call_id", "user_001")
 	if code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", code)
 	}
@@ -163,7 +163,7 @@ func TestContract_ListCalls(t *testing.T) {
 
 	createTestCall(t, "user_list_001")
 
-	code, listResp := doGet(t, "/v1/rtc/calls?limit=10", "user_list_001")
+	code, listResp := doGet(t, "/rtc/calls?limit=10", "user_list_001")
 	if code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", code)
 	}
@@ -177,22 +177,22 @@ func TestContract_ListCalls(t *testing.T) {
 }
 
 // 对齐 service.yaml SIT scenario list_calls_with_missed_filter：
-// GET /v1/rtc/calls?missed=true 仅返回被叫方的未接来电。
+// GET /rtc/calls?missed=true 仅返回被叫方的未接来电。
 func TestContract_ListCalls_MissedFilter(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	// 发起人发起后立即取消 → 对被叫方 user_invitee_001 而言是未接来电。
 	resp := createTestCall(t, "user_caller_missed")
 	missedCallID := extractSessionID(t, resp)
-	doPost(t, "/v1/rtc/calls/"+missedCallID+"/cancel", `{}`, "user_caller_missed", http.StatusOK)
+	doPost(t, "/rtc/calls/"+missedCallID+"/cancel", `{}`, "user_caller_missed", http.StatusOK)
 
 	// 被叫方接通并挂断的通话 → 不应出现在 missed 列表。
 	resp2 := createTestCall(t, "user_caller_answered")
 	answeredCallID := extractSessionID(t, resp2)
-	doPost(t, "/v1/rtc/calls/"+answeredCallID+"/answer", `{}`, "user_invitee_001", http.StatusOK)
-	doPost(t, "/v1/rtc/calls/"+answeredCallID+"/hangup", `{}`, "user_invitee_001", http.StatusOK)
+	doPost(t, "/rtc/calls/"+answeredCallID+"/answer", `{}`, "user_invitee_001", http.StatusOK)
+	doPost(t, "/rtc/calls/"+answeredCallID+"/hangup", `{}`, "user_invitee_001", http.StatusOK)
 
-	code, listResp := doGet(t, "/v1/rtc/calls?missed=true", "user_invitee_001")
+	code, listResp := doGet(t, "/rtc/calls?missed=true", "user_invitee_001")
 	if code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", code)
 	}
@@ -202,11 +202,11 @@ func TestContract_ListCalls_MissedFilter(t *testing.T) {
 	}
 	for _, it := range items {
 		m, _ := it.(map[string]any)
-		if m["_id"] == answeredCallID {
+		if m["callId"] == answeredCallID {
 			t.Error("answered call should not appear in missed list")
 		}
 		if m["endReason"] == "normal" {
-			t.Errorf("missed list should not include normal-ended call, got %v", m["_id"])
+			t.Errorf("missed list should not include normal-ended call, got %v", m["callId"])
 		}
 	}
 }
@@ -217,10 +217,10 @@ func TestContract_ToggleMute(t *testing.T) {
 	resp := createTestCall(t, "user_mute_001")
 	callID := extractSessionID(t, resp)
 
-	doPost(t, "/v1/rtc/calls/"+callID+"/answer", `{}`, "user_invitee_001", http.StatusOK)
-	doPost(t, "/v1/rtc/calls/"+callID+"/join", `{}`, "user_invitee_001", http.StatusOK)
+	doPost(t, "/rtc/calls/"+callID+"/answer", `{}`, "user_invitee_001", http.StatusOK)
+	doPost(t, "/rtc/calls/"+callID+"/join", `{}`, "user_invitee_001", http.StatusOK)
 
-	muteResp := doPost(t, "/v1/rtc/calls/"+callID+"/mute",
+	muteResp := doPost(t, "/rtc/calls/"+callID+"/mute",
 		`{"muted":true}`, "user_invitee_001", http.StatusOK)
 
 	participants, ok := muteResp["participants"].([]any)
@@ -240,15 +240,15 @@ func TestContract_ToggleMute(t *testing.T) {
 func TestContract_ToggleCamera(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
-	resp := doPost(t, "/v1/rtc/calls",
+	resp := doPost(t, "/rtc/calls",
 		`{"callType":"video","inviteeIds":["user_cam_invitee"]}`,
 		"user_cam_001", http.StatusCreated)
 	callID := extractSessionID(t, resp)
 
-	doPost(t, "/v1/rtc/calls/"+callID+"/answer", `{}`, "user_cam_invitee", http.StatusOK)
-	doPost(t, "/v1/rtc/calls/"+callID+"/join", `{}`, "user_cam_invitee", http.StatusOK)
+	doPost(t, "/rtc/calls/"+callID+"/answer", `{}`, "user_cam_invitee", http.StatusOK)
+	doPost(t, "/rtc/calls/"+callID+"/join", `{}`, "user_cam_invitee", http.StatusOK)
 
-	camResp := doPost(t, "/v1/rtc/calls/"+callID+"/camera",
+	camResp := doPost(t, "/rtc/calls/"+callID+"/camera",
 		`{"cameraOn":true}`, "user_cam_invitee", http.StatusOK)
 
 	participants, ok := camResp["participants"].([]any)
@@ -271,16 +271,16 @@ func TestContract_Recording_StartStop(t *testing.T) {
 	resp := createTestCall(t, "user_rec_001")
 	callID := extractSessionID(t, resp)
 
-	doPost(t, "/v1/rtc/calls/"+callID+"/answer", `{}`, "user_invitee_001", http.StatusOK)
-	doPost(t, "/v1/rtc/calls/"+callID+"/join", `{}`, "user_invitee_001", http.StatusOK)
-	doPost(t, "/v1/rtc/calls/"+callID+"/join", `{}`, "user_rec_001", http.StatusOK)
+	doPost(t, "/rtc/calls/"+callID+"/answer", `{}`, "user_invitee_001", http.StatusOK)
+	doPost(t, "/rtc/calls/"+callID+"/join", `{}`, "user_invitee_001", http.StatusOK)
+	doPost(t, "/rtc/calls/"+callID+"/join", `{}`, "user_rec_001", http.StatusOK)
 
-	startResp := doPost(t, "/v1/rtc/calls/"+callID+"/recording/start", `{}`, "user_rec_001", http.StatusOK)
+	startResp := doPost(t, "/rtc/calls/"+callID+"/recording/start", `{}`, "user_rec_001", http.StatusOK)
 	if startResp["isRecording"] != true {
 		t.Errorf("expected isRecording=true, got %v", startResp["isRecording"])
 	}
 
-	stopResp := doPost(t, "/v1/rtc/calls/"+callID+"/recording/stop", `{}`, "user_rec_001", http.StatusOK)
+	stopResp := doPost(t, "/rtc/calls/"+callID+"/recording/stop", `{}`, "user_rec_001", http.StatusOK)
 	if stopResp["isRecording"] != false {
 		t.Errorf("expected isRecording=false, got %v", stopResp["isRecording"])
 	}
@@ -292,11 +292,11 @@ func TestContract_Recording_OnlyInitiator(t *testing.T) {
 	resp := createTestCall(t, "user_rec_002")
 	callID := extractSessionID(t, resp)
 
-	doPost(t, "/v1/rtc/calls/"+callID+"/answer", `{}`, "user_invitee_001", http.StatusOK)
-	doPost(t, "/v1/rtc/calls/"+callID+"/join", `{}`, "user_invitee_001", http.StatusOK)
-	doPost(t, "/v1/rtc/calls/"+callID+"/join", `{}`, "user_rec_002", http.StatusOK)
+	doPost(t, "/rtc/calls/"+callID+"/answer", `{}`, "user_invitee_001", http.StatusOK)
+	doPost(t, "/rtc/calls/"+callID+"/join", `{}`, "user_invitee_001", http.StatusOK)
+	doPost(t, "/rtc/calls/"+callID+"/join", `{}`, "user_rec_002", http.StatusOK)
 
-	code, _ := doPostAny(t, "/v1/rtc/calls/"+callID+"/recording/start", `{}`, "user_invitee_001")
+	code, _ := doPostAny(t, "/rtc/calls/"+callID+"/recording/start", `{}`, "user_invitee_001")
 	if code == http.StatusOK {
 		t.Error("non-initiator should not start recording")
 	}
@@ -308,11 +308,11 @@ func TestContract_ScreenShare_StartStop(t *testing.T) {
 	resp := createTestCall(t, "user_ss_001")
 	callID := extractSessionID(t, resp)
 
-	doPost(t, "/v1/rtc/calls/"+callID+"/answer", `{}`, "user_invitee_001", http.StatusOK)
-	doPost(t, "/v1/rtc/calls/"+callID+"/join", `{}`, "user_invitee_001", http.StatusOK)
-	doPost(t, "/v1/rtc/calls/"+callID+"/join", `{}`, "user_ss_001", http.StatusOK)
+	doPost(t, "/rtc/calls/"+callID+"/answer", `{}`, "user_invitee_001", http.StatusOK)
+	doPost(t, "/rtc/calls/"+callID+"/join", `{}`, "user_invitee_001", http.StatusOK)
+	doPost(t, "/rtc/calls/"+callID+"/join", `{}`, "user_ss_001", http.StatusOK)
 
-	startResp := doPost(t, "/v1/rtc/calls/"+callID+"/screen-share/start", `{}`, "user_invitee_001", http.StatusOK)
+	startResp := doPost(t, "/rtc/calls/"+callID+"/screen-share/start", `{}`, "user_invitee_001", http.StatusOK)
 	if startResp["isScreenSharing"] != true {
 		t.Errorf("expected isScreenSharing=true, got %v", startResp["isScreenSharing"])
 	}
@@ -320,7 +320,7 @@ func TestContract_ScreenShare_StartStop(t *testing.T) {
 		t.Errorf("expected screenShareUserId=user_invitee_001, got %v", startResp["screenShareUserId"])
 	}
 
-	stopResp := doPost(t, "/v1/rtc/calls/"+callID+"/screen-share/stop", `{}`, "user_invitee_001", http.StatusOK)
+	stopResp := doPost(t, "/rtc/calls/"+callID+"/screen-share/stop", `{}`, "user_invitee_001", http.StatusOK)
 	if stopResp["isScreenSharing"] != false {
 		t.Errorf("expected isScreenSharing=false, got %v", stopResp["isScreenSharing"])
 	}
@@ -332,13 +332,13 @@ func TestContract_ScreenShare_SingleSharer(t *testing.T) {
 	resp := createTestCall(t, "user_ss_002")
 	callID := extractSessionID(t, resp)
 
-	doPost(t, "/v1/rtc/calls/"+callID+"/answer", `{}`, "user_invitee_001", http.StatusOK)
-	doPost(t, "/v1/rtc/calls/"+callID+"/join", `{}`, "user_invitee_001", http.StatusOK)
-	doPost(t, "/v1/rtc/calls/"+callID+"/join", `{}`, "user_ss_002", http.StatusOK)
+	doPost(t, "/rtc/calls/"+callID+"/answer", `{}`, "user_invitee_001", http.StatusOK)
+	doPost(t, "/rtc/calls/"+callID+"/join", `{}`, "user_invitee_001", http.StatusOK)
+	doPost(t, "/rtc/calls/"+callID+"/join", `{}`, "user_ss_002", http.StatusOK)
 
-	doPost(t, "/v1/rtc/calls/"+callID+"/screen-share/start", `{}`, "user_invitee_001", http.StatusOK)
+	doPost(t, "/rtc/calls/"+callID+"/screen-share/start", `{}`, "user_invitee_001", http.StatusOK)
 
-	code, _ := doPostAny(t, "/v1/rtc/calls/"+callID+"/screen-share/start", `{}`, "user_ss_002")
+	code, _ := doPostAny(t, "/rtc/calls/"+callID+"/screen-share/start", `{}`, "user_ss_002")
 	if code == http.StatusOK {
 		t.Error("second sharer should be rejected")
 	}

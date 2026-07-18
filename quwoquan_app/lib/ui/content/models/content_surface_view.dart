@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/ui/content/models/article_detail_view.dart';
 import 'package:quwoquan_app/ui/content/models/article_document_models.dart';
 import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
@@ -14,45 +15,63 @@ class ContentAuthorRef {
   const ContentAuthorRef({
     required this.id,
     required this.displayName,
-    required this.avatarUrl,
-    this.backgroundUrl,
+    required this.avatar,
+    this.background,
   });
 
   final String id;
   final String displayName;
-  final String avatarUrl;
-  final String? backgroundUrl;
+  final MediaDeliveryReference? avatar;
+  final MediaDeliveryReference? background;
+
+  String get avatarUrl => avatar?.url ?? '';
+
+  String? get backgroundUrl => background?.url;
 }
 
 /// 图片媒体引用。
 class ContentImageRef {
-  const ContentImageRef({required this.url, this.aspectRatio});
+  const ContentImageRef({
+    required this.delivery,
+    this.aspectRatio,
+  });
 
-  final String url;
+  final MediaDeliveryReference delivery;
   final double? aspectRatio;
+
+  String get url => delivery.url;
 }
 
 /// 封面媒体引用（article 封面 / video 首帧）。
 class ContentCoverRef {
-  const ContentCoverRef({required this.url, this.aspectRatio});
+  const ContentCoverRef({
+    required this.delivery,
+    this.aspectRatio,
+  });
 
-  final String url;
+  final MediaDeliveryReference delivery;
   final double? aspectRatio;
+
+  String get url => delivery.url;
 }
 
 /// 视频媒体引用（单视频）。
 class ContentVideoRef {
   const ContentVideoRef({
-    required this.url,
-    required this.thumbnailUrl,
+    required this.delivery,
+    this.thumbnail,
     this.durationMs,
     this.aspectRatio,
   });
 
-  final String url;
-  final String thumbnailUrl;
+  final MediaDeliveryReference delivery;
+  final MediaDeliveryReference? thumbnail;
   final int? durationMs;
   final double? aspectRatio;
+
+  String get url => delivery.url;
+
+  String get thumbnailUrl => thumbnail?.url ?? '';
 }
 
 /// 互动统计（强类型，替代散落的 count 字段）。

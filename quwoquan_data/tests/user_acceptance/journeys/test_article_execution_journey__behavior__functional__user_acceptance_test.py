@@ -36,14 +36,14 @@ from core.paths import (  # noqa: E402
     ensure_execution_layout,
 )
 import core.paths as _paths_mod  # noqa: E402
-from content.post.evidence_bundle import public_byline_label  # noqa: E402
-from content.post.draft_io import write_agent_draft  # noqa: E402
+from content.post.article.evidence_bundle import public_byline_label  # noqa: E402
+from content.post.article.draft_io import write_agent_draft  # noqa: E402
 from verify.post_verify import verify_scope  # noqa: E402
 from content.source.source_unit import resolve_entity_object_dir, write_source_unit  # noqa: E402
 from content.execution.planning.brief import resolve_compose_brief  # noqa: E402
-from content.post.route_analysis import analyze_route_ref  # noqa: E402
-from content.post.route_compose import build_route_writing_pack  # noqa: E402
-from content.post.route_review import review_route_draft  # noqa: E402
+from content.post.article.route_analysis import analyze_route_ref  # noqa: E402
+from content.post.article.route_compose import build_route_writing_pack  # noqa: E402
+from content.post.article.route_review import review_route_draft  # noqa: E402
 from content.post.materialize_apply import materialize_posts  # noqa: E402
 from content.templates.registry import TemplateRegistry  # noqa: E402
 from content.templates.router import RouteRequest  # noqa: E402

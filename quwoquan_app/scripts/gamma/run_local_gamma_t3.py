@@ -22,9 +22,9 @@ from urllib.parse import urlsplit, urlunsplit
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
 
-from quwoquan_ops.cli.lib.local_gamma_auth import (  # noqa: E402
-    LocalGammaAcceptanceSession,
-    open_local_gamma_acceptance_session,
+from quwoquan_ops.cli.lib.local_environment_auth import (  # noqa: E402
+    LocalAcceptanceSession as LocalGammaAcceptanceSession,
+    open_local_acceptance_session,
 )
 from quwoquan_ops.cli.lib.output_paths import env_run_dir  # noqa: E402
 
@@ -177,6 +177,20 @@ def fixture_post_to_doc(post: Dict[str, Any]) -> Dict[str, Any]:
     media_urls = post.get("imageUrls") or post.get("mediaUrls") or []
     if not media_urls and post.get("coverUrl") and post.get("contentType") == "image":
         media_urls = [post["coverUrl"]]
+    thumbnail_url = post.get("thumbnailUrl") or post.get("coverUrl") or ""
+    duration_ms = int(post.get("durationMs") or 0)
+    media_items = list(post.get("mediaItems") or [])
+    if not media_items and post.get("videoUrl"):
+        media_items.append(
+            {
+                "kind": "video",
+                "url": post["videoUrl"],
+                "coverUrl": thumbnail_url,
+                "durationMs": duration_ms,
+                "width": post.get("width"),
+                "height": post.get("height"),
+            }
+        )
     width = post.get("width")
     height = post.get("height")
     device_info = dict(post.get("deviceInfo") or {})
@@ -188,6 +202,8 @@ def fixture_post_to_doc(post: Dict[str, Any]) -> Dict[str, Any]:
         height = int(height)
         device_info.setdefault("height", height)
         device_info.setdefault("imageHeight", height)
+    if duration_ms > 0:
+        device_info.setdefault("durationMs", duration_ms)
     doc = {
         "_id": post_id,
         "postId": post_id,
@@ -203,8 +219,11 @@ def fixture_post_to_doc(post: Dict[str, Any]) -> Dict[str, Any]:
         "body": post.get("body", ""),
         "tags": post.get("tags") or [],
         "mediaUrls": media_urls,
+        "mediaItems": media_items,
         "coverUrl": post.get("coverUrl", ""),
+        "thumbnailUrl": thumbnail_url,
         "videoUrl": post.get("videoUrl", ""),
+        "durationMs": duration_ms,
         "locationName": post.get("locationName", ""),
         "status": "published",
         "visibility": "public",
@@ -278,7 +297,7 @@ def postgres_published_dsn() -> str:
 def seed_user() -> Dict[str, Any]:
     """Seed user profile fixtures into the live user PostgreSQL store.
 
-    用户主页 (GET /v1/user/profile/{userId}) and 我的主页 (GET /v1/me) both read
+    用户主页 (GET /user/profile/{userId}) and 我的主页 (GET /me) both read
     the user_profiles table. The seed cmd reuses the shared contract fixture
     loader + the generated user_profiles column set, so the persisted row stays
     single-sourced with the service.
@@ -423,7 +442,7 @@ def seed_entity(base_url: str) -> Dict[str, Any]:
     ]
     try:
         status, body = http_request(
-            base_url.rstrip("/") + "/v1/homepages/candidates",
+            base_url.rstrip("/") + "/homepages/candidates",
             method="POST",
             body={
                 "title": "契约主页验证",
@@ -440,7 +459,7 @@ def seed_entity(base_url: str) -> Dict[str, Any]:
         if not homepage_id:
             return {"status": "failed", "httpStatus": status, "error": "candidate create returned no homepage id"}
         pub_status, _ = http_request(
-            base_url.rstrip("/") + f"/v1/homepages/candidates/{homepage_id}:publish",
+            base_url.rstrip("/") + f"/homepages/candidates/{homepage_id}:publish",
             method="POST",
             timeout=8,
         )
@@ -575,7 +594,7 @@ def setup_comment_thread(base_url: str) -> Dict[str, Any]:
     """
     try:
         status, body = http_request(
-            base_url.rstrip() + "/v1/content/posts/fixture_photo_001/comments",
+            base_url.rstrip() + "/content/posts/fixture_photo_001/comments",
             method="POST",
             body={"content": "主评论示例"},
             timeout=8,
@@ -591,7 +610,7 @@ def setup_comment_thread(base_url: str) -> Dict[str, Any]:
                 "error": "CreateComment did not return parent comment id",
             }
         reply_status, reply_body = http_request(
-            base_url.rstrip() + "/v1/content/posts/fixture_photo_001/comments",
+            base_url.rstrip() + "/content/posts/fixture_photo_001/comments",
             method="POST",
             body={"content": "回复示例", "replyToCommentId": parent_id},
             timeout=8,
@@ -606,14 +625,14 @@ def setup_comment_thread(base_url: str) -> Dict[str, Any]:
                 "error": "CreateComment did not return reply comment id",
             }
         reaction_status, _ = http_request(
-            base_url.rstrip() + f"/v1/content/comments/{parent_id}/reaction",
+            base_url.rstrip() + f"/content/comments/{parent_id}/reaction",
             method="POST",
             body={"reaction": "like"},
             timeout=8,
             headers={"Idempotency-Key": gamma_probe_idempotency_key("comment-reaction")},
         )
         bind_status, bind_body = http_request(
-            base_url.rstrip() + f"/v1/content/comments/{parent_id}/media:bind",
+            base_url.rstrip() + f"/content/comments/{parent_id}/media:bind",
             method="POST",
             body={
                 "version": parent_version,
@@ -1304,7 +1323,7 @@ def run_flutter_contracts(base_url: str, product_ops_base_url: str) -> List[Dict
     ]
     for case in cases:
         if case["name"] == "chat_api_contract":
-            chat_inbox = endpoint_contract_summary("chat", "/v1/chat/inbox", "GET")
+            chat_inbox = endpoint_contract_summary("chat", "/chat/inbox", "GET")
             if chat_inbox.get("commercialStatus") == "blocked":
                 checks.append(
                     {
@@ -1425,7 +1444,11 @@ def main() -> int:
             report["status"] = "gate_block"
         else:
             try:
-                _ACTIVE_SESSION = open_local_gamma_acceptance_session(args.base_url)
+                _ACTIVE_SESSION = open_local_acceptance_session(
+                    args.base_url,
+                    environment="gamma",
+                    target_name="gamma-local",
+                )
             except Exception as exc:  # noqa: BLE001
                 report["auth"] = {"status": "failed", "error": type(exc).__name__}
                 report["status"] = "gate_block"

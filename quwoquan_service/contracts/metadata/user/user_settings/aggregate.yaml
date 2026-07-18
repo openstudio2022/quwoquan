@@ -1,4 +1,3 @@
-version: 1
 domain: user
 aggregate_root: UserSettings
 object_kind: aggregate_root
@@ -10,7 +9,7 @@ business_rules:
   - identity 固定为 accountId，同一账号只有一个 UserSettings
   - Persona override 与 account default 分离，读取时由 named Reader 组装
   - quiet hours、privacy 和 call policy 必须通过各自强类型命令校验
-  - 更新使用 expectedVersion 且不接受动态 Map patch
+  - 更新由服务端读取当前 version 后执行内部 CAS，且不接受动态 Map patch
 lifecycle:
   states: [active, deleted]
   optimistic_concurrency: version

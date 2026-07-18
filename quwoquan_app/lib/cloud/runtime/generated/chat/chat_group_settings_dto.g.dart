@@ -24,9 +24,20 @@ class ChatGroupSettingsDto {
       joinRequiresApproval: m['joinRequiresApproval'] as bool? ?? false,
       nameEditableByAdminOnly: m['nameEditableByAdminOnly'] as bool? ?? false,
       privacyShieldAdminOnly: m['privacyShieldAdminOnly'] as bool? ?? false,
-      conversationType: m['type']?.toString() ?? m['conversationType']?.toString() ?? 'group',
+      conversationType: m['conversationType']?.toString() ?? 'group',
       circleId: m['circleId']?.toString() ?? '',
     );
+  }
+
+  factory ChatGroupSettingsDto.fromReadModelMap(Map<String, dynamic> source) {
+    return ChatGroupSettingsDto.fromMap(<String, dynamic>{
+      'qrCodeJoinEnabled': source['qrCodeJoinEnabled'],
+      'joinRequiresApproval': source['joinRequiresApproval'],
+      'nameEditableByAdminOnly': source['nameEditableByAdminOnly'],
+      'privacyShieldAdminOnly': source['privacyShieldAdminOnly'],
+      'conversationType': source['type'],
+      'circleId': source['circleId'],
+    });
   }
 
   Map<String, dynamic> toMap() {

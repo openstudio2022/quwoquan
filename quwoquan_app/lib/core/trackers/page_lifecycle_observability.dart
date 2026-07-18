@@ -35,6 +35,7 @@ class PageLifecycleObservability {
     int? itemCount,
     String? requestId,
     String? traceId,
+    String? waitMode,
   }) {
     final properties = <String, dynamic>{
       'pageName': pageName,
@@ -51,6 +52,7 @@ class PageLifecycleObservability {
     if (itemCount != null) properties['itemCount'] = itemCount;
     if (requestId != null) properties['requestId'] = requestId;
     if (traceId != null) properties['traceId'] = traceId;
+    if (waitMode != null) properties['waitMode'] = waitMode;
     properties.addAll(_failureProperties(error));
     _track(
       eventName: PageLifecycleEventNames.pageLifecycleState,
@@ -119,6 +121,9 @@ class PageLifecycleObservability {
     Object? error,
     int? durationMs,
     int? candidatesTried,
+    String? mediaFailureKind,
+    String? userScene,
+    bool? retryable,
   }) {
     final properties = <String, dynamic>{
       'mediaType': mediaType,
@@ -131,6 +136,11 @@ class PageLifecycleObservability {
     if (candidatesTried != null) {
       properties['candidatesTried'] = candidatesTried;
     }
+    if (mediaFailureKind != null) {
+      properties['mediaFailureKind'] = mediaFailureKind;
+    }
+    if (userScene != null) properties['userScene'] = userScene;
+    if (retryable != null) properties['retryable'] = retryable;
     properties.addAll(_failureProperties(error));
     _track(
       eventName: PageLifecycleEventNames.mediaLoadState,

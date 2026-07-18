@@ -18,15 +18,10 @@ SCRIPTS_ROOT = DATA_ROOT / "scripts"
 if str(SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_ROOT))
 
-from core.article_package import asset_id_from_object_key, compute_post_asset_id, parse_post_asset_id, post_asset_id
+import pytest
+
+from core.article_package import compute_post_asset_id, parse_post_asset_id, post_asset_id
 from core.asset_identity import caption_file_token
-
-
-def test_legacy_object_key_helper_no_long_underscore_run():
-    object_key = "asset-seed/post/稻城亚丁_体验/detail_1.jpg"
-    aid = asset_id_from_object_key(object_key)
-    assert "________" not in aid
-    assert "___" not in aid  # 连续非法字符折叠为单个 _
 
 
 def test_post_asset_id_uses_entity_role_caption_batch_hash():
@@ -39,12 +34,11 @@ def test_post_asset_id_uses_entity_role_caption_batch_hash():
     )
     assert aid.startswith("稻城亚丁_cover_牛奶海秋色_42_")
     parsed = parse_post_asset_id(aid)
-    assert parsed["entityName"] == "稻城亚丁"
-    assert parsed["role"] == "cover"
-    assert parsed["captionToken"] == "牛奶海秋色"
-    assert parsed["executionSequence"] == 42
-    assert parsed["format"] == "v2"
-    assert len(parsed["digest"]) == 8
+    assert parsed.entity_name == "稻城亚丁"
+    assert parsed.role == "cover"
+    assert parsed.caption_token == "牛奶海秋色"
+    assert parsed.execution_sequence == 42
+    assert len(parsed.digest) == 8
 
 
 def test_caption_token_cleaning_and_truncation():
@@ -60,7 +54,7 @@ def test_caption_token_cleaning_and_truncation():
         caption="金顶：云海之上（清晨拍摄，光线最佳，值得早起）",
     )
     parsed = parse_post_asset_id(aid)
-    assert parsed["captionToken"] == token
+    assert parsed.caption_token == token
 
 
 def test_caption_degrades_to_section_then_ordinal_then_entity():
@@ -112,11 +106,11 @@ def test_parse_post_asset_id_right_anchors_entity_name():
         caption="垭口风雪",
     )
     parsed = parse_post_asset_id(aid)
-    assert parsed["entityName"] == "稻城亚丁_高反提醒"
-    assert parsed["role"] == "detail"
-    assert parsed["captionToken"] == "垭口风雪"
-    assert parsed["executionSequence"] == 10000000
-    assert parsed["raw"] == aid
+    assert parsed.entity_name == "稻城亚丁_高反提醒"
+    assert parsed.role == "detail"
+    assert parsed.caption_token == "垭口风雪"
+    assert parsed.execution_sequence == 10000000
+    assert parsed.raw == aid
 
 
 def test_parse_accepts_caption_with_underscore_and_digits():
@@ -128,19 +122,13 @@ def test_parse_accepts_caption_with_underscore_and_digits():
         caption="夜景 2026",
     )
     parsed = parse_post_asset_id(aid)
-    assert parsed["captionToken"] == "夜景_2026"
-    assert parsed["executionSequence"] == 42
-    assert parsed["format"] == "v2"
+    assert parsed.caption_token == "夜景_2026"
+    assert parsed.execution_sequence == 42
 
 
-def test_parse_legacy_v1_asset_id_still_supported():
-    parsed = parse_post_asset_id("峨眉山_cover_42_a1b2c3d4")
-    assert parsed["format"] == "v1"
-    assert parsed["entityName"] == "峨眉山"
-    assert parsed["role"] == "cover"
-    assert parsed["captionToken"] == ""
-    assert parsed["executionSequence"] == 42
-    assert parsed["digest"] == "a1b2c3d4"
+def test_parse_rejects_asset_id_without_caption_segment():
+    with pytest.raises(ValueError, match="invalid post asset id"):
+        parse_post_asset_id("峨眉山_cover_42_a1b2c3d4")
 
 
 def _run_all() -> None:

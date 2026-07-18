@@ -27,7 +27,7 @@ func TestCircleGroupRealMongoTransactionReplayReaderBOLAAndStream(t *testing.T) 
 		"visibility": "private", "joinPolicy": "apply_only",
 		"storageEnabled": true, "noticeEnabled": true,
 	}
-	first := executeGroupCommand(t, http.MethodPost, "/v1/circles/circle-group/groups", body, "group-create-1", "", "persona-member", "CreateCircleGroup")
+	first := executeGroupCommand(t, http.MethodPost, "/circles/circle-group/groups", body, "group-create-1", "", "persona-member", "CreateCircleGroup")
 	if first.Code != http.StatusCreated {
 		t.Fatalf("create CircleGroup failed: status=%d body=%s", first.Code, first.Body.String())
 	}
@@ -37,7 +37,7 @@ func TestCircleGroupRealMongoTransactionReplayReaderBOLAAndStream(t *testing.T) 
 		t.Fatalf("CircleGroup command receipt drift: %#v", created)
 	}
 
-	replay := executeGroupCommand(t, http.MethodPost, "/v1/circles/circle-group/groups", body, "group-create-1", "", "persona-member", "CreateCircleGroup")
+	replay := executeGroupCommand(t, http.MethodPost, "/circles/circle-group/groups", body, "group-create-1", "", "persona-member", "CreateCircleGroup")
 	if replay.Code != http.StatusCreated || decodeBody(t, replay)["idempotentReplay"] != true {
 		t.Fatalf("CircleGroup replay drift: status=%d body=%s", replay.Code, replay.Body.String())
 	}
@@ -46,7 +46,7 @@ func TestCircleGroupRealMongoTransactionReplayReaderBOLAAndStream(t *testing.T) 
 		"visibility": "private", "joinPolicy": "apply_only",
 		"storageEnabled": true, "noticeEnabled": true,
 	}
-	conflict := executeGroupCommand(t, http.MethodPost, "/v1/circles/circle-group/groups", conflictingBody, "group-create-1", "", "persona-member", "CreateCircleGroup")
+	conflict := executeGroupCommand(t, http.MethodPost, "/circles/circle-group/groups", conflictingBody, "group-create-1", "", "persona-member", "CreateCircleGroup")
 	if conflict.Code != http.StatusConflict || decodeBody(t, conflict)["code"] != "CIRCLE.USER.group_idempotency_conflict" {
 		t.Fatalf("CircleGroup idempotency conflict drift: status=%d body=%s", conflict.Code, conflict.Body.String())
 	}
@@ -60,7 +60,7 @@ func TestCircleGroupRealMongoTransactionReplayReaderBOLAAndStream(t *testing.T) 
 		}
 	}
 
-	get := executeGroupQuery(t, "/v1/circles/circle-group/groups/"+groupID, "persona-member", "GetCircleGroup")
+	get := executeGroupQuery(t, "/circles/circle-group/groups/"+groupID, "persona-member", "GetCircleGroup")
 	if get.Code != http.StatusOK {
 		t.Fatalf("get CircleGroup failed: status=%d body=%s", get.Code, get.Body.String())
 	}
@@ -68,14 +68,14 @@ func TestCircleGroupRealMongoTransactionReplayReaderBOLAAndStream(t *testing.T) 
 	if group["groupId"] != groupID || group["memberCount"] != float64(0) || group["version"] != float64(1) {
 		t.Fatalf("CircleGroup Reader slice drift: %#v", group)
 	}
-	if _, leaked := group["_id"]; leaked {
+	if _, leaked := group["id"]; leaked {
 		t.Fatalf("CircleGroup Reader leaked Mongo identity: %#v", group)
 	}
 	if _, leaked := group["createdByPersonaId"]; leaked {
 		t.Fatalf("CircleGroup Reader leaked audit identity: %#v", group)
 	}
 
-	denied := executeGroupQuery(t, "/v1/circles/circle-group/groups/"+groupID, "persona-outsider", "GetCircleGroup")
+	denied := executeGroupQuery(t, "/circles/circle-group/groups/"+groupID, "persona-outsider", "GetCircleGroup")
 	if denied.Code != http.StatusForbidden || decodeBody(t, denied)["code"] != "CIRCLE.USER.not_member" {
 		t.Fatalf("CircleGroup BOLA must fail closed: status=%d body=%s", denied.Code, denied.Body.String())
 	}
@@ -127,7 +127,7 @@ func executeGroupCommand(t *testing.T, method, path string, body any, idempotenc
 		Actor: operation.ActorContext{AccountID: "account-" + personaID, PersonaID: personaID},
 	}))
 	recorder := httptest.NewRecorder()
-	template := "/v1/circles/{circleId}/groups"
+	template := "/circles/{circleId}/groups"
 	if operationName == "UpdateCircleGroup" || operationName == "ArchiveCircleGroup" {
 		template += "/{groupId}"
 	}
@@ -142,11 +142,11 @@ func executeGroupQuery(t *testing.T, path, personaID, operationName string) *htt
 		Actor: operation.ActorContext{AccountID: "account-" + personaID, PersonaID: personaID},
 	}))
 	recorder := httptest.NewRecorder()
-	template := "/v1/circles/{circleId}/groups/{groupId}"
+	template := "/circles/{circleId}/groups/{groupId}"
 	if operationName == "ListCircleGroups" {
-		template = "/v1/circles/{circleId}/groups"
+		template = "/circles/{circleId}/groups"
 	} else if operationName == "SearchCircleGroups" {
-		template = "/v1/circles/{circleId}/groups/search"
+		template = "/circles/{circleId}/groups/search"
 	}
 	groupGuard(http.MethodGet, template, operationName).ServeHTTP(recorder, request)
 	return recorder
@@ -157,12 +157,17 @@ func groupGuard(method, pathTemplate, operationName string) http.Handler {
 		method,
 		"CircleGroup",
 	)
+	versionPrecondition := ""
+	if operationName == "UpdateCircleGroup" {
+		versionPrecondition = "if_match"
+	}
 	return rtauth.RequireGeneratedOperationAuthorizationForRoute(
 		[]rtauth.OperationSecurityDescriptor{{
 			CanonicalOperationID: "circle.circle_group." + operationName,
 			ContractGraphSHA256:  "circle-group-api-integration", Method: method, PathTemplate: pathTemplate,
 			OperationKind: operationKind, MutationTarget: mutationTarget, InvariantTarget: invariantTarget,
-			AuthMode: "required", ActorRequirement: "persona", Principal: "persona",
+			VersionPrecondition: versionPrecondition,
+			AuthMode:            "required", ActorRequirement: "persona", Principal: "persona",
 			CommercialStatus: "ready", TimeoutMilliseconds: 1500,
 		}}, method, pathTemplate,
 	)(testHandler)

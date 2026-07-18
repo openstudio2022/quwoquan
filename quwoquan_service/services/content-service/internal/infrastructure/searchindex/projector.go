@@ -20,6 +20,7 @@ import (
 	"quwoquan_service/runtime/search/es"
 	"quwoquan_service/services/content-service/internal/application/ports"
 	"quwoquan_service/services/content-service/internal/application/searchprojection"
+	postevent "quwoquan_service/services/content-service/internal/domain/post/event"
 	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
 )
 
@@ -84,9 +85,9 @@ func (p *Projector) Project(ctx context.Context, event ports.ProjectorEvent) err
 		return nil
 	}
 	switch event.Type {
-	case "PostDeleted":
+	case postevent.PostDeleted:
 		return p.delete(ctx, postID, event.Type)
-	case "PostCreated", "PostPublished", "PostUpdated", "PostSettingsUpdated", "PostPromotedToWork":
+	case postevent.PostPublished, postevent.PostUpdated, postevent.PostSettingsUpdated, postevent.PostPromotedToWork:
 		return p.reconcile(ctx, postID, event.Type)
 	default:
 		// Counter-only / unrelated events: nothing searchable changed.

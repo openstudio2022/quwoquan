@@ -123,4 +123,3 @@ transfer_pages:
       key: token
     web:
       path_template: open
-version: 1

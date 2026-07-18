@@ -2,7 +2,6 @@ dart_class: AssistantConversationWire
 library_path: assistant/generated/contracts/assistant_conversation.g.dart
 output_path: assistant/generated/contracts/assistant_conversation.g.dart
 contract: assistant_conversation
-version: assistant_conversation.m2
 kind: entity_wire_contract
 fields:
   - { name: conversationId, type: string, required: true }

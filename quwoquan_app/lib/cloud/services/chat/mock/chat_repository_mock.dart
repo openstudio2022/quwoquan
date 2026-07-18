@@ -56,18 +56,18 @@ class MockChatRepository implements ChatRepository {
     final contractConversations = _listOfMap(contractSeed?['conversations']);
     final repositoryConversations =
         seedConversations ??
-        _mergeRowsById(contractConversations, ChatMockData.conversations);
-    final inboxRows =
-        seedConversations ??
-        _mergeRowsById(contractConversations, ChatMockData.inboxItems);
+        _mergeRowsByKeys(
+          contractConversations,
+          ChatMockData.conversations,
+          const <String>['id'],
+        );
+    final inboxRows = ChatMockData.inboxItems;
 
     _conversationCache = repositoryConversations
-        .map(ConversationCacheRecord.fromWireMap)
+        .map(ConversationDto.fromMap)
+        .map(ConversationCacheRecord.fromConversationDto)
         .toList(growable: true);
-    _inboxOverrides = {
-      for (final row in inboxRows)
-        ChatInboxDto.fromMap(row).id: ChatInboxDto.fromMap(row),
-    };
+    _inboxOverrides = {for (final row in inboxRows) row.id: row};
 
     final contractMembers = _mapOfList(contractSeed?['members']);
     final initialMembers = seedMembers ?? contractMembers;
@@ -107,7 +107,7 @@ class MockChatRepository implements ChatRepository {
 
   /// 联系人头像必须走 avatar 媒体平面；禁止 [media/image] 泄漏进 Mock 收件箱。
   static bool _contactRowHasContractAvatar(Map<String, dynamic> row) {
-    final avatar = (row['avatarUrl'] ?? row['avatar'])?.toString().trim() ?? '';
+    final avatar = (row['avatarUrl'] ?? '').toString().trim();
     if (avatar.isEmpty) {
       return false;
     }
@@ -137,31 +137,6 @@ class MockChatRepository implements ChatRepository {
             .toList(growable: false),
       ),
     );
-  }
-
-  static List<Map<String, dynamic>> _mergeRowsById(
-    List<Map<String, dynamic>>? primary,
-    List<Map<String, dynamic>> fallback,
-  ) {
-    final byId = <String, Map<String, dynamic>>{};
-    void put(Map<String, dynamic> row, {required bool overwrite}) {
-      final id = (row['conversationId'] ?? row['id'] ?? row['_id'] ?? '')
-          .toString();
-      if (id.isEmpty) {
-        return;
-      }
-      if (overwrite || !byId.containsKey(id)) {
-        byId[id] = row;
-      }
-    }
-
-    for (final row in primary ?? const <Map<String, dynamic>>[]) {
-      put(row, overwrite: true);
-    }
-    for (final row in fallback) {
-      put(row, overwrite: false);
-    }
-    return byId.values.toList(growable: false);
   }
 
   static List<Map<String, dynamic>> _mergeRowsByKeys(
@@ -268,20 +243,21 @@ class MockChatRepository implements ChatRepository {
       if (current.type != 'group' || current.avatarUrl.trim().isEmpty) {
         continue;
       }
-      final sourceHash = _groupAvatarSourceHash(
-        _ensureMembersCache(current.id),
-      );
+      final members = _ensureMembersCache(current.id);
+      final sourceHash = _groupAvatarSourceHash(members);
       if (sourceHash.isEmpty) {
         continue;
       }
+      final needsMemberCount = current.memberCount != members.length;
       final needsVersion = current.groupAvatarVersion <= 0;
       final needsSourceHash = (current.groupAvatarSourceHash ?? '')
           .trim()
           .isEmpty;
-      if (!needsVersion && !needsSourceHash) {
+      if (!needsMemberCount && !needsVersion && !needsSourceHash) {
         continue;
       }
       final next = current.copyWith(
+        memberCount: members.length,
         groupAvatarVersion: needsVersion ? 1 : current.groupAvatarVersion,
         groupAvatarSourceHash: needsSourceHash
             ? sourceHash
@@ -461,13 +437,27 @@ class MockChatRepository implements ChatRepository {
           final highlight = title.toLowerCase().contains(normalizedQuery)
               ? title
               : preview;
-          return ConversationSearchItemView.fromMap(<String, dynamic>{
-            ...conversation.toWireMap(),
-            'highlightText': highlight,
-            'matchedField': title.toLowerCase().contains(normalizedQuery)
+          return ConversationSearchItemView(
+            conversationId: conversation.id,
+            type: conversation.type,
+            title: conversation.title,
+            avatarUrl: conversation.avatarUrl.isEmpty
+                ? null
+                : conversation.avatarUrl,
+            lastMessagePreview: conversation.lastMessagePreview.isEmpty
+                ? null
+                : conversation.lastMessagePreview,
+            lastMessageTime: DateTime.tryParse(conversation.lastMessageAt),
+            memberCount: conversation.memberCount,
+            circleId: conversation.circleId.isEmpty
+                ? null
+                : conversation.circleId,
+            circleGroupId: conversation.circleGroupId,
+            highlightText: highlight,
+            matchedField: title.toLowerCase().contains(normalizedQuery)
                 ? 'title'
                 : 'lastMessagePreview',
-          });
+          );
         })
         .toList(growable: false);
   }
@@ -549,13 +539,11 @@ class MockChatRepository implements ChatRepository {
 
   @override
   Future<ConversationDto> getConversation(String conversationId) async {
-    final record =
-        _findConversation(conversationId) ??
-        (_conversationCache.isNotEmpty ? _conversationCache.first : null);
+    final record = _findConversation(conversationId);
     if (record == null) {
-      return ConversationDto.fromMap(const <String, dynamic>{});
+      throw StateError('conversation not found: $conversationId');
     }
-    return ConversationDto.fromMap(record.toWireMap());
+    return record.toConversationDto();
   }
 
   @override
@@ -1176,9 +1164,7 @@ class MockChatRepository implements ChatRepository {
   Future<List<ConversationDto>> batchGetConversations(List<String> ids) async {
     return _conversationCache
         .where((conversation) => ids.contains(conversation.id))
-        .map(
-          (conversation) => ConversationDto.fromMap(conversation.toWireMap()),
-        )
+        .map((conversation) => conversation.toConversationDto())
         .toList(growable: false);
   }
 

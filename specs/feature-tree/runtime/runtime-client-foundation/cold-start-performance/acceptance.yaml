@@ -13,11 +13,12 @@ scope:
   - 单控制器全开到逆序聚拢再顺时针逐瓣绽放、最多两次重放与单行提示
   - process start 到 welcome exit 的 6 秒硬门与 0.65 压缩下限
   - deferred Router 并行预加载、安全 Shell、120ms 欢迎终帧淡出与 overlay terminal fallback
-  - startup_welcome_sequence、帧耗时、重放/降级/deadline 告警
+  - startup_welcome_sequence、帧耗时与重放/降级/deadline 发布 UAT 硬门
+  - pre-runApp 配置失败恢复根、Router 超时/异常安全终态与 Android/iOS 原生首帧 watchdog
+  - "`StartupAttempt` 本地 journal、受限匿名启动遥测接收、SLS/Prometheus 投影与补传"
   out_of_scope:
   - native 动态欢迎、overlay、提示或动画进度 handoff
   - 等待首页、聊天、资料等业务数据后才进入 Shell
-  - api_integration（启动状态机没有端云 API 合同）
 gwt_acceptance:
   GWT1:
     title: 原生静态终态与 Flutter 第一帧连续
@@ -124,7 +125,11 @@ gwt_acceptance:
     - 包含 motionSpecVersion=petal_bloom_v2、cycle、预算、readiness、提示、压缩、帧 P95、exitReason 与 deadlineOrigin
     - Shell 首帧记录 shellFirstPaintMs
     - 欢迎层实际移除记录 overlayRemovedMs
+    - home_feed_first_usable 仅在默认推荐非空内容首帧和欢迎遮罩移除均完成后记录，Router/Provider 成功、空态、错误态与后台页不得伪造
     - replay、降级、欢迎退出/遮罩移除超 6 秒与连续慢帧可配置告警
+    - 受限启动遥测真实生成 `ops_startup_phase_total` 与
+      `ops_startup_phase_duration_seconds`；仪表盘按 platform/runtime_env 查看首帧、
+      Shell、terminal 漏斗、recovery 与 journal_drop，attemptId 不作为指标标签
     done_when:
     - 埋点字段合同与 startup probe 通过
     tests:
@@ -197,6 +202,57 @@ gwt_acceptance:
       - Android petal_bloom_v2 profile/release 真机 20 次冷启动与完整录像
       - iPhone petal_bloom_v2 profile/release 真机 20 次冷启动与完整录像
       - 旧 petal hinge 版本时长报告不得作为当前视觉规格验收证据
+  GWT6:
+    title: 启动故障终态与跨端遥测闭环
+    given:
+    - 缺失运行时端点、Welcome observer 抛错、Router future 永不完成或抛错、native 首帧未确认
+    - 启动发生在离线、游客、登录切换、Web pagehide 或下一次成功启动补传条件下
+    when:
+    - bootstrap、Root/Welcome、Router、原生 watchdog 和 startup reporter 的异步分支竞争
+    then:
+    - 每次启动恰好进入 `routerShell`、`safeRecovery` 或 `nativeRecovery` 一个终态，不能永久停在原生 LaunchScreen、Flutter Welcome 或空白页
+    - 配置失败在 Flutter 恢复根显示脱敏结构化错误；Router 失败可重试并创建新的受控加载尝试
+    - native watchdog 只在 renderer 首帧确认前且前台预算耗尽时显示恢复面；Flutter 首帧已到但 safe terminal 较慢时只记录结构化 slow terminal，不得覆盖 Flutter 页面
+    - 同一 attempt 从首次 arm 起只使用一个单调时钟 origin；native clock hydration 不得重新 arm、rebase 或改变 deadline
+    - 同一 `attemptId` 的 native、Dart、Router、Shell、恢复和 summary 事件可按稳定 eventId 精确一次关联
+    - 原生重试生成新的 attemptId，旧 watchdog/journal 不得影响新 Activity；`Activity.recreate()` 不得作为进程冷启动证据
+    - journal 仅在完整 ACK 后删除；零 ACK、部分 ACK、离线、认证切换及 Web 重载均保留待补传记录
+    - 请求、本地 journal、Mongo 和 ES 都不含邮箱、手机号、token、原始异常、堆栈或业务文本
+    done_when:
+    - local_contract、真实 API 接收/幂等/投影集成和 Android/iPhone/Web 故障 UAT 都有可复验记录
+    tests:
+      planned:
+      - file: quwoquan_app/test/local_contract/app/bootstrap_recovery__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/app/startup_state_machine__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/app/startup_telemetry__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/app/startup_native_watchdog__local_contract_test.dart
+      - file: quwoquan_service/services/product-ops-service/cmd/api/main__local_contract_test.go
+      - file: quwoquan_service/services/product-ops-service/tests/api_integration/startup_telemetry__api_integration_test.go
+      - file: quwoquan_service/services/product-ops-service/tests/api_integration/startup_telemetry__api_integration_test.go
+      - file: quwoquan_app/scripts/device/verify_startup_first_frame.py
+      recorded:
+      - file: quwoquan_app/test/local_contract/app/bootstrap_recovery__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/app/startup_state_machine__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/app/startup_telemetry__local_contract_test.dart
+      - file: quwoquan_service/services/product-ops-service/cmd/api/main__local_contract_test.go
+    status: partial
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: startup_failure_state_machine
+        cases:
+        - local_contract.runtime.runtime_client_foundation.cold_start_performance.recovery
+        envs: [local]
+      - layer: api_integration
+        suite: startup_telemetry_ingress
+        cases:
+        - api_integration.runtime.runtime_client_foundation.cold_start_performance.telemetry
+        envs: [gamma]
+      - layer: user_acceptance
+        suite: startup_cross_platform_fault_injection
+        cases:
+        - user_acceptance.runtime.runtime_client_foundation.cold_start_performance.fault_recovery
+        envs: [gamma_local]
 execution:
   local_gate:
   - make verify-app-startup-ttid

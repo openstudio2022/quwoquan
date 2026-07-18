@@ -57,7 +57,6 @@ def test_execution_model_contract__writes_schema_checked_runtime_evidence__local
     execution_id = "20260713--travel-homepage-coverage--cn-zhejiang--canary-902"
     monkeypatch.setattr(runner, "execution_root", lambda _execution_id: tmp_path)
     report = {
-        "contractVersion": "execution-model-readiness-v1",
         "ready": True,
         "runtime": "local",
         "author": {

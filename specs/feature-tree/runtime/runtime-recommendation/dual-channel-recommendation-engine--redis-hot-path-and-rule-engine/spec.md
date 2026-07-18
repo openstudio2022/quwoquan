@@ -2,7 +2,7 @@
 
 ## 功能说明
 - **Redis 热路径**：session_signals（标签权重漂移）、exposed_set（去重）、negative_set（负反馈过滤）、realtime_interest（实时兴趣向量）；key 格式 `session:{user_id}:{session_id}:*`。
-- **信号上报接口**：POST /v1/content/feed/signal；body 含 content_id、signal_type（view/like/dislike）、metadata。
+- **信号上报接口**：POST /content/feed/signal；body 含 content_id、signal_type（view/like/dislike）、metadata。
 - **规则引擎**：RuleScorer 6 维特征评分 + 可配置权重。
 - **性能保障**：SessionCache + BufferedHotPath + 并行读写 + Redis 连接池调优。
 

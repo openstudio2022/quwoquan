@@ -1,4 +1,3 @@
-version: 1
 aggregate: Circle
 
 entities:
@@ -6,6 +5,7 @@ entities:
     description: 圈子（聚合根）
     fields:
       - name: _id
+        source: _id
         type: ObjectId
         constraints: [PK]
         classification: PUBLIC
@@ -14,6 +14,7 @@ entities:
         ops_exposure: read
 
       - name: name
+        source: name
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -24,6 +25,7 @@ entities:
         search_field: true
 
       - name: description
+        source: description
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -34,6 +36,7 @@ entities:
         search_field: true
 
       - name: coverUrl
+        source: coverUrl
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -42,6 +45,7 @@ entities:
         ops_exposure: read
 
       - name: iconUrl
+        source: iconUrl
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -51,6 +55,7 @@ entities:
         description: 圈子独立头像（主页头部头像簇主体），缺省时端侧回退 coverUrl
 
       - name: ownerId
+        source: ownerId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -59,6 +64,7 @@ entities:
         ops_exposure: read
 
       - name: ownerDisplayNameSnapshot
+        source: ownerDisplayNameSnapshot
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -68,6 +74,7 @@ entities:
         description: 圈主显示名证据快照；仅由用户资料投影或环境契约种子写入，影响力读路径不得按 ownerId 或默认文案补造
 
       - name: category
+        source: category
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -77,6 +84,7 @@ entities:
         recommend_feature: true
 
       - name: subCategory
+        source: subCategory
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -87,6 +95,7 @@ entities:
         description: 二级分类 / 组织细分标签
 
       - name: tags
+        source: tags
         type: "[]string"
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -98,6 +107,7 @@ entities:
         description: 路径制 tagRef 列表；唯一真相源为数据工程 control_plane/governance/taxonomy
 
       - name: memberCount
+        source: memberCount
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -108,6 +118,7 @@ entities:
         description: 圈子成员数；圈子页统计前台展示为「成员」
 
       - name: postCount
+        source: postCount
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -117,6 +128,7 @@ entities:
         recommend_feature: true
 
       - name: weeklyActiveCount
+        source: weeklyActiveCount
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -127,6 +139,7 @@ entities:
         description: 周活跃成员数（超前）
 
       - name: status
+        source: status
         type: enum
         enum_ref: CircleStatus
         constraints: [NOT_NULL]
@@ -136,6 +149,7 @@ entities:
         ops_exposure: read_write
 
       - name: visibility
+        source: visibility
         type: enum
         enum_ref: CircleVisibility
         constraints: [NOT_NULL, DEFAULT_PUBLIC]
@@ -146,6 +160,7 @@ entities:
         description: 超前
 
       - name: joinPolicy
+        source: joinPolicy
         type: enum
         enum_ref: CircleJoinPolicy
         constraints: [NOT_NULL, DEFAULT_OPEN]
@@ -156,6 +171,7 @@ entities:
         description: 超前
 
       - name: kind
+        source: kind
         type: enum
         enum_ref: CircleKind
         constraints: [NOT_NULL, DEFAULT_INTEREST]
@@ -166,6 +182,7 @@ entities:
         description: 关系主页类型（兴趣型 / 组织型）
 
       - name: displaySubjectType
+        source: displaySubjectType
         type: enum
         enum_ref: CircleDisplaySubjectType
         constraints: [NOT_NULL, DEFAULT_CIRCLE]
@@ -176,6 +193,7 @@ entities:
         description: 前台详情模板命名（圈子 / 学校主页 / 公司主页等）
 
       - name: followEnabled
+        source: followEnabled
         type: boolean
         constraints: [NOT_NULL, DEFAULT_TRUE]
         classification: PUBLIC
@@ -185,6 +203,7 @@ entities:
         description: 是否允许通过主页沉淀成员关系
 
       - name: defaultPublicGroupId
+        source: defaultPublicGroupId
         type: ObjectId
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -194,6 +213,7 @@ entities:
         description: 默认公共群 / 组织默认交流节点
 
       - name: conversationId
+        source: conversationId
         type: ObjectId
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -203,6 +223,7 @@ entities:
         description: 待删除旧字段；商用入口必须通过 defaultPublicGroupId -> CircleGroup.conversationId 承接聊天，前台不得消费
 
       - name: autoSyncChat
+        source: autoSyncChat
         type: boolean
         constraints: [NOT_NULL, DEFAULT_TRUE]
         classification: PUBLIC
@@ -212,6 +233,7 @@ entities:
         description: 是否自动同步成员到群聊
 
       - name: sectionConfig
+        source: sectionConfig
         type: "[]CircleSectionConfig"
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -221,6 +243,7 @@ entities:
         description: 圈子主页板块配置（顺序+可见性）
 
       - name: storageUsedBytes
+        source: storageUsedBytes
         type: int64
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -230,6 +253,7 @@ entities:
         description: 存储空间已用字节数
 
       - name: storageQuotaBytes
+        source: storageQuotaBytes
         type: int64
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -239,6 +263,7 @@ entities:
         description: 存储空间配额上限（字节）
 
       - name: domainId
+        source: domainId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -250,6 +275,7 @@ entities:
         domain_taxonomy_ref: true
 
       - name: linkedHomepageId
+        source: linkedHomepageId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -259,6 +285,7 @@ entities:
         description: 群组关联的共享主页 ID（只读摘要消费锚点）
 
       - name: linkedHomepageType
+        source: linkedHomepageType
         type: enum
         enum_ref: HomepageType
         constraints: [NULLABLE]
@@ -269,6 +296,7 @@ entities:
         description: 关联共享主页的类型快照
 
       - name: linkedHomepageTitle
+        source: linkedHomepageTitle
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -278,6 +306,7 @@ entities:
         description: 关联共享主页的标题快照
 
       - name: createdAt
+        source: createdAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -287,6 +316,7 @@ entities:
         recommend_feature: true
 
       - name: updatedAt
+        source: updatedAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -299,6 +329,7 @@ entities:
     embedded: true
     fields:
       - name: sectionType
+        source: sectionType
         type: enum
         enum_ref: CircleSectionType
         constraints: [NOT_NULL]
@@ -309,6 +340,7 @@ entities:
         description: 板块类型（works/chat/storage/interaction/custom）
 
       - name: visible
+        source: visible
         type: boolean
         constraints: [NOT_NULL, DEFAULT_TRUE]
         classification: PUBLIC
@@ -325,6 +357,7 @@ entities:
         ops_exposure: read
 
       - name: customTitle
+        source: customTitle
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -337,6 +370,7 @@ entities:
     description: 群组搜索结果项视图，用于全局搜索结果分组
     fields:
       - name: circleId
+        source: circleId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -345,6 +379,7 @@ entities:
         ops_exposure: read
 
       - name: name
+        source: name
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -353,6 +388,7 @@ entities:
         ops_exposure: read
 
       - name: description
+        source: description
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -361,6 +397,7 @@ entities:
         ops_exposure: read
 
       - name: coverUrl
+        source: coverUrl
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -369,6 +406,7 @@ entities:
         ops_exposure: read
 
       - name: categoryId
+        source: categoryId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -377,6 +415,7 @@ entities:
         ops_exposure: read
 
       - name: subCategory
+        source: subCategory
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -385,6 +424,7 @@ entities:
         ops_exposure: read
 
       - name: domainId
+        source: domainId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -393,6 +433,7 @@ entities:
         ops_exposure: read
 
       - name: kind
+        source: kind
         type: enum
         enum_ref: CircleKind
         constraints: [NULLABLE]
@@ -402,6 +443,7 @@ entities:
         ops_exposure: read
 
       - name: displaySubjectType
+        source: displaySubjectType
         type: enum
         enum_ref: CircleDisplaySubjectType
         constraints: [NULLABLE]
@@ -411,6 +453,7 @@ entities:
         ops_exposure: read
 
       - name: memberCount
+        source: memberCount
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -419,6 +462,7 @@ entities:
         ops_exposure: read
 
       - name: postCount
+        source: postCount
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -427,6 +471,7 @@ entities:
         ops_exposure: read
 
       - name: highlightText
+        source: highlightText
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -435,6 +480,7 @@ entities:
         ops_exposure: read
 
       - name: matchedField
+        source: matchedField
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -443,6 +489,7 @@ entities:
         ops_exposure: read
 
       - name: linkedHomepageId
+        source: linkedHomepageId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -451,6 +498,7 @@ entities:
         ops_exposure: read
 
       - name: linkedHomepageType
+        source: linkedHomepageType
         type: enum
         enum_ref: HomepageType
         constraints: [NULLABLE]
@@ -460,6 +508,7 @@ entities:
         ops_exposure: read
 
       - name: linkedHomepageTitle
+        source: linkedHomepageTitle
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -471,6 +520,7 @@ entities:
     description: 群组搜索 facet bucket，用于频道/分类投影视图
     fields:
       - name: facetKey
+        source: facetKey
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -479,6 +529,7 @@ entities:
         ops_exposure: read
 
       - name: label
+        source: label
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -487,6 +538,7 @@ entities:
         ops_exposure: read
 
       - name: categoryId
+        source: categoryId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -495,6 +547,7 @@ entities:
         ops_exposure: read
 
       - name: subCategory
+        source: subCategory
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -503,6 +556,7 @@ entities:
         ops_exposure: read
 
       - name: facetCount
+        source: facetCount
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -514,6 +568,7 @@ entities:
     description: 群组搜索结果视图，包含群组项与 facet buckets
     fields:
       - name: items
+        source: items
         type: "[]CircleSearchItemView"
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -522,6 +577,7 @@ entities:
         ops_exposure: read
 
       - name: facetBuckets
+        source: facetBuckets
         type: "[]CircleFacetBucketView"
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -530,6 +586,7 @@ entities:
         ops_exposure: read
 
       - name: cursor
+        source: cursor
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC

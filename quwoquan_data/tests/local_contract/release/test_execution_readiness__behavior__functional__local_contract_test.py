@@ -1,4 +1,4 @@
-"""Release readiness must bind terminal workflow, author, and reviewer evidence."""
+"""Release readiness must bind terminal execution, author, and reviewer evidence."""
 from __future__ import annotations
 
 import json
@@ -36,9 +36,9 @@ def _fixture(monkeypatch, tmp_path: Path) -> Path:
         lambda execution_id: {"executionId": execution_id, "passed": True, "issues": []},
     )
     _write(
-        root / "_shared/workflow_state.json",
+        root / "_shared/execution_state.json",
         {
-            "schemaVersion": "quwoquan.content.workflow_state",
+            "schema": "quwoquan.content.execution_state",
             "executionId": EXECUTION_ID,
             "completed": ["download_fetch", "build_homepage", "build_validate"],
             "status": "succeeded",
@@ -49,9 +49,8 @@ def _fixture(monkeypatch, tmp_path: Path) -> Path:
     _write(
         root / "evidence/model_readiness.json",
         {
-            "schemaVersion": "quwoquan_data.execution_model_readiness/1",
+            "schema": "quwoquan_data.execution_model_readiness",
             "executionId": EXECUTION_ID,
-            "contractVersion": "execution-model-readiness-v1",
             "ready": True,
             "runtime": "local",
             "author": {
@@ -92,7 +91,7 @@ def _fixture(monkeypatch, tmp_path: Path) -> Path:
     _write(
         object_root / "4.draft/draft_meta.json",
         {
-            "schemaVersion": "quwoquan_data.draft_meta/1",
+            "schema": "quwoquan_data.draft_meta",
             "stage": "4.draft",
             "executionId": EXECUTION_ID,
             "executionBinding": "frozen",
@@ -111,7 +110,7 @@ def _fixture(monkeypatch, tmp_path: Path) -> Path:
         {"generator": "agent", "agentRunId": "author-run-001"},
     )
     reviewer_response = {
-        "schemaVersion": "quwoquan_data.homepage_reviewer_response/1",
+        "schema": "quwoquan_data.homepage_reviewer_response",
         "executionId": EXECUTION_ID,
         "objectRef": OBJECT_REF,
         "decision": "approved",
@@ -122,7 +121,7 @@ def _fixture(monkeypatch, tmp_path: Path) -> Path:
     _write(
         object_root / "5.review/reviewer_result.json",
         {
-            "schemaVersion": "quwoquan_data.reviewer_result/1",
+            "schema": "quwoquan_data.reviewer_result",
             "stage": "5.review",
             "executionId": EXECUTION_ID,
             "executionBinding": "frozen",
@@ -140,7 +139,7 @@ def _fixture(monkeypatch, tmp_path: Path) -> Path:
     _write(
         object_root / "5.review/attestation.json",
         {
-            "schemaVersion": "quwoquan_data.review_attestation/1",
+            "schema": "quwoquan_data.review_attestation",
             "stage": "5.review",
             "executionId": EXECUTION_ID,
             "executionBinding": "frozen",
@@ -205,9 +204,9 @@ def test_execution_readiness__rejects_synthetic_independent_reviewer_run_id__loc
     assert any("runId must be a real Cursor SDK run" in issue for issue in issues)
 
 
-def test_execution_readiness__rejects_interrupted_workflow__local_contract(monkeypatch, tmp_path: Path) -> None:
+def test_execution_readiness__rejects_interrupted_execution__local_contract(monkeypatch, tmp_path: Path) -> None:
     root = _fixture(monkeypatch, tmp_path)
-    state_path = root / "_shared/workflow_state.json"
+    state_path = root / "_shared/execution_state.json"
     state = json.loads(state_path.read_text(encoding="utf-8"))
     state["status"] = "manual_required"
     state["waitingCheckpoint"] = "build_validate"
@@ -216,8 +215,8 @@ def test_execution_readiness__rejects_interrupted_workflow__local_contract(monke
 
     issues = gate.execution_readiness_issues(EXECUTION_ID, require_reviewed=True)
 
-    assert any("workflow status is not succeeded" in issue for issue in issues)
-    assert any("workflow still waiting" in issue for issue in issues)
+    assert any("execution status is not succeeded" in issue for issue in issues)
+    assert any("execution still waiting" in issue for issue in issues)
 
 
 def test_execution_readiness__requires_homepage_media_closure__local_contract(

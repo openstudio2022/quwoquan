@@ -226,7 +226,7 @@ def test_publish_filter_syncs_article_digest_and_provenance_after_filter():
     (topic / "article.md").write_text(article, encoding="utf-8")
     (topic / "5.review").mkdir(parents=True, exist_ok=True)
     write_json(topic / "5.review" / "provenance.json", {
-        "schemaVersion": "quwoquan_data.provenance",
+        "schema": "quwoquan_data.provenance",
         "final": {"contentType": "article", "generator": "agent", "articleDigest": original_digest},
     })
 

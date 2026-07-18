@@ -241,12 +241,16 @@ func (generator *DomainGenerator) buildTemplateData(
 			IsRoot: entityName == aggregateName,
 		}
 		for _, field := range entity.Fields {
+			jsonTag := field.Name
+			if field.Name == "_id" {
+				jsonTag = "id"
+			}
 			entityData.Fields = append(
 				entityData.Fields,
 				domainFieldData{
 					GoName:  generator.fieldGoName(field.Name),
 					GoType:  generator.fieldGoType(field, entitySet),
-					JSONTag: field.Name,
+					JSONTag: jsonTag,
 					BSONTag: field.Name,
 				},
 			)

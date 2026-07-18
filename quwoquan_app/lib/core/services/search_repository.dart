@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
@@ -15,7 +17,11 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 part 'search_repository_models.dart';
 
 abstract class SearchRepository {
-  Future<SearchResponse> search(SearchRequest request);
+  Future<SearchResponse> search(
+    SearchRequest request, {
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  });
 }
 
 SearchRepository buildAppSearchRepository({
@@ -70,9 +76,15 @@ class AppSearchRepository implements SearchRepository {
   final PersonaContextLoader _personaContextLoader;
 
   @override
-  Future<SearchResponse> search(SearchRequest request) async {
+  Future<SearchResponse> search(
+    SearchRequest request, {
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  }) async {
+    cancellation?.throwIfCancelled();
     final normalized = request.normalized();
     if (normalized.query.isEmpty) {
+      cancellation?.throwIfCancelled();
       return SearchResponse(
         request: normalized,
         sections: const <SearchSection>[],
@@ -92,30 +104,31 @@ class AppSearchRepository implements SearchRepository {
           ? await _resolveLocalNamespace()
           : null;
 
-      if (localNamespace != null &&
+      if (normalized.mode == SearchMode.suggest &&
+          localNamespace != null &&
           effectiveObjectTypes.any((type) {
             return type == SearchObjectType.chatContact ||
                 type == SearchObjectType.chatConversation ||
                 type == SearchObjectType.chatMessage;
           })) {
-        await _localChatSearchSyncService.sync(force: false);
-      }
-      if (localNamespace != null &&
-          effectiveObjectTypes.contains(SearchObjectType.circleGroup)) {
-        final seeded = await _localCircleGroupSnapshotStore.ensureSeeded(
-          namespace: localNamespace,
-          circleRepository: _circleRepository,
-          circleGroupQuery: _circleGroupQuery,
+        unawaited(
+          _localChatSearchSyncService
+              .sync(force: false)
+              .then<void>((_) {}, onError: (_, _) {}),
         );
-        if (!seeded) {
-          degradeSignals.add(
-            const SearchDegradeSignal(
-              code: 'circle_group_snapshot_seed_failed',
-              message: 'circle.group 本地快照预热失败，当前仅保留远端与已有本地结果。',
-              objectType: SearchObjectType.circleGroup,
-            ),
-          );
-        }
+      }
+      if (normalized.mode == SearchMode.suggest &&
+          localNamespace != null &&
+          effectiveObjectTypes.contains(SearchObjectType.circleGroup)) {
+        unawaited(
+          _localCircleGroupSnapshotStore
+              .ensureSeeded(
+                namespace: localNamespace,
+                circleRepository: _circleRepository,
+                circleGroupQuery: _circleGroupQuery,
+              )
+              .then<void>((_) {}, onError: (_, _) {}),
+        );
       }
 
       if (normalized.mode == SearchMode.suggest) {
@@ -193,11 +206,14 @@ class AppSearchRepository implements SearchRepository {
         }
       }
 
+      cancellation?.throwIfCancelled();
       return SearchResponse(
         request: normalized,
         sections: sections,
         degradeSignals: degradeSignals,
       );
+    } on CloudOperationCancelledException {
+      rethrow;
     } catch (_) {
       return SearchResponse(
         request: normalized,
@@ -260,15 +276,17 @@ class AppSearchRepository implements SearchRepository {
       );
     }
     try {
-      final contacts = await _localChatSearchStore.searchContacts(
+      final contactsFuture = _localChatSearchStore.searchContacts(
         namespace: namespace,
         query: request.query,
         limit: request.limit,
       );
-      final conversations = await _localChatSearchStore.listConversationViews(
+      final conversationsFuture = _localChatSearchStore.listConversationViews(
         namespace: namespace,
         limit: 200,
       );
+      final contacts = await contactsFuture;
+      final conversations = await conversationsFuture;
       final hits = contacts
           .map((contact) {
             final userId = contact.contactId.trim();
@@ -361,60 +379,74 @@ class AppSearchRepository implements SearchRepository {
       );
     }
     try {
-      final conversationHits = <SearchHit>[];
-      final messageHits = <SearchHit>[];
-      if (request.objectTypes.isEmpty ||
-          request.objectTypes.contains(SearchObjectType.chatConversation)) {
-        final conversations = await _localChatSearchStore.searchConversations(
-          namespace: namespace,
-          query: request.query,
-          conversationType: request.conversationType,
-          limit: request.limit,
-        );
-        conversationHits.addAll(
-          conversations.map(
-            (conversation) => SearchHit(
-              objectType: SearchObjectType.chatConversation,
-              objectId: conversation.conversationId,
-              title: conversation.title,
-              subtitle: conversation.lastMessagePreview,
-              snippet: conversation.lastMessagePreview,
-              resolvedFrom: SearchResolvedFrom.local,
-              matchedField: conversation.matchedField,
-              payload: SearchHitPayloadWireMap(
-                _conversationSearchItemToMap(conversation),
-              ),
-            ),
-          ),
-        );
-      }
-      if (request.objectTypes.isEmpty ||
-          request.objectTypes.contains(SearchObjectType.chatMessage)) {
-        final messages = await _localChatSearchStore.searchMessages(
-          namespace: namespace,
-          query: request.query,
-          conversationType: request.conversationType,
-          limit: request.limit,
-        );
-        messageHits.addAll(
-          messages.map(
-            (message) => SearchHit(
-              objectType: SearchObjectType.chatMessage,
-              objectId: message.messageId,
-              title: message.conversationTitle ?? message.contentPreview,
-              subtitle: (message.senderDisplayName ?? '').isNotEmpty
-                  ? message.senderDisplayName
-                  : message.conversationTitle ?? message.contentPreview,
-              snippet: message.contentPreview,
-              resolvedFrom: SearchResolvedFrom.local,
-              matchedField: message.matchedField,
-              payload: SearchHitPayloadWireMap(
-                _messageSearchItemToMap(message),
-              ),
-            ),
-          ),
-        );
-      }
+      final conversationHitsFuture =
+          request.objectTypes.isEmpty ||
+              request.objectTypes.contains(SearchObjectType.chatConversation)
+          ? _localChatSearchStore
+                .searchConversations(
+                  namespace: namespace,
+                  query: request.query,
+                  conversationType: request.conversationType,
+                  limit: request.limit,
+                )
+                .then(
+                  (conversations) => conversations
+                      .map(
+                        (conversation) => SearchHit(
+                          objectType: SearchObjectType.chatConversation,
+                          objectId: conversation.conversationId,
+                          title: conversation.title,
+                          subtitle: conversation.lastMessagePreview,
+                          snippet: conversation.lastMessagePreview,
+                          resolvedFrom: SearchResolvedFrom.local,
+                          matchedField: conversation.matchedField,
+                          payload: SearchHitPayloadWireMap(
+                            _conversationSearchItemToMap(conversation),
+                          ),
+                        ),
+                      )
+                      .toList(growable: false),
+                )
+          : Future<List<SearchHit>>.value(const <SearchHit>[]);
+      final messageHitsFuture =
+          request.objectTypes.isEmpty ||
+              request.objectTypes.contains(SearchObjectType.chatMessage)
+          ? _localChatSearchStore
+                .searchMessages(
+                  namespace: namespace,
+                  query: request.query,
+                  conversationType: request.conversationType,
+                  limit: request.limit,
+                )
+                .then(
+                  (messages) => messages
+                      .map(
+                        (message) => SearchHit(
+                          objectType: SearchObjectType.chatMessage,
+                          objectId: message.messageId,
+                          title:
+                              message.conversationTitle ??
+                              message.contentPreview,
+                          subtitle: (message.senderDisplayName ?? '').isNotEmpty
+                              ? message.senderDisplayName
+                              : message.conversationTitle ??
+                                    message.contentPreview,
+                          snippet: message.contentPreview,
+                          resolvedFrom: SearchResolvedFrom.local,
+                          matchedField: message.matchedField,
+                          payload: SearchHitPayloadWireMap(
+                            _messageSearchItemToMap(message),
+                          ),
+                        ),
+                      )
+                      .toList(growable: false),
+                )
+          : Future<List<SearchHit>>.value(const <SearchHit>[]);
+      final localHits = await Future.wait<List<SearchHit>>(
+        <Future<List<SearchHit>>>[conversationHitsFuture, messageHitsFuture],
+      );
+      final conversationHits = localHits[0];
+      final messageHits = localHits[1];
       final hits = <SearchHit>[
         ...conversationHits.take(request.limit),
         ...messageHits.take(request.limit),
@@ -468,6 +500,13 @@ class AppSearchRepository implements SearchRepository {
     required LocalSearchNamespace? namespace,
     required Set<SearchObjectType> objectTypes,
   }) async {
+    if (request.mode == SearchMode.suggest) {
+      return _buildSuggestedGroupsSection(
+        request,
+        namespace: namespace,
+        objectTypes: objectTypes,
+      );
+    }
     final degradeSignals = <SearchDegradeSignal>[];
     final includeCircleGroups = objectTypes.contains(
       SearchObjectType.circleGroup,
@@ -621,6 +660,76 @@ class AppSearchRepository implements SearchRepository {
       ),
       degradeSignals: degradeSignals,
     );
+  }
+
+  Future<_SectionBuildResult?> _buildSuggestedGroupsSection(
+    SearchRequest request, {
+    required LocalSearchNamespace? namespace,
+    required Set<SearchObjectType> objectTypes,
+  }) async {
+    if (namespace == null) {
+      return _SectionBuildResult(
+        section: SearchSection(
+          id: 'groups',
+          title: _sectionTitle('groups', '讨论'),
+          objectTypes: objectTypes
+              .where(
+                (type) =>
+                    type == SearchObjectType.circleGroup ||
+                    type == SearchObjectType.circleCircle,
+              )
+              .toList(growable: false),
+          hits: const <SearchHit>[],
+          resolvedFrom: SearchResolvedFrom.local,
+        ),
+        degradeSignals: const <SearchDegradeSignal>[
+          SearchDegradeSignal(
+            code: 'circle_group_local_namespace_unavailable',
+            message: '当前无法确认本地账号命名空间，讨论联想已结算。',
+            objectType: SearchObjectType.circleGroup,
+          ),
+        ],
+      );
+    }
+    try {
+      final groups = await _localCircleGroupSnapshotStore.searchGroups(
+        namespace: namespace,
+        query: request.query,
+        limit: request.limit,
+      );
+      final hits = groups
+          .map(
+            (group) =>
+                _circleGroupHit(group, SearchResolvedFrom.local, request.query),
+          )
+          .toList(growable: false);
+      return _SectionBuildResult(
+        section: SearchSection(
+          id: 'groups',
+          title: _sectionTitle('groups', '讨论'),
+          objectTypes: const <SearchObjectType>[SearchObjectType.circleGroup],
+          hits: hits,
+          resolvedFrom: SearchResolvedFrom.local,
+        ),
+      );
+    } catch (_) {
+      return _SectionBuildResult(
+        section: SearchSection(
+          id: 'groups',
+          title: _sectionTitle('groups', '讨论'),
+          objectTypes: const <SearchObjectType>[SearchObjectType.circleGroup],
+          hits: const <SearchHit>[],
+          resolvedFrom: SearchResolvedFrom.local,
+        ),
+        degradeSignals: const <SearchDegradeSignal>[
+          SearchDegradeSignal(
+            code: 'circle_group_local_failed',
+            message: '讨论本地索引读取失败，当前单域已结算。',
+            objectType: SearchObjectType.circleGroup,
+          ),
+        ],
+      );
+    }
   }
 
   Future<_SectionBuildResult?> _buildContentSection(

@@ -4,21 +4,27 @@ import 'package:quwoquan_app/cloud/runtime/generated/rtc/rtc_signal_payloads.g.d
 void main() {
   group('RtcCallRingingPayload (metadata-driven)', () {
     test('manifest keys 与 events.yaml payload 字段一致（codegen 单一源）', () {
-      expect(rtcCallRingingPayloadWireKeys, containsAll(<String>[
-        'callId',
-        'callType',
-        'initiatorId',
-        'initiatorRingtoneId',
-        'targetUserId',
-        'conversationId',
-      ]));
+      expect(
+        rtcCallRingingPayloadWireKeys,
+        containsAll(<String>[
+          'callId',
+          'callType',
+          'initiatorId',
+          'initiatorRingtoneId',
+          'targetUserId',
+          'conversationId',
+        ]),
+      );
       // 信任两态（SIT3）扩展：来源标签 / 信任关系 / 链接过期，均为可选客户端字符串。
-      expect(rtcCallRingingOptionalClientStringWireKeys, equals(<String>[
-        'callerName',
-        'sourceLabel',
-        'trustRelation',
-        'expiresAt',
-      ]));
+      expect(
+        rtcCallRingingOptionalClientStringWireKeys,
+        equals(<String>[
+          'callerName',
+          'sourceLabel',
+          'trustRelation',
+          'expiresAt',
+        ]),
+      );
     });
 
     test('fromWire：最小 map + 默认值 callType=voice + 扩展 callerName', () {

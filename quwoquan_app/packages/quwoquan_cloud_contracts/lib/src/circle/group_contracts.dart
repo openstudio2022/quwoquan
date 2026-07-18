@@ -106,18 +106,12 @@ final class UpdateCircleGroupCommand {
 }
 
 final class ArchiveCircleGroupCommand {
-  ArchiveCircleGroupCommand({
-    required String circleId,
-    required String groupId,
-    required this.expectedVersion,
-  }) : circleId = _required(circleId, 'circleId'),
-       groupId = _required(groupId, 'groupId') {
-    _positive(expectedVersion, 'expectedVersion');
-  }
+  ArchiveCircleGroupCommand({required String circleId, required String groupId})
+    : circleId = _required(circleId, 'circleId'),
+      groupId = _required(groupId, 'groupId');
 
   final String circleId;
   final String groupId;
-  final int expectedVersion;
 }
 
 final class CircleGroupQuery {
@@ -293,7 +287,6 @@ CloudOperationRequestPayload encodeArchiveCircleGroupCommand(
     'circleId': command.circleId,
     'groupId': command.groupId,
   },
-  headers: <String, String>{'If-Match': '"${command.expectedVersion}"'},
 );
 
 CloudOperationRequestPayload encodeCircleGroupQuery(CircleGroupQuery query) =>

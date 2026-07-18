@@ -1,8 +1,8 @@
-"""Workflow service extracted from the retired monolithic runner."""
+"""Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
 from core.runtime_policy import active_runtime_policy
 import sys
-from content.execution.support import Any, ExecutionContext, MANAGED_AGENT_TIMEOUT_SECONDS, Path, _CURSOR_BRIDGE_LAUNCH_COOLDOWN_SECONDS, _CURSOR_BRIDGE_READY_DELAY_SECONDS, _normalize_managed_agent_provider, aggregate_turn_usage, contextmanager, extract_cursor_usage, hashlib, is_cursor_auth_error, json, load_workflow_state, os, re, resolve_cursor_api_key, save_workflow_state, shutil, signal, store, subprocess, tempfile, time
+from content.execution.support import Any, ExecutionContext, MANAGED_AGENT_TIMEOUT_SECONDS, Path, _CURSOR_BRIDGE_LAUNCH_COOLDOWN_SECONDS, _CURSOR_BRIDGE_READY_DELAY_SECONDS, _normalize_managed_agent_provider, aggregate_turn_usage, contextmanager, extract_cursor_usage, hashlib, is_cursor_auth_error, json, load_execution_state, os, re, resolve_cursor_api_key, save_execution_state, store, subprocess, tempfile, time
 
 _CURSOR_BRIDGE_MAX_RETRIES = active_runtime_policy().cursor_bridge_max_retries
 _PROCESS_TERMINATION_TIMEOUT_SECONDS = active_runtime_policy().process_termination_timeout_seconds
@@ -33,7 +33,7 @@ def _managed_local_workspace_guard(ctx: ExecutionContext):
             lock_file.seek(0)
             owner = lock_file.read().strip()
             raise RuntimeError(
-                "another managed-local workflow is already running in this workspace"
+                "another managed-local execution is already running in this workspace"
                 + (f" ({owner})" if owner else "")
             ) from exc
         lock_file.seek(0)
@@ -62,7 +62,7 @@ def _managed_local_workspace_guard(ctx: ExecutionContext):
                 cleanup_reports: list[dict[str, Any]] = []
                 if cross_task_conflicts:
                     observed_report = {
-                        "schemaVersion": "quwoquan_data.managed_workspace_cleanup",
+                        "schema": "quwoquan_data.managed_workspace_cleanup",
                         "mode": "force_clean_workspace_agent_state_observed_cross_task_after_lock",
                         "requestedConflictCount": len(conflicts),
                         "crossTaskConflictCount": len(cross_task_conflicts),
@@ -91,13 +91,13 @@ def _managed_local_workspace_guard(ctx: ExecutionContext):
                             item for item in conflicts
                             if int(item.get("pid") or 0) not in cross_task_pids
                         ]
-                state = load_workflow_state(ctx.execution_id)
-                reports = state.setdefault("workspaceCleanupReports", [])
+                state = load_execution_state(ctx.execution_id)
+                reports = state.workspace_cleanup_reports
                 if isinstance(reports, list):
                     reports.extend(cleanup_reports)
-                    state["workspaceCleanupReports"] = reports[-20:]
-                    state["heartbeatAt"] = store.now_iso()
-                    save_workflow_state(state)
+                    state.workspace_cleanup_reports = reports[-20:]
+                    state.heartbeat_at = store.now_iso()
+                    save_execution_state(state)
             if conflicts:
                 rendered = "; ".join(
                     f"{item.get('kind')} pid={item.get('pid')} pgid={item.get('pgid')} "
@@ -173,8 +173,8 @@ def _prompt_cursor_agent_capturing_usage(
 def _default_managed_agent_runner(ctx: ExecutionContext, prompt: str) -> dict[str, Any]:
     """在当前 workspace 启动 Cursor Agent；只返回终态，推进由父进程校验。"""
     from content.execution.agent.agent_worker import _terminate_pid_tree_if_alive
-    from content.execution.pipeline.preflight import _cursor_bridge_error_is_retryable, _cursor_bridge_launch_guard, _patch_cursor_sdk_tool_callback_token
-    from content.execution.recovery.stage_reset import _managed_uses_serial_local_cursor
+    from content.execution.controller.preflight import _cursor_bridge_error_is_retryable, _cursor_bridge_launch_guard, _patch_cursor_sdk_tool_callback_token
+    from content.execution.context import _managed_uses_serial_local_cursor
     try:
         from cursor_sdk import (  # type: ignore
             Agent,
@@ -458,107 +458,8 @@ def _default_managed_agent_runner(ctx: ExecutionContext, prompt: str) -> dict[st
         "usageMeasurementMode": str(usage.get("source") or "") if usage.get("available") else "",
     }
 
-def _default_codex_cli_agent_runner(ctx: ExecutionContext, prompt: str) -> dict[str, Any]:
-    """Run a real Codex CLI agent through the same managed checkpoint contract."""
-    from content.execution.agent.agent_worker import _terminate_pid_tree_if_alive
-    codex = shutil.which("codex")
-    if not codex:
-        return {
-            "started": False,
-            "status": "error",
-            "error": "codex CLI unavailable on PATH",
-            "retryable": False,
-            "agentProvider": "codex_cli",
-        }
-    started_at = time.monotonic()
-    with tempfile.TemporaryDirectory(prefix="qwq-codex-agent-") as tmp:
-        output_path = Path(tmp) / "last_message.txt"
-        cmd = [
-            codex,
-            "exec",
-            "-C",
-            str(Path.cwd()),
-            "--dangerously-bypass-approvals-and-sandbox",
-            "--color",
-            "never",
-            "--output-last-message",
-            str(output_path),
-        ]
-        if str(ctx.model or "").strip():
-            cmd.extend(["--model", str(ctx.model).strip()])
-        cmd.append("-")
-        proc = subprocess.Popen(
-            cmd,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            cwd=str(Path.cwd()),
-            env=os.environ.copy(),
-            start_new_session=True,
-        )
-        try:
-            stdout, stderr = proc.communicate(
-                input=prompt,
-                timeout=MANAGED_AGENT_TIMEOUT_SECONDS,
-            )
-        except subprocess.TimeoutExpired:
-            _terminate_pid_tree_if_alive(proc.pid)
-            try:
-                stdout, stderr = proc.communicate(
-                    timeout=_PROCESS_TERMINATION_TIMEOUT_SECONDS
-                )
-            except subprocess.TimeoutExpired:
-                try:
-                    os.killpg(proc.pid, signal.SIGKILL)
-                except OSError:
-                    pass
-                stdout, stderr = proc.communicate()
-            return {
-                "started": False,
-                "status": "error",
-                "error": f"codex exec timed out after {MANAGED_AGENT_TIMEOUT_SECONDS}s",
-                "retryable": True,
-                "errorType": "timeout",
-                "agentProvider": "codex_cli",
-                "stdoutTail": _redact_managed_secret(stdout or "")[-1200:],
-                "stderrTail": _redact_managed_secret(stderr or "")[-1200:],
-            }
-        result_text = ""
-        if output_path.is_file():
-            try:
-                result_text = output_path.read_text(encoding="utf-8").strip()
-            except OSError:
-                result_text = ""
-        if proc.returncode != 0:
-            return {
-                "started": False,
-                "status": "error",
-                "error": (
-                    f"codex exec exited {proc.returncode}; "
-                    f"stderr={_redact_managed_secret(stderr)[-1200:]}"
-                ),
-                "retryable": True,
-                "agentProvider": "codex_cli",
-                "stdoutTail": _redact_managed_secret(stdout)[-1200:],
-                "stderrTail": _redact_managed_secret(stderr)[-1200:],
-            }
-        run_digest = hashlib.sha256((prompt + str(started_at)).encode("utf-8")).hexdigest()[:16]
-        return {
-            "started": True,
-            "status": "finished",
-            "error": None,
-            "result": result_text[:4000],
-            "agentId": "codex-cli",
-            "runId": f"codex-cli-{run_digest}",
-            "durationMs": int(max(0.0, time.monotonic() - started_at) * 1000),
-            "agentProvider": "codex_cli",
-        }
-
 def _managed_agent_runner_for_provider(ctx: ExecutionContext, prompt: str) -> dict[str, Any]:
-    provider = _normalize_managed_agent_provider(ctx.agent_provider)
-    if provider == "codex_cli":
-        return _default_codex_cli_agent_runner(ctx, prompt)
+    _normalize_managed_agent_provider(ctx.agent_provider)
     outcome = _default_managed_agent_runner(ctx, prompt)
     outcome.setdefault("agentProvider", "cursor_sdk")
     return outcome

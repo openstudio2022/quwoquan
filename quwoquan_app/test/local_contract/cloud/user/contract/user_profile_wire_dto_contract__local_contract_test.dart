@@ -25,10 +25,10 @@ import 'package:quwoquan_app/core/models/search_models.dart';
 
 void main() {
   group('SubAccountProfileWireDto', () {
-    test('userId 仅填充 subAccountId，不再冒充 ownerUserId', () {
+    test('subAccountId does not impersonate ownerUserId', () {
       final dto = SubAccountProfileWireDto.fromMap(<String, dynamic>{
-        'userId': 'u_owner',
-        'nickname': 'nick',
+        'subAccountId': 'u_owner',
+        'displayName': 'nick',
         'followerCount': 1,
         'followingCount': 2,
         'postCount': 3,
@@ -40,10 +40,10 @@ void main() {
       expect(dto.displayName, 'nick');
     });
 
-    test('backgroundImage 别名映射到 backgroundUrl', () {
+    test('backgroundUrl uses the canonical wire key', () {
       final dto = SubAccountProfileWireDto.fromMap(<String, dynamic>{
-        'userId': 'u1',
-        'backgroundImage': 'https://bg.example/x.jpg',
+        'subAccountId': 'u1',
+        'backgroundUrl': 'https://bg.example/x.jpg',
       });
       expect(dto.backgroundUrl, 'https://bg.example/x.jpg');
     });
@@ -123,12 +123,10 @@ void main() {
     test('展示名在 wire 空串时回退到 subjectId', () {
       final view = SubAccountProfileViewData.fromSubAccountProfileWire(
         SubAccountProfileWireDto.fromMap(<String, dynamic>{
-          'userId': 'only_id',
-          'nickname': '',
+          'subAccountId': 'only_id',
           'displayName': '',
           'username': '',
           'subjectType': '',
-          'subAccountId': '',
         }),
       );
       expect(view.displayName, 'only_id');
@@ -152,10 +150,10 @@ void main() {
   });
 
   group('ProfileSocialRelationRowWireDto', () {
-    test('userId 与 displayName 别名', () {
+    test('canonical subAccountId and displayName', () {
       final dto = ProfileSocialRelationRowWireDto.fromMap(<String, dynamic>{
-        'userId': 'rel_1',
-        'nickname': '朋友',
+        'subAccountId': 'rel_1',
+        'displayName': '朋友',
         'avatarUrl': 'https://a.test/1.jpg',
         'avatarVersion': 4,
         'relationState': 'following',
@@ -201,18 +199,19 @@ void main() {
   });
 
   group('ProfileInteractionActivityWireDto', () {
-    test('activityId / actor 别名与 target 别名', () {
+    test('canonical activity actor and target fields', () {
       final dto = ProfileInteractionActivityWireDto.fromMap(<String, dynamic>{
-        'id': 'act_1',
-        'userId': 'actor_sub',
-        'nickname': '小明',
-        'avatarUrl': 'https://av.test/z.jpg',
-        'avatarVersion': 8,
+        'activityId': 'act_1',
+        'actorSubAccountId': 'actor_sub',
+        'actorDisplayName': '小明',
+        'actorAvatarUrl': 'https://av.test/z.jpg',
+        'actorAvatarVersion': 8,
         'activityType': 'like',
-        'targetUserId': 'tgt_sub',
-        'postId': 'post_99',
+        'targetSubAccountId': 'tgt_sub',
+        'targetContentId': 'post_99',
         'targetContentType': 'post',
-        'targetTitle': '摘要',
+        'targetContentSummary': '摘要',
+        'displayAvatarVersion': 8,
         'createdAt': '2026-02-02T12:00:00Z',
       });
       expect(dto.activityId, 'act_1');
@@ -249,9 +248,9 @@ void main() {
       final view =
           ProfileInteractionActivityViewData.fromProfileInteractionActivityWire(
             ProfileInteractionActivityWireDto.fromMap(<String, dynamic>{
-              'userId': 'u_x',
+              'actorSubAccountId': 'u_x',
               'activityType': 'comment',
-              'nickname': '某人',
+              'actorDisplayName': '某人',
             }),
           );
       expect(view.activityId, 'comment:u_x');
@@ -297,16 +296,16 @@ void main() {
   });
 
   group('PersonaManagementItemWireDto', () {
-    test('subAccountId / id 别名与扩展字段', () {
+    test('canonical persona fields and extensions', () {
       final dto = PersonaManagementItemWireDto.fromMap(<String, dynamic>{
         'subAccountId': 'per_1',
-        'nickname': '分身名',
+        'displayName': '分身名',
         'userHandle': 'persona_handle',
         'phone': '13800000000',
         'email': 'persona@example.com',
         'avatarUrl': 'https://a.test/persona.jpg',
         'avatarVersion': 5,
-        'inheritsFromOwner': false,
+        'inheritsProfileFromOwner': false,
         'overriddenProfileFields': <String>['email'],
       });
       expect(dto.subAccountId, 'per_1');
@@ -321,10 +320,10 @@ void main() {
   });
 
   group('PersonaManagementQuotaWireDto', () {
-    test('maxPersonas / usedPersonas 别名', () {
+    test('canonical maxSubAccounts and usedSubAccounts', () {
       final dto = PersonaManagementQuotaWireDto.fromMap(<String, dynamic>{
-        'maxPersonas': 10,
-        'usedPersonas': 3,
+        'maxSubAccounts': 10,
+        'usedSubAccounts': 3,
       });
       expect(dto.maxSubAccounts, 10);
       expect(dto.usedSubAccounts, 3);
@@ -376,7 +375,7 @@ void main() {
         'subAccountId': 'persona_main',
         'ownerUserId': 'user_main',
         'avatarVersion': 9,
-        'contextVersion': 3,
+        'personaContextVersion': '3',
         'personaSnapshotVersion': 2,
         'sourceSurfaceId': 'notification_center',
         'explicitOverride': true,
@@ -398,7 +397,7 @@ void main() {
           'avatarUrl':
               'media/avatar/s/archived-avatar/user/persona_photo/v1/profile.png',
           'avatarVersion': 5,
-          'contextVersion': 5,
+          'personaContextVersion': '5',
         }),
       );
       expect(view.subAccountId, 'persona_photo');
@@ -417,9 +416,9 @@ void main() {
   });
 
   group('SocialRelationshipCapabilityWireDto', () {
-    test('relationshipState 别名', () {
+    test('canonical relationState', () {
       final dto = SocialRelationshipCapabilityWireDto.fromMap(<String, dynamic>{
-        'relationshipState': 'mutual',
+        'relationState': 'mutual',
         'canFollow': true,
       });
       expect(dto.relationState, 'mutual');
@@ -428,14 +427,14 @@ void main() {
   });
 
   group('SocialRelationSearchItemWireDto', () {
-    test('显式空 subAccountId 不截断 userId（skip_empty_string_aliases）', () {
+    test('显式空 subAccountId 不消费 retired userId', () {
       final dto = SocialRelationSearchItemWireDto.fromMap(<String, dynamic>{
         'subAccountId': '',
         'userId': 'search_u1',
         'nickname': 'n',
         'avatarVersion': 8,
       });
-      expect(dto.subAccountId, 'search_u1');
+      expect(dto.subAccountId, isEmpty);
       expect(dto.avatarVersion, 8);
     });
 
@@ -512,10 +511,10 @@ void main() {
   });
 
   group('PersonaLifecycleGuardWireDto', () {
-    test('message 多别名', () {
+    test('canonical message', () {
       final dto = PersonaLifecycleGuardWireDto.fromMap(<String, dynamic>{
         'subAccountId': 's1',
-        'userMessage': '提示',
+        'message': '提示',
         'canDelete': false,
       });
       final v = PersonaLifecycleGuardViewData.fromPersonaLifecycleGuardWire(
@@ -526,11 +525,11 @@ void main() {
   });
 
   group('ActivePersonaContextWireDto', () {
-    test('skip_empty 后 userId 回填 subAccountId', () {
+    test('ownerUserId does not backfill an empty subAccountId', () {
       final dto = ActivePersonaContextWireDto.fromMap(<String, dynamic>{
         'subAccountId': '',
-        'userId': 'ctx_u',
-        'nickname': '展示',
+        'ownerUserId': 'ctx_u',
+        'displayName': '展示',
       });
       expect(dto.subAccountId, '');
       expect(dto.ownerUserId, 'ctx_u');
@@ -538,15 +537,18 @@ void main() {
   });
 
   group('PersonaManagementSummaryWireDto', () {
-    test('subAccounts 优先于空 items', () {
+    test('canonical items wins and retired subAccounts is ignored', () {
       final dto = PersonaManagementSummaryWireDto.fromMap(<String, dynamic>{
-        'items': <Map<String, dynamic>>[],
-        'subAccounts': <Map<String, dynamic>>[
+        'items': <Map<String, dynamic>>[
           <String, dynamic>{'subAccountId': 's1', 'displayName': 'A'},
+        ],
+        'subAccounts': <Map<String, dynamic>>[
+          <String, dynamic>{'subAccountId': 'retired', 'displayName': 'B'},
         ],
         'quota': <String, dynamic>{'maxSubAccounts': 5, 'usedSubAccounts': 1},
       });
       expect(dto.items.length, 1);
+      expect(dto.items.single['subAccountId'], 's1');
       final view =
           PersonaManagementSummaryViewData.fromPersonaManagementSummaryWire(
             dto,

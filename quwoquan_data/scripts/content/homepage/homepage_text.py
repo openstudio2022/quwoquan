@@ -10,9 +10,9 @@ from core.content_source_registry import (
     resolve_homepage_source_role,
 )
 
-# 主页主锚资格唯一由 registry 的四百科闭集裁决。
+# 主页主锚资格唯一由 registry 的三百科闭集裁决。
 _HOMEPAGE_GUIDE_PENALTY = ("攻略", "游记", "评论", "点评", "小红书", "图虫", "摄影")
-_HOMEPAGE_ALLOWED_LANES = ("homepage", "legacy", "")
+_HOMEPAGE_ALLOWED_LANES = ("homepage",)
 _HOMEPAGE_FACT_NOISE_MARKERS = (
     "欢迎访问",
     "首页",

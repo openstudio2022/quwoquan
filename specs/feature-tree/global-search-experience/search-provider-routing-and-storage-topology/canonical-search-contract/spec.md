@@ -35,7 +35,7 @@ canonical `SearchResponse` / `SearchHit` 已扩展以下商用字段（真相源
 | `connectionState` | hit | 连接态闭集，驱动已连接区 / 发现区 / 交集分组（端侧不推断） |
 | `intersectionReason` | hit | 交集理由（`primaryText` 等），端侧只读展示、不二次拼装 |
 
-App `result` 阶段统一消费 canonical `search(request)` 响应，**不再消费分域搜索接口**（各域 `/v1/.../search` 退化为 indexer 数据源 / 内部回退）。
+App `result` 阶段统一消费 canonical `search(request)` 响应，**不再消费分域搜索接口**（各域 `/.../search` 退化为 indexer 数据源 / 内部回退）。
 
 ## Out of Scope
 

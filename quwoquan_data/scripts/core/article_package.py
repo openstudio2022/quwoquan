@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 import shutil
 from pathlib import Path
 from typing import Any, Mapping
@@ -15,7 +14,7 @@ from core.asset_identity import (
     parse_post_asset_id as _parse_post_asset_id,
 )
 
-MARKDOWN_VERSION = "qwq-rich-md/1"
+MARKDOWN_DIALECT = "qwq-rich-md"
 
 
 def sha256_text(text: str) -> str:
@@ -114,20 +113,6 @@ def compute_document_version_sha256(
     )
 
 
-def asset_id_from_object_key(object_key: str) -> str:
-    """Stable, readable, collision-free asset id derived from objectKey.
-
-    旧实现把非 ASCII（如中文实体名）整段塌缩成一长串下划线，导致 assetId 看不出
-    对应哪张图 / 哪个实体（评审痛点）。新实现：保留可读 token（含中文实体名），
-    把连续非法字符折叠为单个 `_`，再追加 objectKey 的 sha1 前 8 位保证唯一。
-    系统内 entityRefs/tagRefs 本就大量使用中文路径，assetId 含中文与之一致，且
-    asset:// 仅在 manifest/markdown 内部闭环（由 verify_asset_refs 校验）。
-    """
-    readable = re.sub(r"[^a-zA-Z0-9\u4e00-\u9fff]+", "_", object_key).strip("_")
-    digest = hashlib.sha1(object_key.encode("utf-8")).hexdigest()[:8]
-    return f"data_asset_{readable}_{digest}" if readable else f"data_asset_{digest}"
-
-
 def compute_post_asset_id(
     *,
     entity_name: str,
@@ -139,7 +124,7 @@ def compute_post_asset_id(
     section_slug: str = "",
     ordinal: int = 0,
 ) -> str:
-    """成品图统一命名（v2）：实体_角色_图注_全局批次号_hash。"""
+    """成品图统一命名：实体_角色_图注_全局执行序号_hash。"""
     return _compute_post_asset_id(
         entity_name=entity_name,
         role=role,
@@ -175,7 +160,7 @@ def post_asset_id(
     )
 
 
-def parse_post_asset_id(asset_id: str) -> dict[str, Any]:
+def parse_post_asset_id(asset_id: str):
     return _parse_post_asset_id(asset_id)
 
 
@@ -248,8 +233,8 @@ def build_article_asset_manifest(
         render_profile=render_profile,
     )
     return {
-        "schemaVersion": 1,
-        "articleMarkdownVersion": MARKDOWN_VERSION,
+        "schema": "article-asset-manifest",
+        "markdownDialect": MARKDOWN_DIALECT,
         "articleMarkdownDigest": document_sha256,
         "documentSha256": document_sha256,
         "assetManifestSha256": asset_manifest_sha256,

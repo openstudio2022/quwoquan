@@ -10,7 +10,7 @@ from core.asset_identity import asset_token, role_file_token
 from core.io import read_json, write_json
 from core.paths import execution_shared_dir
 
-EXECUTION_ASSET_REGISTRY_SCHEMA = "quwoquan_data.execution_asset_registry/1"
+EXECUTION_ASSET_REGISTRY_SCHEMA = "quwoquan_data.execution_asset_registry"
 
 
 def execution_asset_registry_path(execution_id: str) -> Path:
@@ -132,7 +132,7 @@ class ExecutionAssetRegistry:
         write_json(
             self.path,
             {
-                "schemaVersion": EXECUTION_ASSET_REGISTRY_SCHEMA,
+                "schema": EXECUTION_ASSET_REGISTRY_SCHEMA,
                 "executionId": self.execution_id,
                 "executionSequence": int(self.execution_sequence),
                 "assetIds": sorted(self.asset_ids),
@@ -144,7 +144,7 @@ class ExecutionAssetRegistry:
 
     def as_payload(self) -> dict[str, Any]:
         return {
-            "schemaVersion": EXECUTION_ASSET_REGISTRY_SCHEMA,
+            "schema": EXECUTION_ASSET_REGISTRY_SCHEMA,
             "executionId": self.execution_id,
             "executionSequence": int(self.execution_sequence),
             "assetIds": sorted(self.asset_ids),

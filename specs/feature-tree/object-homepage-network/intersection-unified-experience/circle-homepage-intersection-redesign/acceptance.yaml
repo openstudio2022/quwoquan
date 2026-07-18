@@ -107,7 +107,7 @@ gwt_acceptance:
       10/10 green；覆盖圈子价值卡云侧 displayText、来源说明、空/错态收起。'
     - '[migrated_from_recorded] local_contract quwoquan_app/test/local_contract/ui/circle/widgets/circle_shell_widget__local_contract_test.dart（圈子价值卡与
       AuthorImpactCard 同构，文案「建立了新连接」，无好友化/收藏文案，2026-06-16 green）'
-    - '[recorded] PENDING api_integration 2026-06-25：`/v1/circles/{id}/impact` 真实链路不再缺
+    - '[recorded] PENDING api_integration 2026-06-25：`/circles/{id}/impact` 真实链路不再缺
       静态 compose/route，剩余阻断是 gamma-local health、seed viewer/circle 关系与 api_integration
       populated 探针；由 `object-homepage-gamma-real-data-closure` 继续收口。'
   GWT3:

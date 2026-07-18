@@ -17,7 +17,11 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.lib.environment_topology import get_target, load_environment_topology
-from quwoquan_ops.cli.lib.output_paths import certificate_export_dir, deployment_work_root
+from quwoquan_ops.cli.lib.local_target_tls import (
+    LOCAL_TLS_TARGETS,
+    resolve_local_target_root_ca,
+)
+from quwoquan_ops.cli.lib.output_paths import deployment_work_root
 from quwoquan_ops.cli.lib.port_manifest import load_port_manifest, profile_ports
 
 
@@ -48,9 +52,7 @@ DEV_UP_ENV_DESCRIPTIONS = {
 ANDROID_LOCAL_LOOPBACK_SUFFIX = ".localhost"
 ANDROID_LOCAL_DEBUG_CA_ENV = "QWQ_ANDROID_LOCAL_ENV_CA_PATH"
 ANDROID_LOCAL_DEBUG_CA_REQUIRED_ENV = "QWQ_ANDROID_LOCAL_ENV_CA_REQUIRED"
-ANDROID_LOCAL_DEBUG_CA_TARGETS = frozenset(
-    {"alpha-local", "beta-local", "gamma-local", "prod-sim"}
-)
+ANDROID_LOCAL_DEBUG_CA_TARGETS = LOCAL_TLS_TARGETS
 
 
 def _configured_root(env_name: str, default_name: str) -> Path:
@@ -511,6 +513,15 @@ def launch_app(
             local_target_android_debug_ca_cert(target_name)
         )
         command_env[ANDROID_LOCAL_DEBUG_CA_REQUIRED_ENV] = "1"
+    if (
+        str(target.get("backend", "")).strip() == "local"
+        and str(device.get("targetPlatform", "")).strip().lower() == "ios"
+        and bool(device.get("emulator", False))
+    ):
+        # start_app_instance is the shared launcher boundary for alpha/beta/
+        # gamma/prod-sim. It invokes the same fail-closed TLS helper before
+        # Flutter starts, with this explicit device identity.
+        command_env["QWQ_IOS_SIMULATOR_UDID"] = device_id
     command = build_start_app_command(
         env_name,
         device_id,
@@ -599,12 +610,7 @@ def local_target_android_debug_ca_cert(target_name: str) -> Path:
         raise RuntimeError(
             f"GATE_BLOCK: local Android debug CA path is undefined for target {target_name}"
         )
-    cert_path = certificate_export_dir(target_name) / "root.crt"
-    if not cert_path.is_file():
-        raise RuntimeError(
-            f"GATE_BLOCK: local Android debug CA certificate missing for {target_name}: {cert_path}"
-        )
-    return cert_path
+    return resolve_local_target_root_ca(target_name)
 
 
 def _android_local_loopback_host(host: str, *, collapse_to_localhost: bool = False) -> str:

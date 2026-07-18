@@ -1,5 +1,4 @@
 # 学习事件流：行为上报经 FeedbackRecorder → MongoSink 写入，供样本拼接与模型训练消费
-version: 1
 read_model: LearningEvents
 
 description: |

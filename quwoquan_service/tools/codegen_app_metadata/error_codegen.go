@@ -15,9 +15,24 @@ func renderContentErrorsDart(ef *errorsFile) string {
 	// Enum values
 	b.WriteString("enum ContentErrorCode {\n")
 	for _, e := range ef.Errors {
-		b.WriteString(fmt.Sprintf("  %s,\n", e.DartConst))
+		b.WriteString(fmt.Sprintf(
+			"  %s('%s', '%s', %d, %d),\n",
+			e.DartConst,
+			e.Code,
+			effectiveRecoveryAction(e),
+			effectiveRecoveryAfterSeconds(e),
+			e.HTTPStatus,
+		))
 	}
-	b.WriteString("  unknown;\n\n")
+	b.WriteString("  unknown('', '', 0, 500);\n\n")
+	b.WriteString("  final String code;\n")
+	b.WriteString("  final String recoveryAction;\n")
+	b.WriteString("  final int recoveryAfterSeconds;\n")
+	b.WriteString("  final int httpStatus;\n\n")
+	b.WriteString(
+		"  const ContentErrorCode(this.code, this.recoveryAction, " +
+			"this.recoveryAfterSeconds, this.httpStatus);\n\n",
+	)
 
 	// fromCode factory
 	b.WriteString("  static ContentErrorCode fromCode(String code) {\n")

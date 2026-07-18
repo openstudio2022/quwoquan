@@ -1,4 +1,3 @@
-version: 1
 read_model: ContactHomeRow
 description: |
   商用联系首页行。由关系、圈子、群成员、会话和交集聚合服务生成。
@@ -13,119 +12,99 @@ client_projection:
       dart_type: String
       nullable: false
       source: id
-      aliases: [id, objectId, userId, circleId, conversationId]
       default: "''"
     - name: kind
       dart_type: String
       nullable: false
       source: kind
-      aliases: [kind, rowKind]
       default: "'user'"
     - name: objectId
       dart_type: String
       nullable: false
       source: objectId
-      aliases: [objectId, userId, circleId]
       default: "''"
     - name: userId
       dart_type: String
       nullable: false
       source: userId
-      aliases: [userId]
       default: "''"
     - name: conversationId
       dart_type: String
       nullable: false
       source: conversationId
-      aliases: [conversationId]
       default: "''"
     - name: circleId
       dart_type: String
       nullable: false
       source: circleId
-      aliases: [circleId]
       default: "''"
     - name: circleGroupId
       dart_type: String
       nullable: false
       source: circleGroupId
-      aliases: [circleGroupId]
       default: "''"
     - name: entityId
       dart_type: String
       nullable: false
       source: entityId
-      aliases: [entityId, homepageId]
       default: "''"
     - name: title
       dart_type: String
       nullable: false
       source: title
-      aliases: [title, displayName, name]
       default: "''"
     - name: subtitle
       dart_type: String
       nullable: false
       source: subtitle
-      aliases: [subtitle, summary]
       default: "''"
     - name: avatarUrl
       dart_type: String
       nullable: false
       source: avatarUrl
-      aliases: [avatarUrl, avatar]
       default: "''"
     - name: relationState
       dart_type: String
       nullable: false
       source: relationState
-      aliases: [relationState]
       default: "'not_following'"
     - name: summaryIntersections
       dart_type: List<String>
       nullable: false
       source: summaryIntersections
-      aliases: [summaryIntersections, intersections]
       default: "const <String>[]"
     - name: sourceEntityTitle
       dart_type: String
       nullable: false
       source: sourceEntityTitle
-      aliases: [sourceEntityTitle, entityTitle]
       default: "''"
     - name: sourceCircleTitle
       dart_type: String
       nullable: false
       source: sourceCircleTitle
-      aliases: [sourceCircleTitle, circleTitle]
       default: "''"
     - name: memberCount
       dart_type: int
       nullable: false
       source: memberCount
-      aliases: [memberCount]
       default: "0"
     - name: contactCount
       dart_type: int
       nullable: false
       source: contactCount
-      aliases: [contactCount]
       default: "0"
     - name: lastActiveAt
       dart_type: DateTime
       nullable: true
       source: lastActiveAt
-      aliases: [lastActiveAt, updatedAt]
       default: "null"
     - name: sortKey
       dart_type: String
       nullable: false
       source: sortKey
-      aliases: [sortKey]
       default: "''"
     - name: isStarred
       dart_type: bool
       nullable: false
       source: isStarred
-      aliases: [isStarred]
       default: "false"

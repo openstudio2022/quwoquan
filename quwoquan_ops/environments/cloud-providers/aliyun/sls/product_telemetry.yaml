@@ -1,0 +1,191 @@
+apiVersion: quwoquan.io/v1
+kind: AliyunSLSProductTelemetry
+metadata:
+  name: app-product-telemetry
+  owner: product-ops-growth
+  environments: [beta, gamma, prod]
+spec:
+  project:
+    configEnv: PRODUCT_OPS_SLS_PROJECT
+    regionEnv: PRODUCT_OPS_SLS_REGION
+    endpointEnv: PRODUCT_OPS_SLS_ENDPOINT
+    endpointScope: vpc
+  credentials:
+    source: deploymentSecret
+    env:
+      accessKeyId: ALIBABA_CLOUD_ACCESS_KEY_ID
+      accessKeySecret: ALIBABA_CLOUD_ACCESS_KEY_SECRET
+      securityToken: ALIBABA_CLOUD_SECURITY_TOKEN
+    forbiddenInConfig: true
+  logstores:
+    - name: app-product-telemetry-raw
+      retentionDays: 3
+      appendMeta: true
+      indexes:
+        text: false
+        fields:
+          - logType
+          - eventType
+          - pageName
+          - result
+          - appVersion
+          - networkClass
+          - deviceManufacturer
+          - deviceModel
+          - errorCode
+          - operationId
+          - httpStatus
+          - occurredAt
+          - sessionId
+          - _batchKey
+          - readyMs
+          - ttffMs
+          - rebufferCount
+          - rebufferMs
+          - seekCount
+          - declaredDurationMs
+          - observedDurationMs
+          - durationMismatch
+          - playbackMode
+        forbidden: [callStack]
+      access:
+        write: product-ops-service
+        query: [product-ops-service]
+        sensitiveExactQueryPermission: ops.event.drilldown.sensitive
+    - name: app-startup-diagnostic-raw
+      retentionDays: 3
+      appendMeta: true
+      forbiddenFields: [sessionId, userId, pageName, callStack]
+      access:
+        write: product-ops-service
+        query: [product-ops-service]
+    - name: app-product-telemetry-hourly
+      retentionDays: 90
+      appendMeta: true
+      forbiddenFields: [sessionId, userId, callStack, _batchKey]
+      access:
+        write: scheduled-sql-product-telemetry
+        query: [product-ops-service]
+  scheduledSql:
+    common:
+      source: app-product-telemetry-raw
+      destination: app-product-telemetry-hourly
+      schedule: 0 * * * *
+      delaySeconds: 120
+      window: '[@h-1h,@h)'
+      timeBasis: __time__
+      businessHourExpression: date_trunc('hour', from_iso8601_timestamp(occurredAt))
+      destinationLogTime: businessHour
+      exactlyOnce: true
+      lateArrival: emitIncrementForBusinessHour
+    jobs:
+      - name: app-product-telemetry-event-dimensions-hourly
+        rowKind: event_dimensions
+        sql: >-
+          * | SELECT date_trunc('hour', from_iso8601_timestamp(occurredAt)) AS businessHour,
+          cast(to_unixtime(date_trunc('hour', from_iso8601_timestamp(occurredAt))) AS bigint) AS __time__,
+          logType,eventType,pageName,appVersion,networkClass,deviceManufacturer,deviceModel,
+          journey,action,result,
+          count(*) AS count,approx_set(sessionId) AS sessionHll
+          GROUP BY businessHour,logType,eventType,pageName,appVersion,networkClass,
+          deviceManufacturer,deviceModel,journey,action,result
+      - name: app-product-telemetry-performance-hourly
+        rowKind: performance
+        sql: >-
+          (eventType:performance_sample OR eventType:app_startup) | SELECT
+          date_trunc('hour', from_iso8601_timestamp(occurredAt)) AS businessHour,eventType,
+          cast(to_unixtime(date_trunc('hour', from_iso8601_timestamp(occurredAt))) AS bigint) AS __time__,
+          operationId,count(*) AS count,
+          approx_percentile(try_cast(durationMs AS double),array[0.5,0.95,0.99]) AS durationPercentiles,
+          approx_percentile(try_cast(tClickToFirstFrameMs AS double),array[0.5,0.95,0.99]) AS firstFramePercentiles,
+          approx_percentile(try_cast(tFirstFrameToShellMs AS double),array[0.5,0.95,0.99]) AS shellPercentiles,
+          approx_percentile(try_cast(tShellToContentMs AS double),array[0.5,0.95,0.99]) AS contentAfterShellPercentiles,
+          approx_percentile(try_cast(tClickToContentMs AS double),array[0.5,0.95,0.99]) AS contentPercentiles,
+          sum(CASE WHEN hasError='true' THEN 1 ELSE 0 END) AS errorCount
+          GROUP BY businessHour,eventType,operationId
+      - name: app-product-telemetry-video-qoe-hourly
+        rowKind: video_qoe
+        sql: >-
+          eventType:video_playback_qoe | SELECT
+          date_trunc('hour', from_iso8601_timestamp(occurredAt)) AS businessHour,
+          cast(to_unixtime(date_trunc('hour', from_iso8601_timestamp(occurredAt))) AS bigint) AS __time__,
+          playbackMode,result,count(*) AS readyCount,
+          approx_percentile(try_cast(readyMs AS double),array[0.5,0.95,0.99]) AS readyPercentiles,
+          approx_percentile(try_cast(ttffMs AS double),array[0.5,0.95,0.99]) AS ttffPercentiles,
+          sum(try_cast(rebufferCount AS bigint)) AS rebufferCount,
+          sum(try_cast(rebufferMs AS bigint)) AS rebufferMs,
+          sum(try_cast(seekCount AS bigint)) AS seekCount,
+          sum(CASE WHEN durationMismatch='true' THEN 1 ELSE 0 END) AS durationMismatchCount
+          GROUP BY businessHour,playbackMode,result
+      - name: app-product-telemetry-errors-hourly
+        rowKind: error_dimensions
+        sql: >-
+          logType:error | SELECT date_trunc('hour', from_iso8601_timestamp(occurredAt)) AS businessHour,
+          cast(to_unixtime(date_trunc('hour', from_iso8601_timestamp(occurredAt))) AS bigint) AS __time__,
+          errorCode,operationId,httpStatus,pageName,appVersion,deviceManufacturer,deviceModel,
+          networkClass,count(*) AS count GROUP BY businessHour,errorCode,operationId,httpStatus,
+          pageName,appVersion,deviceManufacturer,deviceModel,networkClass
+  ram:
+    productOpsActions:
+      - log:PostLogStoreLogs
+      - log:GetLogs
+      - log:GetHistograms
+    scheduledSqlActions:
+      - log:GetLogs
+      - log:PostLogStoreLogs
+    resourceScope: targetProjectAndListedLogstoresOnly
+  alerts:
+    - name: product-startup-content-p95-high
+      signal: scheduledSqlQuery
+      source: app-product-telemetry-raw
+      query: >-
+        eventType:app_startup | SELECT
+        approx_percentile(try_cast(tClickToContentMs AS double), 0.95) AS p95Ms
+      condition: p95Ms > 3000
+      severity: warning
+    - name: product-startup-error-rate-high
+      signal: scheduledSqlQuery
+      source: app-product-telemetry-raw
+      query: >-
+        eventType:app_startup | SELECT
+        sum(CASE WHEN hasError='true' THEN 1 ELSE 0 END) / (count(*) + 0.001) AS errorRate
+      condition: errorRate > 0.001
+      severity: critical
+    - name: product-video-ready-p95-high
+      signal: scheduledSqlQuery
+      source: app-product-telemetry-raw
+      query: >-
+        eventType:video_playback_qoe | SELECT count(*) AS sampleCount,
+        approx_percentile(try_cast(readyMs AS double), 0.95) AS p95Ms
+      condition: sampleCount >= 100 AND p95Ms > 3000
+      severity: warning
+    - name: product-video-rebuffer-rate-high
+      signal: scheduledSqlQuery
+      source: app-product-telemetry-raw
+      query: >-
+        eventType:video_playback_qoe | SELECT count(*) AS sampleCount,
+        sum(CASE WHEN try_cast(rebufferCount AS bigint) > 0 THEN 1 ELSE 0 END)
+        / (count(*) + 0.001) AS rebufferRate
+      condition: sampleCount >= 100 AND rebufferRate > 0.05
+      severity: warning
+    - name: product-video-duration-mismatch-rate-high
+      signal: scheduledSqlQuery
+      source: app-product-telemetry-raw
+      query: >-
+        eventType:video_playback_qoe | SELECT count(*) AS sampleCount,
+        sum(CASE WHEN durationMismatch='true' THEN 1 ELSE 0 END)
+        / (count(*) + 0.001) AS mismatchRate
+      condition: sampleCount >= 100 AND mismatchRate > 0.01
+      severity: warning
+    - name: product-telemetry-scheduled-sql-failed
+      signal: scheduledSqlInstanceStatus
+      condition: FAILED
+      severity: critical
+    - name: product-telemetry-aggregate-stale
+      signal: aggregateFreshnessMinutes
+      threshold: 70
+      severity: warning
+    - name: product-telemetry-raw-retention-drift
+      signal: logstoreRetentionDays
+      expected: 3
+      severity: critical

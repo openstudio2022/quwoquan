@@ -22,9 +22,13 @@ import pytest
 # bytecode caches inside the source tree, regardless of the caller's cwd or
 # shell environment.
 sys.dont_write_bytecode = True
+os.environ["PYTHONDONTWRITEBYTECODE"] = "1"
 
 DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
 REPO_ROOT = DATA_ROOT.parent
+_PYTHON_CACHE_ROOT = REPO_ROOT / ".qwq_output" / "env" / "repo" / "local" / "python-cache" / "pytest"
+sys.pycache_prefix = str(_PYTHON_CACHE_ROOT)
+os.environ["PYTHONPYCACHEPREFIX"] = str(_PYTHON_CACHE_ROOT)
 TESTS_ROOT = DATA_ROOT / "tests"
 SCRIPTS_ROOT = DATA_ROOT / "scripts"
 for _path in (REPO_ROOT, DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):

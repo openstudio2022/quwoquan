@@ -1,10 +1,14 @@
 part of 'entity_repository.dart';
 
 class RemoteHomepageRepository implements HomepageRepository {
-  RemoteHomepageRepository({CloudHttpClient? httpClient, String? baseUrl})
-    : _httpClient = httpClient ?? CloudHttpClient(),
-      _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
+  RemoteHomepageRepository({
+    required this.queryAdapter,
+    CloudHttpClient? httpClient,
+    String? baseUrl,
+  }) : _httpClient = httpClient ?? CloudHttpClient(),
+       _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
 
+  final RemoteHomepageQueryAdapter queryAdapter;
   final CloudHttpClient _httpClient;
   final String _baseUrl;
 
@@ -44,53 +48,27 @@ class RemoteHomepageRepository implements HomepageRepository {
     String? city,
     String? status,
     int limit = CloudApiDefaults.pageLimit,
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
   }) async {
-    final decoded = await _httpClient.getJson(
-      _uri(
-        EntityApiMetadata.searchHomepagesPath,
-        queryParameters: <String, String>{
-          'query': query,
-          if (homepageType != null && homepageType.isNotEmpty)
-            'homepageType': homepageType,
-          if (city != null && city.isNotEmpty) 'city': city,
-          if (status != null && status.isNotEmpty) 'status': status,
-          'limit': '$limit',
-        },
+    final page = await queryAdapter.searchHomepages(
+      HomepageSearchQuery(
+        query: query,
+        homepageType: homepageType,
+        city: city,
+        status: status,
+        limit: limit,
       ),
-      headers: _headersForSurface(
-        AppUiSurfaces.homepagePicker,
-        operationId: EntityApiMetadata.searchHomepagesOperation,
-        clientPageId: EntityRequestPageIds.searchHomepages,
-      ),
+      cancellation: cancellation,
+      deadlineAt: deadlineAt,
     );
-    final page = CloudResponseDecoder.asCursorPage(
-      decoded,
-      context: _contextForSurface(
-        AppUiSurfaces.homepagePicker,
-        operationId: EntityApiMetadata.searchHomepagesOperation,
-      ),
-    );
-    return page.items.map(HomepageSummary.fromMap).toList(growable: false);
+    return page.items.map(homepageSummaryFromContract).toList(growable: false);
   }
 
   @override
   Future<HomepageDetail> getHomepageDetail(String homepageId) async {
-    final decoded = await _httpClient.getJson(
-      _uri(EntityApiMetadata.getHomepageDetailPath(homepageId: homepageId)),
-      headers: _headersForSurface(
-        AppUiSurfaces.homepageDetail,
-        operationId: EntityApiMetadata.getHomepageDetailOperation,
-        clientPageId: EntityRequestPageIds.getHomepageDetail,
-      ),
-    );
-    return HomepageDetail.fromMap(
-      CloudResponseDecoder.asObject(
-        decoded,
-        context: _contextForSurface(
-          AppUiSurfaces.homepageDetail,
-          operationId: EntityApiMetadata.getHomepageDetailOperation,
-        ),
-      ),
+    return homepageDetailFromContract(
+      await queryAdapter.getHomepageDetail(homepageId),
     );
   }
 
@@ -139,22 +117,8 @@ class RemoteHomepageRepository implements HomepageRepository {
 
   @override
   Future<HomepageShellData> getHomepageShell(String homepageId) async {
-    final decoded = await _httpClient.getJson(
-      _uri(EntityApiMetadata.getHomepageShellPath(homepageId: homepageId)),
-      headers: _headersForSurface(
-        AppUiSurfaces.homepageDetail,
-        operationId: EntityApiMetadata.getHomepageShellOperation,
-        clientPageId: EntityRequestPageIds.getHomepageShell,
-      ),
-    );
-    return HomepageShellData.fromMap(
-      CloudResponseDecoder.asObject(
-        decoded,
-        context: _contextForSurface(
-          AppUiSurfaces.homepageDetail,
-          operationId: EntityApiMetadata.getHomepageShellOperation,
-        ),
-      ),
+    return homepageShellFromContract(
+      await queryAdapter.getHomepageShell(homepageId),
     );
   }
 
@@ -167,30 +131,15 @@ class RemoteHomepageRepository implements HomepageRepository {
     String experimentBucket = '',
     String rolloutCohort = '',
   }) async {
-    final decoded = await _httpClient.getJson(
-      _uri(
-        EntityApiMetadata.getObjectPageBundlePath(homepageId: homepageId),
-        queryParameters: <String, String>{
-          if (referralSource.isNotEmpty) 'referralSource': referralSource,
-          if (feedRequestId.isNotEmpty) 'feedRequestId': feedRequestId,
-          if (recommendationTraceId.isNotEmpty)
-            'recommendationTraceId': recommendationTraceId,
-          if (experimentBucket.isNotEmpty) 'experimentBucket': experimentBucket,
-          if (rolloutCohort.isNotEmpty) 'rolloutCohort': rolloutCohort,
-        },
-      ),
-      headers: _headersForSurface(
-        AppUiSurfaces.homepageDetail,
-        operationId: EntityApiMetadata.getObjectPageBundleOperation,
-        clientPageId: EntityRequestPageIds.getObjectPageBundle,
-      ),
-    );
-    return ObjectPageBundle.fromMap(
-      CloudResponseDecoder.asObject(
-        decoded,
-        context: _contextForSurface(
-          AppUiSurfaces.homepageDetail,
-          operationId: EntityApiMetadata.getObjectPageBundleOperation,
+    return objectPageBundleFromContract(
+      await queryAdapter.getObjectPageBundle(
+        HomepageObjectPageBundleQuery(
+          homepageId: homepageId,
+          referralSource: referralSource,
+          feedRequestId: feedRequestId,
+          recommendationTraceId: recommendationTraceId,
+          experimentBucket: experimentBucket,
+          rolloutCohort: rolloutCohort,
         ),
       ),
     );
@@ -200,45 +149,15 @@ class RemoteHomepageRepository implements HomepageRepository {
   Future<HomepageReviewSummaryData> getHomepageReviewSummary(
     String homepageId,
   ) async {
-    final decoded = await _httpClient.getJson(
-      _uri(
-        EntityApiMetadata.getHomepageReviewSummaryPath(homepageId: homepageId),
-      ),
-      headers: _headersForSurface(
-        AppUiSurfaces.homepageDetail,
-        operationId: EntityApiMetadata.getHomepageReviewSummaryOperation,
-        clientPageId: EntityRequestPageIds.getHomepageReviewSummary,
-      ),
-    );
-    return HomepageReviewSummaryData.fromMap(
-      CloudResponseDecoder.asObject(
-        decoded,
-        context: _contextForSurface(
-          AppUiSurfaces.homepageDetail,
-          operationId: EntityApiMetadata.getHomepageReviewSummaryOperation,
-        ),
-      ),
+    return homepageReviewSummaryFromContract(
+      await queryAdapter.getHomepageReviewSummary(homepageId),
     );
   }
 
   @override
   Future<EntityImpactSummary> getEntityImpact(String homepageId) async {
-    final decoded = await _httpClient.getJson(
-      _uri(EntityApiMetadata.getEntityImpactPath(homepageId: homepageId)),
-      headers: _headersForSurface(
-        AppUiSurfaces.homepageDetail,
-        operationId: EntityApiMetadata.getEntityImpactOperation,
-        clientPageId: EntityRequestPageIds.getEntityImpact,
-      ),
-    );
-    return EntityImpactSummary.fromMap(
-      CloudResponseDecoder.asObject(
-        decoded,
-        context: _contextForSurface(
-          AppUiSurfaces.homepageDetail,
-          operationId: EntityApiMetadata.getEntityImpactOperation,
-        ),
-      ),
+    return homepageImpactFromContract(
+      await queryAdapter.getEntityImpact(homepageId),
     );
   }
 
@@ -246,30 +165,9 @@ class RemoteHomepageRepository implements HomepageRepository {
   Future<List<HomepageRelatedGroupSummary>> getHomepageRelatedGroups(
     String homepageId,
   ) async {
-    final decoded = await _httpClient.getJson(
-      _uri(
-        EntityApiMetadata.getHomepageRelatedGroupsPath(homepageId: homepageId),
-      ),
-      headers: _headersForSurface(
-        AppUiSurfaces.homepageDetail,
-        operationId: EntityApiMetadata.getHomepageRelatedGroupsOperation,
-        clientPageId: EntityRequestPageIds.getHomepageRelatedGroups,
-      ),
+    return homepageRelatedGroupsFromContract(
+      await queryAdapter.getHomepageRelatedGroups(homepageId),
     );
-    final object = CloudResponseDecoder.asObject(
-      decoded,
-      context: _contextForSurface(
-        AppUiSurfaces.homepageDetail,
-        operationId: EntityApiMetadata.getHomepageRelatedGroupsOperation,
-      ),
-    );
-    final rows = CloudResponseDecoder.mapListFirstPresent(
-      object,
-      const <String>['groups', 'relatedGroups'],
-    );
-    return rows
-        .map(HomepageRelatedGroupSummary.fromMap)
-        .toList(growable: false);
   }
 
   @override

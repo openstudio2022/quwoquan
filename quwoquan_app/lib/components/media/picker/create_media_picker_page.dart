@@ -23,7 +23,7 @@ import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/core/widgets/app_top_anchored_dropdown.dart';
 import 'package:quwoquan_app/core/models/create_media_models.dart';
-import 'package:quwoquan_app/app/navigation/page_access_internal_routes.dart';
+import 'package:quwoquan_app/app/navigation/generated/page_access_internal_routes.g.dart';
 part 'create_media_picker_page_state.dart';
 part 'create_media_picker_page_state_helpers.dart';
 

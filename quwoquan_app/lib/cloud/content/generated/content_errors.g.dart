@@ -2,49 +2,61 @@
 // ignore_for_file: constant_identifier_names
 
 enum ContentErrorCode {
-  postNotFound,
-  reportNotFound,
-  commentNotFound,
-  forbiddenEdit,
-  forbiddenDelete,
-  unauthorized,
-  invalidArgument,
-  interactionTypeInvalid,
-  interactionCursorInvalid,
-  interactionOwnerForbidden,
-  interactionReadModelUnavailable,
-  assistantMentionContextMissing,
-  invalidContentType,
-  rateLimited,
-  mediaNotFound,
-  originalAccessDenied,
-  originalAccessRateLimited,
-  commentTooLong,
-  commentRateLimited,
-  commentLikeDuplicate,
-  commentReactionForbidden,
-  commentPinForbidden,
-  commentPinInvalidTarget,
-  commentAttachmentLimitExceeded,
-  commentAttachmentNotReady,
-  commentForbiddenDelete,
-  contentTooLong,
-  mediaNotReady,
-  postImmutableAfterPublish,
-  publicRequiredForCircleDistribution,
-  invalidMomentPayload,
-  contentDeleted,
-  versionConflict,
-  idempotencyConflict,
-  moderationApprovalRequired,
-  moderationDecisionStale,
-  circleDistributionForbidden,
-  storageWriteFailed,
-  storageReadFailed,
-  requiredDependencyUnavailable,
-  internalError,
-  upstreamTimeout,
-  unknown;
+  postNotFound('CONTENT.USER.post_not_found', 'surface', 0, 404),
+  reportNotFound('CONTENT.USER.report_not_found', 'surface', 0, 404),
+  commentNotFound('CONTENT.USER.comment_not_found', 'surface', 0, 404),
+  forbiddenEdit('CONTENT.USER.forbidden_edit', 'surface', 0, 403),
+  forbiddenDelete('CONTENT.USER.forbidden_delete', 'surface', 0, 403),
+  unauthorized('CONTENT.USER.unauthorized', 'surface', 0, 401),
+  invalidArgument('CONTENT.USER.invalid_argument', 'surface', 0, 400),
+  interactionTypeInvalid('CONTENT.USER.interaction_type_invalid', 'surface', 0, 400),
+  interactionCursorInvalid('CONTENT.USER.interaction_cursor_invalid', 'refresh', 0, 400),
+  interactionOwnerForbidden('CONTENT.USER.interaction_owner_forbidden', 'surface', 0, 403),
+  interactionReadModelUnavailable('CONTENT.SYSTEM.interaction_read_model_unavailable', 'retry', 3, 503),
+  assistantMentionContextMissing('CONTENT.USER.assistant_mention_context_missing', 'surface', 0, 400),
+  invalidContentType('CONTENT.USER.invalid_content_type', 'surface', 0, 400),
+  rateLimited('CONTENT.USER.rate_limited', 'retry', 60, 429),
+  mediaNotFound('CONTENT.USER.media_not_found', 'surface', 0, 404),
+  mediaPlaybackNetworkUnavailable('CONTENT.SYSTEM.media_playback_network_unavailable', 'retry', 0, 503),
+  mediaPlaybackTemporarilyUnavailable('CONTENT.SYSTEM.media_playback_temporarily_unavailable', 'retry', 0, 503),
+  mediaPlaybackServiceBusy('CONTENT.SYSTEM.media_playback_service_busy', 'retry', 0, 503),
+  mediaPlaybackUnavailable('CONTENT.USER.media_playback_unavailable', 'surface', 0, 404),
+  mediaPlaybackUnsupported('CONTENT.SYSTEM.media_playback_unsupported', 'surface', 0, 422),
+  originalAccessDenied('CONTENT.USER.original_access_denied', 'surface', 0, 403),
+  originalAccessRateLimited('CONTENT.USER.original_access_rate_limited', 'retry', 60, 429),
+  commentTooLong('CONTENT.USER.comment_too_long', 'surface', 0, 400),
+  commentRateLimited('CONTENT.USER.comment_rate_limited', 'retry', 60, 429),
+  commentLikeDuplicate('CONTENT.USER.comment_like_duplicate', 'surface', 0, 409),
+  commentReactionForbidden('CONTENT.USER.comment_reaction_forbidden', 'surface', 0, 403),
+  commentPinForbidden('CONTENT.USER.comment_pin_forbidden', 'surface', 0, 403),
+  commentPinInvalidTarget('CONTENT.USER.comment_pin_invalid_target', 'surface', 0, 400),
+  commentAttachmentLimitExceeded('CONTENT.USER.comment_attachment_limit_exceeded', 'surface', 0, 400),
+  commentAttachmentNotReady('CONTENT.USER.comment_attachment_not_ready', 'retry', 3, 400),
+  commentForbiddenDelete('CONTENT.USER.comment_forbidden_delete', 'surface', 0, 403),
+  contentTooLong('CONTENT.USER.content_too_long', 'surface', 0, 400),
+  mediaNotReady('CONTENT.USER.media_not_ready', 'retry', 3, 400),
+  postImmutableAfterPublish('CONTENT.USER.post_immutable_after_publish', 'surface', 0, 409),
+  publicRequiredForCircleDistribution('CONTENT.USER.public_required_for_circle_distribution', 'surface', 0, 400),
+  invalidMomentPayload('CONTENT.USER.invalid_moment_payload', 'surface', 0, 400),
+  contentDeleted('CONTENT.USER.content_deleted', 'surface', 0, 410),
+  versionConflict('CONTENT.USER.version_conflict', 'refresh', 0, 409),
+  idempotencyConflict('CONTENT.USER.idempotency_conflict', 'refresh', 0, 409),
+  moderationApprovalRequired('CONTENT.USER.moderation_approval_required', 'retry', 3, 409),
+  moderationDecisionStale('CONTENT.USER.moderation_decision_stale', 'refresh', 0, 409),
+  circleDistributionForbidden('CONTENT.USER.circle_distribution_forbidden', 'surface', 0, 403),
+  storageWriteFailed('CONTENT.SYSTEM.storage_write_failed', 'retry', 5, 500),
+  storageReadFailed('CONTENT.SYSTEM.storage_read_failed', 'retry', 5, 500),
+  requiredDependencyUnavailable('CONTENT.SYSTEM.required_dependency_unavailable', 'retry', 5, 503),
+  internalError('CONTENT.SYSTEM.internal_error', 'surface', 0, 500),
+  upstreamTimeout('CONTENT.MIDDLEWARE.upstream_timeout', 'retry', 10, 504),
+  unknown('', '', 0, 500);
+
+  final String code;
+  final String recoveryAction;
+  final int recoveryAfterSeconds;
+  final int httpStatus;
+
+  const ContentErrorCode(this.code, this.recoveryAction, this.recoveryAfterSeconds, this.httpStatus);
 
   static ContentErrorCode fromCode(String code) {
     switch (code) {
@@ -78,6 +90,16 @@ enum ContentErrorCode {
         return ContentErrorCode.rateLimited;
       case 'CONTENT.USER.media_not_found':
         return ContentErrorCode.mediaNotFound;
+      case 'CONTENT.SYSTEM.media_playback_network_unavailable':
+        return ContentErrorCode.mediaPlaybackNetworkUnavailable;
+      case 'CONTENT.SYSTEM.media_playback_temporarily_unavailable':
+        return ContentErrorCode.mediaPlaybackTemporarilyUnavailable;
+      case 'CONTENT.SYSTEM.media_playback_service_busy':
+        return ContentErrorCode.mediaPlaybackServiceBusy;
+      case 'CONTENT.USER.media_playback_unavailable':
+        return ContentErrorCode.mediaPlaybackUnavailable;
+      case 'CONTENT.SYSTEM.media_playback_unsupported':
+        return ContentErrorCode.mediaPlaybackUnsupported;
       case 'CONTENT.USER.original_access_denied':
         return ContentErrorCode.originalAccessDenied;
       case 'CONTENT.USER.original_access_rate_limited':
@@ -158,6 +180,11 @@ class ContentErrorMessages {
     ContentErrorCode.invalidContentType: '不支持的内容类型',
     ContentErrorCode.rateLimited: '操作太频繁，请稍后重试',
     ContentErrorCode.mediaNotFound: '媒体资源不存在或已过期',
+    ContentErrorCode.mediaPlaybackNetworkUnavailable: '网络不太稳定',
+    ContentErrorCode.mediaPlaybackTemporarilyUnavailable: '暂时无法播放',
+    ContentErrorCode.mediaPlaybackServiceBusy: '暂时无法播放',
+    ContentErrorCode.mediaPlaybackUnavailable: '这条视频暂时无法观看，可以先看看别的内容',
+    ContentErrorCode.mediaPlaybackUnsupported: '这条视频暂不支持播放，可以先看看别的内容',
     ContentErrorCode.originalAccessDenied: '当前内容不支持查看或保存原图',
     ContentErrorCode.originalAccessRateLimited: '原图访问过于频繁，请稍后再试',
     ContentErrorCode.commentTooLong: '评论超出字数限制',
@@ -203,6 +230,11 @@ class ContentErrorMessages {
     ContentErrorCode.invalidContentType: 'Unsupported content type',
     ContentErrorCode.rateLimited: 'Too many requests, please retry later',
     ContentErrorCode.mediaNotFound: 'Media asset not found or expired',
+    ContentErrorCode.mediaPlaybackNetworkUnavailable: 'The network is unstable.',
+    ContentErrorCode.mediaPlaybackTemporarilyUnavailable: 'Playback is temporarily unavailable.',
+    ContentErrorCode.mediaPlaybackServiceBusy: 'Playback is temporarily unavailable.',
+    ContentErrorCode.mediaPlaybackUnavailable: 'This video is temporarily unavailable. Please browse other content.',
+    ContentErrorCode.mediaPlaybackUnsupported: 'This video is not supported. Browse other content.',
     ContentErrorCode.originalAccessDenied: 'Original media access is not allowed',
     ContentErrorCode.originalAccessRateLimited: 'Too many original media requests, please retry later',
     ContentErrorCode.commentTooLong: 'Comment exceeds length limit',

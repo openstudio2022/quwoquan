@@ -1,0 +1,2 @@
+Quwoquan contract attachment
+This deterministic text file validates chat attachment delivery.

@@ -69,7 +69,7 @@ WebSocket 仅在用户活跃聊天时建立，空闲时自动回落到 long-poll
                                 ▼
                 ┌──────────────────────────────────┐
                 │     Long-polling（空闲态）         │ ← 默认初始态
-                │     GET /v1/realtime/poll          │
+                │     GET /realtime/poll          │
                 │     覆盖：inbox 角标 / 系统通知     │
                 │     服务端资源：0（HTTP 无状态）     │
                 └───────┬──────────────┬───────────┘
@@ -134,7 +134,7 @@ WebSocket 仅在用户活跃聊天时建立，空闲时自动回落到 long-poll
 | `realtime.active_trigger_msg_count` | 3 | 空闲态收到 N 条消息在 10s 内触发升级活跃态 |
 | `realtime.active_trigger_window_sec` | 10 | 密集消息触发窗口 |
 
-端侧通过 App 启动时从 `/v1/config/realtime` 拉取上述参数，运营可在不发版的情况下调整自适应策略。
+端侧通过 App 启动时从 `/config/realtime` 拉取上述参数，运营可在不发版的情况下调整自适应策略。
 
 **WebSocket Upgrade 失败时（代理/防火墙拦截）**：
 空闲态和活跃态均使用 long-polling，自动重试 WebSocket Upgrade（60s 间隔），
@@ -152,7 +152,7 @@ WebSocket 仅在用户活跃聊天时建立，空闲时自动回落到 long-poll
 而非 3 万（全部在线），服务端资源降低 **83%**。
 
 **Long-polling 协议**：
-- 端点：`GET /v1/realtime/poll?topics=inbox,system&lastSeq={maxInboxSeq}&timeout={poll_interval_sec}`
+- 端点：`GET /realtime/poll?topics=inbox,system&lastSeq={maxInboxSeq}&timeout={poll_interval_sec}`
 - 服务端 hold 连接：有新消息 → 立即返回；超时 → 返回 204
 - 客户端收到响应后**立即重新发起**下一次 poll
 - 空闲态只订阅 `inbox` 和 `system` topic（不订阅具体 conversation）
@@ -161,7 +161,7 @@ WebSocket 仅在用户活跃聊天时建立，空闲时自动回落到 long-poll
 
 **HTTP 轮询（SyncMessages API 兜底）**：
 当 long-polling 也无法建立时（极端受限网络），客户端退化为定时调用
-`POST /v1/chat/conversations/{id}/sync`，间隔 5~30s。
+`POST /chat/conversations/{id}/sync`，间隔 5~30s。
 
 ### 4.0.1 SSE 与自适应传输共存说明
 

@@ -117,11 +117,11 @@ func behaviorFactGuard() http.Handler {
 		[]rtauth.OperationSecurityDescriptor{{
 			CanonicalOperationID: "circle.circle_behavior_fact.ReportCircleBehavior",
 			ContractGraphSHA256:  "circle-behavior-api-integration",
-			Method:               http.MethodPost, PathTemplate: "/v1/circles/behaviors",
+			Method:               http.MethodPost, PathTemplate: "/circles/behaviors",
 			OperationKind: "command", MutationTarget: "CircleBehaviorFact", InvariantTarget: "CircleBehaviorFact",
 			AuthMode: "required", ActorRequirement: "persona_or_device", Principal: "public",
 			CommercialStatus: "ready", TimeoutMilliseconds: 1000,
-		}}, http.MethodPost, "/v1/circles/behaviors",
+		}}, http.MethodPost, "/circles/behaviors",
 	)(testHandler)
 }
 
@@ -143,7 +143,7 @@ func behaviorFactRequest(t *testing.T, body any, idempotencyKey, sessionID strin
 	if err := json.NewEncoder(&buffer).Encode(body); err != nil {
 		t.Fatal(err)
 	}
-	request := httptest.NewRequest(http.MethodPost, "/v1/circles/behaviors", &buffer)
+	request := httptest.NewRequest(http.MethodPost, "/circles/behaviors", &buffer)
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Idempotency-Key", idempotencyKey)
 	request.Header.Set("X-Request-Id", "request-"+idempotencyKey)

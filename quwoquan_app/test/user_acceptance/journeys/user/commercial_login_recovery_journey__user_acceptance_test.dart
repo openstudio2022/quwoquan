@@ -2,7 +2,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
-import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/auth_repository.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/auth/auth_gate.dart';
@@ -11,6 +10,7 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/user/pages/login_page.dart';
 import '../../../support/fakes/test_auth_repository.dart';
+import '../../../support/recording_app_telemetry_recorder.dart';
 
 void main() {
   testWidgets('游客手机号登录：发码、六位输入与显式提交后回到目标表面', (tester) async {
@@ -25,8 +25,8 @@ void main() {
           oneTapLoginClientProvider.overrideWithValue(
             const _JourneyUnavailableOneTapClient(),
           ),
-          opsEventRepositoryProvider.overrideWithValue(
-            MockOpsEventRepository(),
+          appTelemetryReporterProvider.overrideWithValue(
+            RecordingAppTelemetryRecorder(),
           ),
         ],
         child: CupertinoApp(
@@ -100,7 +100,9 @@ Future<void> _pumpJourneyLogin(
         authSessionStoreProvider.overrideWithValue(authStore),
         authRepositoryProvider.overrideWithValue(_JourneyAuthRepository()),
         oneTapLoginClientProvider.overrideWithValue(oneTapClient),
-        opsEventRepositoryProvider.overrideWithValue(MockOpsEventRepository()),
+        appTelemetryReporterProvider.overrideWithValue(
+          RecordingAppTelemetryRecorder(),
+        ),
       ],
       child: const CupertinoApp(
         home: LoginFrameHost(dismissPolicy: LoginDismissPolicy.safeFallback),

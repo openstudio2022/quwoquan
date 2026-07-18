@@ -237,7 +237,7 @@ func TestProjectorIgnoresCounterOnlyEvents(t *testing.T) {
 	f := newFakeES()
 	proj := newProjectorWithFakeES(t, f, fakeReader{byID: map[string]postmodel.Post{post.ID: post}})
 
-	for _, et := range []string{"ContentReactionActivated", "EventBatchReported", "SomethingElse"} {
+	for _, et := range []string{"ContentReactionActivated", "BehaviorBatchReported", "SomethingElse"} {
 		if err := proj.Project(context.Background(), ports.ProjectorEvent{Type: et, AggregateID: post.ID}); err != nil {
 			t.Fatalf("Project(%s) err=%v", et, err)
 		}

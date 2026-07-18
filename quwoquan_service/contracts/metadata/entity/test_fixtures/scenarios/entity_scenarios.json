@@ -1,5 +1,4 @@
 {
-  "schemaVersion": "entity.scenario-fixtures",
   "description": "实体主页 alpha/beta/gamma 共享测试场景，覆盖作者主页、圈子主页、POI/地点主页、认领与选择器。",
   "repositoryExpectations": {
     "alpha": "mock",
@@ -12,7 +11,7 @@
       "homepages": [
         {
           "homepageId": "fixture_homepage_author",
-          "type": "author",
+          "homepageType": "author",
           "title": "契约摄影师主页",
           "ownerId": "fixture_user_photo",
           "summary": "作者主页契约数据",
@@ -23,7 +22,7 @@
         },
         {
           "homepageId": "fixture_homepage_circle",
-          "type": "circle",
+          "homepageType": "circle",
           "title": "契约摄影社主页",
           "ownerId": "fixture_circle_photo",
           "summary": "圈子主页契约数据",
@@ -33,7 +32,7 @@
         },
         {
           "homepageId": "fixture_homepage_poi",
-          "type": "poi",
+          "homepageType": "poi",
           "title": "杭州西湖契约主页",
           "summary": "地点主页契约数据",
           "geo": {
@@ -42,8 +41,25 @@
           }
         },
         {
+          "homepageId": "homepage_sight_dongqian_lake",
+          "homepageType": "sight",
+          "canonicalEntityId": "entity:sight:dongqian_lake",
+          "title": "东钱湖",
+          "subtitle": "浙江宁波东钱湖旅游度假区",
+          "summary": "宁波东钱湖的实体主页，用于验证包含匹配、搜索等待与主页直达。",
+          "city": "宁波",
+          "address": "浙江省宁波市鄞州区东钱湖镇",
+          "status": "published",
+          "categoryTags": [
+            "景点",
+            "湖泊",
+            "浙江"
+          ],
+          "verified": true
+        },
+        {
           "homepageId": "homepage_sight_west_lake",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:west_lake",
           "title": "西湖景区",
           "subtitle": "杭州西湖核心游览区",
@@ -64,7 +80,7 @@
               "title": "西湖日落散步路线",
               "summary": "一条适合黄昏慢走的完整打卡笔记。",
               "contentType": "article",
-              "coverUrl": "https://images.unsplash.com/photo-1506744038136-46273834b3fb",
+              "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
               "authorName": "湖畔慢行者",
               "likeCount": 328,
               "intersectionReasons": [
@@ -80,7 +96,7 @@
               "title": "断桥边的夜色作品",
               "summary": "断桥残雪机位与曝光参数实拍。",
               "contentType": "image",
-              "coverUrl": "https://images.unsplash.com/photo-1538970272646-f61fabb3a8a2",
+              "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
               "authorName": "夜色摄影手",
               "likeCount": 156
             },
@@ -89,7 +105,7 @@
               "title": "苏堤骑行 vlog",
               "summary": "清晨苏堤骑行的一镜到底。",
               "contentType": "video",
-              "coverUrl": "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b",
+              "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
               "authorName": "苏堤骑行客",
               "likeCount": 204,
               "intersectionReasons": [
@@ -105,7 +121,7 @@
             "homepageId": "homepage_sight_west_lake",
             "displayName": "西湖景区",
             "homepageType": "sight",
-            "coverUrl": "https://images.unsplash.com/photo-1506744038136-46273834b3fb",
+            "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
             "summary": "杭州西湖核心游览区，由湖面、堤岸、园林、人文节点和城市公共生活共同构成，适合散步、骑行、摄影与长期内容沉淀。",
             "sections": [
               {
@@ -115,7 +131,7 @@
                 "assets": [
                   {
                     "assetId": "west_lake_cover",
-                    "url": "https://images.unsplash.com/photo-1506744038136-46273834b3fb",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                     "caption": "西湖湖面与城市天际线",
                     "sourceRef": "manifest.assets[0]"
                   }
@@ -161,7 +177,7 @@
                 "assets": [
                   {
                     "assetId": "west_lake_su_causeway",
-                    "url": "https://images.unsplash.com/photo-1500930287596-c1ecaa373bb2",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                     "caption": "苏堤六桥与两侧桃柳",
                     "role": "inline",
                     "sourceRef": "manifest.assets[1]"
@@ -181,14 +197,14 @@
                 "assets": [
                   {
                     "assetId": "west_lake_broken_bridge",
-                    "url": "https://images.unsplash.com/photo-1470770903676-69b98201ea5c",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                     "caption": "断桥残雪",
                     "role": "related",
                     "sourceRef": "manifest.assets[2]"
                   },
                   {
                     "assetId": "west_lake_leifeng_pagoda",
-                    "url": "https://images.unsplash.com/photo-1441974231531-c6227db76b6e",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                     "caption": "",
                     "role": "related",
                     "sourceRef": "manifest.assets[3]"
@@ -225,7 +241,7 @@
         },
         {
           "homepageId": "fixture_homepage_university_pku",
-          "type": "university",
+          "homepageType": "university",
           "canonicalEntityId": "entity:university:pku",
           "title": "北京大学",
           "subtitle": "校园大学主页模板样本",
@@ -259,7 +275,7 @@
         },
         {
           "homepageId": "fixture_homepage_university_tsinghua",
-          "type": "university",
+          "homepageType": "university",
           "canonicalEntityId": "entity:university:tsinghua",
           "title": "清华大学",
           "subtitle": "校园大学主页模板样本",
@@ -283,7 +299,7 @@
         },
         {
           "homepageId": "fixture_homepage_university_fudan",
-          "type": "university",
+          "homepageType": "university",
           "canonicalEntityId": "entity:university:fudan",
           "title": "复旦大学",
           "subtitle": "上海高校主页样本",
@@ -298,7 +314,7 @@
         },
         {
           "homepageId": "fixture_homepage_university_zju",
-          "type": "university",
+          "homepageType": "university",
           "canonicalEntityId": "entity:university:zju",
           "title": "浙江大学",
           "subtitle": "杭州高校主页样本",
@@ -313,7 +329,7 @@
         },
         {
           "homepageId": "fixture_homepage_university_nju",
-          "type": "university",
+          "homepageType": "university",
           "canonicalEntityId": "entity:university:nju",
           "title": "南京大学",
           "subtitle": "南京高校主页样本",
@@ -328,7 +344,7 @@
         },
         {
           "homepageId": "fixture_homepage_travel_photo_west_lake",
-          "type": "travel_photo",
+          "homepageType": "travel_photo",
           "canonicalEntityId": "entity:travel_photo:west_lake",
           "title": "西湖旅行摄影机位",
           "subtitle": "旅行摄影主页模板样本",
@@ -352,7 +368,7 @@
         },
         {
           "homepageId": "homepage_restaurant_night_market",
-          "type": "restaurant",
+          "homepageType": "restaurant",
           "canonicalEntityId": "entity:restaurant:night_market",
           "title": "夜巷小馆",
           "subtitle": "本地人常去的深夜小馆",
@@ -376,7 +392,7 @@
         },
         {
           "homepageId": "homepage_sight_emeishan",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:emeishan",
           "title": "峨眉山",
           "subtitle": "世界遗产与川西南山地旅行代表目的地",
@@ -391,7 +407,7 @@
         },
         {
           "homepageId": "homepage_sight_leshan_giant_buddha",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:leshan_giant_buddha",
           "title": "乐山大佛",
           "subtitle": "岷江、青衣江、大渡河交汇处的石刻造像与城市地标",
@@ -406,7 +422,7 @@
         },
         {
           "homepageId": "fixture_homepage_travel_photo_dali",
-          "type": "travel_photo",
+          "homepageType": "travel_photo",
           "canonicalEntityId": "entity:travel_photo:dali",
           "title": "大理洱海旅行摄影",
           "subtitle": "目的地摄影主页样本",
@@ -421,7 +437,7 @@
         },
         {
           "homepageId": "fixture_homepage_travel_photo_tokyo",
-          "type": "travel_photo",
+          "homepageType": "travel_photo",
           "canonicalEntityId": "entity:travel_photo:tokyo",
           "title": "东京城市摄影路线",
           "subtitle": "海外旅行摄影主页样本",
@@ -436,7 +452,7 @@
         },
         {
           "homepageId": "fixture_homepage_travel_route_erhai",
-          "type": "travel_photo",
+          "homepageType": "travel_photo",
           "canonicalEntityId": "entity:travel_route:erhai",
           "title": "洱海环线",
           "subtitle": "大理洱海骑行环线",
@@ -451,7 +467,7 @@
         },
         {
           "homepageId": "fixture_homepage_travel_route_diancang",
-          "type": "travel_photo",
+          "homepageType": "travel_photo",
           "canonicalEntityId": "entity:travel_route:diancang",
           "title": "滇藏线",
           "subtitle": "滇藏公路自驾线",
@@ -466,7 +482,7 @@
         },
         {
           "homepageId": "fixture_homepage_travel_route_chuanxi",
-          "type": "travel_photo",
+          "homepageType": "travel_photo",
           "canonicalEntityId": "entity:travel_route:chuanxi",
           "title": "川西小环线",
           "subtitle": "川西高原小环线",
@@ -481,7 +497,7 @@
         },
         {
           "homepageId": "fixture_homepage_travel_route_gongga",
-          "type": "travel_photo",
+          "homepageType": "travel_photo",
           "canonicalEntityId": "entity:travel_route:gongga",
           "title": "贡嘎环线",
           "subtitle": "贡嘎山徒步环线",
@@ -496,7 +512,7 @@
         },
         {
           "homepageId": "fixture_homepage_travel_route_daocheng",
-          "type": "travel_photo",
+          "homepageType": "travel_photo",
           "canonicalEntityId": "entity:travel_route:daocheng",
           "title": "稻城亚丁线",
           "subtitle": "稻城亚丁旅行线",
@@ -511,7 +527,7 @@
         },
         {
           "homepageId": "fixture_homepage_travel_spot_duanqiao",
-          "type": "travel_photo",
+          "homepageType": "travel_photo",
           "canonicalEntityId": "entity:photo_spot:duanqiao",
           "title": "断桥晨雾机位",
           "subtitle": "西湖断桥晨雾机位",
@@ -526,7 +542,7 @@
         },
         {
           "homepageId": "fixture_homepage_travel_spot_yulong",
-          "type": "travel_photo",
+          "homepageType": "travel_photo",
           "canonicalEntityId": "entity:photo_spot:yulong",
           "title": "玉龙雪山机位",
           "subtitle": "玉龙雪山观峰机位",
@@ -541,7 +557,7 @@
         },
         {
           "homepageId": "fixture_homepage_travel_spot_laojunshan",
-          "type": "travel_photo",
+          "homepageType": "travel_photo",
           "canonicalEntityId": "entity:photo_spot:laojunshan",
           "title": "老君山观景台",
           "subtitle": "老君山金顶观景台",
@@ -556,7 +572,7 @@
         },
         {
           "homepageId": "fixture_homepage_travel_gear_sony_a7m4",
-          "type": "travel_photo",
+          "homepageType": "travel_photo",
           "canonicalEntityId": "entity:travel_gear:sony_a7m4",
           "title": "索尼 A7M4",
           "subtitle": "索尼 A7M4 机身",
@@ -571,7 +587,7 @@
         },
         {
           "homepageId": "fixture_homepage_travel_gear_lens_35",
-          "type": "travel_photo",
+          "homepageType": "travel_photo",
           "canonicalEntityId": "entity:travel_gear:lens_35",
           "title": "35mm 定焦镜头",
           "subtitle": "35mm 旅拍定焦镜头",
@@ -586,7 +602,7 @@
         },
         {
           "homepageId": "fixture_homepage_travel_place_dali_oldtown",
-          "type": "travel_photo",
+          "homepageType": "travel_photo",
           "canonicalEntityId": "entity:travel_place:dali_oldtown",
           "title": "大理古城",
           "subtitle": "大理古城历史街区",
@@ -601,7 +617,7 @@
         },
         {
           "homepageId": "fixture_homepage_travel_place_cangshan_inn",
-          "type": "travel_photo",
+          "homepageType": "travel_photo",
           "canonicalEntityId": "entity:travel_place:cangshan_inn",
           "title": "苍山脚下民宿",
           "subtitle": "苍山脚下旅拍民宿",
@@ -616,7 +632,7 @@
         },
         {
           "homepageId": "fixture_homepage_travel_place_temp_market",
-          "type": "travel_photo",
+          "homepageType": "travel_photo",
           "canonicalEntityId": "entity:travel_place:temp_market",
           "title": "临时市集",
           "subtitle": "古城临时市集",
@@ -631,7 +647,7 @@
         },
         {
           "homepageId": "fixture_homepage_school_neworiental",
-          "type": "school",
+          "homepageType": "school",
           "canonicalEntityId": "entity:school:neworiental",
           "title": "新东方",
           "subtitle": "教育培训 · 语言学习 · 校友网络",
@@ -686,7 +702,7 @@
         },
         {
           "homepageId": "fixture_homepage_photo_spot_hengshu_studio",
-          "type": "photo_spot",
+          "homepageType": "photo_spot",
           "canonicalEntityId": "entity:photo_spot:hengshu_studio",
           "title": "横竖影像馆取景地",
           "subtitle": "摄影取景地 · 城市影像 · 胶片旅拍",
@@ -741,7 +757,7 @@
         },
         {
           "homepageId": "homepage_sight_中央大街",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:中央大街",
           "title": "中央大街",
           "summary": "中央大街概况中央大街是黑龙江省哈尔滨市道里区的主要商业街之一，原称中国大街，1928年7月正式定名并沿用至今。",
@@ -787,7 +803,7 @@
         },
         {
           "homepageId": "homepage_sight_丹霞山",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:丹霞山",
           "title": "丹霞山",
           "summary": "丹霞山概况丹霞山位于中国广东省北部的韶关市仁化县，是丹霞地貌的命名地。",
@@ -845,7 +861,7 @@
         },
         {
           "homepageId": "homepage_sight_乐山大佛",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:乐山大佛",
           "title": "乐山大佛",
           "summary": "乐山大佛概况乐山大佛，全名嘉州凌云寺大弥勒石像，别称凌云大佛，位于四川省乐山市市中区的岷江、青衣江、大渡河三江交汇之处，是世界上现存高度最高的石佛像。",
@@ -909,7 +925,7 @@
         },
         {
           "homepageId": "homepage_sight_九寨沟",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:九寨沟",
           "title": "九寨沟",
           "summary": "九寨沟风景名胜区位于中国四川省北部阿坝藏族羌族自治州九寨沟县（原南坪县），地跨东经103°46′—104°4′、北纬32°54′—33°19′。因沟中有树正、荷叶、则查洼、盘信、黑果、盘亚助、故洼、彭布、尖盘九个藏族村寨而得名。沟内水系流经",
@@ -955,7 +971,7 @@
         },
         {
           "homepageId": "homepage_sight_五大连池",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:五大连池",
           "title": "五大连池",
           "summary": "五大连池概况-park：五大连池世界地质公园-city：北安、黑河、嫩江、孙吴、逊克、讷河五大连池世界地质公园位于黑龙江省五大连池市，面积达1060平方公里，园内有多处景观。",
@@ -995,7 +1011,7 @@
         },
         {
           "homepageId": "homepage_sight_八达岭长城",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:八达岭长城",
           "title": "八达岭长城",
           "summary": "八达岭长城概况-级别：全国-名称：万里长城——八达岭-分类：古建筑及历史纪念建筑物-时代：明-所在：北京市延庆区-编号：1-101-登录：1961年3月4日-level：AAAAA-district：北京-assess：2007年-loca",
@@ -1047,7 +1063,7 @@
         },
         {
           "homepageId": "homepage_sight_净月潭",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:净月潭",
           "title": "净月潭",
           "summary": "净月潭国家森林公园位于吉林省长春市南关区东南部，占地面积83.23平方公里，1989年建立。公园核心为修建于伪满时期的净月潭水库，后经人工造林和公园化建设，成为如今的国家级森林公园。这里现为国家重点风景名胜区、国家森林公园、国家生态示范区、",
@@ -1105,7 +1121,7 @@
         },
         {
           "homepageId": "homepage_sight_凤凰古城",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:凤凰古城",
           "title": "凤凰古城",
           "summary": "凤凰古城概况凤凰古城，或称凤凰县城，位于中国湖南省湘西土家族苗族自治州凤凰县沱江镇。",
@@ -1151,13 +1167,13 @@
         },
         {
           "homepageId": "homepage_sight_千岛湖",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:千岛湖",
           "title": "千岛湖",
           "summary": "千岛湖，又称新安江水库，为新安江水电站的水体部分，位于浙江省杭州市西南部的淳安县和建德市境内，以发电为主，兼有防洪、灌溉、渔业、航运、旅游等功能。为多年调节大型水库。1959年在新安江建德马铜官峡筑坝兴建水电站而形成的人工湖，面积达567.",
           "city": "",
           "status": "published",
-          "coverUrl": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/1d/ed/1ded25f406e7b574d3415cfcd26fcde2edb883fedf85a7d87d51b52476dc27cd.jpg",
+          "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
           "seedSource": {
             "channel": "qwq-data fixture entity-introduction",
             "entityRef": "地点/景区/千岛湖",
@@ -1167,7 +1183,7 @@
             "homepageId": "homepage_sight_千岛湖",
             "displayName": "千岛湖",
             "homepageType": "sight",
-            "coverUrl": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/1d/ed/1ded25f406e7b574d3415cfcd26fcde2edb883fedf85a7d87d51b52476dc27cd.jpg",
+            "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
             "summary": "千岛湖，又称新安江水库，为新安江水电站的水体部分，位于浙江省杭州市西南部的淳安县和建德市境内，以发电为主，兼有防洪、灌溉、渔业、航运、旅游等功能。为多年调节大型水库。1959年在新安江建德马铜官峡筑坝兴建水电站而形成的人工湖，面积达567.",
             "sections": [
               {
@@ -1183,7 +1199,7 @@
                 "assets": [
                   {
                     "assetId": "千岛湖_detail_2020年7月10日_7孔泄洪的_2_72b2e878",
-                    "url": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/ee/56/ee56f0b5b25656ee3d2f9b9fdb5c92bad67f8d0ac9ded30430f40468fbdb3677.jpg",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                     "caption": "2020年7月10日，7孔泄洪的新安江水电站。",
                     "role": "inline",
                     "sourceRef": "entities/地点/景区/千岛湖"
@@ -1233,42 +1249,42 @@
                 "assets": [
                   {
                     "assetId": "千岛湖_detail_1963年_新安江水电站_2_4c69bbcb",
-                    "url": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/5f/28/5f285ee64c3efdaac70566eec9050cf5d60a82a4ef371b56d7eececbfc93bd8b.jpg",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                     "caption": "1963年 新安江水电站",
                     "role": "inline",
                     "sourceRef": "entities/地点/景区/千岛湖"
                   },
                   {
                     "assetId": "千岛湖_detail_1963年_新安江水电站发电机_2_d94db4ac",
-                    "url": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/07/1a/071abe53e7985e5040b5b2955abd1a98338e198e64a0c6dd17fd9949f47440f3.jpg",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                     "caption": "1963年 新安江水电站发电机",
                     "role": "inline",
                     "sourceRef": "entities/地点/景区/千岛湖"
                   },
                   {
                     "assetId": "千岛湖_detail_1963年_新安江水电站中央控制_2_684626ca",
-                    "url": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/e1/69/e169a9fc9f5b3e3eb3721f64e320a91c8ccf7687d2beeee33206a8a964454153.jpg",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                     "caption": "1963年 新安江水电站中央控制室",
                     "role": "inline",
                     "sourceRef": "entities/地点/景区/千岛湖"
                   },
                   {
                     "assetId": "千岛湖_detail_1966年新安江水库_2_89dcea8a",
-                    "url": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/ed/6c/ed6c542769b603e211430b4bb5e5d395ddb980a1bf2fbac2b9db1b1f2af7dcc8.jpg",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                     "caption": "1966年新安江水库",
                     "role": "inline",
                     "sourceRef": "entities/地点/景区/千岛湖"
                   },
                   {
                     "assetId": "千岛湖_detail_2015年新安江水库大坝_2_b3353d76",
-                    "url": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/2c/24/2c24f598a966712742ed97257727eacde9967f59102246b7bb9fed981b2cc263.jpg",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                     "caption": "2015年新安江水库大坝",
                     "role": "inline",
                     "sourceRef": "entities/地点/景区/千岛湖"
                   },
                   {
                     "assetId": "千岛湖_detail_千岛湖风光_2_82d954e8",
-                    "url": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/b8/c1/b8c132c6c4a462aff4b10b675d0df36e128e5e775b8942cdf65c247cec218811.jpg",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                     "caption": "千岛湖风光",
                     "role": "inline",
                     "sourceRef": "entities/地点/景区/千岛湖"
@@ -1284,13 +1300,13 @@
         },
         {
           "homepageId": "homepage_sight_华山",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:华山",
           "title": "华山",
           "summary": "华山，又名太山，是五岳中的西岳。位于中华人民共和国陕西省渭南市华阴市城南，西距西安市区120公里。秦、晋、豫黄河三角洲交汇处，南接秦岭，北瞰黄河，扼西北进出中原之门户。华山山体倚天拔地，四面如削，更有千尺幢、百尺峡、苍龙岭、鹞子翻身、长空栈",
           "city": "",
           "status": "published",
-          "coverUrl": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/1b/a5/1ba596f304b1c71c70d6b1e5b431acf202f8b0842a5f510a97921c1fccfca6d5.jpg",
+          "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
           "seedSource": {
             "channel": "qwq-data fixture entity-introduction",
             "entityRef": "地点/景区/华山",
@@ -1300,7 +1316,7 @@
             "homepageId": "homepage_sight_华山",
             "displayName": "华山",
             "homepageType": "sight",
-            "coverUrl": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/1b/a5/1ba596f304b1c71c70d6b1e5b431acf202f8b0842a5f510a97921c1fccfca6d5.jpg",
+            "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
             "summary": "华山，又名太山，是五岳中的西岳。位于中华人民共和国陕西省渭南市华阴市城南，西距西安市区120公里。秦、晋、豫黄河三角洲交汇处，南接秦岭，北瞰黄河，扼西北进出中原之门户。华山山体倚天拔地，四面如削，更有千尺幢、百尺峡、苍龙岭、鹞子翻身、长空栈",
             "sections": [
               {
@@ -1316,14 +1332,14 @@
                 "assets": [
                   {
                     "assetId": "华山_detail_2_5d76eebd",
-                    "url": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/8d/10/8d1087ac112c32ff0fa58cdb3d24d1c46139b3d5837e194f88f26e0d34d69217.jpg",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                     "caption": "华山上",
                     "role": "inline",
                     "sourceRef": "entities/地点/景区/华山"
                   },
                   {
                     "assetId": "华山_detail_2_32433490",
-                    "url": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/23/75/2375f7267c6e2a0134d898db3f9a030e0fad0fa46bcb61068d5f0c05f38d2769.jpg",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                     "caption": "华山西峰",
                     "role": "inline",
                     "sourceRef": "entities/地点/景区/华山"
@@ -1337,7 +1353,7 @@
                 "assets": [
                   {
                     "assetId": "华山_detail_2_01de9f89",
-                    "url": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/82/13/821367d5538fd9959a26ecb1213452f95074e8f1ff8f70bd5370f29af3c83628.jpg",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                     "caption": "",
                     "role": "inline",
                     "sourceRef": "entities/地点/景区/华山"
@@ -1351,7 +1367,7 @@
                 "assets": [
                   {
                     "assetId": "华山_detail_2_2b3d7186",
-                    "url": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/80/c0/80c04c9239780ee9f841bc33a4db15a10b9b2b22f69397c532b0bbd59ccce274.jpg",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                     "caption": "下棋亭，位于华山东峰旁",
                     "role": "inline",
                     "sourceRef": "entities/地点/景区/华山"
@@ -1367,7 +1383,7 @@
         },
         {
           "homepageId": "homepage_sight_台北101",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:台北101",
           "title": "台北101",
           "summary": "台北101的建設計畫從1990年代开始展开，初名「台北国際金融中心」，为配合中华民国政府推動的「亚太營运中心」政策規劃面向金融業的大型商辦設施，之后選定在台北市信义計畫区A22及A23区塊上兴建，並於1996年10月決議以BOT模式兴建。1",
@@ -1437,7 +1453,7 @@
         },
         {
           "homepageId": "homepage_sight_四姑娘山",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:四姑娘山",
           "title": "四姑娘山",
           "summary": "四姑娘山位于四川省阿坝藏族羌族自治州小金县四姑娘山镇境内，地处邛崃山脉中段，毗邻卧龙国家级自然保护区和米亚罗自然保护区。1994年、1996年，国务院先后批准建立“四姑娘山国家重点风景名胜区”和“小金四姑娘山国家级自然保护区”，其亦为世界自",
@@ -1483,7 +1499,7 @@
         },
         {
           "homepageId": "homepage_sight_圆明园",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:圆明园",
           "title": "圆明园",
           "summary": "圆明园概况圆明园是清朝兴建的大型皇家园林。",
@@ -1553,7 +1569,7 @@
         },
         {
           "homepageId": "homepage_sight_大雁塔",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:大雁塔",
           "title": "大雁塔",
           "summary": "大雁塔坐落于陕西省西安市雁塔区大慈恩寺内，是一座七层方形佛塔。塔由玄奘三藏主持修建，用以珍藏自印度带回的梵本佛经，现为西安著名古迹与标志性建筑，也是市徽的主要构成元素。唐代新科进士常在塔壁题名留念，\"雁塔题名\"因而成为考取进士的雅称。196",
@@ -1605,7 +1621,7 @@
         },
         {
           "homepageId": "homepage_sight_天坛",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:天坛",
           "title": "天坛",
           "summary": "天坛概况天坛位于北京市东城区，是明清两朝皇帝祭天、祈谷和祈雨的场所。",
@@ -1675,7 +1691,7 @@
         },
         {
           "homepageId": "homepage_sight_天门山",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:天门山",
           "title": "天门山",
           "summary": "天门山概况天门山坐落在中国湖南省张家界市永定区，属武陵山脉，因山顶天然石洞天门洞而得名，素有“湘西第一神山”“武陵之魂”“张家界之魂”之称。",
@@ -1733,7 +1749,7 @@
         },
         {
           "homepageId": "homepage_sight_太白山",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:太白山",
           "title": "太白山",
           "summary": "太白山又称太一山，位于陕西省西南部眉县、太白县和周至县交界处。主峰拔仙台海拔3767.2米，为秦岭主峰，也是汉水与渭水的分水岭，更是青藏高原以东、陕西省的第一高峰。",
@@ -1797,7 +1813,7 @@
         },
         {
           "homepageId": "homepage_sight_山海关",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:山海关",
           "title": "山海关",
           "summary": "山海关概况山海关位于河北省秦皇岛市山海关区与辽宁省葫芦岛市绥中县交界处，古称渝关、临闾关、榆关。",
@@ -1855,7 +1871,7 @@
         },
         {
           "homepageId": "homepage_sight_岳阳楼",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:岳阳楼",
           "title": "岳阳楼",
           "summary": "岳阳楼坐落于湖南省岳阳市古城西门之上，下临洞庭，前望君山，北倚长江。楼名因范仲淹《岳阳楼记》而传扬四海，素有“洞庭天下水，岳阳天下楼”之誉。其始建于公元220年前后，前身相传为三国东吴大将鲁肃所建的阅军楼，西晋南北朝时称巴陵城楼，中唐始称岳",
@@ -1907,7 +1923,7 @@
         },
         {
           "homepageId": "homepage_sight_岳麓山",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:岳麓山",
           "title": "岳麓山",
           "summary": "岳麓山概况岳麓山坐落在湖南省长沙市的湘江西岸，占地面积35.2（一说36）平方公里，最高峰云麓峰，又名灵麓峰，海拔300.8米，是南岳衡山七十二峰之一。",
@@ -1965,13 +1981,13 @@
         },
         {
           "homepageId": "homepage_sight_峨眉山",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:峨眉山",
           "title": "峨眉山",
           "summary": "峨眉山概况峨眉山，亦作峨眉山，位于四川省峨眉山市境内，景区面积154平方公里。",
           "city": "",
           "status": "published",
-          "coverUrl": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/d1/f0/d1f08a13dda7433b59818341f5a70393ce2e2eedd7ab620eecfc9fc23c440e83.jpg",
+          "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
           "seedSource": {
             "channel": "qwq-data fixture entity-introduction",
             "entityRef": "地点/景区/峨眉山",
@@ -1981,7 +1997,7 @@
             "homepageId": "homepage_sight_峨眉山",
             "displayName": "峨眉山",
             "homepageType": "sight",
-            "coverUrl": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/d1/f0/d1f08a13dda7433b59818341f5a70393ce2e2eedd7ab620eecfc9fc23c440e83.jpg",
+            "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
             "summary": "峨眉山概况峨眉山，亦作峨眉山，位于四川省峨眉山市境内，景区面积154平方公里。",
             "sections": [
               {
@@ -1991,7 +2007,7 @@
                 "assets": [
                   {
                     "assetId": "峨眉山_detail_2_529e2211",
-                    "url": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/ec/b1/ecb194572ed31e2f348533a96e2617a366391c660f83f15ce445d92404d152e5.jpg",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                     "caption": "峨秀湖与峨眉山",
                     "role": "inline",
                     "sourceRef": "entities/地点/景区/峨眉山"
@@ -2005,21 +2021,21 @@
                 "assets": [
                   {
                     "assetId": "峨眉山_detail_2_960263a3",
-                    "url": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/15/56/1556bd7fd56c36b2ea410259e4efbe24c94bc5a35cdf1dd90282392ef5434764.jpg",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                     "caption": "金顶大雄宝殿",
                     "role": "inline",
                     "sourceRef": "entities/地点/景区/峨眉山"
                   },
                   {
                     "assetId": "峨眉山_detail_2_86d56537",
-                    "url": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/1d/08/1d0871588f94446c1637720a65df93f1d1d013643c2519239cdd1f1f3d0cdcc3.jpg",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                     "caption": "峨眉山報国寺",
                     "role": "inline",
                     "sourceRef": "entities/地点/景区/峨眉山"
                   },
                   {
                     "assetId": "峨眉山_detail_2_f1028c94",
-                    "url": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/38/ee/38ee21f654c65c54b9eaa7fe051d7f3a6ba6a96d07d4507c68312c8000b85a84.jpg",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                     "caption": "秀甲天下",
                     "role": "inline",
                     "sourceRef": "entities/地点/景区/峨眉山"
@@ -2051,14 +2067,14 @@
                 "assets": [
                   {
                     "assetId": "峨眉山_detail_2_f2e10667",
-                    "url": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/84/55/84557c6a2f5b3ac517b9d9f246184d30e0fc06f1ea234b313cdfa98f5f0fb344.jpg",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                     "caption": "峩眉山道里地圖",
                     "role": "inline",
                     "sourceRef": "entities/地点/景区/峨眉山"
                   },
                   {
                     "assetId": "峨眉山_detail_2_6b16553b",
-                    "url": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/94/4e/944e93cd118b947769c02733b2775fd8e1e77f8f2146a002b7d69e206727d63c.jpg",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                     "caption": "峨眉山",
                     "role": "inline",
                     "sourceRef": "entities/地点/景区/峨眉山"
@@ -2074,7 +2090,7 @@
         },
         {
           "homepageId": "homepage_sight_崆峒山",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:崆峒山",
           "title": "崆峒山",
           "summary": "崆峒山，古称空同山，位于中国甘肃省平凉市以西11公里处。相传广成子在此修炼得道，黄帝前来向他问道，崆峒山因而被称为「天下道教第一山」。崆峒山集自然景观和人文景观于一身，有「西来第一山」「西镇奇观」等美誉，是中国国家重点风景名胜区，也是中国五",
@@ -2120,7 +2136,7 @@
         },
         {
           "homepageId": "homepage_sight_广州塔",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:广州塔",
           "title": "广州塔",
           "summary": "广州塔概况广州塔（英语：CantonTower），昵称小蛮腰、扭纹柴或针筒，位于广东省广州市海珠区赤岗街道艺洲路赤岗塔附近，海拔高程600米，距珠江南岸125米，与海心沙岛及珠江新城隔江相望。",
@@ -2190,7 +2206,7 @@
         },
         {
           "homepageId": "homepage_sight_恭王府",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:恭王府",
           "title": "恭王府",
           "summary": "恭王府概况恭王府位于中国北京市西城区什刹海街道前海西街17号，是清朝后期恭亲王奕訢的府邸及花园，1982年2月23日列入第二批全国重点文物保护单位，2012年评定为国家AAAAA级旅游景区，现由文化和旅游部恭王府博物馆管理。",
@@ -2242,7 +2258,7 @@
         },
         {
           "homepageId": "homepage_sight_故宫",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:故宫",
           "title": "故宫",
           "summary": "故宫，又称紫禁城，是中国明清两朝二十四位皇帝的皇宫。故宫始建于明成祖永乐四年（1406年），以南京故宫为蓝本营建，永乐十八年（1420年）落成。位于北京中轴线中心的故宫，占地面积72万平方米，建筑面积约15万平方米，有大小宫殿七十多座、房屋",
@@ -2300,7 +2316,7 @@
         },
         {
           "homepageId": "homepage_sight_普陀山",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:普陀山",
           "title": "普陀山",
           "summary": "普陀山位于浙江省舟山群岛，是中国四大佛教名山之一，也是观音菩萨的道场，素有\"海天佛国\"\"南海圣境\"之称。山名原为梅岑山，后取观音菩萨在南印度海边应化道场\"补怛洛伽山（Potalaka）\"之名，又称\"普陀落伽\"，是中国四大佛教名山中唯一坐落于",
@@ -2352,7 +2368,7 @@
         },
         {
           "homepageId": "homepage_sight_景山公园",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:景山公园",
           "title": "景山公园",
           "summary": "景山公园位于北京市西城区景山前街，西临北海，南与故宫神武门隔街相望，曾为元明清三代皇家御苑，坐落在北京中轴线上，园中山体曾是全城制高点。2001年列为全国重点文物保护单位，2024年作为“北京中轴线——中国理想都城秩序的杰作”组成部分入选世",
@@ -2416,7 +2432,7 @@
         },
         {
           "homepageId": "homepage_sight_本溪水洞",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:本溪水洞",
           "title": "本溪水洞",
           "summary": "本溪水洞景区位于中国辽宁省本溪市东郊，是迄今发现的世界最长地下充水溶洞，形成历史可追溯数十万年。2015年7月，本溪水洞风景名胜区获评国家5A级旅游景区。",
@@ -2468,7 +2484,7 @@
         },
         {
           "homepageId": "homepage_sight_松花湖",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:松花湖",
           "title": "松花湖",
           "summary": "松花湖概况松花湖在吉林当地亦称作丰满水库，这片开阔水域位于吉林省吉林市境内的第二松花江上，是全省范围内面积最大的湖泊。",
@@ -2514,7 +2530,7 @@
         },
         {
           "homepageId": "homepage_sight_查干湖",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:查干湖",
           "title": "查干湖",
           "summary": "查干湖（蒙古语：查干淖尔，意为\"白色的湖\"或\"圣洁的湖\"），旧名\"查干泡\"，当地又称\"圣水湖\"。位于中国吉林省松原市前郭尔罗斯蒙古族自治县西北部，霍林河末端。湖底海拔126米，最大湖面307平方公里（一说420平方公里），平均水深4米，湖周",
@@ -2566,7 +2582,7 @@
         },
         {
           "homepageId": "homepage_sight_横店影视城",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:横店影视城",
           "title": "横店影视城",
           "summary": "横店影视城概况横店影视城，又称横店影视基地，是中国目前面积最大的影视拍摄基地，也是中国首个国家级影视产业实验区，位于浙江省金华市东阳市横店镇，由横店集团的子公司浙江横店影视城有限公司所有。",
@@ -2636,7 +2652,7 @@
         },
         {
           "homepageId": "homepage_sight_武侯祠",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:武侯祠",
           "title": "武侯祠",
           "summary": "武侯祠概况成都武侯祠位于四川省成都市武侯区浆洗街街道武侯祠大街231号，是中国唯一的君臣合祀祠庙，由武侯祠、汉昭烈庙及惠陵组成，人们习惯将三者统称为武侯祠。",
@@ -2682,7 +2698,7 @@
         },
         {
           "homepageId": "homepage_sight_武夷山",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:武夷山",
           "title": "武夷山",
           "summary": "武夷山概况武夷山风景名胜区位于中国福建南平武夷山市中部，行政区域属武夷街道和星村镇，设立于1979年，1982年被列为第一批国家重点风景名胜区，是“武夷山”世界遗产的重要组成部分，也是中国少数以观光成功拉动低排放经济的地区之一。",
@@ -2752,7 +2768,7 @@
         },
         {
           "homepageId": "homepage_sight_武当山",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:武当山",
           "title": "武当山",
           "summary": "武当山，本名仙室山，一名太岳山，一名太和山，又名谸上山，位于湖北省西北部十堰丹江口市境内，武当山旅游经济特区即依此山而定名。汉江南岸，西北—东南走向，长260余公里，为大巴山脉东段分支，起自湖北、陕西两省边界，止于襄阳市南，隔汉江和大洪山遥",
@@ -2828,7 +2844,7 @@
         },
         {
           "homepageId": "homepage_sight_海螺沟",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:海螺沟",
           "title": "海螺沟",
           "summary": "海螺沟概况海螺沟冰川位于中国四川省甘孜藏族自治州泸定县境内，磨西镇旁，距离成都西南380多公里，是国家5A级景区。",
@@ -2874,7 +2890,7 @@
         },
         {
           "homepageId": "homepage_sight_涠洲岛",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:涠洲岛",
           "title": "涠洲岛",
           "summary": "涠洲岛概况涠洲岛是一座位于广西壮族自治区北海市南方北部湾海域的海岛，是中国最大、地质年龄最小的火山岛。",
@@ -2944,7 +2960,7 @@
         },
         {
           "homepageId": "homepage_sight_澳门威尼斯人",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:澳门威尼斯人",
           "title": "澳门威尼斯人",
           "summary": "澳门威尼斯人（The Venetian Macao）位于澳门路氹城填海区金光大道地段，占地200万平方英尺，开幕时曾是亚洲最大的单幢式酒店及全球最大的赌场之一，坊间亦称威尼斯人度假村或「威记」。以下为度假村概况、设施与交通等可核验信息。",
@@ -3026,7 +3042,7 @@
         },
         {
           "homepageId": "homepage_sight_秦始皇兵马俑",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:秦始皇兵马俑",
           "title": "秦始皇兵马俑",
           "summary": "秦始皇兵马俑概况秦始皇兵马俑又称秦始皇陵兵马俑、秦陵兵马俑，位于陕西省西安市临潼区秦陵街道秦俑村。",
@@ -3108,7 +3124,7 @@
         },
         {
           "homepageId": "homepage_sight_稻城亚丁",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:稻城亚丁",
           "title": "稻城亚丁",
           "summary": "稻城亚丁概况四川亚丁国家级自然保护区位于中国四川省甘孜藏族自治州稻城县，总面积3815.06平方千米，于1996年3月20日设立。",
@@ -3154,7 +3170,7 @@
         },
         {
           "homepageId": "homepage_sight_衡山",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:衡山",
           "title": "衡山",
           "summary": "衡山为五岳之一，亦称“南岳”。南岳始封于唐虞，是古代帝王巡狩祭祀之地，也是道教与汉传佛教圣地之一。主景区全称“衡山风景名胜区”，位于湖南省衡阳市南岳区境内；1979年列为湖南省级自然保护区，1982年11月8日列入第一批国家重点风景名胜区。",
@@ -3260,7 +3276,7 @@
         },
         {
           "homepageId": "homepage_sight_西湖",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:西湖",
           "title": "西湖",
           "summary": "西湖位于中国浙江省杭州旧城西侧，是中国大陆首批国家重点风景名胜区和中国十大风景名胜之一。中国主要的观赏性淡水湖泊之一。",
@@ -3330,7 +3346,7 @@
         },
         {
           "homepageId": "homepage_sight_都江堰_approved_only",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:都江堰_approved_only",
           "title": "都江堰_approved_only",
           "summary": "主页。",
@@ -3364,7 +3380,7 @@
         },
         {
           "homepageId": "homepage_sight_镜泊湖",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:镜泊湖",
           "title": "镜泊湖",
           "summary": "镜泊湖位于黑龙江省牡丹江市宁安市境内，清代《盛京通志》称其为毕尔腾湖，是中国最大的高山堰塞湖，历经五次火山喷发，玄武岩浆流阻塞牡丹江河床而形成。",
@@ -3422,7 +3438,7 @@
         },
         {
           "homepageId": "homepage_sight_长白山",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:长白山",
           "title": "长白山",
           "summary": "长白山古名不咸山（或为白罗聂·显乾之音译）、太白山，在朝鲜半岛又称白头山。1962年因《中朝边界条约》割让部分区域后，成为中华人民共和国与朝鲜民主主义人民共和国边境的界山。广义的长白山指一条西南—东北走向、绵延上千公里的山脉，横亘于吉林、辽",
@@ -3504,7 +3520,7 @@
         },
         {
           "homepageId": "homepage_sight_阳朔西街",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:阳朔西街",
           "title": "阳朔西街",
           "summary": "概况西街，又称阳朔西街，是广西壮族自治区桂林市阳朔县的一条步行街。",
@@ -3550,7 +3566,7 @@
         },
         {
           "homepageId": "homepage_sight_阿里山",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:阿里山",
           "title": "阿里山",
           "summary": "阿里山（Ālǐshān）位於台湾嘉义县的一座国家级风景区。橫跨了梅山、竹崎、番路与阿里山四乡，境内高山自海拔300公尺爬升至2,600公尺，造就了四季晨昏的奇美云海、日出与晚霞；由於地層縱切的影響，风景区内的懸崖、峭壁、峡谷、瀑布特多；知名",
@@ -3662,7 +3678,7 @@
         },
         {
           "homepageId": "homepage_sight_雁荡山",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:雁荡山",
           "title": "雁荡山",
           "summary": "雁荡山概况雁荡山位于中国浙江省温州市北部乐清市境内，一般海拔500至600米，主峰百岗尖西峰海拔1108米。",
@@ -3714,7 +3730,7 @@
         },
         {
           "homepageId": "homepage_sight_青城山",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:青城山",
           "title": "青城山",
           "summary": "青城山概况青城山为中国道教发源地之一，也是著名的道教名山。",
@@ -3766,7 +3782,7 @@
         },
         {
           "homepageId": "homepage_sight_青秀山",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:青秀山",
           "title": "青秀山",
           "summary": "青秀山概况青秀山一般指青秀山风景区，位于广西壮族自治区首府南宁市青秀区境内的邕江江畔，包括青山岭、凤凰岭、凤翼岭、子岭、佛子岭、雷劈岭等18座大小山岭，面积791公顷。",
@@ -3818,13 +3834,13 @@
         },
         {
           "homepageId": "homepage_sight_颐和园",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:颐和园",
           "title": "颐和园",
           "summary": "颐和园概况颐和园是清朝的皇家行宫和大型皇家园林，位于中国北京市海淀区西北，占地297公顷，主要由万寿山和昆明湖组成。",
           "city": "",
           "status": "published",
-          "coverUrl": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/60/69/606933dfc2bc4c7cd40708f9d57e1a0c6002c7640dd59c61babc1761c140106b.jpg",
+          "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
           "seedSource": {
             "channel": "qwq-data fixture entity-introduction",
             "entityRef": "地点/景区/颐和园",
@@ -3834,7 +3850,7 @@
             "homepageId": "homepage_sight_颐和园",
             "displayName": "颐和园",
             "homepageType": "sight",
-            "coverUrl": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/60/69/606933dfc2bc4c7cd40708f9d57e1a0c6002c7640dd59c61babc1761c140106b.jpg",
+            "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
             "summary": "颐和园概况颐和园是清朝的皇家行宫和大型皇家园林，位于中国北京市海淀区西北，占地297公顷，主要由万寿山和昆明湖组成。",
             "sections": [
               {
@@ -3850,14 +3866,14 @@
                 "assets": [
                   {
                     "assetId": "颐和园_detail_清末的颐和园_法军拍摄_1900_2_a31d8d61",
-                    "url": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/52/de/52de1827308ed24a9443050c5e2b0e5d1232e53feb4eb1f572f99abd66483a84.jpg",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                     "caption": "清末的颐和园，法军拍摄（1900年－1901年）。",
                     "role": "inline",
                     "sourceRef": "entities/地点/景区/颐和园"
                   },
                   {
                     "assetId": "颐和园_detail_园内万壽山腳下的銅亭照_门窗柱顶_2_77ba3e9d",
-                    "url": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/c3/c6/c3c6ca659363659fd8792952d4ee8ca5a513a6206c503310b7b39a0ccef1e20d.jpg",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                     "caption": "园内万壽山腳下的銅亭照，门窗柱顶皆用銅製，是中国寺庙中的一個例子",
                     "role": "inline",
                     "sourceRef": "entities/地点/景区/颐和园"
@@ -3871,35 +3887,35 @@
                 "assets": [
                   {
                     "assetId": "颐和园_detail_昆明湖上的游船_2_35aa0375",
-                    "url": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/fb/b2/fbb2bc2f68bc75d54c9435936d753178db688a75c9de93a30ddeb139567d13c6.jpg",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                     "caption": "昆明湖上的游船",
                     "role": "inline",
                     "sourceRef": "entities/地点/景区/颐和园"
                   },
                   {
                     "assetId": "颐和园_detail_佛香阁的全貌_佛香阁的正面为昆明_2_908b0cfe",
-                    "url": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/23/50/2350b9dbcb0e94babba51bf32a1b7012f6cbfbd605b628a867369d58cac88d87.jpg",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                     "caption": "佛香阁的全貌，佛香阁的正面为昆明湖。",
                     "role": "inline",
                     "sourceRef": "entities/地点/景区/颐和园"
                   },
                   {
                     "assetId": "颐和园_detail_昆明湖畔玉澜堂外_2_80a0a3ef",
-                    "url": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/5b/01/5b01def55699621aece87b2e391e2dde5eedb3200eef9ff5627f7c1fc26b7639.jpg",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                     "caption": "昆明湖畔玉澜堂外",
                     "role": "inline",
                     "sourceRef": "entities/地点/景区/颐和园"
                   },
                   {
                     "assetId": "颐和园_detail_佛香阁_2_b0bdf694",
-                    "url": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/97/e1/97e173a8e6081baa505ef6d94346372fd251f44eb897573398017dc3d2027eb9.jpg",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                     "caption": "佛香阁",
                     "role": "inline",
                     "sourceRef": "entities/地点/景区/颐和园"
                   },
                   {
                     "assetId": "颐和园_detail_万寿山上的佛香阁_前景为昆明湖_2_2b36789d",
-                    "url": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/ac/70/ac70ed732e4478b39d1cf920d1d24bc1ca70da568604524855b59bab0d3ed849.jpg",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                     "caption": "万寿山上的佛香阁，前景为昆明湖",
                     "role": "inline",
                     "sourceRef": "entities/地点/景区/颐和园"
@@ -3921,13 +3937,13 @@
         },
         {
           "homepageId": "homepage_sight_香港海洋公园",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:香港海洋公园",
           "title": "香港海洋公园",
           "summary": "香港海洋公园位于香港香港島南区黃竹坑。於1977年开幕，是一座集海陸動物展览、機動游戲、大型表演的主題公园，也是一座世界级的海洋動物主題樂园。公园佔地超過91.5公頃，分「海濱樂园」及「高峰樂园」兩個景区，由架空纜车及海洋列车連接。在节日期",
           "city": "",
           "status": "published",
-          "coverUrl": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/b5/54/b554e92e59d36402b6a871752c32f989548f2771751e1f1a4bc7d8d8ff419176.jpg",
+          "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
           "seedSource": {
             "channel": "qwq-data fixture entity-introduction",
             "entityRef": "地点/景区/香港海洋公园",
@@ -3937,7 +3953,7 @@
             "homepageId": "homepage_sight_香港海洋公园",
             "displayName": "香港海洋公园",
             "homepageType": "sight",
-            "coverUrl": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/b5/54/b554e92e59d36402b6a871752c32f989548f2771751e1f1a4bc7d8d8ff419176.jpg",
+            "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
             "summary": "香港海洋公园位于香港香港島南区黃竹坑。於1977年开幕，是一座集海陸動物展览、機動游戲、大型表演的主題公园，也是一座世界级的海洋動物主題樂园。公园佔地超過91.5公頃，分「海濱樂园」及「高峰樂园」兩個景区，由架空纜车及海洋列车連接。在节日期",
             "sections": [
               {
@@ -3953,21 +3969,21 @@
                 "assets": [
                   {
                     "assetId": "香港海洋公园_detail_2_8e126cf5",
-                    "url": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/aa/61/aa61df42c08ff59f16b9957a7257dcf20946a1242f7eeffc42530239bc8186c4.jpg",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                     "caption": "港铁南港島綫海洋公园站",
                     "role": "inline",
                     "sourceRef": "entities/地点/景区/香港海洋公园"
                   },
                   {
                     "assetId": "香港海洋公园_detail_2_46f726a8",
-                    "url": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/43/3f/433fed95ef86c92b3ac3fe78ec08c0c6cd7960839bad622ff03482bd0897615d.jpg",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                     "caption": "海洋公园巴士總站",
                     "role": "inline",
                     "sourceRef": "entities/地点/景区/香港海洋公园"
                   },
                   {
                     "assetId": "香港海洋公园_detail_2_4e1285ba",
-                    "url": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/28/f6/28f6d66ab0aeecefff2cc82dd80c27d400192c59e7a970c33cf02204b794425e.jpg",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                     "caption": "海洋公园公共交通交匯处小巴站",
                     "role": "inline",
                     "sourceRef": "entities/地点/景区/香港海洋公园"
@@ -3987,28 +4003,28 @@
                 "assets": [
                   {
                     "assetId": "香港海洋公园_detail_2_09f0332f",
-                    "url": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/f2/b9/f2b99695ebde35146699ddbae27e6cef91723b6ee2056c2694f82504f2983e45.jpg",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                     "caption": "登山纜车",
                     "role": "inline",
                     "sourceRef": "entities/地点/景区/香港海洋公园"
                   },
                   {
                     "assetId": "香港海洋公园_detail_2_cbcc5a52",
-                    "url": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/da/b5/dab5ab82c6017d85d244a67b741e76c27caa0f385e0ebb294af6dd4f5ea050bc.jpg",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                     "caption": "每部纜车可載六人",
                     "role": "inline",
                     "sourceRef": "entities/地点/景区/香港海洋公园"
                   },
                   {
                     "assetId": "香港海洋公园_detail_2_02cddbb3",
-                    "url": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/43/83/438309faafd0197074010c85f1114a1c831f0e929de57db78de852246748c054.jpg",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                     "caption": "海洋列车",
                     "role": "inline",
                     "sourceRef": "entities/地点/景区/香港海洋公园"
                   },
                   {
                     "assetId": "香港海洋公园_detail_2_a1dfa1ba",
-                    "url": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/17/07/1707536e796f09e5508af36b4fdac8b65a4a0b66cf6a8010d29bdccbfa2188b6.jpg",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                     "caption": "登山電梯",
                     "role": "inline",
                     "sourceRef": "entities/地点/景区/香港海洋公园"
@@ -4060,7 +4076,7 @@
         },
         {
           "homepageId": "homepage_sight_麦积山石窟",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:麦积山石窟",
           "title": "麦积山石窟",
           "summary": "麦积山石窟位于甘肃省天水市麦积区麦积镇草滩村麦积山，是一处佛教石窟。1961年，麦积山石窟列入中国第一批全国重点文物保护单位。人们常把中国四大石窟比作甘肃敦煌莫高窟、河南洛阳龙门石窟、山西大同云冈石窟，再加上重庆大足石刻或麦积山石窟；前四处",
@@ -4124,7 +4140,7 @@
         },
         {
           "homepageId": "homepage_sight_黄鹤楼",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:黄鹤楼",
           "title": "黄鹤楼",
           "summary": "黄鹤楼位于湖北省武汉市武昌蛇山上，与湖南岳阳楼、江西滕王阁并称江南三大名楼，也是国家旅游胜地四十佳之一。楼被称为\"天下绝景\"，这一称谓源自宋徽宗画作《天下绝景黄鹤楼》。黄鹤楼始建于三国东吴黄武二年（223年），自初代至今已近1800年，历代",
@@ -4182,13 +4198,13 @@
         },
         {
           "homepageId": "homepage_sight_黄龙",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:黄龙",
           "title": "黄龙",
           "summary": "黄龙风景名胜区位于四川省北部阿坝藏族羌族自治州松潘县境内，1992年与九寨沟一同列入世界自然遗产名录。",
           "city": "",
           "status": "published",
-          "coverUrl": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/14/62/1462dd660dd43aa97e67ce1c5ebf0e8ede91d1ff123a8017bfaa81a82af92d92.jpg",
+          "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
           "seedSource": {
             "channel": "qwq-data fixture entity-introduction",
             "entityRef": "地点/景区/黄龙",
@@ -4198,7 +4214,7 @@
             "homepageId": "homepage_sight_黄龙",
             "displayName": "黄龙",
             "homepageType": "sight",
-            "coverUrl": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/14/62/1462dd660dd43aa97e67ce1c5ebf0e8ede91d1ff123a8017bfaa81a82af92d92.jpg",
+            "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
             "summary": "黄龙风景名胜区位于四川省北部阿坝藏族羌族自治州松潘县境内，1992年与九寨沟一同列入世界自然遗产名录。",
             "sections": [
               {
@@ -4214,35 +4230,35 @@
                 "assets": [
                   {
                     "assetId": "黄龙_detail_2_54a0becb",
-                    "url": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/da/46/da460c5dd7176c323e449e2a03c51dd933ec38b1d6c8fab3e3d77cf6c0383829.jpg",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                     "caption": "飛瀑流輝",
                     "role": "inline",
                     "sourceRef": "entities/地点/景区/黄龙"
                   },
                   {
                     "assetId": "黄龙_detail_2_12662e69",
-                    "url": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/6d/ed/6dedc0f95112cc6a9767a484fe9cac811872bceaa3004aa652e55690a51e6f74.jpg",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                     "caption": "瀲灩湖",
                     "role": "inline",
                     "sourceRef": "entities/地点/景区/黄龙"
                   },
                   {
                     "assetId": "黄龙_detail_2_20ba60e0",
-                    "url": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/7a/be/7abe23aeb5d23155c2c5c05ff2db09b4cd70c1ab5524d29326f1c4936a0bdc0a.jpg",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                     "caption": "莲台飛瀑",
                     "role": "inline",
                     "sourceRef": "entities/地点/景区/黄龙"
                   },
                   {
                     "assetId": "黄龙_detail_2_cd0b9f32",
-                    "url": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/f7/8f/f78f3d888e61dc0f07b749662cc7163379a4f0bb68abc46fa08c56e544ed7c98.jpg",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                     "caption": "洗身洞",
                     "role": "inline",
                     "sourceRef": "entities/地点/景区/黄龙"
                   },
                   {
                     "assetId": "黄龙_detail_2_cb88de5a",
-                    "url": "https://gamma-image.quwoquan-env.test:19100/media/objects/sha256/f8/ce/f8ceb31cd22c4b794dbabd3fe349a3e9143b216a5ec7a5fd1b4163ff8663fb46.jpg",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                     "caption": "金沙鋪地",
                     "role": "inline",
                     "sourceRef": "entities/地点/景区/黄龙"
@@ -4258,7 +4274,7 @@
         },
         {
           "homepageId": "homepage_sight_龙脊梯田",
-          "type": "sight",
+          "homepageType": "sight",
           "canonicalEntityId": "entity:sight:龙脊梯田",
           "title": "龙脊梯田",
           "summary": "概况龙脊梯田，又称龙胜梯田，是中国广西壮族自治区桂林市龙胜县龙脊镇的梯田，具有650多年的历史。",
@@ -4383,5 +4399,6 @@
         }
       }
     }
-  ]
+  ],
+  "schema": "entity.scenario-fixtures"
 }

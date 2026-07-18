@@ -106,14 +106,4 @@ final class RemoteContentMediaFacet implements ContentMediaFacet {
     ),
   );
 
-  @override
-  Future<BindContentPostMediaAssetsResult> bindPostMediaAssets(
-    BindContentPostMediaAssetsCommand command,
-  ) => client.contentPostBindMediaAssetsToPost(
-    command,
-    context: invocationContext(
-      ContentRequestPageIds.bindMediaAssetsToPost,
-      command: true,
-    ),
-  );
 }

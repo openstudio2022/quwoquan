@@ -5,10 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/services/chat/mock/chat_repository_mock.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
+import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -116,6 +116,18 @@ void main() {
     expect(feed.map((item) => item.id), contains('fixture_photo_001'));
   });
 
+  test('alpha 视频播放 canary 可从默认契约 fixture 直达', () async {
+    final repo = MockContentRepository();
+
+    final detail = await repo.getPost(postId: 'fixture_video_001');
+
+    expect(detail.post.id, 'fixture_video_001');
+    expect(
+      detail.post.mediaVideoUrl,
+      'media/video/s/video-primary-0001/post/video-content-0001/source.mp4',
+    );
+  });
+
   test('circle mock repository 可由 contracts fixture 初始化', () async {
     final pack = loadCircleScenarioPack();
     final seedRefs = pack.seedRefsFor('circle_list_detail_basic');
@@ -184,6 +196,11 @@ void main() {
     final repo = MockHomepageRepository();
     final items = await repo.searchHomepages(query: '契约');
     expect(items.map((item) => item.id), contains('fixture_homepage_author'));
+    final moneyMatches = await repo.searchHomepages(query: '钱');
+    expect(
+      moneyMatches.map((item) => item.id),
+      contains('homepage_sight_dongqian_lake'),
+    );
   });
 
   test('user profile mock repository 默认优先读取 contract fixture', () async {
@@ -336,7 +353,9 @@ MockContentRepository buildContractSeededContentRepository({
   final seedSet = pack.seedSets[seedRef] as Map<String, dynamic>;
   final posts = ((seedSet['posts'] as List?) ?? const <dynamic>[])
       .whereType<Map>()
-      .map((item) => postBaseDtoFromMap(item.cast<String, dynamic>()))
+      .map(
+        (item) => contentPostDtoFromReadModelMap(item.cast<String, dynamic>()),
+      )
       .toList(growable: false);
   return MockContentRepository(seedPosts: posts);
 }

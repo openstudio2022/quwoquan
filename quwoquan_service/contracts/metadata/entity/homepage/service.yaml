@@ -1,4 +1,3 @@
-version: 1
 
 service:
   name: entity-service
@@ -13,18 +12,21 @@ service:
 
 api_routes:
   - method: GET
-    path: /v1/homepages/search
+    path: /homepages/search
+
     operation: SearchHomepages
     actor: none
+    commercial:
+      status: ready
     authorization:
       principal: public
       ownership_policy: published_homepage_search
     reliability:
-      timeout_ms: 1500
+      timeout_ms: 6000
       cancellation: supported
       retry_mode: idempotent
       max_attempts: 2
-      idempotency: none
+      idempotency: optional
     error_codes: [ENTITY.USER.invalid_argument, ENTITY.SYSTEM.internal_error]
     privacy:
       request_classification: PUBLIC
@@ -52,9 +54,16 @@ api_routes:
     description: 搜索共享主页
     query_params: [query, homepageType, city, status, cursor, limit]
     response_entity: HomepageSearchItemView
+    client_contract:
+      dart_import: ../entity/homepage_queries.dart
+      request_type: HomepageSearchQuery
+      response_type: HomepageSearchSlice
+      request_encoder: encodeHomepageSearchQuery
+      response_decoder: decodeHomepageSearchSlice
 
   - method: POST
-    path: /v1/homepages/candidates
+    path: /homepages/candidates
+
     operation: IntakeHomepageCandidate
     actor: account
     application:
@@ -67,10 +76,11 @@ api_routes:
     description: 创建候选共享主页（introductionMarkdown/introductionAssets 承载数据工程 page.md 三段结构投影）
     request_entity: Homepage
     writable_fields: [title, subtitle, homepageType, categoryTags, coverUrl, address, city, location, introductionMarkdown, introductionAssets]
-    auth: required
-
+    security:
+      auth_mode: required
   - method: POST
-    path: /v1/homepages/candidates/suggest
+    path: /homepages/candidates/suggest
+
     operation: SuggestHomepageCandidate
     actor: persona
     application:
@@ -83,10 +93,11 @@ api_routes:
     description: 补充缺失主页
     request_entity: Homepage
     writable_fields: [title, subtitle, homepageType, categoryTags, coverUrl, address, city, location]
-    auth: required
-
+    security:
+      auth_mode: required
   - method: POST
-    path: /v1/homepages/candidates/{homepageId}:publish
+    path: /homepages/candidates/{homepageId}:publish
+
     operation: PublishHomepageCandidate
     actor: account
     application:
@@ -97,12 +108,42 @@ api_routes:
       mutation_target: Homepage
       invariant_target: Homepage
     description: 将候选共享主页发布为正式主页
-    auth: required
-
+    security:
+      auth_mode: required
   - method: GET
-    path: /v1/homepages/{homepageId}
+    path: /homepages/{homepageId}
+
     operation: GetHomepageDetail
     actor: none
+    commercial:
+      status: ready
+    authorization:
+      principal: public
+      ownership_policy: published_homepage_read
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes: [ENTITY.USER.homepage_not_found, ENTITY.USER.homepage_offline, ENTITY.SYSTEM.internal_error]
+    privacy:
+      request_classification: PUBLIC
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: entity_homepage_detail_get
+      trace: true
+      attributes: [homepage_id, outcome]
+    slo:
+      latency_p95_ms: 300
+      availability_percent: 99.5
+    security:
+      auth_mode: optional
+      principal: public
+      token_transport: bearer
+      anonymous_policy: allow
+      visibility: public
     application:
       kind: query
       facet: HomepageQueryFacade
@@ -111,11 +152,47 @@ api_routes:
       slice: HomepageDetailSlice
     description: 获取共享主页详情
     response_entity: Homepage
+    client_contract:
+      dart_import: ../entity/homepage_queries.dart
+      request_type: HomepageByIdQuery
+      response_type: HomepageDetailProjection
+      request_encoder: encodeHomepageByIdQuery
+      response_decoder: decodeHomepageDetail
 
   - method: GET
-    path: /v1/homepages/{homepageId}/shell
+    path: /homepages/{homepageId}/shell
+
     operation: GetHomepageShell
     actor: none
+    commercial:
+      status: ready
+    authorization:
+      principal: public
+      ownership_policy: published_homepage_read
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes: [ENTITY.USER.homepage_not_found, ENTITY.USER.homepage_offline, ENTITY.SYSTEM.internal_error]
+    privacy:
+      request_classification: PUBLIC
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: entity_homepage_shell_get
+      trace: true
+      attributes: [homepage_id, outcome]
+    slo:
+      latency_p95_ms: 300
+      availability_percent: 99.5
+    security:
+      auth_mode: optional
+      principal: public
+      token_transport: bearer
+      anonymous_policy: allow
+      visibility: public
     application:
       kind: query
       facet: HomepageQueryFacade
@@ -124,9 +201,16 @@ api_routes:
       slice: HomepageShellSlice
     description: 获取共享主页阅读壳层
     response_entity: HomepageShellView
+    client_contract:
+      dart_import: ../entity/homepage_queries.dart
+      request_type: HomepageByIdQuery
+      response_type: HomepageShellProjection
+      request_encoder: encodeHomepageByIdQuery
+      response_decoder: decodeHomepageShell
 
   - method: POST
-    path: /v1/homepages/{homepageId}/follow
+    path: /homepages/{homepageId}/follow
+
     operation: FollowHomepage
     actor: persona
     application:
@@ -138,10 +222,11 @@ api_routes:
       invariant_target: Homepage
     path_params: [homepageId]
     response_entity: Homepage
-    auth: required
-
+    security:
+      auth_mode: required
   - method: DELETE
-    path: /v1/homepages/{homepageId}/follow
+    path: /homepages/{homepageId}/follow
+
     operation: UnfollowHomepage
     actor: persona
     application:
@@ -153,12 +238,15 @@ api_routes:
       invariant_target: Homepage
     path_params: [homepageId]
     response_entity: Homepage
-    auth: required
-
+    security:
+      auth_mode: required
   - method: GET
-    path: /v1/homepages/{homepageId}/introduction
+    path: /homepages/{homepageId}/introduction
+
     operation: GetHomepageIntroduction
     actor: none
+    commercial:
+      status: ready
     authorization:
       principal: public
       ownership_policy: published_homepage_read
@@ -194,11 +282,20 @@ api_routes:
       slice: HomepageIntroductionSlice
     description: 获取主页完整介绍页
     response_entity: HomepageIntroduction
+    client_contract:
+      dart_import: ../entity/homepage_queries.dart
+      request_type: HomepageByIdQuery
+      response_type: HomepageIntroductionProjection
+      request_encoder: encodeHomepageByIdQuery
+      response_decoder: decodeHomepageIntroduction
 
   - method: GET
-    path: /v1/homepages/{homepageId}/object-page-bundle
+    path: /homepages/{homepageId}/object-page-bundle
+
     operation: GetObjectPageBundle
     actor: persona_or_device
+    commercial:
+      status: ready
     authorization:
       principal: persona
       ownership_policy: published_homepage_read
@@ -235,11 +332,47 @@ api_routes:
     description: 获取对象页统一 Bundle（身份、交集、看点、关系边、小趣上下文和灰度上下文）
     query_params: [referralSource, feedRequestId, recommendationTraceId, experimentBucket, rolloutCohort]
     response_entity: ObjectPageBundle
+    client_contract:
+      dart_import: ../entity/homepage_queries.dart
+      request_type: HomepageObjectPageBundleQuery
+      response_type: HomepageObjectPageBundleProjection
+      request_encoder: encodeHomepageObjectPageBundleQuery
+      response_decoder: decodeHomepageObjectPageBundle
 
   - method: GET
-    path: /v1/homepages/{homepageId}/impact
+    path: /homepages/{homepageId}/impact
+
     operation: GetEntityImpact
     actor: persona
+    commercial:
+      status: ready
+    authorization:
+      principal: persona
+      ownership_policy: published_homepage_read
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes: [ENTITY.USER.homepage_not_found, ENTITY.USER.homepage_offline, ENTITY.SYSTEM.internal_error]
+    privacy:
+      request_classification: INTERNAL
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: entity_homepage_impact_get
+      trace: true
+      attributes: [homepage_id, outcome]
+    slo:
+      latency_p95_ms: 300
+      availability_percent: 99.5
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
     application:
       kind: query
       facet: HomepageQueryFacade
@@ -248,12 +381,46 @@ api_routes:
       slice: EntityImpactSlice
     description: 实体（共享主页）影响摘要（连接型帮助结果，端侧实体主页「影响力」模块使用）
     response_entity: EntityImpactSummary
-    auth: required
-
+    client_contract:
+      dart_import: ../entity/homepage_queries.dart
+      request_type: HomepageByIdQuery
+      response_type: HomepageImpactSummaryProjection
+      request_encoder: encodeHomepageByIdQuery
+      response_decoder: decodeHomepageImpactSummary
   - method: GET
-    path: /v1/homepages/{homepageId}/review-summary
+    path: /homepages/{homepageId}/review-summary
+
     operation: GetHomepageReviewSummary
     actor: none
+    commercial:
+      status: ready
+    authorization:
+      principal: public
+      ownership_policy: published_homepage_read
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes: [ENTITY.USER.homepage_not_found, ENTITY.USER.homepage_offline, ENTITY.SYSTEM.internal_error]
+    privacy:
+      request_classification: PUBLIC
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: entity_homepage_review_summary_get
+      trace: true
+      attributes: [homepage_id, outcome]
+    slo:
+      latency_p95_ms: 300
+      availability_percent: 99.5
+    security:
+      auth_mode: optional
+      principal: public
+      token_transport: bearer
+      anonymous_policy: allow
+      visibility: public
     application:
       kind: query
       facet: HomepageQueryFacade
@@ -262,11 +429,47 @@ api_routes:
       slice: HomepageReviewSummarySlice
     description: 获取共享主页评分与口碑摘要
     response_entity: HomepageReviewSummaryView
+    client_contract:
+      dart_import: ../entity/homepage_queries.dart
+      request_type: HomepageByIdQuery
+      response_type: HomepageReviewSummaryProjection
+      request_encoder: encodeHomepageByIdQuery
+      response_decoder: decodeHomepageReviewSummary
 
   - method: GET
-    path: /v1/homepages/{homepageId}/related-groups
+    path: /homepages/{homepageId}/related-groups
+
     operation: GetHomepageRelatedGroups
     actor: none
+    commercial:
+      status: ready
+    authorization:
+      principal: public
+      ownership_policy: published_homepage_read
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes: [ENTITY.USER.homepage_not_found, ENTITY.USER.homepage_offline, ENTITY.SYSTEM.internal_error]
+    privacy:
+      request_classification: PUBLIC
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: entity_homepage_related_groups_get
+      trace: true
+      attributes: [homepage_id, outcome]
+    slo:
+      latency_p95_ms: 300
+      availability_percent: 99.5
+    security:
+      auth_mode: optional
+      principal: public
+      token_transport: bearer
+      anonymous_policy: allow
+      visibility: public
     application:
       kind: query
       facet: HomepageQueryFacade
@@ -275,9 +478,16 @@ api_routes:
       slice: HomepageRelatedGroupsSlice
     description: 获取共享主页相关群组摘要
     response_entity: HomepageRelatedGroupSummaryView
+    client_contract:
+      dart_import: ../entity/homepage_queries.dart
+      request_type: HomepageByIdQuery
+      response_type: HomepageRelatedGroupsSlice
+      request_encoder: encodeHomepageByIdQuery
+      response_decoder: decodeHomepageRelatedGroups
 
   - method: PATCH
-    path: /v1/homepages/{homepageId}/claimed-basics
+    path: /homepages/{homepageId}/claimed-basics
+
     operation: UpdateClaimedHomepageBasics
     actor: persona
     application:
@@ -289,12 +499,36 @@ api_routes:
       invariant_target: Homepage
     description: 更新已认领主页的基础资料
     writable_fields: [title, subtitle, categoryTags, coverUrl, address, city, location]
-    auth: required
-
+    security:
+      auth_mode: required
   - method: POST
-    path: /v1/homepages:reload
+    path: /homepages:reload
+
     operation: ReloadHomepageState
     actor: account
+    commercial:
+      status: ready
+    authorization:
+      principal: account
+      ownership_policy: data_release_environment_operator
+    reliability:
+      timeout_ms: 15000
+      cancellation: supported
+      retry_mode: none
+      max_attempts: 1
+      idempotency: none
+    error_codes: [ENTITY.SYSTEM.internal_error]
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: entity_homepage_state_reload
+      trace: true
+      attributes: [outcome]
+    slo:
+      latency_p95_ms: 5000
+      availability_percent: 99.5
     application:
       kind: command
       facet: HomepageImportCommandFacade
@@ -303,8 +537,12 @@ api_routes:
       mutation_target: Homepage
       invariant_target: Homepage
     description: 免停服重载 homepage_state 快照（数据工程 importer 直写运行库后由 ops 触发；同 ID 覆盖、新 ID 追加，不清空运行期关注/认领状态；来源 sync 的 offline 投影同步删除搜索可见性）
-    auth: required
-
+    security:
+      auth_mode: required
+      principal: account
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 consumers:
   - name: app
     capabilities: [search, suggest, read_homepage, read_homepage_introduction, maintain]
@@ -321,7 +559,7 @@ contract_test:
       mock_target: entity-service API
       scenarios:
         - name: search_homepages
-          route: GET /v1/homepages/search
+          route: GET /homepages/search
           assertions: [status_200, items_match_schema]
     service_side:
       description: 使用真实测试数据库，不 mock 存储层

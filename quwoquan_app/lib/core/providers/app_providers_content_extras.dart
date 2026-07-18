@@ -137,6 +137,7 @@ CloudOperationInvocationContext _contentQueryInvocationContext(
 CloudOperationInvocationContext _contentCommandInvocationContext(
   Ref ref, {
   required String clientPageId,
+  String? idempotencyKey,
 }) {
   final base = _contentQueryInvocationContext(
     ref,
@@ -148,6 +149,7 @@ CloudOperationInvocationContext _contentCommandInvocationContext(
     clientPageId: base.clientPageId,
     actor: base.actor,
     routeId: base.routeId,
-    idempotencyKey: AppTraceContextStore.instance.newRequestId(),
+    idempotencyKey:
+        idempotencyKey ?? AppTraceContextStore.instance.newRequestId(),
   );
 }

@@ -3,7 +3,6 @@
 import json
 
 _PRODUCT_WORKFLOW_JSON = r'''{
-  "version": 1,
   "workflows": [
     {
       "evidence_requirements": {

@@ -13,7 +13,7 @@ func TestSendMessageSeqAssignment(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"direct","title":"seq test","initialMemberIds":["user_test_002"]}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 
 	msg1 := sendMessage(t, convId, `{"type":"text","content":"hello","clientMsgId":"uuid-1"}`)
 	msg2 := sendMessage(t, convId, `{"type":"text","content":"world","clientMsgId":"uuid-2"}`)
@@ -37,7 +37,7 @@ func TestSendMessageClientMsgIdDedup(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"direct","title":"dedup test","initialMemberIds":["user_test_002"]}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 
 	msg1 := sendMessage(t, convId, `{"type":"text","content":"hello","clientMsgId":"dedup-uuid-1"}`)
 	msg2 := sendMessage(t, convId, `{"type":"text","content":"hello","clientMsgId":"dedup-uuid-1"}`)
@@ -70,11 +70,11 @@ func TestSendMessageClientMsgIdConflict(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"direct","title":"conflict test","initialMemberIds":["user_test_002"]}`)
-	convID := conv["_id"].(string)
+	convID := conv["id"].(string)
 	first := sendMessage(t, convID, `{"type":"text","content":"first","clientMsgId":"conflict-uuid-1"}`)
 	conflict := doPost(
 		t,
-		"/v1/chat/conversations/"+convID+"/messages",
+		"/chat/conversations/"+convID+"/messages",
 		`{"type":"text","content":"different","clientMsgId":"conflict-uuid-1"}`,
 		"user_test_001",
 		http.StatusConflict,
@@ -95,11 +95,11 @@ func TestSendMessageClientMsgIdConflict(t *testing.T) {
 func TestSendMessageTypedCardRejectsRemovedMapAndRoundTrips(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	conv := createConversation(t, `{"type":"group","title":"typed card"}`)
-	convID := conv["_id"].(string)
+	convID := conv["id"].(string)
 
 	removed := doPost(
 		t,
-		"/v1/chat/conversations/"+convID+"/messages",
+		"/chat/conversations/"+convID+"/messages",
 		`{"type":"card","content":"removed","clientMsgId":"removed-card","cardPayload":{"title":"removed"}}`,
 		"user_test_001",
 		http.StatusBadRequest,
@@ -123,7 +123,7 @@ func TestSendMessageTypedCardRejectsRemovedMapAndRoundTrips(t *testing.T) {
 		t.Fatalf("typed card response missing messageId: %#v", created)
 	}
 
-	code, listed := doGet(t, "/v1/chat/conversations/"+convID+"/messages?limit=10", "user_test_001")
+	code, listed := doGet(t, "/chat/conversations/"+convID+"/messages?limit=10", "user_test_001")
 	if code != http.StatusOK {
 		t.Fatalf("list typed card: status=%d body=%#v", code, listed)
 	}
@@ -139,7 +139,7 @@ func TestSendMessageTypedCardRejectsRemovedMapAndRoundTrips(t *testing.T) {
 
 	invalid := doPost(
 		t,
-		"/v1/chat/conversations/"+convID+"/messages",
+		"/chat/conversations/"+convID+"/messages",
 		`{"type":"text","content":"invalid","clientMsgId":"text-with-card","card":{"kind":"post","title":"x","attributes":[]}}`,
 		"user_test_001",
 		http.StatusBadRequest,
@@ -180,13 +180,13 @@ func TestListMessages(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"group","title":"list test"}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 
 	for i := 0; i < 5; i++ {
 		sendMessage(t, convId, fmt.Sprintf(`{"type":"text","content":"msg %d","clientMsgId":"list-uuid-%d"}`, i, i))
 	}
 
-	code, result := doGet(t, "/v1/chat/conversations/"+convId+"/messages?limit=10", "user_test_001")
+	code, result := doGet(t, "/chat/conversations/"+convId+"/messages?limit=10", "user_test_001")
 	if code != 200 {
 		t.Fatalf("expected 200, got %d", code)
 	}
@@ -202,13 +202,13 @@ func TestListMessages(t *testing.T) {
 func TestMessageOperationsDenyNonMemberPersona(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	conv := createConversation(t, `{"type":"direct","title":"BOLA contract","initialMemberIds":["user_test_002"]}`)
-	convID := conv["_id"].(string)
+	convID := conv["id"].(string)
 	message := sendMessage(t, convID, `{"type":"text","content":"owner message","clientMsgId":"owner-message"}`)
 	messageID := message["messageId"].(string)
 
 	sendFailure := doPost(
 		t,
-		"/v1/chat/conversations/"+convID+"/messages",
+		"/chat/conversations/"+convID+"/messages",
 		`{"type":"text","content":"intrusion","clientMsgId":"intruder-send"}`,
 		"persona_intruder",
 		http.StatusForbidden,
@@ -219,7 +219,7 @@ func TestMessageOperationsDenyNonMemberPersona(t *testing.T) {
 
 	listStatus, listFailure := doGet(
 		t,
-		"/v1/chat/conversations/"+convID+"/messages?limit=10",
+		"/chat/conversations/"+convID+"/messages?limit=10",
 		"persona_intruder",
 	)
 	if listStatus != http.StatusForbidden || listFailure["code"] != "CHAT.USER.blocked" {
@@ -228,7 +228,7 @@ func TestMessageOperationsDenyNonMemberPersona(t *testing.T) {
 
 	syncFailure := doPost(
 		t,
-		"/v1/chat/conversations/"+convID+"/sync",
+		"/chat/conversations/"+convID+"/sync",
 		`{"lastSeq":0,"limit":10}`,
 		"persona_intruder",
 		http.StatusForbidden,
@@ -238,8 +238,8 @@ func TestMessageOperationsDenyNonMemberPersona(t *testing.T) {
 	}
 
 	for operation, path := range map[string]string{
-		"recall":   "/v1/chat/conversations/" + convID + "/messages/" + messageID + "/recall",
-		"markRead": "/v1/chat/conversations/" + convID + "/messages/" + messageID + "/read",
+		"recall":   "/chat/conversations/" + convID + "/messages/" + messageID + "/recall",
+		"markRead": "/chat/conversations/" + convID + "/messages/" + messageID + "/read",
 	} {
 		failure := doPost(t, path, `{}`, "persona_intruder", http.StatusForbidden)
 		if failure["code"] != "CHAT.USER.blocked" {
@@ -248,7 +248,7 @@ func TestMessageOperationsDenyNonMemberPersona(t *testing.T) {
 	}
 	receiptStatus, receiptFailure := doGet(
 		t,
-		"/v1/chat/conversations/"+convID+"/messages/"+messageID+"/receipts",
+		"/chat/conversations/"+convID+"/messages/"+messageID+"/receipts",
 		"persona_intruder",
 	)
 	if receiptStatus != http.StatusForbidden || receiptFailure["code"] != "CHAT.USER.blocked" {
@@ -261,14 +261,14 @@ func TestMessageOperationsRejectCrossConversationMessageReference(t *testing.T) 
 	t.Cleanup(func() { cleanAll(t) })
 	first := createConversation(t, `{"type":"group","title":"first"}`)
 	second := createConversation(t, `{"type":"group","title":"second"}`)
-	firstID := first["_id"].(string)
-	secondID := second["_id"].(string)
+	firstID := first["id"].(string)
+	secondID := second["id"].(string)
 	message := sendMessage(t, firstID, `{"type":"text","content":"first only","clientMsgId":"cross-conversation"}`)
 	messageID := message["messageId"].(string)
 
 	for operation, path := range map[string]string{
-		"recall":   "/v1/chat/conversations/" + secondID + "/messages/" + messageID + "/recall",
-		"markRead": "/v1/chat/conversations/" + secondID + "/messages/" + messageID + "/read",
+		"recall":   "/chat/conversations/" + secondID + "/messages/" + messageID + "/recall",
+		"markRead": "/chat/conversations/" + secondID + "/messages/" + messageID + "/read",
 	} {
 		failure := doPost(t, path, `{}`, "user_test_001", http.StatusNotFound)
 		if failure["code"] != "CHAT.USER.message_not_found" {
@@ -277,7 +277,7 @@ func TestMessageOperationsRejectCrossConversationMessageReference(t *testing.T) 
 	}
 	receiptStatus, receiptFailure := doGet(
 		t,
-		"/v1/chat/conversations/"+secondID+"/messages/"+messageID+"/receipts",
+		"/chat/conversations/"+secondID+"/messages/"+messageID+"/receipts",
 		"user_test_001",
 	)
 	if receiptStatus != http.StatusNotFound || receiptFailure["code"] != "CHAT.USER.message_not_found" {
@@ -289,12 +289,12 @@ func TestRecallMessageWithinTimeLimit(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"direct","title":"recall test","initialMemberIds":["user_test_002"]}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 
 	msg := sendMessage(t, convId, `{"type":"text","content":"to recall","clientMsgId":"recall-uuid-1"}`)
 	msgId := msg["messageId"].(string)
 
-	result := doPost(t, "/v1/chat/conversations/"+convId+"/messages/"+msgId+"/recall",
+	result := doPost(t, "/chat/conversations/"+convId+"/messages/"+msgId+"/recall",
 		`{}`, "user_test_001", 200)
 
 	if result["status"] != "recalled" {

@@ -8,7 +8,7 @@ description: quwoquan_data 单 execution 内容生产与发布总门面
 ## 目标
 
 把一个内容目标从运行参数、真实来源、五阶段生产、review、canonical publish、
-immutable release 一直编排到环境导入。只允许调用 `qwq-data task geo-homepages` 门面，
+immutable release 一直编排到环境导入。只允许调用 `qwq-data task execute` 门面，
 不暴露阶段角色命令、退役的双层运行身份或第二运行根。
 
 ## 自然语言等价触发
@@ -34,7 +34,7 @@ immutable release 一直编排到环境导入。只允许调用 `qwq-data task g
 
 ```bash
 python3 quwoquan_data/scripts/cli.py task preflight --json
-python3 quwoquan_data/scripts/cli.py task geo-homepages \
+python3 quwoquan_data/scripts/cli.py task execute \
   --execution-id YYYYMMDD--travel-homepage-coverage--cn-zhejiang--canary-001 \
   --milestone canary \
   --country 中国 \

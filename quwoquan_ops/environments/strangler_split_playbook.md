@@ -35,8 +35,8 @@
 
 | 不变量 | 说明 | 守护门禁 |
 |---|---|---|
-| 域级 API path / route | 对外仍 `/v1/<domain>/*`，不变 | `verify_topology_contract_regression.sh` |
-| Service DNS 名 | 集群内 `<service>` 短名 / `/v1/<domain>/*` 上游不变 | `verify_workload_topology_inventory.py` |
+| 域级 API path / route | 对外仍 `/<domain>/*`，不变 | `verify_topology_contract_regression.sh` |
+| Service DNS 名 | 集群内 `<service>` 短名 / `/<domain>/*` 上游不变 | `verify_workload_topology_inventory.py` |
 | domain 唯一归属 + beta=gamma=prod 一致 | 一域只属一个进程；三环境映射一致 | `verify_deployment_domain_mapping.sh` |
 | 端侧 runtime 注入 | App 的 `gatewayBaseUrl` / surface / operation 不变，App 端零改动 | `verify_environment_topology_manifest.py` + 端侧 metadata 门禁 |
 | 数据面归属 | 拆分后仍连同一托管 DB、同一归属、同一 ExternalName/DSN 抽象 | repository 接口 + Secret 注入（无硬编码、无跨域直连） |
@@ -48,7 +48,7 @@
    - `process_domain_mapping.yaml`：从 `seed-box.domains` 移出 `D`，新增 `D-service.domains: [D]`（beta/gamma/prod 同步）。
    - `module_package_mapping.yaml`：把 `D.*` 模块从 `seed-box` package 移到新 `D-service` package。
    - `workload_topology_inventory.yaml`：把 `D` 从 `seed-box.domains` 与 `split_candidates` 移出，新增 `D-service` workload（`deploy_kind: standalone-workload`，`required_primitives: [Deployment, Service, HPA, PDB]`，初期 `wired_to_prod_root: false`）。
-3. **建独立 kustomize**（照搬模板，见第 6 节）：`quwoquan_service/services/D-service/deploy/kustomize/{base,overlays/{dev,integration,beta,prod}}`，保持 Service 名与 `/v1/<domain>/*` 上游不变。
+3. **建独立 kustomize**（照搬模板，见第 6 节）：`quwoquan_service/services/D-service/deploy/kustomize/{base,overlays/{dev,integration,beta,prod}}`，保持 Service 名与 `/<domain>/*` 上游不变。
 4. **wire 进 root**：把 `D-service` prod overlay 加入 `quwoquan_ops/environments/kustomization/{cloud}-prod`，inventory 置 `wired_to_prod_root: true`。
 5. **切流量**：把 Ingress/gateway upstream 或 Service selector 切到新 Deployment（对外 path/Service 名不变）。
 6. **从 monolith 移除**：seed-box 发布单元移除 `D` 模块；dispatcher/worker 通过可靠任务租约接管，不双写、不重复 ACK。

@@ -105,6 +105,30 @@ func (s *MongoPostStore) EnsureIndexes(ctx context.Context) error {
 			Options: options.Index().SetName("idx_posts_canonical_entity").SetSparse(true),
 		},
 		{
+			Keys: bson.D{
+				{Key: "authorId", Value: 1},
+				{Key: "publishIntentId", Value: 1},
+			},
+			Options: options.Index().
+				SetName("idx_posts_publish_intent").
+				SetUnique(true).
+				SetPartialFilterExpression(bson.M{
+					"publishIntentId": bson.M{"$type": "string"},
+				}),
+		},
+		{
+			Keys: bson.D{
+				{Key: "authorId", Value: 1},
+				{Key: "localDraftId", Value: 1},
+			},
+			Options: options.Index().
+				SetName("idx_posts_local_draft").
+				SetUnique(true).
+				SetPartialFilterExpression(bson.M{
+					"localDraftId": bson.M{"$type": "string"},
+				}),
+		},
+		{
 			Keys:    bson.D{{Key: "_id", Value: 1}, {Key: "version", Value: 1}},
 			Options: options.Index().SetName("idx_posts_version").SetUnique(true),
 		},
@@ -200,6 +224,11 @@ func (s *MongoPostStore) Commit(ctx context.Context, commit postports.Commit) (p
 		next.Version = commit.ExpectedVersion + 1
 		if commit.ExpectedVersion == 0 {
 			if _, insertErr := s.coll.InsertOne(txCtx, &next); insertErr != nil {
+				if mongo.IsDuplicateKeyError(insertErr) {
+					return nil, contentgenerated.AppErrorFromIdempotencyConflict(
+						"post publication identity already committed",
+					)
+				}
 				return nil, insertErr
 			}
 		} else {
@@ -280,6 +309,22 @@ func (s *MongoPostStore) FindByID(ctx context.Context, id string) (*postmodel.Po
 		return nil, false
 	}
 	return post, true
+}
+
+func (s *MongoPostStore) FindByPublicationIntent(
+	ctx context.Context,
+	authorID string,
+	publishIntentID string,
+) (*postmodel.Post, bool) {
+	var post postmodel.Post
+	err := s.coll.FindOne(ctx, bson.M{
+		"authorId":        strings.TrimSpace(authorID),
+		"publishIntentId": strings.TrimSpace(publishIntentID),
+	}).Decode(&post)
+	if err != nil {
+		return nil, false
+	}
+	return &post, true
 }
 
 func (s *MongoPostStore) AdjustCommentCount(ctx context.Context, id string, delta int64) (int64, bool, error) {
@@ -421,39 +466,4 @@ func (s *MongoPostStore) ListByAuthor(ctx context.Context, authorID string, limi
 		return nil
 	}
 	return posts
-}
-
-// Create 通过 AggregateStore Commit 写入新 Post，供缓存装饰器与集成测试使用。
-func (s *MongoPostStore) Create(ctx context.Context, post *postmodel.Post) error {
-	if post == nil || strings.TrimSpace(post.ID) == "" {
-		return contentgenerated.AppErrorFromVersionConflict("post create requires aggregate id")
-	}
-	if post.Version == 0 {
-		post.Version = 1
-	}
-	_, err := s.Commit(ctx, postports.Commit{
-		Post:             post,
-		ExpectedVersion:  0,
-		IdempotencyKey:   "create:" + post.ID,
-		CommandName:      "CreatePost",
-		CommandDigest:    post.ID,
-		ReceiptExpiresAt: time.Now().UTC().Add(24 * time.Hour),
-	})
-	return err
-}
-
-// Update 通过乐观版本 Commit 更新 Post，供缓存装饰器与集成测试使用。
-func (s *MongoPostStore) Update(ctx context.Context, id string, post *postmodel.Post) bool {
-	if post == nil || strings.TrimSpace(id) == "" {
-		return false
-	}
-	result, err := s.Commit(ctx, postports.Commit{
-		Post:             post,
-		ExpectedVersion:  post.Version,
-		IdempotencyKey:   "update:" + id + ":" + post.ID,
-		CommandName:      "UpdatePost",
-		CommandDigest:    id,
-		ReceiptExpiresAt: time.Now().UTC().Add(24 * time.Hour),
-	})
-	return err == nil && result.Post != nil
 }

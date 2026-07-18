@@ -87,8 +87,8 @@ class CircleCreateWireDto {
     return CircleCreateWireDto(
       name: m['name']?.toString(),
       description: m['description']?.toString(),
-      coverUrl: (m['coverUrl'] ?? m['cover'])?.toString(),
-      category: (m['category'] ?? m['categoryId'])?.toString(),
+      coverUrl: m['coverUrl']?.toString(),
+      category: m['category']?.toString(),
       subCategory: m['subCategory']?.toString(),
       tags: tags,
       visibility: m['visibility']?.toString(),

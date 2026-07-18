@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
+import 'package:quwoquan_app/core/services/cache/local_chat_search_contact_record.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_message_record.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_store.dart';
 import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
@@ -47,25 +48,22 @@ void main() {
     });
 
     tearDown(() async {
+      await store.close();
       if (await tempDir.exists()) {
         await tempDir.delete(recursive: true);
       }
     });
 
     test('indexes message body and removes recalled message', () async {
-      await store.upsertConversations(
+      await store.upsertConversationRecords(
         namespace: namespace,
-        conversations: <Map<String, dynamic>>[
-          <String, dynamic>{
-            'conversationId': 'conv_1',
-            'title': '摄影讨论组',
-            'type': 'group',
-          },
+        conversations: const <ConversationCacheRecord>[
+          ConversationCacheRecord(id: 'conv_1', title: '摄影讨论组', type: 'group'),
         ],
       );
       await store.upsertMessages(
         namespace: namespace,
-        conversation: ConversationCacheRecord.fromWireMap(
+        conversation: ConversationCacheRecord.fromCacheMap(
           const <String, dynamic>{
             'conversationId': 'conv_1',
             'title': '摄影讨论组',
@@ -104,22 +102,22 @@ void main() {
     test('isolates contacts and messages by namespace', () async {
       await store.upsertContacts(
         namespace: namespace,
-        contacts: const <Map<String, Object?>>[
-          <String, Object?>{
-            'contactId': 'u_owner_1',
-            'displayName': '王芳',
-            'subtitle': '主账号联系人',
-          },
+        contacts: const <LocalChatSearchContactRecord>[
+          LocalChatSearchContactRecord(
+            contactId: 'u_owner_1',
+            displayName: '王芳',
+            subtitle: '主账号联系人',
+          ),
         ],
       );
       await store.upsertContacts(
         namespace: subNamespace,
-        contacts: const <Map<String, Object?>>[
-          <String, Object?>{
-            'contactId': 'u_sub_1',
-            'displayName': '李雷',
-            'subtitle': '子账号联系人',
-          },
+        contacts: const <LocalChatSearchContactRecord>[
+          LocalChatSearchContactRecord(
+            contactId: 'u_sub_1',
+            displayName: '李雷',
+            subtitle: '子账号联系人',
+          ),
         ],
       );
 
@@ -132,19 +130,19 @@ void main() {
         isEmpty,
       );
 
-      await store.upsertConversations(
+      await store.upsertConversationRecords(
         namespace: namespace,
-        conversations: const <Map<String, dynamic>>[
-          <String, dynamic>{
-            'conversationId': 'conv_owner',
-            'title': '摄影讨论组',
-            'type': 'group',
-          },
+        conversations: const <ConversationCacheRecord>[
+          ConversationCacheRecord(
+            id: 'conv_owner',
+            title: '摄影讨论组',
+            type: 'group',
+          ),
         ],
       );
       await store.upsertMessages(
         namespace: namespace,
-        conversation: ConversationCacheRecord.fromWireMap(
+        conversation: ConversationCacheRecord.fromCacheMap(
           const <String, dynamic>{
             'conversationId': 'conv_owner',
             'title': '摄影讨论组',
@@ -164,19 +162,15 @@ void main() {
           ),
         ],
       );
-      await store.upsertConversations(
+      await store.upsertConversationRecords(
         namespace: subNamespace,
-        conversations: const <Map<String, dynamic>>[
-          <String, dynamic>{
-            'conversationId': 'conv_sub',
-            'title': '旅行手账',
-            'type': 'group',
-          },
+        conversations: const <ConversationCacheRecord>[
+          ConversationCacheRecord(id: 'conv_sub', title: '旅行手账', type: 'group'),
         ],
       );
       await store.upsertMessages(
         namespace: subNamespace,
-        conversation: ConversationCacheRecord.fromWireMap(
+        conversation: ConversationCacheRecord.fromCacheMap(
           const <String, dynamic>{
             'conversationId': 'conv_sub',
             'title': '旅行手账',
@@ -207,36 +201,57 @@ void main() {
       );
     });
 
-    test(
-      'message projection codec is versioned and rejects removed wire keys',
-      () {
-        const record = LocalChatSearchMessageRecord(
-          messageId: 'msg_projection_1',
-          conversationId: 'conv_projection_1',
-          senderPersonaId: 'persona_1',
-          messageType: 'text',
-          contentPreview: 'typed projection',
-          seq: 7,
-          timestamp: '2026-07-16T00:00:00.000Z',
-        );
+    test('current message projection codec rejects retired wire keys', () {
+      const record = LocalChatSearchMessageRecord(
+        messageId: 'msg_projection_1',
+        conversationId: 'conv_projection_1',
+        senderPersonaId: 'persona_1',
+        messageType: 'text',
+        contentPreview: 'typed projection',
+        seq: 7,
+        timestamp: '2026-07-16T00:00:00.000Z',
+      );
 
-        expect(
-          LocalChatSearchMessageRecord.fromProjectionMap(
-            record.toProjectionMap(),
-          ).senderPersonaId,
-          'persona_1',
-        );
-        expect(
-          () =>
-              LocalChatSearchMessageRecord.fromProjectionMap(<String, dynamic>{
-                ...record.toProjectionMap(),
-                'senderSub'
-                        'AccountId':
-                    'retired-persona-key',
-              }),
-          throwsFormatException,
-        );
-      },
-    );
+      expect(
+        LocalChatSearchMessageRecord.fromProjectionMap(
+          record.toProjectionMap(),
+        ).senderPersonaId,
+        'persona_1',
+      );
+      expect(
+        () => LocalChatSearchMessageRecord.fromProjectionMap(<String, dynamic>{
+          ...record.toProjectionMap(),
+          'senderSub'
+                  'AccountId':
+              'retired-persona-key',
+        }),
+        throwsFormatException,
+      );
+    });
+
+    test('conversation cache codec only accepts conversationId', () {
+      const canonical = <String, dynamic>{
+        'conversationId': 'conv_cache_1',
+        'type': 'group',
+      };
+      final record = ConversationCacheRecord.fromCacheMap(canonical);
+
+      expect(record.id, 'conv_cache_1');
+      expect(record.toCacheMap()['conversationId'], 'conv_cache_1');
+      expect(record.toCacheMap().containsKey('id'), isFalse);
+      expect(record.toCacheMap().containsKey('_id'), isFalse);
+      expect(
+        () => ConversationCacheRecord.fromCacheMap(const <String, dynamic>{
+          'id': 'retired-id',
+        }),
+        throwsFormatException,
+      );
+      expect(
+        () => ConversationCacheRecord.fromCacheMap(const <String, dynamic>{
+          '_id': 'retired-storage-id',
+        }),
+        throwsFormatException,
+      );
+    });
   });
 }

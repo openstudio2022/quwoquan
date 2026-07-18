@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
+import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 
 Widget _wrap(Widget child) {
@@ -30,15 +31,10 @@ void main() {
       );
       final candidates = image.imageUrlCandidates ?? const <String>[];
       expect(image.cdnPreset, CdnImagePreset.avatar);
-      expect(image.imageUrl, startsWith('https://127.0.0.1:17100/'));
-      expect(
-        candidates,
-        containsAll(<String>[
-          'https://localhost:17100/media/avatar/s/archived-avatar/default/group/v1/default.png',
-          'https://127.0.0.1:17100/media/avatar/s/archived-avatar/default/group/v1/default.png',
-          'https://alpha-avatar.quwoquan-env.test:17100/media/avatar/s/archived-avatar/default/group/v1/default.png',
-        ]),
-      );
+      final expected =
+          '${CloudRuntimeConfig.mediaAvatarCdnBaseUrl}/media/avatar/s/archived-avatar/default/group/v1/default.png';
+      expect(image.imageUrl, expected);
+      expect(candidates, <String>[expected]);
       expect(candidates.join('\n'), isNot(contains('https://10.0.2.2')));
       expect(image.placeholder, isNotNull);
       expect(find.text('契'), findsOneWidget);

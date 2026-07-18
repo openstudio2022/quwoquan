@@ -1,4 +1,3 @@
-version: 1
 
 # 列表响应根 key，与 integration-service location_handler 的 {"items": [...]} 一致。
 # codegen-app 据此生成 responseItemsKey 常量，禁止在业务/测试中硬编码。
@@ -17,7 +16,8 @@ service:
 
 api_routes:
   - method: GET
-    path: /v1/integration/location/nearby
+    path: /integration/location/nearby
+
     operation: GetNearbyLocations
     actor: persona_or_device
     application:
@@ -70,7 +70,8 @@ api_routes:
       visibility: public
 
   - method: GET
-    path: /v1/integration/location/search
+    path: /integration/location/search
+
     operation: SearchLocations
     actor: none
     application:

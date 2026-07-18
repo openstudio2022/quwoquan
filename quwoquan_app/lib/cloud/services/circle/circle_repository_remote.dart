@@ -273,7 +273,7 @@ class RemoteCircleRepository implements CircleRepository {
           .toList(growable: false);
     }
     final obj = CloudResponseDecoder.asObject(decoded, context: path);
-    final raw = obj['data'] ?? obj['items'];
+    final raw = obj['items'];
     if (raw is List) {
       return raw
           .whereType<Map>()

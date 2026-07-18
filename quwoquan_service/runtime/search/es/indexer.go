@@ -128,18 +128,6 @@ func IndexToDocument(src map[string]any) rtsearch.Document {
 			doc.Freshness = t
 		}
 	}
-	// Back-compat: derive ContentType from the stored AI target for content posts
-	// indexed before contentType was persisted.
-	if doc.ContentType == "" && doc.ObjectType == rtsearch.ObjectTypeContentPost {
-		switch asString(src["target"]) {
-		case string(rtsearch.TargetPhoto):
-			doc.ContentType = "photo"
-		case string(rtsearch.TargetVideo):
-			doc.ContentType = "video"
-		case string(rtsearch.TargetArticle):
-			doc.ContentType = "article"
-		}
-	}
 	// Reconstruct the geo dimension from the stored geo_point ({lat,lon}). The
 	// presence of the "geo" key (written only for real coords) keeps the round
 	// trip lossless even for valid (0,0) edge coordinates.

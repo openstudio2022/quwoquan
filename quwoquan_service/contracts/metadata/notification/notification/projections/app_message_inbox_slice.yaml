@@ -1,4 +1,3 @@
-version: 1
 read_model: AppMessageInboxSlice
 
 description: |

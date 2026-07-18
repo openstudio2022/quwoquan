@@ -18,6 +18,12 @@ class TestKeys {
     'discovery_create_button',
   );
   static const createPage = ValueKey<String>('create_page');
+  static const homeCirclesScrollView = ValueKey<String>(
+    'home_circles_scroll_view',
+  );
+  static const homeCirclesRecommendationRail = ValueKey<String>(
+    'home_circles_recommendation_rail',
+  );
 
   /// 沉浸文章顶栏「编辑 / 预览」分段控件。
   static const articleSurfaceModeSegmented = ValueKey<String>(

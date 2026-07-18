@@ -29,7 +29,7 @@ coverage matrix/discover/merge  →  object-local source catalog + evidence  →
 2. **身份优先、OSM 后置**：QID/pageid/OSM type+id 优先；名称+坐标+区县只作 fallback。
    OSM/Wikidata/百科搜索均是 discovery-only，OSM-only 与普通设施不得直接进入主清单。
 3. **运行期资格核验**：主清单不保存来源就绪状态；每个 execution 只在对象本地证据
-   满足 `encyclopedia-primary-v2` 后确认发布资格。
+   满足无版本分支的 `encyclopedia-primary` 当前合同后确认发布资格。
 4. **两段流水线**：download 与 author 以独立 execution stage 编排；download 可离线预跑
    （IO 密集，8-16 并发），author 只消费 download 就绪对象（Agent 密集，池化 4-8）；
    断点基线：完成的 source unit 不重下，同一 execution 只允许 resume。

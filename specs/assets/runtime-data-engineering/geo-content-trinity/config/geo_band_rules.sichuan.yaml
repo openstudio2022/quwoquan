@@ -1,4 +1,4 @@
-schemaVersion: quwoquan_data.geo_band_rules
+schema: quwoquan_data.geo_band_rules
 version: 1
 default_tag_refs:
   - trees/tags/主题/旅行攻略.yaml

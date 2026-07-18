@@ -28,7 +28,7 @@ func (s *PostService) GetAppConfig() map[string]any {
 		featureFlags[key] = value
 	}
 	payload := map[string]any{
-		"schemaVersion":  "app_remote_config.v1",
+		"schema":  "app_remote_config",
 		"packageVersion": "embedded-content-service",
 		"fetchedAt":      time.Now().UTC().Format(time.RFC3339),
 		"maxAgeSec":      21600,

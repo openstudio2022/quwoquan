@@ -52,7 +52,7 @@ type evidencePageResp struct {
 
 func reportBehaviorRaw(t *testing.T, payload string) {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodPost, "/v1/content/behaviors", strings.NewReader(payload))
+	req := httptest.NewRequest(http.MethodPost, "/content/behaviors", strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
@@ -69,7 +69,7 @@ type authorImpactSummaryItem struct {
 
 func authorImpactSummary(t *testing.T, authorID string) []authorImpactSummaryItem {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodGet, "/v1/content/sub-accounts/"+authorID+"/author-impact", nil)
+	req := httptest.NewRequest(http.MethodGet, "/content/sub-accounts/"+authorID+"/author-impact", nil)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -110,7 +110,7 @@ func authorImpactCountFor(t *testing.T, authorID, impactID string) int64 {
 
 func getAuthorImpactEvidence(t *testing.T, authorID, impactID, cursor string, limit int) evidencePageResp {
 	t.Helper()
-	url := fmt.Sprintf("/v1/content/sub-accounts/%s/author-impact/evidence?impactId=%s", authorID, impactID)
+	url := fmt.Sprintf("/content/sub-accounts/%s/author-impact/evidence?impactId=%s", authorID, impactID)
 	if cursor != "" {
 		url += "&cursor=" + cursor
 	}
@@ -139,10 +139,7 @@ func cleanAuthorImpact(t *testing.T, authorID string) {
 
 func postIDFrom(t *testing.T, created map[string]any) string {
 	t.Helper()
-	postID, _ := created["_id"].(string)
-	if postID == "" {
-		postID, _ = created["id"].(string)
-	}
+	postID, _ := created["postId"].(string)
 	if postID == "" {
 		t.Fatalf("missing post id in response: %+v", created)
 	}
@@ -160,8 +157,8 @@ func TestAuthorImpactEvidenceDrilldownIsContentAnchoredAndPrivacySafe(t *testing
 	cleanAuthorImpact(t, authorID)
 	t.Cleanup(func() { cleanPosts(t); cleanAuthorImpact(t, authorID) })
 
-	created := createPostWithAuthor(t, authorID,
-		`{"contentType":"image","title":"城市漫步","coverUrl":"https://example.com/cover.jpg","mediaUrls":["https://example.com/img.jpg"]}`)
+	created := submitPublishedPostWithAuthor(t, authorID,
+		`{"contentType":"image","title":"城市漫步"}`)
 	postID := postIDFrom(t, created)
 
 	payload := fmt.Sprintf(`{
@@ -266,8 +263,8 @@ func TestAuthorImpactEvidencePaginationTerminates(t *testing.T) {
 	cleanAuthorImpact(t, authorID)
 	t.Cleanup(func() { cleanPosts(t); cleanAuthorImpact(t, authorID) })
 
-	created := createPostWithAuthor(t, authorID,
-		`{"contentType":"image","title":"夜行电车","coverUrl":"https://example.com/c.jpg","mediaUrls":["https://example.com/i.jpg"]}`)
+	created := submitPublishedPostWithAuthor(t, authorID,
+		`{"contentType":"image","title":"夜行电车"}`)
 	postID := postIDFrom(t, created)
 
 	for i := 0; i < 3; i++ {

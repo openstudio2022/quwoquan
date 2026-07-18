@@ -66,7 +66,7 @@ def test_current_scope_filters_retired_release_schema():
         write_json(
             current_posts / "manifest.json",
             {
-                "schemaVersion": post_verify.CURRENT_POST_MANIFEST_SCHEMA,
+                "schema": post_verify.CURRENT_POST_MANIFEST_SCHEMA,
                 "topicId": "current",
                 "contentType": "article",
                 "entityRefs": [],

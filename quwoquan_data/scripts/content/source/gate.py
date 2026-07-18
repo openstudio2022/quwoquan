@@ -1,6 +1,7 @@
 """Exit gate for download command."""
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
 from core.data_issue import (
@@ -14,142 +15,91 @@ from core.io import read_json
 from core.image_asset_strategy import (
     image_count_is_hard_quota,
     image_strategy_requires_publishable_images,
-    minimum_publishable_images_per_target,
 )
 from content.execution.workspace import execution_command_root, execution_root
+from governance.coverage.cold_start_supply import load_cold_start_supply_policy
+from core.control_types import ContentType
+from content.execution.identity import parse_execution_id
 
-DEFAULT_MIN_SOURCES = 2
-SCALED_MIN_SOURCES = 4
-SCALED_DEFAULT_MIN_IMAGES = 3
-
-def _require_single_execution(execution_id: str) -> None:
-    if execution_id != execution_id:
-        raise ValueError("content execution requires one executionId")
+PRIMARY_SOURCE_MINIMUM = 1
 
 
-def download_requirements(execution_id: str) -> dict[str, int]:
-    """Return source/image minimums from the current task contract.
+@dataclass(frozen=True, slots=True)
+class DownloadRequirements:
+    min_sources: int
+    min_images: int
+    min_article_base_sources: int
+    min_homepage_sources: int
+    min_homepage_media: int
+    min_video_frames: int
 
-    For separated research, imageWorksPerTarget is the desired score
-    saturation point by default.  Only hard_quota tasks or explicit
-    minimumPublishableImagesPerTarget values become download blockers.
-    """
-    try:
-        from content.execution import store
 
-        spec = store.load_spec(execution_id)
-    except Exception:  # noqa: BLE001
-        spec = {}
-    content = spec.get("content") or {}
-    quotas = (content.get("quotas") or {})
-    separated_research = str(content.get("modalityContract") or "") == "separated_research"
-    scaled = bool(
-        int(quotas.get("entityArticlesPerTarget") or 0)
-        or int(quotas.get("imageWorksPerTarget") or 0)
-        or int(quotas.get("entityHomepagesPerTarget") or 0)
+def _validate_execution_identity(execution_id: str) -> None:
+    parse_execution_id(execution_id)
+
+
+def download_requirements(execution_id: str) -> DownloadRequirements:
+    """Derive download gates from the admitted single-carrier execution spec."""
+    from content.execution import store
+
+    spec = store.load_spec_model(execution_id)
+    content_type = spec.content.carriers[0]
+    quota = spec.content.quotas.for_type(content_type)
+    min_homepage_sources = (
+        PRIMARY_SOURCE_MINIMUM if content_type is ContentType.HOMEPAGE else 0
     )
-    if not scaled:
-        min_images = 2
-        min_article_image_sources = 0
-        min_article_base_sources = DEFAULT_MIN_SOURCES
-        min_homepage_sources = 0
-    elif separated_research:
-        image_works = int(quotas.get("imageWorksPerTarget") or 0)
-        homepage_works = int(quotas.get("entityHomepagesPerTarget") or 0)
-        article_works = int(quotas.get("entityArticlesPerTarget") or 0)
-        min_article_image_sources = 0
-        min_article_base_sources = article_works if article_works > 0 else 0
-        min_homepage_sources = 1 if homepage_works > 0 else 0
-        # Homepage images belong to homepage evidence, not to the independent
-        # image-post lane. A single image work is valid with one rights-cleared
-        # high-quality image; do not force cover+detail for every entity.
-        if image_works > 0 and image_strategy_requires_publishable_images(spec):
-            min_images = (
-                max(1, image_works)
-                if image_count_is_hard_quota(spec)
-                else minimum_publishable_images_per_target(spec)
-            )
-        else:
-            min_images = 0
-        min_sources = max(min_homepage_sources, min_article_base_sources)
-    else:
-        min_images = SCALED_DEFAULT_MIN_IMAGES
-        min_article_image_sources = 0
-        min_article_base_sources = SCALED_MIN_SOURCES
-        min_homepage_sources = 0
-        min_sources = SCALED_MIN_SOURCES
-    return {
-        "minSources": min_sources if scaled else DEFAULT_MIN_SOURCES,
-        "minImages": min_images,
-        "minArticleImageSources": min_article_image_sources,
-        "minArticleBaseSources": min_article_base_sources,
-        "minHomepageSources": min_homepage_sources,
-    }
+    min_article_sources = quota if content_type is ContentType.ARTICLE else 0
+    minimum_publishable_images = (
+        spec.content.research.minimum_publishable_images_per_target or 0
+    )
+    min_images = 0
+    if content_type is ContentType.IMAGE and image_strategy_requires_publishable_images(
+        spec.to_dict()
+    ):
+        min_images = (
+            max(quota, minimum_publishable_images)
+            if image_count_is_hard_quota(spec.to_dict())
+            else minimum_publishable_images
+        )
+    min_homepage_media = (
+        minimum_publishable_images
+        if content_type is ContentType.HOMEPAGE
+        and image_strategy_requires_publishable_images(spec.to_dict())
+        else 0
+    )
+    min_video_frames = (
+        load_cold_start_supply_policy().video_delivery.minimum_segment_count
+        if content_type is ContentType.VIDEO
+        else 0
+    )
+    return DownloadRequirements(
+        min_sources=max(min_homepage_sources, min_article_sources),
+        min_images=min_images,
+        min_article_base_sources=min_article_sources,
+        min_homepage_sources=min_homepage_sources,
+        min_homepage_media=min_homepage_media,
+        min_video_frames=min_video_frames,
+    )
 
 
 
-def active_download_lanes(execution_id: str) -> set[str] | None:
-    """Return quota-enabled separated download lanes, or None for legacy/all-lane tasks."""
-    try:
-        from content.execution import store
+def active_download_lanes(execution_id: str) -> frozenset[str]:
+    """Return the single admitted research lane from the execution spec."""
+    from content.execution import store
 
-        spec = store.load_spec(execution_id)
-    except Exception:  # noqa: BLE001
-        return None
-    content = spec.get("content") if isinstance(spec.get("content"), dict) else {}
-    if str(content.get("modalityContract") or "") != "separated_research":
-        return None
-    quotas = content.get("quotas") if isinstance(content.get("quotas"), dict) else {}
-    lanes: set[str] = set()
-    if int(quotas.get("entityHomepagesPerTarget") or 0) > 0:
-        lanes.add("homepage")
-    if int(quotas.get("entityArticlesPerTarget") or 0) > 0 or int(quotas.get("routeArticles") or 0) > 0:
-        lanes.add("article")
-    if int(quotas.get("imageWorksPerTarget") or 0) > 0:
-        lanes.add("image")
-    return lanes or None
+    spec = store.load_spec_model(execution_id)
+    return frozenset(lane.value for lane in spec.content.research.lanes)
 
 
 def _text_lanes_required(execution_id: str) -> bool:
     lanes = active_download_lanes(execution_id)
-    return lanes is None or bool(lanes & {"homepage", "article"})
-
-
-def _lane_plan_has_payload(download_dir: Path, lane: str) -> bool:
-    path = download_dir / f"{lane}_source_plan.json"
-    if not path.is_file():
-        return False
-    try:
-        data = read_json(path)
-    except Exception:  # noqa: BLE001
-        data = {}
-    payload = data.get("payload") if isinstance(data.get("payload"), dict) else {}
-    sources = data.get("sources") or payload.get("sources") or []
-    image_urls = data.get("imageUrls") or payload.get("imageUrls") or []
-    collections = data.get("collections") or payload.get("collections") or []
-    return any(isinstance(value, list) and value for value in (sources, image_urls, collections))
-
-
-def _has_lane_contract(object_dir: Path, source_units: list[Path]) -> bool:
-    download_dir = object_dir / "1.download"
-    for lane in ("homepage", "article", "image"):
-        if _lane_plan_has_payload(download_dir, lane):
-            return True
-    for unit in source_units:
-        meta_path = unit / "meta.json"
-        try:
-            meta = read_json(meta_path)
-        except Exception:  # noqa: BLE001
-            continue
-        if str(meta.get("researchLane") or "") in {"homepage", "article"}:
-            return True
-    return False
+    return bool(lanes & {ContentType.HOMEPAGE.value, ContentType.ARTICLE.value})
 
 
 def _source_roots(execution_id: str) -> tuple[Path, list[Path]]:
     from content.source.source_unit import iter_source_units
 
-    _require_single_execution(execution_id)
+    _validate_execution_identity(execution_id)
     object_root = execution_root(execution_id) / "entities"
     if object_root.is_dir():
         object_dirs = [
@@ -202,7 +152,7 @@ def _homepage_base_ready(
     if not source_path.is_file():
         return False
     try:
-        from content.post.base_draft import load_base_draft_text
+        from content.post.article.base_draft import load_base_draft_text
 
         source_ref = source_path.resolve().relative_to(batch_dir.resolve()).as_posix()
         text = load_base_draft_text(execution_id, source_ref)
@@ -227,7 +177,7 @@ def _stage_gate_report_issues(
     target_entities: set[str] | None = None,
     text_lanes_required: bool = True,
 ) -> list[DataIssue]:
-    _require_single_execution(execution_id)
+    _validate_execution_identity(execution_id)
     result_root = execution_command_root(execution_id, "source") / "results"
     issues: list[DataIssue] = []
     for step in (
@@ -366,7 +316,6 @@ def gate_download(execution_id: str, *, target_entities: set[str] | None = None)
         homepage_base_ready_count = 0
         image_hashes: set[str] = set()
         image_rights_issues: list[str] = []
-        lane_contract = _has_lane_contract(sources_dir, source_units)
         for sd in source_units:
             meta_path = sd / "meta.json"
             try:
@@ -415,16 +364,16 @@ def gate_download(execution_id: str, *, target_entities: set[str] | None = None)
                         )
         rel_obj = sources_dir.relative_to(root).as_posix() if sources_dir.is_relative_to(root) else sources_dir.name
         rel = f"{rel_obj}/1.download/source_refs.json"
-        if text_lanes_required and md_count < requirements["minSources"]:
+        if text_lanes_required and md_count < requirements.min_sources:
             issues.append(data_issue(
                 DataIssueCode.SOURCE_RETAINED_SHORTFALL,
                 stage=DataIssueStage.DOWNLOAD_FETCH,
                 ref=entity,
                 recovery=DataRecoveryAction.RETRY_SOURCE_DISCOVERY,
-                message=f"{rel}: only {md_count} sources (need >= {requirements['minSources']})",
-                attributes={"retained": md_count, "required": requirements["minSources"]},
+                message=f"{rel}: only {md_count} sources (need >= {requirements.min_sources})",
+                attributes={"retained": md_count, "required": requirements.min_sources},
             ))
-        if text_lanes_required and retained_count < requirements["minSources"]:
+        if text_lanes_required and retained_count < requirements.min_sources:
             issues.append(data_issue(
                 DataIssueCode.SOURCE_RETAINED_SHORTFALL,
                 stage=DataIssueStage.DOWNLOAD_FETCH,
@@ -432,75 +381,55 @@ def gate_download(execution_id: str, *, target_entities: set[str] | None = None)
                 recovery=DataRecoveryAction.RETRY_SOURCE_DISCOVERY,
                 message=(
                     f"{rel}: only {retained_count} retained sources "
-                    f"(need >= {requirements['minSources']}; Reject/manual probe sources do not count)"
+                    f"(need >= {requirements.min_sources}; Reject/manual probe sources do not count)"
                 ),
-                attributes={"retained": retained_count, "required": requirements["minSources"]},
+                attributes={"retained": retained_count, "required": requirements.min_sources},
             ))
-        if lane_contract:
-            download_dir = sources_dir / "1.download"
-            homepage_required = (
-                (
-                    active_lanes is None
-                    and (
-                        int(requirements.get("minHomepageSources") or 0) > 0
-                        or _lane_plan_has_payload(download_dir, "homepage")
-                        or lane_md_count["homepage"] > 0
-                    )
-                )
-                or (active_lanes is not None and "homepage" in active_lanes)
-            )
-            if homepage_required and lane_retained_count["homepage"] < 1:
-                issues.append(data_issue(
-                    DataIssueCode.SOURCE_PRIMARY_AUTHORITY_MISSING,
-                    stage=DataIssueStage.DOWNLOAD_FETCH,
-                    ref=entity,
-                    lane=DataIssueLane.HOMEPAGE,
-                    recovery=DataRecoveryAction.RETRY_SOURCE_DISCOVERY,
-                    message=(
-                        f"{rel}: homepage retained sources={lane_retained_count['homepage']} need>=1 "
-                        "(homepage lane must yield a readable primary-authority encyclopedia source unit)"
-                    ),
-                    attributes={"retained": lane_retained_count["homepage"], "required": 1},
-                ))
-            elif homepage_required and homepage_base_ready_count < 1:
-                issues.append(data_issue(
-                    DataIssueCode.SOURCE_PRIMARY_AUTHORITY_MISSING,
-                    stage=DataIssueStage.DOWNLOAD_FETCH,
-                    ref=entity,
-                    lane=DataIssueLane.HOMEPAGE,
-                    recovery=DataRecoveryAction.RETRY_SOURCE_DISCOVERY,
-                    message=(
-                        f"{rel}: homepage baseDraft-ready sources={homepage_base_ready_count} need>=1 "
-                        "(homepage lane must yield a primary-authority encyclopedia source with >=4 usable facts)"
-                    ),
-                    attributes={"retained": homepage_base_ready_count, "required": 1},
-                ))
-            min_article_sources = int(requirements.get("minArticleBaseSources") or requirements["minSources"])
-            article_required = (
-                (
-                    active_lanes is None
-                    and min_article_sources > 0
-                    and (
-                        _lane_plan_has_payload(download_dir, "article")
-                        or lane_md_count["article"] > 0
-                    )
-                )
-                or (active_lanes is not None and "article" in active_lanes and min_article_sources > 0)
-            )
-            if article_required and lane_retained_count["article"] < min_article_sources:
-                issues.append(data_issue(
-                    DataIssueCode.SOURCE_RETAINED_SHORTFALL,
-                    stage=DataIssueStage.DOWNLOAD_FETCH,
-                    ref=entity,
-                    lane=DataIssueLane.ARTICLE,
-                    recovery=DataRecoveryAction.RETRY_SOURCE_DISCOVERY,
-                    message=(
-                        f"{rel}: article retained sources={lane_retained_count['article']} "
-                        f"need>={min_article_sources}"
-                    ),
-                    attributes={"retained": lane_retained_count["article"], "required": min_article_sources},
-                ))
-        if len(image_hashes) < requirements["minImages"]:
+        homepage_required = ContentType.HOMEPAGE.value in active_lanes
+        if homepage_required and lane_retained_count["homepage"] < 1:
+            issues.append(data_issue(
+                DataIssueCode.SOURCE_PRIMARY_AUTHORITY_MISSING,
+                stage=DataIssueStage.DOWNLOAD_FETCH,
+                ref=entity,
+                lane=DataIssueLane.HOMEPAGE,
+                recovery=DataRecoveryAction.RETRY_SOURCE_DISCOVERY,
+                message=(
+                    f"{rel}: homepage retained sources={lane_retained_count['homepage']} need>=1 "
+                    "(homepage lane must yield a readable primary-authority encyclopedia source unit)"
+                ),
+                attributes={"retained": lane_retained_count["homepage"], "required": 1},
+            ))
+        elif homepage_required and homepage_base_ready_count < 1:
+            issues.append(data_issue(
+                DataIssueCode.SOURCE_PRIMARY_AUTHORITY_MISSING,
+                stage=DataIssueStage.DOWNLOAD_FETCH,
+                ref=entity,
+                lane=DataIssueLane.HOMEPAGE,
+                recovery=DataRecoveryAction.RETRY_SOURCE_DISCOVERY,
+                message=(
+                    f"{rel}: homepage baseDraft-ready sources={homepage_base_ready_count} need>=1 "
+                    "(homepage lane must yield a primary-authority encyclopedia source with >=4 usable facts)"
+                ),
+                attributes={"retained": homepage_base_ready_count, "required": 1},
+            ))
+        min_article_sources = requirements.min_article_base_sources
+        article_required = (
+            ContentType.ARTICLE.value in active_lanes and min_article_sources > 0
+        )
+        if article_required and lane_retained_count["article"] < min_article_sources:
+            issues.append(data_issue(
+                DataIssueCode.SOURCE_RETAINED_SHORTFALL,
+                stage=DataIssueStage.DOWNLOAD_FETCH,
+                ref=entity,
+                lane=DataIssueLane.ARTICLE,
+                recovery=DataRecoveryAction.RETRY_SOURCE_DISCOVERY,
+                message=(
+                    f"{rel}: article retained sources={lane_retained_count['article']} "
+                    f"need>={min_article_sources}"
+                ),
+                attributes={"retained": lane_retained_count["article"], "required": min_article_sources},
+            ))
+        if len(image_hashes) < requirements.min_images:
             issues.append(data_issue(
                 DataIssueCode.MEDIA_PUBLISHABLE_SHORTFALL,
                 stage=DataIssueStage.DOWNLOAD_FETCH,
@@ -509,9 +438,9 @@ def gate_download(execution_id: str, *, target_entities: set[str] | None = None)
                 recovery=DataRecoveryAction.RETRY_SOURCE_DISCOVERY,
                 message=(
                     f"{rel}: only {len(image_hashes)} unique publishable images "
-                    f"(need >= {requirements['minImages']})"
+                    f"(need >= {requirements.min_images})"
                 ),
-                attributes={"retained": len(image_hashes), "required": requirements["minImages"]},
+                attributes={"retained": len(image_hashes), "required": requirements.min_images},
             ))
         issues.extend(
             data_issue(

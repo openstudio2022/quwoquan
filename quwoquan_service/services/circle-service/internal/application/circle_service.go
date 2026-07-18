@@ -138,7 +138,7 @@ func (s *CircleService) CreateCircle(ctx context.Context, req CreateCircleReques
 	}
 
 	s.publishEvent(ctx, "CircleCreated", id, map[string]any{
-		"_id": id, "name": req.Name, "ownerId": req.OwnerID,
+		"id": id, "name": req.Name, "ownerId": req.OwnerID,
 		"category": req.Category, "tags": req.Tags,
 	})
 
@@ -361,7 +361,7 @@ func (s *CircleService) UpdateCircle(ctx context.Context, circleID string, data 
 	}
 
 	s.publishEvent(ctx, "CircleUpdated", circleID, map[string]any{
-		"_id": circleID, "name": c.Name, "description": c.Description,
+		"id": circleID, "name": c.Name, "description": c.Description,
 	})
 
 	return c, nil
@@ -378,7 +378,7 @@ func (s *CircleService) ArchiveCircle(ctx context.Context, circleID string) (err
 			"圈子不存在", "circle not found",
 		)
 	}
-	s.publishEvent(ctx, "CircleArchived", circleID, map[string]any{"_id": circleID, "status": "archived"})
+	s.publishEvent(ctx, "CircleArchived", circleID, map[string]any{"id": circleID, "status": "archived"})
 	return nil
 }
 
@@ -481,11 +481,35 @@ func (s *CircleService) GetCircleFeed(ctx context.Context, circleID string, limi
 	if s.feedStore == nil {
 		return []map[string]any{}, ""
 	}
-	return s.feedStore.ListCirclePosts(ctx, circleID, ListCirclePostsQuery{
+	items, nextCursor := s.feedStore.ListCirclePosts(ctx, circleID, ListCirclePostsQuery{
 		Sort:   sort,
 		Cursor: cursor,
 		Limit:  limit,
 	})
+	projected := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		projected = append(projected, projectCircleFeedItem(item))
+	}
+	return projected, nextCursor
+}
+
+func projectCircleFeedItem(item map[string]any) map[string]any {
+	if item == nil {
+		return nil
+	}
+	out := make(map[string]any, len(item))
+	for key, value := range item {
+		if key == "_id" {
+			continue
+		}
+		out[key] = value
+	}
+	if _, ok := out["postId"]; !ok {
+		if id, ok := item["_id"]; ok {
+			out["postId"] = id
+		}
+	}
+	return out
 }
 
 // --- Feed management ---

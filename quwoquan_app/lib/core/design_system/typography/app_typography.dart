@@ -8,7 +8,7 @@ class AppTypography {
   static const double sm = 12.0;
   static const double smPlus = 13.0;
   static const double base = 14.0;
-  static const double md = base; // Alias for backward compatibility
+  static const double md = base; // Semantic alias token
   static const double lg = 16.0;
   static const double xl = 18.0;
   static const double xxl = 20.0;
@@ -19,6 +19,8 @@ class AppTypography {
   static const double body = base;
   static const double secondary = sm;
   static const double caption = xs;
+  static const double inlineError = base;
+  static const FontWeight inlineErrorWeight = regular;
 
   /// 工具面板功能项文案保持与发现页主体一致。
   static const double toolPanelItemLabel = base;

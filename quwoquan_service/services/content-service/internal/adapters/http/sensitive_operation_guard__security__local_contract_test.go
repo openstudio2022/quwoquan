@@ -32,7 +32,7 @@ func TestSensitiveOperationGuardRejectsForgedIdentityWithoutPrincipal(t *testing
 			w.WriteHeader(http.StatusNoContent)
 		},
 	))
-	req := httptest.NewRequest(http.MethodPost, "/v1/content/behaviors", nil)
+	req := httptest.NewRequest(http.MethodPost, "/content/behaviors", nil)
 	req.Header.Set("X-Client-User-Id", "forged-user")
 	rec := httptest.NewRecorder()
 
@@ -55,7 +55,7 @@ func TestSensitiveOperationGuardAcceptsVerifiedPrincipalAndKeepsPublicRoute(t *t
 		},
 	))
 	principal := verifiedPrincipal("account-1", "persona-1")
-	sensitive := httptest.NewRequest(http.MethodPost, "/v1/content/media/uploads/session-1:complete", nil)
+	sensitive := httptest.NewRequest(http.MethodPost, "/content/media/uploads/session-1:complete", nil)
 	sensitive = sensitive.WithContext(rtauth.WithPrincipal(sensitive.Context(), principal))
 	sensitiveRec := httptest.NewRecorder()
 	handler.ServeHTTP(sensitiveRec, sensitive)
@@ -63,7 +63,7 @@ func TestSensitiveOperationGuardAcceptsVerifiedPrincipalAndKeepsPublicRoute(t *t
 		t.Fatalf("verified sensitive status=%d", sensitiveRec.Code)
 	}
 
-	public := httptest.NewRequest(http.MethodGet, "/v1/content/feed", nil)
+	public := httptest.NewRequest(http.MethodGet, "/content/feed", nil)
 	publicRec := httptest.NewRecorder()
 	handler.ServeHTTP(publicRec, public)
 	if publicRec.Code != http.StatusNoContent {
@@ -74,7 +74,7 @@ func TestSensitiveOperationGuardAcceptsVerifiedPrincipalAndKeepsPublicRoute(t *t
 func TestVerifiedOperationActorUsesPersonaFromTrustedClaims(t *testing.T) {
 	t.Parallel()
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/content/behaviors?userId=forged", nil)
+	req := httptest.NewRequest(http.MethodPost, "/content/behaviors?userId=forged", nil)
 	req = req.WithContext(rtauth.WithPrincipal(
 		req.Context(),
 		verifiedPrincipal("account-1", "persona-1"),

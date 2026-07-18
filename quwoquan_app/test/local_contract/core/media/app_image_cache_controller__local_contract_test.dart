@@ -132,10 +132,8 @@ void main() {
   });
 
   test('evictAvatar 只驱逐原 URL 的登录头像缓存', () async {
-    const target =
-        'https://127.0.0.1:17100/media/avatar/s/mock/user/current/v1/avatar.png';
-    const untouched =
-        'https://127.0.0.1:17100/media/avatar/s/mock/user/other/v1/avatar.png';
+    const target = 'media/avatar/s/mock/user/current/v1/avatar.png';
+    const untouched = 'media/avatar/s/mock/user/other/v1/avatar.png';
     final targetCacheKeys = resolveAvatarImageUrlCandidates(target)
         .map(
           (candidate) => CdnImageUrlBuilder.avatar(

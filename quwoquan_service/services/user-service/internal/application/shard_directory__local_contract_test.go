@@ -24,7 +24,6 @@ func TestLoadShardDirectoryFromMetadata(t *testing.T) {
 
 func TestShardDirectoryResolvePhysicalShardForOwnerID(t *testing.T) {
 	directory := &ShardDirectory{
-		Version:              1,
 		RuleVersion:          identityRuleVersion,
 		SlotCount:            identitySlotCount,
 		HashFn:               identityHashFunction,
@@ -47,7 +46,6 @@ func TestShardDirectoryResolvePhysicalShardForOwnerID(t *testing.T) {
 
 func TestShardDirectoryResolveFallsBackToDefault(t *testing.T) {
 	directory := &ShardDirectory{
-		Version:              1,
 		RuleVersion:          identityRuleVersion,
 		SlotCount:            identitySlotCount,
 		HashFn:               identityHashFunction,

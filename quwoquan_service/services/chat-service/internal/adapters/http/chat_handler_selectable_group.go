@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// handleListSelectableGroupConversations 处理 GET /v1/chat/selectable-group-conversations。
+// handleListSelectableGroupConversations 处理 GET /chat/selectable-group-conversations。
 // 「从群聊中选择联系人」群列表（图四），返回含互关联系人的群 + friendMemberCount。
 func (h *ChatHandler) handleListSelectableGroupConversations(w http.ResponseWriter, r *http.Request) {
 	limit := queryInt(r, "limit", 50)
@@ -24,12 +24,12 @@ func (h *ChatHandler) handleListSelectableGroupConversations(w http.ResponseWrit
 }
 
 // handleListSelectableGroupContactMembers 处理
-// GET /v1/chat/selectable-group-conversations/{conversationId}/contact-members。
+// GET /chat/selectable-group-conversations/{conversationId}/contact-members。
 // 「从群聊中选择联系人」群成员列表（图五），返回该群中与当前用户互关的联系人。
 func (h *ChatHandler) handleListSelectableGroupContactMembers(w http.ResponseWriter, r *http.Request) {
 	conversationID := extractPathParam(
 		r.URL.Path,
-		"/v1/chat/selectable-group-conversations/{conversationId}/contact-members",
+		"/chat/selectable-group-conversations/{conversationId}/contact-members",
 		"conversationId",
 	)
 	limit := queryInt(r, "limit", 100)

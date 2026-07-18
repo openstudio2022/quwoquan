@@ -45,7 +45,6 @@
   "fakeDeviceContext": {},
   "expectedStreamEvents": [
     {
-      "schemaVersion": "assistant_stream_event.m5",
       "eventId": "evt_failure_001",
       "conversationId": "acv_replay_failure",
       "turnId": "atn_replay_failure",
@@ -55,10 +54,10 @@
       "payload": {
         "status": "running"
       },
-      "createdAt": "2026-04-29T00:02:00Z"
+      "createdAt": "2026-04-29T00:02:00Z",
+      "schema": "assistant_stream_event"
     },
     {
-      "schemaVersion": "assistant_stream_event.m5",
       "eventId": "evt_failure_002",
       "conversationId": "acv_replay_failure",
       "turnId": "atn_replay_failure",
@@ -68,10 +67,10 @@
       "payload": {
         "toolName": "mock_search"
       },
-      "createdAt": "2026-04-29T00:02:01Z"
+      "createdAt": "2026-04-29T00:02:01Z",
+      "schema": "assistant_stream_event"
     },
     {
-      "schemaVersion": "assistant_stream_event.m5",
       "eventId": "evt_failure_003",
       "conversationId": "acv_replay_failure",
       "turnId": "atn_replay_failure",
@@ -94,7 +93,8 @@
           "toolName": "mock_search"
         }
       },
-      "createdAt": "2026-04-29T00:02:02Z"
+      "createdAt": "2026-04-29T00:02:02Z",
+      "schema": "assistant_stream_event"
     }
   ],
   "expectedTraceEvents": [],

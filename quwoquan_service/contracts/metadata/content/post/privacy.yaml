@@ -1,4 +1,3 @@
-version: 1
 aggregate: Post
 
 description: |
@@ -93,10 +92,8 @@ data_lifecycle:
 # ── 三、字段暴露范围（API 层精细控制）──────────────────────────────────
 # 补充 fields.yaml api_exposure 的 consumer 粒度控制
 field_visibility:
-  - field: _id
-    internal_name: _id
-    api_alias: postId
-    description: "API 层统一暴露为 postId，内部存储用 _id"
+  - field: postId
+    description: "API/wire 唯一键为 postId；存储层 Mongo _id 不进入客户端 wire；拒绝 _id 与 id 旧键别名"
 
   - field: embedding
     visibility: never_expose

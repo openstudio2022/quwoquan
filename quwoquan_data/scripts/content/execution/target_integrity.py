@@ -42,7 +42,7 @@ def prune_non_target_homepage_artifacts(
     )
     if pruned:
         print(
-            "[geo-homepages] Pruned non-target homepage artifact(s): "
+            "[task execute] Pruned non-target homepage artifact(s): "
             + ", ".join(str(row.get("entity") or "") for row in pruned[:12])
             + (" ..." if len(pruned) > 12 else "")
             + f"; reason={reason}"

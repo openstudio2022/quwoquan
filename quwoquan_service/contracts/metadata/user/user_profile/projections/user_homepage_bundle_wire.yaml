@@ -1,8 +1,7 @@
-version: 1
 read_model: UserHomepageBundleWire
 
 description: |
-  GET /v1/user/{subAccountId}/homepage-bundle 响应 wire（主页首屏聚合真相源，锁定决策 #1）。
+  GET /user/{subAccountId}/homepage-bundle 响应 wire（主页首屏聚合真相源，锁定决策 #1）。
   只聚合「身份域真相」：profile（公开档案）/ stats（统计计数）/ relationshipCapability（viewer→target
   关系能力，自己/陌生时可空）/ tabCounts（Tab 角标计数）/ viewerContext（本人/游客/关系/可见性）/
   cacheVersion（端做乐观回填与并发刷新一致性的版本锚）。
@@ -32,35 +31,29 @@ client_projection:
       dart_type: SubAccountProfileWireDto
       nullable: true
       source: profile
-      aliases: [profile]
       map_from_string_key_class: SubAccountProfileWireDto
     - name: stats
       dart_type: UserProfileStatsWireDto
       nullable: true
       source: stats
-      aliases: [stats]
       map_from_string_key_class: UserProfileStatsWireDto
     - name: relationshipCapability
       dart_type: RelationshipCapabilityWireDto
       nullable: true
       source: relationshipCapability
-      aliases: [relationshipCapability]
       map_from_string_key_class: RelationshipCapabilityWireDto
     - name: tabCounts
       dart_type: UserHomepageTabCountsWireDto
       nullable: true
       source: tabCounts
-      aliases: [tabCounts]
       map_from_string_key_class: UserHomepageTabCountsWireDto
     - name: viewerContext
       dart_type: UserHomepageViewerContextWireDto
       nullable: true
       source: viewerContext
-      aliases: [viewerContext]
       map_from_string_key_class: UserHomepageViewerContextWireDto
     - name: cacheVersion
       dart_type: String
       nullable: false
       source: cacheVersion
-      aliases: [cacheVersion]
       default: "''"

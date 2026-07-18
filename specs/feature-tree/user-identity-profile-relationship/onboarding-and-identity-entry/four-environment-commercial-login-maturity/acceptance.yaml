@@ -248,7 +248,7 @@ contract_acceptance:
     - USER.AUTH 社交错误码生成 Dart/Go 常量。
     - 端侧 RemoteAuthRepository 消费生成的 path/pageId，不硬编码。
     - Apple 与 Passkey 不在 public operation、RemoteAuthRepository 或用户服务公开登录路由中；
-      `POST /v1/auth/login/apple` 和 `POST /v1/auth/login/passkey` 必须返回 404。
+      `POST /auth/login/apple` 和 `POST /auth/login/passkey` 必须返回 404。
     - SendOtp、手机号、微信、QQ、支付宝、一键登录和 hint 的 commercial/security/privacy/reliability/telemetry/SLO 均由 ContractGraph 生成；缺生产证据的 provider 必须保持 blocked。
     tests:
       planned:
@@ -308,15 +308,13 @@ contract_acceptance:
     - 登录漏斗、各 provider 请求结果、非 2xx 比率、P95 与 USER 错误码在同一 L2 大盘可查。
     - provider 非 2xx 比率超过 2%，或挑战/登录 P95 超过 1.2s/1.5s，连续两个 5 分钟窗口后触发告警。
     - '`sys.user.auth.*` 声明成功明细采样、30 天原始明细和 180 天聚合指标保留，并支持 progressive rollout。'
-    - Mongo 登录事件使用 30 天按事件 TTL；旧文档仍有 90 天兜底，不造成无限保留。
+    - 登录观测不得依赖已退役的 product-ops `event_records` Mongo 集合；运行时采样和保留必须由正式单轨实现证明。
     tests:
       planned:
       - file: quwoquan_ops/tests/local_contract/test_auth_login_observability__local_contract_test.py
-      - file: quwoquan_service/services/product-ops-service/internal/infrastructure/persistence/mongo_event_record__local_contract_test.go
       recorded:
       - file: quwoquan_ops/tests/local_contract/test_auth_login_observability__local_contract_test.py
-      - file: quwoquan_service/services/product-ops-service/internal/infrastructure/persistence/mongo_event_record__local_contract_test.go
-    status: implemented
+    status: partial
     test_evidence:
       primary:
       - layer: local_contract
@@ -331,7 +329,7 @@ contract_acceptance:
         - api_integration.user_identity_profile_relationship.onboarding_and_identity_entry.four_environment_commercial_login_maturity.contract3_api_integration
         envs: *id002
     notes:
-    - '2026-07-14: L2 登录大盘、两个窗口告警、sys.user.auth 配置契约与登录事件 30 天 TTL 已落地；真实 prod 指标窗口和回滚演练仍归 UAT1，不能由静态门禁替代。'
+    - '2026-07-18: L2 登录大盘、两个窗口告警和 sys.user.auth 配置契约已有静态证据；旧 product-ops event_records 已按产品日志单轨切换退役，运行时采样 consumer、原始明细保留与 180 天聚合仍缺真实实现证据，因此从 implemented 如实降为 partial。'
 uat_acceptance:
   UAT1:
     title: 四环境端到端与商用纯净证据

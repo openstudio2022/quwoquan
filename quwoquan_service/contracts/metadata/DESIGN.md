@@ -226,7 +226,7 @@ make codegen-rec-model-python # Python: features + training_samples（Pydantic�
 operation_id: content.post.PublishPost
 transport:
   method: POST
-  path_template: /v1/content/posts/{postId}:publish
+  path_template: /content/posts/{postId}:publish
 application:
   facet: PostCommandFacade
   method: publish
@@ -240,6 +240,12 @@ errors:
   catalog: content/post/errors.yaml
 ```
 
+HTTP `path_template` **禁止**协议版本段（`/v` + 数字、`/internal/v` + 数字、
+`/callbacks/v` + 数字）；只允许无版本资源路径，例如 `/content/feed`、
+`/internal/recommendation/model-releases:score`。健康探针 `/health` `/healthz`
+`/metrics` `/livez` `/startupz` 除外。门禁：
+`make verify-api-path-unversioned`（已挂入 `gate_repo.sh`）。
+
 Query operation 将 `kind` 设为 `query`，并声明 `reader` 与 `slice`；禁止仅用 URL、DTO 名或 Handler 名推断。
 Append-only fact 的 POST command 必须声明 `append_sink`，且不得伪装成
 `aggregate_owner`；编译器强制两者互斥，并验证目标分别为 `append_only_fact` 与
@@ -252,21 +258,33 @@ Append-only fact 的 POST command 必须声明 `append_sink`，且不得伪装�
 - 一个 facet 不超过 10 个方法；超过即按子域/场景拆分。
 - transport adapter 不依赖 infrastructure；跨域只经 ExternalDomainPort、事件或本地 projection。
 
+operation 的 `reliability.idempotency` 只描述请求重放；调用方版本前置条件由可选
+`concurrency.version_precondition: if_match` 表达。未声明时禁止业务 command/encoder
+发送 `If-Match`。`if_match` 只允许 aggregate-root command，且必须能证明存在真实多写者
+快照覆盖；一次创建/发布、关系 set/unset、事实 append、projection、external query 与
+runtime session 禁止使用。服务端 Store 的 `ExpectedVersion` 始终是内部 CAS 参数，不是
+公开 API 默认字段。
+
 ### Object Data Ports
 
-- `AggregateStore` 是对象专属具名接口，至少表达 Load、Commit、expectedVersion、IdempotencyKey 和 outbox。
+- `AggregateStore` 是对象专属具名接口，至少表达 Load、Commit、内部 expectedVersion、IdempotencyKey 和 outbox。
 - Reader 以业务目的命名，例如 `PostDetailReader`、`AuthorPostReader`，不暴露 GenericSliceReader。
 - adapter 必须声明 `authoritative`、`projection`、`cache`、`external` 或 `memory`；只有 authoritative store 接受 command commit。
 - 跨上下文写入只经目标 Command Facade，读取只经 named Reader/Slice，异步协作只经公开事件与 outbox/inbox；只有已证明补偿语义的具体流程使用专用 process manager，不存在通用 Saga 或分布式 UnitOfWork。
 - aggregate members 只允许 owned entity/value object；子对象只能经聚合根访问。需要独立命令、版本、并发或生命周期即为 aggregate root，不得为方便直连子对象 Store/Repository。
 - Mongo/PG 中 aggregate change 与同库 outbox 单事务；消费者以 inbox/checkpoint 保证幂等和 replay。
 
+最小机制矩阵固定为：aggregate 内部 CAS；owned entity 继承 owner；value object 无版本；
+append-only fact 唯一 dedupe；projection 每 source 单调 version/sequence；external reference
+无本地写并发；runtime session 逐连接 lease/fencing。禁止为了统一接口给后五类补
+`expectedVersion` 或 command receipt。
+
 ## OpenAPI 派生快照
 
 `service.yaml api_routes` 编译出的 `ContractGraph.Operations` 是 HTTP transport
 唯一真相源。`contracts/metadata/{domain}/openapi.yaml` 只是确定性生成快照，
-禁止手写、合并旧内容或保留未知路径。生成器覆盖 `/v1/`、`/internal/v1/` 与
-`/callbacks/v1/` 下的全部 operation，并固定输出：
+禁止手写、合并旧内容或保留未知路径。生成器覆盖 `/`、`/internal/` 与
+`/callbacks/` 下的全部 operation，并固定输出：
 
 - `operationId` 使用域内稳定 `LocalID`，同时写入 canonical
   `x-contract-operation-id`。

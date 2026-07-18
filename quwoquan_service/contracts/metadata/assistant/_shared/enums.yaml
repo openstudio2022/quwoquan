@@ -94,11 +94,8 @@ enums:
         wire: balanced
       - name: fastExit
         wire: strict
-        aliases: [fast_exit]
       - name: exhaustive
         wire: explore
-        aliases: [exhaustive]
-
   - name: SearchIterationConvergenceStatus
     values:
       - name: unknown
@@ -296,7 +293,6 @@ enums:
     values:
       - name: userVisible
         wire: user_visible
-        aliases: [userVisible]
       - name: system
         wire: system
       - name: internal
@@ -346,7 +342,6 @@ enums:
         wire: session_history
       - name: defaultValue
         wire: default
-        aliases: [default_value]
       - name: unknown
         wire: ''
 
@@ -483,13 +478,10 @@ enums:
         wire: sufficient
       - name: needMoreSearch
         wire: need_more_search
-        aliases: [needMoreSearch]
       - name: budgetExhausted
         wire: budget_exhausted
-        aliases: [budgetExhausted]
       - name: toolFailed
         wire: tool_failed
-        aliases: [toolFailed]
       - name: unknown
         wire: ''
 
@@ -549,7 +541,6 @@ enums:
     values:
       - name: none
         wire: ''
-        aliases: ['']
       - name: expandTimeWindow
         wire: expand_time_window
       - name: expandScopeAndRequery
@@ -563,7 +554,6 @@ enums:
     values:
       - name: singleRetry
         wire: single_retry
-        aliases: ['']
       - name: unknown
         wire: ''
 

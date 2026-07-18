@@ -29,7 +29,7 @@ categories:
         fallback: https://127.0.0.1:17100
         expiry: never
   - id: app_remote_config
-    source: GET /v1/config/app
+    source: GET /config/app
     remote_editable: true
     description: App 可公开消费的运营参数和轻系统参数。
     items:

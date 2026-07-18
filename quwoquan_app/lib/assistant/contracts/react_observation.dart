@@ -16,8 +16,8 @@ class ReactObservation extends ReactObservationDto {
         const <String, dynamic>{};
     return ReactObservation(
       status: (raw['status'] as String?)?.trim() ?? '',
-      coverage: _toDouble(data['coverage'] ?? data['coverageScore']),
-      confidence: _toDouble(data['confidence'] ?? data['confidenceScore']),
+      coverage: _toDouble(data['coverage']),
+      confidence: _toDouble(data['confidence']),
       freshnessHours: _toDouble(data['freshnessHours']),
     );
   }

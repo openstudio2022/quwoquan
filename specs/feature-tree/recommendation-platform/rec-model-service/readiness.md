@@ -20,7 +20,7 @@
 
 | 接口 | method | path | 说明 | 契约位置 |
 |------|--------|------|------|----------|
-| 多场景打分 | POST | `/v1/score` | scenario + userId + sessionId + userFeatures + sessionSignals + candidates → scores[] | `rec_model_service/service.yaml`、`contracts/metadata/recommendation/rec_model/service.yaml` |
+| 多场景打分 | POST | `/score` | scenario + userId + sessionId + userFeatures + sessionSignals + candidates → scores[] | `rec_model_service/service.yaml`、`contracts/metadata/recommendation/rec_model/service.yaml` |
 | 健康检查 | GET | `/health` | 健康探测 | 同上 |
 
 与 Go 端对齐：`runtime/recommendation/scorer.go` 中 `ModelPredictRequest` / `ModelPredictResponse`；metadata 中已增加 `scenario`、`context` 以支持多场景扩展。
@@ -29,7 +29,7 @@
 
 ## 2. 已完成的元数据与契约
 
-- [x] **rec_model_service/service.yaml**：服务归属、api_routes（POST /v1/score、GET /health）、consumers（content-service、circle-service、user-service）
+- [x] **rec_model_service/service.yaml**：服务归属、api_routes（POST /score、GET /health）、consumers（content-service、circle-service、user-service）
 - [x] **rec_model_service/fields.yaml**：ModelScoreRequest、CandidateInput、ModelScoreResponse、CandidateScore
 - [x] **rec_model_service/entity.yaml**、**events.yaml**、**storage.yaml**：占位以满足 `make verify-metadata` 目录校验（本服务无独立存储与领域事件）
 - [x] **entity_catalog.yaml**：ModelScoreRequest、ModelScoreResponse（domain: recommendation, service: rec-model-service）
@@ -37,7 +37,7 @@
 - [x] **_projections/training_samples.yaml**：rec_training_samples 集合与索引
 - [x] **_projections/model_registry.yaml**：rec_model_registry 集合与索引
 - [x] **contracts/endpoint_catalog.md**：recommendation.score.predict、recommendation.health 及错误归因
-- [x] **contracts/metadata/recommendation/rec_model/service.yaml**：POST /v1/score、GET /health 的请求/响应 schema
+- [x] **contracts/metadata/recommendation/rec_model/service.yaml**：POST /score、GET /health 的请求/响应 schema
 - [x] **Python codegen**：`make codegen-rec-model-python` 从同一 metadata 生成 Pydantic 模型与 FastAPI 路由骨架（见下文）
 
 ---
@@ -49,7 +49,7 @@
 - **输出**：`services/rec-model-service/generated/`（禁止手改）：
   - `models/request_response.py`：ModelScoreRequest、CandidateInput、ModelScoreResponse、CandidateScore（Pydantic v2）
   - `models/projections.py`：LearningEvent、TrainingSample、ModelRegistryEntry（对应读模型集合）
-  - `api/routes.py`：FastAPI APIRouter，POST /v1/score、GET /health 骨架
+  - `api/routes.py`：FastAPI APIRouter，POST /score、GET /health 骨架
   - `api/schemas.py`：对上述模型的 re-export。
 - **类型映射**（metadata → Python）：string→str，float64/number→float，int64/int→int，bool→bool，object→dict[str, Any]，timestamp→float，ObjectId→str，[]T→list[T]；NOT_NULL 为必填，否则为 Optional（`T | None`）。
 - **运行环境**：Python 3.10+，Pydantic v2。

@@ -73,7 +73,7 @@ func decodeBody(t *testing.T, rec *httptest.ResponseRecorder) map[string]any {
 
 func createTestCircle(t *testing.T, name string) string {
 	t.Helper()
-	rec := doRequest(t, http.MethodPost, "/v1/circles", map[string]any{
+	rec := doRequest(t, http.MethodPost, "/circles", map[string]any{
 		"name":     name,
 		"category": "interest",
 		"tags":     []string{"test"},
@@ -83,7 +83,7 @@ func createTestCircle(t *testing.T, name string) string {
 	}
 	body := decodeBody(t, rec)
 	data := body["data"].(map[string]any)
-	return data["_id"].(string)
+	return data["id"].(string)
 }
 
 func toInt64(value any) int64 {

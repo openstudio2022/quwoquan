@@ -8,7 +8,7 @@ service:
 
 # v2026.07.07.0: homepage introduction 通路首个 prod 发布（54 实体主页投影）。
 # 相对 v2026.06.16.0 无服务配置变更；本版本用于驱动 prod gray rollout stage 状态机
-# （entity-service 首次进入 prod-hosted service plane，Caddy /v1/homepages* 路由同批生效）。
+# （entity-service 首次进入 prod-hosted service plane，Caddy /homepages* 路由同批生效）。
 
 # Unified search index — WRITE side contract snapshot.
 # entity-service is an indexing producer for the shared ES/OpenSearch index that

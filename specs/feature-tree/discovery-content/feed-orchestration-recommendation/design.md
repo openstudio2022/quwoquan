@@ -2,7 +2,7 @@
 
 ## 0. 需求规格摘要（供 /qwq-extend 与特性树对齐）
 
-- **业务对象**：Post 域 ReportBehaviors API（`POST /v1/content/behaviors`），无独立 behavior 实体；runtime 推荐热路径（HotPath、Engine）。
+- **业务对象**：Post 域 ReportBehaviors API（`POST /content/behaviors`），无独立 behavior 实体；runtime 推荐热路径（HotPath、Engine）。
 - **扩展类型**：契约扩展（OpenAPI BehaviorEvent schema、_shared/types.yaml、redis_keyspace.yaml）+ 云侧手写（BehaviorService、HotPath、Engine）+ 端侧手写（BehaviorRepository、UI 回调）。
 - **涉及扩展场景**：S20（add-test，可选）；其余为 metadata/contracts 手动更新，无对应 S01–S19。
 - **验收**：四类内容（article/moment/photo/video）均可上报全量反馈；hide_author/hide_content_type 生效于 GetFeed 过滤。
@@ -31,11 +31,11 @@
 | 不感兴趣           | 更多 → 不感兴趣        | dislike          | 已有：contentId 入 negative_set，tags 降权 | 端侧需接好：上报 contentId + tags/contentType |
 | 不想看此作者       | 更多 → 不喜欢该作者    | hide_author      | **新增**：authorId 入 rec:hidden_authors:{userId}，引擎过滤该作者 | 需扩展契约与 HotPath |
 | 不想看此类内容     | 更多 → 屏蔽词 / 此类   | hide_content_type| **新增**：contentType 入 rec:hidden_types:{userId}，引擎过滤该类型 | 需扩展契约与 HotPath |
-| 举报               | 更多 → 举报            | report           | 已有：contentId 入 negative_set；另可调 POST /v1/content/reports 做工单 | 端侧可先行为上报，再接举报 API |
+| 举报               | 更多 → 举报            | report           | 已有：contentId 入 negative_set；另可调 POST /content/reports 做工单 | 端侧可先行为上报，再接举报 API |
 
 ### 2.3 行为与内容类型
 
-- 四类内容在**同一** POST /v1/content/behaviors 中上报，通过 `contentId` + 可选 `tags`/`contentType` 区分。
+- 四类内容在**同一** POST /content/behaviors 中上报，通过 `contentId` + 可选 `tags`/`contentType` 区分。
 - 发现流/详情在任意类型（文章/微趣/美图/视频）下均使用相同 `BehaviorRepository.reportEvents` / `reportSingle`，无需按类型分接口。
 
 ## 3. 契约扩展（metadata / API）
@@ -90,8 +90,8 @@
 
 ### 4.4 与 block/report 的关系
 
-- **用户关系**：「不喜欢该作者」可同时调 user-service 的 block（POST /v1/user/block/{targetUserId}），实现全站不看到该作者；推荐侧 hide_author 负责发现流/推荐结果过滤。两者可并存。
-- **举报**：action=report 已入 negative_set；若存在 POST /v1/content/reports，端侧可在同一操作中先上报 report 行为，再调举报接口提交工单。
+- **用户关系**：「不喜欢该作者」可同时调 user-service 的 block（POST /user/block/{targetUserId}），实现全站不看到该作者；推荐侧 hide_author 负责发现流/推荐结果过滤。两者可并存。
+- **举报**：action=report 已入 negative_set；若存在 POST /content/reports，端侧可在同一操作中先上报 report 行为，再调举报接口提交工单。
 
 ## 5. 端侧实现要点
 
@@ -113,7 +113,7 @@
 | 不感兴趣       | 仅 Toast           | reportSingle(contentId, 'dislike', tags: [contentType 或 post.tags]) |
 | 不喜欢该作者   | 仅 Toast           | reportSingle(contentId, 'hide_author', authorId: authorId)；可选调 user block API |
 | 屏蔽词/此类    | onTap null         | reportSingle(contentId, 'hide_content_type', contentType: post.type) 或按「此类」解析 |
-| 举报           | 仅 Toast           | reportSingle(contentId, 'report')；可选调 POST /v1/content/reports |
+| 举报           | 仅 Toast           | reportSingle(contentId, 'report')；可选调 POST /content/reports |
 | 关注           | TODO Toast         | 调 user-service 关注 API（若有）+ reportSingle(contentId, 'follow', authorId: authorId) |
 | 评论成功       | —                  | 在评论提交成功后 reportSingle(contentId, 'comment') |
 
@@ -133,7 +133,7 @@
   └─ 举报 → reportSingle(…, action=report) [ + 举报 API ]
        │
        ▼
-  POST /v1/content/behaviors (sessionId + events[])
+  POST /content/behaviors (sessionId + events[])
        │
        ▼
   BehaviorService.ProcessBatch → HotPath.ProcessSignalBatch
@@ -276,11 +276,11 @@ flowchart TD
 
 ### 9.4 API
 
-- `GET /v1/user/following-subjects`
+- `GET /user/following-subjects`
   - `operation: ListFollowingSubjects`
   - `auth: required`
   - query: `cursor, limit, subjectType`
-- `POST /v1/user/following-subjects/{subjectType}/{subjectId}:mark-visited`
+- `POST /user/following-subjects/{subjectType}/{subjectId}:mark-visited`
   - `operation: MarkFollowingSubjectVisited`
   - `auth: required`
   - request: `MarkFollowingSubjectVisitedRequest`

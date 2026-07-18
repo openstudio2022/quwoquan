@@ -27,7 +27,7 @@ from typing import Any
 
 REPO_ROOT = _find_repo_root()
 SCENARIO = "chat.group_avatar.sync_display_e2e"
-SCHEMA_VERSION = 1
+REPORT_SCHEMA = "chat-avatar-e2e-probe-report"
 CONTRACT_PLACEHOLDER_TOKENS = ("契", "contract", "default-contract")
 
 
@@ -97,7 +97,7 @@ def default_members(args: argparse.Namespace) -> list[str]:
 def report_template(args: argparse.Namespace, members: list[str]) -> dict[str, Any]:
     env_name = normalize_env(args.env)
     return {
-        "schemaVersion": SCHEMA_VERSION,
+        "schema": REPORT_SCHEMA,
         "scenario": SCENARIO,
         "status": "running",
         "failureCategory": "",
@@ -142,8 +142,8 @@ def report_template(args: argparse.Namespace, members: list[str]) -> dict[str, A
         },
         "serviceEndpointEvidence": {
             "healthz": "",
-            "chatConversations": "/v1/chat/conversations",
-            "userSync": "/v1/user/sync",
+            "chatConversations": "/chat/conversations",
+            "userSync": "/user/sync",
             "media": "",
         },
         "uiEvidence": {
@@ -278,7 +278,7 @@ def wait_for_avatar_version(
         last = request_json(
             args,
             "GET",
-            f"/v1/chat/conversations/{urllib.parse.quote(conversation_id)}",
+            f"/chat/conversations/{urllib.parse.quote(conversation_id)}",
             user_id=report["conversation"]["creatorUserId"],
         )
         avatar_url = str(last.get("avatarUrl") or "").strip()
@@ -302,7 +302,7 @@ def poll_user_sync(
         resp = request_json(
             args,
             "POST",
-            "/v1/user/sync",
+            "/user/sync",
             user_id=user_id,
             body={"afterSeq": last_seq, "limit": 200},
         )
@@ -392,7 +392,7 @@ def send_sender_avatar_message(args: argparse.Namespace, report: dict[str, Any],
     result = request_json(
         args,
         "POST",
-        f"/v1/chat/conversations/{urllib.parse.quote(conversation_id)}/messages",
+        f"/chat/conversations/{urllib.parse.quote(conversation_id)}/messages",
         user_id=report["conversation"]["creatorUserId"],
         body={
             "type": "text",
@@ -411,7 +411,7 @@ def send_sender_avatar_message(args: argparse.Namespace, report: dict[str, Any],
             listed = request_json(
                 args,
                 "GET",
-                f"/v1/chat/conversations/{urllib.parse.quote(conversation_id)}/messages?limit=20",
+                f"/chat/conversations/{urllib.parse.quote(conversation_id)}/messages?limit=20",
                 user_id=report["conversation"]["creatorUserId"],
             )
             for item in listed.get("items") or []:
@@ -535,7 +535,7 @@ def run_probe(args: argparse.Namespace, report: dict[str, Any], members: list[st
     created = request_json(
         args,
         "POST",
-        "/v1/chat/conversations",
+        "/chat/conversations",
         user_id=args.creator_id,
         body={"type": "group", "title": title, "initialMemberIds": members, "maxGroupSize": 100},
     )
@@ -555,7 +555,7 @@ def run_probe(args: argparse.Namespace, report: dict[str, Any], members: list[st
     request_json(
         args,
         "POST",
-        f"/v1/chat/conversations/{urllib.parse.quote(conversation_id)}/members",
+        f"/chat/conversations/{urllib.parse.quote(conversation_id)}/members",
         user_id=args.creator_id,
         body={"userIds": [args.added_member_id]},
     )
@@ -574,7 +574,7 @@ def run_probe(args: argparse.Namespace, report: dict[str, Any], members: list[st
         request_json(
             args,
             "DELETE",
-            f"/v1/chat/conversations/{urllib.parse.quote(conversation_id)}/members/{urllib.parse.quote(args.removed_member_id)}",
+            f"/chat/conversations/{urllib.parse.quote(conversation_id)}/members/{urllib.parse.quote(args.removed_member_id)}",
             user_id=args.creator_id,
         )
         after_remove = wait_for_avatar_version(args, report, conversation_id, add_version + 1)
@@ -599,7 +599,7 @@ def verify_fixture_group(args: argparse.Namespace, report: dict[str, Any]) -> No
     inbox = request_json(
         args,
         "GET",
-        "/v1/chat/inbox?limit=50",
+        "/chat/inbox?limit=50",
         user_id=args.creator_id,
     )
     fixture_item = None
@@ -620,7 +620,7 @@ def verify_fixture_group(args: argparse.Namespace, report: dict[str, Any]) -> No
     detail = request_json(
         args,
         "GET",
-        f"/v1/chat/conversations/{urllib.parse.quote(fixture_conversation_id)}",
+        f"/chat/conversations/{urllib.parse.quote(fixture_conversation_id)}",
         user_id=args.creator_id,
     )
     detail_avatar_url = str(detail.get("avatarUrl") or "").strip()
@@ -650,7 +650,7 @@ def verify_fixture_group(args: argparse.Namespace, report: dict[str, Any]) -> No
     request_json(
         args,
         "POST",
-        f"/v1/chat/conversations/{urllib.parse.quote(fixture_conversation_id)}/members",
+        f"/chat/conversations/{urllib.parse.quote(fixture_conversation_id)}/members",
         user_id=args.creator_id,
         body={"userIds": [fixture_add_member_id]},
     )

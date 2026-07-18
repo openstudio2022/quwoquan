@@ -1,5 +1,4 @@
 # 训练样本：SampleJoiner 从 rec_learning_events 拼接生成，供训练管线消费
-version: 1
 read_model: TrainingSamples
 
 description: |

@@ -20,11 +20,11 @@ import (
 // 语义边界：这是「推荐 → 端」瞬时 pub/sub 提示通道，不是领域事件——不进 event_store、
 // 不跨服务消费、不做持久化重放。服务端只在安全边界发射，绝不主动重排用户正在看的内容。
 
-// FeedPatchSchemaVersion 是推荐实时 patch 的契约版本，必须等于 metadata 的 schema_version。
-const FeedPatchSchemaVersion = "feed_patch_v1"
-
 // feedPatchChannelTemplate 是 per-user 瞬时通道模板，必须等于 metadata 的 realtime_channel_template。
 const feedPatchChannelTemplate = "rt:rec:feed:user:{userId}"
+
+// FeedRealtimePatchSchema 是 wire envelope 的单一 schema 身份。
+const FeedRealtimePatchSchema = "feed_realtime_patch"
 
 // FeedPatchType 是 patch 类型闭集（metadata patch_types）。
 type FeedPatchType string
@@ -63,7 +63,7 @@ const (
 
 // FeedRealtimePatch 是强类型 wire envelope，json tag 必须与 metadata envelope_fields 同名。
 type FeedRealtimePatch struct {
-	SchemaVersion           string                    `json:"schemaVersion"`
+	Schema                  string                    `json:"schema"`
 	PatchID                 string                    `json:"patchId"`
 	PatchType               FeedPatchType             `json:"patchType"`
 	UserID                  string                    `json:"userId"`
@@ -353,7 +353,9 @@ func relationshipHintReason(signal BehaviorSignal) (FeedPatchReasonCode, bool) {
 
 // emit 填充契约不变字段、校验、序列化并发布到 per-user 通道，并登记可观测指标。
 func (e *FeedPatchEmitter) emit(ctx context.Context, patch FeedRealtimePatch) error {
-	patch.SchemaVersion = FeedPatchSchemaVersion
+	if patch.Schema == "" {
+		patch.Schema = FeedRealtimePatchSchema
+	}
 	if patch.PatchID == "" {
 		patch.PatchID = e.newID()
 	}
@@ -399,9 +401,6 @@ func (e *FeedPatchEmitter) logEmitError(msg string, patch FeedRealtimePatch, err
 
 // Validate 校验 envelope 满足契约不变量。
 func (p FeedRealtimePatch) Validate() error {
-	if p.SchemaVersion != FeedPatchSchemaVersion {
-		return fmt.Errorf("feed patch: schemaVersion %q != %q", p.SchemaVersion, FeedPatchSchemaVersion)
-	}
 	if strings.TrimSpace(p.PatchID) == "" {
 		return fmt.Errorf("feed patch: patchId required")
 	}

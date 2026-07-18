@@ -139,7 +139,7 @@ void main() {
         transport.send(
           _request(
             authMode: 'optional',
-            uri: Uri.parse('https://evil.example.test/v1/resource'),
+            uri: Uri.parse('https://evil.example.test/resource'),
           ),
         ),
         throwsA(isA<CloudException>()),
@@ -164,7 +164,7 @@ void main() {
           CloudJsonTransportRequest(
             method: 'GET',
             authMode: 'required',
-            uri: Uri.parse('https://gateway.example.test/v1/resource'),
+            uri: Uri.parse('https://gateway.example.test/resource'),
             gatewayOrigin: Uri.parse('https://gateway.example.test'),
             headers: const <String, String>{'X-Request-Id': 'request-id'},
             abortTrigger: Future<void>.value(),
@@ -216,7 +216,7 @@ CloudJsonTransportRequest _request({
   return CloudJsonTransportRequest(
     method: 'GET',
     authMode: authMode,
-    uri: uri ?? Uri.parse('https://gateway.example.test/v1/resource'),
+    uri: uri ?? Uri.parse('https://gateway.example.test/resource'),
     gatewayOrigin: Uri.parse('https://gateway.example.test'),
     headers: headers,
     abortTrigger: Future<void>.delayed(const Duration(seconds: 30)),

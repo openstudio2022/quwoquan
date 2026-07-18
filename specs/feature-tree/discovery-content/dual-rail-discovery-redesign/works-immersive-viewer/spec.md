@@ -65,14 +65,22 @@
 - 图片书三面绑定固定：前翻为 `recto=current.front / verso=current.back / bottom=next.front`，后翻为 `recto=prev.front / verso=prev.back / bottom=current.front`；前翻移动的是当前页纸张，禁止把 `next.back` 贴到 moving sheet。
 - 图片不得维护媒体专用几何、face-frame 分区或 moving-sheet painter；`MediaPageFlipBook` 只消费既有 `StPageFlipRenderFrame` 的 area、anchor、angle 与 shadow。active moving sheet 保持唯一 `Positioned + Transform + ClipPath`，内部每帧只选择一张完整 `RawImage` front/back 材质，不得对子纹理二次布局、压缩或重复采样。
 - 手势方向锁定时冻结 current、moving sheet、bottom 三面材质；事务中的异步 ready/failure 只进入待应用状态。目标页未 ready 时允许翻到中性纸面，commit/cancel 完全落平后才应用新状态；成功图片以 `160ms easeOut` 淡入，Reduce Motion 下最长 `120ms`，不得在动态折页或落页首帧瞬间换图。
-- 静态页与翻页纹理消费同一已解码 `ui.Image` 和同一 `coverSourceRect`。加载超过 `300ms` 才可显示低对比 loading overlay；终态失败只在落平后的静态页显示失败说明与重试，所有 loading/failure overlay 均不得进入翻页纹理。底部可读性渐变和 hairline 由图片书固定 overlay 统一绘制，不烘焙到单页材质。
+- 静态页与翻页纹理消费同一已解码 `ui.Image` 和同一 `coverSourceRect`。加载超过 `300ms` 才可显示低对比 loading overlay；终态失败只在落平后的静态页显示无图标的失败说明与重试，所有 loading/failure overlay 均不得进入翻页纹理。图片与视频失败态共用文字 `重试`、44pt 最小触达区、半透明圆角按钮与 live region；不可恢复视频不得展示无效重试。底部可读性渐变和 hairline 由图片书固定 overlay 统一绘制，不烘焙到单页材质。
 - 点状指示器（`● ● ○ ● ●`）位于图片内容下方、标题上方；最多 6 个点，超出时以首尾淡化表达「还有更多」；必须明确表达当前位置。
 - 单图作品不显示指示器。
 
 ## 视频作品
 
-- 全屏沉浸播放；控制层只允许：播放状态、时间轴、当前时间、总时长（自绘极简控制行）。
-- 禁止：缩略图轨道、截图列表、预览帧、平台默认控制层（Chewie/Material 控件）。
+- 全屏沉浸播放；控制层只允许：播放状态、时间轴、当前时间、总时长与受控 storyboard 预览帧
+  （自绘极简控制行）。
+- 禁止平台默认控制层（Chewie/Material 控件）、端侧远端临时抽帧、截图列表和独立缩略图轨道。
+- 详情首次进入默认不显示时长；视频集在首帧、恢复和切集后显示总时长 5 秒并淡出。
+  时间轴位于底部互动工具栏上方，左右与 caption rail 对齐。
+- 暂停时轨道/当前位置提高到 `4dp/8dp`、控件 pinned，中央显示半透明播放按钮；拖动时提高到
+  `6dp/12dp`，上方显示“目标时间 / 有效总时长”和由服务端 `previewTrack` 提供的预览帧。
+  缺轨、能力不支持或预览失败时只降级为时间浮标，不能影响播放或显示播放失败 CTA。
+- 视频控制只能向 `VideoPlaybackSession` 发命令；页面、时间轴、分集浏览器不得直接持有或操作
+  `VideoPlayerController`。用户手动暂停优先于可见度、前后台和自动恢复。
 - 视频集状态显示为 `视频集 · 1/4 ↔` 胶囊，位于时间轴下方、标题上方；禁止用点状指示器表达视频集；单视频不显示该胶囊。
 - 视频集由契约 `mediaItems` 表达，禁止端侧按同作者从队列临时拼集合。
 

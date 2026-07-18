@@ -41,14 +41,38 @@
 7. **统一同步基线接口**：runtime media 相关变化必须能进入统一 `UserSyncStream`，支持 realtime hint + cursor 增量拉取
 8. **云厂商适配**：冻结 OSS / COS / 文件根目录 / tunnel origin 适配接口、bucket/prefix/slice 组织与 CDN 域名对外暴露规则
 9. **观测与治理基线**：冻结上传、重算、同步、签名 URL、回源失败等关键指标与降级原则
+10. **VOD 权威描述符**：冻结内容视频的服务器探测结果、asset/version 绑定、ready 发布门、
+    verified duration、编码/尺寸与公开 canonical slice；App 不将上传端或原生播放器观测值回写为权威元数据
+11. **Storyboard 派生预览**：冻结可选的、版本绑定且受访问策略约束的预览轨；只为播放拖动预览服务，
+    不形成端侧抽帧或通用视频编辑产品
 
 ### Out of Scope
 
 - 用户自定义上传群头像的产品能力
-- 媒体审核、转码、智能裁剪等独立媒体处理管线
+- 媒体审核、通用视频剪辑、特效、美颜、直播或端侧远端临时抽帧
 - WebRTC 实时音视频流本身
 - 全量记录媒体数据清洗与搬迁
 - 所有内容媒体能力的一次性重构；本次只冻结统一基线和群头像主场景
+
+### VOD 静态探测与预览边界
+
+内容视频的上传/导入完成后，`content-service` 负责提交一个幂等的媒体处理工作项；runtime-media
+只提供对象、交付、任务基础设施和治理能力，不承担 post 的发布决策。处理以
+`{assetId, assetVersion, processorProfile}` 去重，状态只允许：
+
+```text
+processing -> ready | rejected
+```
+
+`ready` 时一次性写入受信任结果：`verifiedDurationMs`、宽高、codec/container、canonical
+video/cover public slice 与可选 `previewTrack` manifest。Post 只能绑定 `ready` asset；
+`processing` 或 `rejected` asset 不得进入 Feed、详情或 WorkBrowser 投影。若旧人工
+`durationMs` 与探测值不一致，走受控修复/回填任务并产生数据质量事件，不能由 App 覆盖或静默
+双读。
+
+`previewTrack` 是可选派生物：manifest、帧索引、缓存 key 和 URL 都必须绑定
+asset/version/profile/access policy。track 缺失、能力不支持、网络慢、节流或内存不足时，
+播放控件只显示时间浮标，不影响正常播放，也不显示播放失败 CTA。
 
 ## 约束
 

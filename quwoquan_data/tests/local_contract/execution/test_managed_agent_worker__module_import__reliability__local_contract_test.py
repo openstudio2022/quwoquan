@@ -5,6 +5,7 @@ from pathlib import Path
 
 from content.execution.agent import agent_worker
 from content.execution.context import ExecutionContext
+from support.execution_manifest_fixture import ExecutionFixtureBuilder
 
 
 class _CompletedProcess:
@@ -32,7 +33,10 @@ def test_managed_agent_subprocess_imports_from_the_data_scripts_root(monkeypatch
     ctx = ExecutionContext(
         execution_id="20260715--travel-homepage-coverage--cn-zhejiang--canary-001",
         entity_ids=["普陀山"],
-        spec={},
+        spec=ExecutionFixtureBuilder(
+            "20260715--travel-homepage-coverage--cn-zhejiang--canary-001",
+            targets=({"name": "普陀山", "entityType": "地点/景区"},),
+        ).spec(),
         managed=True,
     )
 

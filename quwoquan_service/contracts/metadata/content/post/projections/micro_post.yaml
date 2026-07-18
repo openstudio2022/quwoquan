@@ -26,232 +26,142 @@ client_projection:
   dart_imports:
   - package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart
   fields:
-  - aliases:
-    - postId
-    - _id
-    dart_type: String
+  - dart_type: String
     default: ''''''
     name: id
     nullable: false
     source: postId
-  - aliases:
-    - contentType
-    - category
-    dart_type: String
+  - dart_type: String
     default: '''micro'''
     description: 内容类型轴（ContentType）；微趣帖固定为 micro
     name: type
     nullable: false
     source: contentType
-  - aliases:
-    - contentIdentity
-    - identity
-    dart_type: String
+  - dart_type: String
     default: '''moment'''
     name: identity
     nullable: false
     source: contentIdentity
-  - aliases:
-    - assistantUsePolicy
-    dart_type: String
+  - dart_type: String
     default: '''inherit'''
     name: assistantUsePolicy
     nullable: false
     source: assistantUsePolicy
-  - aliases:
-    - userId
-    - author_id
-    dart_type: String
+  - dart_type: String
     default: ''''''
     name: authorId
     nullable: false
     source: authorId
-  - aliases:
-    - authorNickname
-    - nickname
-    - username
-    - displayName
-    dart_type: String
+  - dart_type: String
     default: ''''''
     name: displayName
     nullable: false
-    source: authorNickname
-  - aliases:
-    - authorAvatarUrl
-    - avatarUrl
-    - avatar
-    dart_type: String
+    source: authorDisplayName
+  - dart_type: String
     default: ''''''
     name: avatarUrl
     nullable: false
     source: authorAvatarUrl
-  - aliases:
-    - authorBackgroundUrl
-    dart_type: String
+  - dart_type: String
     default: 'null'
     description: 作者主页背景图（反范式）；null 时 UI 显示默认渐变背景
     name: authorBackgroundUrl
     nullable: true
     source: authorBackgroundUrl
-  - aliases:
-    - authorRoleLabel
-    - roleLabel
-    - authorRole
-    dart_type: String
+  - dart_type: String
     default: ''''''
     description: 作者角色短标签（反范式），首页推荐卡顶部展示
     name: authorRoleLabel
     nullable: false
     source: authorRoleLabel
-  - aliases:
-    - authorIdentityTags
-    - identityTags
-    - authorTags
-    dart_type: List<String>
+  - dart_type: List<String>
     default: <String>[]
     description: 作者身份标签（反范式），首页推荐卡顶部最多展示 2 个
     name: authorIdentityTags
     nullable: false
     source: authorIdentityTags
-  - aliases:
-    - authorVerified
-    - verified
-    - isVerified
-    dart_type: bool
+  - dart_type: bool
     default: 'false'
     description: 作者认证标记（反范式），驱动卡片认证角标
     name: authorVerified
     nullable: false
     source: authorVerified
-  - aliases:
-    - body
-    - content
-    - text
-    - caption
-    dart_type: String
+  - dart_type: String
     default: ''''''
     description: 正文内容（必填，纯文字帖子此为唯一内容）
     name: body
     nullable: false
     source: body
-  - aliases:
-    - mediaUrls
-    - images
-    - imageUrls
-    - image_urls
-    dart_type: List<String>
+  - dart_type: List<String>
     default: <String>[]
     description: 图片列表（图文帖有值，纯文字/视频帖为空列表）
     name: imageUrls
     nullable: false
     source: mediaUrls
-  - aliases:
-    - videoUrl
-    - video_url
-    dart_type: String
+  - dart_type: String
     default: 'null'
     description: 短视频 URL（视频帖有值，其余为 null）
     name: videoUrl
     nullable: true
     source: videoUrl
-  - aliases:
-    - durationMs
-    - duration_ms
-    - duration
-    dart_type: int
+  - dart_type: int
     default: 'null'
     description: 短视频时长（毫秒），视频帖有值
     name: durationMs
     nullable: true
     source: durationMs
-  - aliases:
-    - likeCount
-    - likesCount
-    - likes
-    - like_count
-    dart_type: int
+  - dart_type: int
     default: '0'
     name: likeCount
     nullable: false
     source: likeCount
-  - aliases:
-    - commentCount
-    - commentsCount
-    - comments
-    - comment_count
-    dart_type: int
+  - dart_type: int
     default: '0'
     name: commentCount
     nullable: false
     source: commentCount
-  - aliases:
-    - shareCount
-    - shares
-    - share_count
-    dart_type: int
+  - dart_type: int
     default: '0'
     name: shareCount
     nullable: false
     source: shareCount
-  - aliases:
-    - createdAt
-    - created_at
-    dart_type: DateTime
+  - dart_type: DateTime
     default: DateTime(0)
     description: 创作时间（首次进入系统）。唯一源为 createdAt/created_at；不再以 publishedAt 借壳。
     name: createdAt
     nullable: false
     source: createdAt
-  - aliases:
-    - updatedAt
-    - updated_at
-    dart_type: DateTime
+  - dart_type: DateTime
     default: 'null'
     description: 最后实质更新时间；与 createdAt 相等或更早时 UI 只显示创作时间，更晚时显示创作+更新。
     name: updatedAt
     nullable: true
     source: updatedAt
-  - aliases:
-    - publishedAt
-    - published_at
-    dart_type: DateTime
+  - dart_type: DateTime
     default: 'null'
     description: 首次公开时间（仅首次发布置位）。
     name: publishedAt
     nullable: true
     source: publishedAt
-  - aliases:
-    - contentVertical
-    - categoryId
-    - category
-    - vertical
-    dart_type: String
+  - dart_type: String
     default: 'null'
     description: 推荐垂类归一结果；端侧行为上报透传，不参与 UI 展示。
     name: contentVertical
     nullable: true
     source: contentVertical
-  - aliases:
-    - recallPath
-    - recall_path
-    dart_type: String
+  - dart_type: String
     default: 'null'
     description: 推荐召回路径；端侧行为上报透传，不参与 UI 展示。
     name: recallPath
     nullable: true
     source: recallPath
-  - aliases:
-    - supplySource
-    - supply_source
-    dart_type: String
+  - dart_type: String
     default: 'null'
     description: 内容供给来源；端侧行为上报透传，不参与 UI 展示。
     name: supplySource
     nullable: true
     source: supplySource
-  - aliases:
-    - intersectionReasons
-    dart_type: List<IntersectionReason>
+  - dart_type: List<IntersectionReason>
     default: 'null'
     description: 交集理由（云侧推荐管线预生成；端只读展示，无来源时为 null）
     list_element_dart_class: IntersectionReason
@@ -281,7 +191,7 @@ fields:
 - name: authorId
   type: string
 - description: 作者昵称（反范式）
-  name: authorNickname
+  name: authorDisplayName
   type: string
 - description: 作者头像（反范式）
   name: authorAvatarUrl
@@ -341,4 +251,3 @@ read_model: MicroPost
 source_entities:
 - Post
 storage_backend: mongodb
-version: 1

@@ -68,7 +68,7 @@ const (
 
 // CircleGroup domain model.
 type CircleGroup struct {
-	ID                   string                `json:"_id" bson:"_id"`
+	ID                   string                `json:"id" bson:"_id"`
 	Version              int64                 `json:"version" bson:"version"`
 	CircleID             string                `json:"circleId" bson:"circleId"`
 	ParentGroupID        string                `json:"parentGroupId" bson:"parentGroupId"`

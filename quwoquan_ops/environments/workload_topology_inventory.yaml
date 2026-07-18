@@ -43,7 +43,7 @@ workloads:
       - quwoquan_ops/environments/kustomization/huaweicloud-prod
     wired_to_prod_root: true
     required_primitives: [Deployment, Service, HorizontalPodAutoscaler, PodDisruptionBudget]
-    notes: Go Modular Monolith 发布单元；逻辑独立靠 /v1/<domain>/* 路由 + service.name + 配置段。
+    notes: Go Modular Monolith 发布单元；逻辑独立靠 /<domain>/* 路由 + service.name + 配置段。
 
   - name: recommendation-service
     plane: application
@@ -119,39 +119,39 @@ workloads:
 split_candidates:
   - domain: content
     parent: seed-box
-    route_prefix: /v1/content/
+    route_prefix: /content/
     invariant_service_dns: 保持对外 Service/route 不变
   - domain: chat
     parent: seed-box
-    route_prefix: /v1/chat/
+    route_prefix: /chat/
     invariant_service_dns: 保持对外 Service/route 不变
   - domain: user
     parent: seed-box
-    route_prefix: /v1/user/
+    route_prefix: /user/
     invariant_service_dns: 保持对外 Service/route 不变
   - domain: circle
     parent: seed-box
-    route_prefix: /v1/circles/
+    route_prefix: /circles/
     invariant_service_dns: 保持对外 Service/route 不变
   - domain: integration
     parent: seed-box
-    route_prefix: /v1/integration/location/
+    route_prefix: /integration/location/
     invariant_service_dns: 保持对外 Service/route 不变
   - domain: notification
     parent: seed-box
-    route_prefix: /v1/app-messages/
+    route_prefix: /app-messages/
     invariant_service_dns: 保持对外 Service/route 不变
   - domain: entity
     parent: seed-box
-    route_prefix: /v1/homepages/
+    route_prefix: /homepages/
     invariant_service_dns: 保持对外 Service/route 不变
   - domain: tag
     parent: seed-box
-    route_prefix: /v1/tag/
+    route_prefix: /tag/
     invariant_service_dns: 保持对外 Service/route 不变
   - domain: assistant
     parent: seed-box
-    route_prefix: /v1/assistant/
+    route_prefix: /assistant/
     invariant_service_dns: 保持对外 Service/route 不变
 
 # 外部基础设施能力不是业务 domain，不进入 ContractGraph domain/process/module 闭包。

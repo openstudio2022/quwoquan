@@ -1,5 +1,4 @@
 {
-  "schemaVersion": "quwoquan_data.gate_goldenset/1",
   "description": "好稿/坏稿标注集，用于标定语义门阈值并度量拦截率/误杀率。label=bad 期望被任一门拦截，label=good 期望全门放行。",
   "items": [
     {
@@ -9,8 +8,16 @@
       "meta": {
         "writingIntent": "planning_consultation",
         "carrier": "article",
-        "assets": [{ "assetId": "g_road" }],
-        "bannedRegisterTerms": ["看展", "展厅", "展陈"]
+        "assets": [
+          {
+            "assetId": "g_road"
+          }
+        ],
+        "bannedRegisterTerms": [
+          "看展",
+          "展厅",
+          "展陈"
+        ]
       }
     },
     {
@@ -20,57 +27,102 @@
       "meta": {
         "writingIntent": "decision_experience",
         "carrier": "article",
-        "assets": [{ "assetId": "g_dusk" }],
-        "bannedRegisterTerms": ["看展", "展厅", "展陈"]
+        "assets": [
+          {
+            "assetId": "g_dusk"
+          }
+        ],
+        "bannedRegisterTerms": [
+          "看展",
+          "展厅",
+          "展陈"
+        ]
       }
     },
     {
       "file": "bad_template_a.md",
       "label": "bad",
       "category": "template_skeleton",
-      "expectGates": ["skeletonSimilarity", "semanticDuplicate"],
-      "meta": { "writingIntent": "post_trip_journal", "carrier": "article", "assets": [] }
+      "expectGates": [
+        "skeletonSimilarity",
+        "semanticDuplicate"
+      ],
+      "meta": {
+        "writingIntent": "post_trip_journal",
+        "carrier": "article",
+        "assets": []
+      }
     },
     {
       "file": "bad_template_b.md",
       "label": "bad",
       "category": "template_skeleton",
-      "expectGates": ["skeletonSimilarity", "semanticDuplicate"],
-      "meta": { "writingIntent": "post_trip_journal", "carrier": "article", "assets": [] }
+      "expectGates": [
+        "skeletonSimilarity",
+        "semanticDuplicate"
+      ],
+      "meta": {
+        "writingIntent": "post_trip_journal",
+        "carrier": "article",
+        "assets": []
+      }
     },
     {
       "file": "bad_register.md",
       "label": "bad",
       "category": "register_mismatch",
-      "expectGates": ["registerMismatch"],
+      "expectGates": [
+        "registerMismatch"
+      ],
       "meta": {
         "writingIntent": "planning_consultation",
         "carrier": "article",
-        "assets": [{ "assetId": "r_grass" }],
-        "bannedRegisterTerms": ["看展", "展厅", "展陈"]
+        "assets": [
+          {
+            "assetId": "r_grass"
+          }
+        ],
+        "bannedRegisterTerms": [
+          "看展",
+          "展厅",
+          "展陈"
+        ]
       }
     },
     {
       "file": "bad_no_image.md",
       "label": "bad",
       "category": "image_closure",
-      "expectGates": ["imageReferenceClosure"],
+      "expectGates": [
+        "imageReferenceClosure"
+      ],
       "meta": {
         "writingIntent": "planning_consultation",
         "carrier": "article",
-        "assets": [{ "assetId": "n_img" }]
+        "assets": [
+          {
+            "assetId": "n_img"
+          }
+        ]
       }
     },
     {
       "file": "bad_intent_mismatch.md",
       "label": "bad",
       "category": "intent_mismatch",
-      "expectGates": ["writingIntentConsistency"],
+      "expectGates": [
+        "writingIntentConsistency"
+      ],
       "meta": {
         "writingIntent": "planning_consultation",
         "carrier": "article",
-        "assets": [{ "assetId": "m_snow" }]
+        "assets": [
+          {
+            "assetId": "m_snow"
+          }
+        ]
       }
     }
-  ]
+  ],
+  "schema": "quwoquan_data.gate_goldenset"
 }

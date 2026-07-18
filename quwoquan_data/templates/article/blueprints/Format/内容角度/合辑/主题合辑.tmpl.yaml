@@ -1,5 +1,4 @@
 templateId: 校园_主题合辑
-version: 1
 subject: { kind: topic, type: 教育成长/合辑, minEntityRefs: 3, subjectTagRef: Topic/教育成长/校园生活 }
 vertical: campus
 category: life

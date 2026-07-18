@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import hashlib
 import sys
+from types import SimpleNamespace
 from argparse import Namespace
 from pathlib import Path
 
@@ -14,8 +15,10 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 from core.release_layout import payload_digest, payload_file  # noqa: E402
+from core.source_digest import current_source_digest  # noqa: E402
 from content.release.canonical import handler  # noqa: E402
-from content.release.canonical.object_transaction import build_aggregate_release  # noqa: E402
+from content.release.canonical import aggregate_release as aggregate_module  # noqa: E402
+from content.release.canonical.aggregate_release import build_aggregate_release  # noqa: E402
 
 
 EXECUTION_ID = "20260713--travel-homepage-coverage--cn-zhejiang--canary-901"
@@ -41,7 +44,22 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str, str]:
     publish_root = tmp_path / "publish"
     execution_root = tmp_path / EXECUTION_ID
     release_root = tmp_path / "releases"
-    _write_json(execution_root / "execution_manifest.json", {"executionId": EXECUTION_ID})
+    _write_json(
+        execution_root / "execution_manifest.json",
+        {
+            "executionId": EXECUTION_ID,
+            "sourceDigest": current_source_digest().to_document(),
+        },
+    )
+    _write_json(
+        execution_root / "publish_ref.json",
+        {
+            "schema": "quwoquan_data.execution_publish_ref",
+            "executionId": EXECUTION_ID,
+            "canonicalPublishRoot": "quwoquan_data/publish",
+            "publishedRefs": {"entities": ["地点/景区/普陀山"], "posts": []},
+        },
+    )
     _write_json(
         execution_root / "entities/地点/景区/普陀山/5.review/attestation.json",
         {
@@ -52,9 +70,27 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str, str]:
     )
     selected_key, selected_asset = _write_cas(publish_root, b"putuo-release-asset")
     unrelated_key, unrelated_asset = _write_cas(publish_root, b"unrelated-canonical-asset")
-    _write_json(publish_root / "entities/地点/景区/普陀山/manifest.json", {"assets": []})
+    entity_root = publish_root / "entities/地点/景区/普陀山"
     _write_json(
-        publish_root / "entities/地点/景区/普陀山/tag.refs.json",
+        entity_root / "manifest.json",
+        {
+            "finalContentRef": "page.md",
+            "sourceCatalogRef": "source_catalog.json",
+            "rightsRef": "rights.json",
+            "creatorRefsRef": "creator.refs.json",
+            "tagRefsRef": "tag.refs.json",
+            "assetRefsRef": "asset.refs.json",
+        },
+    )
+    (entity_root / "page.md").write_text("# 普陀山\n", encoding="utf-8")
+    _write_json(entity_root / "source_catalog.json", {"sources": []})
+    _write_json(entity_root / "rights.json", {"assets": []})
+    _write_json(
+        entity_root / "creator.refs.json",
+        {"creatorRefs": []},
+    )
+    _write_json(
+        entity_root / "tag.refs.json",
         {"tagRefs": [TAG_REF]},
     )
     _write_json(
@@ -67,10 +103,14 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str, str]:
         },
     )
     _write_json(
-        publish_root / "entities/地点/景区/普陀山/asset.refs.json",
+        entity_root / "asset.refs.json",
         {"assets": [selected_asset]},
     )
     _write_json(publish_root / "entities/地点/景区/其他/manifest.json", {"assets": []})
+    _write_json(
+        publish_root / "entities/地点/景区/其他/creator.refs.json",
+        {"creatorRefs": []},
+    )
     _write_json(
         publish_root / "entities/地点/景区/其他/tag.refs.json",
         {"tagRefs": [TAG_REF]},
@@ -103,14 +143,25 @@ def test_aggregate_release__payload_layout__contract__local_contract(tmp_path: P
     assert desired["desiredRefs"]["tags"] == [TAG_REF]
     media = json.loads(payload_file(release, "media_manifest.json").read_text(encoding="utf-8"))
     assert [item["objectKey"] for item in media["assets"]] == [selected_key]
+    assert payload_file(release, selected_key).is_file()
     assert unrelated_key not in {item["objectKey"] for item in media["assets"]}
     aggregate = json.loads((release / "attestations/aggregate.json").read_text(encoding="utf-8"))
     assert aggregate["payloadSha256"] == payload_digest(release)
+    assert aggregate["sourceDigest"] == current_source_digest().to_document()
     assert aggregate["rolloutMilestone"] == "canary"
+    assert aggregate["postCount"] == 0
+    assert aggregate["creatorCount"] == 0
     header = json.loads(payload_file(release, "release.json").read_text(encoding="utf-8"))
     assert header["rolloutMilestone"] == "canary"
+    assert header["sourceDigest"] == current_source_digest().to_document()
     assert not (release / "release.json").exists()
     assert not (release / "desired_state.json").exists()
+
+    later = publish_root / "entities/地点/景区/后续对象"
+    _write_json(later / "manifest.json", {"schema": "quwoquan_data.entity_manifest"})
+    _write_json(later / "creator.refs.json", {"creatorRefs": []})
+    _write_json(later / "tag.refs.json", {"tagRefs": []})
+    _write_json(later / "asset.refs.json", {"assets": []})
 
     rerun = build_aggregate_release(
         publish_root=publish_root,
@@ -151,3 +202,146 @@ def test_release_aggregate_handler__execution_ids__contract__local_contract(
     assert captured["execution_roots"] == [tmp_path / "tasks" / item for item in execution_ids]
     assert captured["rollout_milestone"] == "canary"
     assert json.loads(capsys.readouterr().out)["releaseId"] == RELEASE_ID
+
+
+def test_launch_release__complete_object_closure__contract__local_contract(
+    tmp_path: Path, monkeypatch
+) -> None:
+    publish_root = tmp_path / "publish"
+    release_root = tmp_path / "releases"
+    entity_ref = "地点/景区/普陀山"
+    creator_ref = "qwq_creator_travel_blogger_001"
+    for relative in ("creators", "entities", "posts", "tags", "media/objects"):
+        (publish_root / relative).mkdir(parents=True, exist_ok=True)
+    entity_root = publish_root / "entities" / entity_ref
+    _write_json(
+        entity_root / "manifest.json",
+        {
+            "schema": "quwoquan_data.entity_manifest",
+            "finalContentRef": "page.md",
+            "sourceCatalogRef": "source_catalog.json",
+            "rightsRef": "rights.json",
+            "creatorRefsRef": "creator.refs.json",
+            "tagRefsRef": "tag.refs.json",
+            "assetRefsRef": "asset.refs.json",
+        },
+    )
+    (entity_root / "page.md").write_text("# 普陀山\n", encoding="utf-8")
+    _write_json(entity_root / "source_catalog.json", {"sources": []})
+    _write_json(entity_root / "rights.json", {"assets": []})
+    _write_json(entity_root / "creator.refs.json", {"creatorRefs": []})
+    _write_json(entity_root / "tag.refs.json", {"tagRefs": []})
+    _write_json(entity_root / "asset.refs.json", {"assets": []})
+    creator_root = publish_root / "creators" / creator_ref
+    _write_json(
+        creator_root / "_creator.json",
+        {
+            "schema": "quwoquan_data.creator_object",
+            "creatorId": creator_ref,
+            "profileRef": "profile.json",
+            "assetsRef": "assets.refs.json",
+            "worksRefsRef": "works.refs.ndjson",
+            "tagRefs": [],
+            "entityRefs": [],
+        },
+    )
+    _write_json(creator_root / "profile.json", {"userId": creator_ref})
+    _write_json(creator_root / "assets.refs.json", {"assets": []})
+    (creator_root / "works.refs.ndjson").write_text("", encoding="utf-8")
+
+    executions: list[Path] = []
+
+    def add_execution(execution_id: str, *, entities: list[str], posts: list[str]) -> None:
+        root = tmp_path / "tasks" / execution_id
+        _write_json(
+            root / "execution_manifest.json",
+            {
+                "executionId": execution_id,
+                "sourceDigest": current_source_digest().to_document(),
+            },
+        )
+        _write_json(
+            root / "publish_ref.json",
+            {
+                "schema": "quwoquan_data.execution_publish_ref",
+                "executionId": execution_id,
+                "canonicalPublishRoot": "quwoquan_data/publish",
+                "publishedRefs": {"entities": entities, "posts": posts},
+            },
+        )
+        executions.append(root)
+
+    add_execution(
+        "20260718--travel-homepage-coverage--cn-zhejiang--m3-901",
+        entities=[entity_ref],
+        posts=[],
+    )
+    for content_type, suffix in (("article", "guide"), ("image", "gallery"), ("video", "short")):
+        post_ref = f"{content_type}/普陀山/{suffix}"
+        post_root = publish_root / "posts" / post_ref
+        object_key, asset = _write_cas(
+            publish_root,
+            f"{content_type}-asset".encode("utf-8"),
+        )
+        _write_json(
+            post_root / "manifest.json",
+            {
+                "schema": "quwoquan_data.post_manifest",
+                "contentType": content_type,
+                "creatorProfileId": creator_ref,
+                "finalContentRef": "content.md",
+                "sourceCatalogRef": "source_catalog.json",
+                "rightsRef": "rights.json",
+                "creatorRefsRef": "creator.refs.json",
+                "tagRefsRef": "tag.refs.json",
+                "assetRefsRef": "asset.refs.json",
+            },
+        )
+        (post_root / "content.md").write_text(f"# {content_type}\n", encoding="utf-8")
+        _write_json(post_root / "source_catalog.json", {"sources": []})
+        _write_json(post_root / "rights.json", {"assets": []})
+        _write_json(post_root / "creator.refs.json", {"creatorRefs": [creator_ref]})
+        _write_json(post_root / "tag.refs.json", {"tagRefs": []})
+        _write_json(post_root / "asset.refs.json", {"assets": [asset]})
+        add_execution(
+            f"20260718--travel-{content_type}-cold-start--cn-zhejiang--m3-90{len(executions) + 1}",
+            entities=[],
+            posts=[post_ref],
+        )
+        assert (publish_root / object_key).is_file()
+
+    policy = SimpleNamespace(
+        expected_post_count=3,
+        targets=(SimpleNamespace(name="普陀山"),),
+        content_mix=SimpleNamespace(article=1, image=1, video=1),
+    )
+    monkeypatch.setattr(
+        aggregate_module,
+        "expected_entity_refs",
+        lambda: {"浙江省": {entity_ref}, "四川省": set()},
+    )
+    monkeypatch.setattr(aggregate_module, "load_cold_start_supply_policy", lambda: policy)
+
+    result = build_aggregate_release(
+        publish_root=publish_root,
+        release_root=release_root,
+        release_id="20260718--travel-cold-start-launch--cn-zhejiang-sichuan--launch-001",
+        execution_roots=executions,
+        rollout_milestone="launch",
+    )
+
+    release = release_root / result["releaseId"]
+    desired = json.loads(payload_file(release, "desired_state.json").read_text(encoding="utf-8"))
+    assert desired["desiredRefs"] == {
+        "creators": [creator_ref],
+        "entities": [entity_ref],
+        "posts": [
+            "article/普陀山/guide",
+            "image/普陀山/gallery",
+            "video/普陀山/short",
+        ],
+        "tags": [],
+    }
+    assert payload_file(release, f"objects/creators/{creator_ref}/_creator.json").is_file()
+    assert result["postCount"] == 3
+    assert result["creatorCount"] == 1

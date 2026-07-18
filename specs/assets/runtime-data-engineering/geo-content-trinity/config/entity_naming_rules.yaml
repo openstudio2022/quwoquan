@@ -1,4 +1,4 @@
-schemaVersion: quwoquan_data.entity_naming_rules
+schema: quwoquan_data.entity_naming_rules
 version: 2
 display:
   labelZhRequiredByDefault: true

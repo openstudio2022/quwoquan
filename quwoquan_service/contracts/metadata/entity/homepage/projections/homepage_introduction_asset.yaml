@@ -1,4 +1,3 @@
-version: 1
 read_model: HomepageIntroductionAsset
 
 description: |
@@ -22,25 +21,20 @@ client_projection:
       dart_type: String
       nullable: false
       source: assetId
-      aliases: [assetId, id]
       default: "''"
 
     - name: url
       dart_type: String
       nullable: false
       source: url
-      aliases: [url, imageUrl]
       default: "''"
 
     - name: caption
       dart_type: String
       nullable: true
       source: caption
-      aliases: [caption]
-
     - name: role
       dart_type: String
       nullable: false
       source: role
-      aliases: [role, assetRole]
       default: "'related'"

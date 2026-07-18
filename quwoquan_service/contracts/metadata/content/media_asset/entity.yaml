@@ -1,4 +1,3 @@
-version: 1
 domain: content
 entity: MediaAsset
 object_kind: aggregate_root
@@ -17,7 +16,7 @@ business_rules:
   - sourceSessionId 只能绑定一个完成且摘要一致的 MediaUploadSession
   - objectKey 与 sha256 创建后不可变，重复完成按摘要幂等返回同一资产
   - processing -> ready|rejected 只能由受信处理结果命令推进
-  - accessPolicy 变更必须校验 owner persona 与 expectedVersion
+  - accessPolicy 变更必须校验 owner persona，并以服务端内部 version CAS 提交
   - deleted 资产不再被新 Post、Comment 或 Message 引用
 
 lifecycle:

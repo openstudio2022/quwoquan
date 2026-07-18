@@ -53,7 +53,6 @@
   "fakeDeviceContext": {},
   "expectedStreamEvents": [
     {
-      "schemaVersion": "assistant_stream_event.m5",
       "eventId": "evt_action_001",
       "conversationId": "acv_replay_action",
       "turnId": "atn_replay_action",
@@ -63,10 +62,10 @@
       "payload": {
         "status": "running"
       },
-      "createdAt": "2026-04-29T00:03:00Z"
+      "createdAt": "2026-04-29T00:03:00Z",
+      "schema": "assistant_stream_event"
     },
     {
-      "schemaVersion": "assistant_stream_event.m5",
       "eventId": "evt_action_002",
       "conversationId": "acv_replay_action",
       "turnId": "atn_replay_action",
@@ -76,10 +75,10 @@
       "payload": {
         "toolName": "app_action"
       },
-      "createdAt": "2026-04-29T00:03:01Z"
+      "createdAt": "2026-04-29T00:03:01Z",
+      "schema": "assistant_stream_event"
     },
     {
-      "schemaVersion": "assistant_stream_event.m5",
       "eventId": "evt_action_003",
       "conversationId": "acv_replay_action",
       "turnId": "atn_replay_action",
@@ -89,10 +88,10 @@
       "payload": {
         "toolName": "app_action"
       },
-      "createdAt": "2026-04-29T00:03:02Z"
+      "createdAt": "2026-04-29T00:03:02Z",
+      "schema": "assistant_stream_event"
     },
     {
-      "schemaVersion": "assistant_stream_event.m5",
       "eventId": "evt_action_004",
       "conversationId": "acv_replay_action",
       "turnId": "atn_replay_action",
@@ -102,7 +101,8 @@
       "payload": {
         "text": "I prepared an action proposal. Please confirm before the app opens the page."
       },
-      "createdAt": "2026-04-29T00:03:03Z"
+      "createdAt": "2026-04-29T00:03:03Z",
+      "schema": "assistant_stream_event"
     }
   ],
   "expectedTraceEvents": [],

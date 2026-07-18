@@ -139,34 +139,39 @@ def _assert_import_and_api(
         or any(not isinstance(value, str) or not value.strip() for value in mapping.values())
     ):
         raise TwoProvinceEnvironmentClosureError("homepage importer receipt does not exactly close the two-province release")
-    cases_path = import_root / "app_uat_cases.json"
-    if import_result.get("appUatCasesRef") != _output_ref(cases_path):
-        raise TwoProvinceEnvironmentClosureError("Gamma import result does not bind app_uat_cases.json")
-    cases = _read_object(cases_path, label="Gamma App UAT cases")
-    _assert_schema(cases, "release", "gamma_app_uat_case_manifest", label="Gamma App UAT cases")
+    cases_path = import_root / "homepage_verification_cases.json"
+    if import_result.get("homepageVerificationCasesRef") != _output_ref(cases_path):
+        raise TwoProvinceEnvironmentClosureError("Gamma import result does not bind homepage verification cases")
+    cases = _read_object(cases_path, label="Gamma homepage verification cases")
+    _assert_schema(
+        cases,
+        "release",
+        "homepage_verification_case_manifest",
+        label="Gamma homepage verification cases",
+    )
     case_rows = cases.get("cases")
     if not isinstance(case_rows, list):
-        raise TwoProvinceEnvironmentClosureError("Gamma App UAT cases must contain a cases array")
+        raise TwoProvinceEnvironmentClosureError("Gamma homepage verification cases must contain a cases array")
     case_mapping = {
         str(row.get("entityRef") or "").strip(): str(row.get("homepageId") or "").strip()
         for row in case_rows if isinstance(row, Mapping)
     }
     if cases.get("releaseId") != release_id or case_mapping != {str(key): str(value) for key, value in mapping.items()}:
-        raise TwoProvinceEnvironmentClosureError("Gamma App UAT cases drift from homepage importer identity mapping")
+        raise TwoProvinceEnvironmentClosureError("Gamma homepage verification cases drift from homepage importer identity mapping")
 
     api_root = _run_root(release_id, api_run_id)
-    api_result = _assert_completed_run(api_root, release_id=release_id, kind="homepage_api_verification")
+    api_result = _assert_completed_run(api_root, release_id=release_id, kind="verify")
     api_path = api_root / "homepage-api-verification.json"
     if api_result.get("homepageApiVerificationRef") != _output_ref(api_path):
         raise TwoProvinceEnvironmentClosureError("Gamma API verification run does not bind its report")
     api = _read_object(api_path, label="Gamma homepage API verification")
-    _assert_schema(api, "release", "gamma_homepage_api_verification", label="Gamma homepage API verification")
+    _assert_schema(api, "release", "homepage_api_verification", label="Gamma homepage API verification")
     api_mapping = {
         str(row.get("entityRef") or "").strip(): str(row.get("homepageId") or "").strip()
         for row in api.get("entities", []) if isinstance(row, Mapping)
     }
-    if api.get("releaseId") != release_id or api.get("sourceUatCasesRef") != _output_ref(cases_path) or api_mapping != case_mapping:
-        raise TwoProvinceEnvironmentClosureError("Gamma API verification drift from importer/App UAT identities")
+    if api.get("releaseId") != release_id or api.get("sourceCasesRef") != _output_ref(cases_path) or api_mapping != case_mapping:
+        raise TwoProvinceEnvironmentClosureError("Gamma API verification drift from importer identities")
     return import_root / "homepage-import.json", cases_path, api_path
 
 
@@ -246,13 +251,13 @@ def environment_attestation_issues(
         if kind == "importer_api":
             refs = _single_evidence_ref(payload, kind=kind, count=3)
             importer_path = next((path for path in refs if path.name == "homepage-import.json"), None)
-            cases_path = next((path for path in refs if path.name == "app_uat_cases.json"), None)
+            cases_path = next((path for path in refs if path.name == "homepage_verification_cases.json"), None)
             api_path = next((path for path in refs if path.name == "homepage-api-verification.json"), None)
             if importer_path is None or cases_path is None or api_path is None:
                 raise TwoProvinceEnvironmentClosureError("importer_api attestation has invalid evidence roles")
             import_run_id = _data_release_run_id(importer_path, release_id=release_id, filename="homepage-import.json")
-            if _data_release_run_id(cases_path, release_id=release_id, filename="app_uat_cases.json") != import_run_id:
-                raise TwoProvinceEnvironmentClosureError("Gamma App UAT cases are not in the importer run")
+            if _data_release_run_id(cases_path, release_id=release_id, filename="homepage_verification_cases.json") != import_run_id:
+                raise TwoProvinceEnvironmentClosureError("Gamma homepage verification cases are not in the importer run")
             api_run_id = _data_release_run_id(api_path, release_id=release_id, filename="homepage-api-verification.json")
             resolved = _assert_import_and_api(
                 release_root=release_root,
@@ -266,7 +271,7 @@ def environment_attestation_issues(
             (app_report,) = _single_evidence_ref(payload, kind=kind, count=1)
             cases_ref = _read_object(app_report, label="Gamma App UAT report").get("releaseUatCasesPath")
             cases_path = _path_from_output_ref(cases_ref, label="Gamma App UAT cases reference")
-            _data_release_run_id(cases_path, release_id=release_id, filename="app_uat_cases.json")
+            _data_release_run_id(cases_path, release_id=release_id, filename="homepage_verification_cases.json")
             _assert_app_uat(app_report, case_manifest=cases_path, release_id=release_id)
         elif kind == "rollback_replay":
             rollback_target = str(payload.get("rollbackTargetReleaseId") or "").strip()
@@ -323,7 +328,7 @@ def build_environment_attestations(
         replay_run_id=replay_run_id,
     )
     common = {
-        "schemaVersion": "quwoquan_data.two_province_release_attestation/1",
+        "schema": "quwoquan_data.two_province_release_attestation",
         "releaseId": release_id,
         "payloadSha256": payload_digest(release_root),
         "passed": True,

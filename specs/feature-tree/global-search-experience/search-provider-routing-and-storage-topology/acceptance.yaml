@@ -7,7 +7,7 @@ node:
   parent_domain_service: global-search-experience
   parent_business_capability: search-provider-routing-and-storage-topology
 scope:
-  summary: search provider routing and storage topology 验收范围，覆盖 canonical /v1/search、两阶段执行策略、ES/OpenSearch
+  summary: search provider routing and storage topology 验收范围，覆盖 canonical /search、两阶段执行策略、ES/OpenSearch
     派生读库、搜索准确性/可重复性、搜索词热力推荐闭环与发布准出。
   in_scope:
   - canonical search(request) tool-facing contract。

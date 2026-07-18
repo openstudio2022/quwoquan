@@ -1,4 +1,3 @@
-version: 1
 read_model: EntityImpactSummary
 description: |
   实体（共享主页）影响摘要（GetEntityImpact 响应真相源）。
@@ -20,17 +19,14 @@ client_projection:
       dart_type: String
       nullable: false
       source: homepageId
-      aliases: [homepageId]
       default: "''"
     - name: total
       dart_type: int
       nullable: false
       source: total
-      aliases: [total]
       default: "0"
     - name: items
       dart_type: List<EntityImpactItem>
       nullable: false
       source: items
-      aliases: [items]
       list_element_dart_class: EntityImpactItem

@@ -50,7 +50,7 @@ class ObjectIntersectionCard extends StatefulWidget {
   final List<IntersectionReason> reasons;
   final bool isDark;
 
-  /// 默认就地展开的证据组行数（真相源为 /v1/config/app，调用方传入）。
+  /// 默认就地展开的证据组行数（真相源为 /config/app，调用方传入）。
   final int inlineExpandCount;
 
   /// 「全部交集」入口文案；为空则不展示更多入口。

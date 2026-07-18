@@ -38,7 +38,7 @@ func TestConsentRoutesRequireVerifiedAccountAndIgnoreForgedHeader(t *testing.T) 
 
 	forged := httptest.NewRequest(
 		http.MethodPost,
-		"/v1/assistant/skills/personal_content_access/consent",
+		"/assistant/skills/personal_content_access/consent",
 		strings.NewReader(`{"grantedScope":"read_own_content"}`),
 	)
 	forged.Header.Set("X-Client-User-Id", "forged-account")
@@ -50,7 +50,7 @@ func TestConsentRoutesRequireVerifiedAccountAndIgnoreForgedHeader(t *testing.T) 
 
 	verified := httptest.NewRequest(
 		http.MethodPost,
-		"/v1/assistant/skills/personal_content_access/consent",
+		"/assistant/skills/personal_content_access/consent",
 		strings.NewReader(`{"grantedScope":"read_own_content"}`),
 	)
 	verified.Header.Set("X-Client-User-Id", "forged-account")
@@ -101,7 +101,7 @@ func TestHandleReportInteractionEvent_BatchWrapperAndHeaders(t *testing.T) {
 		},
 	}
 	payload, _ := json.Marshal(body)
-	req := httptest.NewRequest(http.MethodPost, "/v1/assistant/learning/events", bytes.NewReader(payload))
+	req := httptest.NewRequest(http.MethodPost, "/assistant/learning/events", bytes.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Client-User-Id", "user_1")
 	req.Header.Set("X-Client-Session-Id", "session_1")
@@ -155,7 +155,7 @@ func TestHandleReportScorecard_BatchWrapper(t *testing.T) {
 		},
 	}
 	payload, _ := json.Marshal(body)
-	req := httptest.NewRequest(http.MethodPost, "/v1/assistant/learning/scorecards", bytes.NewReader(payload))
+	req := httptest.NewRequest(http.MethodPost, "/assistant/learning/scorecards", bytes.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -194,7 +194,7 @@ func TestHandleGetLearningOpsSummary(t *testing.T) {
 		t.Fatalf("ReportInteractionEvents error: %v", err)
 	}
 	handler := NewHandler(service).Routes()
-	req := httptest.NewRequest(http.MethodGet, "/v1/assistant/ops/learning-summary", nil)
+	req := httptest.NewRequest(http.MethodGet, "/assistant/ops/learning-summary", nil)
 	req.Header.Set("X-Client-User-Id", "user_http_1")
 	w := httptest.NewRecorder()
 
@@ -222,11 +222,11 @@ func TestAssistantDoesNotExposeNotificationRoutes(t *testing.T) {
 		method string
 		path   string
 	}{
-		{http.MethodPost, "/v1/app-messages"},
-		{http.MethodGet, "/v1/app-messages"},
-		{http.MethodGet, "/v1/app-messages/unread-count"},
-		{http.MethodGet, "/v1/app-messages/stream"},
-		{http.MethodPost, "/v1/app-messages/message-1/read"},
+		{http.MethodPost, "/app-messages"},
+		{http.MethodGet, "/app-messages"},
+		{http.MethodGet, "/app-messages/unread-count"},
+		{http.MethodGet, "/app-messages/stream"},
+		{http.MethodPost, "/app-messages/message-1/read"},
 	} {
 		response := httptest.NewRecorder()
 		handler.ServeHTTP(response, httptest.NewRequest(route.method, route.path, nil))
@@ -255,7 +255,7 @@ func TestHandleSuggestCreationAssistance(t *testing.T) {
 		"bodyDigest":        "峨眉山旅行路线和摄影点整理",
 		"primaryHomepageId": "homepage_sight_emeishan",
 	})
-	req := httptest.NewRequest(http.MethodPost, "/v1/assistant/skills/creation-suggest", bytes.NewReader(payload))
+	req := httptest.NewRequest(http.MethodPost, "/assistant/skills/creation-suggest", bytes.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Client-User-Id", "user_creation")
 	w := httptest.NewRecorder()
@@ -294,7 +294,7 @@ func TestHandleTickIntersectionReminders(t *testing.T) {
 	)
 	handler := NewHandler(service).Routes()
 	payload, _ := json.Marshal(map[string]any{"userId": "user_http_intersection"})
-	req := httptest.NewRequest(http.MethodPost, "/v1/assistant/intersections/reminders/tick", bytes.NewReader(payload))
+	req := httptest.NewRequest(http.MethodPost, "/assistant/intersections/reminders/tick", bytes.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -341,7 +341,7 @@ func TestHandleSkillSubscriptionLifecycleAndCronTick(t *testing.T) {
 			"cron": "0 8 * * *",
 		},
 	})
-	createReq := httptest.NewRequest(http.MethodPost, "/v1/assistant/skill-subscriptions", bytes.NewReader(payload))
+	createReq := httptest.NewRequest(http.MethodPost, "/assistant/skill-subscriptions", bytes.NewReader(payload))
 	createReq.Header.Set("Content-Type", "application/json")
 	createReq.Header.Set("X-Client-User-Id", "user_sub_1")
 	createResp := httptest.NewRecorder()
@@ -359,7 +359,7 @@ func TestHandleSkillSubscriptionLifecycleAndCronTick(t *testing.T) {
 	}
 
 	statusPayload, _ := json.Marshal(map[string]any{"status": "paused"})
-	statusReq := httptest.NewRequest(http.MethodPatch, "/v1/assistant/skill-subscriptions/"+subscriptionID+"/status", bytes.NewReader(statusPayload))
+	statusReq := httptest.NewRequest(http.MethodPatch, "/assistant/skill-subscriptions/"+subscriptionID+"/status", bytes.NewReader(statusPayload))
 	statusReq.Header.Set("Content-Type", "application/json")
 	statusReq.Header.Set("X-Client-User-Id", "user_sub_1")
 	statusResp := httptest.NewRecorder()
@@ -369,13 +369,13 @@ func TestHandleSkillSubscriptionLifecycleAndCronTick(t *testing.T) {
 	}
 
 	resumePayload, _ := json.Marshal(map[string]any{"status": "active"})
-	resumeReq := httptest.NewRequest(http.MethodPatch, "/v1/assistant/skill-subscriptions/"+subscriptionID+"/status", bytes.NewReader(resumePayload))
+	resumeReq := httptest.NewRequest(http.MethodPatch, "/assistant/skill-subscriptions/"+subscriptionID+"/status", bytes.NewReader(resumePayload))
 	resumeReq.Header.Set("Content-Type", "application/json")
 	resumeReq.Header.Set("X-Client-User-Id", "user_sub_1")
 	handler.ServeHTTP(httptest.NewRecorder(), resumeReq)
 
 	tickPayload, _ := json.Marshal(map[string]any{"now": "2026-04-29T08:00:00Z"})
-	tickReq := httptest.NewRequest(http.MethodPost, "/v1/assistant/skill-subscriptions/cron/tick", bytes.NewReader(tickPayload))
+	tickReq := httptest.NewRequest(http.MethodPost, "/assistant/skill-subscriptions/cron/tick", bytes.NewReader(tickPayload))
 	tickReq.Header.Set("Content-Type", "application/json")
 	tickReq.Header.Set("X-Client-User-Id", "user_sub_1")
 	tickResp := httptest.NewRecorder()
@@ -401,7 +401,7 @@ func TestHandleConversationTurnStream(t *testing.T) {
 	handler := NewHandler(service).Routes()
 
 	conversationPayload, _ := json.Marshal(map[string]any{"summary": "M4 smoke"})
-	conversationReq := httptest.NewRequest(http.MethodPost, "/v1/assistant/conversations", bytes.NewReader(conversationPayload))
+	conversationReq := httptest.NewRequest(http.MethodPost, "/assistant/conversations", bytes.NewReader(conversationPayload))
 	conversationReq.Header.Set("Content-Type", "application/json")
 	conversationReq.Header.Set("X-Client-User-Id", "user_m4_1")
 	conversationResp := httptest.NewRecorder()
@@ -421,7 +421,7 @@ func TestHandleConversationTurnStream(t *testing.T) {
 	turnPayload, _ := json.Marshal(map[string]any{
 		"input": map[string]any{"text": "今天帮我整理日程"},
 	})
-	turnReq := httptest.NewRequest(http.MethodPost, "/v1/assistant/conversations/"+conversationID+"/runs", bytes.NewReader(turnPayload))
+	turnReq := httptest.NewRequest(http.MethodPost, "/assistant/conversations/"+conversationID+"/runs", bytes.NewReader(turnPayload))
 	turnReq.Header.Set("Content-Type", "application/json")
 	turnReq.Header.Set("X-Client-User-Id", "user_m4_1")
 	turnResp := httptest.NewRecorder()
@@ -438,7 +438,7 @@ func TestHandleConversationTurnStream(t *testing.T) {
 		t.Fatalf("turnId=%q", turnID)
 	}
 
-	streamReq := httptest.NewRequest(http.MethodGet, "/v1/assistant/runs/"+turnID+"/events", nil)
+	streamReq := httptest.NewRequest(http.MethodGet, "/assistant/runs/"+turnID+"/events", nil)
 	streamReq.Header.Set("X-Client-User-Id", "user_m4_1")
 	streamResp := httptest.NewRecorder()
 	handler.ServeHTTP(streamResp, streamReq)
@@ -469,7 +469,7 @@ func TestHandleTurnStream_M5AgentLoopEndToEnd(t *testing.T) {
 	handler := NewHandler(service).Routes()
 
 	conversationPayload, _ := json.Marshal(map[string]any{"summary": "M5 e2e"})
-	conversationReq := httptest.NewRequest(http.MethodPost, "/v1/assistant/conversations", bytes.NewReader(conversationPayload))
+	conversationReq := httptest.NewRequest(http.MethodPost, "/assistant/conversations", bytes.NewReader(conversationPayload))
 	conversationReq.Header.Set("Content-Type", "application/json")
 	conversationReq.Header.Set("X-Client-User-Id", "user_m5_http")
 	conversationResp := httptest.NewRecorder()
@@ -486,7 +486,7 @@ func TestHandleTurnStream_M5AgentLoopEndToEnd(t *testing.T) {
 	turnPayload, _ := json.Marshal(map[string]any{
 		"input": map[string]any{"text": "帮我总结今天的安排"},
 	})
-	turnReq := httptest.NewRequest(http.MethodPost, "/v1/assistant/conversations/"+conversationID+"/runs", bytes.NewReader(turnPayload))
+	turnReq := httptest.NewRequest(http.MethodPost, "/assistant/conversations/"+conversationID+"/runs", bytes.NewReader(turnPayload))
 	turnReq.Header.Set("Content-Type", "application/json")
 	turnReq.Header.Set("X-Client-User-Id", "user_m5_http")
 	turnResp := httptest.NewRecorder()
@@ -500,7 +500,7 @@ func TestHandleTurnStream_M5AgentLoopEndToEnd(t *testing.T) {
 	}
 	turnID, _ := turn["turnId"].(string)
 
-	streamReq := httptest.NewRequest(http.MethodGet, "/v1/assistant/runs/"+turnID+"/events", nil)
+	streamReq := httptest.NewRequest(http.MethodGet, "/assistant/runs/"+turnID+"/events", nil)
 	streamReq.Header.Set("X-Client-User-Id", "user_m5_http")
 	streamResp := httptest.NewRecorder()
 	handler.ServeHTTP(streamResp, streamReq)
@@ -539,7 +539,7 @@ func TestHandleTurnStream_M5AgentLoopEndToEnd(t *testing.T) {
 	if !bytes.Contains([]byte(body), []byte(`"text":"日程待办助手已生成会议与提醒方案`)) {
 		t.Fatalf("stream missing final text payload: %s", body)
 	}
-	getTurnReq := httptest.NewRequest(http.MethodGet, "/v1/assistant/runs/"+turnID, nil)
+	getTurnReq := httptest.NewRequest(http.MethodGet, "/assistant/runs/"+turnID, nil)
 	getTurnReq.Header.Set("X-Client-User-Id", "user_m5_http")
 	getTurnResp := httptest.NewRecorder()
 	handler.ServeHTTP(getTurnResp, getTurnReq)
@@ -620,7 +620,7 @@ func createM11TurnAndStream(t *testing.T, handler http.Handler, scenario, skillI
 	t.Helper()
 	userID := "user_m11_http_" + scenario
 	conversationPayload, _ := json.Marshal(map[string]any{"summary": "M11 " + scenario})
-	conversationReq := httptest.NewRequest(http.MethodPost, "/v1/assistant/conversations", bytes.NewReader(conversationPayload))
+	conversationReq := httptest.NewRequest(http.MethodPost, "/assistant/conversations", bytes.NewReader(conversationPayload))
 	conversationReq.Header.Set("Content-Type", "application/json")
 	conversationReq.Header.Set("X-Client-User-Id", userID)
 	conversationResp := httptest.NewRecorder()
@@ -644,7 +644,7 @@ func createM11TurnAndStream(t *testing.T, handler http.Handler, scenario, skillI
 		"input":    map[string]any{"text": text},
 		"trigger":  map[string]any{"type": "user_message"},
 	})
-	turnReq := httptest.NewRequest(http.MethodPost, "/v1/assistant/conversations/"+conversationID+"/runs", bytes.NewReader(turnPayload))
+	turnReq := httptest.NewRequest(http.MethodPost, "/assistant/conversations/"+conversationID+"/runs", bytes.NewReader(turnPayload))
 	turnReq.Header.Set("Content-Type", "application/json")
 	turnReq.Header.Set("X-Client-User-Id", userID)
 	turnResp := httptest.NewRecorder()
@@ -661,7 +661,7 @@ func createM11TurnAndStream(t *testing.T, handler http.Handler, scenario, skillI
 		t.Fatalf("turnId missing: %#v", turn)
 	}
 
-	streamReq := httptest.NewRequest(http.MethodGet, "/v1/assistant/runs/"+turnID+"/events", nil)
+	streamReq := httptest.NewRequest(http.MethodGet, "/assistant/runs/"+turnID+"/events", nil)
 	streamReq.Header.Set("Content-Type", "application/json")
 	streamReq.Header.Set("X-Client-User-Id", userID)
 	streamResp := httptest.NewRecorder()
@@ -692,7 +692,7 @@ func TestHandleTurnStream_M5ToolFailureReturnsRuntimeFailure(t *testing.T) {
 	)
 	handler := NewHandler(service).Routes()
 	conversationPayload, _ := json.Marshal(map[string]any{"summary": "M5 failure"})
-	conversationReq := httptest.NewRequest(http.MethodPost, "/v1/assistant/conversations", bytes.NewReader(conversationPayload))
+	conversationReq := httptest.NewRequest(http.MethodPost, "/assistant/conversations", bytes.NewReader(conversationPayload))
 	conversationReq.Header.Set("Content-Type", "application/json")
 	conversationReq.Header.Set("X-Client-User-Id", "user_m5_fail")
 	conversationResp := httptest.NewRecorder()
@@ -703,7 +703,7 @@ func TestHandleTurnStream_M5ToolFailureReturnsRuntimeFailure(t *testing.T) {
 	}
 	conversationID, _ := conversation["conversationId"].(string)
 	turnPayload, _ := json.Marshal(map[string]any{"input": map[string]any{"text": "验证失败路径"}})
-	turnReq := httptest.NewRequest(http.MethodPost, "/v1/assistant/conversations/"+conversationID+"/runs", bytes.NewReader(turnPayload))
+	turnReq := httptest.NewRequest(http.MethodPost, "/assistant/conversations/"+conversationID+"/runs", bytes.NewReader(turnPayload))
 	turnReq.Header.Set("Content-Type", "application/json")
 	turnReq.Header.Set("X-Client-User-Id", "user_m5_fail")
 	turnResp := httptest.NewRecorder()
@@ -714,7 +714,7 @@ func TestHandleTurnStream_M5ToolFailureReturnsRuntimeFailure(t *testing.T) {
 	}
 	turnID, _ := turn["turnId"].(string)
 
-	streamReq := httptest.NewRequest(http.MethodGet, "/v1/assistant/runs/"+turnID+"/events", nil)
+	streamReq := httptest.NewRequest(http.MethodGet, "/assistant/runs/"+turnID+"/events", nil)
 	streamReq.Header.Set("X-Client-User-Id", "user_m5_fail")
 	streamResp := httptest.NewRecorder()
 	handler.ServeHTTP(streamResp, streamReq)
@@ -731,7 +731,7 @@ func TestHandleTurnStream_M5ToolFailureReturnsRuntimeFailure(t *testing.T) {
 	if !bytes.Contains([]byte(body), []byte(`"runtimeFailure"`)) {
 		t.Fatalf("stream missing runtimeFailure: %s", body)
 	}
-	getTurnReq := httptest.NewRequest(http.MethodGet, "/v1/assistant/runs/"+turnID, nil)
+	getTurnReq := httptest.NewRequest(http.MethodGet, "/assistant/runs/"+turnID, nil)
 	getTurnReq.Header.Set("X-Client-User-Id", "user_m5_fail")
 	getTurnResp := httptest.NewRecorder()
 	handler.ServeHTTP(getTurnResp, getTurnReq)

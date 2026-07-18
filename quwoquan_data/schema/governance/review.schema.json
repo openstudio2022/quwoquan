@@ -5,7 +5,7 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "schemaVersion",
+    "schema",
     "decisionId",
     "candidateId",
     "decision",
@@ -17,9 +17,6 @@
     "reviewedAt"
   ],
   "properties": {
-    "schemaVersion": {
-      "const": "quwoquan_data.governance_review/1"
-    },
     "decisionId": {
       "type": "string",
       "minLength": 1
@@ -30,7 +27,12 @@
     },
     "decision": {
       "type": "string",
-      "enum": ["approve", "reject", "offline", "reopen"]
+      "enum": [
+        "approve",
+        "reject",
+        "offline",
+        "reopen"
+      ]
     },
     "reviewer": {
       "type": "string",
@@ -44,15 +46,28 @@
     },
     "fromStatus": {
       "type": "string",
-      "enum": ["published", "pending_review", "rejected", "offline"]
+      "enum": [
+        "published",
+        "pending_review",
+        "rejected",
+        "offline"
+      ]
     },
     "toStatus": {
       "type": "string",
-      "enum": ["published", "pending_review", "rejected", "offline"]
+      "enum": [
+        "published",
+        "pending_review",
+        "rejected",
+        "offline"
+      ]
     },
     "reviewedAt": {
       "type": "string",
       "format": "date-time"
+    },
+    "schema": {
+      "const": "quwoquan_data.governance_review"
     }
   }
 }

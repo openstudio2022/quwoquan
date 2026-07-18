@@ -29,7 +29,7 @@ def evaluate_maturity(*, coverage_status: str, has_license_policy: bool, has_wor
     if has_license_policy and has_worker_queue and has_post_activation and coverage_status == "passed":
         level = 4
     return {
-        "schemaVersion": "quwoquan.data_engineering_maturity.v1",
+        "schema": "quwoquan.data_engineering_maturity",
         "level": level,
         "levelLabel": dict(LEVELS)[level],
         "blockers": blockers,

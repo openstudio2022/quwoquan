@@ -292,7 +292,7 @@ func TestMain(m *testing.M) {
 	postServiceCore := postapp.NewPostService(
 		postapp.WithMediaAssetBindingReader(
 			postapp.BindDataPorts(postStore),
-			mediainfra.NewPostBindingReader(mediaStore),
+			mediainfra.NewPostBindingReader(mediaStore, mediaObjects),
 		),
 		postapp.WithEventPublisher(eventSpy),
 		postapp.WithCommentReaders(commentStore),
@@ -460,6 +460,20 @@ func (g *apiIntegrationMediaObjectGateway) CompleteUpload(_ context.Context, par
 		SHA256:      params.ExpectedSHA256,
 		DeliveryURL: "https://cdn.test/media/" + strings.TrimPrefix(params.ExpectedSHA256, "sha256:"),
 	}, nil
+}
+
+func (g *apiIntegrationMediaObjectGateway) PublishPublicSlice(
+	_ context.Context,
+	sourceObjectKey string,
+	publicSliceKey string,
+) error {
+	if !strings.HasPrefix(sourceObjectKey, "media/objects/") {
+		return fmt.Errorf("object %s was not completed", sourceObjectKey)
+	}
+	g.mu.Lock()
+	g.objects[publicSliceKey] = mediaapp.PrepareUploadParams{}
+	g.mu.Unlock()
+	return nil
 }
 
 func (g *apiIntegrationMediaObjectGateway) DeliveryURL(_ context.Context, objectKey string) (string, error) {

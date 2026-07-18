@@ -33,7 +33,7 @@ void main() {
     expect(executor.operation?.method, 'POST');
     expect(
       executor.operation?.pathTemplate,
-      '/v1/chat/conversations/{conversationId}/messages',
+      '/chat/conversations/{conversationId}/messages',
     );
     expect(executor.context?.surfaceId, AppUiSurfaces.chatDetail.id);
     expect(executor.context?.idempotencyKey, 'client-message-1');

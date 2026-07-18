@@ -21,7 +21,6 @@ import (
 // contracts/metadata/content/post/projections/recommendation_realtime_patch.yaml.
 type recPatchContractYAML struct {
 	RealtimeChannelTemplate string `yaml:"realtime_channel_template"`
-	SchemaVersion           string `yaml:"schema_version"`
 	PatchTypes              []struct {
 		ID string `yaml:"id"`
 	} `yaml:"patch_types"`
@@ -54,9 +53,6 @@ func loadRecPatchContract(t *testing.T) recPatchContractYAML {
 func TestFeedPatchContractConstantsMatchMetadata(t *testing.T) {
 	c := loadRecPatchContract(t)
 
-	if c.SchemaVersion != FeedPatchSchemaVersion {
-		t.Fatalf("schema_version metadata=%q go=%q", c.SchemaVersion, FeedPatchSchemaVersion)
-	}
 	if c.RealtimeChannelTemplate != feedPatchChannelTemplate {
 		t.Fatalf("realtime_channel_template metadata=%q go=%q", c.RealtimeChannelTemplate, feedPatchChannelTemplate)
 	}
@@ -111,11 +107,15 @@ func TestFeedPatchContractConstantsMatchMetadata(t *testing.T) {
 
 	// envelope json tags must match metadata envelope_fields exactly, in order,
 	// so the wire contract has a single source of truth (no second definition).
-	gotFields := envelopeJSONTags(t)
-	wantFields := make([]string, 0, len(c.EnvelopeFields))
+	if FeedRealtimePatchSchema != "feed_realtime_patch" {
+		t.Fatalf("FeedRealtimePatchSchema=%q", FeedRealtimePatchSchema)
+	}
+
+	wantFields := []string{"schema"}
 	for _, f := range c.EnvelopeFields {
 		wantFields = append(wantFields, f.Name)
 	}
+	gotFields := envelopeJSONTags(t)
 	if !reflect.DeepEqual(gotFields, wantFields) {
 		t.Fatalf("envelope fields drift:\n metadata=%v\n go json=%v", wantFields, gotFields)
 	}
@@ -210,9 +210,6 @@ func TestEmitNegativeFeedbackRemovalDislike(t *testing.T) {
 	got := msgs[0]
 	if got.channel != "rt:rec:feed:user:user-1" {
 		t.Fatalf("channel = %q", got.channel)
-	}
-	if got.patch.SchemaVersion != FeedPatchSchemaVersion {
-		t.Fatalf("schemaVersion = %q", got.patch.SchemaVersion)
 	}
 	if got.patch.PatchType != FeedPatchNegativeFeedbackRemoval {
 		t.Fatalf("patchType = %q", got.patch.PatchType)
@@ -394,7 +391,7 @@ func TestPatchWireKeysStable(t *testing.T) {
 	if err := json.Unmarshal([]byte(msgs[0].raw), &wire); err != nil {
 		t.Fatalf("unmarshal wire: %v", err)
 	}
-	for _, key := range []string{"schemaVersion", "patchId", "patchType", "userId", "targetPostIds", "reasonCode", "affectedCount", "safeToApplyWhileViewing", "emittedAt"} {
+	for _, key := range []string{"patchId", "patchType", "userId", "targetPostIds", "reasonCode", "affectedCount", "safeToApplyWhileViewing", "emittedAt"} {
 		if _, ok := wire[key]; !ok {
 			t.Fatalf("wire missing required key %q (got %v)", key, wireKeys(wire))
 		}

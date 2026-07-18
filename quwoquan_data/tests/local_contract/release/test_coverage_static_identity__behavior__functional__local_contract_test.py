@@ -2,7 +2,7 @@
 
 覆盖两块验收意图：
 - schema 校验：仓内示例主清单对 master_list.schema.json 契约全绿；
-  契约（schemaVersion const / 必填集 / enum / 字段白名单）只从 schema 文件读取。
+  契约（schema const / 必填集 / enum / 字段白名单）只从 schema 文件读取。
 - verify 门：C1-C10 每条规则各有可失败反例（tmp coverage root 注入 +
   真实契约标签树 CONTRACT_TAGS_ROOT，仓内路径不随 QWQ_DATA_ROOT 隔离漂移）。
 """
@@ -42,7 +42,7 @@ def _write_master_file(
     file_overrides: dict | None = None,
 ) -> Path:
     payload = {
-        "schemaVersion": "quwoquan_data.discovery_seed/2",
+        "schema": "quwoquan_data.discovery_seed",
         "country": root.name,
         "province": province,
         "city": city,
@@ -76,9 +76,9 @@ def test_repo_master_list_passes_gate():
 
 
 def test_schema_contract_is_single_source():
-    """必填集/enum/schemaVersion const 只从 schema 文件读取，不维护第二真相源。"""
+    """必填集/enum/schema const 只从 schema 文件读取，不维护第二真相源。"""
     contract = _load_schema_contract(MASTER_LIST_SCHEMA_PATH)
-    assert contract["schemaVersion"] == "quwoquan_data.discovery_seed/2"
+    assert contract["schema"] == "quwoquan_data.discovery_seed"
     assert set(contract["leafRequired"]) == {
         "name", "canonicalName", "entityType", "typeTagRefs",
         "geoTagRef", "selectionPriority",

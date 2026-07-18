@@ -69,9 +69,9 @@ void main() {
     });
   });
 
-  // ── GreetingRequestDto 兼容性契约 ────────────────────────────────────────────
+  // ── GreetingRequestDto 单轨契约 ────────────────────────────────────────────
 
-  group('GreetingRequestDto — 兼容性契约', () {
+  group('GreetingRequestDto — 单轨契约', () {
     test('fromMap 缺失字段使用安全默认值', () {
       final dto = GreetingRequestDto.fromMap(const <String, dynamic>{});
       expect(dto.id, isEmpty);

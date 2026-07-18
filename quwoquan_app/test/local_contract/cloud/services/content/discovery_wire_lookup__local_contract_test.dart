@@ -14,13 +14,13 @@ void main() {
       );
       final row = findDiscoveryWireRowByPostId('d1', rows);
       expect(row, isNotNull);
-      expect(row!['postId'], 'd1');
+      expect(row!['id'], 'd1');
     });
 
     test('lookupCanonicalDiscoveryWireRowByPostId uses ContentMockData', () {
       final row = lookupCanonicalDiscoveryWireRowByPostId('m1');
       expect(row, isNotNull);
-      expect(row!['postId'], 'm1');
+      expect(row!['id'], 'm1');
     });
 
     test('mockDiscoveryWireFallback mirrors remote when not mock', () {
@@ -28,13 +28,16 @@ void main() {
       expect(mockDiscoveryWireFallback(false, canonical), isEmpty);
       final mapped = mockDiscoveryWireFallback(true, canonical);
       expect(mapped, isNotEmpty);
-      expect(mapped.first['postId'], canonical.first.id);
+      expect(mapped.first['id'], canonical.first.id);
     });
 
-    test('prototypeDiscoveryWireRowForMock only when mock and non-empty id', () {
-      expect(prototypeDiscoveryWireRowForMock(false, 'd1'), isNull);
-      expect(prototypeDiscoveryWireRowForMock(true, ''), isNull);
-      expect(prototypeDiscoveryWireRowForMock(true, 'd1'), isNotNull);
-    });
+    test(
+      'prototypeDiscoveryWireRowForMock only when mock and non-empty id',
+      () {
+        expect(prototypeDiscoveryWireRowForMock(false, 'd1'), isNull);
+        expect(prototypeDiscoveryWireRowForMock(true, ''), isNull);
+        expect(prototypeDiscoveryWireRowForMock(true, 'd1'), isNotNull);
+      },
+    );
   });
 }

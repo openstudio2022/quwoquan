@@ -50,10 +50,6 @@ from content.release.canonical.object_transaction_contract import (
     _verify_package,
 )
 
-
-CONTENT_RELEASE_KIND = "content"
-
-
 def _release_entity_tag_refs(*, publish_root: Path, entity_refs: set[str]) -> list[str]:
     refs: set[str] = set()
     for ref in sorted(entity_refs):
@@ -241,7 +237,7 @@ def build_entity_object_transaction_package(
             if not canonical_file_page.startswith("https://") or not license_url.startswith("https://"):
                 raise ObjectTransactionError(f"asset {asset_id} 缺 HTTPS 权利证明")
             snapshot_payload = {
-                "schemaVersion": "quwoquan_data.asset_rights_snapshot/1",
+                "schema": "quwoquan_data.asset_rights_snapshot",
                 "executionId": execution_id,
                 "assetId": asset_id,
                 "sourceAsset": source_asset,
@@ -325,12 +321,12 @@ def build_entity_object_transaction_package(
         rights_ref = Path("rights.json")
         _write_json(
             object_root / rights_ref,
-            {"schemaVersion": "quwoquan_data.asset_rights_closure/1", "assets": rights_rows},
+            {"schema": "quwoquan_data.asset_rights_closure", "assets": rights_rows},
         )
         _write_json(
             object_root / "manifest.json",
             {
-                "schemaVersion": "quwoquan_data.entity_object/1",
+                "schema": "quwoquan_data.entity_object",
                 "entityRef": str(entity.get("entityRef") or ""),
                 "executionId": execution_id,
                 "finalContentRef": "page.md",
@@ -358,14 +354,14 @@ def build_entity_object_transaction_package(
             object_root=object_root,
             object_kind="entities",
             object_ref=canonical_ref,
-            target_schema="quwoquan_data.entity_object/1",
+            target_schema="quwoquan_data.entity_object",
             source_policy_revision=REQUIRED_SOURCE_POLICY,
             closure=closure,
             cas_rows=cas_rows,
             review=review_binding,
         )
         package = {
-            "schemaVersion": PACKAGE_SCHEMA,
+            "schema": PACKAGE_SCHEMA,
             "transactionId": transaction_id,
             "executionId": execution_id,
             "sourcePolicyRevision": REQUIRED_SOURCE_POLICY,
@@ -373,7 +369,7 @@ def build_entity_object_transaction_package(
                 "layoutSchema": LAYOUT_SCHEMA,
                 "objectKind": "entities",
                 "objectRef": canonical_ref,
-                "objectSchema": "quwoquan_data.entity_object/1",
+                "objectSchema": "quwoquan_data.entity_object",
                 "packageObjectRef": "object",
             },
             "closure": closure,
@@ -386,403 +382,3 @@ def build_entity_object_transaction_package(
     except Exception:
         shutil.rmtree(staging, ignore_errors=True)
         raise
-
-
-def build_aggregate_release(
-    *,
-    publish_root: Path,
-    release_root: Path,
-    release_id: str,
-    execution_roots: list[Path],
-    rollout_milestone: str,
-) -> dict[str, Any]:
-    """Create one immutable environment-neutral release from approved executions."""
-    release_id = _safe_id(release_id, label="releaseId")
-    rollout_milestone = str(rollout_milestone or "").strip()
-    if rollout_milestone not in {"canary", "m1", "m2", "m3"}:
-        raise ObjectTransactionError("rolloutMilestone must be canary, m1, m2, or m3")
-    final_root = release_root / release_id
-    execution_ids: list[str] = []
-    entity_refs: set[str] = set()
-    for root in execution_roots:
-        manifest = _read_json(root / "execution_manifest.json")
-        execution_id = _execution_id(str(manifest.get("executionId") or ""))
-        if root.name != execution_id:
-            raise ObjectTransactionError("aggregate execution root identity mismatch")
-        execution_ids.append(execution_id)
-        for attestation_path in sorted(root.glob("entities/*/*/*/5.review/attestation.json")):
-            attestation = _read_json(attestation_path)
-            if attestation.get("decision") != "approved" or str(
-                (attestation.get("independentReviewer") or {}).get("status") or ""
-            ) != "passed":
-                continue
-            ref = str(attestation.get("objectRef") or "").removeprefix("/entity/")
-            if not ref:
-                continue
-            canonical = publish_root / "entities" / _safe_rel(ref, label="entityRef")
-            if not (canonical / "manifest.json").is_file():
-                raise ObjectTransactionError(f"approved execution object 未进入 canonical publish：{ref}")
-            entity_refs.add(ref)
-    if not entity_refs:
-        raise ObjectTransactionError("aggregate release 没有 approved canonical entity")
-
-    canonical_closure = validate_canonical_publish(publish_root)
-    if canonical_closure["status"] != "passed":
-        raise ObjectTransactionError(
-            "aggregate release canonical closure invalid: "
-            + "; ".join(
-                f"{item['code']}:{item['ref']}" for item in canonical_closure["issues"][:5]
-            )
-        )
-    tag_refs = _release_entity_tag_refs(publish_root=publish_root, entity_refs=entity_refs)
-
-    if final_root.exists():
-        header = _read_json(payload_file(final_root, "release.json"))
-        desired = _read_json(payload_file(final_root, "desired_state.json"))
-        existing_refs = sorted(
-            str(item) for item in ((desired.get("desiredRefs") or {}).get("entities") or [])
-        )
-        existing_tag_refs = sorted(
-            str(item) for item in ((desired.get("desiredRefs") or {}).get("tags") or [])
-        )
-        expected_execution_ids = sorted(set(execution_ids))
-        current_merkle = tree_integrity_stats(publish_root)["merkleRoot"]
-        if (
-            header.get("releaseId") == release_id
-            and sorted(header.get("executionIds") or []) == expected_execution_ids
-            and existing_refs == sorted(entity_refs)
-            and existing_tag_refs == tag_refs
-            and header.get("canonicalMerkle") == current_merkle
-            and header.get("releaseKind") == CONTENT_RELEASE_KIND
-            and header.get("rolloutMilestone") == rollout_milestone
-        ):
-            return {
-                "schemaVersion": "quwoquan_data.aggregate_release_result/1",
-                "releaseId": release_id,
-                "releaseRoot": str(final_root),
-                "executionIds": expected_execution_ids,
-                "entityCount": len(entity_refs),
-                "canonicalMerkle": current_merkle,
-                "rolloutMilestone": rollout_milestone,
-                "idempotent": True,
-            }
-        raise ObjectTransactionError(f"aggregate release create-once conflict: {final_root}")
-
-    final_root.parent.mkdir(parents=True, exist_ok=True)
-    staging = Path(tempfile.mkdtemp(prefix=f".{release_id}.", dir=final_root.parent))
-    try:
-        payload = payload_root(staging)
-        for ref in sorted(entity_refs):
-            _copy_tree(
-                publish_root / "entities" / ref,
-                payload / "objects/entities" / ref,
-            )
-        for ref in tag_refs:
-            _copy_tree(
-                publish_root / "tags" / _safe_rel(ref, label="tagRef"),
-                payload / "objects/tags" / ref,
-            )
-        desired = {
-            "creators": [],
-            "entities": sorted(entity_refs),
-            "posts": [],
-            "tags": tag_refs,
-        }
-        canonical = tree_integrity_stats(publish_root)
-        _write_json(
-            payload / "release.json",
-            {
-                "schemaVersion": RELEASE_SCHEMA,
-                "releaseId": release_id,
-                "releaseKind": CONTENT_RELEASE_KIND,
-                "canonicalMerkle": canonical["merkleRoot"],
-                "executionIds": sorted(set(execution_ids)),
-                "rolloutMilestone": rollout_milestone,
-            },
-        )
-        _write_json(
-            payload / "desired_state.json",
-            {
-                "schemaVersion": "quwoquan_data.release_desired_state/1",
-                "releaseId": release_id,
-                "desiredRefs": desired,
-            },
-        )
-        _write_json(
-            payload / "index/objects.json",
-            {"schemaVersion": "quwoquan_data.release_object_index/1", **desired},
-        )
-        _write_json(
-            payload / "sample_bundle.json",
-            {
-                "schemaVersion": "quwoquan_data.release_sample_bundle/1",
-                "entities": desired["entities"],
-                "posts": desired["posts"],
-                "tags": desired["tags"],
-            },
-        )
-        media_manifest = build_release_media_manifest(
-            release_id=release_id,
-            post_refs=[],
-            entity_refs=desired["entities"],
-            publish_root=publish_root,
-        )
-        if media_manifest["issues"]:
-            raise ObjectTransactionError(
-                "aggregate release media closure invalid: "
-                + "; ".join(str(issue) for issue in media_manifest["issues"][:5])
-            )
-        _write_json(
-            payload / "media_manifest.json",
-            media_manifest,
-        )
-        aggregate_attestation = {
-            "schemaVersion": "quwoquan_data.aggregate_release_attestation/2",
-            "releaseId": release_id,
-            "releaseKind": CONTENT_RELEASE_KIND,
-            "executionIds": sorted(set(execution_ids)),
-            "rolloutMilestone": rollout_milestone,
-            "entityCount": len(entity_refs),
-            "tagCount": len(tag_refs),
-            "canonicalMerkle": canonical["merkleRoot"],
-            "payloadSha256": payload_digest(staging),
-            "recordedAt": _now(),
-        }
-        assert_valid(
-            aggregate_attestation,
-            "release",
-            "aggregate_release_attestation",
-            label=f"aggregate_release_attestation:{release_id}",
-        )
-        _write_json(attestation_root(staging) / "aggregate.json", aggregate_attestation)
-        assert_environment_neutral(staging)
-        staging.replace(final_root)
-        return {
-            "schemaVersion": "quwoquan_data.aggregate_release_result/1",
-            "releaseId": release_id,
-            "releaseRoot": str(final_root),
-            "executionIds": sorted(set(execution_ids)),
-            "entityCount": len(entity_refs),
-            "canonicalMerkle": canonical["merkleRoot"],
-            "rolloutMilestone": rollout_milestone,
-            "idempotent": False,
-        }
-    except Exception:
-        shutil.rmtree(staging, ignore_errors=True)
-        raise
-
-
-def _transaction_root(output_root: Path, transaction_id: str) -> Path:
-    return output_root / "data/local/workspace/object-transactions" / transaction_id
-
-
-def validate_canonical_publish(root: Path) -> dict[str, Any]:
-    issues: list[dict[str, str]] = []
-    referenced_media: set[str] = set()
-    referenced_creators: set[str] = set()
-    referenced_tags: set[str] = set()
-    if root.is_dir():
-        for child in root.iterdir():
-            if child.name not in ALLOWED_CANONICAL_ROOTS:
-                issues.append({"code": "noncanonical_root", "ref": child.name})
-    for path in _files(root):
-        if path.suffix != ".json":
-            continue
-        rel = path.relative_to(root).as_posix()
-        try:
-            payload = _read_json(path)
-        except ObjectTransactionError as exc:
-            issues.append({"code": "invalid_json", "ref": rel, "message": str(exc)})
-            continue
-        for object_key in _collect_object_keys(payload):
-            referenced_media.add(object_key)
-            try:
-                safe_key = _safe_rel(object_key, label="objectKey")
-            except ObjectTransactionError:
-                issues.append({"code": "asset_ref_path_escape", "ref": f"{rel}:{object_key}"})
-                continue
-            asset = root / safe_key
-            if not object_key.startswith("media/objects/sha256/"):
-                issues.append({"code": "non_cas_asset_ref", "ref": f"{rel}:{object_key}"})
-            elif not asset.is_file():
-                issues.append({"code": "dangling_asset_ref", "ref": f"{rel}:{object_key}"})
-        if not rel.startswith("creators/"):
-            referenced_creators.update(_collect_creator_ids(payload))
-
-    try:
-        referenced_tags = set(collect_canonical_tag_refs(root))
-    except ObjectTransactionError as exc:
-        issues.append({"code": "invalid_tag_ref_document", "ref": str(exc)})
-    tag_root = root / "tags"
-    expected_tag_files: set[str] = set()
-    for tag_ref in sorted(referenced_tags):
-        try:
-            tag_path = _safe_rel(tag_ref, label="tagRef")
-        except ObjectTransactionError:
-            issues.append({"code": "tag_ref_path_escape", "ref": tag_ref})
-            continue
-        snapshot = tag_root / tag_path / "_definition.json"
-        expected_tag_files.add(snapshot.relative_to(root).as_posix())
-        if not snapshot.is_file():
-            issues.append({"code": "dangling_tag_ref", "ref": tag_ref})
-            continue
-        try:
-            assert_valid(_read_json(snapshot), "governance", "_definition", label=f"publish tag {tag_ref}")
-        except (ObjectTransactionError, ValueError, FileNotFoundError) as exc:
-            issues.append({"code": "invalid_tag_snapshot", "ref": f"{tag_ref}: {exc}"})
-    for snapshot in _files(tag_root):
-        rel = snapshot.relative_to(root).as_posix()
-        if rel not in expected_tag_files:
-            issues.append({"code": "orphan_tag_snapshot", "ref": rel})
-
-    media_root = root / "media" / "objects"
-    for asset in _files(media_root):
-        object_key = asset.relative_to(root).as_posix()
-        if object_key not in referenced_media:
-            issues.append({"code": "orphan_media", "ref": object_key})
-
-    creators_root = root / "creators"
-    if creators_root.is_dir():
-        for manifest in sorted(creators_root.glob("*/_creator.json")):
-            creator_id = manifest.parent.name
-            if creator_id not in referenced_creators:
-                issues.append({"code": "orphan_creator", "ref": creator_id})
-    return {
-        "status": "passed" if not issues else "failed",
-        "issues": issues,
-        "casObjectCount": len(list(_files(root / "media/objects"))),
-        "tagSnapshotCount": len(expected_tag_files),
-    }
-
-
-def _collect_creator_ids(value: Any) -> set[str]:
-    """Collect only consumer-side creator references from canonical object JSON."""
-    result: set[str] = set()
-    if isinstance(value, dict):
-        for key, child in value.items():
-            if key in {"creatorId", "creatorProfileId"} and isinstance(child, str) and child:
-                result.add(child)
-            if key in {"creatorRef", "authorCreatorId"} and isinstance(child, str) and child:
-                result.add(child)
-            if key == "creatorRefs" and isinstance(child, list):
-                result.update(item for item in child if isinstance(item, str) and item)
-            result.update(_collect_creator_ids(child))
-    elif isinstance(value, list):
-        for child in value:
-            result.update(_collect_creator_ids(child))
-    return result
-
-
-def _verify_attestation(report: dict[str, Any], expected: str) -> None:
-    embedded = str(report.pop("dryRunAttestationSha256", ""))
-    actual = _digest_bytes(_json_bytes(report))
-    report["dryRunAttestationSha256"] = embedded
-    if expected != embedded or actual != embedded:
-        raise ObjectTransactionError(
-            "dry-run attestation mismatch："
-            f"expected={expected} embedded={embedded} actual={actual}"
-        )
-
-
-def audit_object_transaction(
-    *,
-    publish_root: Path,
-    output_root: Path,
-    package_root: Path,
-    transaction_id: str,
-    expected_canonical_merkle: str,
-) -> dict[str, Any]:
-    transaction_id = _safe_id(transaction_id, label="transactionId")
-    before = tree_integrity_stats(publish_root)
-    if before["merkleRoot"] != expected_canonical_merkle:
-        raise ObjectTransactionError(
-            "current canonical Merkle 不匹配："
-            f"expected={expected_canonical_merkle} actual={before['merkleRoot']}"
-        )
-    package = _verify_package(
-        package_root,
-        canonical_root=publish_root,
-        required_source_policy_revision=REQUIRED_SOURCE_POLICY,
-        require_target_absent=True,
-    )
-    if package["transactionId"] != transaction_id:
-        raise ObjectTransactionError("package transactionId 不匹配")
-    run_root = _transaction_root(output_root, transaction_id)
-    report_path = run_root / "audit_report.json"
-    staging = run_root / "staging/canonical"
-    if report_path.is_file():
-        persisted = _read_json(report_path)
-        _verify_attestation(
-            persisted,
-            str(persisted.get("dryRunAttestationSha256") or ""),
-        )
-        if (
-            persisted.get("beforeCanonical", {}).get("merkleRoot")
-            == before["merkleRoot"]
-            and persisted.get("objectClosureDigest")
-            == package["objectClosureDigest"]
-            and persisted.get("packageSha256") == package["packageSha256"]
-            and staging.is_dir()
-            and tree_integrity_stats(staging)["merkleRoot"]
-            == persisted.get("afterCanonical", {}).get("merkleRoot")
-        ):
-            return {**persisted, "idempotent": True}
-        raise ObjectTransactionError("已有 audit 与当前事务输入不一致")
-    if staging.exists():
-        raise ObjectTransactionError(f"stale staging 已存在：{staging}")
-    _copy_tree(publish_root, staging)
-    target = staging / package["objectKind"] / package["objectRef"]
-    _copy_tree(Path(package["objectRoot"]), target)
-    for row in package["casRows"]:
-        source = package_root / row["sourceRef"]
-        destination = staging / row["objectKey"]
-        if destination.is_file():
-            if _digest_file(destination) != row["sha256"]:
-                raise ObjectTransactionError(f"canonical CAS collision：{row['objectKey']}")
-        else:
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source, destination)
-    refresh_canonical_tag_snapshots(staging)
-    closure = validate_canonical_publish(staging)
-    if closure["status"] != "passed":
-        raise ObjectTransactionError(
-            f"staging canonical closure 失败：{closure['issues'][:5]}"
-        )
-    after = tree_integrity_stats(staging)
-    report: dict[str, Any] = {
-        "schemaVersion": DRY_RUN_SCHEMA,
-        "transactionId": transaction_id,
-        "executionId": package["executionId"],
-        "sourcePolicyRevision": package["sourcePolicyRevision"],
-        "targetLayout": LAYOUT_SCHEMA,
-        "targetObjectSchema": package["objectSchema"],
-        "objectKind": package["objectKind"],
-        "objectRef": package["objectRef"],
-        "objectClosureDigest": package["objectClosureDigest"],
-        "packageSha256": package["packageSha256"],
-        "beforeCanonical": {
-            key: before[key]
-            for key in ("algorithm", "merkleRoot", "fileCount", "totalBytes", "inventoryHash")
-        },
-        "afterCanonical": {
-            key: after[key]
-            for key in ("algorithm", "merkleRoot", "fileCount", "totalBytes", "inventoryHash")
-        },
-        "review": package["review"],
-        "closure": {
-            "status": closure["status"],
-            "creatorRefs": package["creatorRefs"],
-            "tagRefs": package["tagRefs"],
-            "casRefs": [
-                {
-                    key: row[key]
-                    for key in ("objectKey", "sha256", "bytes")
-                }
-                for row in package["casRows"]
-            ],
-        },
-        "idempotent": False,
-    }
-    report["dryRunAttestationSha256"] = _digest_bytes(_json_bytes(report))
-    _write_json(report_path, report)
-    return report

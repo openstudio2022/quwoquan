@@ -17,7 +17,7 @@ func BenchmarkSendMessage(b *testing.B) {
 	b.Cleanup(func() { cleanAllBench(b) })
 
 	conv := benchCreateConversation(b, `{"type":"group","title":"bench send msg","maxGroupSize":500}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
@@ -26,7 +26,7 @@ func BenchmarkSendMessage(b *testing.B) {
 			n := atomic.AddInt64(&seq, 1)
 			payload := fmt.Sprintf(`{"type":"text","content":"bench msg","clientMsgId":"bench-%d"}`, n)
 			req := httptest.NewRequest(http.MethodPost,
-				"/v1/chat/conversations/"+convId+"/messages",
+				"/chat/conversations/"+convId+"/messages",
 				strings.NewReader(payload))
 			req.Header.Set("Content-Type", "application/json")
 			req.Header.Set("X-Client-User-Id", "user_bench_001")
@@ -44,7 +44,7 @@ func BenchmarkSendMessageConcurrent1000(b *testing.B) {
 	b.Cleanup(func() { cleanAllBench(b) })
 
 	conv := benchCreateConversation(b, `{"type":"group","title":"bench concurrent","maxGroupSize":500}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 
 	const concurrency = 100
 	messagesPerWorker := 10
@@ -63,7 +63,7 @@ func BenchmarkSendMessageConcurrent1000(b *testing.B) {
 					n := atomic.AddInt64(&counter, 1)
 					payload := fmt.Sprintf(`{"type":"text","content":"concurrent msg","clientMsgId":"conc-%d-%d"}`, workerID, n)
 					req := httptest.NewRequest(http.MethodPost,
-						"/v1/chat/conversations/"+convId+"/messages",
+						"/chat/conversations/"+convId+"/messages",
 						strings.NewReader(payload))
 					req.Header.Set("Content-Type", "application/json")
 					req.Header.Set("X-Client-User-Id", fmt.Sprintf("user_bench_%03d", workerID))
@@ -88,14 +88,14 @@ func BenchmarkSyncMessages10K(b *testing.B) {
 	b.Cleanup(func() { cleanAllBench(b) })
 
 	conv := benchCreateConversation(b, `{"type":"group","title":"bench sync 10K","maxGroupSize":500}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 
 	// Seed messages (use a smaller count for benchmark setup; 10K in real env)
 	const seedCount = 200
 	for i := 0; i < seedCount; i++ {
 		payload := fmt.Sprintf(`{"type":"text","content":"seed %d","clientMsgId":"seed-%d"}`, i, i)
 		req := httptest.NewRequest(http.MethodPost,
-			"/v1/chat/conversations/"+convId+"/messages",
+			"/chat/conversations/"+convId+"/messages",
 			strings.NewReader(payload))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("X-Client-User-Id", "user_bench_001")
@@ -109,7 +109,7 @@ func BenchmarkSyncMessages10K(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		req := httptest.NewRequest(http.MethodPost,
-			"/v1/chat/conversations/"+convId+"/sync",
+			"/chat/conversations/"+convId+"/sync",
 			strings.NewReader(`{"lastSeq":0,"limit":100}`))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("X-Client-User-Id", "user_bench_001")
@@ -126,12 +126,12 @@ func BenchmarkListMessages(b *testing.B) {
 	b.Cleanup(func() { cleanAllBench(b) })
 
 	conv := benchCreateConversation(b, `{"type":"group","title":"bench list msgs","maxGroupSize":500}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 
 	for i := 0; i < 100; i++ {
 		payload := fmt.Sprintf(`{"type":"text","content":"list bench %d","clientMsgId":"lb-%d"}`, i, i)
 		req := httptest.NewRequest(http.MethodPost,
-			"/v1/chat/conversations/"+convId+"/messages",
+			"/chat/conversations/"+convId+"/messages",
 			strings.NewReader(payload))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("X-Client-User-Id", "user_bench_001")
@@ -142,7 +142,7 @@ func BenchmarkListMessages(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		req := httptest.NewRequest(http.MethodGet,
-			"/v1/chat/conversations/"+convId+"/messages?limit=50",
+			"/chat/conversations/"+convId+"/messages?limit=50",
 			nil)
 		req.Header.Set("X-Client-User-Id", "user_bench_001")
 		rec := httptest.NewRecorder()
@@ -168,11 +168,11 @@ func BenchmarkAddMembers50(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
 		conv := benchCreateConversation(b, `{"type":"group","title":"bench members","maxGroupSize":500}`)
-		convId := conv["_id"].(string)
+		convId := conv["id"].(string)
 		b.StartTimer()
 
 		req := httptest.NewRequest(http.MethodPost,
-			"/v1/chat/conversations/"+convId+"/members",
+			"/chat/conversations/"+convId+"/members",
 			strings.NewReader(membersPayload))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("X-Client-User-Id", "user_bench_001")
@@ -192,7 +192,7 @@ func BenchmarkCreateConversation(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		payload := fmt.Sprintf(`{"type":"group","title":"bench conv %d","maxGroupSize":500}`, i)
 		req := httptest.NewRequest(http.MethodPost,
-			"/v1/chat/conversations",
+			"/chat/conversations",
 			strings.NewReader(payload))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("X-Client-User-Id", "user_bench_001")
@@ -222,7 +222,7 @@ func cleanAllBench(b *testing.B) {
 
 func benchCreateConversation(b *testing.B, payload string) map[string]any {
 	b.Helper()
-	req := httptest.NewRequest(http.MethodPost, "/v1/chat/conversations", strings.NewReader(payload))
+	req := httptest.NewRequest(http.MethodPost, "/chat/conversations", strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Client-User-Id", "user_bench_001")
 	rec := httptest.NewRecorder()

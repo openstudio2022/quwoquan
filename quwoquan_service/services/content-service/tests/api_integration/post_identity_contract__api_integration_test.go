@@ -17,59 +17,42 @@ import (
 	recinfra "quwoquan_service/services/content-service/internal/infrastructure/recommendation"
 )
 
-func TestCreatePostPersistsIdentityAndAssistantUsePolicy(t *testing.T) {
+func TestSubmitPostPublicationPersistsIdentityAndAssistantUsePolicy(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
-
-	req := httptest.NewRequest(
-		http.MethodPost,
-		"/v1/content/posts",
-		strings.NewReader(`{
+	resp := submitPublishedPostWithAuthor(t, "identity_author", `{
 			"contentType":"micro",
 			"contentIdentity":"moment",
 			"assistantUsePolicy":"exclude",
 			"body":"只给自己看的点滴"
-		}`),
-	)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Client-User-Id", "identity_author")
-	rec := httptest.NewRecorder()
-	testHandler.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
-	}
-	var resp map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
+		}`)
 	if resp["contentIdentity"] != "moment" {
 		t.Fatalf("expected contentIdentity=moment, got %v", resp["contentIdentity"])
 	}
 	if resp["assistantUsePolicy"] != "exclude" {
 		t.Fatalf("expected assistantUsePolicy=exclude, got %v", resp["assistantUsePolicy"])
 	}
-	if resp["status"] != "draft" {
-		t.Fatalf("expected status=draft after create, got %v", resp["status"])
+	if resp["status"] != "published" {
+		t.Fatalf("expected status=published after atomic publication, got %v", resp["status"])
 	}
 }
 
 func TestUpdatePostSettingsContract(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	created := createPostWithAuthor(t, "settings_author", `{
+	created := submitPublishedPostWithAuthor(t, "settings_author", `{
 		"contentType":"article",
 		"contentIdentity":"work",
 		"title":"可调整设置的作品",
 		"body":"发布内容保持不可变"
 	}`)
-	postID, _ := created["_id"].(string)
+	postID, _ := created["postId"].(string)
 	if postID == "" {
 		t.Fatal("created post must have an id")
 	}
 
 	request := httptest.NewRequest(
 		http.MethodPatch,
-		"/v1/content/posts/"+postID+"/settings",
+		"/content/posts/"+postID+"/settings",
 		strings.NewReader(`{
 			"visibility":"private",
 			"assistantUsePolicy":"exclude"
@@ -77,6 +60,7 @@ func TestUpdatePostSettingsContract(t *testing.T) {
 	)
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("X-Client-User-Id", "settings_author")
+	ensureIdempotencyHeader(request, "update-settings")
 	recorder := httptest.NewRecorder()
 	testHandler.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusOK {
@@ -91,7 +75,7 @@ func TestUpdatePostSettingsContract(t *testing.T) {
 		t.Fatalf("updated settings drifted: %+v", updated)
 	}
 
-	ownerRequest := httptest.NewRequest(http.MethodGet, "/v1/content/posts/"+postID, nil)
+	ownerRequest := httptest.NewRequest(http.MethodGet, "/content/posts/"+postID, nil)
 	ownerRequest.Header.Set("X-Client-User-Id", "settings_author")
 	ownerRecorder := httptest.NewRecorder()
 	testHandler.ServeHTTP(ownerRecorder, ownerRequest)
@@ -110,17 +94,16 @@ func TestUpdatePostSettingsContract(t *testing.T) {
 func TestUpdatePostSettingsRejectsRetiredCirclePlacementFields(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	created := createPostWithAuthor(t, "settings_author", `{
+	created := submitPublishedPostWithAuthor(t, "settings_author", `{
 		"contentType":"image",
 		"contentIdentity":"work",
-		"title":"初始作品",
-		"mediaUrls":["https://example.com/cover.jpg"]
+		"title":"初始作品"
 	}`)
-	postID, _ := created["_id"].(string)
+	postID, _ := created["postId"].(string)
 
 	req := httptest.NewRequest(
 		http.MethodPatch,
-		"/v1/content/posts/"+postID+"/settings",
+		"/content/posts/"+postID+"/settings",
 		strings.NewReader(`{
 			"visibility":"public",
 			"circleIds":["circle_a","circle_b"],
@@ -129,6 +112,7 @@ func TestUpdatePostSettingsRejectsRetiredCirclePlacementFields(t *testing.T) {
 	)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Client-User-Id", "settings_author")
+	ensureIdempotencyHeader(req, "update-settings-retired-field")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 
@@ -140,17 +124,16 @@ func TestUpdatePostSettingsRejectsRetiredCirclePlacementFields(t *testing.T) {
 func TestPromotePostToWorkContract(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	created := createPostWithAuthor(t, "promote_author", `{
+	created := submitPublishedPostWithAuthor(t, "promote_author", `{
 		"contentType":"micro",
 		"contentIdentity":"moment",
-		"body":"旅行路上的随手记录",
-		"mediaUrls":["https://example.com/travel-1.jpg"]
+		"body":"旅行路上的随手记录"
 	}`)
-	postID, _ := created["_id"].(string)
+	postID, _ := created["postId"].(string)
 
 	req := httptest.NewRequest(
 		http.MethodPost,
-		"/v1/content/posts/"+postID+":promoteToWork",
+		"/content/posts/"+postID+":promoteToWork",
 		strings.NewReader(`{
 			"contentType":"image",
 			"title":"东京旅行相册",
@@ -161,6 +144,7 @@ func TestPromotePostToWorkContract(t *testing.T) {
 	)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Client-User-Id", "promote_author")
+	ensureIdempotencyHeader(req, "promote-to-work")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 
@@ -171,8 +155,8 @@ func TestPromotePostToWorkContract(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if resp["_id"] != postID {
-		t.Fatalf("expected same post id, got %v", resp["_id"])
+	if resp["postId"] != postID {
+		t.Fatalf("expected same post id, got %v", resp["postId"])
 	}
 	if resp["contentIdentity"] != "work" {
 		t.Fatalf("expected contentIdentity=work, got %v", resp["contentIdentity"])
@@ -188,31 +172,34 @@ func TestPromotePostToWorkContract(t *testing.T) {
 func TestPromotePostKeepsCountersAndCommentThread(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	created := createPostWithAuthor(t, "promote_thread_author", `{
+	created := submitPublishedPostWithAuthor(t, "promote_thread_author", `{
 		"contentType":"micro",
 		"contentIdentity":"moment",
 		"body":"升级前的点滴"
 	}`)
-	postID, _ := created["_id"].(string)
+	postID, _ := created["postId"].(string)
 	if postID == "" {
 		t.Fatal("expected post id")
 	}
 
 	commentReq := httptest.NewRequest(
 		http.MethodPost,
-		"/v1/content/posts/"+postID+"/comments",
+		"/content/posts/"+postID+"/comments",
 		strings.NewReader(`{"content":"这条评论升级后也要保留"}`),
 	)
 	commentReq.Header.Set("Content-Type", "application/json")
 	commentReq.Header.Set("X-Client-User-Id", "thread_commenter")
+	commentReq.Header.Set("X-Client-Sub-Account-Id", "thread_commenter")
+	ensureIdempotencyHeader(commentReq, "promote-thread-comment")
 	commentRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(commentRec, commentReq)
 	if commentRec.Code != http.StatusCreated {
 		t.Fatalf("expected 201 comment created, got %d: %s", commentRec.Code, commentRec.Body.String())
 	}
 
-	likeReq := httptest.NewRequest(http.MethodPost, "/v1/content/posts/"+postID+"/like", nil)
+	likeReq := httptest.NewRequest(http.MethodPost, "/content/posts/"+postID+"/like", nil)
 	likeReq.Header.Set("X-Client-User-Id", "thread_liker")
+	ensureIdempotencyHeader(likeReq, "promote-thread-like")
 	likeRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(likeRec, likeReq)
 	if likeRec.Code != http.StatusOK {
@@ -225,17 +212,18 @@ func TestPromotePostKeepsCountersAndCommentThread(t *testing.T) {
 
 	promoteReq := httptest.NewRequest(
 		http.MethodPost,
-		"/v1/content/posts/"+postID+":promoteToWork",
+		"/content/posts/"+postID+":promoteToWork",
 		strings.NewReader(`{
 			"contentType":"article",
 			"title":"升级后的长文",
 			"articleMarkdown":"# 升级后的长文\n\n升级后正文",
-			"articleMarkdownVersion":"qwq-rich-md/1",
+			"markdownDialect":"qwq-rich-md",
 			"articleAssetManifest":{"assets":[]}
 		}`),
 	)
 	promoteReq.Header.Set("Content-Type", "application/json")
 	promoteReq.Header.Set("X-Client-User-Id", "promote_thread_author")
+	ensureIdempotencyHeader(promoteReq, "promote-thread")
 	promoteRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(promoteRec, promoteReq)
 	if promoteRec.Code != http.StatusOK {
@@ -246,14 +234,14 @@ func TestPromotePostKeepsCountersAndCommentThread(t *testing.T) {
 	if err := json.Unmarshal(promoteRec.Body.Bytes(), &promoteResp); err != nil {
 		t.Fatalf("decode promote response: %v", err)
 	}
-	if promoteResp["_id"] != postID {
-		t.Fatalf("expected promote keep same post id, got %v", promoteResp["_id"])
+	if promoteResp["postId"] != postID {
+		t.Fatalf("expected promote keep same post id, got %v", promoteResp["postId"])
 	}
 	if promoteResp["contentIdentity"] != "work" {
 		t.Fatalf("expected work identity after promote, got %v", promoteResp["contentIdentity"])
 	}
 
-	countersReq := httptest.NewRequest(http.MethodGet, "/v1/content/posts/"+postID+"/counters", nil)
+	countersReq := httptest.NewRequest(http.MethodGet, "/content/posts/"+postID+"/counters", nil)
 	countersRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(countersRec, countersReq)
 	if countersRec.Code != http.StatusOK {
@@ -270,7 +258,7 @@ func TestPromotePostKeepsCountersAndCommentThread(t *testing.T) {
 		t.Fatalf("expected comment counter preserved, got %v", counters["comment"])
 	}
 
-	commentsReq := httptest.NewRequest(http.MethodGet, "/v1/content/posts/"+postID+"/comments?limit=20", nil)
+	commentsReq := httptest.NewRequest(http.MethodGet, "/content/posts/"+postID+"/comments?limit=20", nil)
 	commentsRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(commentsRec, commentsReq)
 	if commentsRec.Code != http.StatusOK {
@@ -293,17 +281,17 @@ func TestPromotePostKeepsCountersAndCommentThread(t *testing.T) {
 func TestAssistantAccessRevokedAfterSettingsChange(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	created := createPostWithAuthor(t, "assistant_author", `{
+	created := submitPublishedPostWithAuthor(t, "assistant_author", `{
 		"contentType":"article",
 		"contentIdentity":"work",
 		"title":"可被小趣引用的作品",
 		"body":"初始正文"
 	}`)
-	postID, _ := created["_id"].(string)
+	postID, _ := created["postId"].(string)
 
 	req := httptest.NewRequest(
 		http.MethodPatch,
-		"/v1/content/posts/"+postID+"/settings",
+		"/content/posts/"+postID+"/settings",
 		strings.NewReader(`{
 			"visibility":"private",
 			"assistantUsePolicy":"exclude"
@@ -311,6 +299,7 @@ func TestAssistantAccessRevokedAfterSettingsChange(t *testing.T) {
 	)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Client-User-Id", "assistant_author")
+	ensureIdempotencyHeader(req, "assistant-settings")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 
@@ -318,7 +307,7 @@ func TestAssistantAccessRevokedAfterSettingsChange(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	getReq := httptest.NewRequest(http.MethodGet, "/v1/content/posts/"+postID, nil)
+	getReq := httptest.NewRequest(http.MethodGet, "/content/posts/"+postID, nil)
 	getReq.Header.Set("X-Client-User-Id", "assistant_author")
 	getRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(getRec, getReq)
@@ -336,7 +325,7 @@ func TestAssistantAccessRevokedAfterSettingsChange(t *testing.T) {
 		t.Fatalf("expected assistantUsePolicy=exclude, got %v", getResp["assistantUsePolicy"])
 	}
 
-	viewerReq := httptest.NewRequest(http.MethodGet, "/v1/content/posts/"+postID, nil)
+	viewerReq := httptest.NewRequest(http.MethodGet, "/content/posts/"+postID, nil)
 	viewerReq.Header.Set("X-Client-User-Id", "assistant_viewer")
 	viewerRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(viewerRec, viewerReq)
@@ -360,15 +349,15 @@ func TestAssistantAccessRevokedAfterSettingsChange(t *testing.T) {
 func TestPrivatePostBlocksNonAuthorViewer(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	created := createPostWithAuthor(t, "private_author", `{
+	created := submitPublishedPostWithAuthor(t, "private_author", `{
 		"contentType":"article",
 		"title":"私密作品",
 		"body":"仅自己可见",
 		"visibility":"private"
 	}`)
-	postID, _ := created["_id"].(string)
+	postID, _ := created["postId"].(string)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/content/posts/"+postID, nil)
+	req := httptest.NewRequest(http.MethodGet, "/content/posts/"+postID, nil)
 	req.Header.Set("X-Client-User-Id", "other_viewer")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
@@ -395,21 +384,17 @@ func assertStablePostNotFound(t *testing.T, raw []byte) {
 
 func TestPostCreateRejectsDirectCirclePlacement(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
-	request := httptest.NewRequest(http.MethodPost, "/v1/content/posts", strings.NewReader(`{
+	request := newPostPublicationRequestForTest(t, "circle_author", `{
 		"contentType":"article",
 		"contentIdentity":"work",
 		"title":"圈内作品",
 		"body":"仅圈成员可见",
 		"articleMarkdown":"# 圈内作品\n\n仅圈成员可见",
-		"articleMarkdownVersion":"qwq-rich-md/1",
+		"markdownDialect":"qwq-rich-md",
 		"articleAssetManifest":{"assets":[]},
 		"visibility":"circle_visible",
 		"circleIds":["circle_alpha"]
-	}`))
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("X-Client-User-Id", "circle_author")
-	request.Header.Set("X-Client-Sub-Account-Id", "circle_author")
-	request.Header.Set("Idempotency-Key", "retired-circle-placement")
+	}`)
 	recorder := httptest.NewRecorder()
 	testHandler.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusBadRequest {
@@ -420,12 +405,12 @@ func TestPostCreateRejectsDirectCirclePlacement(t *testing.T) {
 func TestPostProjectionRebuildReplaysDurableOutbox(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	created := createPostWithAuthor(t, "rebuild_author", `{
+	created := submitPublishedPostWithAuthor(t, "rebuild_author", `{
 		"contentType":"article",
 		"title":"记录作品",
 		"body":"等待补投影"
 	}`)
-	postID, _ := created["_id"].(string)
+	postID, _ := created["postId"].(string)
 	if postID == "" {
 		t.Fatal("expected post id")
 	}
@@ -452,8 +437,8 @@ func TestPostProjectionRebuildReplaysDurableOutbox(t *testing.T) {
 	if err != nil {
 		t.Fatalf("replay durable Post outbox: %v", err)
 	}
-	if count < 2 {
-		t.Fatalf("expected CreatePost and PublishPost facts to replay, got %d", count)
+	if count != 1 {
+		t.Fatalf("expected one atomic PostPublished fact to replay, got %d", count)
 	}
 
 	var projected bson.M
@@ -479,12 +464,12 @@ func TestPostProjectionRebuildReplaysDurableOutbox(t *testing.T) {
 func TestDiscoveryProjectionPersistsAuthorSubAccountID(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	created := createPostWithAuthor(t, "projection_author", `{
+	created := submitPublishedPostWithAuthor(t, "projection_author", `{
 		"contentType":"article",
 		"title":"作者主键投影",
 		"body":"发现流必须保留 canonical subAccountId"
 	}`)
-	postID, _ := created["_id"].(string)
+	postID, _ := created["postId"].(string)
 	if postID == "" {
 		t.Fatal("expected post id")
 	}
@@ -503,12 +488,12 @@ func TestDiscoveryProjectionPersistsAuthorSubAccountID(t *testing.T) {
 func TestListUserPostsByIdentity(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	createPostWithAuthor(t, "identity_feed_author", `{
+	submitPublishedPostWithAuthor(t, "identity_feed_author", `{
 		"contentType":"micro",
 		"contentIdentity":"moment",
 		"body":"早安点滴"
 	}`)
-	createPostWithAuthor(t, "identity_feed_author", `{
+	submitPublishedPostWithAuthor(t, "identity_feed_author", `{
 		"contentType":"article",
 		"contentIdentity":"work",
 		"title":"旅行笔记",
@@ -517,7 +502,7 @@ func TestListUserPostsByIdentity(t *testing.T) {
 
 	req := httptest.NewRequest(
 		http.MethodGet,
-		"/v1/content/sub-accounts/identity_feed_author/posts?identity=work&type=article&limit=20",
+		"/content/sub-accounts/identity_feed_author/posts?identity=work&type=article&limit=20",
 		nil,
 	)
 	rec := httptest.NewRecorder()

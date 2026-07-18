@@ -12,9 +12,9 @@ func TestContract_JoinCall(t *testing.T) {
 	resp := createTestCall(t, "user_join_001")
 	callID := extractSessionID(t, resp)
 
-	doPost(t, "/v1/rtc/calls/"+callID+"/answer", `{}`, "user_invitee_001", http.StatusOK)
+	doPost(t, "/rtc/calls/"+callID+"/answer", `{}`, "user_invitee_001", http.StatusOK)
 
-	joinResp := doPost(t, "/v1/rtc/calls/"+callID+"/join", `{}`, "user_invitee_001", http.StatusOK)
+	joinResp := doPost(t, "/rtc/calls/"+callID+"/join", `{}`, "user_invitee_001", http.StatusOK)
 	session, ok := joinResp["session"].(map[string]any)
 	if !ok {
 		t.Fatal("join response missing session")
@@ -35,11 +35,11 @@ func TestContract_LeaveCall(t *testing.T) {
 	resp := createTestCall(t, "user_leave_001")
 	callID := extractSessionID(t, resp)
 
-	doPost(t, "/v1/rtc/calls/"+callID+"/answer", `{}`, "user_invitee_001", http.StatusOK)
-	doPost(t, "/v1/rtc/calls/"+callID+"/join", `{}`, "user_invitee_001", http.StatusOK)
-	doPost(t, "/v1/rtc/calls/"+callID+"/join", `{}`, "user_leave_001", http.StatusOK)
+	doPost(t, "/rtc/calls/"+callID+"/answer", `{}`, "user_invitee_001", http.StatusOK)
+	doPost(t, "/rtc/calls/"+callID+"/join", `{}`, "user_invitee_001", http.StatusOK)
+	doPost(t, "/rtc/calls/"+callID+"/join", `{}`, "user_leave_001", http.StatusOK)
 
-	leaveResp := doPost(t, "/v1/rtc/calls/"+callID+"/leave", `{}`, "user_leave_001", http.StatusOK)
+	leaveResp := doPost(t, "/rtc/calls/"+callID+"/leave", `{}`, "user_leave_001", http.StatusOK)
 	status := leaveResp["status"]
 	if status == "ended" {
 		t.Logf("call ended after initiator leave (expected if only 1 active remains)")
@@ -52,13 +52,13 @@ func TestContract_LeaveCall_LastParticipantEndsCall(t *testing.T) {
 	resp := createTestCall(t, "user_last_001")
 	callID := extractSessionID(t, resp)
 
-	doPost(t, "/v1/rtc/calls/"+callID+"/answer", `{}`, "user_invitee_001", http.StatusOK)
-	doPost(t, "/v1/rtc/calls/"+callID+"/join", `{}`, "user_invitee_001", http.StatusOK)
-	doPost(t, "/v1/rtc/calls/"+callID+"/join", `{}`, "user_last_001", http.StatusOK)
+	doPost(t, "/rtc/calls/"+callID+"/answer", `{}`, "user_invitee_001", http.StatusOK)
+	doPost(t, "/rtc/calls/"+callID+"/join", `{}`, "user_invitee_001", http.StatusOK)
+	doPost(t, "/rtc/calls/"+callID+"/join", `{}`, "user_last_001", http.StatusOK)
 
-	doPost(t, "/v1/rtc/calls/"+callID+"/leave", `{}`, "user_last_001", http.StatusOK)
+	doPost(t, "/rtc/calls/"+callID+"/leave", `{}`, "user_last_001", http.StatusOK)
 
-	leaveResp := doPost(t, "/v1/rtc/calls/"+callID+"/leave", `{}`, "user_invitee_001", http.StatusOK)
+	leaveResp := doPost(t, "/rtc/calls/"+callID+"/leave", `{}`, "user_invitee_001", http.StatusOK)
 	if leaveResp["status"] != "ended" {
 		t.Errorf("expected status=ended after last participant leaves, got %v", leaveResp["status"])
 	}
@@ -70,15 +70,15 @@ func TestContract_LeaveCall_LastParticipantEndsCall(t *testing.T) {
 func TestContract_InviteToCall(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
-	resp := doPost(t, "/v1/rtc/calls",
+	resp := doPost(t, "/rtc/calls",
 		`{"callType":"audio","inviteeIds":["user_inv_b"],"circleId":"circle_001"}`,
 		"user_inv_001", http.StatusCreated)
 	callID := extractSessionID(t, resp)
 
-	doPost(t, "/v1/rtc/calls/"+callID+"/answer", `{}`, "user_inv_b", http.StatusOK)
-	doPost(t, "/v1/rtc/calls/"+callID+"/join", `{}`, "user_inv_b", http.StatusOK)
+	doPost(t, "/rtc/calls/"+callID+"/answer", `{}`, "user_inv_b", http.StatusOK)
+	doPost(t, "/rtc/calls/"+callID+"/join", `{}`, "user_inv_b", http.StatusOK)
 
-	inviteResp := doPost(t, "/v1/rtc/calls/"+callID+"/invite",
+	inviteResp := doPost(t, "/rtc/calls/"+callID+"/invite",
 		`{"inviteeIds":["user_inv_c","user_inv_d"]}`, "user_inv_001", http.StatusOK)
 
 	participants, ok := inviteResp["participants"].([]any)
@@ -93,20 +93,20 @@ func TestContract_InviteToCall(t *testing.T) {
 func TestContract_MultiPartyJoinLeave(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
-	resp := doPost(t, "/v1/rtc/calls",
+	resp := doPost(t, "/rtc/calls",
 		`{"callType":"video","inviteeIds":["user_mp_b","user_mp_c"],"circleId":"circle_multi"}`,
 		"user_mp_001", http.StatusCreated)
 	callID := extractSessionID(t, resp)
 
-	doPost(t, "/v1/rtc/calls/"+callID+"/answer", `{}`, "user_mp_b", http.StatusOK)
-	doPost(t, "/v1/rtc/calls/"+callID+"/join", `{}`, "user_mp_b", http.StatusOK)
+	doPost(t, "/rtc/calls/"+callID+"/answer", `{}`, "user_mp_b", http.StatusOK)
+	doPost(t, "/rtc/calls/"+callID+"/join", `{}`, "user_mp_b", http.StatusOK)
 
-	doPost(t, "/v1/rtc/calls/"+callID+"/answer", `{}`, "user_mp_c", http.StatusOK)
-	doPost(t, "/v1/rtc/calls/"+callID+"/join", `{}`, "user_mp_c", http.StatusOK)
+	doPost(t, "/rtc/calls/"+callID+"/answer", `{}`, "user_mp_c", http.StatusOK)
+	doPost(t, "/rtc/calls/"+callID+"/join", `{}`, "user_mp_c", http.StatusOK)
 
-	doPost(t, "/v1/rtc/calls/"+callID+"/join", `{}`, "user_mp_001", http.StatusOK)
+	doPost(t, "/rtc/calls/"+callID+"/join", `{}`, "user_mp_001", http.StatusOK)
 
-	code, getResp := doGet(t, "/v1/rtc/calls/"+callID, "user_mp_001")
+	code, getResp := doGet(t, "/rtc/calls/"+callID, "user_mp_001")
 	if code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", code)
 	}
@@ -118,9 +118,9 @@ func TestContract_MultiPartyJoinLeave(t *testing.T) {
 		t.Error("missing participantCount")
 	}
 
-	doPost(t, "/v1/rtc/calls/"+callID+"/leave", `{}`, "user_mp_b", http.StatusOK)
+	doPost(t, "/rtc/calls/"+callID+"/leave", `{}`, "user_mp_b", http.StatusOK)
 
-	code, getResp2 := doGet(t, "/v1/rtc/calls/"+callID, "user_mp_001")
+	code, getResp2 := doGet(t, "/rtc/calls/"+callID, "user_mp_001")
 	if code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", code)
 	}
@@ -146,18 +146,18 @@ func TestContract_MaxParticipantsLimit(t *testing.T) {
 	}
 	inviteeJSON += "]"
 
-	resp := doPost(t, "/v1/rtc/calls",
+	resp := doPost(t, "/rtc/calls",
 		fmt.Sprintf(`{"callType":"audio","inviteeIds":%s,"circleId":"circle_limit"}`, inviteeJSON),
 		"user_limit_initiator", http.StatusCreated)
 	callID := extractSessionID(t, resp)
 
 	for _, id := range invitees[:5] {
-		doPost(t, "/v1/rtc/calls/"+callID+"/answer", `{}`, id, http.StatusOK)
-		doPost(t, "/v1/rtc/calls/"+callID+"/join", `{}`, id, http.StatusOK)
+		doPost(t, "/rtc/calls/"+callID+"/answer", `{}`, id, http.StatusOK)
+		doPost(t, "/rtc/calls/"+callID+"/join", `{}`, id, http.StatusOK)
 	}
-	doPost(t, "/v1/rtc/calls/"+callID+"/join", `{}`, "user_limit_initiator", http.StatusOK)
+	doPost(t, "/rtc/calls/"+callID+"/join", `{}`, "user_limit_initiator", http.StatusOK)
 
-	code, _ := doPostAny(t, "/v1/rtc/calls/"+callID+"/invite",
+	code, _ := doPostAny(t, "/rtc/calls/"+callID+"/invite",
 		`{"inviteeIds":["user_over_limit_1","user_over_limit_2"]}`, "user_limit_initiator")
 	_ = code
 }
@@ -169,7 +169,7 @@ func TestContract_ResponseShape_HasRequiredFields(t *testing.T) {
 	session := extractSession(t, resp)
 
 	requiredFields := []string{
-		"_id", "callType", "status", "initiatorId", "roomId",
+		"callId", "callType", "status", "initiatorId", "roomId",
 		"maxParticipants", "participantCount", "participants",
 		"createdAt", "updatedAt",
 	}

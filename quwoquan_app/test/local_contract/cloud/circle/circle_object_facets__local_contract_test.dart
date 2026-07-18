@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/cloud/remote/circle/post_placement/post_placement_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
@@ -30,13 +31,13 @@ void main() {
     },
   );
 
-  test('LeaveCircle version is encoded only as validated If-Match', () {
+  test('LeaveCircle is a server-owned state transition without If-Match', () {
     final payload = encodeLeaveCircleMembershipCommand(
-      LeaveCircleMembershipCommand(circleId: 'circle-1', expectedVersion: 7),
+      LeaveCircleMembershipCommand(circleId: 'circle-1'),
     );
 
     expect(payload.pathParameters, <String, String>{'circleId': 'circle-1'});
-    expect(payload.headers, <String, String>{'If-Match': '"7"'});
+    expect(payload.headers, isEmpty);
     expect(payload.body, isNull);
   });
 
@@ -109,6 +110,53 @@ void main() {
   );
 
   test(
+    'CirclePostPlacement retries reuse a stable business idempotency key',
+    () async {
+      final executor = _CircleRecordingExecutor(
+        response: <String, Object?>{
+          'placementId': 'placement-1',
+          'version': 1,
+          'state': 'active',
+          'idempotentReplay': false,
+        },
+      );
+      final contexts = <CloudOperationInvocationContext>[];
+      final remote = RemoteCirclePostPlacementCommandWriter(
+        client: GeneratedCloudOperationClient(executor),
+        invocationContext: (clientPageId, idempotencyKey) {
+          final context = CloudOperationInvocationContext(
+            surfaceId: 'createWorkspace',
+            clientPageId: clientPageId,
+            actor: const CloudOperationActorContext(personaId: 'persona-1'),
+            idempotencyKey: idempotencyKey,
+          );
+          contexts.add(context);
+          return context;
+        },
+      );
+      final command = PlaceCirclePostCommand(
+        circleId: 'circle-1',
+        groupId: 'group-1',
+        postId: 'post-1',
+      );
+
+      await remote.placePost(command);
+      await remote.placePost(command);
+
+      expect(contexts, hasLength(2));
+      expect(contexts.first.idempotencyKey, contexts.last.idempotencyKey);
+      expect(
+        contexts.first.idempotencyKey,
+        'circle-placement:circle-1:group-1:post-1',
+      );
+      expect(executor.body, <String, Object?>{
+        'postId': 'post-1',
+        'groupId': 'group-1',
+      });
+    },
+  );
+
+  test(
     'CircleGroup create uses generated typed ABI without actor fields',
     () async {
       final executor = _CircleRecordingExecutor(
@@ -145,7 +193,7 @@ void main() {
     },
   );
 
-  test('CircleGroup update/archive carry version only through If-Match', () {
+  test('CircleGroup only uses If-Match for multi-writer snapshot updates', () {
     final update = encodeUpdateCircleGroupCommand(
       UpdateCircleGroupCommand(
         circleId: 'circle-1',
@@ -158,19 +206,16 @@ void main() {
     expect(update.body, <String, Object?>{'name': '更新名称'});
 
     final archive = encodeArchiveCircleGroupCommand(
-      ArchiveCircleGroupCommand(
-        circleId: 'circle-1',
-        groupId: 'group-1',
-        expectedVersion: 8,
-      ),
+      ArchiveCircleGroupCommand(circleId: 'circle-1', groupId: 'group-1'),
     );
-    expect(archive.headers, <String, String>{'If-Match': '"8"'});
+    expect(archive.headers, isEmpty);
     expect(archive.body, isNull);
   });
 
   test('CircleGroup Reader rejects aggregate storage and audit aliases', () {
     expect(decodeCircleGroupSlice(_groupSlice()).groupId, 'group-1');
     expect(
+      // 拒绝 _id alias：未知/存储键不得进入 Reader 解码
       () => decodeCircleGroupSlice(_groupSlice()..['_id'] = 'group-1'),
       throwsFormatException,
     );
@@ -194,7 +239,6 @@ void main() {
             circleId: 'circle-1',
             groupId: 'group-1',
             personaId: 'persona-2',
-            expectedVersion: 4,
           ),
           context: const CloudOperationInvocationContext(
             surfaceId: 'circleDetail',
@@ -210,7 +254,7 @@ void main() {
       'groupId': 'group-1',
       'personaId': 'persona-2',
     });
-    expect(executor.headers, <String, String>{'If-Match': '"4"'});
+    expect(executor.headers, isEmpty);
     expect(executor.body, isNull);
     expect(
       executor.operation?.canonicalOperationId,
@@ -315,6 +359,7 @@ final class _CircleRecordingExecutor implements CloudOperationExecutor {
 
   final Object? response;
   CloudOperationContract? operation;
+  CloudOperationInvocationContext? context;
   Map<String, String> pathParameters = const <String, String>{};
   Map<String, String> queryParameters = const <String, String>{};
   Map<String, String> headers = const <String, String>{};
@@ -328,6 +373,7 @@ final class _CircleRecordingExecutor implements CloudOperationExecutor {
     required CloudOperationRequestEncoder requestEncoder,
   }) async {
     this.operation = operation;
+    this.context = context;
     final payload = requestEncoder();
     pathParameters = payload.pathParameters;
     queryParameters = payload.queryParameters;

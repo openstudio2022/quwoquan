@@ -322,7 +322,7 @@ def query_control_plane_triage(args: argparse.Namespace) -> dict[str, Any] | Non
         return None
     if args.domain == "product":
         path = build_query_path(
-            "/v1/control-plane/product/triage/summary",
+            "/control-plane/product/triage/summary",
             {
                 "pageName": args.page_name,
                 "surfaceId": args.surface_id,
@@ -330,7 +330,7 @@ def query_control_plane_triage(args: argparse.Namespace) -> dict[str, Any] | Non
         )
     else:
         path = build_query_path(
-            "/v1/control-plane/platform/triage/summary",
+            "/control-plane/platform/triage/summary",
             {
                 "env": args.env,
                 "cluster": args.cluster,

@@ -1,4 +1,3 @@
-version: 1
 aggregate: CallSession
 layer: e2e
 
@@ -16,13 +15,14 @@ execution:
 
 scenarios:
   - name: rtc_call_reconnect_after_network_jitter
+    source: rtc_call_reconnect_after_network_jitter
     description: 建连成功后发生短暂抖动，RTC 服务恢复会话并保持控制面策略一致
     test_type: ui_journey
     patrol_flow: rtc_call_reconnect user_acceptance pending PlatformAutomator scenario
     actors:
       app: lib/ui/chat/pages/chat_conversation_page.dart
       gateway: realtime-gateway websocket upgrade
-      service: rtc-service POST /v1/rtc/call-sessions
+      service: rtc-service POST /rtc/call-sessions
       media: livekit-sfu
     steps:
       - user starts a one-to-one call

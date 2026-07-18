@@ -127,6 +127,48 @@ func (s *Store) FindReceipt(
 	return commentports.CommitResult{Aggregate: aggregate, Replayed: true}, true, nil
 }
 
+func (s *Store) RecordIdempotentReceipt(
+	_ context.Context,
+	idempotent commentports.IdempotentReceipt,
+) (commentports.CommitResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if existing, found := s.receipts[idempotent.IdempotencyKey]; found &&
+		existing.expiresAt.After(time.Now().UTC()) {
+		if existing.commandName != idempotent.CommandName ||
+			existing.commandDigest != idempotent.CommandDigest {
+			return commentports.CommitResult{},
+				contentgenerated.AppErrorFromIdempotencyConflict(
+					"test comment receipt digest mismatch",
+				)
+		}
+		aggregate, err := commentmodel.Restore(existing.snapshot)
+		return commentports.CommitResult{
+			Aggregate: aggregate,
+			Replayed:  true,
+		}, err
+	}
+	if idempotent.Aggregate == nil {
+		return commentports.CommitResult{},
+			contentgenerated.AppErrorFromVersionConflict(
+				"comment no-op receipt requires aggregate",
+			)
+	}
+	snapshot := cloneSnapshot(idempotent.Aggregate.Snapshot())
+	expiresAt := idempotent.ReceiptExpiresAt.UTC()
+	if expiresAt.IsZero() {
+		expiresAt = time.Now().UTC().Add(24 * time.Hour)
+	}
+	s.receipts[idempotent.IdempotencyKey] = receipt{
+		commandName:   idempotent.CommandName,
+		commandDigest: idempotent.CommandDigest,
+		snapshot:      snapshot,
+		expiresAt:     expiresAt,
+	}
+	aggregate, err := commentmodel.Restore(snapshot)
+	return commentports.CommitResult{Aggregate: aggregate}, err
+}
+
 func (s *Store) Commit(
 	_ context.Context,
 	commit commentports.Commit,

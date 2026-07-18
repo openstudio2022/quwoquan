@@ -1,5 +1,5 @@
 version: 1
-updated_at: 2026-07-13T13:59:45.232459Z
+updated_at: 2026-07-18T01:35:45.772508Z
 features:
     - id: assistant-run-learning
       name: assistant-run-learning
@@ -1792,24 +1792,10 @@ features:
               domain: ""
               status: specified
               tags: []
-            - id: analytics-metric-dictionary--metric-dimension-standard
-              name: analytics-metric-dictionary--metric-dimension-standard
-              level: L3_story
-              path: product-ops-growth/event-ingestion-and-analytics/analytics-metric-dictionary--metric-dimension-standard
-              domain: ""
-              status: specified
-              tags: []
             - id: event-schema-governance
               name: event-schema-governance
               level: L3_story
               path: product-ops-growth/event-ingestion-and-analytics/event-schema-governance
-              domain: ""
-              status: specified
-              tags: []
-            - id: event-schema-governance--event-version-compatibility
-              name: event-schema-governance--event-version-compatibility
-              level: L3_story
-              path: product-ops-growth/event-ingestion-and-analytics/event-schema-governance--event-version-compatibility
               domain: ""
               status: specified
               tags: []

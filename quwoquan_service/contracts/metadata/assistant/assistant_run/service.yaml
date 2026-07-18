@@ -1,4 +1,3 @@
-version: 1
 
 service:
   name: assistant-service
@@ -13,7 +12,8 @@ service:
 
 api_routes:
   - method: POST
-    path: /v1/assistant/search/xiaoqu
+    path: /assistant/search/xiaoqu
+
     operation: SearchXiaoquResults
     actor: persona
     application:
@@ -34,7 +34,8 @@ api_routes:
       visibility: private
 
   - method: POST
-    path: /v1/assistant/conversations/{conversationId}/runs
+    path: /assistant/conversations/{conversationId}/runs
+
     operation: StartAssistantRun
     actor: persona
     application:
@@ -55,7 +56,8 @@ api_routes:
       visibility: private
 
   - method: GET
-    path: /v1/assistant/runs/{runId}
+    path: /assistant/runs/{runId}
+
     operation: GetAssistantRun
     actor: persona
     application:
@@ -74,7 +76,8 @@ api_routes:
       visibility: private
 
   - method: GET
-    path: /v1/assistant/runs/{runId}/events
+    path: /assistant/runs/{runId}/events
+
     operation: StreamAssistantRunEvents
     actor: persona
     application:
@@ -94,7 +97,8 @@ api_routes:
       visibility: private
 
   - method: POST
-    path: /v1/assistant/page-context
+    path: /assistant/page-context
+
     operation: ReportPageContext
     actor: persona
     application:
@@ -116,7 +120,8 @@ api_routes:
       visibility: private
 
   - method: GET
-    path: /v1/assistant/personalization
+    path: /assistant/personalization
+
     operation: GetEntryPersonalization
     actor: persona
     application:
@@ -136,7 +141,8 @@ api_routes:
       visibility: private
 
   - method: GET
-    path: /v1/assistant/suggested-actions
+    path: /assistant/suggested-actions
+
     operation: GetSuggestedActions
     actor: persona
     application:
@@ -156,7 +162,8 @@ api_routes:
       visibility: private
 
   - method: GET
-    path: /v1/assistant/policy
+    path: /assistant/policy
+
     operation: GetPolicy
     actor: none
     application:
@@ -169,7 +176,8 @@ api_routes:
     response_entity: AssistantPolicyView
 
   - method: GET
-    path: /v1/assistant/skills
+    path: /assistant/skills
+
     operation: ListSkills
     actor: none
     application:
@@ -183,7 +191,8 @@ api_routes:
     response_entity: AssistantSkillCatalogListView
 
   - method: POST
-    path: /v1/assistant/skills/creation-suggest
+    path: /assistant/skills/creation-suggest
+
     operation: SuggestCreationAssistance
     actor: persona
     application:
@@ -206,7 +215,8 @@ api_routes:
       visibility: private
 
   - method: GET
-    path: /v1/assistant/tasks
+    path: /assistant/tasks
+
     operation: ListAssistantTasks
     actor: persona
     application:
@@ -226,7 +236,8 @@ api_routes:
       visibility: private
 
   - method: GET
-    path: /v1/assistant/memories
+    path: /assistant/memories
+
     operation: ListAssistantMemories
     actor: persona
     application:
@@ -246,7 +257,8 @@ api_routes:
       visibility: private
 
   - method: GET
-    path: /v1/assistant/ops/learning-summary
+    path: /assistant/ops/learning-summary
+
     operation: GetLearningOpsSummary
     actor: account
     application:
@@ -290,22 +302,22 @@ contract_test:
       data_source: fields.yaml
       scenarios:
         - name: page_context_report
-          route: POST /v1/assistant/page-context
+          route: POST /assistant/page-context
           variants: [content_detail, feed, chat, circle]
           assertions: [status_200, context_cached]
 
         - name: suggested_actions
-          route: GET /v1/assistant/suggested-actions
+          route: GET /assistant/suggested-actions
           assertions: [status_200, actions_relevant_to_page]
 
         - name: entry_personalization
-          route: GET /v1/assistant/personalization
+          route: GET /assistant/personalization
           assertions: [status_200, welcome_and_chips_returned]
 
         - name: skill_consent_flow
           routes:
-            - POST /v1/assistant/skills/{skillId}/consent
-            - DELETE /v1/assistant/skills/{skillId}/consent
+            - POST /assistant/skills/{skillId}/consent
+            - DELETE /assistant/skills/{skillId}/consent
           assertions: [consent_granted, consent_revoked]
 
     service_side:

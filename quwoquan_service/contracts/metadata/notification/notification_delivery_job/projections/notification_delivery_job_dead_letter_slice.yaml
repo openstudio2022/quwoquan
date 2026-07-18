@@ -1,4 +1,3 @@
-version: 1
 read_model: NotificationDeliveryJobDeadLetterSlice
 
 description: NotificationDeliveryJob dead-letter operator 查询的具名切片。

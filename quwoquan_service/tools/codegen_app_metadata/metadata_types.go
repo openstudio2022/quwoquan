@@ -26,11 +26,11 @@ type sharedFieldDef struct {
 
 type fieldDef struct {
 	Name           string   `yaml:"name"`
+	Source         string   `yaml:"source"`
 	Type           string   `yaml:"type"`
 	Constraints    []string `yaml:"constraints"`
 	EnumRef        string   `yaml:"enum_ref"`
 	ClientDartName string   `yaml:"client_dart_name"`
-	JsonKeys       []string `yaml:"json_keys"`
 	ClientDefault  string   `yaml:"client_default"`
 	ItemEntity     string   `yaml:"item_entity"`
 }
@@ -71,31 +71,16 @@ type routeDef struct {
 	ResponseBody     string        `yaml:"response_body"`
 	ResponseBodyKind string        `yaml:"response_body_kind"`
 	Security         routeSecurity `yaml:"security"`
-	// Back-compat: 旧写法 auth: required / auth_required: bool。统一收敛到 security.auth_mode。
-	Auth         string `yaml:"auth"`
-	AuthRequired *bool  `yaml:"auth_required"`
 }
 
 // resolveAuthMode 返回 public | optional | required 三态。
-// 优先 security.auth_mode；其次兼容旧 auth/auth_required；缺失声明默认 required，
-// 公开/可选 operation 必须由 metadata 显式授权，禁止 fail-open。
+// 只认 security.auth_mode；未知或缺失声明一律收紧为 required，禁止 fail-open，
+// 同时禁止旧 auth/auth_required 双轨。
 func (r routeDef) resolveAuthMode() string {
 	mode := strings.ToLower(strings.TrimSpace(r.Security.AuthMode))
 	switch mode {
 	case "public", "optional", "required":
 		return mode
-	}
-	if strings.EqualFold(strings.TrimSpace(r.Auth), "required") {
-		return "required"
-	}
-	if strings.EqualFold(strings.TrimSpace(r.Auth), "optional") {
-		return "optional"
-	}
-	if r.AuthRequired != nil {
-		if *r.AuthRequired {
-			return "required"
-		}
-		return "public"
 	}
 	return "required"
 }
@@ -119,15 +104,13 @@ type integrationLocationServiceFile struct {
 // ── {domain}/{entity}/projections/*.yaml ─────────────────────────────────────
 
 type projectionFieldDef struct {
-	Name                   string   `yaml:"name"`
-	DartType               string   `yaml:"dart_type"`
-	WireType               string   `yaml:"type"`
-	Nullable               bool     `yaml:"nullable"`
-	Source                 string   `yaml:"source"`
-	Aliases                []string `yaml:"aliases"`
-	Default                string   `yaml:"default"`
-	Description            string   `yaml:"description"`
-	SkipEmptyStringAliases bool     `yaml:"skip_empty_string_aliases"`
+	Name        string `yaml:"name"`
+	DartType    string `yaml:"dart_type"`
+	WireType    string `yaml:"type"`
+	Nullable    bool   `yaml:"nullable"`
+	Source      string `yaml:"source"`
+	Default     string `yaml:"default"`
+	Description string `yaml:"description"`
 	// When dart_type is List<SomeDto>, set to SomeDto; fromMap uses SomeDto.fromMap per element.
 	ListElementDartClass string `yaml:"list_element_dart_class"`
 	// When dart_type is a class with SomeDto.fromMap(Map<String,dynamic>) and wire is a JSON object.
@@ -216,7 +199,7 @@ type discoveryTabDef struct {
 	Order       int    `yaml:"order"`
 }
 
-// homeChannelDef：首页频道运营可配置项（端 meta 默认 + /v1/config/app 远程覆盖）。
+// homeChannelDef：首页频道运营可配置项（端 meta 默认 + /config/app 远程覆盖）。
 type homeChannelDef struct {
 	ID                       string            `yaml:"id"`
 	LabelKey                 string            `yaml:"label_key"`
@@ -434,6 +417,50 @@ type uiSurfaceDef struct {
 
 type uiSurfacesFile struct {
 	Surfaces []uiSurfaceDef `yaml:"surfaces"`
+}
+
+// ── _shared/app_pages.yaml + ops/event_record/event_catalog.yaml ────────────
+
+type appPageDef struct {
+	PageName          string `yaml:"page_name"`
+	RouteID           string `yaml:"route_id"`
+	InternalID        string `yaml:"internal_id"`
+	Location          string `yaml:"location"`
+	CollectPageAccess bool   `yaml:"collect_page_access"`
+}
+
+type appPagesFile struct {
+	Pages            []appPageDef `yaml:"pages"`
+	InternalPages    []appPageDef `yaml:"internal_pages"`
+	FallbackContexts []string     `yaml:"fallback_contexts"`
+}
+
+type telemetryExtensionDef struct {
+	Type          string `yaml:"type"`
+	Minimum       *int   `yaml:"minimum"`
+	Maximum       *int   `yaml:"maximum"`
+	MaxLength     int    `yaml:"max_length"`
+	MaxItems      int    `yaml:"max_items"`
+	ItemMaxLength int    `yaml:"item_max_length"`
+	Sensitive     bool   `yaml:"sensitive"`
+}
+
+type telemetryEventDef struct {
+	EventType          string   `yaml:"event_type"`
+	LogType            string   `yaml:"log_type"`
+	RequiredExtensions []string `yaml:"required_extensions"`
+	OptionalExtensions []string `yaml:"optional_extensions"`
+	NormalSampleRate   float64  `yaml:"normal_sample_rate"`
+	SlowThresholdMS    int      `yaml:"slow_threshold_ms"`
+	InternalPriority   string   `yaml:"internal_priority"`
+}
+
+type telemetryEventCatalogFile struct {
+	LogTypes        []string                         `yaml:"log_types"`
+	NetworkClasses  []string                         `yaml:"network_classes"`
+	CommonFields    []string                         `yaml:"common_fields"`
+	ExtensionFields map[string]telemetryExtensionDef `yaml:"extension_fields"`
+	Events          []telemetryEventDef              `yaml:"events"`
 }
 
 type searchNamedValueDef struct {

@@ -82,7 +82,7 @@ func TestNewObservedHTTPClient_RetryAndSingleTerminalLogging(t *testing.T) {
 		exceptionLogger,
 	)
 
-	req, _ := http.NewRequest(http.MethodGet, "http://content.internal/v1/content/feed", nil)
+	req, _ := http.NewRequest(http.MethodGet, "http://content.internal/content/feed", nil)
 	req = req.WithContext(WithCorrelationMeta(context.Background(), CorrelationMeta{
 		TraceID:   "SVC.sess.content.feed.list.t1.r1",
 		RequestID: "SVC.content.feed.list.t1.r1",

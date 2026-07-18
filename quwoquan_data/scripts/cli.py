@@ -9,7 +9,9 @@ from pathlib import Path
 sys.dont_write_bytecode = True
 
 SCRIPTS_ROOT = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPTS_ROOT.parent.parent
 sys.path.insert(0, str(SCRIPTS_ROOT))
+sys.path.insert(0, str(REPO_ROOT))
 
 from core.python_environment import maybe_reexec_for_agent_command
 
@@ -21,7 +23,7 @@ def main() -> None:
 
     from content.execution.handler import register_parser as register_task
     from content.release.canonical.handler import register_parser as register_release
-    from content.release.environment.handler import register_parser as register_ship
+    from content.release.environment.cli import register_parser as register_ship
     from governance.handler import register_parser as register_governance
     from verify.handler import register_parser as register_verify
 

@@ -1,4 +1,3 @@
-version: 1
 domain: entity
 entity: HomepageReview
 object_kind: aggregate_root
@@ -13,7 +12,7 @@ capabilities:
 
 business_rules:
   - author persona 对同一 homepage 仅有一个 active review
-  - rating 必须处于 1 到 5，正文修改使用 expectedVersion
+  - rating 必须处于 1 到 5，正文修改使用服务端内部 version CAS
   - 只有 author 可以更新或删除自己的评价
   - Homepage 只消费评价投影，不与评价聚合强一致提交
 lifecycle:

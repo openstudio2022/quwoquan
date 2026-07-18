@@ -92,7 +92,7 @@ def main() -> int:
 
     # content：任意受管控 JSON 即可（404 若路由正确也可能是业务 JSON）
     code, content_body = _req(
-        f"{base}/v1/content/posts?limit=1",
+        f"{base}/content/posts?limit=1",
         headers={"X-Test-Local-Gamma": "true"},
         timeout=timeout_seconds,
         retry_attempts=retry_attempts,
@@ -103,7 +103,7 @@ def main() -> int:
     if "local-gamma mirror http endpoint is ready" in content_body:
         failures.append("content: still hitting Caddy catch-all (plain 'ready' text)")
     if "route is not ready" in content_body and code == 404:
-        failures.append("content: Caddy 404 catch-all — check path /v1/content*")
+        failures.append("content: Caddy 404 catch-all — check path /content*")
 
     payload = json.dumps(
         {
@@ -113,7 +113,7 @@ def main() -> int:
             "maxGroupSize": 100},
     ).encode()
     code, chat_body = _req(
-        f"{base}/v1/chat/conversations",
+        f"{base}/chat/conversations",
         method="POST",
         data=payload,
         headers={
@@ -129,7 +129,7 @@ def main() -> int:
     if "local-gamma mirror http endpoint is ready" in chat_body:
         failures.append("chat: still hitting Caddy plain-text catch-all — 部署的 Caddyfile 可能过旧")
     if "local-gamma mirror route is not ready" in chat_body:
-        failures.append("chat: Caddy 404 catch-all — /v1/chat* 未反代到 chat-service")
+        failures.append("chat: Caddy 404 catch-all — /chat* 未反代到 chat-service")
     stripped = chat_body.strip()
     if code >= 200 and code < 300 and stripped and not stripped.startswith("{"):
         failures.append(f"chat: expected JSON body, got http {code}: {stripped[:160]!r}")
@@ -144,7 +144,7 @@ def main() -> int:
     # service and the service rejected the request before its handler.
     user_sync_payload = json.dumps({"afterSeq": 0, "limit": 1}).encode("utf-8")
     code, user_body = _req(
-        f"{base}/v1/user/sync",
+        f"{base}/user/sync",
         method="POST",
         data=user_sync_payload,
         headers={"Content-Type": "application/json"},
@@ -155,9 +155,9 @@ def main() -> int:
     if code == 0:
         failures.append(f"user: request failed: {user_body[:200]!r}")
     if "local-gamma mirror http endpoint is ready" in user_body:
-        failures.append("user: still hitting Caddy plain-text catch-all — /v1/user* 未反代到 user-service")
+        failures.append("user: still hitting Caddy plain-text catch-all — /user* 未反代到 user-service")
     if "local-gamma mirror route is not ready" in user_body:
-        failures.append("user: Caddy 404 catch-all — /v1/user* 未反代到 user-service")
+        failures.append("user: Caddy 404 catch-all — /user* 未反代到 user-service")
     if code != 401 or "GATEWAY.USER.unauthorized" not in user_body:
         failures.append(
             "user: expected generated authorization 401 for an anonymous sync request, "
@@ -166,7 +166,7 @@ def main() -> int:
 
     # auth：发送空 payload 仅验证 Caddy → user-service 路由，不创建 OTP challenge。
     code, auth_body = _req(
-        f"{base}/v1/auth/otp/send",
+        f"{base}/auth/otp/send",
         method="POST",
         data=b"{}",
         headers={"Content-Type": "application/json"},
@@ -180,11 +180,11 @@ def main() -> int:
             f"got http {code}: {auth_body[:200]!r}"
         )
     if "local-gamma mirror route is not ready" in auth_body:
-        failures.append("auth: Caddy 404 catch-all — /v1/auth* 未反代到 user-service")
+        failures.append("auth: Caddy 404 catch-all — /auth* 未反代到 user-service")
 
     assistant_payload = json.dumps({"summary": "gamma-route-smoke"}).encode("utf-8")
     code, assistant_body = _req(
-        f"{base}/v1/assistant/conversations",
+        f"{base}/assistant/conversations",
         method="POST",
         data=assistant_payload,
         headers={
@@ -199,11 +199,11 @@ def main() -> int:
         failures.append(f"assistant: request failed: {assistant_body[:200]!r}")
     if "local-gamma mirror http endpoint is ready" in assistant_body:
         failures.append(
-            "assistant: still hitting Caddy plain-text catch-all — /v1/assistant* 未反代到 assistant-service",
+            "assistant: still hitting Caddy plain-text catch-all — /assistant* 未反代到 assistant-service",
         )
     if "local-gamma mirror route is not ready" in assistant_body:
         failures.append(
-            "assistant: Caddy 404 catch-all — /v1/assistant* 未反代到 assistant-service",
+            "assistant: Caddy 404 catch-all — /assistant* 未反代到 assistant-service",
         )
     stripped = assistant_body.strip()
     if 200 <= code < 300:

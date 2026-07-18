@@ -22,6 +22,7 @@ for _path in (DATA_ROOT, SCRIPTS_ROOT):
         sys.path.insert(0, str(_path))
 
 from core import quality_gates as qg  # noqa: E402
+from core import quality_similarity as qs  # noqa: E402
 from core import rubric_judge as rj  # noqa: E402
 
 GOLDEN_DIR = DATA_ROOT / "tests" / "support" / "fixtures" / "golden_set"
@@ -108,7 +109,7 @@ def evaluate_goldenset(golden_dir: Path = GOLDEN_DIR) -> dict[str, Any]:
             "skeletonHeading": qg.SKELETON_HEADING_SIMILARITY,
             "skeletonEnding": qg.SKELETON_ENDING_SIMILARITY,
             "skeletonNgram": qg.SKELETON_NGRAM_SIMILARITY,
-            "semanticSimhash": qg.SEMANTIC_DUP_SIMHASH,
+            "semanticSimhash": qs.SEMANTIC_DUP_SIMHASH,
         },
         "targets": {
             "interceptRate": INTERCEPT_TARGET,

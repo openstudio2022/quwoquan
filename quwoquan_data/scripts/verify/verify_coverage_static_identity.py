@@ -4,7 +4,7 @@ walk `verticals/travel/coverage/中国/{省}/{市州}.yaml`（目录即行政层
 一文件自闭环、无总控 index——裁决 8），逐文件校验：
 
   C1  - 目录归属：省目录名/市州文件名命中行政区树 `Topic/地理/行政区/{国}` 对应层级节点
-  C2  - schema 同口径结构门：schemaVersion const、必填字段、字段类型、
+  C2  - schema 同口径结构门：schema const、必填字段、字段类型、
         未知字段阻断（必填集/enum/字段白名单从 schema/governance/master_list.schema.json 读取，
         不维护第二真相源；homepageStatus 等易变状态字段借未知字段门天然阻断）
   C3  - 归属一致性：country/province/city 字段与磁盘路径一致
@@ -54,7 +54,7 @@ def _load_schema_contract(schema_path: Path) -> dict:
         schema["properties"]["districts"]["items"]["properties"]["leaves"]["items"]
     )
     return {
-        "schemaVersion": schema["properties"]["schemaVersion"]["const"],
+        "schema": schema["properties"]["schema"]["const"],
         "fileRequired": list(schema.get("required") or []),
         "fileFields": set(schema.get("properties") or {}),
         "districtRequired": list(schema["properties"]["districts"]["items"].get("required") or []),
@@ -204,9 +204,9 @@ def scan_master_list(
         for field in contract["fileRequired"]:
             if not data.get(field):
                 errors.append(f"C2: {rel} 缺必填字段 {field}")
-        version = str(data.get("schemaVersion") or "")
-        if version and version != contract["schemaVersion"]:
-            errors.append(f"C2: {rel} schemaVersion '{version}' != '{contract['schemaVersion']}'")
+        version = str(data.get("schema") or "")
+        if version and version != contract["schema"]:
+            errors.append(f"C2: {rel} schema '{version}' != '{contract['schema']}'")
 
         # C3: 归属字段 ↔ 路径一致
         for field, expected in (("country", country), ("province", province), ("city", city)):

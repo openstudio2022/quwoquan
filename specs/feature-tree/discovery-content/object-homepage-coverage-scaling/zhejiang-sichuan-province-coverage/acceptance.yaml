@@ -9,10 +9,12 @@ node:
 scope:
   summary: 浙江、四川实体主页从覆盖清单到 Gamma App 消费的单任务端到端准出。
   in_scope:
-  - 两省覆盖清单与 encyclopedia-primary-v2 来源核验。
+  - 两省覆盖清单与 encyclopedia-primary 来源核验。
   - 浙江、四川各一条金丝雀 execution，随后 M1、M2、M3。
   - 逐图权利、Agent 正文、独立 review、canonical publish 与 immutable release。
   - Gamma 幂等导入、API 核验、动态 App UAT、观测与回滚重放。
+  - 浙江、四川各 10 个代表实体的 article/image/video 冷启动供给，共 60 个 approved posts。
+  - 同一 launch release 在 Alpha、Beta、Gamma、Prod 的 promotion、验证与回滚证据。
   out_of_scope:
   - 两省以外实体实跑。
 rollout_contract:
@@ -36,11 +38,7 @@ rollout_contract:
       cumulative: {浙江省: 922, 四川省: 1977, total: 2899}
       rollback_to: m2
   capacity:
-    soak_jobs: 30
-    minimum_safe_concurrency: 3
-    maximum_unrecovered_bridge_failures: 0
-    minimum_approved_homepages_per_hour: 18
-    maximum_object_p95_seconds: 720
+    contract_ref: quwoquan_data/verticals/travel/coverage/two_province_homepage_rollout.yaml#/capacity
 gwt_acceptance:
   GWT1:
     title: 目录、输入与凭证准入
@@ -87,7 +85,7 @@ gwt_acceptance:
     when:
     - 选择实体并构建 source unit、对象本地 source catalog 与图片候选。
     then:
-    - 主来源绑定 encyclopedia-primary-v2，图片逐项具有来源与权利结论。
+    - 主来源绑定 encyclopedia-primary，图片逐项具有来源与权利结论。
     - 普陀山 17 个页面图位与东钱湖 5 个页面图位均无数量截断；尺寸参数不进入图注。
     - cover、inline、related 三类处置互斥，groupMember 只进入相关图片。
     done_when:
@@ -174,7 +172,7 @@ gwt_acceptance:
       supporting: []
     notes: []
   GWT4:
-    title: M1、M2、M3 两省扩量与全覆盖
+    title: M1、M2、M3 两省扩量与冷启动 launch release
     given:
     - 双省金丝雀 release 的 immutable Gamma closure 已通过复验。
     when:
@@ -186,15 +184,20 @@ gwt_acceptance:
     - M1、M2、M3 创建前必须复验前一档 rollout_milestone_closure，且浙江/四川分别达到契约数量；M3 与覆盖主清单等量。
     - 四档增量目标两两不交叠，累计数量依次为 3、203、1203、2899，最终集合与 master digest 精确相等。
     - 每档使用累计 full-sync release，按 empty、canary、M1、M2 顺序回滚并 replay 当前 release。
+    - M3 闭包后按 cold_start_supply_policy 为两省各 10 个代表实体生成 article、image、video 各一篇。
+    - launch release 精确包含 2899 entities、60 approved posts 及其实际引用的 creator/media/tag 闭包。
+    - video 必须是正式 9:16 H.264 MP4 lane，具备 poster、字幕、checksum、权利和 provenance。
     done_when:
     - 两省覆盖 release 通过 verify two-province-coverage-release。
     edge_cases:
     - 外部限流或来源失败只阻断对应 execution，不计为覆盖成功。
     contract_refs:
     - quwoquan_data/scripts/verify/verify_two_province_coverage_release.py
+    - quwoquan_data/verticals/travel/cold_start_supply_policy.yaml
+    - quwoquan_data/schema/governance/cold_start_supply_policy.schema.json
     performance_points:
-    - 放量前 30-job soak 的安全并发至少 3，未恢复 bridge 基础设施失败为 0。
-    - M1 approved homepages/hour 不低于 18，P95 单对象耗时不超过 720 秒。
+    - 放量前 Cursor SDK soak 必须满足 rollout capacity 合同，且不得冒充主页生产吞吐。
+    - M1 的真实 approved homepage 吞吐与对象 P95 必须满足同一 rollout capacity 合同。
     tests:
       planned:
       - file: quwoquan_data/tests/api_integration/release/test_release_first_ship__behavior__functional__api_integration_test.py
@@ -211,16 +214,20 @@ gwt_acceptance:
       supporting: []
     notes: []
   GWT5:
-    title: Gamma 动态 App 用户旅程 UAT
+    title: 四环境 promotion 与动态 App 用户旅程 UAT
     given:
-    - 双省 release 已幂等导入 Gamma，实体主页 API 返回 200。
+    - launch release 已冻结，2899 entities 与 60 posts 的引用闭包和 digest 已通过验证。
     when:
     - 用户从标签页和搜索进入浙江、四川实体主页。
     then:
     - 正文、封面、标签与来源信息正确渲染，错误态可恢复，关键行为有 trace。
     - M1、M2、M3 分别按最多 100 实体一片顺序执行 3、13、29 个 UAT 分片，每档 App 只构建一次。
+    - Alpha 对同 digest 执行 mock/contract 投影；Beta 执行真实 full-sync、API、幂等与回滚。
+    - Gamma 执行全量 API、29 个主页分片及 feed、搜索、article/image/video 消费旅程。
+    - Prod 仅在显式确认和审批证据齐全时按 canary、M1、M2、M3、launch 灰度，并可回滚上一 release。
+    - 冷启动 feed 至少 20 条，非空率不低于 0.999，重复曝光率低于 0.01，端云 trace 完整。
     done_when:
-    - gamma-local 真设备或模拟器动态 UAT 与观测证据通过。
+    - 四环境 promotion evidence 指向同一 release digest；Gamma 动态 UAT 与 Prod rollout/rollback/replay 证据通过。
     edge_cases:
     - 未导入实体返回统一 404 语义与空态。
     contract_refs:
@@ -239,8 +246,18 @@ gwt_acceptance:
         suite: two_province_gamma_local
         cases:
         - user_acceptance.discovery_content.object_homepage_coverage_scaling.zhejiang_sichuan_province_coverage.gwt5.gamma_local
-        envs: [gamma_local]
-      supporting: []
+        envs: [gamma_local, prod]
+      supporting:
+      - layer: local_contract
+        suite: two_province_alpha_projection
+        cases:
+        - local_contract.discovery_content.object_homepage_coverage_scaling.zhejiang_sichuan_province_coverage.gwt5.alpha_projection
+        envs: [alpha]
+      - layer: api_integration
+        suite: two_province_environment_promotion
+        cases:
+        - api_integration.discovery_content.object_homepage_coverage_scaling.zhejiang_sichuan_province_coverage.gwt5.promotion
+        envs: [beta, gamma, prod]
     notes: []
 execution:
   local_gate:
@@ -248,3 +265,5 @@ execution:
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate
+  - make gate-full
+  - bash quwoquan_ops/gate/gate_repo.sh

@@ -43,7 +43,7 @@ class CreateDraftLocalStorage {
       '$_v2Prefix:$scopeKey:draft:$draftId';
 
   static Future<({List<CreateDraft> drafts, String? currentId})>
-      loadDraftsWithCurrentId() async {
+  loadDraftsWithCurrentId() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(draftsKey);
     var drafts = const <CreateDraft>[];
@@ -63,7 +63,19 @@ class CreateDraftLocalStorage {
   ) async {
     final prefs = await SharedPreferences.getInstance();
     await migrateStoredDraftsIfNeeded(scopeKey);
-    final ids = _decodeIdList(prefs.getString(scopedIndexKey(scopeKey)));
+    final indexedIds = _decodeIdList(prefs.getString(scopedIndexKey(scopeKey)));
+    final ids = <String>[...indexedIds];
+    final knownIds = indexedIds.toSet();
+    final payloadPrefix = '$_v2Prefix:$scopeKey:draft:';
+    final recoverableKeys =
+        prefs.getKeys().where((key) => key.startsWith(payloadPrefix)).toList()
+          ..sort();
+    for (final key in recoverableKeys) {
+      final id = key.substring(payloadPrefix.length).trim();
+      if (id.isNotEmpty && knownIds.add(id)) {
+        ids.add(id);
+      }
+    }
     final drafts = <CreateDraft>[];
     for (final id in ids) {
       final draft = _decodeDraftPayload(
@@ -87,16 +99,23 @@ class CreateDraftLocalStorage {
     String? currentId,
   ) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      draftsKey,
-      jsonEncode(
-        drafts.map((d) => d.toStorageMap()).toList(growable: false),
+    await _requirePersisted(
+      prefs.setString(
+        draftsKey,
+        jsonEncode(drafts.map((d) => d.toStorageMap()).toList(growable: false)),
       ),
+      draftsKey,
     );
     if (currentId == null || currentId.isEmpty) {
-      await prefs.remove(currentDraftIdKey);
+      await _requirePersisted(
+        prefs.remove(currentDraftIdKey),
+        currentDraftIdKey,
+      );
     } else {
-      await prefs.setString(currentDraftIdKey, currentId);
+      await _requirePersisted(
+        prefs.setString(currentDraftIdKey, currentId),
+        currentDraftIdKey,
+      );
     }
   }
 
@@ -115,16 +134,25 @@ class CreateDraftLocalStorage {
         continue;
       }
       ids.add(id);
-      await prefs.setString(
-        scopedDraftPayloadKey(scopeKey, id),
-        jsonEncode(draft.toStorageMap()),
+      final payloadKey = scopedDraftPayloadKey(scopeKey, id);
+      await _requirePersisted(
+        prefs.setString(payloadKey, jsonEncode(draft.toStorageMap())),
+        payloadKey,
       );
     }
-    await prefs.setString(scopedIndexKey(scopeKey), jsonEncode(ids));
+    final indexKey = scopedIndexKey(scopeKey);
+    await _requirePersisted(
+      prefs.setString(indexKey, jsonEncode(ids)),
+      indexKey,
+    );
+    final currentKey = scopedCurrentDraftIdKey(scopeKey);
     if (currentId == null || currentId.trim().isEmpty) {
-      await prefs.remove(scopedCurrentDraftIdKey(scopeKey));
+      await _requirePersisted(prefs.remove(currentKey), currentKey);
     } else {
-      await prefs.setString(scopedCurrentDraftIdKey(scopeKey), currentId.trim());
+      await _requirePersisted(
+        prefs.setString(currentKey, currentId.trim()),
+        currentKey,
+      );
     }
   }
 
@@ -133,11 +161,15 @@ class CreateDraftLocalStorage {
     String? currentId,
   ) async {
     final prefs = await SharedPreferences.getInstance();
+    final currentKey = scopedCurrentDraftIdKey(scopeKey);
     if (currentId == null || currentId.trim().isEmpty) {
-      await prefs.remove(scopedCurrentDraftIdKey(scopeKey));
+      await _requirePersisted(prefs.remove(currentKey), currentKey);
       return;
     }
-    await prefs.setString(scopedCurrentDraftIdKey(scopeKey), currentId.trim());
+    await _requirePersisted(
+      prefs.setString(currentKey, currentId.trim()),
+      currentKey,
+    );
   }
 
   static Future<CreateDraft?> loadScopedDraft(
@@ -162,13 +194,17 @@ class CreateDraftLocalStorage {
     final prefs = await SharedPreferences.getInstance();
     await migrateStoredDraftsIfNeeded(scopeKey);
     final indexKey = scopedIndexKey(scopeKey);
-    final ids = _decodeIdList(
-      prefs.getString(indexKey),
-    ).toList(growable: true)..removeWhere((id) => id == normalizedId);
-    await prefs.remove(scopedDraftPayloadKey(scopeKey, normalizedId));
-    await prefs.setString(indexKey, jsonEncode(ids));
-    if (prefs.getString(scopedCurrentDraftIdKey(scopeKey)) == normalizedId) {
-      await prefs.remove(scopedCurrentDraftIdKey(scopeKey));
+    final ids = _decodeIdList(prefs.getString(indexKey)).toList(growable: true)
+      ..removeWhere((id) => id == normalizedId);
+    final payloadKey = scopedDraftPayloadKey(scopeKey, normalizedId);
+    await _requirePersisted(prefs.remove(payloadKey), payloadKey);
+    await _requirePersisted(
+      prefs.setString(indexKey, jsonEncode(ids)),
+      indexKey,
+    );
+    final currentKey = scopedCurrentDraftIdKey(scopeKey);
+    if (prefs.getString(currentKey) == normalizedId) {
+      await _requirePersisted(prefs.remove(currentKey), currentKey);
     }
   }
 
@@ -177,8 +213,7 @@ class CreateDraftLocalStorage {
     final next = loaded.drafts
         .where((d) => d.id != draftId)
         .toList(growable: false);
-    final nextCurrent =
-        loaded.currentId == draftId ? null : loaded.currentId;
+    final nextCurrent = loaded.currentId == draftId ? null : loaded.currentId;
     await persistDrafts(next, nextCurrent);
   }
 
@@ -202,8 +237,8 @@ class CreateDraftLocalStorage {
       drafts,
       currentId: prefs.getString(currentDraftIdKey),
     );
-    await prefs.remove(draftsKey);
-    await prefs.remove(currentDraftIdKey);
+    await _requirePersisted(prefs.remove(draftsKey), draftsKey);
+    await _requirePersisted(prefs.remove(currentDraftIdKey), currentDraftIdKey);
   }
 
   static List<String> _decodeIdList(String? raw) {
@@ -236,6 +271,15 @@ class CreateDraftLocalStorage {
       return CreateDraft.fromStorageMap(Map<String, dynamic>.from(decoded));
     } catch (_) {
       return null;
+    }
+  }
+
+  static Future<void> _requirePersisted(
+    Future<bool> operation,
+    String storageKey,
+  ) async {
+    if (!await operation) {
+      throw StateError('local draft persistence failed for $storageKey');
     }
   }
 }

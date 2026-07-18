@@ -12,43 +12,29 @@ import (
 
 	rtauth "quwoquan_service/runtime/auth"
 	rtoperation "quwoquan_service/runtime/operation"
-	"quwoquan_service/services/content-service/internal/application/commandmeta"
 	postapp "quwoquan_service/services/content-service/internal/application/post"
 	postdomain "quwoquan_service/services/content-service/internal/domain/post"
 	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
 )
 
 func TestProfileShareInteractionDurableHTTPContract(t *testing.T) {
-	ctx := commandmeta.WithIdempotencyKey(
-		context.Background(),
-		"profile-share-target-create",
-	)
-	created, err := testPostService.CreatePost(ctx, map[string]any{
-		"id":                     "api-profile-share-target",
-		"authorId":               "api-owner-persona",
-		"contentType":            "article",
-		"title":                  "高原路线",
-		"body":                   "一条用于转发互动 API 契约的高原路线。",
-		"articleMarkdown":        "# 高原路线\n\n一条用于转发互动 API 契约的高原路线。",
-		"articleMarkdownVersion": "qwq-rich-md/1",
-		"articleAssetManifest": map[string]any{
-			"assets": []any{},
-		},
-		"articleRenderProfile": map[string]any{
-			"template":   "journal",
-			"fontPreset": "clean",
-		},
-		"visibility": "public",
-		"status":     "published",
-	})
-	if err != nil {
-		t.Fatalf("create target: %v", err)
-	}
+	ctx := context.Background()
+	created := submitPublishedPostWithAuthor(t, "api-owner-persona", `{
+		"contentType":"article",
+		"title":"高原路线",
+		"body":"一条用于转发互动 API 契约的高原路线。",
+		"articleMarkdown":"# 高原路线\n\n一条用于转发互动 API 契约的高原路线。",
+		"markdownDialect":"qwq-rich-md",
+		"articleAssetManifest":{"assets":[]},
+		"articleRenderProfile":{"template":"journal","fontPreset":"clean"},
+		"visibility":"public"
+	}`)
+	postID := asTestString(created["postId"])
 	if err := persistence.NewMongoShareInteractionStore(mongoDB, slog.Default()).Save(
 		ctx,
 		postdomain.ShareInteractionOccurrence{
 			InteractionID: "outbound-share-api", ActorSubAccountID: "api-actor-persona",
-			TargetSubAccountID: "api-owner-persona", TargetContentID: created.ID,
+			TargetSubAccountID: "api-owner-persona", TargetContentID: postID,
 			TargetContentType: "article", TargetKind: "record", TargetAvailability: "active",
 			OccurredAt: time.Now().UTC(),
 		},
@@ -59,7 +45,7 @@ func TestProfileShareInteractionDurableHTTPContract(t *testing.T) {
 	request := authedProfileShareRequest(
 		t,
 		http.MethodGet,
-		"/v1/content/sub-accounts/api-owner-persona/interactions/received?type=share&limit=20",
+		"/content/sub-accounts/api-owner-persona/interactions/received?type=share&limit=20",
 		"api-owner-persona",
 	)
 	recorder := httptest.NewRecorder()
@@ -83,7 +69,7 @@ func TestProfileShareInteractionDurableHTTPContract(t *testing.T) {
 	if len(page.Items) == 0 ||
 		page.Items[0].ActivityType != "share" ||
 		page.Items[0].Direction != "received" ||
-		page.Items[0].TargetContentID != created.ID ||
+		page.Items[0].TargetContentID != postID ||
 		page.Items[0].TargetKind != "record" ||
 		page.Items[0].TargetAvailability != "active" {
 		t.Fatalf("share page mismatch: %#v", page.Items)
@@ -92,7 +78,7 @@ func TestProfileShareInteractionDurableHTTPContract(t *testing.T) {
 	stateRequest := authedProfileShareRequest(
 		t,
 		http.MethodPatch,
-		"/v1/content/sub-accounts/api-owner-persona/interactions/"+
+		"/content/sub-accounts/api-owner-persona/interactions/"+
 			url.PathEscape(page.Items[0].ActivityID)+
 			"/state?state=read",
 		"api-owner-persona",
@@ -128,7 +114,7 @@ func TestProfileShareInteractionDurableHTTPContract(t *testing.T) {
 	badCursor := authedProfileShareRequest(
 		t,
 		http.MethodGet,
-		"/v1/content/sub-accounts/api-owner-persona/interactions/received?type=share&cursor=bad",
+		"/content/sub-accounts/api-owner-persona/interactions/received?type=share&cursor=bad",
 		"api-owner-persona",
 	)
 	badCursorRecorder := httptest.NewRecorder()

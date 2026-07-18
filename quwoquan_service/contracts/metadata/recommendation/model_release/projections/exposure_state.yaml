@@ -1,4 +1,3 @@
-version: 1
 read_model: ExposureState
 
 description: |
@@ -14,7 +13,7 @@ source_entities:
 
 source_events:
   - PostCreated
-  - EventBatchReported
+  - BehaviorBatchReported
   - RecommendationServed
   - ExposureBudgetEvaluated
 

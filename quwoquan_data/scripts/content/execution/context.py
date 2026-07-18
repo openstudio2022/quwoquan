@@ -1,18 +1,24 @@
-"""Workflow runtime context for task/run.py.
+"""Execution runtime context for task/run.py.
 
-This module owns the context object, managed-agent defaults, and workflow state
-persistence. The CLI entry lives in content.execution.pipeline.cli; shared runtime state lives here
+This module owns the context object, managed-agent defaults, and execution state
+persistence. The CLI entry lives in content.execution.controller.entrypoint; shared runtime state lives here
 so stage orchestration can depend on a narrow, explicit contract.
 """
 from __future__ import annotations
 
-import os
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping
+from typing import Callable, Iterable, Mapping
 
-from core.control_types import AgentProvider, ExecutionStage, RuntimeEnvironment, StageKind, StageStatus
+from core.control_types import (
+    AgentProvider,
+    ExecutionStage,
+    ExecutionStateStatus,
+    RuntimeEnvironment,
+    StageKind,
+    StageStatus,
+)
 from core.data_issue import (
     DataIssue,
     DataIssueCode,
@@ -25,17 +31,21 @@ from core.data_issue import (
 from core.io import read_json, write_json
 from core.runtime_policy import active_runtime_policy
 from content.execution import store
-from content.execution.workspace import ExecutionWorkspace, execution_workflow_packet_path, execution_workflow_state_path
+from content.execution.contracts import (
+    ExecutionState,
+    ExecutionStateTransition,
+)
+from content.execution.spec_contract import ExecutionSpec
+from content.execution.workspace import ExecutionWorkspace, execution_command_packet_path, execution_state_path
 
-WORKFLOW_STATE_VERSION = "quwoquan.content.workflow_state"
-PIPELINE_STATE_VERSION = WORKFLOW_STATE_VERSION
+EXECUTION_STATE_CONTRACT = "quwoquan.content.execution_state"
 
 # 节点类型
 AUTO = StageKind.AUTO
 CHECKPOINT = StageKind.CHECKPOINT
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class StageResult:
     """单 stage 执行结果。
 
@@ -48,10 +58,11 @@ class StageResult:
     message: str = ""
     checkpoint_hint: str = ""
     fallback_stage: ExecutionStage | None = None
-    issue_records: list[DataIssue] = field(default_factory=list)
+    issue_records: tuple[DataIssue, ...] = field(default_factory=tuple)
     controller_yield: bool = False
 
     def __post_init__(self) -> None:
+        object.__setattr__(self, "issue_records", tuple(self.issue_records))
         if not isinstance(self.stage, ExecutionStage):
             raise TypeError("StageResult.stage must be an ExecutionStage")
         if not isinstance(self.kind, StageKind):
@@ -67,9 +78,9 @@ class StageResult:
             raise TypeError("StageResult.issue_records must contain DataIssue values")
 
     @property
-    def issues(self) -> list[str]:
+    def issues(self) -> tuple[str, ...]:
         """Presentation-only rendering of the typed issue records."""
-        return issue_messages(self.issue_records)
+        return tuple(issue_messages(self.issue_records))
 
     @property
     def issue_stage(self) -> DataIssueStage:
@@ -77,7 +88,7 @@ class StageResult:
         try:
             return DataIssueStage(self.stage.value)
         except ValueError as exc:
-            raise ValueError(f"unknown workflow stage: {self.stage}") from exc
+            raise ValueError(f"unknown execution stage: {self.stage}") from exc
 
 
 def stage_issues(
@@ -87,46 +98,43 @@ def stage_issues(
     code: DataIssueCode = DataIssueCode.QUALITY_FAILED,
     recovery: DataRecoveryAction = DataRecoveryAction.STOP,
     ref: str = "",
-) -> list[DataIssue]:
-    """Convert a legacy boundary message list into typed stage outcomes."""
+) -> tuple[DataIssue, ...]:
+    """Convert presentation messages at a validation boundary into typed issues."""
     if not isinstance(stage, ExecutionStage):
         raise TypeError("stage_issues.stage must be an ExecutionStage")
-    return data_issues(
+    return tuple(data_issues(
         code,
         stage=DataIssueStage(stage.value),
         ref=ref,
         messages=messages,
         recovery=recovery,
-    )
+    ))
 
 
 _RUNTIME_POLICY = active_runtime_policy()
 MAX_REACT_REWINDS = _RUNTIME_POLICY.react_rewind_limit
 MAX_MANAGED_INFRA_RETRIES = _RUNTIME_POLICY.preflight_startup_attempts
 DEFAULT_CURSOR_AGENT_MODEL = _RUNTIME_POLICY.cursor_model
-DEFAULT_CODEX_AGENT_MODEL = os.environ.get("QWQ_CODEX_AGENT_MODEL", "").strip()
-DEFAULT_MANAGED_AGENT_PROVIDER = AgentProvider.CURSOR_SDK
+DEFAULT_MANAGED_AGENT_PROVIDER = _RUNTIME_POLICY.cursor_provider
 MANAGED_AGENT_PROVIDERS = {item.value for item in AgentProvider}
 def _normalize_managed_agent_provider(raw: str | None) -> str:
     provider = str(raw or DEFAULT_MANAGED_AGENT_PROVIDER.value).strip()
     if provider not in MANAGED_AGENT_PROVIDERS:
-        return DEFAULT_MANAGED_AGENT_PROVIDER.value
+        raise ValueError(f"unsupported managed agent provider: {provider}")
     return provider
 
 
 def _resolve_managed_model(provider: str, raw_model: str | None) -> str:
+    _normalize_managed_agent_provider(provider)
     model = str(raw_model or "").strip()
-    if model:
-        return model
-    if _normalize_managed_agent_provider(provider) == "codex_cli":
-        return DEFAULT_CODEX_AGENT_MODEL
-    return DEFAULT_CURSOR_AGENT_MODEL
+    return model or DEFAULT_CURSOR_AGENT_MODEL
 
 
 MANAGED_LANE_LIMITS = {
     "homepage": _RUNTIME_POLICY.author_workers,
     "article": _RUNTIME_POLICY.author_workers,
     "image": _RUNTIME_POLICY.research_workers,
+    "video": _RUNTIME_POLICY.author_workers,
 }
 MANAGED_AGENT_TIMEOUT_SECONDS = _RUNTIME_POLICY.agent_timeout_seconds
 MANAGED_AGENT_FUTURE_GRACE_SECONDS = _RUNTIME_POLICY.managed_future_grace_seconds
@@ -134,32 +142,59 @@ MANAGED_SCHEDULER_STALE_SECONDS = _RUNTIME_POLICY.scheduler_stale_seconds
 DOWNLOAD_FETCH_ONLY_RETRY_LIMIT = _RUNTIME_POLICY.download_fetch_retry_limit
 _CURSOR_BRIDGE_LAUNCH_COOLDOWN_SECONDS = _RUNTIME_POLICY.bridge_launch_cooldown_seconds
 _CURSOR_BRIDGE_READY_DELAY_SECONDS = _RUNTIME_POLICY.bridge_ready_delay_seconds
-MANAGED_LOCAL_CURSOR_MAX_WORKERS = _RUNTIME_POLICY.author_workers
-MANAGED_CODEX_CLI_MAX_WORKERS = _RUNTIME_POLICY.codex_cli_workers
+MANAGED_LOCAL_CURSOR_MAX_WORKERS = min(
+    _RUNTIME_POLICY.author_workers,
+    _RUNTIME_POLICY.cursor_bridge_instances,
+)
 _MANAGED_AGENT_SUBPROCESS_LOCK = threading.Lock()
 _MANAGED_AGENT_SUBPROCESS_PIDS: set[int] = set()
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class ExecutionContext:
     execution_id: str
-    entity_ids: list[str]
-    spec: dict
-    baseline_packet: dict | None = None
+    entity_ids: tuple[str, ...]
+    spec: ExecutionSpec
+    baseline_packet: Mapping[str, object] | None = None
     baseline_packet_path: Path | None = None
-    until: str | None = None
-    completed: list[str] = field(default_factory=list)
+    until: ExecutionStage | None = None
+    completed: tuple[ExecutionStage, ...] = field(default_factory=tuple)
     managed: bool = False
-    runtime: str = RuntimeEnvironment.LOCAL.value
+    runtime: RuntimeEnvironment = RuntimeEnvironment.LOCAL
     max_workers: int = _RUNTIME_POLICY.author_workers
     model: str = DEFAULT_CURSOR_AGENT_MODEL
-    agent_provider: str = AgentProvider.CURSOR_SDK.value
+    agent_provider: AgentProvider = AgentProvider.CURSOR_SDK
     release_only: bool = False
-    agent_runner: Callable[[str], dict[str, Any]] | None = None
+    agent_runner: Callable[[str], Mapping[str, object]] | None = None
     force_clean_workspace_agent_state: bool = False
+    controller_run_id: str | None = None
 
     def __post_init__(self) -> None:
-        self.execution_id = ExecutionWorkspace(self.execution_id).execution_id
+        object.__setattr__(
+            self,
+            "execution_id",
+            ExecutionWorkspace(self.execution_id).execution_id,
+        )
+        object.__setattr__(self, "entity_ids", tuple(self.entity_ids))
+        object.__setattr__(self, "completed", tuple(self.completed))
+        if not isinstance(self.spec, ExecutionSpec):
+            if not isinstance(self.spec, Mapping):
+                raise TypeError("ExecutionContext.spec must be a mapping")
+            object.__setattr__(self, "spec", ExecutionSpec.from_mapping(self.spec))
+        if self.spec.execution_id != self.execution_id:
+            raise ValueError(
+                "ExecutionContext execution_id must match ExecutionSpec.execution_id"
+            )
+        if not isinstance(self.runtime, RuntimeEnvironment):
+            object.__setattr__(self, "runtime", RuntimeEnvironment(str(self.runtime)))
+        if not isinstance(self.agent_provider, AgentProvider):
+            object.__setattr__(
+                self,
+                "agent_provider",
+                AgentProvider(str(self.agent_provider)),
+            )
+        if self.until is not None and not isinstance(self.until, ExecutionStage):
+            object.__setattr__(self, "until", ExecutionStage(str(self.until)))
 
     @property
     def workspace(self) -> ExecutionWorkspace:
@@ -168,32 +203,10 @@ class ExecutionContext:
 
 def _managed_local_cursor_worker_cap(
     ctx: ExecutionContext,
-    *,
-    local_cursor_max_workers: int | None = MANAGED_LOCAL_CURSOR_MAX_WORKERS,
 ) -> int:
     if _normalize_managed_agent_provider(ctx.agent_provider) != "cursor_sdk":
-        return max(1, int(ctx.max_workers or 1))
-    if local_cursor_max_workers is not None:
-        return max(1, int(local_cursor_max_workers))
-    base = max(1, int(ctx.max_workers or 1))
-    if str(ctx.runtime) != RuntimeEnvironment.LOCAL.value:
-        return base
-    try:
-        state = load_workflow_state(ctx.execution_id)
-    except Exception:  # noqa: BLE001 - cap must never block preflight/tests
-        return base
-    last = state.get("lastAgentRun") if isinstance(state.get("lastAgentRun"), Mapping) else {}
-    if str((last or {}).get("stage") or "") != "post_author":
-        return base
-    infra = int((last or {}).get("infrastructureFailures") or 0)
-    if infra <= 0:
-        return base
-    scheduler = last.get("scheduler") if isinstance(last.get("scheduler"), Mapping) else {}
-    previous = int((scheduler or {}).get("effectiveWorkerCount") or base)
-    # Cursor local bridge failures tend to be concurrency-sensitive.  Back off
-    # aggressively so unattended reruns converge instead of replaying the same
-    # connection-refused wave.
-    return max(1, min(base, max(1, previous // 2)))
+        return max(1, int(ctx.max_workers))
+    return min(max(1, int(ctx.max_workers)), MANAGED_LOCAL_CURSOR_MAX_WORKERS)
 
 
 def _managed_uses_serial_local_cursor(ctx: ExecutionContext) -> bool:
@@ -204,7 +217,7 @@ def _managed_uses_serial_local_cursor(ctx: ExecutionContext) -> bool:
     )
 
 
-def _write_workflow_packet(
+def _write_execution_packet(
     ctx: ExecutionContext,
     *,
     stage_name: str,
@@ -212,32 +225,34 @@ def _write_workflow_packet(
     result: StageResult,
     completed: list[str],
     next_stage: str | None,
-    state: dict,
+    state: ExecutionStateTransition,
 ) -> Path:
     from core.command_packet import build_packet, write_packet
 
     packet = build_packet(
         execution_id=ctx.execution_id,
-        command="task geo-homepages",
-        object_kind="workflow",
+        command="task execute",
+        object_kind="execution",
         object_ref=ctx.execution_id,
         stage=stage_name,
         read_policy=[
             "baseline_freeze_packet.json",
-            "workflow_state.json",
+            "execution_state.json",
             "current stage inputs",
         ],
-        stop_if=[f"stage {stage_name} failed", f"stage {stage_name} waiting"] if result.status != "done" else [],
+        stop_if=[f"stage {stage_name} failed", f"stage {stage_name} waiting"]
+        if result.status is not StageStatus.DONE
+        else [],
         output_policy=[
-            "write _shared/workflow_packets/<stage>.json",
-            "write _shared/workflow_state.json",
+            "write _shared/command_packets/<stage>.json",
+            "write _shared/execution_state.json",
             "advance only when gate is green",
         ],
         inputs={
             "baselinePacketPath": str(ctx.baseline_packet_path or ""),
             "completedStages": completed,
-            "waitingCheckpoint": state.get("waitingCheckpoint"),
-            "until": ctx.until or "",
+            "waitingCheckpoint": state.waiting_checkpoint,
+            "until": ctx.until.value if ctx.until else "",
         },
         outputs={
             "status": result.status.value,
@@ -262,23 +277,23 @@ def _write_workflow_packet(
             "message": result.message,
         },
     )
-    return write_packet(execution_workflow_packet_path(ctx.execution_id, stage_name), packet)
+    return write_packet(execution_command_packet_path(ctx.execution_id, stage_name), packet)
 
 
 def _state_path(execution_id: str) -> Path:
-    return execution_workflow_state_path(execution_id)
+    return execution_state_path(execution_id)
 
 
-def load_workflow_state(execution_id: str) -> dict:
+def load_execution_state(execution_id: str) -> ExecutionStateTransition:
     p = _state_path(execution_id)
     if p.exists():
-        return read_json(p)
-    return {
-        "schemaVersion": WORKFLOW_STATE_VERSION,
+        return ExecutionState.from_mapping(read_json(p)).open_transition()
+    return ExecutionState.from_mapping({
+        "schema": EXECUTION_STATE_CONTRACT,
         "executionId": execution_id,
         "completed": [],
         "waitingCheckpoint": None,
-        "status": "queued",
+        "status": ExecutionStateStatus.QUEUED.value,
         "owner": None,
         "heartbeatAt": None,
         "retryCounts": {},
@@ -286,17 +301,27 @@ def load_workflow_state(execution_id: str) -> dict:
         "failedObjects": [],
         "nextAction": None,
         "updatedAt": store.now_iso(),
-    }
+    }).open_transition()
 
 
-def save_workflow_state(state: dict) -> Path:
+def execution_state_status(state: ExecutionStateTransition) -> ExecutionStateStatus:
+    return state.status
+
+
+def save_execution_state(state: ExecutionStateTransition) -> Path:
     from core.schema import assert_valid
 
-    state["updatedAt"] = store.now_iso()
-    # workflow state 的字段唯一定义在 schema/execution/workflow_state.schema.json；
+    state.updated_at = store.now_iso()
+    payload = state.freeze().to_dict()
+    # execution state 的字段唯一定义在 schema/execution/execution_state.schema.json；
     # 新增字段必须先补 Schema，未知字段 fail-closed 拒绝落盘。
-    assert_valid(state, "execution", "workflow_state", label=f"workflow_state:{state.get('executionId', '')}")
-    p = _state_path(state["executionId"])
+    assert_valid(
+        payload,
+        "execution",
+        "execution_state",
+        label=f"execution_state:{state.execution_id}",
+    )
+    p = _state_path(state.execution_id)
     p.parent.mkdir(parents=True, exist_ok=True)
-    write_json(p, state)
+    write_json(p, payload)
     return p

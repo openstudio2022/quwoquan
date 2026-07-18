@@ -1,4 +1,3 @@
-version: 1
 
 surfaces:
   - id: chatList
@@ -209,9 +208,8 @@ surfaces:
     path_template: /search/network
     description: 网络结果页（小趣搜 assistant 结果 tab + 圈子频道分类内容结果）
     operation_ids:
-      - CreatePost
       - GetNearbyLocations
-      - PublishPost
+      - SubmitPostPublication
       - SearchLocations
       - SearchPosts
       - GetPost
@@ -538,9 +536,8 @@ surfaces:
     path_template: /create
     description: 内容创作工作台及其内嵌编辑流程
     operation_ids:
-      - CreatePost
       - GetNearbyLocations
-      - PublishPost
+      - SubmitPostPublication
       - SearchLocations
       - InitMediaUpload
       - CompleteMediaUpload
@@ -551,7 +548,6 @@ surfaces:
       - CreateOutboundShare
       - PlacePostInCircle
       - GetMediaUploadSession
-      - BindMediaAssetsToPost
       - SelectAutoVideoCover
       - SelectManualVideoCover
 

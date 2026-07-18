@@ -93,10 +93,6 @@ _HOMEPAGE_PAREN_LOCATION_LINE_RE = re.compile(
     r"[\(（][^)）]{1,16}[\)）][，,]?(?:位于|位於|位在|坐落|地处|地處)"
 )
 
-_HOMEPAGE_INSECT_CONTEXT_RE = re.compile(r"(学名|學名|胡蜂|黄蜂|黃蜂|昆虫|昆蟲|本属包括|本屬包括|下属物种|下屬物種)")
-
-_HOMEPAGE_STATION_CONTEXT_RE = re.compile(r"(地铁|地鐵|车站|車站|站台|出入口|接驳交通)")
-
 _HOMEPAGE_NAVIGATION_MARKERS = (
     "登录",
     "註冊",
@@ -158,12 +154,13 @@ def _homepage_text_quality_issue(
     require_fact_ready: bool,
 ) -> str:
     """Return a blocking reason when homepage text cannot support a base draft."""
-    body = re.sub(r"\s+", " ", str(text or "")).strip()
-    if not body:
+    raw_body = str(text or "")
+    compact_body = re.sub(r"\s+", " ", raw_body).strip()
+    if not compact_body:
         return "empty_homepage_text"
-    if require_fact_ready and len(body) < 80:
+    if require_fact_ready and len(compact_body) < 80:
         return "homepage_text_too_short"
-    head = body[:1800]
+    head = compact_body[:1800]
     if _HOMEPAGE_JSON_API_RE.search(head):
         return "raw_json_api_homepage"
     if any(marker.lower() in head.lower() for marker in _HOMEPAGE_REDIRECT_MARKERS):
@@ -176,10 +173,10 @@ def _homepage_text_quality_issue(
         and (disambig_hits >= 1 or parenthesized_location_hits >= 2 or location_mentions >= 3)
     ):
         return "disambiguation_homepage"
-    if require_fact_ready and _HOMEPAGE_INSECT_CONTEXT_RE.search(head) and "蜂" not in entity_id:
-        return "wrong_entity_context"
-    if require_fact_ready and _HOMEPAGE_STATION_CONTEXT_RE.search(head) and not entity_id.endswith("站"):
-        return "wrong_entity_context"
-    if require_fact_ready and _homepage_fact_signal_count(body[:5000], entity_id) < 4:
+    # Preserve newlines while counting facts.  Structured encyclopedia
+    # frontends often emit one fact per line without terminal punctuation;
+    # flattening first turns valid evidence into one overlong sentence that the
+    # signal counter intentionally ignores.
+    if require_fact_ready and _homepage_fact_signal_count(raw_body[:5000], entity_id) < 4:
         return "insufficient_homepage_facts"
     return ""

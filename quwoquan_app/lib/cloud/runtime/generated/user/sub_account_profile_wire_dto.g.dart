@@ -60,20 +60,20 @@ class SubAccountProfileWireDto {
 
   factory SubAccountProfileWireDto.fromMap(Map<String, dynamic> m) {
     return SubAccountProfileWireDto(
-      subAccountId: _firstNonEmptyWireString(m, <String>['subAccountId', 'userId']) ?? '',
-      ownerUserId: _firstNonEmptyWireString(m, <String>['ownerUserId']) ?? '',
-      userHandle: m['userHandle']?.toString() ?? m['username']?.toString() ?? m['nickname']?.toString() ?? '',
+      subAccountId: m['subAccountId']?.toString() ?? '',
+      ownerUserId: m['ownerUserId']?.toString() ?? '',
+      userHandle: m['userHandle']?.toString() ?? '',
       nickname: m['nickname']?.toString() ?? '',
-      displayName: m['displayName']?.toString() ?? m['nickname']?.toString() ?? '',
-      username: m['username']?.toString() ?? m['userHandle']?.toString() ?? m['nickname']?.toString() ?? '',
+      displayName: m['displayName']?.toString() ?? '',
+      username: m['username']?.toString() ?? '',
       subjectType: m['subjectType']?.toString() ?? '',
       nicknameCustomized: m['nicknameCustomized'] as bool? ?? false,
       avatarUrl: m['avatarUrl']?.toString() ?? '',
       avatarVersion: (m['avatarVersion'] as num?)?.toInt() ?? 0,
-      backgroundUrl: m['backgroundUrl']?.toString() ?? m['backgroundImage']?.toString() ?? '',
+      backgroundUrl: m['backgroundUrl']?.toString() ?? '',
       bio: m['bio']?.toString() ?? '',
       identityTags: _parseStringList(m['identityTags']) ?? <String>[],
-      verified: m['verified'] as bool? ?? m['isVerified'] as bool? ?? false,
+      verified: m['verified'] as bool? ?? false,
       followerCount: (m['followerCount'] as num?)?.toInt() ?? 0,
       followingCount: (m['followingCount'] as num?)?.toInt() ?? 0,
       postCount: (m['postCount'] as num?)?.toInt() ?? 0,
@@ -177,14 +177,6 @@ class SubAccountProfileWireDto {
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
-}
-
-String? _firstNonEmptyWireString(Map<String, dynamic> m, List<String> keys) {
-  for (final k in keys) {
-    final v = m[k]?.toString();
-    if (v != null && v.isNotEmpty) return v;
-  }
-  return null;
 }
 
 DateTime? _parseDateTime(dynamic v) {

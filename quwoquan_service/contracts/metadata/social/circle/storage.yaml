@@ -1,4 +1,3 @@
-version: 1
 aggregate: Circle
 backend: mongodb
 
@@ -13,6 +12,7 @@ collections:
       - { name: idx_circles_weekly_active, keys: { weeklyActiveCount: -1 } }
     search_indexes:
       - name: search_circles_text
+        source: search_circles_text
         type: text
         fields: [name, description, tags]
         weights: { name: 10, tags: 5, description: 1 }

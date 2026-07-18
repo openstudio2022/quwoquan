@@ -15,7 +15,7 @@ func TestHomepageSearchUsesCanonicalSearchSignals(t *testing.T) {
 	)
 	defer server.Close()
 
-	candidate := requestJSON(t, server.Client(), http.MethodPost, server.URL+"/v1/homepages/candidates", map[string]any{
+	candidate := requestJSON(t, server.Client(), http.MethodPost, server.URL+"/homepages/candidates", map[string]any{
 		"title":        "四川旅游主页",
 		"subtitle":     "川西旅行露营攻略和实体信息",
 		"homepageType": "sight",
@@ -23,12 +23,12 @@ func TestHomepageSearchUsesCanonicalSearchSignals(t *testing.T) {
 		"address":      "川西环线",
 		"categoryTags": []string{"旅行", "露营", "攻略"},
 	}, http.StatusCreated)
-	homepageID := stringField(t, candidate, "_id")
+	homepageID := stringField(t, candidate, "homepageId")
 	requestJSON(
 		t,
 		server.Client(),
 		http.MethodPost,
-		server.URL+"/v1/homepages/candidates/"+homepageID+":publish",
+		server.URL+"/homepages/candidates/"+homepageID+":publish",
 		nil,
 		http.StatusOK,
 	)
@@ -37,7 +37,7 @@ func TestHomepageSearchUsesCanonicalSearchSignals(t *testing.T) {
 		t,
 		server.Client(),
 		http.MethodGet,
-		server.URL+"/v1/homepages/search?query=scly&status=published",
+		server.URL+"/homepages/search?query=scly&status=published",
 		nil,
 		http.StatusOK,
 	)
@@ -57,7 +57,7 @@ func TestHomepageSearchUsesCanonicalSearchSignals(t *testing.T) {
 		t,
 		server.Client(),
 		http.MethodGet,
-		server.URL+"/v1/homepages/search?query=出行&status=published",
+		server.URL+"/homepages/search?query=出行&status=published",
 		nil,
 		http.StatusOK,
 	)

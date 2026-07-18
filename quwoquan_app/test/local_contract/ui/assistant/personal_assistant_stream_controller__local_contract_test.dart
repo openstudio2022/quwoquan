@@ -750,6 +750,7 @@ AssistantStreamEventWire _event({
   RuntimeFailureWire? runtimeFailure,
 }) {
   return AssistantStreamEventWire(
+    schema: 'assistant_stream_event',
     eventId: 'evt_$seq',
     conversationId: 'acv_test_personal',
     turnId: 'atn_test_personal',

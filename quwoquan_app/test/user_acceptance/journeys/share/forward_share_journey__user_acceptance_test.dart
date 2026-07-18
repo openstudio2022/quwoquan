@@ -18,6 +18,8 @@ import 'package:quwoquan_app/ui/share/widgets/forward_confirm_sheet.dart';
 import 'package:quwoquan_app/ui/user/widgets/my_qr_card.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
+import '../../../support/fixtures/chat/chat_inbox_fixture_builder.dart';
+
 const _qrCard = ProfileQrCardData(
   publicProfileUrl: 'https://mock.quwoquan.local/u/current',
   qrPayload: 'quwoquan://profile/current?qr=mock_current',
@@ -186,7 +188,7 @@ class _ForwardJourneyChatRepository extends MockChatRepository {
     final base = DateTime.utc(2026, 6, 27, 12);
     return List<ChatInboxDto>.generate(
       3,
-      (index) => ChatInboxDto(
+      (index) => chatInboxFixture(
         id: 'conv_$index',
         type: index == 1 ? 'group' : 'direct',
         title: '会话 $index',

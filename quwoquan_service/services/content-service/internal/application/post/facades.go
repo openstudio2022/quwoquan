@@ -10,18 +10,22 @@ import (
 // Facades 是 transport 的对象应用入口。它只组合细粒度 Facade，不暴露
 // PostService、generic data access 或基础设施实现。
 type Facades struct {
+	PostPublicationCommandFacade
 	PostLifecycleCommandFacade
 	PostReadFacade
-	MediaBindingCommandFacade
 	ProfileInteractionFacade
 	ContentUtilityQueryFacade
 	SemanticGovernanceCommandFacade
 }
 
+type PostPublicationCommandFacade interface {
+	SubmitPostPublication(
+		context.Context,
+		SubmitPostPublicationCommand,
+	) (PostPublicationReceipt, error)
+}
+
 type PostLifecycleCommandFacade interface {
-	CreatePost(context.Context, map[string]any) (*postmodel.Post, error)
-	UpdatePost(context.Context, string, string, map[string]any) (*postmodel.Post, error)
-	PublishPost(context.Context, string, string, map[string]any) (*postmodel.Post, error)
 	UpdatePostSettings(context.Context, string, string, map[string]any) (*postmodel.Post, error)
 	PromotePostToWork(context.Context, string, string, map[string]any) (*postmodel.Post, error)
 	DeletePost(context.Context, string, string) error
@@ -31,10 +35,6 @@ type PostReadFacade interface {
 	GetPostOrTombstone(context.Context, string) (*postmodel.Post, bool, bool)
 	SearchPosts(context.Context, SearchPostsRequest) ([]postmodel.PostSearchItemView, string, error)
 	GetHelperRead(context.Context, string) (map[string]any, error)
-}
-
-type MediaBindingCommandFacade interface {
-	BindMediaAssetsToPost(context.Context, string, string, []string) (BindMediaAssetsToPostResult, error)
 }
 
 type ProfileInteractionFacade interface {
@@ -59,9 +59,9 @@ func BindFacades(service *PostService) *Facades {
 		return nil
 	}
 	return &Facades{
+		PostPublicationCommandFacade:    service,
 		PostLifecycleCommandFacade:      service,
 		PostReadFacade:                  service,
-		MediaBindingCommandFacade:       service,
 		ProfileInteractionFacade:        service,
 		ContentUtilityQueryFacade:       service,
 		SemanticGovernanceCommandFacade: service,

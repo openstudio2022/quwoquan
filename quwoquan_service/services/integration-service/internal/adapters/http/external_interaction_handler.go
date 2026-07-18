@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	externalRequestsPath = "/v1/integrations/external-requests"
+	externalRequestsPath = "/integrations/external-requests"
 )
 
 func (h *Handler) handleSubmitExternalRequest(w http.ResponseWriter, r *http.Request) {

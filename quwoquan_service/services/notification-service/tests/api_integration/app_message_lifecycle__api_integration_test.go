@@ -67,7 +67,7 @@ func TestAppMessageLifecycleUsesNotificationAggregateAndTransactionalOutbox(t *t
   "target":{"targetType":"assistant_turn","targetId":"turn_001","routeId":"personalAssistantDialog","routePath":"/assistant","query":{"dimension":"content"}},
   "provenance":{"personalized":true,"interestTags":["travel"],"matchedSegments":["travel_enthusiast"],"lifecycleStage":"active"}
 }`)
-	created := requestAppMessage(t, handler, http.MethodPost, "/internal/v1/app-messages", "account_001", "idem-app-message-001", payload)
+	created := requestAppMessage(t, handler, http.MethodPost, "/internal/app-messages", "account_001", "idem-app-message-001", payload)
 	if created.Code != http.StatusCreated {
 		t.Fatalf("create status=%d body=%s", created.Code, created.Body.String())
 	}
@@ -77,7 +77,7 @@ func TestAppMessageLifecycleUsesNotificationAggregateAndTransactionalOutbox(t *t
 		t.Fatalf("create response missing messageId: %#v", createdBody)
 	}
 
-	replayed := requestAppMessage(t, handler, http.MethodPost, "/internal/v1/app-messages", "account_001", "idem-app-message-001", payload)
+	replayed := requestAppMessage(t, handler, http.MethodPost, "/internal/app-messages", "account_001", "idem-app-message-001", payload)
 	if replayed.Code != http.StatusCreated {
 		t.Fatalf("replay status=%d body=%s", replayed.Code, replayed.Body.String())
 	}
@@ -85,7 +85,7 @@ func TestAppMessageLifecycleUsesNotificationAggregateAndTransactionalOutbox(t *t
 		t.Fatalf("idempotent replay messageId=%q want %q", got, messageID)
 	}
 
-	list := requestAppMessage(t, handler, http.MethodGet, "/v1/app-messages?limit=20", "account_001", "", nil)
+	list := requestAppMessage(t, handler, http.MethodGet, "/app-messages?limit=20", "account_001", "", nil)
 	if list.Code != http.StatusOK {
 		t.Fatalf("list status=%d body=%s", list.Code, list.Body.String())
 	}
@@ -94,7 +94,7 @@ func TestAppMessageLifecycleUsesNotificationAggregateAndTransactionalOutbox(t *t
 		t.Fatalf("list items=%#v", items)
 	}
 
-	isolated := requestAppMessage(t, handler, http.MethodGet, "/v1/app-messages/"+messageID, "account_002", "", nil)
+	isolated := requestAppMessage(t, handler, http.MethodGet, "/app-messages/"+messageID, "account_002", "", nil)
 	if isolated.Code != http.StatusNotFound {
 		t.Fatalf("cross-account get status=%d body=%s", isolated.Code, isolated.Body.String())
 	}
@@ -102,16 +102,16 @@ func TestAppMessageLifecycleUsesNotificationAggregateAndTransactionalOutbox(t *t
 		t.Fatalf("cross-account stable code=%q", code)
 	}
 
-	ack := requestAppMessage(t, handler, http.MethodPost, "/v1/app-messages/"+messageID+"/ack", "account_001", "", nil)
+	ack := requestAppMessage(t, handler, http.MethodPost, "/app-messages/"+messageID+"/ack", "account_001", "", nil)
 	if ack.Code != http.StatusOK || stringValue(decodeResponse(t, ack)["ackedAt"]) == "" {
 		t.Fatalf("ack status=%d body=%s", ack.Code, ack.Body.String())
 	}
-	read := requestAppMessage(t, handler, http.MethodPost, "/v1/app-messages/"+messageID+"/read", "account_001", "", nil)
+	read := requestAppMessage(t, handler, http.MethodPost, "/app-messages/"+messageID+"/read", "account_001", "", nil)
 	readBody := decodeResponse(t, read)
 	if read.Code != http.StatusOK || readBody["read"] != true || stringValue(readBody["readAt"]) == "" {
 		t.Fatalf("read status=%d body=%#v", read.Code, readBody)
 	}
-	unread := requestAppMessage(t, handler, http.MethodGet, "/v1/app-messages/unread-count", "account_001", "", nil)
+	unread := requestAppMessage(t, handler, http.MethodGet, "/app-messages/unread-count", "account_001", "", nil)
 	if unread.Code != http.StatusOK || numberValue(decodeResponse(t, unread)["unreadCount"]) != 0 {
 		t.Fatalf("unread status=%d body=%s", unread.Code, unread.Body.String())
 	}

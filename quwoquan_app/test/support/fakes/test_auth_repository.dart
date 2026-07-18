@@ -2,14 +2,15 @@ import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.
 import 'package:quwoquan_app/cloud/runtime/generated/user/one_tap_login_hint_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/owner_credential_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/persona_management_item_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/user/generated/prefab_user_metadata.g.dart';
 import 'package:quwoquan_app/cloud/services/user/auth_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 
 /// Test-only AuthRepository double. Production and alpha composition must not
 /// import this library; alpha owns a separate contract-fixture adapter.
 class TestAuthRepository implements AuthRepository {
-  static const ownerId = 'fixture_user_current';
-  static const subAccountId = 'fixture_sub_current';
+  static const ownerId = PrefabUserMetadata.currentUserId;
+  static const subAccountId = PrefabUserMetadata.currentSubAccountId;
 
   @override
   Future<OtpSendResultData> sendOtp({

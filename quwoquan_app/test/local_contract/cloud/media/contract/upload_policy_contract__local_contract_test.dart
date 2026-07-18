@@ -38,7 +38,7 @@ void main() {
     });
   });
 
-  group('UploadPolicy — 兼容性契约', () {
+  group('UploadPolicy — 单轨契约', () {
     test('chatFile 允许任意 contentType（空 allowedTypes）', () {
       final error = validateUpload(
         category: MediaCategory.chatFile,

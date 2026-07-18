@@ -37,7 +37,7 @@ const _testCommentText = 'Patrol E2E test comment 测试评论 🎯';
 
 Future<String> _seedPhotoPost(http.Client client) async {
   final resp = await client.post(
-    Uri.parse('$_apiBase/v1/content/posts'),
+    Uri.parse('$_apiBase/content/posts'),
     headers: {
       'Content-Type': 'application/json',
       if (_testToken.isNotEmpty) 'Authorization': 'Bearer $_testToken',
@@ -52,12 +52,12 @@ Future<String> _seedPhotoPost(http.Client client) async {
   if (resp.statusCode != 201) {
     throw Exception('seed failed: ${resp.statusCode} ${resp.body}');
   }
-  return (jsonDecode(resp.body) as Map<String, dynamic>)['_id'] as String;
+  return (jsonDecode(resp.body) as Map<String, dynamic>)['postId'] as String;
 }
 
 Future<void> _deletePost(http.Client client, String postId) async {
   await client.delete(
-    Uri.parse('$_apiBase/v1/content/posts/$postId'),
+    Uri.parse('$_apiBase/content/posts/$postId'),
     headers: {if (_testToken.isNotEmpty) 'Authorization': 'Bearer $_testToken'},
   );
 }

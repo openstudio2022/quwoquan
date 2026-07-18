@@ -13,9 +13,9 @@ capability: object-homepage-network / homepage introduction 读模型
 
 # 路由集合（HTTP SLI 的 route label 过滤；与 homepage_handler.go 一致）。
 routes:
-  homepage_search: /v1/homepages/search
-  homepage_candidates: /v1/homepages/candidates
-  homepage_detail_and_projections: /v1/homepages/{homepageId}/*   # object-page-bundle / introduction / intersections
+  homepage_search: /homepages/search
+  homepage_candidates: /homepages/candidates
+  homepage_detail_and_projections: /homepages/{homepageId}/*   # object-page-bundle / introduction / intersections
 
 # 指标真相源（Prometheus，promauto 默认注册表，/metrics 暴露）
 metrics:
@@ -28,13 +28,13 @@ slis:
   - id: homepage_read_latency
     description: 主页读路由（search/bundle/introduction）的用户感知延迟；单文档
       homepage_state 读模型 + 无请求期聚合，目标对齐 intersection 读路径。
-    sli: histogram_quantile(q, sum(rate(http_server_duration_seconds_bucket{service="entity-service", route=~"/v1/homepages.*"}[5m])) by (le))
+    sli: histogram_quantile(q, sum(rate(http_server_duration_seconds_bucket{service="entity-service", route=~"/homepages.*"}[5m])) by (le))
     objectives:
       p50_ms: 60
       p95_ms: 300
   - id: homepage_read_availability
     description: 主页读路由可用性 = 1 - 5xx 错误率（status 以 5 开头）
-    sli: 1 - sum(rate(http_server_requests_total{service="entity-service", route=~"/v1/homepages.*", status=~"5.."}[5m])) / sum(rate(http_server_requests_total{service="entity-service", route=~"/v1/homepages.*"}[5m]))
+    sli: 1 - sum(rate(http_server_requests_total{service="entity-service", route=~"/homepages.*", status=~"5.."}[5m])) / sum(rate(http_server_requests_total{service="entity-service", route=~"/homepages.*"}[5m]))
     objective: 0.995
   - id: homepage_read_error_rate
     description: 主页读路由结构化错误率（runtime/errors 错误码，含 4xx 语义错误），
@@ -55,7 +55,7 @@ slis:
     objective: prod 占位 URL 数 == 0
 
 # 灰度/回滚分层（与 prod rolloutStagePolicy 一致）：
-#   1) gray-initial：单实例承接 /v1/homepages*，SLO gate 通过后 full。
+#   1) gray-initial：单实例承接 /homepages*，SLO gate 通过后 full。
 #   2) 回滚：stackctl deploy 回退上一镜像版本；数据层用
 #      qwq-data ship rollback --to-release <dataReleaseId> 幂等重放历史 bundle。
 rollback_layers:

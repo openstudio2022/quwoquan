@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/homepage_verification_case_manifest.schema.json",
+  "title": "Environment homepage verification case manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "environment",
+    "releaseId",
+    "runId",
+    "importerReportRef",
+    "generatedAt",
+    "cases"
+  ],
+  "properties": {
+    "environment": {
+      "enum": [
+        "beta",
+        "gamma",
+        "prod"
+      ]
+    },
+    "releaseId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "runId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "importerReportRef": {
+      "type": "string",
+      "pattern": "^env/(beta|gamma|prod)/runs/data-release/"
+    },
+    "generatedAt": {
+      "type": "string",
+      "minLength": 1
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "entityRef",
+          "homepageId",
+          "title"
+        ],
+        "properties": {
+          "entityRef": {
+            "type": "string",
+            "minLength": 3
+          },
+          "homepageId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "schema": {
+      "const": "quwoquan_data.homepage_verification_case_manifest"
+    }
+  }
+}

@@ -208,15 +208,8 @@ class CircleStateNotifier extends Notifier<CircleState> {
   Future<void> leaveCircle() async {
     final previousStatus = state.joinStatus;
     final previousRole = state.role;
-    var expectedVersion = state.membershipVersion;
+    final previousVersion = state.membershipVersion;
     try {
-      expectedVersion ??=
-          (await ref
-                  .read(circleDetailMembershipQueryProvider)
-                  .getMyMembership(
-                    MyCircleMembershipQuery(circleId: _circleId),
-                  ))
-              .version;
       state = state.copyWith(
         joinStatus: 'none',
         role: CircleRole.visitor,
@@ -225,12 +218,7 @@ class CircleStateNotifier extends Notifier<CircleState> {
       );
       final result = await ref
           .read(circleDetailMembershipCommandWriterProvider)
-          .leave(
-            LeaveCircleMembershipCommand(
-              circleId: _circleId,
-              expectedVersion: expectedVersion,
-            ),
-          );
+          .leave(LeaveCircleMembershipCommand(circleId: _circleId));
       state = state.copyWith(
         joinStatus: result.state.name,
         role: CircleRole.visitor,
@@ -241,8 +229,8 @@ class CircleStateNotifier extends Notifier<CircleState> {
       state = state.copyWith(
         joinStatus: previousStatus,
         role: previousRole,
-        membershipVersion: expectedVersion,
-        clearMembershipVersion: expectedVersion == null,
+        membershipVersion: previousVersion,
+        clearMembershipVersion: previousVersion == null,
         loadError: error,
       );
     }

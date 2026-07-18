@@ -1,4 +1,3 @@
-version: 1
 aggregate: AssistantInteractionEvent
 backend: mongodb
 collections:

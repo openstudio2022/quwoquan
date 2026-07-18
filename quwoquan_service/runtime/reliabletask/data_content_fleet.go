@@ -38,7 +38,7 @@ func (j DataContentJob) IdempotencyKey() (string, error) {
 
 func (j DataContentJob) payload(idempotencyKey string) map[string]string {
 	return map[string]string{
-		"schemaVersion":  "quwoquan.object_job",
+		"schema":  "quwoquan.object_job",
 		"jobId":          strings.TrimSpace(j.JobID),
 		"taskId":         strings.TrimSpace(j.TaskID),
 		"batchId":        strings.TrimSpace(j.BatchID),
@@ -86,7 +86,7 @@ func (f DataContentFleet) Declare(ctx context.Context, job DataContentJob) (Task
 		IdempotencyKey:  key,
 		PartitionKey:    partitionKey,
 		Payload:         payload,
-		PayloadAllow:    []string{"schemaVersion", "jobId", "taskId", "batchId", "ref", "stage", "partitionKey", "entityRef", "carrier", "sourceRevision", "idempotencyKey"},
+		PayloadAllow:    []string{"schema", "jobId", "taskId", "batchId", "ref", "stage", "partitionKey", "entityRef", "carrier", "sourceRevision", "idempotencyKey"},
 		CreatedByModule: "data.task_outbox_dispatcher",
 	})
 }

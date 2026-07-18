@@ -102,7 +102,8 @@ gwt_acceptance:
     - 输入校验、提交、限流、provider 或网络失败发生。
     then:
     - 输入问题使用 AppInlineFieldError；操作失败使用 AppFormErrorCard，不以弱 caption 替代 metadata inlineCard。
-    - 自动完成恢复转场时使用 compact 密度，只显示色点和一条说明，不附加与页面主按钮重复的动作。
+    - 两类内联错误均为透明的圆形感叹号加 14px 常规错误文字，图文间距 6px；浅色 #E5484D、深色 #FF6B6B，不使用色点、胶囊、卡片或阴影。
+    - 自动完成恢复转场时使用 compact 密度，只显示一条说明，不附加与页面主按钮重复的动作。
     - 每次失败只有一个主反馈，liveRegion 只播报新错误一次，不抢焦点。
     - 编辑、重试或成功后清除对应反馈。
     done_when:
@@ -131,6 +132,46 @@ gwt_acceptance:
       supporting: []
     notes:
     - '2026-07-16: 登录运营商显式失败使用 compact formInlineCard，卡内无短信按钮，页面仅保留“获取验证码”单一主动作。'
+  GWT4:
+    title: 播放与加载失败提供无歧义恢复或退出路径
+    given:
+    - 用户在内容流、沉浸浏览或首屏加载中遇到可重试和不可重试失败。
+    when:
+    - 错误载体渲染标题、可选说明与恢复操作。
+    then:
+    - 可重试的视频失败只展示一个“再试一次”主操作，标题和说明不包含“稍后”或重复恢复动词。
+    - 不可重试的视频失败不展示伪重试，提供“可以先看看别的内容”的替代路径。
+    - 首屏加载失败的恢复操作与宿主返回分离，页面说明不与“再试一次”冲突。
+    done_when:
+    - 媒体播放失败、页态错误组件与结构化错误语义的 local_contract 断言同时通过。
+    edge_cases:
+    - 网络不可达
+    - 媒体资源不存在
+    - 设备解码不支持
+    contract_refs:
+    - quwoquan_service/contracts/metadata/content/post/errors.yaml
+    - specs/ux/error-and-permission-semantics.md
+    tests:
+      planned:
+      - file: quwoquan_app/test/local_contract/core/media/media_playback_failure__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/media/video/video_player_widget__failure_experience__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/core/widgets/error_states/app_error_states__local_contract_test.dart
+      recorded:
+      - file: quwoquan_app/test/local_contract/core/media/media_playback_failure__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/media/video/video_player_widget__failure_experience__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/core/widgets/error_states/app_error_states__local_contract_test.dart
+    status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: media_and_page_error_exit_semantics
+        cases:
+        - local_contract.runtime.runtime_client_foundation.error_permission_display_semantics.media_retry_copy
+        - local_contract.runtime.runtime_client_foundation.error_permission_display_semantics.page_retry_copy
+        envs: *id001
+      supporting: []
+    notes:
+    - '2026-07-18: media playback overlay and page-load copy now keep recovery verbs in the actionable CTA only; local_contract evidence recorded above.'
 execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh

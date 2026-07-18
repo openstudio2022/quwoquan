@@ -17,7 +17,10 @@ List<PostBaseDto>? _contractSeedPosts() {
   contractPosts.addAll(
     posts
         .whereType<Map>()
-        .map((item) => postBaseDtoFromMap(item.cast<String, dynamic>()))
+        .map(
+          (item) =>
+              contentPostDtoFromReadModelMap(item.cast<String, dynamic>()),
+        )
         .toList(growable: false),
   );
   if (contractPosts.isEmpty) {
@@ -64,31 +67,50 @@ extension _MockContentPosts on MockContentRepository {
     String postId, {
     required Map<String, dynamic> payloadMerge,
   }) {
+    Map<String, dynamic>? existingProjection;
+    for (final post in _allDiscoveryPosts()) {
+      if (post.id == postId) {
+        existingProjection = post.toMap();
+        break;
+      }
+    }
     final merged = <String, dynamic>{
-      'postId': postId,
-      '_id': postId,
       'id': postId,
       'authorId': 'mock_user',
       'displayName': 'Mock User',
-      'authorAvatarUrl': _mockContentDefaultAuthorAvatarUrl,
+      'avatarUrl': _mockContentDefaultAuthorAvatarUrl,
       'body': '',
-      'mediaUrls': <String>[],
+      'imageUrls': <String>[],
       'likeCount': 0,
       'commentCount': 0,
       'shareCount': 0,
       'publishedAt': DateTime.now().toUtc().toIso8601String(),
       'createdAt': DateTime.now().toUtc().toIso8601String(),
       'assistantUsePolicy': 'inherit',
+      ...?existingProjection,
       ...payloadMerge,
     };
-    final contentType = (merged['contentType'] ?? merged['type'] ?? 'micro')
-        .toString();
-    merged['contentType'] = contentType;
-    if (contentType == 'micro') {
-      merged['contentIdentity'] = merged['contentIdentity'] ?? 'moment';
+    final contentType = merged.remove('contentType')?.toString().trim();
+    if (contentType?.isNotEmpty == true) {
+      merged['type'] = contentType;
+    }
+    final contentIdentity = merged.remove('contentIdentity')?.toString().trim();
+    if (contentIdentity?.isNotEmpty == true) {
+      merged['identity'] = contentIdentity;
+    }
+    final mediaUrls = merged.remove('mediaUrls');
+    if (mediaUrls is List) {
+      merged['imageUrls'] = mediaUrls;
+    }
+    merged.remove('postId');
+    merged.remove('_id');
+    final type = merged['type']?.toString().trim() ?? '';
+    if (type.isEmpty) {
+      throw StateError('mock post type is required');
+    }
+    if (type == 'micro') {
       merged['identity'] = merged['identity'] ?? 'moment';
     } else {
-      merged['contentIdentity'] = merged['contentIdentity'] ?? 'work';
       merged['identity'] = merged['identity'] ?? 'work';
     }
     return merged;
@@ -112,7 +134,7 @@ extension _MockContentPosts on MockContentRepository {
     final base = <String, dynamic>{
       'authorId': authorId,
       'displayName': displayName,
-      'authorAvatarUrl': _mockContentDefaultAuthorAvatarUrl,
+      'avatarUrl': _mockContentDefaultAuthorAvatarUrl,
       'authorBackgroundUrl':
           'media/image/s/mock/seed/p_1506905925346-21bda4d32df4/v1/image.jpg',
       'createdAt': '2025-12-20T10:00:00Z',
@@ -122,10 +144,10 @@ extension _MockContentPosts on MockContentRepository {
         trimmed,
         payloadMerge: <String, dynamic>{
           ...base,
-          'contentType': 'video',
+          'type': 'video',
           'body': '森林的呼吸',
           'videoUrl':
-              'media/video/s/mock/external/flutter/butterfly/v1/video.mp4',
+              'media/video/s/video-primary-0001/post/video-content-0001/source.mp4',
           'thumbnailUrl':
               'media/image/s/mock/seed/p_1646034296147-d8ed3aace9a4/v1/image.jpg',
           'width': 720,
@@ -142,7 +164,7 @@ extension _MockContentPosts on MockContentRepository {
         trimmed,
         payloadMerge: <String, dynamic>{
           ...base,
-          'contentType': 'article',
+          'type': 'article',
           'title': '极简摄影的真谛',
           'body': '通过剥离不必要的元素，我们才能看见事物的本质。这是一篇关于极简主义摄影的思考与实践。',
           'coverUrl':
@@ -158,7 +180,7 @@ extension _MockContentPosts on MockContentRepository {
         trimmed,
         payloadMerge: <String, dynamic>{
           ...base,
-          'contentType': 'micro',
+          'type': 'micro',
           'body': '风吹过露台的时候',
           'imageUrls': <String>[],
           'likeCount': 420,
@@ -174,7 +196,7 @@ extension _MockContentPosts on MockContentRepository {
       trimmed,
       payloadMerge: <String, dynamic>{
         ...base,
-        'contentType': 'image',
+        'type': 'image',
         'body': '光影的节奏',
         'coverUrl':
             'media/image/s/mock/seed/p_1647956450271-2ff54205bebf/v1/image.jpg',
@@ -198,7 +220,7 @@ extension _MockContentPosts on MockContentRepository {
     final base = <String, dynamic>{
       'authorId': authorId,
       'displayName': displayName,
-      'authorAvatarUrl': _mockContentDefaultAuthorAvatarUrl,
+      'avatarUrl': _mockContentDefaultAuthorAvatarUrl,
       'authorBackgroundUrl':
           'media/image/s/mock/seed/p_1506905925346-21bda4d32df4/v1/image.jpg',
     };
@@ -207,7 +229,7 @@ extension _MockContentPosts on MockContentRepository {
         '${authorId}_p1',
         payloadMerge: <String, dynamic>{
           ...base,
-          'contentType': 'image',
+          'type': 'image',
           'body': '光影的节奏',
           'coverUrl':
               'media/image/s/mock/seed/p_1647956450271-2ff54205bebf/v1/image.jpg',
@@ -226,10 +248,10 @@ extension _MockContentPosts on MockContentRepository {
         '${authorId}_v1',
         payloadMerge: <String, dynamic>{
           ...base,
-          'contentType': 'video',
+          'type': 'video',
           'body': '森林的呼吸',
           'videoUrl':
-              'media/video/s/mock/external/flutter/butterfly/v1/video.mp4',
+              'media/video/s/video-primary-0001/post/video-content-0001/source.mp4',
           'thumbnailUrl':
               'media/image/s/mock/seed/p_1646034296147-d8ed3aace9a4/v1/image.jpg',
           'width': 720,
@@ -245,7 +267,7 @@ extension _MockContentPosts on MockContentRepository {
         '${authorId}_a1',
         payloadMerge: <String, dynamic>{
           ...base,
-          'contentType': 'article',
+          'type': 'article',
           'title': '极简摄影的真谛',
           'body': '通过剥离不必要的元素，我们才能看见事物的本质。这是一篇关于极简主义摄影的思考与实践。',
           'coverUrl':
@@ -278,13 +300,9 @@ extension _MockContentPosts on MockContentRepository {
     }
     for (final item in raw.whereType<Map>()) {
       final wire = item.cast<String, dynamic>();
-      final itemId =
-          wire['postId']?.toString() ??
-          wire['_id']?.toString() ??
-          wire['id']?.toString() ??
-          '';
+      final itemId = wire['postId']?.toString() ?? '';
       if (itemId == trimmed) {
-        return Map<String, dynamic>.from(wire);
+        return contentPostWireFromReadModelMap(wire);
       }
     }
     return null;
@@ -337,8 +355,7 @@ extension _MockContentPosts on MockContentRepository {
     for (final item in showcase) {
       if (item.id == trimmed) {
         final row = item.toDiscoveryWireMap();
-        if ((row['contentType']?.toString() ?? row['type']?.toString() ?? '') ==
-            'article') {
+        if ((row['type']?.toString() ?? '') == 'article') {
           return ContentMockData.articleWireByPostId(trimmed) ?? row;
         }
         return row;
@@ -370,16 +387,12 @@ extension _MockContentPosts on MockContentRepository {
     String? identity,
     String? type,
   }) {
-    return _matchesIdentityAndType(
-      <String, dynamic>{
-        'contentType': post.type,
-        'type': post.type,
-        'contentIdentity': post.identity,
-        'identity': post.identity,
-      },
-      identity: identity,
-      type: type,
-    );
+    final expectedIdentity = (identity ?? '').trim();
+    final expectedType = _normalizeFeedType(type);
+    if (expectedIdentity.isNotEmpty && post.identity != expectedIdentity) {
+      return false;
+    }
+    return expectedType == null || post.type == expectedType;
   }
 
   String? _mapCategoryToIdentity(String category) {
@@ -418,29 +431,5 @@ extension _MockContentPosts on MockContentRepository {
       default:
         return normalized;
     }
-  }
-
-  bool _matchesIdentityAndType(
-    Map<String, dynamic> item, {
-    String? identity,
-    String? type,
-  }) {
-    final itemType = _normalizeFeedType(
-      item['contentType']?.toString() ?? item['type']?.toString(),
-    );
-    final itemIdentity =
-        (item['contentIdentity'] ??
-                item['identity'] ??
-                (itemType == 'micro' ? 'moment' : 'work'))
-            .toString();
-    final expectedIdentity = (identity ?? '').trim();
-    final expectedType = _normalizeFeedType(type);
-    if (expectedIdentity.isNotEmpty && itemIdentity != expectedIdentity) {
-      return false;
-    }
-    if (expectedType != null && expectedType.isNotEmpty) {
-      return itemType == expectedType;
-    }
-    return true;
   }
 }

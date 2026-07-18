@@ -9,10 +9,11 @@
         "cursor": {
           "type": "object",
           "properties": {
+            "provider": { "const": "cursor_sdk" },
             "model": { "type": "string", "minLength": 1 },
             "runtime": { "enum": ["local", "cloud"] }
           },
-          "required": ["model", "runtime"],
+          "required": ["provider", "model", "runtime"],
           "additionalProperties": false
         },
         "workers": {
@@ -22,9 +23,9 @@
             "reviewer": { "type": "integer", "minimum": 1 },
             "research": { "type": "integer", "minimum": 1 },
             "download": { "type": "integer", "minimum": 1 },
-            "codexCli": { "type": "integer", "minimum": 1 }
+            "cursorBridgeInstances": { "type": "integer", "minimum": 1 }
           },
-          "required": ["author", "reviewer", "research", "download", "codexCli"],
+          "required": ["author", "reviewer", "research", "download", "cursorBridgeInstances"],
           "additionalProperties": false
         },
         "budgets": {
@@ -33,6 +34,7 @@
             "startupTimeoutSeconds": { "type": "integer", "minimum": 1 },
             "preflightNetworkTimeoutSeconds": { "type": "integer", "minimum": 1 },
             "agentTimeoutSeconds": { "type": "integer", "minimum": 1 },
+            "defaultObjectTokenBudget": { "type": "integer", "minimum": 1 },
             "authRetryLimit": { "type": "integer", "minimum": 1 },
             "authRetryDelaySeconds": { "type": "integer", "minimum": 1 },
             "noProgressRoundLimit": { "type": "integer", "minimum": 1 },
@@ -42,6 +44,8 @@
             "workerStaggerSeconds": { "type": "number", "exclusiveMinimum": 0 },
             "managedFutureGraceSeconds": { "type": "integer", "minimum": 1 },
             "schedulerStaleSeconds": { "type": "integer", "minimum": 1 },
+            "controllerLeaseStaleSeconds": { "type": "integer", "minimum": 1 },
+            "assignmentDeadlineSeconds": { "type": "integer", "minimum": 1 },
             "downloadFetchRetryLimit": { "type": "integer", "minimum": 0 },
             "bridgeLaunchCooldownSeconds": { "type": "number", "minimum": 0 },
             "bridgeReadyDelaySeconds": { "type": "number", "minimum": 0 },
@@ -80,6 +84,7 @@
             "queueBackoffCapSeconds": { "type": "integer", "minimum": 1 },
             "queueStuckThreshold": { "type": "integer", "minimum": 1 },
             "startupProbeSuiteAttempts": { "type": "integer", "minimum": 1 },
+            "cursorStartupProbeCacheTtlSeconds": { "type": "integer", "minimum": 0 },
             "cursorTrue5xxRateLimit": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
             "cursorStartupTimeoutRateLimit": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
             "coverageWikiRetryLimit": { "type": "integer", "minimum": 1 },
@@ -92,11 +97,12 @@
           },
           "required": [
             "startupTimeoutSeconds", "preflightNetworkTimeoutSeconds",
-            "agentTimeoutSeconds", "authRetryLimit",
+            "agentTimeoutSeconds", "defaultObjectTokenBudget", "authRetryLimit",
             "authRetryDelaySeconds", "noProgressRoundLimit",
             "researchWaveSize", "researchMaxWavesPerRun",
             "coldStartMaxWorkers", "workerStaggerSeconds",
             "managedFutureGraceSeconds", "schedulerStaleSeconds",
+            "controllerLeaseStaleSeconds", "assignmentDeadlineSeconds",
             "downloadFetchRetryLimit", "bridgeLaunchCooldownSeconds",
             "bridgeReadyDelaySeconds", "reactRewindLimit",
             "preflightStartupAttempts",
@@ -114,7 +120,7 @@
             "queueHeartbeatSeconds", "queueMaxAttempts", "queueMaxStartupFailures",
             "queueMaxWallClockSeconds", "queueBackoffBaseSeconds",
             "queueBackoffCapSeconds", "queueStuckThreshold",
-            "startupProbeSuiteAttempts", "cursorTrue5xxRateLimit",
+            "startupProbeSuiteAttempts", "cursorStartupProbeCacheTtlSeconds", "cursorTrue5xxRateLimit",
             "cursorStartupTimeoutRateLimit", "coverageWikiRetryLimit",
             "coverageWikiRetryBackoffSeconds", "coverageWikiInterRequestDelaySeconds",
             "coverageOverpassRetryLimit", "coverageOverpassRetryBackoffSeconds",
@@ -156,12 +162,13 @@
             "providerTimeoutSeconds": {
               "type": "object",
               "properties": {
+                "encyclopedia": { "type": "integer", "minimum": 1 },
                 "mediawiki": { "type": "integer", "minimum": 1 },
                 "qunar": { "type": "integer", "minimum": 1 },
                 "openverse": { "type": "integer", "minimum": 1 },
                 "overpass": { "type": "integer", "minimum": 1 }
               },
-              "required": ["mediawiki", "qunar", "openverse", "overpass"],
+              "required": ["encyclopedia", "mediawiki", "qunar", "openverse", "overpass"],
               "additionalProperties": false
             }
           },

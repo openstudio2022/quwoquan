@@ -22,7 +22,7 @@ class MockHomepageIntroductionRepository
           continue;
         }
         final map = raw.cast<String, dynamic>();
-        final id = (map['homepageId'] ?? map['id'] ?? '').toString();
+        final id = (map['homepageId'] ?? '').toString();
         if (id != resolvedHomepageId) {
           continue;
         }
@@ -45,43 +45,17 @@ class MockHomepageIntroductionRepository
 
 class RemoteHomepageIntroductionRepository
     implements HomepageIntroductionRepository {
-  RemoteHomepageIntroductionRepository({
-    CloudHttpClient? httpClient,
-    String? baseUrl,
-  }) : _httpClient = httpClient ?? CloudHttpClient(),
-       _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
+  RemoteHomepageIntroductionRepository({required this.queryAdapter});
 
-  final CloudHttpClient _httpClient;
-  final String _baseUrl;
-
-  Uri _uri(String path) => Uri.parse('$_baseUrl$path');
+  final RemoteHomepageQueryAdapter queryAdapter;
 
   @override
   Future<HomepageIntroduction?> getHomepageIntroduction(
     String homepageId,
   ) async {
-    final decoded = await _httpClient.getJson(
-      _uri(
-        EntityApiMetadata.getHomepageIntroductionPath(homepageId: homepageId),
-      ),
-      headers: CloudRequestHeaders.forSurfaceOperation(
-        surfaceId: AppUiSurfaces.homepageIntroduction.id,
-        routeId: AppUiSurfaces.homepageIntroduction.routeId,
-        operationId: EntityApiMetadata.getHomepageIntroductionOperation,
-        clientPageId: EntityRequestPageIds.getHomepageIntroduction,
-      ),
+    return homepageIntroductionFromContract(
+      await queryAdapter.getHomepageIntroduction(homepageId),
     );
-    final object = CloudResponseDecoder.asObject(
-      decoded,
-      context: CloudRequestHeaders.contextForSurfaceOperation(
-        surfaceId: AppUiSurfaces.homepageIntroduction.id,
-        operationId: EntityApiMetadata.getHomepageIntroductionOperation,
-      ),
-    );
-    if (object.isEmpty) {
-      return null;
-    }
-    return HomepageIntroduction.fromMap(object);
   }
 }
 

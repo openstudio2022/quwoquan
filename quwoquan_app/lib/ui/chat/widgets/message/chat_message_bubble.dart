@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
@@ -399,7 +400,7 @@ class ChatMessageBubble extends StatelessWidget {
                 ),
                 SizedBox(width: AppSpacing.intraGroupXs),
                 Icon(
-                  Icons.chevron_right_rounded,
+                  CupertinoIcons.chevron_forward,
                   color: textColor.withValues(alpha: 0.64),
                   size: AppSpacing.iconMedium,
                 ),

@@ -109,7 +109,6 @@ class LoginFrame extends StatelessWidget {
                               message:
                                   presentation.feedback?.message ??
                                   presentation.message,
-                              tone: LoginMessageTone.neutral,
                             ),
                           ],
                           const SizedBox(
@@ -146,12 +145,10 @@ class LoginFrame extends StatelessWidget {
                               semantic: UiErrorSemantic(
                                 category: UiErrorCategory.submit,
                                 scope: UiErrorScope.form,
-                                title:
-                                    UITextConstants.loginSocialUnavailableTitle,
+                                title: '',
                                 message: socialMethodFeedback,
                                 presentation:
                                     UiErrorPresentation.formInlineCard,
-                                tone: UiErrorTone.caution,
                               ),
                               density: AppFormErrorCardDensity.compact,
                             ),
@@ -215,16 +212,9 @@ bool _showsProcessFeedback(LoginEntryPresentation presentation) {
 }
 
 class _TopLevelErrorBanner extends StatelessWidget {
-  const _TopLevelErrorBanner({
-    required this.message,
-    this.tone = LoginMessageTone.neutral,
-  });
+  const _TopLevelErrorBanner({required this.message});
 
   final String message;
-
-  /// 顶层提示语气。一键/三方登录失败后的降级提示通常可恢复（中性/琥珀），
-  /// 红色仅用于真正阻断态（此类已路由到验证码面板，几乎不会经此横幅）。
-  final LoginMessageTone tone;
 
   @override
   Widget build(BuildContext context) {
@@ -233,12 +223,9 @@ class _TopLevelErrorBanner extends StatelessWidget {
       semantic: UiErrorSemantic(
         category: UiErrorCategory.submit,
         scope: UiErrorScope.form,
-        title: UITextConstants.loginSocialUnavailableTitle,
+        title: '',
         message: message,
         presentation: UiErrorPresentation.formInlineCard,
-        tone: tone == LoginMessageTone.blocking
-            ? UiErrorTone.critical
-            : UiErrorTone.caution,
       ),
       density: AppFormErrorCardDensity.compact,
     );
@@ -380,10 +367,6 @@ class LoginAccountArea extends StatelessWidget {
               ),
       LoginEntryKind.submitting => _submittingPanel(),
       LoginEntryKind.resolving => const _ResolvingPanel(),
-      LoginEntryKind.error => UnavailablePanel(message: presentation.message),
-      LoginEntryKind.unavailable => UnavailablePanel(
-        message: presentation.message,
-      ),
     };
     final areaHeight = _heightForPresentation(presentation);
     if (areaHeight == null) {
@@ -429,28 +412,14 @@ class AccountBlockedPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      liveRegion: true,
-      child: Column(
-        key: const ValueKey<String>('loginAccountBlocked'),
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: <Widget>[
-          Icon(
-            CupertinoIcons.lock_shield,
-            size: AppSpacing.forty,
-            color: loginMessageToneColor(context, LoginMessageTone.blocking),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            state.message,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: AppTypography.iosCallout,
-              height: AppSpacing.textLineHeightBody,
-              color: loginMessageToneColor(context, LoginMessageTone.blocking),
-            ),
-          ),
-        ],
+    return AppFormErrorCard(
+      key: const ValueKey<String>('loginAccountBlocked'),
+      semantic: UiErrorSemantic(
+        category: UiErrorCategory.authRequired,
+        scope: UiErrorScope.form,
+        title: '',
+        message: state.message,
+        presentation: UiErrorPresentation.formInlineCard,
       ),
     );
   }
@@ -667,11 +636,7 @@ class PhoneOtpPanel extends StatelessWidget {
     };
     if (!isFormError) return null;
     final fallback = switch (state.phase) {
-      LoginPhoneOtpPhase.rateLimited =>
-        UITextConstants.loginOtpRateLimited.replaceFirst(
-          '%d',
-          '${state.resendSeconds > 0 ? state.resendSeconds : 60}',
-        ),
+      LoginPhoneOtpPhase.rateLimited => UITextConstants.loginOtpRateLimited,
       LoginPhoneOtpPhase.codeExpired => UITextConstants.loginOtpExpired,
       LoginPhoneOtpPhase.loginLocked => UITextConstants.loginPhoneLoginLocked,
       LoginPhoneOtpPhase.accountSuspended =>
@@ -684,10 +649,9 @@ class PhoneOtpPanel extends StatelessWidget {
           ? UiErrorCategory.rateLimited
           : UiErrorCategory.submit,
       scope: UiErrorScope.form,
-      title: UITextConstants.loginOtpErrorTitle,
+      title: '',
       message: state.message.isEmpty ? fallback : state.message,
       presentation: UiErrorPresentation.formInlineCard,
-      tone: UiErrorTone.caution,
     );
   }
 

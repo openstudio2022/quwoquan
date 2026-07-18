@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	createAppMessagePath = "/internal/v1/app-messages"
+	createAppMessagePath = "/internal/app-messages"
 	responseBodyLimit    = 1 << 20
 )
 

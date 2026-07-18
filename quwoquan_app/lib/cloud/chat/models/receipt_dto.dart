@@ -17,20 +17,20 @@ class ReceiptDto {
 
   factory ReceiptDto.fromMap(Map<String, dynamic> map) {
     return ReceiptDto(
-      id: (map['_id'] ?? map['id'] ?? '') as String,
+      id: (map['id'] ?? '') as String,
       messageId: (map['messageId'] ?? '') as String,
       conversationId: (map['conversationId'] ?? '') as String,
       userId: (map['userId'] ?? '') as String,
-      readAt: DateTime.tryParse((map['readAt'] ?? '') as String) ??
-          DateTime.now(),
+      readAt:
+          DateTime.tryParse((map['readAt'] ?? '') as String) ?? DateTime.now(),
     );
   }
 
   Map<String, dynamic> toMap() => {
-        'id': id,
-        'messageId': messageId,
-        'conversationId': conversationId,
-        'userId': userId,
-        'readAt': readAt.toIso8601String(),
-      };
+    'id': id,
+    'messageId': messageId,
+    'conversationId': conversationId,
+    'userId': userId,
+    'readAt': readAt.toIso8601String(),
+  };
 }

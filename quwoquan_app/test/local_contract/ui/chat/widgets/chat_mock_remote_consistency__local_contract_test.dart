@@ -7,6 +7,8 @@ import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
 
+import '../../../../support/fixtures/chat/chat_inbox_fixture_builder.dart';
+
 Widget _scopedApp({required ChatRepository overrideRepo}) {
   return ProviderScope(
     overrides: [chatRepositoryProvider.overrideWithValue(overrideRepo)],
@@ -100,7 +102,7 @@ class _CustomMockChatRepository extends MockChatRepository {
   @override
   Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
     return [
-      ChatInboxDto(
+      chatInboxFixture(
         id: 'conv_custom',
         type: 'direct',
         title: '自定义会话',

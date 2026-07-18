@@ -25,7 +25,7 @@ from content.execution.workspace import (
 DEFAULT_SPEC_DOC = REPO_ROOT / "specs/feature-tree/runtime/runtime-data-engineering/spec.md"
 DEFAULT_DESIGN_DOC = REPO_ROOT / "specs/feature-tree/runtime/runtime-data-engineering/design.md"
 DEFAULT_ACCEPTANCE_DOC = REPO_ROOT / "specs/feature-tree/runtime/runtime-data-engineering/acceptance.yaml"
-DEFAULT_WORKFLOW_DOC = REPO_ROOT / "specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/workflow.md"
+DEFAULT_EXECUTION_GUIDE = REPO_ROOT / "specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/execution.md"
 DEFAULT_COMMAND_MATRIX_DOC = (
     REPO_ROOT / "specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/command-matrix.md"
 )
@@ -119,7 +119,7 @@ def _input_paths(
     spec_doc: Path,
     design_doc: Path,
     acceptance_doc: Path,
-    workflow_doc: Path,
+    execution_guide: Path,
     command_matrix_doc: Path,
 ) -> dict[str, str]:
     return {
@@ -129,7 +129,7 @@ def _input_paths(
         "specDocPath": str(spec_doc),
         "designDocPath": str(design_doc),
         "acceptanceDocPath": str(acceptance_doc),
-        "workflowDocPath": str(workflow_doc),
+        "executionGuidePath": str(execution_guide),
         "commandMatrixDocPath": str(command_matrix_doc),
     }
 
@@ -146,7 +146,7 @@ def _write_failed_baseline_report(
     write_json(
         report_path,
         {
-            "schemaVersion": "quwoquan.data.baseline_report/1",
+            "schema": "quwoquan.data.baseline_report",
             "executionId": execution_id,
             "status": "failed",
             "issues": issues,
@@ -172,7 +172,7 @@ def handle_baseline(args: argparse.Namespace) -> None:
     spec_doc = _optional_path(getattr(args, "spec_doc", None)) or DEFAULT_SPEC_DOC
     design_doc = _optional_path(getattr(args, "design_doc", None)) or DEFAULT_DESIGN_DOC
     acceptance_doc = _optional_path(getattr(args, "acceptance_doc", None)) or DEFAULT_ACCEPTANCE_DOC
-    workflow_doc = _optional_path(getattr(args, "workflow_doc", None)) or DEFAULT_WORKFLOW_DOC
+    execution_guide = _optional_path(getattr(args, "execution_guide", None)) or DEFAULT_EXECUTION_GUIDE
     command_matrix_doc = _optional_path(getattr(args, "command_matrix_doc", None)) or DEFAULT_COMMAND_MATRIX_DOC
     catalog_config = _optional_path(getattr(args, "catalog_config", None))
     naming_rules = _optional_path(getattr(args, "naming_rules", None))
@@ -186,7 +186,7 @@ def handle_baseline(args: argparse.Namespace) -> None:
         "spec-doc": spec_doc,
         "design-doc": design_doc,
         "acceptance-doc": acceptance_doc,
-        "workflow-doc": workflow_doc,
+        "execution-guide": execution_guide,
         "command-matrix-doc": command_matrix_doc,
     }
     for label, path in required_files.items():
@@ -254,7 +254,7 @@ def handle_baseline(args: argparse.Namespace) -> None:
         spec_doc=spec_doc,
         design_doc=design_doc,
         acceptance_doc=acceptance_doc,
-        workflow_doc=workflow_doc,
+        execution_guide=execution_guide,
         command_matrix_doc=command_matrix_doc,
     )
     if issues:
@@ -280,7 +280,7 @@ def handle_baseline(args: argparse.Namespace) -> None:
         "specDoc": _file_snapshot(spec_doc),
         "designDoc": _file_snapshot(design_doc),
         "acceptanceDoc": _file_snapshot(acceptance_doc),
-        "workflowDoc": _file_snapshot(workflow_doc),
+        "executionGuide": _file_snapshot(execution_guide),
         "commandMatrixDoc": _file_snapshot(command_matrix_doc),
         "schemaFiles": [_file_snapshot(path) for path in schema_files],
         "configFiles": [_file_snapshot(path) for path in config_files],
@@ -305,7 +305,7 @@ def handle_baseline(args: argparse.Namespace) -> None:
             "spec.md",
             "design.md",
             "acceptance.yaml",
-            "workflow.md",
+            "execution.md",
             "command-matrix.md",
             "schema/config list",
         ],
@@ -324,7 +324,7 @@ def handle_baseline(args: argparse.Namespace) -> None:
             "packetPath": str(execution_baseline_freeze_packet_path(execution_id)),
             "reportPath": str(execution_shared_path(execution_id, "baseline_report.json")),
         },
-        handoff_to="task geo-homepages",
+        handoff_to="task execute",
         evidence={
             "required": ["baseline_freeze_packet.json", "baseline_report.json"],
             "optional": ["catalog.ndjson"],
@@ -335,7 +335,7 @@ def handle_baseline(args: argparse.Namespace) -> None:
     write_packet(packet_path, packet)
 
     report = {
-        "schemaVersion": "quwoquan.data.baseline_report/1",
+        "schema": "quwoquan.data.baseline_report",
         "executionId": execution_id,
         "status": "passed",
         "issues": [],

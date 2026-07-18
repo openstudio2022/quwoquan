@@ -171,14 +171,14 @@ seed-box Pod
 **方案 B：手写 ServeMux 注册**
 
 ```go
-mux.HandleFunc("GET /v1/user/profile/{userId}", h.handleGetProfile)
-mux.HandleFunc("POST /v1/user/follow/{targetUserId}", h.handleFollow)
+mux.HandleFunc("GET /user/profile/{userId}", h.handleGetProfile)
+mux.HandleFunc("POST /user/follow/{targetUserId}", h.handleFollow)
 ```
 
 **选型决策：方案 B（手写）**
 
 理由：
-1. Go 1.22+ 的 `net/http` 原生支持 method + path pattern（`GET /v1/...`），无需 codegen 匹配逻辑
+1. Go 1.22+ 的 `net/http` 原生支持 method + path pattern（`GET /...`），无需 codegen 匹配逻辑
 2. content-service 的 `generatedRouteTable` + `resolveGeneratedOperation` 是在 Go 1.21 时代写的权宜之计
 3. 手写路由 20+ 行，清晰可审计，与 `service.yaml` 一一对应
 4. 减少 codegen 依赖，user-service 作为新服务可采用更现代的模式

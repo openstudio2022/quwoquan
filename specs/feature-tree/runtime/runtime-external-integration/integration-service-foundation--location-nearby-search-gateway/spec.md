@@ -1,7 +1,7 @@
 # L4 特性：location-nearby-search-gateway
 
 ## 功能说明
-- 提供 `/v1/integration/location/nearby` 与 `/v1/integration/location/search` 标准接口。
+- 提供 `/integration/location/nearby` 与 `/integration/location/search` 标准接口。
 - 全量通过云端获取附近列表与搜索结果，端侧不直接调用百度/阿里。
 
 ## 适用范围与约束

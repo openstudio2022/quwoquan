@@ -1,4 +1,3 @@
-version: 1
 read_model: NotificationDeliveryJobDeadLetter
 
 description: 已耗尽重试预算的 NotificationDeliveryJob operator 审计投影。

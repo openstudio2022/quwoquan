@@ -1,4 +1,3 @@
-version: 1
 entity: MediaAsset
 tests:
   - name: media_asset_owner_contract
@@ -9,7 +8,7 @@ tests:
     operation: GetMediaAsset
     go_func: TestMediaAssetHTTPPacketExposesOnlyPublicReadyAssetsAndOwnsVideoCover
     command: GetMediaAsset/SelectAutoVideoCover/SelectManualVideoCover
-  - name: media_asset_binding_contract
-    operation: BindMediaAssetsToPost
-    go_func: TestBindMediaAssetsToPostContract
-    command: BindMediaAssetsToPost
+  - name: media_asset_publication_contract
+    operation: SubmitPostPublication
+    go_func: TestSubmitPostPublicationBindsReadyOwnedMedia
+    command: SubmitPostPublication

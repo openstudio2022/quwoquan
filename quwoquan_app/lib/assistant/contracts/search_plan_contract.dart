@@ -369,15 +369,7 @@ List<SearchPlanItem> searchPlansFromTaskGraph(TaskGraph taskGraph) {
     final explicitPlans = SearchPlanItem.normalizeList(
       task.toolArgs.fields['searchPlans'],
     );
-    if (explicitPlans.isNotEmpty) {
-      plans.addAll(explicitPlans);
-      continue;
-    }
-    final query = (task.toolArgs.fields['query'] as String?)?.trim() ?? '';
-    if (query.isEmpty) {
-      continue;
-    }
-    plans.add(SearchPlanItem(id: task.taskId, query: query));
+    plans.addAll(explicitPlans);
   }
   return SearchPlanItem.normalizeList(SearchPlanItem.toJsonList(plans));
 }

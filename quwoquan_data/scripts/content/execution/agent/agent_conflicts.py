@@ -1,4 +1,4 @@
-"""Workflow service extracted from the retired monolithic runner."""
+"""Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
 from content.execution.support import Any, Mapping, Path, Sequence, _MANAGED_LOCAL_DATA_CLI_MARKERS, _MANAGED_LOCAL_DESTRUCTIVE_MARKERS, _normalize_managed_agent_provider, os, re, shlex, signal, store, time
 
@@ -60,13 +60,13 @@ def _cursor_bridge_in_workspace(command: str, process_cwd: str, workspace: Path)
 def _managed_local_workspace_conflicts(workspace: Path) -> list[dict[str, Any]]:
     """Find live same-workspace data jobs that can corrupt local Cursor runs.
     Local Cursor Agent execution is process- and workspace-sensitive: orphaned
-    bridges and a second managed workflow in the same checkout can steal the
+    bridges and a second managed execution in the same checkout can steal the
     bridge callback port or terminate each other's subprocesses.  Detect these
     before creating or resuming a managed batch so failures surface as preflight
     blockers instead of content-quality noise.
     """
     from content.execution.agent.agent_runner import _redact_managed_secret
-    from content.execution.pipeline.preflight import _current_process_family_pids, _process_cwd, _process_rows
+    from content.execution.controller.preflight import _current_process_family_pids, _process_cwd, _process_rows
     rows = _process_rows()
     ignore_pids = _current_process_family_pids(rows)
     workspace_path = workspace.resolve()
@@ -157,9 +157,9 @@ def _cleanup_managed_local_workspace_conflicts(
     conflicts: Sequence[Mapping[str, Any]],
 ) -> dict[str, Any]:
     from content.execution.agent.agent_worker import _terminate_pid_tree_if_alive
-    from content.execution.pipeline.preflight import _current_process_family_pids
+    from content.execution.controller.preflight import _current_process_family_pids
     report: dict[str, Any] = {
-        "schemaVersion": "quwoquan_data.managed_workspace_cleanup",
+        "schema": "quwoquan_data.managed_workspace_cleanup",
         "mode": "force_clean_workspace_agent_state",
         "startedAt": store.now_iso(),
         "requestedConflictCount": len(conflicts),

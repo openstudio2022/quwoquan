@@ -9,6 +9,7 @@ import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_service.dart';
+import 'package:quwoquan_app/core/services/cache/cache_telemetry_sink.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_message_record.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_store.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_sync_service.dart';
@@ -45,6 +46,7 @@ void main() {
     });
 
     tearDown(() async {
+      await store.close();
       if (await tempDir.exists()) {
         await tempDir.delete(recursive: true);
       }
@@ -57,6 +59,7 @@ void main() {
         conversationCache: cache,
         store: store,
         personaContextLoader: () async => currentContext,
+        telemetrySink: const NoopCacheTelemetrySink(),
       );
 
       expect(await service.sync(), isTrue);
@@ -103,14 +106,28 @@ void main() {
 
     test('failed sync can retry immediately without force', () async {
       final repo = _FlakyChatRepository();
+      final telemetry = _RecordingCacheTelemetrySink();
       final service = LocalChatSearchSyncService(
         chatRepository: repo,
         conversationCache: cache,
         store: store,
         personaContextLoader: () async => currentContext,
+        telemetrySink: telemetry,
       );
 
       expect(await service.sync(), isFalse);
+      expect(
+        telemetry.events,
+        contains(
+          predicate<Map<String, Object?>>(
+            (event) =>
+                event['eventName'] == 'local_chat_search_sync' &&
+                event['operation'] == 'fullSync' &&
+                event['result'] == 'failed' &&
+                event['errorType'] == 'StateError',
+          ),
+        ),
+      );
       expect(await service.sync(), isTrue);
       expect(repo.listContactsCalls, equals(2));
 
@@ -131,24 +148,21 @@ void main() {
         conversationCache: cache,
         store: store,
         personaContextLoader: () async => currentContext,
+        telemetrySink: const NoopCacheTelemetrySink(),
       );
       final namespace = LocalSearchNamespace.fromActivePersonaContext(
         currentContext,
       );
 
-      await store.upsertConversations(
+      await store.upsertConversationRecords(
         namespace: namespace,
-        conversations: const <Map<String, dynamic>>[
-          <String, dynamic>{
-            'conversationId': 'conv_1',
-            'title': '摄影讨论组',
-            'type': 'group',
-          },
+        conversations: const <ConversationCacheRecord>[
+          ConversationCacheRecord(id: 'conv_1', title: '摄影讨论组', type: 'group'),
         ],
       );
       await store.upsertMessages(
         namespace: namespace,
-        conversation: ConversationCacheRecord.fromWireMap(
+        conversation: ConversationCacheRecord.fromCacheMap(
           const <String, dynamic>{
             'conversationId': 'conv_1',
             'title': '摄影讨论组',
@@ -192,24 +206,21 @@ void main() {
         conversationCache: cache,
         store: store,
         personaContextLoader: () async => currentContext,
+        telemetrySink: const NoopCacheTelemetrySink(),
       );
       final namespace = LocalSearchNamespace.fromActivePersonaContext(
         currentContext,
       );
 
-      await store.upsertConversations(
+      await store.upsertConversationRecords(
         namespace: namespace,
-        conversations: const <Map<String, dynamic>>[
-          <String, dynamic>{
-            'conversationId': 'conv_1',
-            'title': '摄影讨论组',
-            'type': 'group',
-          },
+        conversations: const <ConversationCacheRecord>[
+          ConversationCacheRecord(id: 'conv_1', title: '摄影讨论组', type: 'group'),
         ],
       );
       await store.upsertMessages(
         namespace: namespace,
-        conversation: ConversationCacheRecord.fromWireMap(
+        conversation: ConversationCacheRecord.fromCacheMap(
           const <String, dynamic>{
             'conversationId': 'conv_1',
             'title': '摄影讨论组',
@@ -260,32 +271,24 @@ void main() {
         conversationCache: cache,
         store: store,
         personaContextLoader: () async => currentContext,
+        telemetrySink: const NoopCacheTelemetrySink(),
       );
       final namespace = LocalSearchNamespace.fromActivePersonaContext(
         currentContext,
       );
 
-      final orphanConversations = List<Map<String, dynamic>>.generate(205, (
+      final orphanConversations = List<ConversationCacheRecord>.generate(205, (
         index,
       ) {
         final id = 'orphan_$index';
-        return <String, dynamic>{
-          'conversationId': id,
-          'id': id,
-          '_id': id,
-          'title': '孤儿会话 $index',
-          'type': 'group',
-          'updatedAt': DateTime.utc(
-            2026,
-            4,
-            23,
-            10,
-            0,
-            index,
-          ).toIso8601String(),
-        };
+        return ConversationCacheRecord(
+          id: id,
+          title: '孤儿会话 $index',
+          type: 'group',
+          updatedAt: DateTime.utc(2026, 4, 23, 10, 0, index).toIso8601String(),
+        );
       });
-      await store.upsertConversations(
+      await store.upsertConversationRecords(
         namespace: namespace,
         conversations: orphanConversations,
       );
@@ -314,6 +317,15 @@ class _CountingChatRepository extends MockChatRepository {
   }
 }
 
+class _RecordingCacheTelemetrySink implements CacheTelemetrySink {
+  final List<Map<String, Object?>> events = <Map<String, Object?>>[];
+
+  @override
+  void record(String eventName, Map<String, Object?> attributes) {
+    events.add(<String, Object?>{'eventName': eventName, ...attributes});
+  }
+}
+
 class _FlakyChatRepository extends MockChatRepository {
   int listContactsCalls = 0;
   bool _shouldFail = true;
@@ -339,7 +351,6 @@ class _StableChatRepository extends MockChatRepository {
   Future<ConversationDto> getConversation(String id) async {
     getConversationCalls += 1;
     return ConversationDto.fromMap(<String, dynamic>{
-      '_id': id,
       'id': id,
       'title': '摄影讨论组',
       'type': 'group',
@@ -352,7 +363,6 @@ class _StableChatRepository extends MockChatRepository {
       'status': 'active',
       'createdAt': '2026-03-27T10:00:00.000Z',
       'updatedAt': '2026-03-27T10:00:00.000Z',
-      'lastMessageAt': '2026-03-27T10:00:00.000Z',
       'lastMessagePreview': '',
     });
   }

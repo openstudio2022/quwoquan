@@ -15,9 +15,7 @@ Map<String, dynamic> buildAssistantCumulativeUsageStatsProtocolMap({
   final currentRun = AssistantUiUsageStatsViewData.fromProtocolMap(
     currentRunStats,
   );
-  final currentRunLedger = _ledgerMaps(
-    currentRunStats['runUsageLedger'] ?? currentRunStats['usageLedger'],
-  );
+  final currentRunLedger = _ledgerMaps(currentRunStats['runUsageLedger']);
 
   var previousCalls = 0;
   var previousTokens = 0;
@@ -31,9 +29,7 @@ Map<String, dynamic> buildAssistantCumulativeUsageStatsProtocolMap({
     if (run.runMaxTokensPerCall > previousMaxTokens) {
       previousMaxTokens = run.runMaxTokensPerCall;
     }
-    cumulativeLedger.addAll(
-      _ledgerMaps(stats['runUsageLedger'] ?? stats['usageLedger']),
-    );
+    cumulativeLedger.addAll(_ledgerMaps(stats['runUsageLedger']));
   }
   cumulativeLedger.addAll(currentRunLedger);
 
@@ -83,11 +79,11 @@ final class AssistantUsageLedgerEntryViewData {
 
   factory AssistantUsageLedgerEntryViewData.fromMap(Map<String, dynamic> m) {
     return AssistantUsageLedgerEntryViewData(
-      totalTokens: _usageInt(m['totalTokens'] ?? m['tokenUsage']),
+      totalTokens: _usageInt(m['totalTokens']),
       inputTokens: _usageInt(m['inputTokens']),
       outputTokens: _usageInt(m['outputTokens']),
       source: (m['source'] as String?)?.trim() ?? '',
-      modelRef: (m['modelRef'] ?? m['model'] ?? '').toString().trim(),
+      modelRef: (m['modelRef'] ?? '').toString().trim(),
     );
   }
 }
@@ -131,27 +127,22 @@ final class AssistantUiUsageStatsViewData {
   ) {
     if (m.isEmpty) return AssistantUiUsageStatsViewData.empty;
 
-    final runCalls = _usageInt(m['runModelCallCount'] ?? m['modelCallCount']);
-    final runTokens = _usageInt(m['runTotalTokens'] ?? m['totalTokens']);
-    final runMax = _usageInt(m['runMaxTokensPerCall'] ?? m['maxTokensPerCall']);
-    final runLedgerRaw =
-        (m['runUsageLedger'] ?? m['usageLedger']) as List? ?? const [];
+    final runCalls = _usageInt(m['runModelCallCount']);
+    final runTokens = _usageInt(m['runTotalTokens']);
+    final runMax = _usageInt(m['runMaxTokensPerCall']);
+    final runLedgerRaw = m['runUsageLedger'] as List? ?? const [];
     final runLedger = _parseLedger(runLedgerRaw);
 
     final session = (m['sessionUsageStats'] as Map?)?.cast<String, dynamic>();
     final sessionCalls = session != null
         ? _usageInt(session['modelCallCount'])
-        : _usageInt(
-            m['cumulativeModelCallCount'] ?? m['sessionModelCallCount'],
-          );
+        : _usageInt(m['cumulativeModelCallCount']);
     final sessionTokens = session != null
         ? _usageInt(session['totalTokens'])
-        : _usageInt(m['cumulativeTotalTokens'] ?? m['sessionTotalTokens']);
+        : _usageInt(m['cumulativeTotalTokens']);
     final sessionMax = session != null
         ? _usageInt(session['maxTokensPerCall'])
-        : _usageInt(
-            m['cumulativeMaxTokensPerCall'] ?? m['sessionMaxTokensPerCall'],
-          );
+        : _usageInt(m['cumulativeMaxTokensPerCall']);
     final sessionLedgerRaw = session != null
         ? (session['usageLedger'] as List? ?? const [])
         : (m['cumulativeUsageLedger'] as List? ?? const []);

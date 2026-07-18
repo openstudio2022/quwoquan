@@ -32,6 +32,8 @@ type OperationSecurityDescriptor struct {
 	Permissions          []string
 	OwnershipPolicy      string
 	TimeoutMilliseconds  int
+	Idempotency          string
+	VersionPrecondition  string
 	CommercialStatus     string
 }
 
@@ -136,6 +138,10 @@ func mustCompileOperationDescriptors(
 		descriptor.OperationKind = strings.TrimSpace(descriptor.OperationKind)
 		descriptor.MutationTarget = strings.TrimSpace(descriptor.MutationTarget)
 		descriptor.InvariantTarget = strings.TrimSpace(descriptor.InvariantTarget)
+		descriptor.Idempotency = strings.TrimSpace(descriptor.Idempotency)
+		descriptor.VersionPrecondition = strings.TrimSpace(
+			descriptor.VersionPrecondition,
+		)
 		switch descriptor.OperationKind {
 		case "command":
 			if descriptor.MutationTarget == "" ||
@@ -156,6 +162,29 @@ func mustCompileOperationDescriptors(
 		default:
 			panic(
 				"generated operation descriptor has invalid operation kind: " +
+					descriptor.CanonicalOperationID,
+			)
+		}
+		switch descriptor.Idempotency {
+		case "", "none", "optional", "required":
+		default:
+			panic(
+				"generated operation descriptor has invalid idempotency policy: " +
+					descriptor.CanonicalOperationID,
+			)
+		}
+		switch descriptor.VersionPrecondition {
+		case "":
+		case "if_match":
+			if descriptor.OperationKind != "command" {
+				panic(
+					"generated non-command descriptor requires If-Match: " +
+						descriptor.CanonicalOperationID,
+				)
+			}
+		default:
+			panic(
+				"generated operation descriptor has invalid version precondition: " +
 					descriptor.CanonicalOperationID,
 			)
 		}
@@ -249,6 +278,33 @@ func authorizeGeneratedOperation(
 		)
 		return
 	}
+	idempotencyKey := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+	if descriptor.Idempotency == "required" && idempotencyKey == "" {
+		writeOperationRequestError(
+			w,
+			r,
+			"stable Idempotency-Key is required by the operation contract",
+		)
+		return
+	}
+	ifMatch := strings.TrimSpace(r.Header.Get("If-Match"))
+	if descriptor.VersionPrecondition == "if_match" {
+		if !validIfMatchVersion(ifMatch) {
+			writeOperationRequestError(
+				w,
+				r,
+				"quoted positive If-Match aggregate version is required",
+			)
+			return
+		}
+	} else if ifMatch != "" {
+		writeOperationRequestError(
+			w,
+			r,
+			"If-Match is forbidden for a server-owned concurrency operation",
+		)
+		return
+	}
 	ctx := context.WithValue(
 		r.Context(),
 		operationDescriptorContextKey{},
@@ -256,10 +312,7 @@ func authorizeGeneratedOperation(
 	)
 	current, _ := operation.FromContext(ctx)
 	current.OperationID = descriptor.CanonicalOperationID
-	current.IdempotencyKey = strings.TrimSpace(r.Header.Get("Idempotency-Key"))
-	if current.IdempotencyKey == "" {
-		current.IdempotencyKey = strings.TrimSpace(r.Header.Get("X-Request-Id"))
-	}
+	current.IdempotencyKey = idempotencyKey
 	if hasPrincipal {
 		current.Actor = principal.Actor
 	} else {
@@ -275,6 +328,22 @@ func authorizeGeneratedOperation(
 		defer cancel()
 	}
 	next.ServeHTTP(w, r.WithContext(ctx))
+}
+
+func validIfMatchVersion(value string) bool {
+	if len(value) < 3 || value[0] != '"' || value[len(value)-1] != '"' {
+		return false
+	}
+	digits := value[1 : len(value)-1]
+	if digits == "" || digits[0] == '0' {
+		return false
+	}
+	for _, digit := range digits {
+		if digit < '0' || digit > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func compilePathTemplate(template string) (*regexp.Regexp, error) {
@@ -419,6 +488,22 @@ func writeOperationGuardError(
 		rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleGateway, rterr.KindUser, reason),
 			"请求未获授权",
+			debugMessage,
+		),
+		rterr.HTTPWriteOptionsFromRequest(r),
+	)
+}
+
+func writeOperationRequestError(
+	w http.ResponseWriter,
+	r *http.Request,
+	debugMessage string,
+) {
+	rterr.WriteHTTPError(
+		w,
+		rterr.NewInvalidArgument(
+			rterr.ModuleGateway,
+			"请求参数不完整",
 			debugMessage,
 		),
 		rterr.HTTPWriteOptionsFromRequest(r),

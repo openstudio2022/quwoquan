@@ -3,7 +3,7 @@
 ## 功能说明
 - **SSEServer**：管理 SSE 连接（Connect/Push/Disconnect/Broadcast），按 userId 路由推送；支持 Last-Event-ID 续传。
 - **ChangeStreamWatcher**：监听 MongoDB 集合变更（Change Stream），将变更事件转换为 SSE 推送或内部事件。
-- **HTTP 集成**：GET /v1/stream/events 注册 SSE 连接，需认证。
+- **HTTP 集成**：GET /stream/events 注册 SSE 连接，需认证。
 
 ## 实现要点
 - **SSEServer**：连接池按 userId 索引；Push 时广播给该用户所有连接。

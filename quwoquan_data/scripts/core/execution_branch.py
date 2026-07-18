@@ -99,7 +99,7 @@ def resolve_execution_branch(
 ) -> str:
     """执行分支 = 当前 git 分支（证据用途）。
 
-    历史遗留 spec 中的 workflowPolicy.executionBranch 只作记录，不参与解析，
+    历史遗留 spec 中的 executionPolicy.executionBranch 只作记录，不参与解析，
     防止旧 feature 分支冻结值把新批锁死在已废止分支上。
     """
     return current_git_branch(cwd=cwd or _repo_root())
@@ -111,9 +111,9 @@ def stamp_execution_branch(
     cwd: str | Path | None = None,
 ) -> str:
     """把当前正式分支与 commit 冻结进 spec（生成期证据；可重放审计）。"""
-    workflow = spec.setdefault("workflowPolicy", {})
+    workflow = spec.setdefault("executionPolicy", {})
     if not isinstance(workflow, dict):
-        raise ValueError("workflowPolicy must be a mapping")
+        raise ValueError("executionPolicy must be a mapping")
     branch = current_git_branch(cwd=cwd or _repo_root())
     if branch:
         workflow["executionBranch"] = branch
@@ -128,7 +128,7 @@ def execution_branch_payload(
     *,
     cwd: str | Path | None = None,
 ) -> dict[str, Any]:
-    workflow = (spec or {}).get("workflowPolicy") if isinstance(spec, Mapping) else {}
+    workflow = (spec or {}).get("executionPolicy") if isinstance(spec, Mapping) else {}
     workflow = workflow if isinstance(workflow, Mapping) else {}
     return {
         "stampedExecutionBranch": str(workflow.get("executionBranch") or "").strip(),

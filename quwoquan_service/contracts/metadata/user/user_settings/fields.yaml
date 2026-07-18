@@ -1,4 +1,3 @@
-version: 1
 aggregate: UserSettings
 
 entities:
@@ -6,6 +5,7 @@ entities:
     description: 通知 + 隐私 + 来电设置
     fields:
       - name: userId
+        source: userId
         type: string
         constraints: [PK, FK_user_profiles_CASCADE]
         classification: PUBLIC
@@ -15,6 +15,7 @@ entities:
         description: 1:1 关联
 
       - name: enablePush
+        source: enablePush
         type: bool
         constraints: [NOT_NULL, DEFAULT_TRUE]
         classification: PUBLIC
@@ -23,6 +24,7 @@ entities:
         ops_exposure: read
 
       - name: enableMarketing
+        source: enableMarketing
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -31,6 +33,7 @@ entities:
         ops_exposure: read
 
       - name: quietHoursStart
+        source: quietHoursStart
         type: time
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -39,6 +42,7 @@ entities:
         ops_exposure: read
 
       - name: quietHoursEnd
+        source: quietHoursEnd
         type: time
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -47,6 +51,7 @@ entities:
         ops_exposure: read
 
       - name: defaultIncomingCallRingtoneId
+        source: defaultIncomingCallRingtoneId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -56,6 +61,7 @@ entities:
         description: 默认来电铃声 ID（仅支持官方铃声库）
 
       - name: allowCallerRingtoneOverride
+        source: allowCallerRingtoneOverride
         type: bool
         constraints: [NOT_NULL, DEFAULT_TRUE]
         classification: PUBLIC
@@ -65,6 +71,7 @@ entities:
         description: 是否允许使用发起方配置的专属呼叫铃声替换默认铃声
 
       - name: enableCallVibration
+        source: enableCallVibration
         type: bool
         constraints: [NOT_NULL, DEFAULT_TRUE]
         classification: PUBLIC
@@ -74,6 +81,7 @@ entities:
         description: 来电时是否振动
 
       - name: enableGroupCallRing
+        source: enableGroupCallRing
         type: bool
         constraints: [NOT_NULL, DEFAULT_TRUE]
         classification: PUBLIC
@@ -83,6 +91,7 @@ entities:
         description: 群语音/视频邀请是否按来电方式响铃提醒
 
       - name: allowStrangerMsg
+        source: allowStrangerMsg
         type: bool
         constraints: [NOT_NULL, DEFAULT_TRUE]
         classification: PUBLIC
@@ -91,6 +100,7 @@ entities:
         ops_exposure: read
 
       - name: profileVisibility
+        source: profileVisibility
         type: enum
         enum_ref: ProfileVisibility
         constraints: [NOT_NULL, DEFAULT_PUBLIC]
@@ -100,6 +110,7 @@ entities:
         ops_exposure: read
 
       - name: contentLanguage
+        source: contentLanguage
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -109,6 +120,7 @@ entities:
         description: 内容语言偏好（超前）
 
       - name: feedPreference
+        source: feedPreference
         type: enum
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -118,6 +130,7 @@ entities:
         description: recommend/chronological（超前）
 
       - name: assistantEnabled
+        source: assistantEnabled
         type: bool
         constraints: [NOT_NULL, DEFAULT_TRUE]
         classification: PUBLIC
@@ -127,6 +140,7 @@ entities:
         description: 小趣助手开关
 
       - name: defaultThemeMode
+        source: defaultThemeMode
         type: enum
         enum_ref: ThemeModeSetting
         constraints: [NOT_NULL]
@@ -138,6 +152,7 @@ entities:
         description: owner 默认主题模式
 
       - name: defaultFontSizePreset
+        source: defaultFontSizePreset
         type: enum
         enum_ref: FontSizePreset
         constraints: [NOT_NULL]
@@ -149,6 +164,7 @@ entities:
         description: owner 默认字号预设
 
       - name: appearanceVersion
+        source: appearanceVersion
         type: int
         constraints: [NOT_NULL, DEFAULT_1]
         classification: PUBLIC
@@ -158,6 +174,7 @@ entities:
         description: appearance 设置版本号（LWW 最终一致性判定基线）
 
       - name: appearanceUpdatedAt
+        source: appearanceUpdatedAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -167,6 +184,7 @@ entities:
         description: owner 默认 appearance 最后更新时间
 
       - name: blockedKeywords
+        source: blockedKeywords
         type: "string[]"
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -176,6 +194,7 @@ entities:
         description: 用户级内容屏蔽词（命中过滤，不参与公开画像）
 
       - name: updatedAt
+        source: updatedAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC

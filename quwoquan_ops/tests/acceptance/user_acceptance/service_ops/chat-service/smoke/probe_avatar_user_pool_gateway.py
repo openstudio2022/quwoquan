@@ -11,6 +11,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+from typing import Any
 
 
 def _find_repo_root() -> Path:
@@ -18,14 +19,18 @@ def _find_repo_root() -> Path:
         if (candidate / "quwoquan_app").is_dir() and (candidate / "quwoquan_service").is_dir():
             return candidate
     raise RuntimeError("cannot locate quwoquan repo root")
-from typing import Any
 
 
 ROOT = _find_repo_root()
 SHARED = ROOT / "quwoquan_service" / "contracts" / "metadata" / "_shared" / "test_fixtures"
 MEDIA_ROOT = SHARED / "media"
 USER_POOL_PATH = SHARED / "user_pool.json"
-CREATOR_POOL_PATH = SHARED / "user_pool.creator_pool.travel_photo_1k_v1.json"
+HTTP_TIMEOUT_SECONDS = 10
+READY_TIMEOUT_SECONDS = 20
+READY_PROBE_TIMEOUT_SECONDS = 2
+READY_POLL_SECONDS = 0.2
+PROCESS_SHUTDOWN_TIMEOUT_SECONDS = 5
+CORE_PNG_COVER_KEY = "media/image/s/archived-image/post/fixture_photo_001/cover.png"
 
 
 def free_port() -> int:
@@ -38,28 +43,28 @@ def free_port() -> int:
 
 
 def get_json(url: str) -> Any:
-    with urllib.request.urlopen(url, timeout=10) as response:
+    with urllib.request.urlopen(url, timeout=HTTP_TIMEOUT_SECONDS) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
 def get_headers(url: str) -> dict[str, str]:
-    with urllib.request.urlopen(url, timeout=10) as response:
+    with urllib.request.urlopen(url, timeout=HTTP_TIMEOUT_SECONDS) as response:
         response.read()
         return {key.lower(): value for key, value in response.headers.items()}
 
 
 def wait_ok(url: str, label: str) -> None:
-    deadline = time.monotonic() + 20
+    deadline = time.monotonic() + READY_TIMEOUT_SECONDS
     last_error = ""
     while time.monotonic() < deadline:
         try:
-            with urllib.request.urlopen(url, timeout=2) as response:
+            with urllib.request.urlopen(url, timeout=READY_PROBE_TIMEOUT_SECONDS) as response:
                 response.read()
                 if response.status < 500:
                     return
         except (OSError, urllib.error.URLError) as exc:
             last_error = str(exc)
-        time.sleep(0.2)
+        time.sleep(READY_POLL_SECONDS)
     raise RuntimeError(f"{label} did not become ready: {last_error}")
 
 
@@ -82,18 +87,7 @@ def require(condition: bool, message: str) -> None:
 
 
 def load_pool() -> dict[str, Any]:
-    shared_pool = json.loads(USER_POOL_PATH.read_text(encoding="utf-8"))
-    creator_pool = json.loads(CREATOR_POOL_PATH.read_text(encoding="utf-8"))
-    merged_users: dict[str, dict[str, Any]] = {}
-    for item in list(shared_pool.get("users") or []) + list(creator_pool.get("users") or []):
-        if not isinstance(item, dict):
-            continue
-        user_id = str(item.get("userId") or "").strip()
-        if user_id:
-            merged_users[user_id] = item
-    combined_pool = dict(shared_pool)
-    combined_pool["users"] = list(merged_users.values())
-    return combined_pool
+    return json.loads(USER_POOL_PATH.read_text(encoding="utf-8"))
 
 
 def first_object_key(pool: dict[str, Any], prefix: str | tuple[str, ...], *, exclude_suffix: str | None = None) -> str:
@@ -134,7 +128,7 @@ def main() -> int:
     processes: list[subprocess.Popen[str]] = []
     avatar_object_key = first_object_key(pool, ("media/avatar/s/archived-avatar/user/", "media/preset/avatar/"))
     group_avatar_key = first_object_key(pool, "media/avatar/s/archived-avatar/group/")
-    png_cover_key = "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png"
+    png_cover_key = CORE_PNG_COVER_KEY
     mixed_cover_key = first_object_key(pool, "media/image/s/archived-image/post/", exclude_suffix=".png")
     try:
         media = subprocess.Popen(
@@ -170,12 +164,12 @@ def main() -> int:
         processes.append(gateway)
         wait_ok(f"{gateway_base}/healthz", "beta gateway")
 
-        content = get_json(f"{gateway_base}/v1/content/feed")
-        user = get_json(f"{gateway_base}/v1/user/profile")
-        contacts = get_json(f"{gateway_base}/v1/chat/contacts")
-        inbox = get_json(f"{gateway_base}/v1/chat/inbox")
-        messages = get_json(f"{gateway_base}/v1/chat/conversations/fixture_conv_direct/messages")
-        members = get_json(f"{gateway_base}/v1/chat/conversations/fixture_conv_direct/members")
+        content = get_json(f"{gateway_base}/content/feed")
+        user = get_json(f"{gateway_base}/user/profile")
+        contacts = get_json(f"{gateway_base}/chat/contacts")
+        inbox = get_json(f"{gateway_base}/chat/inbox")
+        messages = get_json(f"{gateway_base}/chat/conversations/fixture_conv_direct/messages")
+        members = get_json(f"{gateway_base}/chat/conversations/fixture_conv_direct/members")
 
         avatar_values = []
         for payload in (content, user, contacts, inbox, messages, members):
@@ -186,17 +180,17 @@ def main() -> int:
         require(avatar_values, "expected avatar values from gateway fixtures")
         require(
             all(
-                value.startswith((f"{media_base}/media/avatar/", f"{media_base}/media/preset/avatar/"))
+                value.startswith(("media/avatar/", "media/preset/avatar/"))
                 for value in avatar_values
             ),
-            f"all avatar values must be media-base URLs, got {avatar_values}",
+            f"all avatar values must remain canonical object keys, got {avatar_values}",
         )
 
         cover_values = collect_strings(content, "coverUrl") + collect_strings(content, "thumbnailUrl")
         require(cover_values, "expected post cover values from gateway content fixture")
         require(
-            all(value.startswith(f"{media_base}/media/image/s/archived-image/post/") for value in cover_values),
-            f"all cover values must be media image URLs, got {cover_values}",
+            all(value.startswith("media/image/s/archived-image/post/") for value in cover_values),
+            f"all cover values must remain canonical object keys, got {cover_values}",
         )
 
         avatar_headers = get_headers(f"{gateway_base}/{avatar_object_key}")
@@ -215,7 +209,7 @@ def main() -> int:
                 process.terminate()
         for process in reversed(processes):
             try:
-                process.wait(timeout=5)
+                process.wait(timeout=PROCESS_SHUTDOWN_TIMEOUT_SECONDS)
             except subprocess.TimeoutExpired:
                 process.kill()
 

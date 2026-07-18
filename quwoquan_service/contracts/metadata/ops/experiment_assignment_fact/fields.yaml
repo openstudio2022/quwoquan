@@ -1,8 +1,8 @@
-version: 1
 entity: ExperimentAssignmentFact
 
 fields:
   - name: id
+    source: id
     type: string
     constraints: [PK]
     classification: PUBLIC
@@ -11,6 +11,7 @@ fields:
     ops_exposure: read
 
   - name: experimentId
+    source: experimentId
     type: string
     constraints: [NOT_NULL]
     classification: PUBLIC
@@ -19,6 +20,7 @@ fields:
     ops_exposure: read
 
   - name: subjectKey
+    source: subjectKey
     type: string
     constraints: [NOT_NULL]
     classification: PII
@@ -27,6 +29,7 @@ fields:
     ops_exposure: read
 
   - name: variant
+    source: variant
     type: string
     constraints: [NOT_NULL]
     classification: PUBLIC
@@ -35,6 +38,7 @@ fields:
     ops_exposure: read
 
   - name: policyVersion
+    source: policyVersion
     type: string
     constraints: [NOT_NULL]
     classification: PUBLIC
@@ -43,6 +47,7 @@ fields:
     ops_exposure: read
 
   - name: assignedAt
+    source: assignedAt
     type: timestamp
     constraints: [NOT_NULL]
     classification: PUBLIC

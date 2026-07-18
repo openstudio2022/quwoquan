@@ -2,20 +2,22 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/ui/chat/models/chat_contacts_row.dart';
 import 'package:quwoquan_app/ui/chat/models/chat_list_item_view_model.dart';
+
+import '../../../support/fixtures/chat/chat_inbox_fixture_builder.dart';
 
 void main() {
   group('chat avatar URL resolution', () {
     test('conversation list items expose loadable avatar URLs', () {
       final item = ChatListItemViewModel.fromDto(
-        ChatInboxDto(
+        chatInboxFixture(
           id: 'conv_1',
           type: 'group',
           title: '契约群',
-          avatarUrl: '/media/avatar/s/archived-avatar/conversation/conv_1/v2/hash.png?v=2',
+          avatarUrl:
+              '/media/avatar/s/archived-avatar/conversation/conv_1/v2/hash.png?v=2',
         ),
       );
 
@@ -34,7 +36,8 @@ void main() {
         ChatContactRowDto(
           userId: 'user_2',
           displayName: '契约联系人',
-          avatarUrl: 'media/avatar/s/archived-avatar/user/user_2/v1/profile.png',
+          avatarUrl:
+              'media/avatar/s/archived-avatar/user/user_2/v1/profile.png',
           relationState: 'mutual',
         ),
       );
@@ -57,7 +60,8 @@ void main() {
         clientMsgId: 'client_msg_1',
         senderId: 'user_2',
         senderName: '契约联系人',
-        senderAvatar: '/media/avatar/s/archived-avatar/user/user_2/v3/profile.png?v=3',
+        senderAvatar:
+            '/media/avatar/s/archived-avatar/user/user_2/v3/profile.png?v=3',
         type: 'text',
         content: '你好',
         status: 'sent',
@@ -93,23 +97,26 @@ void main() {
       expect(item.thumbnailUrl, 'https://cdn.example.com/photo.jpg');
     });
 
-    test('image message display falls back to image url when thumbnail missing', () {
-      final item = ChatMessageDto(
-        id: 'msg_img_fallback',
-        conversationId: 'conv_1',
-        seq: 3,
-        clientMsgId: 'client_msg_img_fallback',
-        senderId: 'user_2',
-        type: 'image',
-        mediaAssetId: 'asset_img_fallback',
-        mediaDeliveryUrl: 'https://cdn.example.com/photo2.jpg',
-        mediaType: 'image',
-        mediaContentType: 'image/jpeg',
-        status: 'sent',
-      ).toDisplayItem(currentUserId: 'user_me');
+    test(
+      'image message display falls back to image url when thumbnail missing',
+      () {
+        final item = ChatMessageDto(
+          id: 'msg_img_fallback',
+          conversationId: 'conv_1',
+          seq: 3,
+          clientMsgId: 'client_msg_img_fallback',
+          senderId: 'user_2',
+          type: 'image',
+          mediaAssetId: 'asset_img_fallback',
+          mediaDeliveryUrl: 'https://cdn.example.com/photo2.jpg',
+          mediaType: 'image',
+          mediaContentType: 'image/jpeg',
+          status: 'sent',
+        ).toDisplayItem(currentUserId: 'user_me');
 
-      expect(item.imageUrl, 'https://cdn.example.com/photo2.jpg');
-      expect(item.thumbnailUrl, 'https://cdn.example.com/photo2.jpg');
-    });
+        expect(item.imageUrl, 'https://cdn.example.com/photo2.jpg');
+        expect(item.thumbnailUrl, 'https://cdn.example.com/photo2.jpg');
+      },
+    );
   });
 }

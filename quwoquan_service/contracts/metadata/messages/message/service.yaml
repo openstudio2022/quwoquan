@@ -1,4 +1,3 @@
-version: 1
 service:
   name: chat-service
   domain: chat
@@ -11,7 +10,8 @@ service:
     target_story: app-cloud-business-object-commercial-closure
 api_routes:
   - method: POST
-    path: /v1/chat/conversations/{conversationId}/messages
+    path: /chat/conversations/{conversationId}/messages
+
     operation: SendMessage
     actor: persona
     application:
@@ -61,7 +61,8 @@ api_routes:
       visibility: private
 
   - method: POST
-    path: /v1/chat/conversations/{conversationId}/messages/{messageId}/recall
+    path: /chat/conversations/{conversationId}/messages/{messageId}/recall
+
     operation: RecallMessage
     actor: persona
     application:
@@ -81,7 +82,8 @@ api_routes:
       visibility: private
 
   - method: GET
-    path: /v1/chat/conversations/{conversationId}/messages
+    path: /chat/conversations/{conversationId}/messages
+
     operation: ListMessages
     actor: persona
     authorization:
@@ -122,7 +124,8 @@ api_routes:
       visibility: private
 
   - method: POST
-    path: /v1/chat/conversations/{conversationId}/sync
+    path: /chat/conversations/{conversationId}/sync
+
     operation: SyncMessages
     actor: persona
     application:
@@ -132,10 +135,11 @@ api_routes:
       reader: MessageSyncReader
       slice: MessageSyncSlice
     description: 离线同步（上报 lastSeq，返回 gap 消息列表 + hasMore，单次最多 500 条）
-    auth: required
-
+    security:
+      auth_mode: required
   - method: GET
-    path: /v1/chat/messages/search
+    path: /chat/messages/search
+
     operation: SearchMessages
     actor: persona
     application:
@@ -147,4 +151,5 @@ api_routes:
     description: 全局搜索消息投影；不加载 Conversation 聚合。
     query_params: [query, cursor, limit]
     response_entity: MessageSearchItemView
-    auth: required
+    security:
+      auth_mode: required

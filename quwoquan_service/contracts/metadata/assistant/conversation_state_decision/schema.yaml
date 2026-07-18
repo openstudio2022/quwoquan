@@ -2,7 +2,6 @@ dart_class: ConversationStateDecisionDto
 library_path: assistant/contracts/conversation_state_decision.dart
 output_path: assistant/generated/contracts/conversation_state_decision.g.dart
 contract: conversation_state_decision
-version: v1
 kind: runtime_policy_contract
 imports:
   - package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart

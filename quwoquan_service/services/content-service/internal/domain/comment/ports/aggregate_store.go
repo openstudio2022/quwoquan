@@ -34,6 +34,14 @@ type CommitResult struct {
 	Replayed  bool
 }
 
+type IdempotentReceipt struct {
+	Aggregate        *commentmodel.Comment
+	IdempotencyKey   string
+	CommandName      string
+	CommandDigest    string
+	ReceiptExpiresAt time.Time
+}
+
 // AggregateStore 只负责 Comment 状态、命令回执、CAS 与事务 outbox；
 // 它不持有 Post 状态或 Post.commentCount。
 type AggregateStore interface {
@@ -44,6 +52,7 @@ type AggregateStore interface {
 		commandName string,
 		commandDigest string,
 	) (CommitResult, bool, error)
+	RecordIdempotentReceipt(ctx context.Context, receipt IdempotentReceipt) (CommitResult, error)
 	Commit(ctx context.Context, commit Commit) (CommitResult, error)
 }
 

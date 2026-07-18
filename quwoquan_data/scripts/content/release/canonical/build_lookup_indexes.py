@@ -295,7 +295,7 @@ def _coverage_rows(
 
 
 def _index_hash(files: Iterable[Path], root: Path) -> str:
-    digest = hashlib.sha256(b"quwoquan-release-index-v1\0")
+    digest = hashlib.sha256(b"quwoquan-release-index\0")
     for path in sorted(files):
         digest.update(path.relative_to(root).as_posix().encode("utf-8"))
         digest.update(b"\0")
@@ -361,7 +361,7 @@ def build_publish_lookup_indexes(
     manifest = target / "manifest.json"
     expected_manifest = _json_bytes(
         {
-            "schemaVersion": "quwoquan_data.release_lookup_index/1",
+            "schema": "quwoquan_data.release_lookup_index",
             **result,
             "coverage": coverage_summary,
         }

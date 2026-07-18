@@ -13,8 +13,8 @@ import (
 
 func TestUnsupportedFutureLoginMethodsAreNotPublic(t *testing.T) {
 	for _, route := range []string{
-		"/v1/auth/login/apple",
-		"/v1/auth/login/passkey",
+		"/auth/login/apple",
+		"/auth/login/passkey",
 	} {
 		rec := doRequest(t, http.MethodPost, route, `{"credential":"must-not-be-accepted"}`, nil)
 		if rec.Code != http.StatusNotFound {
@@ -148,7 +148,7 @@ func TestBindCredential_Success(t *testing.T) {
 	createTestProfile(t, "bind_owner", "bind_user")
 	createTestCredential(t, "cred_phone", "bind_owner", "phone", "hash_phone_bind")
 
-	rec := doRequest(t, http.MethodPost, "/v1/user/credentials",
+	rec := doRequest(t, http.MethodPost, "/user/credentials",
 		`{"credentialType":"wechat","credentialKey":"wx_union_id_123","displayLabel":"微信账号"}`,
 		authHeaders("bind_owner"))
 	if rec.Code != http.StatusOK {
@@ -171,7 +171,7 @@ func TestUnbindCredential_LastCredentialForbidden(t *testing.T) {
 	createTestCredential(t, "cred_only", "unbind_owner", "phone", "hash_only_phone")
 
 	// 尝试解绑唯一凭证应被拒绝
-	rec := doRequest(t, http.MethodDelete, "/v1/user/credentials/phone", "", authHeaders("unbind_owner"))
+	rec := doRequest(t, http.MethodDelete, "/user/credentials/phone", "", authHeaders("unbind_owner"))
 	if rec.Code == http.StatusOK {
 		t.Fatal("expected error when unbinding the last credential")
 	}
@@ -184,7 +184,7 @@ func TestUnbindCredential_KeepsRemaining(t *testing.T) {
 	createTestCredential(t, "c_wechat", "multi_cred_owner", "wechat", "wx_union_multi")
 
 	// 解绑微信（还有手机号剩余）
-	rec := doRequest(t, http.MethodDelete, "/v1/user/credentials/wechat", "", authHeaders("multi_cred_owner"))
+	rec := doRequest(t, http.MethodDelete, "/user/credentials/wechat", "", authHeaders("multi_cred_owner"))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("unbind wechat: expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -205,7 +205,7 @@ func TestListCredentials(t *testing.T) {
 	createTestCredential(t, "lc1", "list_cred_owner", "phone", "hash_lc_phone")
 	createTestCredential(t, "lc2", "list_cred_owner", "apple", "apple_subject_123")
 
-	rec := doRequest(t, http.MethodGet, "/v1/user/credentials", "", authHeaders("list_cred_owner"))
+	rec := doRequest(t, http.MethodGet, "/user/credentials", "", authHeaders("list_cred_owner"))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("list credentials: expected 200, got %d", rec.Code)
 	}

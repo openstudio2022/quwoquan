@@ -55,7 +55,7 @@ def parse_cloud_runtime_defaults(path: Path) -> dict[str, str]:
     for key in DART_RUNTIME_DEFAULT_KEYS:
         match = re.search(
             rf"static const String {re.escape(key)} = String\.fromEnvironment\(\s*"
-            rf"'[^']+',\s*defaultValue: '([^']+)'",
+            rf"'[^']+',\s*defaultValue: '([^']*)'",
             text,
             re.MULTILINE,
         )
@@ -97,16 +97,14 @@ def main() -> int:
                     f"{runtime_path.relative_to(ROOT)}: {runtime_key} mismatch, expected {expected}, got {actual}"
                 )
 
-    default_runtime_path = ROOT / "quwoquan_app" / "configs" / "default" / "app_runtime.yaml"
-    default_runtime_values = parse_runtime_yaml(default_runtime_path)
     cloud_runtime_path = ROOT / "quwoquan_app" / "lib" / "cloud" / "runtime" / "cloud_runtime_config.dart"
     cloud_runtime_defaults = parse_cloud_runtime_defaults(cloud_runtime_path)
     for key in DART_RUNTIME_DEFAULT_KEYS:
-        expected = str(default_runtime_values.get(key, "")).strip()
         actual = str(cloud_runtime_defaults.get(key, "")).strip()
-        if actual != expected:
+        if actual:
             issues.append(
-                f"{cloud_runtime_path.relative_to(ROOT)}: {key} default mismatch, expected {expected}, got {actual}"
+                f"{cloud_runtime_path.relative_to(ROOT)}: {key} 不得定义 authority 默认值，"
+                "必须由正式 launcher 显式注入"
             )
 
     service_configs = sorted(

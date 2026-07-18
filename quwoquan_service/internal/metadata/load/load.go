@@ -19,7 +19,7 @@ import (
 )
 
 var aggregateTopLevelKeys = stringSet(
-	"version", "domain", "aggregate_root", "object_kind", "aggregate_owner",
+	"domain", "aggregate_root", "object_kind", "aggregate_owner",
 	"description", "storage_backend", "cache_layer", "cache_ttl_seconds",
 	"capabilities", "taggable", "vector_enabled", "members", "ddd_layer_mapping",
 	"counter_strategy", "join_paths", "livekit_integration", "seq_strategy",
@@ -27,7 +27,7 @@ var aggregateTopLevelKeys = stringSet(
 )
 
 var entityTopLevelKeys = stringSet(
-	"version", "domain", "entity", "entity_name", "is_aggregate", "aggregate_root",
+	"domain", "entity", "entity_name", "is_aggregate", "aggregate_root",
 	"object_kind", "aggregate_owner", "description", "storage_backend", "cache_layer",
 	"cache_ttl_seconds", "capabilities", "taggable", "vector_enabled",
 	"relation_signal", "ddd_layer_mapping", "service", "ownership", "storage",
@@ -35,7 +35,7 @@ var entityTopLevelKeys = stringSet(
 )
 
 var serviceTopLevelKeys = stringSet(
-	"version", "aggregate", "entity", "response_list_key", "service", "api_routes",
+	"aggregate", "entity", "response_list_key", "service", "api_routes",
 	"consumers", "contract_test",
 )
 
@@ -335,7 +335,6 @@ type routeDocument struct {
 	ResponseBody     string            `yaml:"response_body"`
 	ResponseBodyKind string            `yaml:"response_body_kind"`
 	Actor            string            `yaml:"actor"`
-	Auth             string            `yaml:"auth"`
 	Security         map[string]string `yaml:"security"`
 	Authorization    struct {
 		Principal       string   `yaml:"principal"`
@@ -351,6 +350,9 @@ type routeDocument struct {
 		MaxAttempts         int    `yaml:"max_attempts"`
 		Idempotency         string `yaml:"idempotency"`
 	} `yaml:"reliability"`
+	Concurrency struct {
+		VersionPrecondition string `yaml:"version_precondition"`
+	} `yaml:"concurrency"`
 	ErrorCodes []string `yaml:"error_codes"`
 	Privacy    struct {
 		RequestClassification  string `yaml:"request_classification"`
@@ -421,7 +423,7 @@ func loadService(metadataDir, path string, object ast.Object) ([]ast.Operation, 
 		}
 		actor := strings.TrimSpace(route.Actor)
 		if actor == "" {
-			actor = inferActorRequirement(route.Auth, route.Security)
+			actor = inferActorRequirement(route.Security)
 		}
 		commercial := mergeCommercialBinding(
 			document.Service.CommercialDefaults,
@@ -472,7 +474,7 @@ func loadService(metadataDir, path string, object ast.Object) ([]ast.Operation, 
 			ResponseBodyKind: strings.TrimSpace(route.ResponseBodyKind),
 			SourcePath:       relativePath(metadataDir, path),
 			Security:         route.Security,
-			AuthMode:         resolveAuthMode(route.Auth, route.Security),
+			AuthMode:         resolveAuthMode(route.Security),
 			Principal: strings.TrimSpace(
 				route.Authorization.Principal,
 			),
@@ -498,6 +500,11 @@ func loadService(metadataDir, path string, object ast.Object) ([]ast.Operation, 
 				Idempotency: strings.TrimSpace(
 					route.Reliability.Idempotency,
 				),
+			},
+			Concurrency: ast.ConcurrencyPolicy{
+				VersionPrecondition: ast.VersionPrecondition(strings.TrimSpace(
+					route.Concurrency.VersionPrecondition,
+				)),
 			},
 			ErrorCodes: trimStrings(route.ErrorCodes),
 			Privacy: ast.PrivacyPolicy{
@@ -740,11 +747,8 @@ func resolveOperationKind(method, explicit string) (ast.OperationKind, bool, err
 	return ast.OperationKindCommand, false, nil
 }
 
-func inferActorRequirement(auth string, security map[string]string) string {
-	authMode := strings.TrimSpace(auth)
-	if security != nil && strings.TrimSpace(security["auth_mode"]) != "" {
-		authMode = strings.TrimSpace(security["auth_mode"])
-	}
+func inferActorRequirement(security map[string]string) string {
+	authMode := resolveAuthMode(security)
 	switch authMode {
 	case "required":
 		return "persona"
@@ -755,11 +759,8 @@ func inferActorRequirement(auth string, security map[string]string) string {
 	}
 }
 
-func resolveAuthMode(auth string, security map[string]string) string {
-	authMode := strings.TrimSpace(auth)
-	if security != nil && strings.TrimSpace(security["auth_mode"]) != "" {
-		authMode = strings.TrimSpace(security["auth_mode"])
-	}
+func resolveAuthMode(security map[string]string) string {
+	authMode := strings.TrimSpace(security["auth_mode"])
 	switch strings.ToLower(authMode) {
 	case "public", "optional", "required":
 		return strings.ToLower(authMode)
@@ -938,290 +939,4 @@ func addSourceDocument(catalog *ast.Catalog, root, path string, errs *[]error) {
 	catalog.Documents = append(catalog.Documents, ast.SourceDocument{
 		Path: relative, SHA256: digest, MediaType: mediaType, Content: content,
 	})
-}
-
-type businessObjectMapWire struct {
-	Domain          string                           `json:"domain"`
-	DecisionRefs    []string                         `json:"decision_refs"`
-	BoundedContexts []boundedContextRegistrationWire `json:"bounded_contexts"`
-	Objects         []businessObjectBoundaryWire     `json:"objects"`
-}
-
-type businessObjectBoundaryWire struct {
-	CanonicalObject      string                   `json:"canonical_object"`
-	BoundedContext       string                   `json:"bounded_context"`
-	ObjectKind           ast.ObjectKind           `json:"object_kind"`
-	AggregateOwner       *string                  `json:"aggregate_owner"`
-	Identity             objectIdentityWire       `json:"identity"`
-	InvariantRefs        []string                 `json:"invariant_refs"`
-	MemberBounds         map[string]int           `json:"member_bounds"`
-	StorageRole          string                   `json:"storage_role"`
-	StorageBackend       *string                  `json:"storage_backend"`
-	MutationEntrypoints  []string                 `json:"mutation_entrypoints"`
-	EventConsumers       []string                 `json:"event_consumers"`
-	LifecycleRefs        []string                 `json:"lifecycle_refs"`
-	SourceDocument       *string                  `json:"source_document"`
-	SourceEntity         *string                  `json:"source_entity"`
-	Access               objectAccessPolicyWire   `json:"access"`
-	Relationships        []objectRelationshipWire `json:"relationships"`
-	FieldRoles           map[string][]string      `json:"field_roles"`
-	LocalIdentityReasons map[string]string        `json:"local_identity_reasons"`
-}
-
-type objectIdentityWire struct {
-	Fields        []string `json:"fields"`
-	VersionSource string   `json:"version_source"`
-	VersionField  *string  `json:"version_field"`
-}
-
-type boundedContextRegistrationWire struct {
-	ContextID    string                  `json:"context_id"`
-	Name         string                  `json:"name"`
-	Role         string                  `json:"role"`
-	AccessPolicy contextAccessPolicyWire `json:"access_policy"`
-}
-
-type contextAccessPolicyWire struct {
-	Commands     string `json:"commands"`
-	Queries      string `json:"queries"`
-	ChildObjects string `json:"child_objects"`
-	CrossContext string `json:"cross_context"`
-}
-
-type objectAccessPolicyWire struct {
-	Commands     string `json:"commands"`
-	Queries      string `json:"queries"`
-	CrossContext string `json:"cross_context"`
-}
-
-type objectRelationshipWire struct {
-	Name            string   `json:"name"`
-	TargetObject    string   `json:"target_object"`
-	TargetObjects   []string `json:"target_objects"`
-	ReferenceFields []string `json:"reference_fields"`
-	Kind            string   `json:"kind"`
-	Cardinality     string   `json:"cardinality"`
-	Consistency     string   `json:"consistency"`
-	Access          string   `json:"access"`
-	OnDelete        string   `json:"on_delete"`
-}
-
-func loadBusinessObjectMaps(catalog *ast.Catalog, errs *[]error) {
-	for _, document := range catalog.Documents {
-		if filepath.Base(document.Path) != "business_object_map.yaml" {
-			continue
-		}
-		var wire businessObjectMapWire
-		var envelope map[string]json.RawMessage
-		if err := json.Unmarshal(document.Content, &envelope); err != nil {
-			*errs = append(
-				*errs,
-				fmt.Errorf("%s: decode business object map envelope: %w", document.Path, err),
-			)
-			continue
-		}
-		for _, retiredField := range []string{"version", "schemaVersion", "registryRevision"} {
-			if _, exists := envelope[retiredField]; exists {
-				*errs = append(
-					*errs,
-					fmt.Errorf(
-						"%s: retired Registry field %q is forbidden",
-						document.Path,
-						retiredField,
-					),
-				)
-				continue
-			}
-		}
-		if err := json.Unmarshal(document.Content, &wire); err != nil {
-			*errs = append(
-				*errs,
-				fmt.Errorf("%s: decode business object map: %w", document.Path, err),
-			)
-			continue
-		}
-		objectMap := ast.BusinessObjectMap{
-			Domain:          strings.TrimSpace(wire.Domain),
-			DecisionRefs:    append([]string(nil), wire.DecisionRefs...),
-			BoundedContexts: make([]ast.BoundedContextRegistration, 0, len(wire.BoundedContexts)),
-			SourcePath:      document.Path,
-			Objects: make(
-				[]ast.BusinessObjectBoundary,
-				0,
-				len(wire.Objects),
-			),
-		}
-		for _, boundedContext := range wire.BoundedContexts {
-			objectMap.BoundedContexts = append(
-				objectMap.BoundedContexts,
-				ast.BoundedContextRegistration{
-					ContextID: strings.TrimSpace(boundedContext.ContextID),
-					Name:      strings.TrimSpace(boundedContext.Name),
-					Role:      strings.TrimSpace(boundedContext.Role),
-					AccessPolicy: ast.ContextAccessPolicy{
-						Commands:     strings.TrimSpace(boundedContext.AccessPolicy.Commands),
-						Queries:      strings.TrimSpace(boundedContext.AccessPolicy.Queries),
-						ChildObjects: strings.TrimSpace(boundedContext.AccessPolicy.ChildObjects),
-						CrossContext: strings.TrimSpace(boundedContext.AccessPolicy.CrossContext),
-					},
-				},
-			)
-		}
-		for _, object := range wire.Objects {
-			relationships := make([]ast.ObjectRelationship, 0, len(object.Relationships))
-			for _, relationship := range object.Relationships {
-				relationships = append(relationships, ast.ObjectRelationship{
-					Name:            strings.TrimSpace(relationship.Name),
-					TargetObject:    strings.TrimSpace(relationship.TargetObject),
-					TargetObjects:   normalizedStrings(relationship.TargetObjects),
-					ReferenceFields: normalizedStrings(relationship.ReferenceFields),
-					Kind:            strings.TrimSpace(relationship.Kind),
-					Cardinality:     strings.TrimSpace(relationship.Cardinality),
-					Consistency:     strings.TrimSpace(relationship.Consistency),
-					Access:          strings.TrimSpace(relationship.Access),
-					OnDelete:        strings.TrimSpace(relationship.OnDelete),
-				})
-			}
-			objectMap.Objects = append(
-				objectMap.Objects,
-				ast.BusinessObjectBoundary{
-					CanonicalObject: strings.TrimSpace(object.CanonicalObject),
-					BoundedContext:  strings.TrimSpace(object.BoundedContext),
-					ObjectKind:      object.ObjectKind,
-					AggregateOwner:  dereferenceString(object.AggregateOwner),
-					Identity: ast.ObjectIdentity{
-						Fields:        normalizedStrings(object.Identity.Fields),
-						VersionSource: strings.TrimSpace(object.Identity.VersionSource),
-						VersionField:  dereferenceString(object.Identity.VersionField),
-					},
-					InvariantRefs:       normalizedStrings(object.InvariantRefs),
-					MemberBounds:        cloneIntMap(object.MemberBounds),
-					StorageRole:         strings.TrimSpace(object.StorageRole),
-					StorageBackend:      dereferenceString(object.StorageBackend),
-					MutationEntrypoints: normalizedStrings(object.MutationEntrypoints),
-					EventConsumers:      normalizedStrings(object.EventConsumers),
-					LifecycleRefs:       normalizedStrings(object.LifecycleRefs),
-					SourceDocument:      dereferenceString(object.SourceDocument),
-					SourceEntity:        dereferenceString(object.SourceEntity),
-					Access: ast.ObjectAccessPolicy{
-						Commands:     strings.TrimSpace(object.Access.Commands),
-						Queries:      strings.TrimSpace(object.Access.Queries),
-						CrossContext: strings.TrimSpace(object.Access.CrossContext),
-					},
-					Relationships:        relationships,
-					FieldRoles:           cloneFieldRoles(object.FieldRoles),
-					LocalIdentityReasons: cloneStringMap(object.LocalIdentityReasons),
-				},
-			)
-		}
-		catalog.BusinessObjectMaps = append(catalog.BusinessObjectMaps, objectMap)
-	}
-}
-
-func mergeBusinessObjectBoundaries(catalog *ast.Catalog, errs *[]error) {
-	objectsByDomainName := make(map[string]int, len(catalog.Objects))
-	objectIDs := make(map[string]struct{}, len(catalog.Objects))
-	for index, object := range catalog.Objects {
-		key := object.Domain + "\x00" + object.Name
-		objectsByDomainName[key] = index
-		objectIDs[object.ID] = struct{}{}
-	}
-	for _, objectMap := range catalog.BusinessObjectMaps {
-		for _, boundary := range objectMap.Objects {
-			key := objectMap.Domain + "\x00" + boundary.CanonicalObject
-			if _, exists := objectsByDomainName[key]; exists {
-				continue
-			}
-			id := objectMap.Domain + "." + snakeCaseIdentifier(
-				boundary.CanonicalObject,
-			)
-			if _, exists := objectIDs[id]; exists {
-				*errs = append(
-					*errs,
-					fmt.Errorf(
-						"%s: canonical object %q conflicts with object id %q",
-						objectMap.SourcePath,
-						boundary.CanonicalObject,
-						id,
-					),
-				)
-				continue
-			}
-			catalog.Objects = append(catalog.Objects, ast.Object{
-				ID:             id,
-				Domain:         objectMap.Domain,
-				Name:           boundary.CanonicalObject,
-				Kind:           boundary.ObjectKind,
-				KindExplicit:   true,
-				AggregateOwner: boundary.AggregateOwner,
-				StorageBackend: boundary.StorageBackend,
-				SourcePath:     objectMap.SourcePath,
-			})
-			objectsByDomainName[key] = len(catalog.Objects) - 1
-			objectIDs[id] = struct{}{}
-		}
-	}
-}
-
-func dereferenceString(value *string) string {
-	if value == nil {
-		return ""
-	}
-	return strings.TrimSpace(*value)
-}
-
-func cloneFieldRoles(
-	roles map[string][]string,
-) map[string][]string {
-	cloned := map[string][]string{
-		"authoritative_state": {},
-		"owned_value":         {},
-		"reference":           {},
-		"append_only_fact":    {},
-		"projection":          {},
-		"transport_only":      {},
-	}
-	for role, fields := range roles {
-		cloned[role] = append([]string{}, fields...)
-	}
-	return cloned
-}
-
-func normalizedStrings(values []string) []string {
-	result := make([]string, 0, len(values))
-	for _, value := range values {
-		result = append(result, strings.TrimSpace(value))
-	}
-	return result
-}
-
-func cloneIntMap(values map[string]int) map[string]int {
-	result := make(map[string]int, len(values))
-	for key, value := range values {
-		result[strings.TrimSpace(key)] = value
-	}
-	return result
-}
-
-func cloneStringMap(values map[string]string) map[string]string {
-	result := make(map[string]string, len(values))
-	for key, value := range values {
-		result[strings.TrimSpace(key)] = strings.TrimSpace(value)
-	}
-	return result
-}
-
-func snakeCaseIdentifier(value string) string {
-	var result strings.Builder
-	for index, current := range value {
-		if current >= 'A' && current <= 'Z' {
-			if index > 0 {
-				result.WriteByte('_')
-			}
-			result.WriteRune(current + ('a' - 'A'))
-			continue
-		}
-		result.WriteRune(current)
-	}
-	return result.String()
 }

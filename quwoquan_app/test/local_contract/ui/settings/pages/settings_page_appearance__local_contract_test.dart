@@ -8,7 +8,6 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/providers/appearance_settings_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
-import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/appearance_settings_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/auth_repository.dart';
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
@@ -18,11 +17,13 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/providers/theme_provider.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_about_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_dark_mode_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_permissions_page.dart';
 import '../../../../support/fakes/test_auth_repository.dart';
+import '../../../../support/recording_app_telemetry_recorder.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -275,13 +276,13 @@ void main() {
       final store = _SpyAuthSessionStore();
       final repo = _SpyAuthRepository();
       final behavior = _SpyBehaviorRepository();
-      final ops = _SpyOpsEventRepository();
+      final ops = _SpyAppTelemetryRecorder();
       await tester.pumpWidget(
         _buildSettingsApp(
           store: store,
           authRepository: repo,
           behaviorRepository: behavior,
-          opsEventRepository: ops,
+          telemetryRecorder: ops,
         ),
       );
       await tester.pumpAndSettle();
@@ -326,13 +327,13 @@ void main() {
       final store = _SpyAuthSessionStore();
       final repo = _SpyAuthRepository();
       final behavior = _SpyBehaviorRepository();
-      final ops = _SpyOpsEventRepository();
+      final ops = _SpyAppTelemetryRecorder();
       await tester.pumpWidget(
         _buildSettingsApp(
           store: store,
           authRepository: repo,
           behaviorRepository: behavior,
-          opsEventRepository: ops,
+          telemetryRecorder: ops,
         ),
       );
       await tester.pumpAndSettle();
@@ -376,7 +377,7 @@ Widget _buildSettingsApp({
   AuthSessionStore? store,
   AuthRepository? authRepository,
   BehaviorRepository? behaviorRepository,
-  OpsEventRepository? opsEventRepository,
+  AppTelemetryRecorder? telemetryRecorder,
 }) {
   return ProviderScope(
     overrides: [
@@ -393,8 +394,8 @@ Widget _buildSettingsApp({
         authRepositoryProvider.overrideWithValue(authRepository),
       if (behaviorRepository != null)
         behaviorRepositoryProvider.overrideWithValue(behaviorRepository),
-      if (opsEventRepository != null)
-        opsEventRepositoryProvider.overrideWithValue(opsEventRepository),
+      if (telemetryRecorder != null)
+        appTelemetryReporterProvider.overrideWithValue(telemetryRecorder),
     ],
     child: MaterialApp.router(
       routerConfig: GoRouter(
@@ -557,13 +558,10 @@ final class _SpyBehaviorRepository extends MockBehaviorRepository {
   }
 }
 
-final class _SpyOpsEventRepository extends MockOpsEventRepository {
-  int clearPendingCount = 0;
-
+final class _SpyAppTelemetryRecorder extends RecordingAppTelemetryRecorder {
   @override
   Future<void> clearPendingForLogout() async {
     clearPendingCount += 1;
-    await super.clearPendingForLogout();
   }
 }
 

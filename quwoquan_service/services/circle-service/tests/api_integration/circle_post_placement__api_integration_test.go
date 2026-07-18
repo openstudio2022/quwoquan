@@ -37,13 +37,13 @@ func TestCirclePostPlacementRealMongoTransactionAndTrustedActor(t *testing.T) {
 		[]rtauth.OperationSecurityDescriptor{{
 			CanonicalOperationID: "circle.circle_post_placement.PlacePostInCircle",
 			ContractGraphSHA256:  "circle-placement-api-integration",
-			Method:               http.MethodPost, PathTemplate: "/v1/circles/{circleId}/post-placements",
+			Method:               http.MethodPost, PathTemplate: "/circles/{circleId}/post-placements",
 			OperationKind: "command", MutationTarget: "CirclePostPlacement", InvariantTarget: "CirclePostPlacement",
 			AuthMode: "required", ActorRequirement: "persona", Principal: "persona",
 			CommercialStatus: "ready", TimeoutMilliseconds: 1500,
 		}},
 		http.MethodPost,
-		"/v1/circles/{circleId}/post-placements",
+		"/circles/{circleId}/post-placements",
 	)(testHandler)
 
 	forged := placementRequest(t, "post-placement-1", "placement-key-forged")
@@ -118,7 +118,7 @@ func placementRequest(t *testing.T, postID, idempotencyKey string) *http.Request
 	if err != nil {
 		t.Fatal(err)
 	}
-	request := httptest.NewRequest(http.MethodPost, "/v1/circles/circle-placement/post-placements", bytes.NewReader(body))
+	request := httptest.NewRequest(http.MethodPost, "/circles/circle-placement/post-placements", bytes.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Idempotency-Key", idempotencyKey)
 	request.Header.Set("X-Request-Id", "request-"+idempotencyKey)

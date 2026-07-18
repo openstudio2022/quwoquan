@@ -291,13 +291,13 @@ type PostArticleAssetSlice struct {
 }
 
 type PostArticleAssetManifestSlice struct {
-	SchemaVersion          int64                   `json:"schemaVersion,omitempty" bson:"schemaVersion,omitempty"`
-	ArticleMarkdownVersion string                  `json:"articleMarkdownVersion,omitempty" bson:"articleMarkdownVersion,omitempty"`
-	ArticleMarkdownDigest  string                  `json:"articleMarkdownDigest,omitempty" bson:"articleMarkdownDigest,omitempty"`
-	DocumentSHA256         string                  `json:"documentSha256,omitempty" bson:"documentSha256,omitempty"`
-	AssetManifestSHA256    string                  `json:"assetManifestSha256,omitempty" bson:"assetManifestSha256,omitempty"`
-	DocumentVersionSHA256  string                  `json:"documentVersionSha256,omitempty" bson:"documentVersionSha256,omitempty"`
-	Assets                 []PostArticleAssetSlice `json:"assets,omitempty" bson:"assets,omitempty"`
+	Schema                int64                   `json:"schema,omitempty" bson:"schema,omitempty"`
+	MarkdownDialect       string                  `json:"markdownDialect,omitempty" bson:"markdownDialect,omitempty"`
+	ArticleMarkdownDigest string                  `json:"articleMarkdownDigest,omitempty" bson:"articleMarkdownDigest,omitempty"`
+	DocumentSHA256        string                  `json:"documentSha256,omitempty" bson:"documentSha256,omitempty"`
+	AssetManifestSHA256   string                  `json:"assetManifestSha256,omitempty" bson:"assetManifestSha256,omitempty"`
+	DocumentVersionSHA256 string                  `json:"documentVersionSha256,omitempty" bson:"documentVersionSha256,omitempty"`
+	Assets                []PostArticleAssetSlice `json:"assets,omitempty" bson:"assets,omitempty"`
 }
 
 type PostArticleRenderProfileSlice struct {
@@ -332,7 +332,7 @@ type PostHomepageSnapshotSlice struct {
 // embedding、moderationStatus、contentDigest、authorQualitySignals 以及 PII
 // 发布位置/设备信息，不能被误作 Post 聚合继续写回。
 type PostDetailSlice struct {
-	PostID                  PostID                         `json:"_id" bson:"_id"`
+	PostID                  PostID                         `json:"postId" bson:"_id"`
 	AuthorPersonaID         PersonaID                      `json:"authorId" bson:"authorId"`
 	CreatorProfileID        string                         `json:"creatorProfileId,omitempty" bson:"creatorProfileId,omitempty"`
 	CreatorArchetype        string                         `json:"creatorArchetype,omitempty" bson:"creatorArchetype,omitempty"`
@@ -355,8 +355,11 @@ type PostDetailSlice struct {
 	MediaItems              []PostMediaItemSlice           `json:"mediaItems,omitempty" bson:"mediaItems,omitempty"`
 	CoverURL                string                         `json:"coverUrl,omitempty" bson:"coverUrl,omitempty"`
 	ThumbnailURL            string                         `json:"thumbnailUrl,omitempty" bson:"thumbnailUrl,omitempty"`
+	Width                   int64                          `json:"width,omitempty" bson:"width,omitempty"`
+	Height                  int64                          `json:"height,omitempty" bson:"height,omitempty"`
+	DurationMS              int64                          `json:"durationMs,omitempty" bson:"durationMs,omitempty"`
 	ArticleMarkdown         string                         `json:"articleMarkdown,omitempty" bson:"articleMarkdown,omitempty"`
-	ArticleMarkdownVersion  string                         `json:"articleMarkdownVersion,omitempty" bson:"articleMarkdownVersion,omitempty"`
+	MarkdownDialect         string                         `json:"markdownDialect,omitempty" bson:"markdownDialect,omitempty"`
 	ArticleMarkdownDigest   string                         `json:"articleMarkdownDigest,omitempty" bson:"articleMarkdownDigest,omitempty"`
 	ArticleAssetManifest    *PostArticleAssetManifestSlice `json:"articleAssetManifest,omitempty" bson:"articleAssetManifest,omitempty"`
 	ArticleRenderProfile    *PostArticleRenderProfileSlice `json:"articleRenderProfile,omitempty" bson:"articleRenderProfile,omitempty"`
@@ -395,7 +398,7 @@ type PostDetailSlice struct {
 // AuthorPostItemSlice 是个人主页创作页的紧凑卡片白名单。它不会载入详情
 // 正文 Markdown、manifest 或其他大字段。
 type AuthorPostItemSlice struct {
-	PostID                PostID          `json:"_id" bson:"_id"`
+	PostID                PostID          `json:"postId" bson:"_id"`
 	AuthorPersonaID       PersonaID       `json:"authorId" bson:"authorId"`
 	ContentType           ContentType     `json:"contentType" bson:"contentType"`
 	ContentIdentity       ContentIdentity `json:"contentIdentity,omitempty" bson:"contentIdentity,omitempty"`
@@ -437,31 +440,36 @@ type AuthorPostPageSlice struct {
 // 它不暴露聚合 Version、幂等 receipt、outbox、审核内部字段、设备原始信息或
 // 动态 Map；媒体尺寸在 persistence adapter 内归一为显式数值。
 type PostFeedItemSlice struct {
-	PostID           PostID          `json:"postId" bson:"_id"`
-	AuthorPersonaID  PersonaID       `json:"authorId" bson:"authorId"`
-	ContentType      ContentType     `json:"contentType" bson:"contentType"`
-	ContentIdentity  ContentIdentity `json:"contentIdentity,omitempty" bson:"contentIdentity,omitempty"`
-	Title            string          `json:"title,omitempty" bson:"title,omitempty"`
-	Body             string          `json:"body,omitempty" bson:"body,omitempty"`
-	MediaURLs        []string        `json:"mediaUrls,omitempty" bson:"mediaUrls,omitempty"`
-	VideoURL         string          `json:"videoUrl,omitempty" bson:"videoUrl,omitempty"`
-	CoverURL         string          `json:"coverUrl,omitempty" bson:"coverUrl,omitempty"`
-	ThumbnailURL     string          `json:"thumbnailUrl,omitempty" bson:"thumbnailUrl,omitempty"`
-	CoverStrategy    string          `json:"coverStrategy,omitempty" bson:"coverStrategy,omitempty"`
-	CoverFrameTimeMS int64           `json:"coverFrameTimeMs,omitempty" bson:"coverFrameTimeMs,omitempty"`
-	DurationMS       int64           `json:"durationMs,omitempty" bson:"-"`
-	Width            int64           `json:"width,omitempty" bson:"-"`
-	Height           int64           `json:"height,omitempty" bson:"-"`
-	TagRefs          []string        `json:"tagRefs,omitempty" bson:"tagRefs,omitempty"`
-	EntityRefs       []string        `json:"entityRefs,omitempty" bson:"entityRefs,omitempty"`
-	ContentVertical  string          `json:"contentVertical,omitempty" bson:"contentVertical,omitempty"`
-	SourceTaskID     string          `json:"sourceTaskId,omitempty" bson:"sourceTaskId,omitempty"`
-	LikeCount        int64           `json:"likeCount" bson:"likeCount"`
-	CommentCount     int64           `json:"commentCount" bson:"commentCount"`
-	ShareCount       int64           `json:"shareCount" bson:"shareCount"`
-	CreatedAt        time.Time       `json:"createdAt" bson:"createdAt"`
-	UpdatedAt        time.Time       `json:"updatedAt" bson:"updatedAt"`
-	PublishedAt      time.Time       `json:"publishedAt,omitempty" bson:"publishedAt,omitempty"`
+	PostID             PostID          `json:"postId" bson:"_id"`
+	AuthorPersonaID    PersonaID       `json:"authorId" bson:"authorId"`
+	AuthorDisplayName  string          `json:"authorDisplayName,omitempty" bson:"authorDisplayNameSnapshot,omitempty"`
+	AuthorAvatarURL    string          `json:"authorAvatarUrl,omitempty" bson:"authorAvatarUrlSnapshot,omitempty"`
+	ContentType        ContentType     `json:"contentType" bson:"contentType"`
+	ContentIdentity    ContentIdentity `json:"contentIdentity,omitempty" bson:"contentIdentity,omitempty"`
+	AssistantUsePolicy string          `json:"assistantUsePolicy,omitempty" bson:"assistantUsePolicy,omitempty"`
+	Title              string          `json:"title,omitempty" bson:"title,omitempty"`
+	Body               string          `json:"body,omitempty" bson:"body,omitempty"`
+	Summary            string          `json:"summary,omitempty" bson:"summary,omitempty"`
+	MediaURLs          []string        `json:"mediaUrls,omitempty" bson:"mediaUrls,omitempty"`
+	VideoURL           string          `json:"videoUrl,omitempty" bson:"videoUrl,omitempty"`
+	CoverURL           string          `json:"coverUrl,omitempty" bson:"coverUrl,omitempty"`
+	ThumbnailURL       string          `json:"thumbnailUrl,omitempty" bson:"thumbnailUrl,omitempty"`
+	CoverStrategy      string          `json:"coverStrategy,omitempty" bson:"coverStrategy,omitempty"`
+	CoverFrameTimeMS   int64           `json:"coverFrameTimeMs,omitempty" bson:"coverFrameTimeMs,omitempty"`
+	DurationMS         int64           `json:"durationMs,omitempty" bson:"-"`
+	Width              int64           `json:"width,omitempty" bson:"-"`
+	Height             int64           `json:"height,omitempty" bson:"-"`
+	TagRefs            []string        `json:"tagRefs,omitempty" bson:"tagRefs,omitempty"`
+	EntityRefs         []string        `json:"entityRefs,omitempty" bson:"entityRefs,omitempty"`
+	Visibility         PostVisibility  `json:"visibility,omitempty" bson:"visibility,omitempty"`
+	ContentVertical    string          `json:"contentVertical,omitempty" bson:"contentVertical,omitempty"`
+	SourceTaskID       string          `json:"sourceTaskId,omitempty" bson:"sourceTaskId,omitempty"`
+	LikeCount          int64           `json:"likeCount" bson:"likeCount"`
+	CommentCount       int64           `json:"commentCount" bson:"commentCount"`
+	ShareCount         int64           `json:"shareCount" bson:"shareCount"`
+	CreatedAt          time.Time       `json:"createdAt" bson:"createdAt"`
+	UpdatedAt          time.Time       `json:"updatedAt" bson:"updatedAt"`
+	PublishedAt        time.Time       `json:"publishedAt,omitempty" bson:"publishedAt,omitempty"`
 }
 
 type PostFeedSlice struct {

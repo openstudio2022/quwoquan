@@ -29,7 +29,6 @@
   "fakeDeviceContext": {},
   "expectedStreamEvents": [
     {
-      "schemaVersion": "assistant_stream_event.m5",
       "eventId": "evt_direct_001",
       "conversationId": "acv_replay_direct",
       "turnId": "atn_replay_direct",
@@ -39,10 +38,10 @@
       "payload": {
         "status": "running"
       },
-      "createdAt": "2026-04-29T00:00:00Z"
+      "createdAt": "2026-04-29T00:00:00Z",
+      "schema": "assistant_stream_event"
     },
     {
-      "schemaVersion": "assistant_stream_event.m5",
       "eventId": "evt_direct_002",
       "conversationId": "acv_replay_direct",
       "turnId": "atn_replay_direct",
@@ -52,10 +51,10 @@
       "payload": {
         "text": "XiaoQu can help plan tasks, calendar, meetings, routines, and study goals."
       },
-      "createdAt": "2026-04-29T00:00:01Z"
+      "createdAt": "2026-04-29T00:00:01Z",
+      "schema": "assistant_stream_event"
     },
     {
-      "schemaVersion": "assistant_stream_event.m5",
       "eventId": "evt_direct_003",
       "conversationId": "acv_replay_direct",
       "turnId": "atn_replay_direct",
@@ -65,7 +64,8 @@
       "payload": {
         "status": "completed"
       },
-      "createdAt": "2026-04-29T00:00:02Z"
+      "createdAt": "2026-04-29T00:00:02Z",
+      "schema": "assistant_stream_event"
     }
   ],
   "expectedTraceEvents": [

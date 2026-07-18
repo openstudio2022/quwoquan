@@ -241,7 +241,7 @@ func groupEventType(kind groupmodel.ChangeKind) string {
 }
 
 type groupEventPayload struct {
-	GroupID            string                       `json:"_id"`
+	GroupID            string                       `json:"groupId"`
 	Version            int64                        `json:"version"`
 	CircleID           string                       `json:"circleId"`
 	GroupType          groupmodel.CircleGroupType   `json:"groupType"`

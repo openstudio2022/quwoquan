@@ -14,7 +14,7 @@ class ProfileCredentialSummaryData {
     return ProfileCredentialSummaryData(
       credentialType: map['credentialType']?.toString() ?? '',
       displayLabel: map['displayLabel']?.toString() ?? '',
-      isBound: map['isBound'] as bool? ?? map['isActive'] as bool? ?? false,
+      isBound: map['isBound'] as bool? ?? false,
     );
   }
 
@@ -60,8 +60,7 @@ class ProfileQrCardData {
       qrTokenId: map['qrTokenId']?.toString() ?? '',
       styleVersion: map['styleVersion']?.toString() ?? 'v1',
       avatarUrl: map['avatarUrl']?.toString() ?? '',
-      displayName:
-          map['displayName']?.toString() ?? map['nickname']?.toString() ?? '',
+      displayName: map['displayName']?.toString() ?? '',
       region: map['region']?.toString() ?? '',
       shareText: map['shareText']?.toString() ?? '',
       expiresAt: _dateTimeFromAny(map['expiresAt']),
@@ -142,18 +141,13 @@ class ProfileEditSnapshotData {
     final qrCard = map['qrCard'];
     return ProfileEditSnapshotData(
       ownerUserId: map['ownerUserId']?.toString() ?? '',
-      subAccountId:
-          map['subAccountId']?.toString() ?? map['userId']?.toString() ?? '',
+      subAccountId: map['subAccountId']?.toString() ?? '',
       avatarUrl: map['avatarUrl']?.toString() ?? '',
       avatarAssetId: map['avatarAssetId']?.toString() ?? '',
       avatarVersion: (map['avatarVersion'] as num?)?.toInt() ?? 0,
-      backgroundUrl:
-          map['backgroundUrl']?.toString() ??
-          map['backgroundImage']?.toString() ??
-          '',
+      backgroundUrl: map['backgroundUrl']?.toString() ?? '',
       backgroundAssetId: map['backgroundAssetId']?.toString() ?? '',
-      nickname:
-          map['nickname']?.toString() ?? map['displayName']?.toString() ?? '',
+      nickname: map['nickname']?.toString() ?? '',
       gender: map['gender']?.toString() ?? 'unspecified',
       birthDate: map['birthDate']?.toString() ?? '',
       region: map['region']?.toString() ?? '',

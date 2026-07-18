@@ -2,11 +2,30 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {
-    "schemaVersion": { "type": "string", "minLength": 1 },
-    "executionId": { "type": "string", "minLength": 1 },
-    "step": { "type": "string", "minLength": 1 },
-    "ref": { "type": "string", "minLength": 1 },
-    "payload": { "type": "object" }
+    "executionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "step": {
+      "type": "string",
+      "minLength": 1
+    },
+    "ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "payload": {
+      "type": "object"
+    },
+    "schema": {
+      "const": "quwoquan_data.stage_envelope"
+    }
   },
-  "required": ["schemaVersion", "executionId", "step", "ref", "payload"]
+  "required": [
+    "schema",
+    "executionId",
+    "step",
+    "ref",
+    "payload"
+  ]
 }

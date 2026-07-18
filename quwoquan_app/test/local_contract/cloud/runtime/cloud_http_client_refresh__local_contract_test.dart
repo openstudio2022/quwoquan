@@ -15,7 +15,7 @@ void main() {
       client: MockClient((request) async {
         requestCount++;
         final authHeader = request.headers['Authorization'];
-        if (request.url.path == '/v1/protected') {
+        if (request.url.path == '/protected') {
           if (authHeader == 'Bearer expired-token') {
             return http.Response('{"code":"USER.AUTH.token_expired"}', 401);
           }
@@ -33,7 +33,7 @@ void main() {
     );
 
     final response = await client.getJson(
-      Uri.parse('https://gateway.example.com/v1/protected'),
+      Uri.parse('https://gateway.example.com/protected'),
       headers: const <String, String>{'X-Client-Page-Id': 'test.page'},
     );
 
@@ -59,7 +59,7 @@ void main() {
 
     await expectLater(
       () => client.getJson(
-        Uri.parse('https://gateway.example.com/v1/protected'),
+        Uri.parse('https://gateway.example.com/protected'),
         headers: const <String, String>{'X-Client-Page-Id': 'test.page'},
       ),
       throwsA(isA<Exception>()),

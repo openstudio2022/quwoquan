@@ -37,19 +37,19 @@ class CircleMemberRosterItemDto {
     Map<String, dynamic> m, {
     String circleId = '',
   }) {
-    final uid = (m['userId'] ?? m['id'] ?? m['_id'] ?? '').toString();
-    final memId = (m['_id'] ?? m['id'] ?? uid).toString();
+    final uid = (m['userId'] ?? '').toString();
+    final memId = (m['id'] ?? uid).toString();
     return CircleMemberRosterItemDto(
       membershipId: memId.isNotEmpty ? memId : uid,
       circleId: (m['circleId'] ?? circleId).toString(),
       userId: uid,
       role: (m['role'] ?? 'member').toString(),
       joinedAt: _parseDateTime(m['joinedAt']),
-      displayName: m['displayName'] as String? ?? m['name'] as String?,
-      avatarUrl: m['avatarUrl'] as String? ?? m['avatar'] as String?,
-      worksCountLabel: _label(m['worksCountLabel'], m['worksCount']),
-      fansCountLabel: _label(m['fansCountLabel'], m['fansCount']),
-      likesCountLabel: _label(m['likesCountLabel'], m['likesCount']),
+      displayName: m['displayName'] as String?,
+      avatarUrl: m['avatarUrl'] as String?,
+      worksCountLabel: _label(m['worksCountLabel']),
+      fansCountLabel: _label(m['fansCountLabel']),
+      likesCountLabel: _label(m['likesCountLabel']),
       isFollowed: m['isFollowed'] as bool? ?? false,
       lastActiveAt: m['lastActiveAt'] != null
           ? _parseDateTime(m['lastActiveAt'])
@@ -74,10 +74,9 @@ class CircleMemberRosterItemDto {
     'contribution': contribution,
   };
 
-  static String? _label(dynamic a, dynamic b) {
-    if (a != null) return a.toString();
-    if (b != null) return b.toString();
-    return null;
+  static String? _label(dynamic value) {
+    if (value == null) return null;
+    return value.toString();
   }
 
   static DateTime _parseDateTime(dynamic v) {

@@ -128,23 +128,19 @@ class UITextConstants {
   static const String homeCirclesStoryTypeActivity = '活动';
   static const String homeCirclesStoryTypeCreation = '创作';
 
-  /// 发现页 Tab（1:1 对应 DiscoveryFeed.tsx CATEGORIES）
   static const String discoveryTabMoment = '点滴';
   static const String discoveryTabPhoto = '图片';
   static const String discoveryTabVideo = '视频';
   static const String discoveryTabArticle = '笔记';
 
-  /// 双轨道架构主 Rail 标签
   static const String discoveryRailMoment = '点滴';
   static const String discoveryRailWorks = '作品';
 
-  /// 作品频道二级过滤器
   static const String discoveryWorksFilterAll = '全部';
   static const String discoveryWorksFilterVideo = '视频';
   static const String discoveryWorksFilterImage = '图片';
   static const String discoveryWorksFilterArticle = '笔记';
 
-  /// 统一创作容器过滤器（profile / circle）
   static const String creationFilterAll = '全部';
   static const String creationFilterMoment = '点滴';
   static const String creationFilterWork = '作品';
@@ -277,14 +273,14 @@ class UITextConstants {
   static const String loginOtpResendCountdown = '重新获取(%ds)';
   static const String loginOtpMismatch = '验证码错误，请重新输入';
   static const String loginOtpExpired = '验证码已过期，请重新获取';
-  static const String loginOtpRateLimited = '发送过于频繁，请 %d 秒后再试';
-  static const String loginOtpSendFailed = '验证码发送失败，请重试或换其它方式';
-  static const String loginOtpErrorTitle = '未能获取验证码';
-  static const String loginSocialUnavailableTitle = '暂时无法使用此方式';
+  static const String loginOtpRateLimited = '操作过于频繁，请稍后重试';
+  static const String loginOtpSendFailed = '验证码发送失败，请稍后重试';
+  static const String loginNetworkUnavailable = '网络连接异常，请检查后重试';
+  static const String loginServiceUnavailable = '登录服务暂不可用，请使用其他方式登录';
   static const String loginSocialNotConfigured = '当前测试环境未配置，请改用短信验证码登录';
   static const String loginSocialClientNotInstalled = '未安装对应客户端，请改用短信验证码登录';
   static const String loginSocialProbeTimeout = '登录方式检测超时，请重试或改用短信验证码登录';
-  static const String loginSocialSdkUnavailable = '登录服务暂不可用，请改用短信验证码登录';
+  static const String loginSocialSdkUnavailable = loginServiceUnavailable;
   static const String loginPhoneLoginLocked = '多次失败已锁定，请稍后再试或更换其它方式登录';
   static const String loginAccountSuspended = '账号已被限制登录，请按页面提示处理或更换其它方式登录';
   static const String loginAccountDeleted = '账号已注销或进入删除流程，无法直接登录，可更换手机号';
@@ -331,7 +327,7 @@ class UITextConstants {
   static const String loginOtpQueued = '验证码请求已受理，请留意短信';
   static const String loginOtpPassThroughDebugHint = '当前为非生产联调放通，验证码正确性校验已跳过';
   static const String loginHelp = '遇到问题';
-  static const String loginFailed = '登录失败，请稍后重试';
+  static const String loginFailed = loginServiceUnavailable;
   // 标题：进入全屏登录页后展示，按动作变化，只表达「需要账号身份」。
   static const String authGateTitleProfile = '登录后查看我的主页';
   static const String authGateTitleCreate = '登录后发布内容';
@@ -442,6 +438,10 @@ class UITextConstants {
   static const String welcomeMainSlogan = '遇见同趣，绽放热爱';
   static const String welcomeButtonLabel = '开启发现之旅';
   static const String startupStillStartingInline = '启动中，马上进入';
+  static const String startupRecoveryTitle = '应用暂时无法启动';
+  static const String startupRecoveryMessage = '请检查网络或稍后重新打开应用。';
+  static const String startupRecoveryRetry = '重新尝试';
+  static const String startupRecoverySupportHint = '若问题持续出现，请联系支持并提供诊断标识。';
   static const String assistantWhisperSignature = '小趣';
   static const String assistantWhisperLine = '专注你的热爱，剩下的交给我';
   static const String commentPlaceholder = '添加评论...';
@@ -450,10 +450,13 @@ class UITextConstants {
   static const String commentClosed = '评论已关闭';
   static const String needLogin = '需要登录';
   static const String loading = '加载中...', retry = '重试';
+  static const String mediaRetrying = '重试中…';
+  static const String requestWaitSlow = '加载时间稍长，请稍候';
+  static const String requestActionSlow = '正在处理，请稍候';
+  static const String requestOutcomePending = '操作结果待确认';
   static const String cancel = '取消', close = '关闭';
   static const String openSettings = '去设置';
 
-  /// 表单/弹层主提交（与「确认」区分，偏对话框「确定」）
   static const String ok = '确定', confirm = '确认';
   static const String user = '用户', following = '已关注';
   static const String followBack = '回关', unknownUser = '未知用户';
@@ -469,16 +472,14 @@ class UITextConstants {
   static const String webInstallBannerIosPackage = 'iPhone / iPad';
   static const String webInstallBannerAndroidPackage = 'Android / 鸿蒙';
 
-  /// 分享目标：微信
   static const String shareTargetWechat = '微信';
 
-  /// 分享目标：朋友圈
   static const String shareTargetMoments = '朋友圈';
   static const String loadFailed = '加载失败';
   static const String temporarilyUnavailable = '暂时连不上';
   static const String contentTemporarilyUnavailable = workOpenFailedTitle;
   static const String contentNotLoadedYet = '这里还没加载出来';
-  static const String checkNetworkAndTryAgain = '检查网络后再试一次，或稍后回来看看。';
+  static const String checkNetworkAndTryAgain = '可能是网络问题。';
   static const String contentLoadSoftFailed = '服务暂时不可用，稍后自动恢复后再试';
   static const String refreshSoftFailed = refreshFailedRetained;
   static const String refreshTimeoutSoftFailed = '这次刷新有点慢，稍后再试。';
@@ -489,15 +490,17 @@ class UITextConstants {
   static const String profileCacheFallback = '网络不太稳，先显示上次看到的主页。';
   static const String chatListCacheFallback = '网络不太稳，先显示本机最近的聊天。';
   static const String chatListLoadFailedTitle = '聊天列表没加载出来';
-  static const String chatListLoadFailedMessage = '检查网络后再试一次。';
+  static const String chatListLoadFailedMessage = '可能是网络问题。';
   static const String refreshFailedRetained = '这次刷新没成功，页面先保持不变。';
-  static const String appendFailedRetry = '后面的内容没加载出来，点一下再试。';
+  static const String appendFailedRetry = '后面没加载出来，轻点重试';
   static const String appendFailedTitle = '后面没加载出来';
   static const String pageLoadFailedTitle = '这页没加载出来';
-  static const String pageLoadFailedMessage = '检查网络后再试一次。';
+  static const String pageLoadFailedMessage = '可能是网络问题。';
   static const String searchUnavailableTitle = '搜索没连上';
   static const String searchUnavailableMessage = '请稍后再搜一次。';
   static const String searchEmptyResult = '没有找到相关结果';
+  static const String searchWaitSlow = '搜索时间稍长，请稍候';
+  static const String searchPartialResult = '部分结果暂时没有加载出来';
   static const String searchXiaoquLoading = '小趣正在整理搜索方向';
   static const String searchNoNetworkReferences = '暂时没有找到可引用的网络结果';
   static const String searchNoAppResults = '没有找到相关应用内结果';
@@ -511,7 +514,13 @@ class UITextConstants {
   static const String sectionLoadFailedTitleDefault = '这里没加载出来';
   static const String circleDiscussionLoadFailedTitle = '讨论没加载出来';
   static const String imageLoadFailed = '图片没加载出来';
-  static const String videoLoadFailed = '视频没加载出来';
+  static const String videoPlaybackNetworkTitle = '网络不太稳定';
+  static const String videoPlaybackTemporaryTitle = '暂时无法播放';
+  static const String videoPlaybackUnavailableTitle = '这条视频暂时无法观看';
+  static const String videoPlaybackUnavailableMessage = '可以先看看别的内容';
+  static const String videoPlaybackUnsupportedTitle = '这条视频暂不支持播放';
+  static const String videoPlaybackUnsupportedMessage =
+      videoPlaybackUnavailableMessage;
   static const String workOpenFailedTitle = '这个作品打不开';
   static const String chatOpenFailedTitle = '这个聊天打不开';
   static const String chatOpenFailedMessage = '可能已被删除，或你暂时不能查看。';
@@ -526,7 +535,7 @@ class UITextConstants {
   static const String submitNotCompleted = '提交未完成';
   static const String checkFieldsTitle = '请检查填写内容';
   static const String tryAgain = '再试一次';
-  static const String videoPlaybackFailed = videoLoadFailed, back = '返回';
+  static const String back = '返回';
   static const String gotIt = '我知道了';
   static const String loginToContinue = '登录后继续';
   static const String contentUnavailable = '这个作品不可用了';
@@ -1507,8 +1516,10 @@ class UITextConstants {
   static const String editProfileProposalTitle = '资料修改建议';
   static const String editProfileProposalPending = '待确认';
   static const String editProfileProposalConfirmed = '待应用';
+  static const String editProfileProposalApplying = '正在安全应用';
   static const String editProfileProposalLoadFailed = '加载失败，点此重试';
   static const String editProfileProposalApprove = '确认并应用';
+  static const String editProfileProposalResumeApply = '继续安全应用';
   static const String editProfileProposalReject = '拒绝建议';
   static const String editProfileProposalApplied = '资料建议已应用';
   static const String editProfileProposalRejected = '资料建议已拒绝';
@@ -1714,6 +1725,7 @@ class UITextConstants {
   static const String postPhoto = '发图片', postVideo = '发视频';
   static const String postArticle = '写笔记', publish = '发表';
   static const String publishAction = '发布';
+  static const String publishQueued = '已保存，将在网络恢复后自动发布';
   static const String createActionPostPhotoShort = '发布照片';
   static const String createActionPhotoSubtitle = '从相册选照片或拍照';
   static const String createActionPostVideoShort = '发布视频';

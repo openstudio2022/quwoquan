@@ -76,21 +76,21 @@ def beta_gateway_smoke(port: int) -> dict[str, object]:
         base = f"http://127.0.0.1:{port}"
         checks = [
             "/healthz",
-            "/v1/content/feed",
-            "/v1/content/profile-subjects/fixture_user_current/posts",
-            "/v1/chat/inbox",
-            "/v1/chat/contacts",
-            "/v1/chat/conversations",
-            "/v1/circles",
-            "/v1/circles/fixture_circle_photo/feed",
-            "/v1/user/profile",
-            "/v1/me",
-            "/v1/users/fixture_user_current/works",
-            "/v1/users/fixture_user_current/circles",
-            "/v1/entity/homepages",
-            "/v1/integration/locations/pois",
-            "/v1/app-messages",
-            "/v1/rtc/calls",
+            "/content/feed",
+            "/content/profile-subjects/fixture_user_current/posts",
+            "/chat/inbox",
+            "/chat/contacts",
+            "/chat/conversations",
+            "/circles",
+            "/circles/fixture_circle_photo/feed",
+            "/user/profile",
+            "/me",
+            "/users/fixture_user_current/works",
+            "/users/fixture_user_current/circles",
+            "/homepages/search",
+            "/integration/locations/pois",
+            "/app-messages",
+            "/rtc/calls",
         ]
         for path in checks:
             wait_url(base + path)
@@ -106,7 +106,7 @@ def beta_gateway_smoke(port: int) -> dict[str, object]:
 def load_shared_pool_summary() -> dict[str, object]:
     pool = json.loads(USER_POOL.read_text(encoding="utf-8"))
     return {
-        "schemaVersion": pool.get("schemaVersion"),
+        "schema": pool.get("schema"),
         "statistics": pool.get("statistics"),
         "sourceCatalogDigest": pool.get("sourceCatalogDigest"),
     }

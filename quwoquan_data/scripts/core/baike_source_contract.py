@@ -5,6 +5,7 @@ sourceScreen、Local Cursor SDK source bridge 与 downloader 必须消费同一�
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from fnmatch import fnmatch
 from typing import Final
 from urllib.parse import urlsplit
@@ -23,6 +24,129 @@ def _primary_rows() -> list[dict]:
         for row in (_homepage_policy().get("primarySources") or [])
         if isinstance(row, dict)
     ]
+
+
+@dataclass(frozen=True, slots=True)
+class EncyclopediaCanonicalResolutionPolicy:
+    base_url: str
+    candidate_limit: int
+    require_geo_context_for_alias: bool
+    canonical_confidence: float
+    alias_confidence: float
+
+
+@dataclass(frozen=True, slots=True)
+class BaiduBaikeApiPolicy:
+    base_url: str
+    candidate_limit: int
+    require_geo_context_for_alias: bool
+    canonical_confidence: float
+    alias_confidence: float
+    fixed_query: tuple[tuple[str, str], ...]
+
+
+def _canonical_resolution_policy(source_kind: str) -> EncyclopediaCanonicalResolutionPolicy:
+    row = next(
+        (
+            item
+            for item in _primary_rows()
+            if str(item.get("sourceKind") or "") == source_kind
+        ),
+        None,
+    )
+    if row is None:
+        raise ValueError(f"{source_kind} primary source contract is missing")
+    raw = row.get("canonicalResolution")
+    if not isinstance(raw, dict):
+        raise ValueError(f"{source_kind}.canonicalResolution must be a mapping")
+    base_url = str(raw.get("baseUrl") or "").strip()
+    if not base_url.startswith("https://www.baike.com/wiki/"):
+        raise ValueError(f"{source_kind}.canonicalResolution.baseUrl is invalid")
+    candidate_limit = raw.get("candidateLimit")
+    if (
+        not isinstance(candidate_limit, int)
+        or isinstance(candidate_limit, bool)
+        or candidate_limit < 1
+    ):
+        raise ValueError(
+            f"{source_kind}.canonicalResolution.candidateLimit must be positive"
+        )
+    require_geo = raw.get("requireGeoContextForAlias")
+    if not isinstance(require_geo, bool):
+        raise ValueError(
+            f"{source_kind}.canonicalResolution.requireGeoContextForAlias must be boolean"
+        )
+    canonical_confidence = raw.get("canonicalConfidence")
+    alias_confidence = raw.get("aliasConfidence")
+    for field, value in (
+        ("canonicalConfidence", canonical_confidence),
+        ("aliasConfidence", alias_confidence),
+    ):
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not 0 < float(value) <= 1
+        ):
+            raise ValueError(
+                f"{source_kind}.canonicalResolution.{field} must be within (0, 1]"
+            )
+    return EncyclopediaCanonicalResolutionPolicy(
+        base_url=base_url,
+        candidate_limit=candidate_limit,
+        require_geo_context_for_alias=require_geo,
+        canonical_confidence=float(canonical_confidence),
+        alias_confidence=float(alias_confidence),
+    )
+
+
+def _baidu_api_policy() -> BaiduBaikeApiPolicy:
+    row = next(
+        (
+            item
+            for item in _primary_rows()
+            if str(item.get("sourceKind") or "") == "baidu_baike"
+        ),
+        None,
+    )
+    if row is None:
+        raise ValueError("baidu_baike primary source contract is missing")
+    raw = row.get("canonicalResolution")
+    if not isinstance(raw, dict):
+        raise ValueError("baidu_baike.canonicalResolution must be a mapping")
+    base_url = str(raw.get("baseUrl") or "").strip()
+    expected = "https://baike.baidu.com/api/openapi/BaikeLemmaCardApi"
+    if base_url != expected:
+        raise ValueError("baidu_baike.canonicalResolution.baseUrl is invalid")
+    candidate_limit = raw.get("candidateLimit")
+    if isinstance(candidate_limit, bool) or not isinstance(candidate_limit, int) or candidate_limit < 1:
+        raise ValueError("baidu_baike.canonicalResolution.candidateLimit must be positive")
+    require_geo = raw.get("requireGeoContextForAlias")
+    if not isinstance(require_geo, bool):
+        raise ValueError("baidu_baike.canonicalResolution.requireGeoContextForAlias must be boolean")
+    canonical_confidence = raw.get("canonicalConfidence")
+    alias_confidence = raw.get("aliasConfidence")
+    for field, value in (
+        ("canonicalConfidence", canonical_confidence),
+        ("aliasConfidence", alias_confidence),
+    ):
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 < float(value) <= 1:
+            raise ValueError(f"baidu_baike.canonicalResolution.{field} must be within (0, 1]")
+    fixed_query = raw.get("fixedQuery")
+    if not isinstance(fixed_query, dict) or not fixed_query:
+        raise ValueError("baidu_baike.canonicalResolution.fixedQuery must be a non-empty mapping")
+    normalized_query = tuple(
+        sorted((str(key), str(value)) for key, value in fixed_query.items() if str(key) and str(value))
+    )
+    if len(normalized_query) != len(fixed_query):
+        raise ValueError("baidu_baike.canonicalResolution.fixedQuery contains empty values")
+    return BaiduBaikeApiPolicy(
+        base_url=base_url,
+        candidate_limit=candidate_limit,
+        require_geo_context_for_alias=require_geo,
+        canonical_confidence=float(canonical_confidence),
+        alias_confidence=float(alias_confidence),
+        fixed_query=normalized_query,
+    )
 
 
 _ROWS: Final[list[dict]] = _primary_rows()
@@ -70,6 +194,10 @@ SOURCE_AUTHORITY_ROLES: Final[dict[str, str]] = {
     kind: "primary" for kind in SOURCE_PRIORITY
 }
 ENCYCLOPEDIA_SOURCE_KINDS: Final[frozenset[str]] = PRIMARY_AUTHORITY_SOURCE_KINDS
+TOUTIAO_BAIKE_CANONICAL_RESOLUTION: Final[EncyclopediaCanonicalResolutionPolicy] = (
+    _canonical_resolution_policy("toutiao_baike")
+)
+BAIDU_BAIKE_API_POLICY: Final[BaiduBaikeApiPolicy] = _baidu_api_policy()
 
 
 def source_url_matches_contract(source_kind: str, url: str) -> bool:
@@ -106,12 +234,18 @@ def source_contract_issues(supported_extractors: set[str] | frozenset[str]) -> l
         for kind, extractor in SOURCE_EXTRACTORS.items()
         if extractor not in supported_extractors
     ]
-    if HOMEPAGE_SOURCE_POLICY_REVISION != "encyclopedia-primary-v2":
-        issues.append("homepage source policy revision must be encyclopedia-primary-v2")
-    if len(SOURCE_PRIORITY) != 4 or len(set(SOURCE_PRIORITY)) != 4:
-        issues.append("homepage primary source closed set must contain four unique source kinds")
-    if SOURCE_AUTHORITY_RANKS.get("sogou_baike") != SOURCE_AUTHORITY_RANKS.get("toutiao_baike"):
-        issues.append("sogou_baike and toutiao_baike must share authorityRank")
+    if HOMEPAGE_SOURCE_POLICY_REVISION != "encyclopedia-primary":
+        issues.append("homepage source policy revision must be encyclopedia-primary")
+    if len(SOURCE_PRIORITY) != 3 or len(set(SOURCE_PRIORITY)) != 3:
+        issues.append("homepage primary source closed set must contain three unique source kinds")
+    try:
+        _canonical_resolution_policy("toutiao_baike")
+    except ValueError as exc:
+        issues.append(str(exc))
+    try:
+        _baidu_api_policy()
+    except ValueError as exc:
+        issues.append(str(exc))
     for kind in SOURCE_PRIORITY:
         if not SOURCE_HOSTS.get(kind):
             issues.append(f"{kind}: hosts missing")
@@ -123,7 +257,10 @@ def source_contract_issues(supported_extractors: set[str] | frozenset[str]) -> l
 
 
 __all__ = [
+    "BAIDU_BAIKE_API_POLICY",
+    "BaiduBaikeApiPolicy",
     "ENCYCLOPEDIA_SOURCE_KINDS",
+    "EncyclopediaCanonicalResolutionPolicy",
     "HOMEPAGE_SOURCE_POLICY_REVISION",
     "PRIMARY_AUTHORITY_SOURCE_KINDS",
     "SOURCE_AUTHORITY_ROLES",
@@ -134,6 +271,7 @@ __all__ = [
     "SOURCE_PRIORITY",
     "SOURCE_URL_PATTERNS",
     "SOURCE_USE_MODES",
+    "TOUTIAO_BAIKE_CANONICAL_RESOLUTION",
     "source_contract_issues",
     "source_identity_matches_contract",
     "source_url_matches_contract",

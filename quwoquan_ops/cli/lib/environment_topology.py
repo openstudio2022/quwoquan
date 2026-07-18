@@ -68,6 +68,8 @@ LOCAL_PUBLIC_PORT_ROLES = {
 LOCAL_ORIGIN_PORT_ROLES = {
     "mediaOrigin": "media-origin",
 }
+DATA_RELEASE_MODES = {"projection-only", "local-import", "hosted-import"}
+DATA_RELEASE_ENV_KEY_RE = re.compile(r"^QWQ_[A-Z0-9_]+$")
 
 
 def load_environment_topology(path: Path | None = None) -> dict[str, Any]:
@@ -97,8 +99,8 @@ def validate_environment_topology(
     port_manifest: dict[str, Any] | None = None,
 ) -> list[str]:
     issues: list[str] = []
-    if manifest.get("schemaVersion") != "environment-topology/v1":
-        issues.append("schemaVersion must be environment-topology/v1")
+    if manifest.get("schema") != "environment-topology":
+        issues.append("schema must be environment-topology")
 
     environments = manifest.get("environments")
     if not isinstance(environments, dict):
@@ -113,6 +115,11 @@ def validate_environment_topology(
         env = environments.get(env_name)
         if not isinstance(env, dict):
             continue
+        expected_target = ENVIRONMENT_CANONICAL_TARGET[env_name]
+        if str(env.get("dataReleaseTarget") or "") != expected_target:
+            issues.append(
+                f"{env_name}: dataReleaseTarget must be canonical target {expected_target}"
+            )
         public_bases = env.get("publicBases")
         if not isinstance(public_bases, dict):
             issues.append(f"{env_name}: publicBases must be a mapping")
@@ -248,13 +255,13 @@ def validate_environment_topology(
                 f"{target_name}: backend must be local or ssh-hosted"
             )
         profile = target.get("portProfile")
+        role_ports: dict[str, int] = {}
         if backend == "local" and not profile:
             issues.append(f"{target_name}: local targets require portProfile")
         if backend == "local" and profile and local_ports_manifest:
             try:
                 role_ports = profile_ports(local_ports_manifest, str(profile))
             except KeyError:
-                role_ports = {}
                 issues.append(
                     f"{target_name}: portProfile {profile} must exist in local port manifest"
                 )
@@ -300,6 +307,53 @@ def validate_environment_topology(
                         issues.append(
                             f"{target_name}: origins.{field} must stay on loopback host"
                         )
+        data_release = target.get("dataRelease")
+        if target_name in ENVIRONMENT_CANONICAL_TARGET.values():
+            if not isinstance(data_release, dict):
+                issues.append(f"{target_name}: dataRelease must be a mapping")
+            else:
+                mode = str(data_release.get("mode") or "")
+                if mode not in DATA_RELEASE_MODES:
+                    issues.append(
+                        f"{target_name}: dataRelease.mode must be one of {sorted(DATA_RELEASE_MODES)}"
+                    )
+                public_key = str(data_release.get("mediaPublicBaseKey") or "")
+                if public_key not in URL_FIELDS:
+                    issues.append(
+                        f"{target_name}: dataRelease.mediaPublicBaseKey must name a publicBases field"
+                    )
+                if mode == "projection-only" and env_name != "alpha":
+                    issues.append(
+                        f"{target_name}: projection-only data release is reserved for alpha"
+                    )
+                if mode == "local-import":
+                    if backend != "local":
+                        issues.append(f"{target_name}: local-import requires local backend")
+                    for field in ("mongoPortRole", "entityReloadPortRole"):
+                        role = str(data_release.get(field) or "")
+                        if not role or role not in role_ports:
+                            issues.append(
+                                f"{target_name}: dataRelease.{field} must reference a port role"
+                            )
+                    media_ref = str(data_release.get("mediaLocalRef") or "")
+                    if not media_ref or Path(media_ref).is_absolute() or ".." in Path(media_ref).parts:
+                        issues.append(
+                            f"{target_name}: dataRelease.mediaLocalRef must be a safe target-local relative path"
+                        )
+                if mode == "hosted-import":
+                    if backend != "ssh-hosted":
+                        issues.append(f"{target_name}: hosted-import requires ssh-hosted backend")
+                    for field in (
+                        "mongoUriEnv",
+                        "mediaRootEnv",
+                        "entityReloadUrlEnv",
+                        "authTokenEnv",
+                    ):
+                        env_key = str(data_release.get(field) or "")
+                        if not DATA_RELEASE_ENV_KEY_RE.fullmatch(env_key):
+                            issues.append(
+                                f"{target_name}: dataRelease.{field} must be an environment key name"
+                            )
         if target_name == "prod-hosted" and env_name != "prod":
             issues.append("prod-hosted target must map to prod environment")
         if target_name == "prod-hosted" and backend != "ssh-hosted":

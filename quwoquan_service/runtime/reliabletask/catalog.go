@@ -12,7 +12,7 @@ import (
 type Catalog struct {
 	Version                  int                   `yaml:"version"`
 	CompatibleRuntimeVersion string                `yaml:"compatibleRuntimeVersion"`
-	SchemaVersion            int                   `yaml:"schemaVersion"`
+	Schema            int                   `yaml:"schema"`
 	Modules                  map[string]ModuleSpec `yaml:"modules"`
 	Tasks                    map[string]TaskSpec   `yaml:"tasks"`
 	Policies                 PolicyCatalog         `yaml:"-"`

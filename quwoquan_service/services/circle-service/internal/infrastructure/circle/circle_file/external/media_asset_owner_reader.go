@@ -46,7 +46,7 @@ func (reader *MediaAssetOwnerReader) ReadOwnedReadyAsset(ctx context.Context, as
 		return fileports.MediaAssetOwnerSlice{}, false, fmt.Errorf("assetID and ownerPersonaID are required")
 	}
 	endpoint := *reader.baseURL
-	endpoint.Path = strings.TrimRight(endpoint.Path, "/") + "/internal/v1/content/media/" + url.PathEscape(assetID) + ":reference"
+	endpoint.Path = strings.TrimRight(endpoint.Path, "/") + "/internal/content/media/" + url.PathEscape(assetID) + ":reference"
 	query := endpoint.Query()
 	query.Set("ownerPersonaId", ownerPersonaID)
 	endpoint.RawQuery = query.Encode()

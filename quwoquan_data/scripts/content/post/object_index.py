@@ -21,6 +21,7 @@ from typing import Any, Mapping
 from datetime import datetime, timezone
 
 from core.io import read_json, write_json
+from core.control_types import ContentType
 from core.paths import (
     OBJECT_STAGES,
     STAGE_COMPOSE,
@@ -51,8 +52,15 @@ def load_index(execution_id: str) -> dict[str, dict[str, Any]]:
 
 
 def content_type_from_brief(brief: Mapping[str, Any]) -> str:
-    """Image carriers live under posts/image; prose lives under article."""
-    return "image" if str(brief.get("carrier") or "") == "image" else "article"
+    """Resolve the sole post content type from the carrier contract."""
+    carrier = str(brief.get("carrier") or ContentType.ARTICLE.value)
+    try:
+        content_type = ContentType(carrier)
+    except ValueError as exc:
+        raise ValueError(f"unsupported post carrier: {carrier!r}") from exc
+    if content_type is ContentType.HOMEPAGE:
+        raise ValueError("homepage is not a post carrier")
+    return content_type.value
 
 
 def require_title_hint(brief: Mapping[str, Any], *, ref: str = "") -> str:
@@ -75,7 +83,7 @@ def compute_content_coords(
     ref: str = "",
 ) -> dict[str, Any]:
     """从 brief 确定性算出内容对象坐标（angle/title），不含 seq。"""
-    from content.post.route_core import _publish_angle  # 延迟导入避免循环依赖
+    from content.post.article.route_core import _publish_angle  # 延迟导入避免循环依赖
 
     angle = _publish_angle(brief)
     title = require_title_hint(brief, ref=ref)
@@ -141,7 +149,7 @@ def register_content_object(
         ]
         next_seq = max(group_seqs or [0]) + 1
     index[ref] = {"contentType": content_type, "angle": angle, "title": title, "seq": next_seq}
-    write_json(index_path(execution_id), {"schemaVersion": INDEX_SCHEMA, "refs": index})
+    write_json(index_path(execution_id), {"schema": INDEX_SCHEMA, "refs": index})
     return index[ref]
 
 
@@ -205,7 +213,7 @@ def write_content_object_index(execution_id: str, ref: str) -> Path:
     write_json(
         path,
         {
-            "schemaVersion": OBJECT_INDEX_SCHEMA,
+            "schema": OBJECT_INDEX_SCHEMA,
             "objectKind": "content",
             "objectRef": ref,
             "publishTargetRef": rel,
@@ -227,16 +235,11 @@ def write_brief_object(
 ) -> Path:
     """登记路由并把 compose brief 落对象 `3.compose/brief.json`。"""
     payload = dict(brief)
-    from core.paths import execution_runtime_state_path
+    from content.execution.runtime_state import load_execution_runtime_state
 
-    manifest_path = execution_runtime_state_path(execution_id)
-    if manifest_path.is_file() and not payload.get("executionSequence"):
-        manifest = read_json(manifest_path)
-        if isinstance(manifest, dict) and manifest.get("executionSequence") is not None:
-            try:
-                payload["executionSequence"] = int(manifest["executionSequence"])
-            except (TypeError, ValueError):
-                pass
+    runtime_state = load_execution_runtime_state(execution_id)
+    if runtime_state is not None and not payload.get("executionSequence"):
+        payload["executionSequence"] = runtime_state.execution_sequence
     register_from_brief(execution_id, ref, payload, content_type)
     from core.paths import STAGE_COMPOSE, ensure_object_stages
 

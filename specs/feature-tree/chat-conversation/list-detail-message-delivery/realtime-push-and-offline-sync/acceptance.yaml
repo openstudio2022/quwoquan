@@ -20,7 +20,7 @@ scope:
   out_of_scope:
   - 服务端 EventPublisher 与 Redis realtime fanout。
   - FCM/APNs 离线推送与通知点击直达聊天页。
-  - '`/v1/config/realtime` 配置拉取与热更新。'
+  - '`/config/realtime` 配置拉取与热更新。'
   - 全量 seq gap fill、断线补洞、多设备同步。
 gwt_acceptance:
   GWT1:

@@ -162,7 +162,7 @@ repo verify/package
 
 | 边界 | 对象 | 含义 |
 |---|---|---|
-| 逻辑边界 | 领域服务（DDD bounded context） | 第一真相源：路由前缀 `/v1/<domain>/*`、`service.name`、指标/日志/配置段/错误码独立 |
+| 逻辑边界 | 领域服务（DDD bounded context） | 第一真相源：路由前缀 `/<domain>/*`、`service.name`、指标/日志/配置段/错误码独立 |
 | 部署单元 | Kubernetes Deployment | 最小发布与伸缩单元；对外稳定标识是 Service（DNS/路由），Deployment 可替换 |
 | 物理资源 | 单 ACK 集群 + 共享节点池 | `requests/limits` + bin-packing + HPA + cluster-autoscaler + namespace `ResourceQuota` 降本 |
 
@@ -178,7 +178,7 @@ repo verify/package
   - `livekit-sfu`：首发用 Deployment + HPA + PDB，UDP（7882）经 NodePort/`LoadBalancer` 暴露；若后续需稳定网络标识可演进为 StatefulSet（拆分不变量不变）。
   - `coturn`：`hostNetwork` 固定副本 Deployment（UDP/TCP 3478 + TLS 5349），中继按节点容量手动扩，不配 HPA。
 - 数据平面：阿里云托管（ApsaraDB PostgreSQL/Redis + MongoDB），不进集群自建。
-- 入口：共享 Ingress/ALB，按 `/v1/<domain>/*` 路由到对应 Service。
+- 入口：共享 Ingress/ALB，按 `/<domain>/*` 路由到对应 Service。
 
 部署形态唯一：所有服务一律独立 Deployment（或有状态用 StatefulSet），sidecar 仅限代理/日志/配置 bootstrap 等辅助进程，不承载领域职责。
 
@@ -221,7 +221,7 @@ repo verify/package
 
 拆分步骤：
 
-1. 新建独立 Deployment / HPA / PDB / Service，保持原域 Service DNS 名与 `/v1/<domain>/*` 路由不变。
+1. 新建独立 Deployment / HPA / PDB / Service，保持原域 Service DNS 名与 `/<domain>/*` 路由不变。
 2. 把 Ingress/gateway upstream 或 Service selector 切到新 Deployment。
 3. 从 `seed-box` 发布单元移除该域模块，rollout/rollback 按域独立。
 

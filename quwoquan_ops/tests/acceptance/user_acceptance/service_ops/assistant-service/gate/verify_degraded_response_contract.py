@@ -5,7 +5,7 @@ L0 门禁：降级响应契约静态分析
 检查规则：
 1. 每处 '助手暂时不可用' 返回时必须同时设置 errorCode（非空）
 2. 每处 degraded: true 返回时必须设置 errorCode
-3. finalText 中不得直接携带 JSON envelope 关键字（assistant_turn_v2, contractVersion）
+3. finalText 中不得直接携带 JSON envelope 关键字（assistant_turn_v2, schema）
 4. capability_gateway.dart 中每处 catch 必须保留 rootCause 信息在 trace.message 中
 
 违反任意规则 → 以非零退出，打印定位信息。
@@ -104,7 +104,7 @@ def check_degraded_true_has_error_code(path: Path) -> list[str]:
 
 def check_no_json_envelope_leak(path: Path) -> list[str]:
     """
-    规则 3：finalText 的字符串字面量不得含 assistant_turn_v2 / contractVersion。
+    规则 3：finalText 的字符串字面量不得含 assistant_turn_v2 / schema。
     仅检测 finalText: '...' 形式的赋值行。
     """
     violations = []
@@ -113,7 +113,7 @@ def check_no_json_envelope_leak(path: Path) -> list[str]:
     content = path.read_text(encoding="utf-8")
     # 查找 finalText 字符串字面量中含 JSON envelope key 的地方
     pattern = re.compile(
-        r"finalText\s*:\s*['\"]([^'\"]*(?:assistant_turn_v2|contractVersion)[^'\"]*)['\"]"
+        r"finalText\s*:\s*['\"]([^'\"]*(?:assistant_turn_v2|schema)[^'\"]*)['\"]"
     )
     for m in pattern.finditer(content):
         lineno = content[: m.start()].count("\n") + 1

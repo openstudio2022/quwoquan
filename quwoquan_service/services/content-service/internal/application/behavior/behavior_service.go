@@ -493,7 +493,7 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 	if s.publisher != nil {
 		aggregateID := firstNonEmptyLocal(batchSessionID, batchUserID, occurredAt.Format(time.RFC3339Nano))
 		_ = s.publisher.Publish(ctx, messaging.DomainEvent{
-			Type:          "EventBatchReported",
+			Type:          "BehaviorBatchReported",
 			AggregateType: "BehaviorBatch",
 			AggregateID:   aggregateID,
 			Payload:       payload,

@@ -6,22 +6,22 @@ void main() {
   group('Notification metadata contract', () {
     test('service.yaml generated paths stay aligned', () {
       expect(NotificationApiMetadata.domain, 'notification');
-      expect(NotificationApiMetadata.listAppMessagesPath, '/v1/app-messages');
+      expect(NotificationApiMetadata.listAppMessagesPath, '/app-messages');
       expect(
         NotificationApiMetadata.getAppMessageUnreadCountPath,
-        '/v1/app-messages/unread-count',
+        '/app-messages/unread-count',
       );
       expect(
         NotificationApiMetadata.getAppMessagePath(messageId: 'message/a'),
-        '/v1/app-messages/message%2Fa',
+        '/app-messages/message%2Fa',
       );
       expect(
         NotificationApiMetadata.ackAppMessagePath(messageId: 'message-a'),
-        '/v1/app-messages/message-a/ack',
+        '/app-messages/message-a/ack',
       );
       expect(
         NotificationApiMetadata.readAppMessagePath(messageId: 'message-a'),
-        '/v1/app-messages/message-a/read',
+        '/app-messages/message-a/read',
       );
     });
 

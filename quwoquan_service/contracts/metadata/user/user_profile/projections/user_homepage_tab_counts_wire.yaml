@@ -1,4 +1,3 @@
-version: 1
 read_model: UserHomepageTabCountsWire
 
 description: |
@@ -21,23 +20,19 @@ client_projection:
       dart_type: int
       nullable: false
       source: worksCount
-      aliases: [worksCount, postCount]
       default: "0"
     - name: likesCount
       dart_type: int
       nullable: false
       source: likesCount
-      aliases: [likesCount, likeCount]
       default: "0"
     - name: circlesCount
       dart_type: int
       nullable: false
       source: circlesCount
-      aliases: [circlesCount, circleCount]
       default: "0"
     - name: collectionsCount
       dart_type: int
       nullable: false
       source: collectionsCount
-      aliases: [collectionsCount]
       default: "0"

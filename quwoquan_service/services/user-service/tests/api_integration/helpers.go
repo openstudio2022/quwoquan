@@ -37,7 +37,7 @@ func doRequest(t *testing.T, method, path string, body string, headers map[strin
 // API response 永远不暴露验证码。
 func requestOtpCode(t *testing.T, phone string) string {
 	t.Helper()
-	rec := doRequest(t, "POST", "/v1/auth/otp/send", `{"phone":"`+phone+`","deviceId":"ios-test","platform":"ios","appVersion":"1.0.0","sourceOperation":"test"}`, nil)
+	rec := doRequest(t, "POST", "/auth/otp/send", `{"phone":"`+phone+`","deviceId":"ios-test","platform":"ios","appVersion":"1.0.0","sourceOperation":"test"}`, nil)
 	if rec.Code != 200 {
 		t.Fatalf("send otp: expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}

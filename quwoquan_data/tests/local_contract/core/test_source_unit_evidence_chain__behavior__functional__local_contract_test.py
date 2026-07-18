@@ -1,6 +1,6 @@
 """来源单元 → 文章资产 证据链契约 (T2)。
 
-证明 docs/pipeline_directory_layout_spec.md §3/§4：
+证明 specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/execution.md §3/§4：
 - download 写来源单元（编号 + assets/ + index + manifest），无对象级散 images/。
 - produce 选图消费来源单元，asset 携带相对 sourceAssetRef/sourceRef。
 - materialize 成品 assets 文件名 = assetId，可由 article.md 的 asset:// 直查；
@@ -46,7 +46,7 @@ from core.paths import (  # noqa: E402
 from core.qunar_template import source_author_ref  # noqa: E402
 from content.source.source_assets import object_image_candidates  # noqa: E402
 from content.source.source_unit import iter_source_units, write_source_unit  # noqa: E402
-from content.post.route_assets import _build_route_assets  # noqa: E402
+from content.post.article.route_assets import _build_route_assets  # noqa: E402
 from verify.verify_directory_evidence_chain import scan_execution  # noqa: E402
 from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
 

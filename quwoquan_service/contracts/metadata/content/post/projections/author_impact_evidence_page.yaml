@@ -1,4 +1,3 @@
-version: 1
 read_model: AuthorImpactEvidencePage
 description: |
   创作者影响力证据分页（ListAuthorImpactEvidence 响应真相源，对应云侧读模型
@@ -23,35 +22,29 @@ client_projection:
       dart_type: String
       nullable: false
       source: impactId
-      aliases: [impactId]
       default: "''"
     - name: evidenceSnapshotId
       dart_type: String
       nullable: false
       source: evidenceSnapshotId
-      aliases: [evidenceSnapshotId]
       default: "''"
     - name: totalCount
       dart_type: int
       nullable: false
       source: totalCount
-      aliases: [totalCount]
       default: "0"
     - name: items
       dart_type: List<AuthorImpactEvidenceItem>
       nullable: false
       source: items
-      aliases: [items]
       list_element_dart_class: AuthorImpactEvidenceItem
     - name: nextCursor
       dart_type: String
       nullable: false
       source: nextCursor
-      aliases: [nextCursor]
       default: "''"
     - name: hasMore
       dart_type: bool
       nullable: false
       source: hasMore
-      aliases: [hasMore]
       default: "false"

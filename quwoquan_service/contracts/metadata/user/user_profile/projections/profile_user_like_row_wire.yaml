@@ -1,4 +1,3 @@
-version: 1
 read_model: ProfileUserLikeRowWire
 
 description: |
@@ -19,47 +18,40 @@ client_projection:
       dart_type: String
       nullable: false
       source: postId
-      aliases: [postId]
       default: "''"
 
     - name: title
       dart_type: String
       nullable: false
       source: title
-      aliases: [title]
       default: "''"
 
     - name: coverUrl
       dart_type: String
       nullable: false
       source: coverUrl
-      aliases: [coverUrl]
       default: "''"
 
     - name: likerNickname
       dart_type: String
       nullable: false
       source: likerNickname
-      aliases: [likerNickname]
       default: "''"
 
     - name: likerAvatarUrl
       dart_type: String
       nullable: false
       source: likerAvatarUrl
-      aliases: [likerAvatarUrl]
       default: "''"
 
     - name: likerAvatarVersion
       dart_type: int
       nullable: false
       source: likerAvatarVersion
-      aliases: [likerAvatarVersion, avatarVersion]
       default: "0"
 
     - name: likedAt
       dart_type: DateTime
       nullable: true
       source: likedAt
-      aliases: [likedAt]
       default: "null"

@@ -2,26 +2,54 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {
-    "schemaVersion": { "type": "string" },
-    "releaseId": { "type": "string" },
-    "executionId": { "type": "string", "minLength": 1 },
-    "status": { "type": "string", "enum": ["assembled", "verified", "published"] },
-    "entityCount": { "type": "integer" },
-    "tagCount": { "type": "integer" },
-    "postCount": { "type": "integer" },
+    "releaseId": {
+      "type": "string"
+    },
+    "executionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "assembled",
+        "verified",
+        "published"
+      ]
+    },
+    "entityCount": {
+      "type": "integer"
+    },
+    "tagCount": {
+      "type": "integer"
+    },
+    "postCount": {
+      "type": "integer"
+    },
     "relationCounts": {
       "type": "object",
       "properties": {
-        "postTagRelations": { "type": "integer" },
-        "postEntityRelations": { "type": "integer" },
-        "entityTagRelations": { "type": "integer" },
-        "tagCooccurrences": { "type": "integer" }
+        "postTagRelations": {
+          "type": "integer"
+        },
+        "postEntityRelations": {
+          "type": "integer"
+        },
+        "entityTagRelations": {
+          "type": "integer"
+        },
+        "tagCooccurrences": {
+          "type": "integer"
+        }
       }
+    },
+    "schema": {
+      "const": "quwoquan_data.release_manifest"
     }
   },
   "additionalProperties": false,
   "required": [
-    "schemaVersion",
+    "schema",
     "releaseId",
     "executionId",
     "status"

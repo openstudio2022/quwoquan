@@ -1,4 +1,3 @@
-version: 1
 domain: user
 entity: InviteRecord
 object_kind: aggregate_root

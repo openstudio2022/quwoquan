@@ -1,4 +1,4 @@
-schemaVersion: quwoquan.content.preset
+schema: quwoquan.content.preset
 presetId: content/travel/video/base
 title: 旅行视频作品内容基线
 defaults:
@@ -9,9 +9,6 @@ defaults:
     modalityContract: separated_research
     research:
       lanes: [video]
-      maxConcurrency: 4
-      laneConcurrency:
-        video: 4
       allowAiImages: false
     quotas:
       entityHomepagesPerTarget: 0

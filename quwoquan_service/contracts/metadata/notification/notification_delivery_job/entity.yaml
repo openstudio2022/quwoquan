@@ -1,4 +1,3 @@
-version: 1
 domain: notification
 entity: NotificationDeliveryJob
 object_kind: aggregate_root

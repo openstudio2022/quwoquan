@@ -6,7 +6,7 @@
 
 ## 范围
 
-- 新增 `GET /v1/content/works-feed` 端点到 `contracts/metadata/content/service.yaml`
+- 新增 `GET /content/works-feed` 端点到 `contracts/metadata/content/service.yaml`
 - 端侧新增 `ContentRepository.listWorksFeedPage(filterType, cursor, limit)` 方法
 - `WorksFeedProvider`（Riverpod AsyncNotifier）：管理 works-feed cursor 分页状态
 - `filter_type` 枚举：`null`（全部）/ `image` / `video` / `article`

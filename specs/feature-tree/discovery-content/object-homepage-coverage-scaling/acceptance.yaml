@@ -10,7 +10,7 @@ scope:
   summary: 实体主页覆盖从静态主清单、execution 内来源资格核验、单 execution 生产到环境发布与 App 消费的验收范围。
   in_scope:
   - 区县、实体类型与来源 coverage cell 及 checkpoint。
-  - execution-owned encyclopedia-primary-v2 来源资格核验与逐图权利闭包。
+  - execution-owned encyclopedia-primary 来源资格核验与逐图权利闭包。
   - 单 execution 工作包的五阶段生产、review 与 release 引用。
   - immutable release、Gamma 导入、API 与 App UAT 证据。
   out_of_scope:

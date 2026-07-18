@@ -4,10 +4,7 @@ import 'package:quwoquan_app/ui/circle/models/circle_hub_feed_post_entry.dart';
 
 /// 圈子 Hub：wire / mock 行 → [CircleDto] 与 [CircleHubFeedPostEntry] 的单点适配（见 gap 清单 policy.non_assistant_ui_wire_adapter_entrypoints）。
 CircleDto circleDtoFromHubMockMap(Map<String, Object?> circle) {
-  return CircleDto.fromMap({
-    ...Map<String, dynamic>.from(circle),
-    'description': circle['description'] ?? circle['desc'],
-  });
+  return CircleDto.fromMap(Map<String, dynamic>.from(circle));
 }
 
 /// 合并圈子名到 wire 行，供 [CircleHubFeedPostEntry.fromMap] 使用。
@@ -30,7 +27,7 @@ CircleHubFeedPostEntry mergeCircleStoryEntry(
 }
 
 String hubCircleStoryTypeLabel(Map<String, dynamic> item) {
-  final type = (item['type'] ?? item['contentType'] ?? '').toString();
+  final type = (item['contentType'] ?? '').toString();
   switch (type) {
     case 'image':
       return UITextConstants.discoveryTabPhoto;
@@ -49,4 +46,3 @@ String hubCircleStoryTypeLabel(Map<String, dynamic> item) {
       return UITextConstants.homeCirclesStoryTypeCreation;
   }
 }
-

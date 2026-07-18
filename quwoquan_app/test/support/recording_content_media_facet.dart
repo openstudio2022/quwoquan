@@ -11,7 +11,6 @@ final class RecordingContentMediaFacet implements ContentMediaFacet {
   final List<SelectManualContentMediaCoverCommand> selectedManualCovers =
       <SelectManualContentMediaCoverCommand>[];
   final List<String> selectedAutoCoverMediaIds = <String>[];
-  final List<String> boundAssetIds = <String>[];
   final Map<String, InitContentMediaUploadCommand> _uploadBySession =
       <String, InitContentMediaUploadCommand>{};
   int _sequence = 0;
@@ -113,20 +112,6 @@ final class RecordingContentMediaFacet implements ContentMediaFacet {
       coverFrameTimeMs: 0,
       thumbnailUrl: url,
       coverUrl: url,
-    );
-  }
-
-  @override
-  Future<BindContentPostMediaAssetsResult> bindPostMediaAssets(
-    BindContentPostMediaAssetsCommand command,
-  ) async {
-    boundAssetIds
-      ..clear()
-      ..addAll(command.assetIds);
-    return BindContentPostMediaAssetsResult(
-      postId: command.postId,
-      boundAssetIds: command.assetIds,
-      boundCount: command.assetIds.length,
     );
   }
 

@@ -1,4 +1,3 @@
-version: 1
 read_model: ReplyPageSlice
 description: 二级回复商用投影分页；组合 ContentReaction、MediaAsset 与 capability，parentCommentId 是一级线程根。
 source_entities: [Comment, ContentReaction, MediaAsset, Post]

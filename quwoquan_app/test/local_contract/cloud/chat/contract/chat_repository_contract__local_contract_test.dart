@@ -304,7 +304,7 @@ void main() {
     });
   });
 
-  group('ChatRepository — 兼容性契约', () {
+  group('ChatRepository — 单轨契约', () {
     late ChatRepository repo;
 
     setUp(() {

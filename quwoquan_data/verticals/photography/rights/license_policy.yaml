@@ -1,4 +1,4 @@
-schemaVersion: quwoquan.photography_license_policy.v1
+schema: quwoquan.photography_license_policy
 vertical: photography
 defaultAction: block
 discoveryPlatformRoles:

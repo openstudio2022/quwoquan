@@ -1,4 +1,4 @@
-schemaVersion: prod-plane-access-isolation/v1
+schema: prod-plane-access-isolation
 description: >
   prod-hosted 远端唯一托管目标的「访问隔离层」单一真相源（去 root · 四平面）。
   本文件只描述「谁（Linux service 账号）用哪份凭据、登录到哪条固定路径、操作哪个运行时平面、在哪些 rollout stage 生效」，

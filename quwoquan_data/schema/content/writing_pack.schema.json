@@ -3,46 +3,123 @@
   "description": "写作契约 writing_pack — 内容对象 3.compose/writing_pack.json（CLI prepare 产出，供会话模型创作正文）",
   "type": "object",
   "properties": {
-    "schemaVersion": { "type": "string" },
-    "stage": { "const": "3.compose" },
-    "executionId": { "type": "string", "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(canary|m1|m2|m3)-[0-9]{3,}$" },
-    "executionBinding": { "enum": ["frozen", "standalone"] },
-    "sourcePolicyRevision": { "const": "encyclopedia-primary-v2" },
-    "sourceRevision": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
-    "promptBundleRevision": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "stage": {
+      "const": "3.compose"
+    },
+    "executionId": {
+      "type": "string",
+      "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(canary|m1|m2|m3)-[0-9]{3,}$"
+    },
+    "executionBinding": {
+      "enum": [
+        "frozen",
+        "standalone"
+      ]
+    },
+    "sourcePolicyRevision": {
+      "const": "encyclopedia-primary"
+    },
+    "sourceRevision": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "promptBundleRevision": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
     "selectedSourceUrls": {
       "type": "array",
-      "items": { "type": "string", "pattern": "^https://" }
+      "items": {
+        "type": "string",
+        "pattern": "^https://"
+      }
     },
-    "ref": { "type": "string" },
-    "kind": { "type": "string" },
-    "title": { "type": "string" },
-    "byline": { "type": "string" },
-    "carrier": { "type": "string" },
-    "publishLayout": { "type": "string" },
-    "templateId": { "type": ["string", "null"] },
-    "wordCount": { "type": "object" },
-    "forbiddenPhrases": { "type": "array", "items": { "type": "string" } },
-    "mustIncludeFacts": { "type": "array", "items": { "type": "string" } },
-    "sectionIntents": { "type": "array", "items": { "type": "string" } },
-    "narrativeContract": { "type": "object" },
-    "styleFamily": { "type": "string" },
-    "evidencePoints": { "type": "array" },
-    "assets": { "type": "array" },
+    "ref": {
+      "type": "string"
+    },
+    "kind": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "byline": {
+      "type": "string"
+    },
+    "carrier": {
+      "type": "string"
+    },
+    "publishLayout": {
+      "type": "string"
+    },
+    "templateId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "wordCount": {
+      "type": "object"
+    },
+    "forbiddenPhrases": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "mustIncludeFacts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "sectionIntents": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "narrativeContract": {
+      "type": "object"
+    },
+    "styleFamily": {
+      "type": "string"
+    },
+    "evidencePoints": {
+      "type": "array"
+    },
+    "assets": {
+      "type": "array"
+    },
     "writingIntent": {
       "type": "string",
-      "enum": ["planning_consultation", "decision_experience", "post_trip_journal"],
+      "enum": [
+        "planning_consultation",
+        "decision_experience",
+        "post_trip_journal"
+      ],
       "description": "写作主线：单篇唯一；prompt.md 据此给会话模型主线导向"
     },
-    "baseSourceRef": { "type": ["string", "null"], "description": "主底稿来源 ref（风格与事实锚点）" },
+    "baseSourceRef": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "主底稿来源 ref（风格与事实锚点）"
+    },
     "bannedRegisterTerms": {
       "type": "array",
-      "items": { "type": "string" },
+      "items": {
+        "type": "string"
+      },
       "description": "本主体类型禁用语域词（由垂类模板规则注入，如户外景区禁'看展/展厅'）"
+    },
+    "schema": {
+      "const": "quwoquan_data.writing_pack"
     }
   },
   "required": [
-    "schemaVersion",
+    "schema",
     "stage",
     "executionId",
     "executionBinding",

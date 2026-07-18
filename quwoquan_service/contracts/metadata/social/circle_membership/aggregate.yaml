@@ -1,4 +1,3 @@
-version: 1
 domain: circle
 aggregate_root: CircleMembership
 object_kind: aggregate_root

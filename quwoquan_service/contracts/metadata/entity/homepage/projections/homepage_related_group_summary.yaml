@@ -1,4 +1,3 @@
-version: 1
 read_model: HomepageRelatedGroupSummary
 
 description: |
@@ -20,59 +19,48 @@ client_projection:
       dart_type: String
       nullable: false
       source: circleId
-      aliases: [circleId]
       default: "''"
 
     - name: name
       dart_type: String
       nullable: false
       source: name
-      aliases: [name]
       default: "''"
 
     - name: memberCount
       dart_type: int
       nullable: false
       source: memberCount
-      aliases: [memberCount]
       default: "0"
 
     - name: linkedHomepageId
       dart_type: String
       nullable: true
       source: linkedHomepageId
-      aliases: [linkedHomepageId]
-
     - name: linkedHomepageTitle
       dart_type: String
       nullable: true
       source: linkedHomepageTitle
-      aliases: [linkedHomepageTitle]
-
     - name: ownerUserId
       dart_type: String
       nullable: false
       source: ownerUserId
-      aliases: [ownerUserId]
       default: "''"
 
     - name: ownerDisplayNameSnapshot
       dart_type: String
       nullable: false
       source: ownerDisplayNameSnapshot
-      aliases: [ownerDisplayNameSnapshot]
       default: "''"
 
     - name: ownerAvatarUrlSnapshot
       dart_type: String
       nullable: false
       source: ownerAvatarUrlSnapshot
-      aliases: [ownerAvatarUrlSnapshot]
       default: "''"
 
     - name: evidenceSnapshotId
       dart_type: String
       nullable: false
       source: evidenceSnapshotId
-      aliases: [evidenceSnapshotId]
       default: "''"

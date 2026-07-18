@@ -30,7 +30,7 @@ func TestCommentHTTPUsesTypedObjectFacadesAndVersionCAS(t *testing.T) {
 	handler := NewContentHandler(nil, nil, nil, commentService, reactionService, nil, nil).Routes()
 
 	created := performCommentRequest(t, handler, http.MethodPost,
-		"/v1/content/posts/post-comment-http/comments",
+		"/content/posts/post-comment-http/comments",
 		map[string]any{"content": "typed comment", "mentions": []any{}},
 		"comment-http-create", "comment-author")
 	if created.Code != http.StatusCreated {
@@ -44,7 +44,7 @@ func TestCommentHTTPUsesTypedObjectFacadesAndVersionCAS(t *testing.T) {
 		t.Fatalf("create result=%+v", createResult)
 	}
 	replied := performCommentRequest(t, handler, http.MethodPost,
-		"/v1/content/posts/post-comment-http/comments",
+		"/content/posts/post-comment-http/comments",
 		map[string]any{
 			"content":            "typed reply",
 			"replyToCommentId":   createResult.ID,
@@ -57,7 +57,7 @@ func TestCommentHTTPUsesTypedObjectFacadesAndVersionCAS(t *testing.T) {
 	}
 
 	listed := performCommentRequest(t, handler, http.MethodGet,
-		"/v1/content/posts/post-comment-http/comments", nil, "", "comment-author")
+		"/content/posts/post-comment-http/comments", nil, "", "comment-author")
 	if listed.Code != http.StatusOK {
 		t.Fatalf("list status=%d body=%s", listed.Code, listed.Body.String())
 	}
@@ -78,7 +78,7 @@ func TestCommentHTTPUsesTypedObjectFacadesAndVersionCAS(t *testing.T) {
 	}
 
 	replies := performCommentRequest(t, handler, http.MethodGet,
-		"/v1/content/posts/post-comment-http/comments/"+createResult.ID+"/replies",
+		"/content/posts/post-comment-http/comments/"+createResult.ID+"/replies",
 		nil, "", "comment-author")
 	if replies.Code != http.StatusOK {
 		t.Fatalf("reply page status=%d body=%s", replies.Code, replies.Body.String())
@@ -93,7 +93,7 @@ func TestCommentHTTPUsesTypedObjectFacadesAndVersionCAS(t *testing.T) {
 	}
 
 	reacted := performCommentRequest(t, handler, http.MethodPost,
-		"/v1/content/comments/"+createResult.ID+"/reaction",
+		"/content/comments/"+createResult.ID+"/reaction",
 		map[string]any{"reaction": "dislike"}, "comment-http-react", "comment-viewer")
 	if reacted.Code != http.StatusOK {
 		t.Fatalf("react status=%d body=%s", reacted.Code, reacted.Body.String())
@@ -107,7 +107,7 @@ func TestCommentHTTPUsesTypedObjectFacadesAndVersionCAS(t *testing.T) {
 	}
 
 	viewerList := performCommentRequest(t, handler, http.MethodGet,
-		"/v1/content/posts/post-comment-http/comments", nil, "", "comment-viewer")
+		"/content/posts/post-comment-http/comments", nil, "", "comment-viewer")
 	if viewerList.Code != http.StatusOK {
 		t.Fatalf("viewer list status=%d body=%s", viewerList.Code, viewerList.Body.String())
 	}
@@ -123,7 +123,7 @@ func TestCommentHTTPUsesTypedObjectFacadesAndVersionCAS(t *testing.T) {
 	}
 
 	ownerList := performCommentRequest(t, handler, http.MethodGet,
-		"/v1/content/posts/post-comment-http/comments", nil, "", "post-owner")
+		"/content/posts/post-comment-http/comments", nil, "", "post-owner")
 	if ownerList.Code != http.StatusOK {
 		t.Fatalf("post-owner list status=%d body=%s", ownerList.Code, ownerList.Body.String())
 	}
@@ -135,16 +135,9 @@ func TestCommentHTTPUsesTypedObjectFacadesAndVersionCAS(t *testing.T) {
 		t.Fatalf("post owner must receive canPin capability: %+v", ownerPage)
 	}
 
-	staleDelete := performCommentRequest(t, handler, http.MethodDelete,
-		"/v1/content/posts/post-comment-http/comments/"+createResult.ID,
-		map[string]any{"version": 2}, "comment-http-delete-stale", "comment-author")
-	if staleDelete.Code != http.StatusConflict {
-		t.Fatalf("stale delete status=%d body=%s", staleDelete.Code, staleDelete.Body.String())
-	}
-
 	deleted := performCommentRequest(t, handler, http.MethodDelete,
-		"/v1/content/posts/post-comment-http/comments/"+createResult.ID,
-		map[string]any{"version": createResult.Version}, "comment-http-delete", "comment-author")
+		"/content/posts/post-comment-http/comments/"+createResult.ID,
+		nil, "comment-http-delete", "comment-author")
 	if deleted.Code != http.StatusOK {
 		t.Fatalf("delete status=%d body=%s", deleted.Code, deleted.Body.String())
 	}

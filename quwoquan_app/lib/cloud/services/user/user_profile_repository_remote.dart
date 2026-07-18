@@ -221,7 +221,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
       context: ContentRequestPageIds.listUserPosts,
     );
     final items = CloudResponseDecoder.mapList(data, 'items');
-    return items.map(postBaseDtoFromMap).toList();
+    return items.map(contentPostDtoFromReadModelMap).toList();
   }
 
   @override

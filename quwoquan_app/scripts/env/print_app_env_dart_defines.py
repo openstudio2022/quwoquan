@@ -65,16 +65,12 @@ def apply_overrides(values: dict[str, str], args: argparse.Namespace) -> dict[st
         "gatewayBaseUrl": gateway_override,
         "legalBaseUrl": legal_override,
         "mediaAvatarCdnBaseUrl": args.media_avatar_base_url
-        or args.media_base_url
         or os.environ.get("LOCAL_GAMMA_MEDIA_AVATAR_BASE_URL", ""),
         "mediaImageCdnBaseUrl": args.media_image_base_url
-        or args.media_base_url
         or os.environ.get("LOCAL_GAMMA_MEDIA_IMAGE_BASE_URL", ""),
         "mediaVideoCdnBaseUrl": args.media_video_base_url
-        or args.media_base_url
         or os.environ.get("LOCAL_GAMMA_MEDIA_VIDEO_BASE_URL", ""),
         "mediaUploadBaseUrl": args.media_upload_base_url
-        or args.media_base_url
         or os.environ.get("LOCAL_GAMMA_MEDIA_UPLOAD_BASE_URL", ""),
         "contractFixtureProfile": args.contract_fixture_profile
         or os.environ.get("CONTRACT_FIXTURE_PROFILE", ""),
@@ -103,7 +99,6 @@ def main() -> int:
     parser.add_argument("--format", choices=["args", "shell", "json"], default="args")
     parser.add_argument("--gateway-base-url", default="")
     parser.add_argument("--legal-base-url", default="")
-    parser.add_argument("--media-base-url", default="")
     parser.add_argument("--media-avatar-base-url", default="")
     parser.add_argument("--media-image-base-url", default="")
     parser.add_argument("--media-video-base-url", default="")
@@ -119,6 +114,19 @@ def main() -> int:
     if not cfg.exists():
         raise SystemExit(f"app runtime config not found: {cfg}")
     values = apply_overrides(parse_runtime_yaml(cfg), args)
+    required_endpoint_keys = (
+        "gatewayBaseUrl",
+        "mediaAvatarCdnBaseUrl",
+        "mediaImageCdnBaseUrl",
+        "mediaVideoCdnBaseUrl",
+        "mediaUploadBaseUrl",
+    )
+    missing = [key for key in required_endpoint_keys if not values.get(key, "").strip()]
+    if missing:
+        raise SystemExit(
+            "app runtime config is missing explicit endpoint values: "
+            + ", ".join(missing)
+        )
     defines = {
         define_key: values[source_key]
         for source_key, define_key in DEFINE_KEYS.items()

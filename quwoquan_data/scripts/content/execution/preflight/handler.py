@@ -11,24 +11,18 @@ from pathlib import Path
 from core.cursor_startup_probe import cursor_startup_probe_suite
 from core.paths import DATA_EXECUTIONS_ROOT, DATA_LOCAL_ROOT
 from core.python_environment import (
-    DEFAULT_CURSOR_STARTUP_MODEL,
     prepare_data_runtime_cache,
-    resolve_cursor_startup_timeout_seconds,
     runtime_report,
 )
 from core.python_runtime import environment_preflight
 from core.runtime_policy import active_runtime_policy
+from content.release.canonical.rollout_contract import load_rollout_contract
 
 _RUNTIME_CHILD_ENV = "QWQ_DATA_PREFLIGHT_RUNTIME_CHILD"
 
 
 def _network_timeout_seconds(args: argparse.Namespace) -> float:
-    value = getattr(args, "timeout_seconds", None)
-    return float(
-        value
-        if value is not None
-        else active_runtime_policy().preflight_network_timeout_seconds
-    )
+    return float(active_runtime_policy().preflight_network_timeout_seconds)
 
 
 def _report_output_path(value: object) -> Path:
@@ -69,7 +63,6 @@ def _print_preflight(report: dict, *, as_json: bool) -> None:
     runtime = report.get("runtime") or {}
     key = report.get("cursorApiKey") or {}
     network = report.get("network") or {}
-    cloud_api = report.get("cursorCloudApi") or {}
     print(f"[env preflight] runtime={'ready' if runtime.get('ready') else 'missing'}")
     print(f"[env preflight] resolvedPython={runtime.get('resolvedPython') or '<missing>'}")
     key_status = "present" if key.get("present") else "missing"
@@ -84,16 +77,6 @@ def _print_preflight(report: dict, *, as_json: bool) -> None:
             status = row.get("status") or row.get("error") or ""
             marker = "ok" if row.get("reachable") else "fail"
             print(f"  - {marker}: {row.get('url')} {status}")
-    if cloud_api.get("checked"):
-        status = "ready" if cloud_api.get("ready") else "failed"
-        key_type = cloud_api.get("keyType") or "unknown"
-        code = cloud_api.get("errorCode")
-        suffix = f" keyType={key_type}"
-        if code:
-            suffix += f" errorCode={code}"
-        print(f"[env preflight] cursorCloudApi={status}{suffix}")
-    elif cloud_api:
-        print(f"[env preflight] cursorCloudApi=skipped ({cloud_api.get('skipReason')})")
     startup = report.get("cursorStartup") or {}
     if startup.get("checked"):
         print(
@@ -126,6 +109,64 @@ def _print_cursor_probe(report: dict, *, as_json: bool) -> None:
         print(f"  - {item}", file=sys.stderr)
 
 
+def _capacity_soak_report() -> dict:
+    """Run the rollout-owned Cursor infrastructure capacity admission."""
+    capacity = load_rollout_contract().capacity
+    policy = active_runtime_policy()
+    report = cursor_startup_probe_suite(
+        model=policy.cursor_model,
+        runtime=policy.cursor_runtime.value,
+        attempts=capacity.soak_jobs,
+        timeout_seconds=policy.startup_timeout_seconds,
+        cwd=Path.cwd(),
+    )
+    issues = list(report.get("issues") or [])
+    if int(report.get("successCount") or 0) != capacity.soak_jobs:
+        issues.append(
+            "capacity soak requires every Cursor SDK probe job to finish: "
+            f"{report.get('successCount')}/{capacity.soak_jobs}"
+        )
+    if int(report.get("effectiveConcurrency") or 0) < capacity.minimum_safe_concurrency:
+        issues.append(
+            "capacity soak effective concurrency is below contract: "
+            f"{report.get('effectiveConcurrency')}<{capacity.minimum_safe_concurrency}"
+        )
+    if (
+        int(report.get("bridgeDisconnectCount") or 0)
+        > capacity.maximum_unrecovered_bridge_failures
+    ):
+        issues.append(
+            "capacity soak unrecovered bridge failures exceed contract: "
+            f"{report.get('bridgeDisconnectCount')}>"
+            f"{capacity.maximum_unrecovered_bridge_failures}"
+        )
+    if float(report.get("probeJobsPerHour") or 0) < capacity.minimum_probe_jobs_per_hour:
+        issues.append(
+            "capacity soak probe throughput is below contract: "
+            f"{report.get('probeJobsPerHour')}<{capacity.minimum_probe_jobs_per_hour}"
+        )
+    if float(report.get("startupLatencyP95") or 0) > capacity.maximum_probe_job_p95_seconds:
+        issues.append(
+            "capacity soak probe P95 exceeds contract: "
+            f"{report.get('startupLatencyP95')}>{capacity.maximum_probe_job_p95_seconds}"
+        )
+    report["capacityContract"] = {
+        "soakJobs": capacity.soak_jobs,
+        "minimumSafeConcurrency": capacity.minimum_safe_concurrency,
+        "maximumUnrecoveredBridgeFailures": capacity.maximum_unrecovered_bridge_failures,
+        "minimumProbeJobsPerHour": capacity.minimum_probe_jobs_per_hour,
+        "maximumProbeJobP95Seconds": capacity.maximum_probe_job_p95_seconds,
+    }
+    report["homepageProductionThresholds"] = {
+        "minimumApprovedHomepagesPerHour": capacity.minimum_approved_homepages_per_hour,
+        "maximumHomepageObjectP95Seconds": capacity.maximum_homepage_object_p95_seconds,
+        "evidenceStage": "m1",
+    }
+    report["issues"] = list(dict.fromkeys(str(issue) for issue in issues if str(issue)))
+    report["ready"] = not report["issues"]
+    return report
+
+
 def _cursor_startup_enabled(args: argparse.Namespace) -> bool:
     if bool(getattr(args, "no_cursor_startup", False)):
         return False
@@ -133,15 +174,7 @@ def _cursor_startup_enabled(args: argparse.Namespace) -> bool:
 
 
 def _startup_timeout_seconds(args: argparse.Namespace) -> float:
-    return resolve_cursor_startup_timeout_seconds(
-        getattr(args, "startup_timeout_seconds", None)
-    )
-
-
-def _check_cursor_cloud_api(args: argparse.Namespace) -> bool:
-    # 即使 runtime=local，cursor_sdk 仍依赖账号资格；否则 403/plan_required
-    # 会在本地桥里被折叠成 InternalServerError 500，误导 H100/H1000 准入判断。
-    return not bool(getattr(args, "no_cursor_key", False))
+    return float(active_runtime_policy().startup_timeout_seconds)
 
 
 def handle_doctor(args: argparse.Namespace) -> None:
@@ -152,10 +185,7 @@ def handle_doctor(args: argparse.Namespace) -> None:
 
 
 def handle_prepare(args: argparse.Namespace) -> None:
-    report = prepare_data_runtime_cache(
-        python=Path(args.python).expanduser() if getattr(args, "python", None) else None,
-        requirements=Path(args.requirements).expanduser() if getattr(args, "requirements", None) else None,
-    )
+    report = prepare_data_runtime_cache()
     if bool(getattr(args, "json", False)):
         print(json.dumps(report, ensure_ascii=False, indent=2))
     else:
@@ -175,16 +205,15 @@ def handle_prepare(args: argparse.Namespace) -> None:
 
 
 def handle_preflight(args: argparse.Namespace) -> None:
-    runtime = str(getattr(args, "runtime", "local") or "local")
+    policy = active_runtime_policy()
     report = environment_preflight(
         require_cursor_key=not bool(getattr(args, "no_cursor_key", False)),
         check_network=not bool(getattr(args, "no_network", False)),
-        check_cursor_cloud_api=_check_cursor_cloud_api(args),
         endpoints=getattr(args, "endpoint", None),
         timeout_seconds=_network_timeout_seconds(args),
         check_cursor_startup=_cursor_startup_enabled(args),
-        cursor_startup_model=str(getattr(args, "model", DEFAULT_CURSOR_STARTUP_MODEL) or DEFAULT_CURSOR_STARTUP_MODEL),
-        cursor_startup_runtime=runtime,
+        cursor_startup_model=policy.cursor_model,
+        cursor_startup_runtime=policy.cursor_runtime.value,
         cursor_startup_timeout_seconds=_startup_timeout_seconds(args),
     )
     _print_preflight(report, as_json=bool(getattr(args, "json", False)))
@@ -193,9 +222,10 @@ def handle_preflight(args: argparse.Namespace) -> None:
 
 
 def handle_cursor_probe(args: argparse.Namespace) -> None:
+    policy = active_runtime_policy()
     report = cursor_startup_probe_suite(
-        model=str(getattr(args, "model", DEFAULT_CURSOR_STARTUP_MODEL) or DEFAULT_CURSOR_STARTUP_MODEL),
-        runtime=str(getattr(args, "runtime", "local") or "local"),
+        model=policy.cursor_model,
+        runtime=policy.cursor_runtime.value,
         attempts=int(
             getattr(args, "attempts", None)
             or active_runtime_policy().startup_probe_suite_attempts
@@ -218,22 +248,21 @@ def handle_cursor_probe(args: argparse.Namespace) -> None:
 def _preflight_in_python(args: argparse.Namespace, python: Path) -> dict:
     """Run final preflight in the prepared data runtime.
 
-    `task preflight` is often launched by `/usr/bin/python3`, while managed workflow
+    `task preflight` is often launched by `/usr/bin/python3`, while managed execution
     may re-exec into a disposable cache rebuilt from repository requirements. Running
     the final preflight in that interpreter avoids falsely diagnosing missing
     `cursor_sdk`; the cache itself is never a source of truth.
     """
     if Path(sys.executable).absolute() == python.absolute():
-        runtime = str(getattr(args, "runtime", "local") or "local")
+        policy = active_runtime_policy()
         return environment_preflight(
             require_cursor_key=not bool(getattr(args, "no_cursor_key", False)),
             check_network=not bool(getattr(args, "no_network", False)),
-            check_cursor_cloud_api=_check_cursor_cloud_api(args),
             endpoints=getattr(args, "endpoint", None),
             timeout_seconds=_network_timeout_seconds(args),
             check_cursor_startup=_cursor_startup_enabled(args),
-            cursor_startup_model=str(getattr(args, "model", DEFAULT_CURSOR_STARTUP_MODEL) or DEFAULT_CURSOR_STARTUP_MODEL),
-            cursor_startup_runtime=runtime,
+            cursor_startup_model=policy.cursor_model,
+            cursor_startup_runtime=policy.cursor_runtime.value,
             cursor_startup_timeout_seconds=_startup_timeout_seconds(args),
         )
     cmd = [
@@ -242,22 +271,9 @@ def _preflight_in_python(args: argparse.Namespace, python: Path) -> dict:
         "task",
         "preflight",
         "--json",
-        "--timeout-seconds",
-        str(_network_timeout_seconds(args)),
-        "--runtime",
-        str(getattr(args, "runtime", "local") or "local"),
     ]
     if _cursor_startup_enabled(args):
-        cmd.extend(
-            [
-                "--model",
-                str(
-                    getattr(args, "model", None)
-                    or active_runtime_policy().cursor_model
-                ),
-            ]
-        )
-        cmd.extend(["--startup-timeout-seconds", str(_startup_timeout_seconds(args))])
+        cmd.append("--cursor-startup")
     else:
         cmd.append("--no-cursor-startup")
     if bool(getattr(args, "no_cursor_key", False)):
@@ -279,13 +295,13 @@ def _preflight_in_python(args: argparse.Namespace, python: Path) -> dict:
         report = json.loads((proc.stdout or "{}").strip() or "{}")
     except json.JSONDecodeError:
         report = {
-            "schemaVersion": "quwoquan_data.environment_preflight",
+            "schema": "quwoquan_data.environment_preflight",
             "ready": False,
             "issues": [proc.stderr.strip() or "env preflight subprocess did not return JSON"],
         }
     if not report:
         report = {
-            "schemaVersion": "quwoquan_data.environment_preflight",
+            "schema": "quwoquan_data.environment_preflight",
             "ready": False,
             "issues": [proc.stderr.strip() or "task preflight subprocess returned an empty report"],
         }
@@ -300,10 +316,7 @@ def handle_ready(args: argparse.Namespace) -> None:
     if os.environ.get(_RUNTIME_CHILD_ENV) == "1":
         handle_preflight(args)
         return
-    prepare = prepare_data_runtime_cache(
-        python=Path(args.python).expanduser() if getattr(args, "python", None) else None,
-        requirements=Path(args.requirements).expanduser() if getattr(args, "requirements", None) else None,
-    )
+    prepare = prepare_data_runtime_cache()
     preflight_python = Path(str(prepare.get("python") or "")).expanduser()
     preflight = (
         _preflight_in_python(args, preflight_python)
@@ -311,12 +324,11 @@ def handle_ready(args: argparse.Namespace) -> None:
         else environment_preflight(
             require_cursor_key=not bool(getattr(args, "no_cursor_key", False)),
             check_network=not bool(getattr(args, "no_network", False)),
-            check_cursor_cloud_api=_check_cursor_cloud_api(args),
             endpoints=getattr(args, "endpoint", None),
             timeout_seconds=_network_timeout_seconds(args),
             check_cursor_startup=_cursor_startup_enabled(args),
-            cursor_startup_model=str(getattr(args, "model", DEFAULT_CURSOR_STARTUP_MODEL) or DEFAULT_CURSOR_STARTUP_MODEL),
-            cursor_startup_runtime=str(getattr(args, "runtime", "local") or "local"),
+            cursor_startup_model=active_runtime_policy().cursor_model,
+            cursor_startup_runtime=active_runtime_policy().cursor_runtime.value,
             cursor_startup_timeout_seconds=_startup_timeout_seconds(args),
         )
     )
@@ -328,14 +340,25 @@ def handle_ready(args: argparse.Namespace) -> None:
     )
     if cursor_startup and "timeoutSeconds" not in cursor_startup:
         cursor_startup["timeoutSeconds"] = startup_timeout_seconds
+    run_soak = bool(getattr(args, "soak", False))
+    capacity_soak = (
+        _capacity_soak_report()
+        if run_soak and bool(prepare.get("ready")) and bool(preflight.get("ready"))
+        else {}
+    )
     report = {
-        "schemaVersion": "quwoquan_data.task_preflight",
+        "schema": "quwoquan_data.task_preflight",
         "prepare": prepare,
         "preflight": preflight,
         "cursorApiKey": preflight.get("cursorApiKey") or {},
         "cursorStartup": cursor_startup,
+        "capacitySoak": capacity_soak,
         "startupTimeoutSeconds": startup_timeout_seconds,
-        "ready": bool(prepare.get("ready")) and bool(preflight.get("ready")),
+        "ready": (
+            bool(prepare.get("ready"))
+            and bool(preflight.get("ready"))
+            and (not run_soak or bool(capacity_soak.get("ready")))
+        ),
     }
     report_out = getattr(args, "report_out", None)
     if report_out:
@@ -353,6 +376,8 @@ def handle_ready(args: argparse.Namespace) -> None:
             for item in prepare["missing"]:
                 print(f"  - {item}", file=sys.stderr)
         _print_preflight(preflight, as_json=False)
+        if run_soak:
+            _print_cursor_probe(capacity_soak, as_json=False)
         print("[task preflight] READY" if report.get("ready") else "[task preflight] FAILED")
     if not report.get("ready"):
         raise SystemExit(1)
@@ -365,6 +390,7 @@ def _compact_ready_evidence(report: dict) -> dict:
     credential = report.get("cursorApiKey") if isinstance(report.get("cursorApiKey"), dict) else {}
     network = preflight.get("network") if isinstance(preflight.get("network"), dict) else {}
     startup = report.get("cursorStartup") if isinstance(report.get("cursorStartup"), dict) else {}
+    capacity = report.get("capacitySoak") if isinstance(report.get("capacitySoak"), dict) else {}
     return {
         "ready": bool(report.get("ready")),
         "runtime": {
@@ -391,34 +417,29 @@ def _compact_ready_evidence(report: dict) -> dict:
             "model": startup.get("model"),
             "issues": list(startup.get("issues") or []),
         },
+        "capacitySoak": {
+            "ready": bool(capacity.get("ready")),
+            "attempts": capacity.get("attempts"),
+            "successCount": capacity.get("successCount"),
+            "effectiveConcurrency": capacity.get("effectiveConcurrency"),
+            "bridgeDisconnectCount": capacity.get("bridgeDisconnectCount"),
+            "probeJobsPerHour": capacity.get("probeJobsPerHour"),
+            "startupLatencyP95": capacity.get("startupLatencyP95"),
+            "issues": list(capacity.get("issues") or []),
+        },
         "issues": list(preflight.get("issues") or []),
     }
 
 
 def register_task_preflight_parser(subparsers: argparse._SubParsersAction) -> None:
     pr = subparsers.add_parser("preflight", help="准备数据运行时并验证凭证、网络和 Cursor SDK")
-    pr.add_argument(
-        "--python",
-        help="目标 Python；默认 .qwq_output/env/repo/local/python-envs/cache/quwoquan-data/bin/python",
-    )
-    pr.add_argument("--requirements", help="依赖清单；默认 quwoquan_data/requirements.txt")
     pr.add_argument("--json", action="store_true")
     pr.add_argument("--no-network", action="store_true", help="跳过网络探测（仅限本地诊断）")
     pr.add_argument("--no-cursor-key", action="store_true", help="跳过 key file 凭证检查（仅限单测/离线）")
     pr.add_argument("--endpoint", action="append", help="覆盖网络探测端点，可重复")
-    pr.add_argument(
-        "--timeout-seconds",
-        type=float,
-        help="显式覆盖 preflight 网络超时；缺省读取 runtime profile",
-    )
     pr.add_argument("--no-cursor-startup", action="store_true", help="跳过真实 Cursor SDK Agent.prompt 启动探针（仅限单测/离线）")
-    pr.add_argument("--model", default=DEFAULT_CURSOR_STARTUP_MODEL, help="Cursor startup probe model")
-    pr.add_argument("--runtime", choices=["local", "cloud"], default="local", help="Cursor startup probe runtime")
-    pr.add_argument(
-        "--startup-timeout-seconds",
-        type=float,
-        help="显式覆盖 Cursor 启动超时；缺省读取 runtime profile",
-    )
+    pr.add_argument("--cursor-startup", action="store_true", help=argparse.SUPPRESS)
+    pr.add_argument("--soak", action="store_true", help="运行 rollout 合同定义的 Cursor SDK 并发容量准入")
     pr.add_argument("--report-out", dest="report_out", help="写出精简、脱敏的运行准入证据")
     pr.set_defaults(cursor_startup=True)
     pr.set_defaults(handler=handle_ready)

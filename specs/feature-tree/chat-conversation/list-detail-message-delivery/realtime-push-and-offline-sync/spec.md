@@ -70,7 +70,7 @@ stateDiagram-v2
 - `chat-service` EventPublisher 接入与 Redis fanout
 - FCM/APNs 注册、离线推送触达、通知点击直达聊天页
 - 全量 seq gap fill / SyncMessages 恢复策略
-- `/v1/config/realtime` 热更新配置拉取
+- `/config/realtime` 热更新配置拉取
 - Realtime 连接态埋点、SLO histogram、灰度与回滚仪表盘
 - 多设备同时在线同步、消息压缩、端到端加密推送
 

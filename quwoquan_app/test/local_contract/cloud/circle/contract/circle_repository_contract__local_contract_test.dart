@@ -54,8 +54,10 @@ void main() {
 
     test('getCircleStats 返回统计数据', () async {
       final stats = await repo.getCircleStats(_fixtureCircleId);
-      expect(stats.raw.containsKey('totalMembers'), isTrue);
-      expect(stats.raw.containsKey('weeklyActive'), isTrue);
+      expect(stats.raw.containsKey('memberCount'), isTrue);
+      expect(stats.raw.containsKey('weeklyActiveCount'), isTrue);
+      expect(stats.raw.containsKey('totalMembers'), isFalse);
+      expect(stats.raw.containsKey('weeklyActive'), isFalse);
     });
 
     test('createCircle 返回含 id 和 createdAt', () async {

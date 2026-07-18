@@ -24,7 +24,7 @@ import (
 )
 
 const (
-	externalRequestsPath         = "/v1/integrations/external-requests"
+	externalRequestsPath         = "/integrations/external-requests"
 	integrationResponseBodyLimit = 1 << 20
 
 	integrationProviderTimeoutCode  = "INTEGRATION.MIDDLEWARE.provider_timeout"

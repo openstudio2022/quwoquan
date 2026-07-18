@@ -39,7 +39,7 @@ func TestMaxInflightMiddlewareShedsWhenFull(t *testing.T) {
 	h := MaxInflightMiddleware(limiter, observer)(next)
 
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/search", nil))
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/search", nil))
 
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status=%d, want 503", rec.Code)
@@ -68,7 +68,7 @@ func TestMaxInflightMiddlewarePassesThroughAndReleases(t *testing.T) {
 	h := MaxInflightMiddleware(limiter, observer)(next)
 
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/search", nil))
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/search", nil))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d, want 200", rec.Code)

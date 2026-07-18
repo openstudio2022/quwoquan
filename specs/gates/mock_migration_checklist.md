@@ -50,7 +50,7 @@ make verify-app-mock-isolation
 | AppearanceSettings | `MockAppearanceSettingsRepository` | [ ] | [`appearance_settings_repository.dart`](../../quwoquan_app/lib/cloud/services/user/appearance_settings_repository.dart) |
 | Greeting | `MockGreetingRepository` | [ ] | [`greeting_repository.dart`](../../quwoquan_app/lib/cloud/services/user/greeting_repository.dart) |
 | OpsVisit | `MockOpsVisitRepository` | [ ] | [`ops_visit_repository.dart`](../../quwoquan_app/lib/cloud/services/ops/ops_visit_repository.dart) |
-| OpsEvent | `MockOpsEventRepository` | [ ] | [`ops_event_repository.dart`](../../quwoquan_app/lib/cloud/services/ops/ops_event_repository.dart) |
+| OpsEvent | `MockOpsEventRepository` | [x] | deleted; telemetry uses `AppTelemetryTransport` with generated `OpsApiMetadata` |
 | UserSync | `MockUserSyncRepository` | [ ] | [`user_sync_repository.dart`](../../quwoquan_app/lib/cloud/services/user/user_sync_repository.dart) |
 | HomepageIntroduction | `MockHomepageIntroductionRepository` | [ ] | [`entity_introduction_repository.dart`](../../quwoquan_app/lib/cloud/services/entity/entity_introduction_repository.dart) |
 | Intersection | `MockIntersectionRepository` | [ ] | [`intersection_repository.dart`](../../quwoquan_app/lib/cloud/services/content/intersection_repository.dart) |

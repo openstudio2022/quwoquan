@@ -113,7 +113,7 @@ abstract class PostBaseDto {
   /// 供展示层解析的原始缩略图 media reference。
   String get mediaThumbnailUrl => thumbnailUrl?.trim() ?? '';
 
-  /// 兼容旧调用口径：视频展示封面优先缩略图，再回退显式 cover。
+  /// 视频展示封面优先使用缩略图；未提供时使用内容封面。
   String get mediaVideoCoverUrl {
     if (mediaThumbnailUrl.isNotEmpty) {
       return mediaThumbnailUrl;

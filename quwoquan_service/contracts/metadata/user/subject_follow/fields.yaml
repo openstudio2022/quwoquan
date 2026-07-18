@@ -1,4 +1,3 @@
-version: 1
 entity: SubjectFollow
 fields:
   - { name: id, type: string, constraints: [PK], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read }

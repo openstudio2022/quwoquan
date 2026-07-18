@@ -1,11 +1,11 @@
 """RC6 形态自适应字数门契约：长文≥600 / 图文混排≥200+图 单一真相源。
 
-唯一真相源 = content.post.base_draft.base_draft_readiness；verify/review/run.py 预检
+唯一真相源 = content.post.article.base_draft.base_draft_readiness；verify/review/run.py 预检
 都必须经此消费，禁止固定 600 raw 第二真相源误杀图多文少的真·图文底稿。
 """
 from __future__ import annotations
 
-from content.post import base_draft
+from content.post.article import base_draft
 from content.post import content_review
 
 

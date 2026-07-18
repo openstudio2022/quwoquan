@@ -1,8 +1,7 @@
-version: 1
 read_model: ContentArticleSummaryGenerateResponse
 
 description: |
-  POST /v1/content/articles/summary:generate 响应 wire。
+  POST /content/articles/summary:generate 响应 wire。
 
 source_entities:
   - Post
@@ -19,5 +18,4 @@ client_projection:
       dart_type: String
       nullable: false
       source: summary
-      aliases: [summary]
       default: "''"

@@ -18,39 +18,59 @@ class ChatInboxDto {
   final String circleId;
 
   ChatInboxDto({
-    this.id = '',
-    this.type = '',
-    this.title = '',
-    this.avatarUrl = '',
-    this.groupAvatarVersion = 0,
-    this.lastMessagePreview = '',
-    this.lastMessageType = 'text',
+    required this.id,
+    required this.type,
+    required this.title,
+    required this.avatarUrl,
+    required this.groupAvatarVersion,
+    required this.lastMessagePreview,
+    required this.lastMessageType,
     this.lastMessageTime,
-    this.lastSeq = 0,
-    this.unreadCount = 0,
-    this.mentionUnreadCount = 0,
-    this.muted = false,
-    this.pinned = false,
-    this.circleId = '',
+    required this.lastSeq,
+    required this.unreadCount,
+    required this.mentionUnreadCount,
+    required this.muted,
+    required this.pinned,
+    required this.circleId,
   });
 
   factory ChatInboxDto.fromMap(Map<String, dynamic> m) {
+    _validateChatInboxDtoWire(m);
     return ChatInboxDto(
-      id: m['conversationId']?.toString() ?? m['id']?.toString() ?? m['_id']?.toString() ?? '',
-      type: m['type']?.toString() ?? '',
-      title: m['title']?.toString() ?? m['conversationTitle']?.toString() ?? '',
-      avatarUrl: m['avatarUrl']?.toString() ?? m['avatar']?.toString() ?? '',
-      groupAvatarVersion: (m['groupAvatarVersion'] as num?)?.toInt() ?? 0,
-      lastMessagePreview: m['lastMessagePreview']?.toString() ?? m['lastMessage']?.toString() ?? m['preview']?.toString() ?? '',
-      lastMessageType: m['lastMessageType']?.toString() ?? m['messageType']?.toString() ?? 'text',
-      lastMessageTime: _parseDateTime(m['lastMessageTime']) ?? _parseDateTime(m['lastMessageAt']) ?? _parseDateTime(m['updatedAt']) ?? null,
-      lastSeq: (m['lastSeq'] as num?)?.toInt() ?? (m['maxSeq'] as num?)?.toInt() ?? 0,
-      unreadCount: (m['unreadCount'] as num?)?.toInt() ?? 0,
-      mentionUnreadCount: (m['mentionUnreadCount'] as num?)?.toInt() ?? (m['mentionCount'] as num?)?.toInt() ?? 0,
-      muted: m['muted'] as bool? ?? false,
-      pinned: m['pinned'] as bool? ?? false,
-      circleId: m['circleId']?.toString() ?? '',
+      id: m['id'] as String,
+      type: m['type'] as String,
+      title: m['title'] as String,
+      avatarUrl: m['avatarUrl'] as String,
+      groupAvatarVersion: m['groupAvatarVersion'] as int,
+      lastMessagePreview: m['lastMessagePreview'] as String,
+      lastMessageType: m['lastMessageType'] as String,
+      lastMessageTime: m['lastMessageTime'] == null ? null : DateTime.parse(m['lastMessageTime'] as String),
+      lastSeq: m['lastSeq'] as int,
+      unreadCount: m['unreadCount'] as int,
+      mentionUnreadCount: m['mentionUnreadCount'] as int,
+      muted: m['muted'] as bool,
+      pinned: m['pinned'] as bool,
+      circleId: m['circleId'] as String,
     );
+  }
+
+  factory ChatInboxDto.fromReadModelMap(Map<String, dynamic> source) {
+    return ChatInboxDto.fromMap(<String, dynamic>{
+      'id': source['conversationId'],
+      'type': source['type'],
+      'title': source['title'],
+      'avatarUrl': source['avatarUrl'],
+      'groupAvatarVersion': source['groupAvatarVersion'],
+      'lastMessagePreview': source['lastMessagePreview'],
+      'lastMessageType': source['lastMessageType'],
+      'lastMessageTime': source['lastMessageTime'],
+      'lastSeq': source['lastSeq'],
+      'unreadCount': source['unreadCount'],
+      'mentionUnreadCount': source['mentionUnreadCount'],
+      'muted': source['muted'],
+      'pinned': source['pinned'],
+      'circleId': source['circleId'],
+    });
   }
 
   Map<String, dynamic> toMap() {
@@ -62,7 +82,7 @@ class ChatInboxDto {
       'groupAvatarVersion': groupAvatarVersion,
       'lastMessagePreview': lastMessagePreview,
       'lastMessageType': lastMessageType,
-      'lastMessageTime': lastMessageTime,
+      'lastMessageTime': lastMessageTime?.toIso8601String(),
       'lastSeq': lastSeq,
       'unreadCount': unreadCount,
       'mentionUnreadCount': mentionUnreadCount,
@@ -116,9 +136,67 @@ class ChatInboxDto {
   }
 }
 
-DateTime? _parseDateTime(dynamic v) {
-  if (v == null) return null;
-  if (v is DateTime) return v;
-  if (v is String) return DateTime.tryParse(v);
-  return null;
+void _validateChatInboxDtoWire(Map<String, dynamic> m) {
+  const allowed = <String>{
+    'id',
+    'type',
+    'title',
+    'avatarUrl',
+    'groupAvatarVersion',
+    'lastMessagePreview',
+    'lastMessageType',
+    'lastMessageTime',
+    'lastSeq',
+    'unreadCount',
+    'mentionUnreadCount',
+    'muted',
+    'pinned',
+    'circleId',
+  };
+  final unknown = m.keys.where((key) => !allowed.contains(key)).toList(growable: false);
+  if (unknown.isNotEmpty) {
+    throw FormatException('ChatInboxDto contains unknown fields: ${unknown.join(',')}');
+  }
+  if (!m.containsKey('id') || m['id'] == null || (m['id'] is! String)) {
+    throw FormatException('ChatInboxDto.id has an invalid wire value');
+  }
+  if (!m.containsKey('type') || m['type'] == null || (m['type'] is! String)) {
+    throw FormatException('ChatInboxDto.type has an invalid wire value');
+  }
+  if (!m.containsKey('title') || m['title'] == null || (m['title'] is! String)) {
+    throw FormatException('ChatInboxDto.title has an invalid wire value');
+  }
+  if (!m.containsKey('avatarUrl') || m['avatarUrl'] == null || (m['avatarUrl'] is! String)) {
+    throw FormatException('ChatInboxDto.avatarUrl has an invalid wire value');
+  }
+  if (!m.containsKey('groupAvatarVersion') || m['groupAvatarVersion'] == null || (m['groupAvatarVersion'] is! int)) {
+    throw FormatException('ChatInboxDto.groupAvatarVersion has an invalid wire value');
+  }
+  if (!m.containsKey('lastMessagePreview') || m['lastMessagePreview'] == null || (m['lastMessagePreview'] is! String)) {
+    throw FormatException('ChatInboxDto.lastMessagePreview has an invalid wire value');
+  }
+  if (!m.containsKey('lastMessageType') || m['lastMessageType'] == null || (m['lastMessageType'] is! String)) {
+    throw FormatException('ChatInboxDto.lastMessageType has an invalid wire value');
+  }
+  if (m.containsKey('lastMessageTime') && m['lastMessageTime'] != null && (m['lastMessageTime'] is! String || DateTime.tryParse(m['lastMessageTime'] as String) == null)) {
+    throw FormatException('ChatInboxDto.lastMessageTime has an invalid wire value');
+  }
+  if (!m.containsKey('lastSeq') || m['lastSeq'] == null || (m['lastSeq'] is! int)) {
+    throw FormatException('ChatInboxDto.lastSeq has an invalid wire value');
+  }
+  if (!m.containsKey('unreadCount') || m['unreadCount'] == null || (m['unreadCount'] is! int)) {
+    throw FormatException('ChatInboxDto.unreadCount has an invalid wire value');
+  }
+  if (!m.containsKey('mentionUnreadCount') || m['mentionUnreadCount'] == null || (m['mentionUnreadCount'] is! int)) {
+    throw FormatException('ChatInboxDto.mentionUnreadCount has an invalid wire value');
+  }
+  if (!m.containsKey('muted') || m['muted'] == null || (m['muted'] is! bool)) {
+    throw FormatException('ChatInboxDto.muted has an invalid wire value');
+  }
+  if (!m.containsKey('pinned') || m['pinned'] == null || (m['pinned'] is! bool)) {
+    throw FormatException('ChatInboxDto.pinned has an invalid wire value');
+  }
+  if (!m.containsKey('circleId') || m['circleId'] == null || (m['circleId'] is! String)) {
+    throw FormatException('ChatInboxDto.circleId has an invalid wire value');
+  }
 }

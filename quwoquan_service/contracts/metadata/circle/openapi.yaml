@@ -4,7 +4,7 @@ info:
     title: quwoquan circle API
     version: v1
 paths:
-    /v1/circles:
+    /circles:
         get:
             operationId: ListCircles
             x-contract-operation-id: circle.circle.ListCircles
@@ -59,7 +59,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/circles/{circleId}:
+    /circles/{circleId}:
         get:
             operationId: GetCircle
             x-contract-operation-id: circle.circle.GetCircle
@@ -153,7 +153,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/circles/{circleId}/feed:
+    /circles/{circleId}/feed:
         get:
             operationId: GetCircleFeed
             x-contract-operation-id: circle.circle.GetCircleFeed
@@ -184,7 +184,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-    /v1/circles/{circleId}/files:
+    /circles/{circleId}/files:
         get:
             operationId: ListCircleFiles
             x-contract-operation-id: circle.circle_file.ListCircleFiles
@@ -233,6 +233,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:
@@ -254,7 +260,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/circles/{circleId}/files/{fileId}:
+    /circles/{circleId}/files/{fileId}:
         get:
             operationId: GetCircleFile
             x-contract-operation-id: circle.circle_file.GetCircleFile
@@ -313,6 +319,18 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+                - name: If-Match
+                  in: header
+                  required: true
+                  description: Quoted positive aggregate version for a snapshot overwrite.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:
@@ -355,6 +373,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -370,7 +394,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/circles/{circleId}/groups:
+    /circles/{circleId}/groups:
         get:
             operationId: ListCircleGroups
             x-contract-operation-id: circle.circle_group.ListCircleGroups
@@ -419,6 +443,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: true
                 content:
@@ -440,7 +470,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/circles/{circleId}/groups/{groupId}:
+    /circles/{circleId}/groups/{groupId}:
         get:
             operationId: GetCircleGroup
             x-contract-operation-id: circle.circle_group.GetCircleGroup
@@ -499,6 +529,18 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+                - name: If-Match
+                  in: header
+                  required: true
+                  description: Quoted positive aggregate version for a snapshot overwrite.
+                  schema:
+                    type: string
             requestBody:
                 required: true
                 content:
@@ -541,6 +583,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -556,7 +604,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/circles/{circleId}/groups/{groupId}/memberships:
+    /circles/{circleId}/groups/{groupId}/memberships:
         get:
             operationId: ListCircleGroupMemberships
             x-contract-operation-id: circle.circle_group_membership.ListCircleGroupMemberships
@@ -615,6 +663,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:
@@ -636,7 +690,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/circles/{circleId}/groups/{groupId}/memberships/{personaId}:
+    /circles/{circleId}/groups/{groupId}/memberships/{personaId}:
         delete:
             operationId: RemoveCircleGroupMember
             x-contract-operation-id: circle.circle_group_membership.RemoveCircleGroupMember
@@ -663,6 +717,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -678,7 +738,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/circles/{circleId}/groups/{groupId}/memberships/{personaId}/role:
+    /circles/{circleId}/groups/{groupId}/memberships/{personaId}/role:
         patch:
             operationId: UpdateCircleGroupMemberRole
             x-contract-operation-id: circle.circle_group_membership.UpdateCircleGroupMemberRole
@@ -705,6 +765,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: true
                 content:
@@ -726,7 +792,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/circles/{circleId}/groups/{groupId}/memberships/{personaId}:approve:
+    /circles/{circleId}/groups/{groupId}/memberships/{personaId}:approve:
         post:
             operationId: ApproveCircleGroupMember
             x-contract-operation-id: circle.circle_group_membership.ApproveCircleGroupMember
@@ -753,6 +819,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:
@@ -774,7 +846,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/circles/{circleId}/groups/{groupId}/memberships/{personaId}:reject:
+    /circles/{circleId}/groups/{groupId}/memberships/{personaId}:reject:
         post:
             operationId: RejectCircleGroupMember
             x-contract-operation-id: circle.circle_group_membership.RejectCircleGroupMember
@@ -801,6 +873,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:
@@ -822,7 +900,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/circles/{circleId}/groups/{groupId}/memberships/self:
+    /circles/{circleId}/groups/{groupId}/memberships/self:
         get:
             operationId: GetMyCircleGroupMembership
             x-contract-operation-id: circle.circle_group_membership.GetMyCircleGroupMembership
@@ -881,6 +959,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -896,7 +980,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/circles/{circleId}/groups/search:
+    /circles/{circleId}/groups/search:
         get:
             operationId: SearchCircleGroups
             x-contract-operation-id: circle.circle_group.SearchCircleGroups
@@ -929,7 +1013,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/circles/{circleId}/impact:
+    /circles/{circleId}/impact:
         get:
             operationId: GetCircleImpact
             x-contract-operation-id: circle.circle.GetCircleImpact
@@ -962,7 +1046,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/circles/{circleId}/memberships:
+    /circles/{circleId}/memberships:
         get:
             operationId: ListCircleMemberships
             x-contract-operation-id: circle.circle_membership.ListCircleMemberships
@@ -1009,6 +1093,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:
@@ -1030,7 +1120,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/circles/{circleId}/memberships/{personaId}/role:
+    /circles/{circleId}/memberships/{personaId}/role:
         patch:
             operationId: UpdateCircleMembershipRole
             x-contract-operation-id: circle.circle_membership.UpdateCircleMembershipRole
@@ -1050,6 +1140,12 @@ paths:
                 - name: personaId
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
             requestBody:
@@ -1073,7 +1169,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/circles/{circleId}/memberships/self:
+    /circles/{circleId}/memberships/self:
         get:
             operationId: GetMyCircleMembership
             x-contract-operation-id: circle.circle_membership.GetMyCircleMembership
@@ -1122,6 +1218,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -1137,7 +1239,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/circles/{circleId}/post-placements:
+    /circles/{circleId}/post-placements:
         post:
             operationId: PlacePostInCircle
             x-contract-operation-id: circle.circle_post_placement.PlacePostInCircle
@@ -1152,6 +1254,12 @@ paths:
                 - name: circleId
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
             requestBody:
@@ -1175,7 +1283,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/circles/{circleId}/post-placements/{placementId}:
+    /circles/{circleId}/post-placements/{placementId}:
         delete:
             operationId: RemovePostFromCircle
             x-contract-operation-id: circle.circle_post_placement.RemovePostFromCircle
@@ -1197,6 +1305,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -1212,7 +1326,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/circles/{circleId}/post-placements/{placementId}/feature:
+    /circles/{circleId}/post-placements/{placementId}/feature:
         patch:
             operationId: FeatureCirclePost
             x-contract-operation-id: circle.circle_post_placement.FeatureCirclePost
@@ -1234,6 +1348,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: true
                 content:
@@ -1255,7 +1375,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/circles/{circleId}/post-placements/{placementId}/pin:
+    /circles/{circleId}/post-placements/{placementId}/pin:
         patch:
             operationId: PinCirclePost
             x-contract-operation-id: circle.circle_post_placement.PinCirclePost
@@ -1277,6 +1397,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: true
                 content:
@@ -1298,7 +1424,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/circles/{circleId}/sections:
+    /circles/{circleId}/sections:
         patch:
             operationId: UpdateCircleSections
             x-contract-operation-id: circle.circle.UpdateCircleSections
@@ -1332,7 +1458,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/circles/{circleId}/stats:
+    /circles/{circleId}/stats:
         get:
             operationId: GetCircleStats
             x-contract-operation-id: circle.circle.GetCircleStats
@@ -1363,7 +1489,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-    /v1/circles/behaviors:
+    /circles/behaviors:
         post:
             operationId: ReportCircleBehavior
             x-contract-operation-id: circle.circle_behavior_fact.ReportCircleBehavior
@@ -1374,6 +1500,13 @@ paths:
                 facet: CircleBehaviorFactWriter
                 method: appendCircleBehavior
                 appendSink: CircleBehaviorFact
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: true
                 content:
@@ -1392,7 +1525,7 @@ paths:
             security:
                 - bearerAuth: []
                 - {}
-    /v1/circles/search:
+    /circles/search:
         get:
             operationId: SearchCircles
             x-contract-operation-id: circle.circle.SearchCircles
@@ -1419,7 +1552,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/personas/{personaId}/circles:
+    /personas/{personaId}/circles:
         get:
             operationId: ListPersonaCircles
             x-contract-operation-id: circle.circle_membership.ListPersonaCircles

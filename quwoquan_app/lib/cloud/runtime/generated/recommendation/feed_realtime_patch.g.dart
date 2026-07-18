@@ -2,9 +2,6 @@
 // Source: contracts/metadata/content/post/projections/recommendation_realtime_patch.yaml
 // ignore_for_file: prefer_const_constructors
 
-/// Realtime feed patch schema version (`schema_version`).
-const feedRealtimePatchSchemaVersion = 'feed_patch_v1';
-
 /// Per-user realtime channel template (`realtime_channel_template`).
 const feedRealtimePatchChannelTemplate = 'rt:rec:feed:user:{userId}';
 
@@ -122,7 +119,6 @@ enum FeedPatchRemovalDimension {
 /// 强类型推荐实时 patch envelope（单一真相源：recommendation_realtime_patch.yaml）。
 class FeedRealtimePatch {
   const FeedRealtimePatch({
-    required this.schemaVersion,
     required this.patchId,
     required this.patchType,
     required this.userId,
@@ -139,7 +135,6 @@ class FeedRealtimePatch {
     required this.emittedAt,
   });
 
-  final String schemaVersion;
   final String patchId;
   final FeedRealtimePatchType patchType;
   final String userId;
@@ -157,7 +152,6 @@ class FeedRealtimePatch {
 
   factory FeedRealtimePatch.fromWire(Map<String, dynamic> payload) {
     return FeedRealtimePatch(
-      schemaVersion: payload['schemaVersion'] as String? ?? '',
       patchId: payload['patchId'] as String? ?? '',
       patchType: FeedRealtimePatchType.fromWire(payload['patchType'] as String?),
       userId: payload['userId'] as String? ?? '',
@@ -178,7 +172,6 @@ class FeedRealtimePatch {
 
 /// envelope wire 字段顺序（codegen 与 recommendation_realtime_patch.yaml 同步）。
 const feedRealtimePatchWireKeys = <String>[
-  'schemaVersion',
   'patchId',
   'patchType',
   'userId',
@@ -196,12 +189,14 @@ const feedRealtimePatchWireKeys = <String>[
 ];
 
 /// 解析一条推荐实时 patch 消息体。
-/// schemaVersion 不匹配时返回 null（前向兼容：忽略未知 schema），
-/// 端侧据此安全降级，不解析未来版本。
-FeedRealtimePatch? parseFeedRealtimePatch(Map<String, dynamic> message) {
-  final schema = message['schemaVersion'] as String? ?? '';
-  if (schema != feedRealtimePatchSchemaVersion) {
-    return null;
+FeedRealtimePatch parseFeedRealtimePatch(Map<String, dynamic> message) {
+  final unknownKeys = message.keys
+      .where((key) => !feedRealtimePatchWireKeys.contains(key))
+      .toList(growable: false);
+  if (unknownKeys.isNotEmpty) {
+    throw FormatException(
+      'FeedRealtimePatch contains unknown fields: ${unknownKeys.join(',')}',
+    );
   }
   return FeedRealtimePatch.fromWire(message);
 }

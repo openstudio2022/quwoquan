@@ -68,7 +68,7 @@ func TestPremiumPoolProjectorMarksContentTakedown(t *testing.T) {
 	if err := projector.Project(context.Background(), ProjectorEvent{
 		Type:        "PostDeleted",
 		AggregateID: "post_premium_1",
-		Payload:     map[string]any{"_id": "post_premium_1"},
+		Payload:     map[string]any{"postId": "post_premium_1"},
 		OccurredAt:  now,
 	}); err != nil {
 		t.Fatalf("project post delete: %v", err)

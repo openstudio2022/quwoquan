@@ -41,7 +41,7 @@ void main() {
       expect(path, 'memory://app/exception.log');
       expect(writer.lastLine, matches(RegExp(r'^\d{4}-\d{2}-\d{2}T')));
       expect(writer.lastLine, contains(',ERROR,app exception,,'));
-      expect(writer.lastLine, isNot(contains('schemaVersion')));
+      expect(writer.lastLine, isNot(contains('schema')));
       expect(writer.lastLine, isNot(contains('sessionId')));
     },
   );
@@ -73,7 +73,7 @@ void main() {
       level: AppLogLevel.info,
       payload: const <String, dynamic>{
         'method': 'GET',
-        'route': '/v1/search',
+        'route': '/search',
         'status': 200,
         'durationMs': 17,
       },
@@ -83,7 +83,7 @@ void main() {
     expect(path, 'memory://app/access.log');
     expect(
       writer.lastLine,
-      endsWith('GET,/v1/search,200,17,req-1,trace-1,cloud api request'),
+      endsWith('GET,/search,200,17,req-1,trace-1,cloud api request'),
     );
     expect(writer.lastLine, isNot(contains('action')));
     expect(writer.lastLine, isNot(contains('target')));

@@ -31,6 +31,7 @@ if [[ -z "${LOCAL_GAMMA_HTTP_PORT:-}" \
    || -z "${LOCAL_GAMMA_CIRCLE_PORT:-}" \
    || -z "${LOCAL_GAMMA_INTEGRATION_PORT:-}" \
    || -z "${LOCAL_GAMMA_NOTIFICATION_PORT:-}" \
+   || -z "${LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT:-}" \
    || -z "${LOCAL_GAMMA_POSTGRES_PORT:-}" \
    || -z "${LOCAL_GAMMA_MONGO_PORT:-}" \
    || -z "${LOCAL_GAMMA_REDIS_PORT:-}" \
@@ -67,7 +68,11 @@ CONFIG_VERSION="${LOCAL_GAMMA_CONFIG_VERSION:-local-gamma-v1}"
 IMAGE_VERSION="${LOCAL_GAMMA_IMAGE_VERSION:-0.0.1}"
 GATEWAY_BASE_URL="${LOCAL_GAMMA_GATEWAY_BASE_URL:-https://gamma-api.quwoquan-env.test:${LOCAL_GAMMA_HTTP_PORT}}"
 PRODUCT_OPS_BASE_URL="${LOCAL_GAMMA_PRODUCT_OPS_BASE_URL:-https://gamma-product-ops.quwoquan-env.test:${LOCAL_GAMMA_PRODUCT_OPS_PORT}}"
-MEDIA_BASE_URL="${LOCAL_GAMMA_MEDIA_PUBLIC_BASE_URL:-${LOCAL_GAMMA_MEDIA_BASE_URL:-https://gamma-image.quwoquan-env.test:${LOCAL_GAMMA_MEDIA_EDGE_PORT}}}"
+MEDIA_AVATAR_BASE_URL="${LOCAL_GAMMA_MEDIA_AVATAR_BASE_URL:-https://gamma-avatar.quwoquan-env.test:${LOCAL_GAMMA_MEDIA_EDGE_PORT}}"
+MEDIA_IMAGE_BASE_URL="${LOCAL_GAMMA_MEDIA_IMAGE_BASE_URL:-${LOCAL_GAMMA_MEDIA_PUBLIC_BASE_URL:-${LOCAL_GAMMA_MEDIA_BASE_URL:-https://gamma-image.quwoquan-env.test:${LOCAL_GAMMA_MEDIA_EDGE_PORT}}}}"
+MEDIA_VIDEO_BASE_URL="${LOCAL_GAMMA_MEDIA_VIDEO_BASE_URL:-https://gamma-video.quwoquan-env.test:${LOCAL_GAMMA_MEDIA_EDGE_PORT}}"
+MEDIA_UPLOAD_BASE_URL="${LOCAL_GAMMA_MEDIA_UPLOAD_BASE_URL:-https://gamma-upload.quwoquan-env.test:${LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT}}"
+MEDIA_BASE_URL="$MEDIA_IMAGE_BASE_URL"
 PUBLIC_HOSTS=(
   gamma-api.quwoquan-env.test
   gamma-product-ops.quwoquan-env.test
@@ -273,32 +278,55 @@ stop_colima_tunnels() {
   rm -f "$tunnel_pid_file"
 }
 
+LOCAL_GAMMA_MANAGED_CONTAINER_BASE_NAMES=(
+  gamma-proxy
+  assistant-service
+  user-service
+  chat-service
+  content-service
+  product-ops-service
+  platform-ops-service
+  tag-service
+  search-service
+  entity-service
+  circle-service
+  integration-service
+  notification-service
+  object-storage-init
+  object-storage
+  mongo-init
+  rec-model-service
+  elasticsearch
+  redis
+  mongodb
+  postgres
+)
+
+cleanup_stale_named_gamma_containers() {
+  local base_name=""
+  local container_name=""
+  local status=""
+  for base_name in "${LOCAL_GAMMA_MANAGED_CONTAINER_BASE_NAMES[@]}"; do
+    for container_name in "quwoquan_service_${base_name}_1" "quwoquan_service-${base_name}-1"; do
+      status="$(docker inspect --format '{{.State.Status}}' "$container_name" 2>/dev/null || true)"
+      if [[ -z "$status" ]]; then
+        continue
+      fi
+      if [[ "$status" == "running" || "$status" == "restarting" || "$status" == "paused" ]]; then
+        echo "[local-gamma] FAIL: unmanaged active container blocks canonical compose ownership: ${container_name} status=${status}" >&2
+        return 1
+      fi
+      echo "[local-gamma] removing stale non-running container: ${container_name} status=${status}"
+      docker rm "$container_name" >/dev/null
+    done
+  done
+}
+
 cleanup_existing_gamma_runtime() {
   local base_name=""
   local container_name=""
   local image_name=""
-  local -a base_names=(
-    gamma-proxy
-    assistant-service
-    user-service
-    chat-service
-    content-service
-    product-ops-service
-    platform-ops-service
-    tag-service
-    search-service
-    entity-service
-    circle-service
-    integration-service
-    notification-service
-    mongo-init
-    rec-model-service
-    elasticsearch
-    redis
-    mongodb
-    postgres
-  )
-  for base_name in "${base_names[@]}"; do
+  for base_name in "${LOCAL_GAMMA_MANAGED_CONTAINER_BASE_NAMES[@]}"; do
     for container_name in "quwoquan_service_${base_name}_1" "quwoquan_service-${base_name}-1"; do
       docker rm -f "$container_name" >/dev/null 2>&1 || true
       if command -v podman >/dev/null 2>&1; then
@@ -357,6 +385,7 @@ start_colima_tunnels_if_needed() {
   local http_port="${LOCAL_GAMMA_HTTP_PORT:-19000}"
   local product_ops_port="${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}"
   local media_edge_port="${LOCAL_GAMMA_MEDIA_EDGE_PORT:-19100}"
+  local object_storage_edge_port="${LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT:-19130}"
   # user-service 直连健康探针（wait_local_gamma_host_ready）使用 user_port，必须同步开隧道，
   # 否则 colima 下 host 无法直达 user-service 发布端口，host 就绪探测会卡死。
   local user_port="${LOCAL_GAMMA_USER_PORT:-19210}"
@@ -369,7 +398,7 @@ start_colima_tunnels_if_needed() {
   stop_colima_tunnels
   colima ssh-config > "$ssh_config"
   : > "$tunnel_pid_file"
-  for port in "$http_port" "$product_ops_port" "$media_edge_port" "$user_port"; do
+  for port in "$http_port" "$product_ops_port" "$media_edge_port" "$object_storage_edge_port" "$user_port"; do
     if host_port_open "$port"; then
       continue
     fi
@@ -872,16 +901,22 @@ service:
 YAML
 }
 
+verify_canonical_video_materialization() {
+  python3 "$ROOT/quwoquan_ops/cli/lib/local_gamma_media.py" \
+    verify --target-root "$LOCAL_GAMMA_MEDIA_ROOT"
+}
+
 prepare_media_root() {
   local media="${LOCAL_GAMMA_MEDIA_ROOT}"
   local canonical_media_root="$ROOT/quwoquan_service/contracts/metadata/_shared/test_fixtures/media"
   local required_sample="$media/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png"
   local required_avatar="$media/media/avatar/s/archived-avatar/circle/fixture_circle_coffee_04/v1/avatar.png"
-  local required_video="$media/media/video/s/archived-video/beta-sample.mp4"
+  local required_video="$media/media/video/s/video-primary-0001/post/video-content-0001/source.mp4"
   local media_file_count=0
   if [[ -d "$media/media" ]]; then
     media_file_count="$(find "$media/media" -type f | wc -l | tr -d '[:space:]')"
     if [[ -f "$required_sample" && -f "$required_avatar" && -f "$required_video" && "$media_file_count" -ge 1000 ]]; then
+      verify_canonical_video_materialization
       echo "[local-gamma] reuse pre-synced full shared media bundle: $media"
       return 0
     fi
@@ -893,8 +928,8 @@ prepare_media_root() {
     return 1
   fi
   if [[ -d "$canonical_media_root" ]]; then
-    mkdir -p "$media"
-    cp -R "$canonical_media_root/." "$media/"
+    python3 "$ROOT/quwoquan_ops/cli/lib/local_gamma_media.py" \
+      materialize --target-root "$media"
     return 0
   fi
   echo "[local-gamma] FAIL: curated gamma media bundle is unavailable; sync ${LOCAL_GAMMA_MEDIA_ROOT} first" >&2
@@ -920,7 +955,10 @@ PY
   python3 "$ROOT/quwoquan_app/scripts/env/print_app_env_dart_defines.py" \
     --env "$LOCAL_GAMMA_APP_ENV" \
     --gateway-base-url "$GATEWAY_BASE_URL" \
-    --media-base-url "$MEDIA_BASE_URL"
+    --media-avatar-base-url "$MEDIA_AVATAR_BASE_URL" \
+    --media-image-base-url "$MEDIA_IMAGE_BASE_URL" \
+    --media-video-base-url "$MEDIA_VIDEO_BASE_URL" \
+    --media-upload-base-url "$MEDIA_UPLOAD_BASE_URL"
 }
 
 preflight_local_gamma_inputs() {
@@ -1052,6 +1090,7 @@ fi
 if [[ "$down" == "1" ]]; then
   stop_colima_tunnels
   docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" down
+  cleanup_stale_named_gamma_containers
   rm -f "$stack_report"
   exit 0
 fi
@@ -1289,6 +1328,12 @@ if [[ "$podman_compose" == "1" ]]; then
     -e MONGO_URI=mongodb://mongodb:27017 \
     -e POSTGRES_DSN='postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable' \
     -e PRODUCT_OPS_REDIS_REC_ADDR=redis:6379 -e PRODUCT_OPS_REDIS_GENERAL_ADDR=redis:6379 \
+    -e PRODUCT_OPS_SLS_REGION="${PRODUCT_OPS_SLS_REGION:?PRODUCT_OPS_SLS_REGION is required}" \
+    -e PRODUCT_OPS_SLS_ENDPOINT="${PRODUCT_OPS_SLS_ENDPOINT:?PRODUCT_OPS_SLS_ENDPOINT is required}" \
+    -e PRODUCT_OPS_SLS_PROJECT="${PRODUCT_OPS_SLS_PROJECT:?PRODUCT_OPS_SLS_PROJECT is required}" \
+    -e ALIBABA_CLOUD_ACCESS_KEY_ID="${ALIBABA_CLOUD_ACCESS_KEY_ID:?ALIBABA_CLOUD_ACCESS_KEY_ID is required}" \
+    -e ALIBABA_CLOUD_ACCESS_KEY_SECRET="${ALIBABA_CLOUD_ACCESS_KEY_SECRET:?ALIBABA_CLOUD_ACCESS_KEY_SECRET is required}" \
+    -e ALIBABA_CLOUD_SECURITY_TOKEN="${ALIBABA_CLOUD_SECURITY_TOKEN:-}" \
     -e AUTH_JWT_SECRET="${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}" \
     -e AUTH_JWT_ISSUER="${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}" \
     -e AUTH_JWT_AUDIENCE="${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}" \
@@ -1486,6 +1531,10 @@ if [[ "$podman_compose" == "1" ]]; then
     -e CONFIG_ROOT=/etc/qwq-config -e CONFIG_VERSION="$CONFIG_VERSION" \
     -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" \
     -e ENTITY_MONGO_URI=mongodb://mongodb:27017 -e ENTITY_MONGO_DATABASE=quwoquan_entity \
+    -e AUTH_JWT_SECRET="${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}" \
+    -e AUTH_JWT_ISSUER="${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}" \
+    -e AUTH_JWT_AUDIENCE="${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}" \
+    -e AUTH_JWT_TOKEN_VERSION="${AUTH_JWT_TOKEN_VERSION:?AUTH_JWT_TOKEN_VERSION is required}" \
     -e SEARCH_ES_ENABLED=true -e SEARCH_ES_ENDPOINTS=http://elasticsearch:9200 \
     -v "${LOCAL_GAMMA_CONFIG_ROOT}:/etc/qwq-config:ro" \
     -p "${LOCAL_GAMMA_ENTITY_PORT:-19290}:18084" \
@@ -1529,6 +1578,7 @@ else
   echo "[local-gamma] startup mode: compose-up"
   # Recreate the local mirror on every gate run so changed host port envs take effect.
   "${compose_cmd[@]}" down --remove-orphans >/dev/null 2>&1 || true
+  cleanup_stale_named_gamma_containers
   # 本地进程中断时 Caddy 可能留下半写入的证书锁。此处代理已停止，
   # 可安全清理过期签发锁，同时保留本地 CA 与已签发证书。
   if docker volume inspect quwoquan_service_local-gamma-caddy-data >/dev/null 2>&1; then
@@ -1602,9 +1652,10 @@ else
     fi
     echo "[local-gamma] compose left ${created_count} created-only containers; retrying once from the already-built images" >&2
     if ! "${compose_cmd[@]}" down --remove-orphans; then
-      echo "[local-gamma] WARN: failed to remove created-only compose runtime before retry" >&2
+      echo "[local-gamma] FAIL: failed to remove created-only compose runtime before retry" >&2
       return 1
     fi
+    cleanup_stale_named_gamma_containers
     for arg in "${retry_args[@]}"; do
       if [[ "$arg" == "--no-build" ]]; then
         has_no_build=1
@@ -1616,23 +1667,39 @@ else
     fi
     "${compose_cmd[@]}" "${retry_args[@]}"
   }
-  compose_up_failed=0
   if ! "${compose_cmd[@]}" "${compose_up_args[@]}"; then
     if retry_compose_up_after_created_only_failure; then
       echo "[local-gamma] compose created-only retry recovered startup"
     else
-      # Docker compose may return early while health checks are still converging.
-      # Keep the existing readiness probes as the final source of truth.
-      compose_up_failed=1
-      echo "[local-gamma] WARN: compose up reported a startup error; deferring to host readiness probes" >&2
+      echo "[local-gamma] FAIL: compose up failed; runtime readiness cannot be inferred from partial containers" >&2
+      exit 1
     fi
   fi
-  ensure_docker_gamma_proxy_started || true
+  ensure_docker_gamma_proxy_started
 fi
 start_colima_tunnels_if_needed
 ensure_public_hosts_mapping
 
 # docker compose 分支不会逐项 wait_healthy；在宣告就绪前用主机侧探测避免 T3/T4 撞到端口未监听。
+gamma_canonical_video_range_mime_ready() {
+  local host="$1"
+  local port="$2"
+  local probe=""
+  local status=""
+  local content_type=""
+  probe="$(
+    curl -kfsS \
+      --resolve "${host}:${port}:127.0.0.1" \
+      -H "Range: bytes=0-1" \
+      -o /dev/null \
+      -w '%{http_code}|%{content_type}' \
+      "https://${host}:${port}/media/video/s/video-primary-0001/post/video-content-0001/source.mp4"
+  )" || return 1
+  status="${probe%%|*}"
+  content_type="${probe#*|}"
+  [[ "$status" == "206" && "$content_type" == video/* ]]
+}
+
 wait_local_gamma_host_ready() {
   local gw="${GATEWAY_BASE_URL%/}"
   local gw_host="gamma-api.quwoquan-env.test"
@@ -1640,6 +1707,7 @@ wait_local_gamma_host_ready() {
   local product_ops_host="gamma-product-ops.quwoquan-env.test"
   local product_ops_public_port="${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}"
   local media_host="gamma-image.quwoquan-env.test"
+  local video_host="gamma-video.quwoquan-env.test"
   local media_edge_port="${LOCAL_GAMMA_MEDIA_EDGE_PORT:-19100}"
   local po_port="${LOCAL_GAMMA_PRODUCT_OPS_SERVICE_PORT:-19250}"
   local platform_ops_port="${LOCAL_GAMMA_PLATFORM_OPS_SERVICE_PORT:-19260}"
@@ -1648,7 +1716,7 @@ wait_local_gamma_host_ready() {
   local notification_port="${LOCAL_GAMMA_NOTIFICATION_PORT:-19320}"
   local deadline=$(( $(date +%s) + HOST_READY_TIMEOUT_SECONDS ))
   local last_gamma_proxy_retry=0
-  echo "[local-gamma] waiting for host probes (${HOST_READY_TIMEOUT_SECONDS}s): ${gw}/healthz + ${PRODUCT_OPS_BASE_URL%/}/healthz + ${MEDIA_BASE_URL%/}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png + http://127.0.0.1:${po_port}/healthz + http://127.0.0.1:${platform_ops_port}/healthz + http://127.0.0.1:${user_port}/healthz + http://127.0.0.1:${integration_port}/healthz + http://127.0.0.1:${notification_port}/healthz"
+  echo "[local-gamma] waiting for host probes (${HOST_READY_TIMEOUT_SECONDS}s): ${gw}/healthz + ${PRODUCT_OPS_BASE_URL%/}/healthz + ${MEDIA_BASE_URL%/}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png + ${MEDIA_VIDEO_BASE_URL%/}/media/video/s/video-primary-0001/post/video-content-0001/source.mp4(Range 206/video/*) + internal health"
   while (( $(date +%s) < deadline )); do
     if (( $(date +%s) - last_gamma_proxy_retry >= 15 )); then
       ensure_docker_gamma_proxy_started || true
@@ -1657,6 +1725,7 @@ wait_local_gamma_host_ready() {
     if curl -kfsS --resolve "${gw_host}:${gw_port}:127.0.0.1" "https://${gw_host}:${gw_port}/healthz" >/dev/null 2>&1 \
       && curl -kfsS --resolve "${product_ops_host}:${product_ops_public_port}:127.0.0.1" "https://${product_ops_host}:${product_ops_public_port}/healthz" >/dev/null 2>&1 \
       && curl -kfsS --resolve "${media_host}:${media_edge_port}:127.0.0.1" "https://${media_host}:${media_edge_port}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" >/dev/null 2>&1 \
+      && gamma_canonical_video_range_mime_ready "$video_host" "$media_edge_port" \
       && curl -fsS "http://127.0.0.1:${po_port}/healthz" >/dev/null 2>&1 \
       && curl -fsS "http://127.0.0.1:${platform_ops_port}/healthz" >/dev/null 2>&1 \
       && curl -fsS "http://127.0.0.1:${user_port}/healthz" >/dev/null 2>&1 \
@@ -1667,10 +1736,11 @@ wait_local_gamma_host_ready() {
     fi
     sleep 2
   done
-  echo "[local-gamma] FAIL: host cannot reach ${gw}/healthz, ${PRODUCT_OPS_BASE_URL%/}/healthz, ${MEDIA_BASE_URL%/}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png and internal health probes within ${HOST_READY_TIMEOUT_SECONDS}s" >&2
+  echo "[local-gamma] FAIL: host cannot reach the canonical media video Range/MIME surface or required health probes within ${HOST_READY_TIMEOUT_SECONDS}s" >&2
   curl -kfsS --resolve "${gw_host}:${gw_port}:127.0.0.1" "https://${gw_host}:${gw_port}/healthz" >&2 || true
   curl -kfsS --resolve "${product_ops_host}:${product_ops_public_port}:127.0.0.1" "https://${product_ops_host}:${product_ops_public_port}/healthz" >&2 || true
   curl -kfsS --resolve "${media_host}:${media_edge_port}:127.0.0.1" "https://${media_host}:${media_edge_port}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" >&2 || true
+  gamma_canonical_video_range_mime_ready "$video_host" "$media_edge_port" || true
   docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" ps >&2 || true
   curl -fsS "http://127.0.0.1:${integration_port}/healthz" >&2 || true
   curl -fsS "http://127.0.0.1:${notification_port}/healthz" >&2 || true
@@ -1708,10 +1778,6 @@ export_local_gamma_root_ca() {
   return 1
 }
 export_local_gamma_root_ca
-
-if [[ "${compose_up_failed:-0}" == "1" ]]; then
-  echo "[local-gamma] WARN: host probes recovered after compose startup reported an error" >&2
-fi
 
 seed_integration_location_data() {
   local mongo_port="${LOCAL_GAMMA_MONGO_PORT:-}"
@@ -1962,7 +2028,7 @@ def request_json(path: str) -> dict:
     )
 
 object_body = request_json(
-    f"/v1/content/intersections/object?objectId={person}&objectType=user&limit=8"
+    f"/content/intersections/object?objectId={person}&objectType=user&limit=8"
 )
 reasons = object_body.get("items") or []
 if not reasons:
@@ -1995,8 +2061,8 @@ if materialize.returncode != 0:
     print(materialize.stderr, file=sys.stderr)
     raise SystemExit(materialize.returncode)
 
-summary = request_json("/v1/content/intersections/summary")
-listing = request_json("/v1/content/intersections?limit=8")
+summary = request_json("/content/intersections/summary")
+listing = request_json("/content/intersections?limit=8")
 if int(summary.get("totalCount") or 0) <= 0:
     raise SystemExit(f"intersection summary remains empty: {summary}")
 if len(listing.get("items") or []) <= 0:
@@ -2028,7 +2094,7 @@ Path(report_path).write_text(
 print(json.dumps(report, ensure_ascii=False))
 PY
   then
-    echo "[local-gamma] GATE_BLOCK: intersection seed failed; /v1/content/intersections is unproven" >&2
+    echo "[local-gamma] GATE_BLOCK: intersection seed failed; /content/intersections is unproven" >&2
     return 1
   fi
   echo "[local-gamma] intersection seed completed (${report})"
@@ -2214,7 +2280,7 @@ if seed.returncode != 0:
 
 body = request_local_gamma_json(
     gateway,
-    path="/v1/content/feed?type=premium&limit=5",
+    path="/content/feed?type=premium&limit=5",
     session=session,
 )
 items = body.get("items") or []
@@ -2260,7 +2326,7 @@ fi
 
 # search-service 的 ES 召回读模型 cold-start：把已 seed 的内容（quwoquan_content.posts）
 # 经统一投影回填进共享 ES 索引 quwoquan_objects（与 search-service 查询同一索引）。
-# 这是检索读模型的环境 seed，与 tag/content seed 同级，保证 /v1/search 返回真实 hit。
+# 这是检索读模型的环境 seed，与 tag/content seed 同级，保证 /search 返回真实 hit。
 seed_search_index() {
   local es_port="${LOCAL_GAMMA_ES_PORT:-}"
   local mongo_port="${LOCAL_GAMMA_MONGO_PORT:-}"
@@ -2308,7 +2374,7 @@ PY
       --mongo-uri "mongodb://127.0.0.1:${mongo_port}/?directConnection=true" \
       --posts-db quwoquan_content --env gamma --batch-size 100 \
       --request-timeout "$LOCAL_GAMMA_SEARCH_BACKFILL_REQUEST_TIMEOUT" ); then
-    echo "[local-gamma] FAIL: search backfill failed; gamma startup is blocked because /v1/search would be incomplete" >&2
+    echo "[local-gamma] FAIL: search backfill failed; gamma startup is blocked because /search would be incomplete" >&2
     return 1
   fi
   echo "[local-gamma] search index backfill completed"

@@ -1,4 +1,3 @@
-version: 1
 aggregate: Post
 
 description: |
@@ -9,10 +8,10 @@ description: |
   feature_flags 为编译期常量（修改需发版）；
   预留 runtime_overridable: true 标记，便于未来接入 Remote Config 覆盖。
 
-# ── 〇、首页频道配置（运营可配置：端 meta 默认 + /v1/config/app 远程覆盖）─────────
+# ── 〇、首页频道配置（运营可配置：端 meta 默认 + /config/app 远程覆盖）─────────
 home_channels:
   # 首页频道（运营资产）：端 codegen 默认为发布自带 fallback；
-  # 运营经 GET /v1/config/app 的 content.home_channels 远程覆盖（不发版即可增删改频道）。
+  # 运营经 GET /config/app 的 content.home_channels 远程覆盖（不发版即可增删改频道）。
   # template 为端实现的有限频道模板类型；运营选模板 + 配 feed_query/mood_copy 参数。
   # feed_query 为首页频道取数真相源（端 toDiscoveryFeedQuery 优先消费；category 必填，
   # identity/type 可选）。template 为兼容字段；layout_template / phone_columns /

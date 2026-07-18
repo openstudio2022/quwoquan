@@ -301,7 +301,7 @@ VideoPostDto _videoPost({required int width, required int height}) {
     authorIdentityTags: const <String>['影像'],
     authorVerified: false,
     body: '视频画面下方的配文',
-    videoUrl: 'media/video/s/archived-video/beta-sample.mp4',
+    videoUrl: 'media/video/s/video-primary-0001/post/video-content-0001/source.mp4',
     thumbnailUrl:
         'media/image/s/archived-image/post/fixture_video_001/v1/cover.png',
     coverUrl:
@@ -533,7 +533,7 @@ void main() {
     );
   });
 
-  testWidgets('推荐卡片把头像、图片、视频统一投影为 secure local media candidates', (
+  testWidgets('推荐卡片把头像、图片、视频统一投影为注入媒体端点', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
@@ -558,13 +558,10 @@ void main() {
         avatarImages.single.imageUrlCandidates ?? const <String>[];
     expect(
       avatarCandidates,
-      containsAll(<String>[
-        'https://localhost:17100/media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png',
-        'https://127.0.0.1:17100/media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png',
+      <String>[
         'https://alpha-avatar.quwoquan-env.test:17100/media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png',
-      ]),
+      ],
     );
-    expect(avatarCandidates.join('\n'), isNot(contains('https://10.0.2.2')));
 
     final contentImages = tester
         .widgetList<AppCachedNetworkImage>(find.byType(AppCachedNetworkImage))
@@ -575,7 +572,7 @@ void main() {
       contentImages.any(
         (widget) =>
             widget.imageUrlCandidates?.contains(
-              'https://localhost:17100/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png',
+              'https://alpha-image.quwoquan-env.test:17100/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png',
             ) ??
             false,
       ),
@@ -588,16 +585,11 @@ void main() {
     final player = tester.widget<VideoPlayerWidget>(
       find.byType(VideoPlayerWidget),
     );
-    final videoCandidates = player.videoUrlCandidates ?? const <String>[];
     expect(
-      videoCandidates,
-      containsAll(<String>[
-        'https://localhost:17100/media/video/s/archived-video/beta-sample.mp4',
-        'https://127.0.0.1:17100/media/video/s/archived-video/beta-sample.mp4',
-        'https://alpha-video.quwoquan-env.test:17100/media/video/s/archived-video/beta-sample.mp4',
-      ]),
+      player.deliveryReference.url,
+      'https://alpha-video.quwoquan-env.test:17100/media/video/s/video-primary-0001/post/video-content-0001/source.mp4',
     );
-    expect(videoCandidates.join('\n'), isNot(contains('https://10.0.2.2')));
+    expect(player.deliveryReference.url, isNot(contains('https://10.0.2.2')));
   });
 
   testWidgets('首页推荐瀑布流不会把图片 cover 当成视频源初始化', (tester) async {
@@ -625,7 +617,7 @@ void main() {
       contentImages.any(
         (widget) =>
             widget.imageUrlCandidates?.contains(
-              'https://localhost:17100/$coverObjectKey',
+              'https://alpha-image.quwoquan-env.test:17100/$coverObjectKey',
             ) ??
             false,
       ),
@@ -662,9 +654,9 @@ void main() {
     expect(avatarImages, isNotEmpty);
     expect(
       avatarImages.first.imageUrlCandidates,
-      contains(
-        'https://localhost:17100/media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png',
-      ),
+      <String>[
+        'https://alpha-avatar.quwoquan-env.test:17100/media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png',
+      ],
     );
   });
 
@@ -725,6 +717,24 @@ void main() {
 
     expect(find.byKey(const ValueKey('home-feed-skeleton')), findsOneWidget);
     expect(find.byKey(const ValueKey('home-feed-empty')), findsNothing);
+  });
+
+  testWidgets('首页空白阻塞进入慢阶段时只在骨架屏下显示一次提示', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      _buildFeedScope(
+        notifier: _SlowLoadingFeedMapNotifier.new,
+        disableAnimations: true,
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('home-feed-skeleton')), findsOneWidget);
+    expect(find.byKey(const ValueKey('home_feed_slow_hint')), findsOneWidget);
+    expect(find.text(UITextConstants.requestWaitSlow), findsOneWidget);
+    expect(find.byType(CupertinoActivityIndicator), findsNothing);
   });
 
   testWidgets('任务A·空态：加载完成无内容展示运营兜底文案与再试', (tester) async {
@@ -1407,7 +1417,7 @@ void main() {
   ) async {
     final behaviorRepo = MockBehaviorRepository();
     final tracker = ContentBehaviorTracker(
-      repository: behaviorRepo,
+      reporter: behaviorRepo,
       maxBatchSize: 1,
       enablePeriodicFlush: false,
     );
@@ -1456,7 +1466,7 @@ void main() {
 
       final behaviorRepo = MockBehaviorRepository();
       final tracker = ContentBehaviorTracker(
-        repository: behaviorRepo,
+        reporter: behaviorRepo,
         maxBatchSize: 1,
         enablePeriodicFlush: false,
       );
@@ -1584,6 +1594,20 @@ class _LoadingFeedMapNotifier extends DiscoveryFeedMapNotifier {
   Map<String, AsyncValue<DiscoveryFeedState>> build() {
     return <String, AsyncValue<DiscoveryFeedState>>{
       'recommend': const AsyncLoading<DiscoveryFeedState>(),
+    };
+  }
+
+  @override
+  Future<void> load(String channelId, {bool force = false}) async {}
+}
+
+class _SlowLoadingFeedMapNotifier extends DiscoveryFeedMapNotifier {
+  @override
+  Map<String, AsyncValue<DiscoveryFeedState>> build() {
+    return <String, AsyncValue<DiscoveryFeedState>>{
+      'recommend': const AsyncData(
+        DiscoveryFeedState(isLoading: true, isSlow: true),
+      ),
     };
   }
 

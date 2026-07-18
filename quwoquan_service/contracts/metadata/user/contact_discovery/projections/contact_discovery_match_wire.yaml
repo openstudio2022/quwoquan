@@ -1,4 +1,3 @@
-version: 1
 read_model: ContactDiscoveryMatchWire
 
 description: |
@@ -22,55 +21,45 @@ client_projection:
       dart_type: String
       nullable: false
       source: hashedPhone
-      aliases: [hashedPhone, phoneHash]
       default: "''"
 
     - name: subAccountId
       dart_type: String
       nullable: false
       source: subAccountId
-      aliases: [subAccountId, userId]
       default: "''"
-      skip_empty_string_aliases: true
-
     - name: userHandle
       dart_type: String
       nullable: false
       source: userHandle
-      aliases: [userHandle, username, subAccountId]
       default: "''"
 
     - name: displayName
       dart_type: String
       nullable: false
       source: displayName
-      aliases: [displayName, nickname]
       default: "''"
 
     - name: avatarUrl
       dart_type: String
       nullable: true
       source: avatarUrl
-      aliases: [avatarUrl]
       default: "null"
 
     - name: avatarVersion
       dart_type: int
       nullable: false
       source: avatarVersion
-      aliases: [avatarVersion]
       default: "0"
 
     - name: region
       dart_type: String
       nullable: true
       source: region
-      aliases: [region]
       default: "null"
 
     - name: relationshipCapability
       dart_type: Map<String, dynamic>
       nullable: true
       source: relationshipCapability
-      aliases: [relationshipCapability]
       default: "null"

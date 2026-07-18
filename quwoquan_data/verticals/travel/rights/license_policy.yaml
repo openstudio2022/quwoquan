@@ -1,4 +1,4 @@
-schemaVersion: quwoquan.travel_license_policy.v1
+schema: quwoquan.travel_license_policy
 vertical: travel
 defaultAction: block
 discoveryPlatformRoles:

@@ -1,4 +1,3 @@
-version: 1
 domain: user
 aggregate_root: ProfileUpdateProposal
 object_kind: aggregate_root
@@ -10,10 +9,11 @@ business_rules:
   - target persona、source 与 proposedChanges 创建后不可变
   - proposedChanges 必须是允许字段的强类型 change set，不接受动态 Map
   - 只有 target persona owner 可以确认或拒绝
-  - apply 必须调用 Persona Command Facade，并记录目标 expectedVersion
+  - apply 必须先持久化 applying 检查点，再以提案快照中的目标 Persona version 幂等调用 Persona Command Facade
+  - applying 禁止 reject；进程崩溃后可从检查点安全续作，目标 Persona 版本失效则进入 expired
   - applied 与 rejected 为终态，重复命令返回同一 receipt
 lifecycle:
-  states: [pending, confirmed, applied, rejected, expired]
+  states: [pending, confirmed, applying, applied, rejected, expired]
   optimistic_concurrency: version
   idempotency: command_receipt
 ddd_layer_mapping:

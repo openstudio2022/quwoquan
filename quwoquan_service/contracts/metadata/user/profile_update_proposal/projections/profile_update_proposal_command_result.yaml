@@ -1,4 +1,3 @@
-version: 1
 read_model: ProfileUpdateProposalCommandResult
 
 description: ProfileUpdateProposal command 的稳定幂等回执，不回传 proposedChanges。

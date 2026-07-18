@@ -22,7 +22,7 @@ for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
 
 from core.io import read_json, write_json
 
-from content.post.evidence_text import clean_source_markdown, score_source_markdown
+from content.post.article.evidence_text import clean_source_markdown, score_source_markdown
 
 from core.paths import execution_root
 
@@ -39,10 +39,12 @@ from content.source.research.auto_plan_report import (  # noqa: E402
     _source_availability_summary,
 )
 from content.source.research.plan_state import (  # noqa: E402
-    _download_reject_memory,
     _image_window,
     _safe_collection_id,
     _source,
+)
+from content.source.research.reject_memory import (  # noqa: E402
+    _download_reject_memory,
     _source_reject_should_enter_memory,
 )
 from content.source.research.plan_reuse import _verified_homepage_sources_from_source_units  # noqa: E402

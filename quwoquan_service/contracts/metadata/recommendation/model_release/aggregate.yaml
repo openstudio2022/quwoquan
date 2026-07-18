@@ -1,4 +1,3 @@
-version: 1
 domain: recommendation
 aggregate_root: RecommendationModelRelease
 object_kind: aggregate_root

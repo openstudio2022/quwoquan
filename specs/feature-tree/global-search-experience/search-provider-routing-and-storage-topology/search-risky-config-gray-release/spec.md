@@ -30,7 +30,7 @@ Out of Scope:
 1. 发布配置必须有 `quwoquan_service/services/<service>/v*.yaml` 版本文件，并声明 `config.version / min_image_version / max_image_version`。
 2. 提交的配置不得包含真实 endpoint、password、token 或证书；端点和凭据仅由部署环境变量/secret 注入。
 3. `es.enabled=true` 只允许在 gamma/prod-sim/prod rollout stage 中通过 stackctl 验证后生效。
-4. Redis publish 是 best-effort，Redis 配置故障不得反压 `/v1/search` result 主路径。
+4. Redis publish 是 best-effort，Redis 配置故障不得反压 `/search` result 主路径。
 5. 高风险配置变更必须配套 acceptance 证据：package、health、verify、search smoke、feedback 202、故障/回滚演练。
 
 ## 灰度与回滚
@@ -45,7 +45,7 @@ Out of Scope:
   - `search_retrieve_load_shed_total` 或 `search_retrieve_inflight` 持续高位；
   - ES error / timeout / threadpool queue 持续超阈值；
   - Redis lag 超阈值影响推荐 freshness；
-  - `/v1/search` 结构化 5xx 或 degrade rate 超阈值。
+  - `/search` 结构化 5xx 或 degrade rate 超阈值。
 
 ## 验收重点
 

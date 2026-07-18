@@ -1,13 +1,8 @@
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_stats_wire_dto.dart';
 
-int _readStatsInt(
-  Map<String, dynamic> stats,
-  String a,
-  String b,
-  int fallback,
-) {
-  final v = stats[a] ?? stats[b];
+int _readStatsInt(Map<String, dynamic> stats, String key, int fallback) {
+  final v = stats[key];
   if (v is num) return v.toInt();
   if (v is String) {
     final p = int.tryParse(v.trim());
@@ -22,21 +17,15 @@ extension CircleStatsWireProjection on CircleStatsWireDto {
     final s = raw;
     final fb = circleFallback;
     return CircleStatsViewData(
-      members: _readStatsInt(
-        s,
-        'members',
-        'totalMembers',
-        fb?.memberCount ?? 0,
-      ),
-      posts: _readStatsInt(s, 'posts', 'totalPosts', fb?.postCount ?? 0),
-      discussions: _readStatsInt(s, 'discussions', 'totalDiscussions', 0),
+      members: _readStatsInt(s, 'memberCount', fb?.memberCount ?? 0),
+      posts: _readStatsInt(s, 'postCount', fb?.postCount ?? 0),
+      discussions: _readStatsInt(s, 'discussionCount', 0),
       weeklyActive: _readStatsInt(
         s,
-        'weeklyActive',
-        'active',
+        'weeklyActiveCount',
         fb?.weeklyActiveCount ?? 0,
       ),
-      likes: _readStatsInt(s, 'likes', 'totalLikes', 0),
+      likes: _readStatsInt(s, 'likeCount', 0),
     );
   }
 }

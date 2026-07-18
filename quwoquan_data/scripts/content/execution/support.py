@@ -1,4 +1,4 @@
-"""Shared external dependencies for decomposed workflow services."""
+"""Shared external dependencies for decomposed execution services."""
 from __future__ import annotations
 import argparse
 import copy
@@ -20,7 +20,7 @@ import tempfile
 from concurrent.futures import ThreadPoolExecutor, wait
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Sequence
-from core.control_types import ExecutionStage, StageKind, StageStatus
+from core.control_types import ExecutionStage, ExecutionStateStatus, StageKind, StageStatus
 from core.data_issue import (
     DataIssue,
     DataIssueCode,
@@ -73,7 +73,6 @@ from content.execution.recovery.download_hints import (
 from content.execution.context import (
     AUTO,
     CHECKPOINT,
-    DEFAULT_CODEX_AGENT_MODEL,
     DEFAULT_CURSOR_AGENT_MODEL,
     DEFAULT_MANAGED_AGENT_PROVIDER,
     DOWNLOAD_FETCH_ONLY_RETRY_LIMIT,
@@ -82,33 +81,32 @@ from content.execution.context import (
     _MANAGED_AGENT_SUBPROCESS_LOCK,
     _MANAGED_AGENT_SUBPROCESS_PIDS,
     MANAGED_AGENT_TIMEOUT_SECONDS,
-    MANAGED_CODEX_CLI_MAX_WORKERS,
     MANAGED_LANE_LIMITS,
     MANAGED_LOCAL_CURSOR_MAX_WORKERS,
     MANAGED_SCHEDULER_STALE_SECONDS,
     MAX_MANAGED_INFRA_RETRIES,
     MAX_REACT_REWINDS,
-    PIPELINE_STATE_VERSION,
     ExecutionContext,
     StageResult,
     stage_issues,
-    WORKFLOW_STATE_VERSION,
+    EXECUTION_STATE_CONTRACT,
     _CURSOR_BRIDGE_LAUNCH_COOLDOWN_SECONDS,
     _CURSOR_BRIDGE_READY_DELAY_SECONDS,
     _managed_local_cursor_worker_cap as _context_managed_local_cursor_worker_cap,
     _normalize_managed_agent_provider,
     _resolve_managed_model,
     _state_path,
-    _write_workflow_packet,
-    load_workflow_state,
-    save_workflow_state,
+    _write_execution_packet,
+    load_execution_state,
+    execution_state_status,
+    save_execution_state,
 )
+from content.execution.contracts import ExecutionState, ExecutionStateTransition
 from content.execution.active_spec import (
     active_spec as _active_spec,
     active_target as _active_target,
-    content_quota_int as _content_quota_int,
     entity_homepages_per_target as _entity_homepages_per_target,
-    is_homepage_only_workflow as _is_homepage_only_workflow,
+    is_homepage_only_execution as _is_homepage_only_execution,
 )
 from content.execution.target_integrity import (
     frozen_target_names,
@@ -198,7 +196,7 @@ _IMAGE_SOURCE_TEXT_NOISE_TOKENS = {
 }
 
 _MANAGED_LOCAL_DATA_CLI_MARKERS = (
-    "task geo-homepages",
+    "task execute",
     "data research-plan",
     "task scaled-e2e",
 )

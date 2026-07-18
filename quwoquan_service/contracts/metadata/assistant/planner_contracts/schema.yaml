@@ -2,10 +2,10 @@ dart_class: SlotFillPlanDto
 library_path: assistant/contracts/planner_contracts.dart
 output_path: assistant/generated/contracts/planner_contracts.g.dart
 contract: planner_contracts
-version: v1
 kind: runtime_protocol_contract
 fields:
   - name: entries
+    source: entries
     type: map<object>
     ref: slot_fill_entry
     default: {}
@@ -14,18 +14,23 @@ subcontracts:
     class_name: SlotFillEntry
     fields:
       - name: slotId
+        source: slotId
         type: string
         required: true
       - name: value
+        source: value
         type: any
       - name: source
+        source: source
         type: enum
         enum_ref: SlotSource
         default: ''
       - name: action
+        source: action
         type: enum
         enum_ref: SlotFillAction
         default: ''
       - name: confidence
+        source: confidence
         type: double
         default: 0.0

@@ -42,6 +42,16 @@ def payload_digest(release_root: Path) -> str:
     return str(tree_integrity_stats(root)["merkleRoot"])
 
 
+def object_closure_digest(release_root: Path, *, create: bool = False) -> str:
+    """Return the Merkle root of only the immutable selected object closure."""
+    root = payload_file(release_root, "objects")
+    if create:
+        root.mkdir(parents=True, exist_ok=True)
+    if not root.is_dir():
+        raise FileNotFoundError(f"release object closure is missing: {root}")
+    return str(tree_integrity_stats(root)["merkleRoot"])
+
+
 def required_payload_paths(release_root: Path) -> tuple[Path, ...]:
     return tuple(
         payload_file(release_root, name)
@@ -58,6 +68,7 @@ __all__ = [
     "RELEASE_HEADER",
     "SAMPLE_BUNDLE",
     "attestation_root",
+    "object_closure_digest",
     "payload_digest",
     "payload_file",
     "payload_root",

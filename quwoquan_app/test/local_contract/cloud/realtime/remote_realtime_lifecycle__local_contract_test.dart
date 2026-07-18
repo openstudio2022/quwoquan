@@ -15,7 +15,7 @@ void main() {
       currentUserIdResolver: () => 'user-42',
       authTokenProvider: const _TokenProvider(),
       config: const RealtimeConfig(
-        wsUrl: 'ws://127.0.0.1:18080/v1/realtime/ws',
+        wsUrl: 'ws://127.0.0.1:18080/realtime/ws',
         gatewayBaseUrl: 'http://127.0.0.1:17000',
         longPollHoldSec: 1,
       ),
@@ -58,7 +58,7 @@ void main() {
       currentUserIdResolver: () => 'user-42',
       authTokenProvider: const _TokenProvider(),
       config: const RealtimeConfig(
-        wsUrl: 'ws://127.0.0.1:18080/v1/realtime/ws',
+        wsUrl: 'ws://127.0.0.1:18080/realtime/ws',
         gatewayBaseUrl: 'http://127.0.0.1:17000',
         longPollHoldSec: 1,
       ),
@@ -108,7 +108,7 @@ void main() {
       currentUserIdResolver: () => 'user-42',
       authTokenProvider: const _TokenProvider(),
       config: const RealtimeConfig(
-        wsUrl: 'ws://127.0.0.1:18080/v1/realtime/ws',
+        wsUrl: 'ws://127.0.0.1:18080/realtime/ws',
         gatewayBaseUrl: 'http://127.0.0.1:17000',
         longPollHoldSec: 1,
       ),
@@ -163,7 +163,7 @@ void main() {
         currentUserIdResolver: () => '',
         authTokenProvider: const _TokenProvider(),
         config: const RealtimeConfig(
-          wsUrl: 'ws://127.0.0.1:18080/v1/realtime/ws',
+          wsUrl: 'ws://127.0.0.1:18080/realtime/ws',
           gatewayBaseUrl: 'http://127.0.0.1:17000',
           longPollHoldSec: 1,
         ),

@@ -51,6 +51,19 @@ func main() {
 	if err != nil && !os.IsNotExist(err) {
 		exitErr(err)
 	}
+	appPages, err := readAppPages(filepath.Join(metadataDir, "_shared", "app_pages.yaml"))
+	if err != nil {
+		exitErr(fmt.Errorf("read app_pages.yaml: %w", err))
+	}
+	telemetryCatalog, err := readTelemetryEventCatalog(
+		filepath.Join(metadataDir, "ops", "event_record", "event_catalog.yaml"),
+	)
+	if err != nil {
+		exitErr(fmt.Errorf("read telemetry event_catalog.yaml: %w", err))
+	}
+	if err := validateTelemetryMetadata(telemetryCatalog, appPages, appRoutes); err != nil {
+		exitErr(err)
+	}
 	searchContract, err := readSearchContract(filepath.Join(metadataDir, "_shared", "search_contract.yaml"))
 	if err != nil && !os.IsNotExist(err) {
 		exitErr(err)
@@ -92,7 +105,7 @@ func main() {
 	feedRoute := findRoute(service.APIRoutes, "GetFeed")
 	getPostRoute := findRoute(service.APIRoutes, "GetPost")
 	feedDefaultLimit := paginationLimitDefault(shared, 20)
-	writableFields := findWritableFields(service.APIRoutes, "CreatePost")
+	writableFields := findWritableFields(service.APIRoutes, "SubmitPostPublication")
 	likeRoutes := buildMutationRoutes(service.APIRoutes,
 		[]string{"LikePost", "UnlikePost", "FavoritePost", "UnfavoritePost"})
 
@@ -168,6 +181,16 @@ func main() {
 			renderSimpleErrorsDart("EntityErrorCode", "entity/homepage/errors.yaml", "主页服务异常，请稍后重试", entityErrs),
 		)
 	}
+	opsEventErrs, err := readErrors(
+		filepath.Join(metadataDir, "ops", "event_record", "errors.yaml"),
+	)
+	if err != nil {
+		exitErr(fmt.Errorf("read ops event-record errors: %w", err))
+	}
+	writeFile(
+		filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "ops", "ops_event_record_errors.g.dart"),
+		renderSimpleErrorsDart("OpsEventRecordErrorCode", "ops/event_record/errors.yaml", "启动诊断暂时不可用，请稍后重试", opsEventErrs),
+	)
 
 	// 3b. 生成 content_behaviors.g.dart（ContentBehaviorTracker）
 	if behDef, err := readBehaviors(filepath.Join(postDir, "behaviors.yaml")); err == nil {
@@ -398,6 +421,18 @@ func main() {
 			renderAppUISurfacesDart(uiSurfaces.Surfaces),
 		)
 	}
+	writeFile(
+		filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "ops", "app_telemetry_catalog.g.dart"),
+		renderAppTelemetryCatalogDart(telemetryCatalog),
+	)
+	writeFile(
+		filepath.Join(appDir, "lib", "app", "navigation", "generated", "app_pages.g.dart"),
+		renderAppPagesDart(appPages, appRoutes),
+	)
+	writeFile(
+		filepath.Join(appDir, "lib", "app", "navigation", "generated", "page_access_internal_routes.g.dart"),
+		renderPageAccessInternalRoutesDart(appPages),
+	)
 	if searchContract != nil {
 		writeFile(
 			filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "search", "search_contract.g.dart"),

@@ -50,7 +50,7 @@ def _master_file(province: str, city: str, districts: list[dict]) -> None:
     path.write_text(
         yaml.safe_dump(
             {
-                "schemaVersion": "quwoquan_data.discovery_seed/2",
+                "schema": "quwoquan_data.discovery_seed",
                 "country": "中国",
                 "province": province,
                 "city": city,
@@ -91,13 +91,13 @@ def _tag(ref: str, label: str) -> None:
 def _env_release(release_id: str, env: str, *, entities: list[str], dry_run: bool,
                  finished_at: str, mapping: dict[str, str] | None = None) -> None:
     write_json(RELEASE_ROOT / release_id / "payload" / "desired_state.json", {
-        "schemaVersion": "quwoquan_data.release_desired_state/1",
+        "schema": "quwoquan_data.release_desired_state",
         "releaseId": release_id,
         "desiredRefs": {"posts": [], "entities": entities},
     })
     run_dir = OUTPUT_ROOT / "env" / env / "runs" / "data-release" / release_id / "apply-1"
     write_json(run_dir / "import-homepage.json", {
-        "schemaVersion": "quwoquan_service.homepage_import_report/3",
+        "schema": "quwoquan_service.homepage_import_report",
         "env": env,
         "dryRun": dry_run,
         "mode": "upsert",
@@ -155,7 +155,7 @@ def _seed() -> None:
                  finished_at="2026-07-07T10:00:00Z",
                  mapping={"地点/景区/九寨沟": "homepage_9"})
     write_json(RELEASE_ROOT / "coverage-index" / "payload" / "desired_state.json", {
-        "schemaVersion": "quwoquan_data.release_desired_state/1",
+        "schema": "quwoquan_data.release_desired_state",
         "releaseId": "coverage-index",
         "desiredRefs": {"posts": [], "entities": ["地点/景区/九寨沟", "地点/景区/黄龙"]},
     })
@@ -224,7 +224,7 @@ def test_env_imports_use_latest_non_dry_run_and_expand_homepage_id():
     assert gamma["imported"] is True
     assert gamma["releaseId"] == "rel_apply"
     # v2 映射产物展开真实 homepageId；base 来自 environment_topology_manifest。
-    assert gamma["introductionUrl"].endswith("/v1/homepages/homepage_9/introduction")
+    assert gamma["introductionUrl"].endswith("/homepages/homepage_9/introduction")
     assert gamma["introductionUrl"].startswith("https://gamma-api.")
     assert jzg["envImports"]["prod"] == {"imported": False}
 

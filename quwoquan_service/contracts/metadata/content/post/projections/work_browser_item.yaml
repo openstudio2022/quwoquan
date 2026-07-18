@@ -37,255 +37,153 @@ client_projection:
   - article_entity_mention_dto.g.dart
   - work_browser_media_item_dto.g.dart
   fields:
-  - aliases:
-    - postId
-    - id
-    - _id
-    dart_type: String
+  - dart_type: String
     default: ''''''
     name: workId
     nullable: false
     source: postId
-  - aliases:
-    - contentType
-    - type
-    - category
-    dart_type: String
+  - dart_type: String
     default: ''''''
     name: workType
     nullable: false
     source: contentType
-  - aliases:
-    - contentIdentity
-    - identity
-    dart_type: String
+  - dart_type: String
     default: '''work'''
     name: workIdentity
     nullable: false
     source: contentIdentity
-  - aliases:
-    - title
-    dart_type: String
+  - dart_type: String
     default: 'null'
     name: title
     nullable: true
     source: title
-  - aliases:
-    - body
-    - description
-    - content
-    - caption
-    dart_type: String
+  - dart_type: String
     default: 'null'
     name: caption
     nullable: true
     source: body
-  - aliases:
-    - authorId
-    - userId
-    - author_id
-    dart_type: String
+  - dart_type: String
     default: ''''''
     name: authorId
     nullable: false
     source: authorId
-  - aliases:
-    - authorNickname
-    - displayName
-    - authorDisplayNameSnapshot
-    - nickname
-    - username
-    dart_type: String
+  - dart_type: String
     default: ''''''
     name: authorName
     nullable: false
-    source: authorNickname
-  - aliases:
-    - authorAvatarUrl
-    - avatarUrl
-    - authorAvatarUrlSnapshot
-    - avatar
-    dart_type: String
+    source: authorDisplayName
+  - dart_type: String
     default: ''''''
     name: authorAvatarUrl
     nullable: false
     source: authorAvatarUrl
-  - aliases:
-    - badge
-    - authorBadge
-    dart_type: String
+  - dart_type: String
     default: 'null'
     description: 作者认证角标（云侧快照，端不得本地推断）
     name: authorBadge
     nullable: true
     source: badge
-  - aliases:
-    - likeCount
-    - likesCount
-    - like_count
-    dart_type: int
+  - dart_type: int
     default: '0'
     name: likeCount
     nullable: false
     source: likeCount
-  - aliases:
-    - commentCount
-    - commentsCount
-    - comment_count
-    dart_type: int
+  - dart_type: int
     default: '0'
     name: commentCount
     nullable: false
     source: commentCount
-  - aliases:
-    - shareCount
-    - shares
-    - share_count
-    dart_type: int
+  - dart_type: int
     default: '0'
     name: shareCount
     nullable: false
     source: shareCount
-  - aliases:
-    - coverUrl
-    - cover
-    - thumbnail
-    - thumbnailUrl
-    dart_type: String
+  - dart_type: String
     default: ''''''
     name: coverUrl
     nullable: false
     source: coverUrl
-  - aliases:
-    - thumbnailUrl
-    - thumbnail
-    - coverUrl
-    - cover
-    dart_type: String
+  - dart_type: String
     default: ''''''
     description: 视频未播放态主封面；为空时回退 coverUrl
     name: thumbnailUrl
     nullable: false
     source: thumbnailUrl
-  - aliases:
-    - mediaUrls
-    - imageUrls
-    - images
-    - image_urls
-    dart_type: List<String>
+  - dart_type: List<String>
     default: <String>[]
     name: imageUrls
     nullable: false
     source: mediaUrls
-  - aliases:
-    - videoUrl
-    - video_url
-    dart_type: String
+  - dart_type: String
     default: 'null'
     name: videoUrl
     nullable: true
     source: videoUrl
-  - aliases:
-    - durationMs
-    - duration_ms
-    - duration
-    dart_type: int
+  - dart_type: int
     default: 'null'
     name: durationMs
     nullable: true
     source: durationMs
-  - aliases:
-    - width
-    - imageWidth
-    - w
-    dart_type: int
+  - dart_type: int
     default: 'null'
     name: width
     nullable: true
     source: width
-  - aliases:
-    - height
-    - imageHeight
-    - h
-    dart_type: int
+  - dart_type: int
     default: 'null'
     name: height
     nullable: true
     source: height
-  - aliases:
-    - mediaItems
-    dart_type: List<WorkBrowserMediaItemDto>
+  - dart_type: List<WorkBrowserMediaItemDto>
     list_element_dart_class: WorkBrowserMediaItemDto
     name: mediaItems
     nullable: false
     source: mediaItems
-  - aliases:
-    - articleMarkdown
-    dart_type: String
+  - dart_type: String
     default: 'null'
     name: articleMarkdown
     nullable: true
     source: articleMarkdown
-  - aliases:
-    - articleTemplate
-    dart_type: String
+  - dart_type: String
     default: 'null'
     name: articleTemplate
     nullable: true
     source: articleTemplate
-  - aliases:
-    - articleFontPreset
-    dart_type: String
+  - dart_type: String
     default: 'null'
     name: articleFontPreset
     nullable: true
     source: articleFontPreset
-  - aliases:
-    - articleRenderProfile
-    dart_type: Map<String, dynamic>
+  - dart_type: Map<String, dynamic>
     default: 'null'
     name: articleRenderProfile
     nullable: true
     source: articleRenderProfile
-  - aliases:
-    - contentVertical
-    - categoryId
-    - category
-    - vertical
-    dart_type: String
+  - dart_type: String
     default: 'null'
     description: 文章深色纸张系统适配垂类。
     name: contentVertical
     nullable: true
     source: contentVertical
-  - aliases:
-    - paperThemeMode
-    dart_type: String
+  - dart_type: String
     default: 'null'
     description: system/manual；可由 articleRenderProfile.paperThemeMode 冗余到顶层。
     name: paperThemeMode
     nullable: true
     source: paperThemeMode
-  - aliases:
-    - paperTexture
-    - articlePaperTexture
-    dart_type: String
+  - dart_type: String
     default: 'null'
     description: darkPaper/coolGray/warmBlack/inkGreen/deepBrown；手动选择或云侧推荐纸张。
     name: paperTexture
     nullable: true
     source: paperTexture
-  - aliases:
-    - entityMentions
-    dart_type: List<ArticleEntityMentionDto>
+  - dart_type: List<ArticleEntityMentionDto>
     default: <ArticleEntityMentionDto>[]
     list_element_dart_class: ArticleEntityMentionDto
     name: entityMentions
     nullable: false
     source: entityMentions
-  - aliases:
-    - intersectionReasons
-    dart_type: List<IntersectionReason>
+  - dart_type: List<IntersectionReason>
     default: 'null'
     list_element_dart_class: IntersectionReason
     name: intersectionReasons
@@ -309,4 +207,3 @@ description: 'Work Browser 作品呈现契约（V1.0）。统一沉浸式作品�
 
   '
 read_model: WorkBrowserItem
-version: 1

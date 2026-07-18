@@ -1,6 +1,7 @@
 import com.flutter.gradle.tasks.FlutterTask
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.net.URI
 import java.nio.charset.StandardCharsets
 import java.util.Base64
 
@@ -27,24 +28,73 @@ val deploymentWorkRoot =
     System.getenv("QWQ_DEPLOY_WORK_ROOT")?.takeIf { it.isNotBlank() }
         ?: System.getProperty("user.home") + "/.cache/quwoquan/deploy"
 val alphaLocalCaCert =
-    File(deploymentWorkRoot, "alpha-local/certificates/tls/ca/root.crt")
+    File(deploymentWorkRoot, "alpha-local/certificates/root.crt")
 val alphaLocalStackScript =
     repoRootDir.resolve("quwoquan_ops/cli/alpha/start_alpha_mock_stack.sh")
 val alphaLocalAdbReversePorts = listOf("17000", "17010", "17100")
-val alphaLocalDefaultDartDefines =
-    linkedMapOf(
-        "APP_RUNTIME_ENV" to "alpha",
-        "APP_DATA_SOURCE" to "mock",
-        "CLOUD_GATEWAY_BASE_URL" to "https://localhost:17000",
-        "APP_LEGAL_BASE_URL" to "https://localhost:17000/legal",
-        "MEDIA_AVATAR_CDN_BASE_URL" to "https://localhost:17100",
-        "MEDIA_IMAGE_CDN_BASE_URL" to "https://localhost:17100",
-        "MEDIA_VIDEO_CDN_BASE_URL" to "https://localhost:17100",
-        "MEDIA_UPLOAD_BASE_URL" to "https://localhost:17100",
-        "CONTRACT_FIXTURE_PROFILE" to "lite",
-        "APP_CURRENT_USER_ID" to "fixture_user_current",
-        "APP_INSTANCE_NAMESPACE" to "android-plain-flutter-run",
+val alphaLocalTransportDartDefineKeys =
+    setOf(
+        "CLOUD_GATEWAY_BASE_URL",
+        "APP_LEGAL_BASE_URL",
+        "MEDIA_AVATAR_CDN_BASE_URL",
+        "MEDIA_IMAGE_CDN_BASE_URL",
+        "MEDIA_VIDEO_CDN_BASE_URL",
+        "MEDIA_UPLOAD_BASE_URL",
     )
+
+fun loadRuntimePackageDartDefines(env: String): LinkedHashMap<String, String> {
+    val output = ByteArrayOutputStream()
+    exec {
+        workingDir = repoRootDir
+        commandLine(
+            "python3",
+            repoRootDir.resolve("quwoquan_app/scripts/env/print_app_env_dart_defines.py").absolutePath,
+            "--env",
+            env,
+            "--format",
+            "args",
+        )
+        standardOutput = output
+    }
+    val definitions = linkedMapOf<String, String>()
+    for (raw in output.toString(StandardCharsets.UTF_8.name()).lineSequence()) {
+        val define = raw.trim().removePrefix("--dart-define=")
+        val separator = define.indexOf("=")
+        if (separator > 0) {
+            definitions[define.substring(0, separator)] = define.substring(separator + 1)
+        }
+    }
+    check(definitions.containsKey("CLOUD_GATEWAY_BASE_URL")) {
+        "runtime package $env did not produce CLOUD_GATEWAY_BASE_URL"
+    }
+    return definitions
+}
+
+fun rewriteAlphaLocalTransport(rawUrl: String): String {
+    val parsed = URI(rawUrl)
+    check(parsed.scheme == "https" && parsed.port > 0) {
+        "alpha local transport requires an explicit HTTPS port: $rawUrl"
+    }
+    return URI(
+        parsed.scheme,
+        parsed.userInfo,
+        "localhost",
+        parsed.port,
+        parsed.path,
+        parsed.query,
+        parsed.fragment,
+    ).toASCIIString()
+}
+
+// 裸 Android Debug/Profile 仍以同一个环境包为入口；仅 transport 覆盖到 adb reverse
+// 的 localhost，避免把开发机域名硬编码为第二份配置。
+val alphaLocalDefaultDartDefines =
+    loadRuntimePackageDartDefines("alpha").apply {
+        alphaLocalTransportDartDefineKeys.forEach { key ->
+            put(key, rewriteAlphaLocalTransport(getValue(key)))
+        }
+        put("APP_INSTANCE_NAMESPACE", "android-plain-flutter-run")
+    }
 
 android {
     namespace = "com.quwoquan.quwoquan_app"
@@ -153,19 +203,40 @@ fun encodeDartDefines(defines: List<String>): String {
     }
 }
 
+fun requireCompleteRuntimeDartDefines(encoded: String?, taskName: String) {
+    val valuesByKey =
+        decodeDartDefines(encoded)
+            .mapNotNull { define ->
+                val separator = define.indexOf("=")
+                if (separator <= 0) {
+                    null
+                } else {
+                    define.substring(0, separator) to define.substring(separator + 1).trim()
+                }
+            }
+            .toMap()
+    val requiredKeys =
+        setOf(
+            "APP_RUNTIME_ENV",
+            "CLOUD_GATEWAY_BASE_URL",
+            "APP_LEGAL_BASE_URL",
+            "MEDIA_AVATAR_CDN_BASE_URL",
+            "MEDIA_IMAGE_CDN_BASE_URL",
+            "MEDIA_VIDEO_CDN_BASE_URL",
+            "MEDIA_UPLOAD_BASE_URL",
+        )
+    val missing = requiredKeys.filter { valuesByKey[it].isNullOrBlank() }
+    check(missing.isEmpty()) {
+        "Release Flutter build requires complete runtime dart-defines; missing " +
+            missing.joinToString(", ") +
+            ". Use quwoquan_app/scripts/env/print_app_env_dart_defines.py " +
+            "or a supported environment build entrypoint. task=$taskName"
+    }
+}
+
 // Plain `flutter run` alpha debug/profile only. Transport URL keys are force-
 // overwritten to localhost so stale `*.quwoquan-env.test` dart-defines cannot
 // reach the APK. beta/gamma/prod packages skip this entire merge.
-val alphaLocalTransportDartDefineKeys =
-    setOf(
-        "CLOUD_GATEWAY_BASE_URL",
-        "APP_LEGAL_BASE_URL",
-        "MEDIA_AVATAR_CDN_BASE_URL",
-        "MEDIA_IMAGE_CDN_BASE_URL",
-        "MEDIA_VIDEO_CDN_BASE_URL",
-        "MEDIA_UPLOAD_BASE_URL",
-    )
-
 fun mergeAlphaLocalDartDefines(encoded: String?): String {
     val defines = decodeDartDefines(encoded)
     val valuesByKey =
@@ -193,12 +264,21 @@ fun mergeAlphaLocalDartDefines(encoded: String?): String {
     return encodeDartDefines(mergedDefines)
 }
 
-tasks.withType<FlutterTask>().configureEach {
-    if (
-        name.contains("Debug", ignoreCase = true) ||
-            name.contains("Profile", ignoreCase = true)
-    ) {
-        dartDefines = mergeAlphaLocalDartDefines(dartDefines)
+// Flutter 插件在自身 afterEvaluate 中才创建并填充 FlutterTask。这里也在
+// afterEvaluate 之后合并，避免先写入的本地环境定义被插件的原始空值覆盖。
+afterEvaluate {
+    tasks.withType<FlutterTask>().configureEach {
+        if (
+            name.contains("Debug", ignoreCase = true) ||
+                name.contains("Profile", ignoreCase = true)
+        ) {
+            dartDefines = mergeAlphaLocalDartDefines(dartDefines)
+        }
+        if (name.contains("Release", ignoreCase = true)) {
+            doFirst {
+                requireCompleteRuntimeDartDefines(dartDefines, name)
+            }
+        }
     }
 }
 
@@ -334,12 +414,39 @@ val prepareLocalEnvDebugRes by tasks.registering {
     }
 }
 
+val verifyAndroidLocalAlphaCaSource by tasks.registering {
+    inputs.file(alphaLocalCaCert).optional()
+    inputs.dir(generatedLocalEnvDebugResDir)
+    dependsOn(prepareLocalEnvDebugRes)
+
+    doLast {
+        val configuredPath =
+            providers.environmentVariable(localEnvCaEnvVar).orElse("").get().trim()
+        if (configuredPath.isNotEmpty()) {
+            return@doLast
+        }
+        check(alphaLocalCaCert.isFile) {
+            "Android alpha debug CA must be the TLS proxy signing root: ${alphaLocalCaCert.absolutePath}"
+        }
+        val packagedRoot =
+            generatedLocalEnvDebugResDir
+                .get()
+                .dir("raw")
+                .file("local_env_debug_root.crt")
+                .asFile
+        check(packagedRoot.isFile && packagedRoot.readBytes().contentEquals(alphaLocalCaCert.readBytes())) {
+            "Android packaged local_env_debug_root.crt must exactly equal the alpha TLS proxy signing root"
+        }
+    }
+}
+
 tasks.matching { task ->
     task.name == "preDebugBuild" || task.name == "preProfileBuild"
 }.configureEach {
     dependsOn(prepareAndroidLocalAlphaStack)
     dependsOn(prepareAndroidLocalAdbReverse)
     dependsOn(prepareLocalEnvDebugRes)
+    dependsOn(verifyAndroidLocalAlphaCaSource)
 }
 
 val vendoredAndroidArtifactsDir =

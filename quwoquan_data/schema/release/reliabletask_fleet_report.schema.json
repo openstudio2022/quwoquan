@@ -3,7 +3,7 @@
   "$id": "quwoquan_data/schema/release/reliabletask_fleet_report.schema.json",
   "type": "object",
   "required": [
-    "schemaVersion",
+    "schema",
     "passed",
     "backend",
     "total",
@@ -20,29 +20,93 @@
   ],
   "additionalProperties": false,
   "properties": {
-    "schemaVersion": { "const": "quwoquan.reliabletask_fleet_report/1" },
-    "passed": { "type": "boolean" },
-    "backend": { "const": "mongodb+redis" },
-    "total": { "type": "integer", "minimum": 1 },
-    "succeeded": { "type": "integer", "minimum": 0 },
-    "controlPlaneTaskThroughputPerHour": { "type": "number", "minimum": 0 },
-    "acceptedContentThroughputPerHour": { "type": "number", "minimum": 0 },
-    "acceptedContentThroughputStatus": {
-      "enum": ["MEASURED", "GATE_BLOCK_NO_COMMERCIAL_BATCH"]
+    "passed": {
+      "type": "boolean"
     },
-    "automaticRecoveryRate": { "type": "number", "minimum": 0, "maximum": 1 },
-    "finalizedWithinStageBudgetRate": { "type": "number", "minimum": 0, "maximum": 1 },
-    "stageLatencyP99Ms": { "type": "integer", "minimum": 0 },
-    "workerUtilization": { "type": "number", "minimum": 0 },
-    "repairCount": { "type": "integer", "minimum": 0 },
-    "reasonedAbandonCount": { "type": "integer", "minimum": 0 },
-    "tokenCount": { "type": "integer", "minimum": 0 },
-    "costUsd": { "type": "number", "minimum": 0 },
-    "storageErrorCount": { "type": "integer", "minimum": 0 },
-    "queueLag": { "type": "integer", "minimum": 0 },
-    "duplicatePublishCount": { "type": "integer", "minimum": 0 },
-    "missingObjectCount": { "type": "integer", "minimum": 0 },
-    "idempotencyKey": { "const": "entity+carrier+sourceRevision" },
-    "completedAt": { "type": "string", "minLength": 1 }
+    "backend": {
+      "const": "mongodb+redis"
+    },
+    "total": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "succeeded": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "controlPlaneTaskThroughputPerHour": {
+      "type": "number",
+      "minimum": 0
+    },
+    "acceptedContentThroughputPerHour": {
+      "type": "number",
+      "minimum": 0
+    },
+    "acceptedContentThroughputStatus": {
+      "enum": [
+        "MEASURED",
+        "GATE_BLOCK_NO_COMMERCIAL_BATCH"
+      ]
+    },
+    "automaticRecoveryRate": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "finalizedWithinStageBudgetRate": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "stageLatencyP99Ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "workerUtilization": {
+      "type": "number",
+      "minimum": 0
+    },
+    "repairCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "reasonedAbandonCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "tokenCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "costUsd": {
+      "type": "number",
+      "minimum": 0
+    },
+    "storageErrorCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "queueLag": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "duplicatePublishCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "missingObjectCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "idempotencyKey": {
+      "const": "entity+carrier+sourceRevision"
+    },
+    "completedAt": {
+      "type": "string",
+      "minLength": 1
+    },
+    "schema": {
+      "const": "quwoquan.reliabletask_fleet_report"
+    }
   }
 }

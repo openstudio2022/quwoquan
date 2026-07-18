@@ -47,6 +47,8 @@ objects:
     authoritative_state:
     - _id
     - version
+    - publishIntentId
+    - localDraftId
     - authorId
     - creatorArchetype
     - creatorProfileVersion
@@ -59,7 +61,7 @@ objects:
     - title
     - body
     - articleMarkdown
-    - articleMarkdownVersion
+    - markdownDialect
     - articleMarkdownDigest
     - contentVertical
     - status
@@ -126,20 +128,21 @@ objects:
     - _id
     version_field: version
     version_source: field
+  local_identity_reasons:
+    localDraftId: 端侧草稿在所属作者内的稳定去重键，不是 Post 聚合主身份
+    publishIntentId: 一次发布意图在所属作者内的永久幂等键，不是 Post 聚合主身份
+    sourceTaskId: immutable correlation or idempotency key scoped to this fact or command; it is not a business-object reference
   invariant_refs:
   - content/post/aggregate.yaml#business_rules
   lifecycle_refs:
   - content/post/aggregate.yaml#lifecycle
   member_bounds: {}
   mutation_entrypoints:
-  - BindMediaAssetsToPost
-  - CreatePost
   - DeletePost
   - GenerateArticleSummary
   - PromotePostToWork
-  - PublishPost
   - ReportBehaviors
-  - UpdatePost
+  - SubmitPostPublication
   - UpdatePostSettings
   - UpdateProfileInteractionState
   object_kind: aggregate_root
@@ -203,8 +206,6 @@ objects:
   source_entity: Post
   storage_backend: mongodb
   storage_role: authoritative
-  local_identity_reasons:
-    sourceTaskId: immutable correlation or idempotency key scoped to this fact or command; it is not a business-object reference
 - access:
     commands: aggregate_facade
     cross_context: public_contract_only
@@ -329,6 +330,16 @@ objects:
     - accessPolicy
     - processingStatus
     - processingFailureReason
+    - processorProfile
+    - verifiedDurationMs
+    - videoWidth
+    - videoHeight
+    - videoCodec
+    - videoContainer
+    - videoPublicSliceKey
+    - coverPublicSliceKey
+    - previewTrackVersion
+    - previewTrackManifestSliceKey
     - coverStrategy
     - manualCoverAssetId
     - coverFrameTimeMs

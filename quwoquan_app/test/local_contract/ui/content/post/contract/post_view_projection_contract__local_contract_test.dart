@@ -15,17 +15,17 @@ import 'package:quwoquan_app/ui/content/services/post_view_projection.dart';
 /// 守护目标：
 /// - DTO 字段变更后，统一模型输出的强类型字段必须第一时间失败，不悄悄回归。
 /// - 覆盖"0→1 bug"：真实计数必须被忠实投射，不被归零后再 +1。
-/// - 覆盖别名兼容：旧字段名（likesCount/commentsCount/savesCount）须被正确归一。
+/// - 单轨拒旧键：likesCount/commentsCount/savesCount 不得被解析为计数。
 /// - 自包含 inline fixtures（不依赖 lib 端 mock data 类），契约数据由本文件就地构造。
 void main() {
   const Map<String, dynamic> minPhoto = {
-    'postId': 'ph1',
-    'contentType': 'image',
+    'id': 'ph1',
+    'type': 'image',
     'authorId': 'auth1',
     'displayName': '摄影师',
-    'authorAvatarUrl': 'media/avatar/s/test/content/ph1/v1/avatar.jpg',
+    'avatarUrl': 'media/avatar/s/test/content/ph1/v1/avatar.jpg',
     'coverUrl': 'media/image/s/test/content/ph1/v1/cover.jpg',
-    'mediaUrls': [
+    'imageUrls': [
       'media/image/s/test/content/ph1/v1/img1.jpg',
       'media/image/s/test/content/ph1/v1/img2.jpg',
     ],
@@ -38,11 +38,11 @@ void main() {
   };
 
   const Map<String, dynamic> minVideo = {
-    'postId': 'vd1',
-    'contentType': 'video',
+    'id': 'vd1',
+    'type': 'video',
     'authorId': 'vauth1',
     'displayName': '视频创作者',
-    'authorAvatarUrl': 'media/avatar/s/test/content/vd1/v1/avatar.jpg',
+    'avatarUrl': 'media/avatar/s/test/content/vd1/v1/avatar.jpg',
     'videoUrl': 'media/video/s/test/content/vd1/v1/video.mp4',
     'thumbnailUrl': 'media/image/s/test/content/vd1/v1/thumb.jpg',
     'width': 1080,
@@ -55,11 +55,11 @@ void main() {
   };
 
   const Map<String, dynamic> minArticle = {
-    'postId': 'art1',
-    'contentType': 'article',
+    'id': 'art1',
+    'type': 'article',
     'authorId': 'writer1',
     'displayName': '技术作者',
-    'authorAvatarUrl': 'media/avatar/s/test/content/art1/v1/avatar.jpg',
+    'avatarUrl': 'media/avatar/s/test/content/art1/v1/avatar.jpg',
     'title': '2026年技术趋势',
     'body': '这是文章内容，包含多段落...',
     'coverUrl': 'media/image/s/test/content/art1/v1/cover.jpg',
@@ -76,6 +76,8 @@ void main() {
   String resolvedAvatar(String raw) => resolveAvatarImageUrl(raw);
 
   String resolvedMedia(String raw) => resolveContentMediaUrl(raw);
+
+  String resolvedVideo(String raw) => resolveContentVideoUrl(raw);
 
   // ─────────────────────────────────────────────────────────────────────────
   // ContentSurfaceViewMapper.fromDto — 公共字段
@@ -105,10 +107,11 @@ void main() {
 
     test('authorBackgroundUrl 投射到 author.backgroundUrl', () {
       final raw = Map<String, dynamic>.from(minPhoto)
-        ..['authorBackgroundUrl'] = 'media/image/s/test/content/ph1/v1/bg.jpg';
+        ..['authorBackgroundUrl'] =
+            'media/background/s/test/content/ph1/v1/bg.jpg';
       expect(
         surfaceOf(raw).author.backgroundUrl,
-        equals(resolvedMedia('media/image/s/test/content/ph1/v1/bg.jpg')),
+        equals(resolvedMedia('media/background/s/test/content/ph1/v1/bg.jpg')),
       );
     });
 
@@ -140,13 +143,13 @@ void main() {
       expect(surfaceOf(raw).stats.like, equals(999999));
     });
 
-    test('别名输入 likesCount 也能正确投射', () {
+    test('拒绝 likesCount/commentsCount/savesCount alias，只认 canonical 计数', () {
       final raw = <String, dynamic>{
-        'postId': 'alias1',
-        'contentType': 'image',
+        'id': 'alias1',
+        'type': 'image',
         'authorId': 'a',
         'displayName': 'A',
-        'authorAvatarUrl': '',
+        'avatarUrl': '',
         'coverUrl': '',
         'likesCount': 200,
         'commentsCount': 10,
@@ -154,21 +157,17 @@ void main() {
         'publishedAt': '2025-01-01T00:00:00Z',
       };
       final r = surfaceOf(raw);
-      expect(
-        r.stats.like,
-        equals(200),
-        reason: 'likesCount alias 必须被 DTO 正确归一',
-      );
-      expect(r.stats.comment, equals(10));
+      expect(r.stats.like, equals(0), reason: 'likesCount alias 必须被拒绝，不得归一');
+      expect(r.stats.comment, equals(0));
     });
 
     test('计数字段缺失时默认为 0，不抛异常', () {
       final raw = <String, dynamic>{
-        'postId': 'no_counts',
-        'contentType': 'image',
+        'id': 'no_counts',
+        'type': 'image',
         'authorId': 'a',
         'displayName': 'A',
-        'authorAvatarUrl': '',
+        'avatarUrl': '',
         'coverUrl': '',
         'publishedAt': '2025-01-01T00:00:00Z',
       };
@@ -202,7 +201,7 @@ void main() {
       final r = surfaceOf(minVideo);
       expect(
         r.video?.url,
-        equals(resolvedMedia('media/video/s/test/content/vd1/v1/video.mp4')),
+        equals(resolvedVideo('media/video/s/test/content/vd1/v1/video.mp4')),
       );
       expect(
         r.video?.thumbnailUrl,
@@ -237,15 +236,15 @@ void main() {
     });
   });
 
-  group('ContentSurfaceViewMapper.fromDto 异常兜底', () {
-    test('空 map 不抛异常，返回 ContentSurfaceView', () {
-      expect(surfaceOf(const {}), isA<ContentSurfaceView>());
+  group('ContentSurfaceViewMapper.fromDto 异常边界', () {
+    test('空 map 缺少 contentType 时显式拒绝', () {
+      expect(() => surfaceOf(const {}), throwsArgumentError);
     });
 
-    test('仅含无效字段也不抛异常', () {
+    test('仅含无效字段时显式拒绝', () {
       expect(
         () => surfaceOf(<String, dynamic>{'unknown': 'value'}),
-        returnsNormally,
+        throwsArgumentError,
       );
     });
   });
@@ -320,7 +319,7 @@ void main() {
               'asset://fig1\n'
               ':::\n';
         raw['articleAssetManifest'] = <String, dynamic>{
-          'schemaVersion': 1,
+          'schema': 'article-asset-manifest',
           'assets': <Map<String, dynamic>>[
             {
               'assetId': 'cover',
@@ -432,7 +431,7 @@ void main() {
           '---\n'
           'title: 成都出发峨眉山周末自驾周末短途（夏季）\n'
           'template: journal\n'
-          'articleMarkdownVersion: qwq-rich-md/1\n'
+          'markdownDialect: qwq-rich-md\n'
           'coverImage: asset://data_asset_media_image_post_chuanxi_v2__________v1_cover_jpg\n'
           '---\n\n'
           '# 成都出发峨眉山周末自驾周末短途（夏季）\n\n'
@@ -448,12 +447,12 @@ void main() {
           ':::\n';
       final raw = Map<String, dynamic>.from(minArticle)
         ..['articleMarkdown'] = dataArticleMarkdown
-        ..['articleMarkdownVersion'] = 'qwq-rich-md/1'
+        ..['markdownDialect'] = 'qwq-rich-md'
         ..['articleTemplate'] = 'journal'
         ..['articleFontPreset'] = 'clean'
         ..['articleAssetManifest'] = <String, dynamic>{
-          'schemaVersion': 1,
-          'articleMarkdownVersion': 'qwq-rich-md/1',
+          'schema': 'article-asset-manifest',
+          'markdownDialect': 'qwq-rich-md',
           'articleMarkdownDigest': 'sha256:test',
           'assets': <Map<String, dynamic>>[
             {
@@ -462,7 +461,7 @@ void main() {
               'kind': 'image',
               'scope': 'cold_start',
               'objectKey':
-                  'media/image/s/archived-image/post/chuanxi_v2_峨眉山周末_自驾/v1/cover.jpg',
+                  'media/image/s/archived-image/post/chuanxi-v2-emeishan-weekend/v1/cover.jpg',
               'caption': '封面',
             },
             {
@@ -471,7 +470,7 @@ void main() {
               'kind': 'image',
               'scope': 'cold_start',
               'objectKey':
-                  'media/image/s/archived-image/post/chuanxi_v2_峨眉山周末_自驾/v1/detail_2.jpg',
+                  'media/image/s/archived-image/post/chuanxi-v2-emeishan-weekend/v1/detail-2.jpg',
               'caption': '配图2',
             },
           ],
@@ -497,7 +496,7 @@ void main() {
             .map((node) => node.imageUrl),
         contains(
           resolvedMedia(
-            'media/image/s/archived-image/post/chuanxi_v2_峨眉山周末_自驾/v1/cover.jpg',
+            'media/image/s/archived-image/post/chuanxi-v2-emeishan-weekend/v1/cover.jpg',
           ),
         ),
       );
@@ -511,13 +510,13 @@ void main() {
   // ──────────────────────────────────────────────────────────────────
   group('MicroPostDto 投影契约', () {
     final momentWithImages = <String, dynamic>{
-      'postId': 'moment_01',
-      'contentType': 'micro',
+      'id': 'moment_01',
+      'type': 'micro',
       'authorId': 'u99',
-      'authorNickname': '小趣',
-      'authorAvatarUrl': 'media/avatar/s/test/content/moment_01/v1/avatar.jpg',
+      'displayName': '小趣',
+      'avatarUrl': 'media/avatar/s/test/content/moment_01/v1/avatar.jpg',
       'body': '今天天气真好 ☀️',
-      'mediaUrls': [
+      'imageUrls': [
         'media/image/s/test/content/moment_01/v1/img1.jpg',
         'media/image/s/test/content/moment_01/v1/img2.jpg',
       ],
@@ -528,13 +527,13 @@ void main() {
     };
 
     final momentWithVideo = <String, dynamic>{
-      'postId': 'moment_02',
-      'contentType': 'micro',
+      'id': 'moment_02',
+      'type': 'micro',
       'authorId': 'u88',
-      'authorNickname': '视频君',
-      'authorAvatarUrl': 'media/avatar/s/test/content/moment_02/v1/avatar.jpg',
+      'displayName': '视频君',
+      'avatarUrl': 'media/avatar/s/test/content/moment_02/v1/avatar.jpg',
       'body': '短视频时刻',
-      'mediaUrls': <String>[],
+      'imageUrls': <String>[],
       'videoUrl': 'media/video/s/test/content/moment_02/v1/moment_video.mp4',
       'durationMs': 8000,
       'likeCount': 12,

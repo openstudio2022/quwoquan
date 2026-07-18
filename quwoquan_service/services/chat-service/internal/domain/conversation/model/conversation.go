@@ -16,7 +16,7 @@ var (
 
 // Conversation is the aggregate root for the chat domain.
 type Conversation struct {
-	ID                    string    `json:"_id" bson:"_id"`
+	ID                    string    `json:"id" bson:"_id"`
 	Type                  string    `json:"type" bson:"type"`
 	Title                 string    `json:"title" bson:"title"`
 	AvatarUrl             string    `json:"avatarUrl" bson:"avatarUrl"`
@@ -46,7 +46,7 @@ type Conversation struct {
 
 // ConversationMember tracks membership in a conversation (independent collection for scale).
 type ConversationMember struct {
-	ID               string    `json:"_id" bson:"_id"`
+	ID               string    `json:"id" bson:"_id"`
 	ConversationId   string    `json:"conversationId" bson:"conversationId"`
 	UserId           string    `json:"userId" bson:"userId"`
 	DisplayName      string    `json:"displayName" bson:"displayName"`
@@ -62,7 +62,7 @@ type ConversationMember struct {
 
 // ConversationUserState holds per-user conversation state (readSeq, unread, mute, pin).
 type ConversationUserState struct {
-	ID                 string    `json:"_id" bson:"_id"`
+	ID                 string    `json:"id" bson:"_id"`
 	UserId             string    `json:"userId" bson:"userId"`
 	ConversationId     string    `json:"conversationId" bson:"conversationId"`
 	ReadSeq            int64     `json:"readSeq" bson:"readSeq"`

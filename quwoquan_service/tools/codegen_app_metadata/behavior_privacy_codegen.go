@@ -16,7 +16,7 @@ func renderContentBehaviorsDart(bf *behaviorsFile) string {
 		if ev.DartMethod != "" && ev.DedicatedRoute == "" {
 			trackedEvents = append(trackedEvents, ev)
 			if ev.BatchRoute != "" && batchRoute == "" {
-				// Extract path from "POST /v1/content/behaviors"
+				// Extract path from "POST /content/behaviors"
 				parts := strings.SplitN(ev.BatchRoute, " ", 2)
 				if len(parts) == 2 {
 					batchRoute = parts[1]
@@ -25,7 +25,7 @@ func renderContentBehaviorsDart(bf *behaviorsFile) string {
 		}
 	}
 	if batchRoute == "" {
-		batchRoute = "/v1/content/behaviors"
+		batchRoute = "/content/behaviors"
 	}
 
 	b.WriteString("// ignore: avoid_classes_with_only_static_members\n")
@@ -76,6 +76,8 @@ func renderContentBehaviorsDart(bf *behaviorsFile) string {
 				positional = append(positional, "double consumedRatio")
 			case "totalUnits":
 				positional = append(positional, "int totalUnits")
+			case "effectivePlayMs":
+				positional = append(positional, "int effectivePlayMs")
 			case "subjectId":
 				positional = append(positional, "String subjectId")
 			case "feedbackKind":

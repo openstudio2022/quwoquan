@@ -4,7 +4,7 @@ info:
     title: quwoquan search API
     version: v1
 paths:
-    /v1/search:
+    /search:
         post:
             operationId: SearchQuery
             x-contract-operation-id: search.query.SearchQuery
@@ -38,7 +38,7 @@ paths:
             security:
                 - bearerAuth: []
                 - {}
-    /v1/search/feedback:
+    /search/feedback:
         post:
             operationId: ReportSearchFeedback
             x-contract-operation-id: search.query.ReportSearchFeedback
@@ -67,7 +67,7 @@ paths:
             security:
                 - bearerAuth: []
                 - {}
-    /v1/search/recent:
+    /search/recent:
         get:
             operationId: ListRecentSearches
             x-contract-operation-id: search.recent_search_state.ListRecentSearches
@@ -115,7 +115,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/search/recent/{entryId}:
+    /search/recent/{entryId}:
         put:
             operationId: UpsertRecentSearch
             x-contract-operation-id: search.recent_search_state.UpsertRecentSearch

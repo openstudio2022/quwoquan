@@ -11,14 +11,15 @@
 | **架构约束** | [.cursor/rules/01-arch-constraints.mdc](../../.cursor/rules/01-arch-constraints.mdc) §2.4 表内「横向质量矩阵」行。 |
 | **命令** | `make verify-app-page-horizontal-quality`（矩阵 + 漏页/清单）；全量 `bash quwoquan_ops/gate/gate_repo.sh --scope app` 或根目录 `make gate`。 |
 | **门禁** | `quwoquan_ops/gate/gate_repo.sh` → `verify_page_horizontal_quality_matrix.py`、`verify_page_matrix_scan_complete.py`、`verify_metadata_driven_ui_gate.py` 等与 P2 同向脚本。 |
-| **流程** | 九会话规划见 `specs/.../page-horizontal-quality/nine-session-rollout-content.execution.planning.md`；**新增页**不等待 S1–S8 重跑，但须 **当 PR 满足 P1–P8 当前列** 或标 `○` 并备注债/Story。 |
+| **流程** | 历史九会话规划见 `specs/.../page-horizontal-quality/nine-session-rollout-content.execution.planning.md`；**新增页**不等待旧波次重跑，但须满足 P1–P9 当前列；P1–P8 可按既有规则标 `○`，P9 只能为 `✓` 或明确 `—`。 |
 
 ## 矩阵更新
 
-- [x] 已在 [`page-horizontal-quality-matrix.md`](../feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-matrix.md) **新增一行**或更新已有行（路径、领域、类型、**P1–P8**）。
-- [x] **P1–P8** 每项已填 **`✓` / `—` / `○`**（`○` = 待审计，专项合入前须收敛），**无空白**；`—` 已在「备注」列简要说明。
+- [x] 已在 [`page-horizontal-quality-matrix.md`](../feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-matrix.md) **新增一行**或更新已有行（路径、领域、类型、**P1–P9**）。
+- [x] **P1–P8** 已填 **`✓` / `—` / `○`**；**P9** 已填 **`✓` / `—`**，无 `○`；所有列无空白，`—` 已在备注说明。
+- [x] 2026-07-17 启动遥测改动已复核 `main_app_shell.dart`、`web_main_app_shell.dart` 与 `home_page.dart`：默认推荐内容首帧和欢迎遮罩移除共同决定首页可用，未改变 P1–P9 结论。
 
-## 维度快速核对（当前 P1–P8）
+## 维度快速核对（当前 P1–P9）
 
 - [x] **P1** iOS 根壳与材质符合规范；无违规 Material 根 Scaffold（见 `ios-native-page-enforcement`）。
 - [x] **P2** 云接口与模型来自 metadata codegen；无手写 path/operation 第二真相源。
@@ -28,6 +29,7 @@
 - [x] **P6** 浅色/深色可读可点或已登记豁免（S6）。
 - [x] **P7** 仅谈 **断点与版式**：`AppSpacing`/`responsiveValue`/登记宽度语义；**不与 token 混写**。
 - [x] **P8** 仅谈 **语义 token**：间距/字阶/圆角/色等；**不与断点策略混写**。
+- [x] **P9** 声明等待模式与真实 `request_wait_tests`；同一请求单一进度、6 秒前台出口、supersede/dispose 防旧响应回写均有证据。
 
 ## 各维置 ✓ 的最低证据（与门禁 / 脚本对齐）
 
@@ -41,6 +43,7 @@
 | **P6** | 双色下可读可点；或与 `dual-theme-page-coverage/page-dual-theme-matrix.md` 交叉引用 | 兄弟 L3 S6 |
 | **P7** | compact/regular/expanded 版式可用；优先 `AppSpacing.responsiveValue`、`feedMaxContentWidth` 等 | 与 `specs/02_IOS_NATIVE_FRONTEND_UX_SPEC.md` §2.7 一致 |
 | **P8** | 间距/字阶/圆角/色用语义 token，无魔法数体系 | `python3 quwoquan_app/scripts/runtime/verify_dart_semantic.py` 等 gate 脚本 |
+| **P9** | 异步等待与恢复；模式、阶段、取消、终态和页面证据同源 | `make verify-test-coverage-map` + request wait local_contract |
 
 ## Mock 与端云隔离（强制）
 

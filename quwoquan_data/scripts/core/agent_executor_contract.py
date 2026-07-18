@@ -111,7 +111,7 @@ def scan_agent_executor_contract(scripts_root: Path | None = None) -> list[str]:
     issues.extend(
         _require_substring(
             root,
-            "content/post/draft_io.py",
+            "content/post/article/draft_io.py",
             ('GENERATOR_AGENT = "agent"', "GENERATOR_PENDING"),
             "draft_io 必须冻结 agent/pending generator 契约",
         )

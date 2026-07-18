@@ -1,4 +1,3 @@
-version: 1
 aggregate: PersonaRelationship
 backend: postgres
 tables:

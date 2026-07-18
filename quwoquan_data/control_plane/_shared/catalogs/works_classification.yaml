@@ -1,4 +1,4 @@
-schemaVersion: quwoquan.works_classification.v1
+schema: quwoquan.works_classification
 # 作品 vs 随记判定的版本化配置（唯一真相源）。
 # version 写入每条 WorksClassificationVerdict.thresholdsVersion，可审计、可回滚。
 # 改判定行为：改本文件 version + 阈值，再跑判定与门禁；禁止在代码里散落魔数阈值。
@@ -78,12 +78,12 @@ carrierRules:
   minImagesForImageWork: 4       # 可发布图 >= 此值且叙事稀薄 → image 作品
   lowNarrativeForImage: 1        # 叙事证据点 <= 此值视为叙事稀薄
 
-# ── 三形态配额（continuous supply / 站点全量分类入库的形态约束）──
+# ── 四载体分类权重（具体生产数量由 rollout/cold-start policy 唯一声明）──
 carrierQuotas:
   homepage: { minPerEntity: 1 }
   article: { weight: 0.50 }
   image: { weight: 0.30 }
-  video: { weight: 0.20, deferred: true }   # video 作品后置（Phase 5）
+  video: { weight: 0.20 }
 
 # ── 抽检采样率（门禁分层执行模型：软门抽检比例）──
 samplingRates:

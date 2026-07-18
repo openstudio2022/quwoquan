@@ -35,8 +35,8 @@ def verify_fonts(
     except (FileNotFoundError, ValueError) as exc:
         return [str(exc)]
 
-    if data.get("schemaVersion") != "bundled-fonts-manifest":
-        errors.append("manifest schemaVersion must be bundled-fonts-manifest")
+    if data.get("schema") != "bundled-fonts-manifest":
+        errors.append("manifest schema must be bundled-fonts-manifest")
 
     pubspec_path = pubspec_file if pubspec_file is not None else root / "pubspec.yaml"
     pubspec_text = _load_pubspec_text(pubspec_path)

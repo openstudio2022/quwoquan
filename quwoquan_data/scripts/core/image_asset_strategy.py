@@ -25,7 +25,6 @@ IMAGE_COUNT_POLICIES = {
 }
 
 COMMERCIAL_SCALE_TARGET_THRESHOLD = 100
-COMMERCIAL_SCALE_IMAGES_PER_TARGET_THRESHOLD = 2
 
 
 def _research(spec: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -143,7 +142,10 @@ def validate_image_asset_strategy(spec: Mapping[str, Any]) -> list[str]:
     return issues
 
 
-def image_asset_strategy_scale_issues(spec: Mapping[str, Any]) -> list[str]:
+def image_asset_strategy_scale_issues(
+    spec: Mapping[str, Any],
+    scale_proof: Mapping[str, Any] | None = None,
+) -> list[str]:
     """Return preflight blockers for image strategy at commercial batch scale.
 
     Open-license discovery remains valid for small trials and for entities that
@@ -163,45 +165,47 @@ def image_asset_strategy_scale_issues(spec: Mapping[str, Any]) -> list[str]:
     required_targets = max(len(declared_targets), int(acceptance.get("minEntities") or 0))
     strategy = image_asset_strategy(spec)
     count_policy = image_count_policy(spec)
+    configured_minimum = minimum_publishable_images_per_target(spec)
+    minimum_images_per_target = max(
+        configured_minimum,
+        per_target_images if count_policy == IMAGE_COUNT_POLICY_HARD_QUOTA else 0,
+    )
     if (
         required_targets < COMMERCIAL_SCALE_TARGET_THRESHOLD
-        or per_target_images < COMMERCIAL_SCALE_IMAGES_PER_TARGET_THRESHOLD
+        or (
+            per_target_images < 2
+            and minimum_images_per_target < 1
+        )
     ):
         return []
-
-    minimum_images_per_target = (
-        per_target_images
-        if count_policy == IMAGE_COUNT_POLICY_HARD_QUOTA
-        else minimum_publishable_images_per_target(spec)
-    )
     required_images = required_targets * minimum_images_per_target
     if strategy == OPEN_LICENSE_PUBLISH:
-        proof_field = "openLicenseScaleProof"
+        proof_file = "_shared/open_license_scale_proof.json"
         entity_count_field = "preScreenedEntityCount"
         required_text = (
-            "content.research.openLicenseScaleProof with "
+            f"execution evidence {proof_file} with "
             "{missing}; otherwise configure licensed_provider_publish with "
             "licensedImageProvider/licensedAssetPool or ai_generated_original with "
             "syntheticAssetProvider"
         )
     elif strategy == LICENSED_PROVIDER_PUBLISH:
-        proof_field = "licensedProviderScaleProof"
+        proof_file = "_shared/licensed_provider_scale_proof.json"
         entity_count_field = "licensedEntityCount"
         required_text = (
-            "content.research.licensedProviderScaleProof with "
+            f"execution evidence {proof_file} with "
             "{missing}; provider name alone is not sufficient for commercial image release"
         )
     elif strategy == AI_GENERATED_ORIGINAL:
-        proof_field = "syntheticScaleProof"
+        proof_file = "_shared/synthetic_scale_proof.json"
         entity_count_field = "generatedEntityCount"
         required_text = (
-            "content.research.syntheticScaleProof with "
+            f"execution evidence {proof_file} with "
             "{missing}; generation provider name alone is not sufficient for commercial image release"
         )
     else:
         return []
 
-    proof = research.get(proof_field) if isinstance(research.get(proof_field), Mapping) else {}
+    proof = scale_proof if isinstance(scale_proof, Mapping) else {}
     pre_screened_entities = int(
         (proof or {}).get(entity_count_field)
         or (proof or {}).get("scoredEntityCount")
@@ -223,6 +227,6 @@ def image_asset_strategy_scale_issues(spec: Mapping[str, Any]) -> list[str]:
         return []
     return [
         f"content.research.imageAssetStrategy={strategy} at commercial scale "
-        f"({required_targets} targets x {per_target_images} image works) requires "
+        f"({required_targets} targets x {minimum_images_per_target} required images) requires "
         + required_text.format(missing=", ".join(missing))
     ]

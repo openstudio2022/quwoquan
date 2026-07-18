@@ -21,7 +21,7 @@ export const productControlPlane = {
         {
           "method": "GET",
           "operation": "ListL1L4MetricSnapshots",
-          "path": "/v1/control-plane/product/metrics/l1l4",
+          "path": "/control-plane/product/metrics/l1l4",
           "scopes": [
             "ops.product.dashboard.read"
           ]
@@ -40,7 +40,7 @@ export const productControlPlane = {
         {
           "method": "GET",
           "operation": "GetModerationCase",
-          "path": "/v1/control-plane/product/moderation/cases/{caseId}",
+          "path": "/control-plane/product/moderation/cases/{caseId}",
           "scopes": [
             "ops.case.read"
           ]
@@ -48,7 +48,7 @@ export const productControlPlane = {
         {
           "method": "POST",
           "operation": "StartModerationReview",
-          "path": "/v1/control-plane/product/moderation/cases/{caseId}:startReview",
+          "path": "/control-plane/product/moderation/cases/{caseId}:startReview",
           "scopes": [
             "ops.case.write"
           ]
@@ -58,7 +58,7 @@ export const productControlPlane = {
           "danger_level": "high",
           "method": "POST",
           "operation": "ApplyEnforcementAction",
-          "path": "/v1/control-plane/product/moderation/cases/{caseId}:applyAction",
+          "path": "/control-plane/product/moderation/cases/{caseId}:applyAction",
           "scopes": [
             "ops.case.write"
           ]
@@ -77,7 +77,7 @@ export const productControlPlane = {
         {
           "method": "GET",
           "operation": "ListReports",
-          "path": "/v1/content/reports",
+          "path": "/content/reports",
           "scopes": [
             "ops.case.read"
           ]
@@ -85,7 +85,7 @@ export const productControlPlane = {
         {
           "method": "GET",
           "operation": "GetReport",
-          "path": "/v1/content/reports/{reportId}",
+          "path": "/content/reports/{reportId}",
           "scopes": [
             "ops.case.read"
           ]
@@ -93,7 +93,7 @@ export const productControlPlane = {
         {
           "method": "POST",
           "operation": "BeginReportReview",
-          "path": "/v1/content/reports/{reportId}/review",
+          "path": "/content/reports/{reportId}/review",
           "scopes": [
             "ops.case.write"
           ]
@@ -103,7 +103,7 @@ export const productControlPlane = {
           "danger_level": "high",
           "method": "PATCH",
           "operation": "ResolveReport",
-          "path": "/v1/content/reports/{reportId}",
+          "path": "/content/reports/{reportId}",
           "scopes": [
             "ops.case.write"
           ]
@@ -122,7 +122,7 @@ export const productControlPlane = {
         {
           "method": "GET",
           "operation": "GetRecoveryCase",
-          "path": "/v1/control-plane/product/recovery/cases/{caseId}",
+          "path": "/control-plane/product/recovery/cases/{caseId}",
           "scopes": [
             "ops.case.read"
           ]
@@ -132,7 +132,7 @@ export const productControlPlane = {
           "danger_level": "critical",
           "method": "POST",
           "operation": "SubmitRecoveryDecision",
-          "path": "/v1/control-plane/product/recovery/cases/{caseId}:submitDecision",
+          "path": "/control-plane/product/recovery/cases/{caseId}:submitDecision",
           "scopes": [
             "ops.case.approve"
           ]
@@ -151,7 +151,7 @@ export const productControlPlane = {
         {
           "method": "GET",
           "operation": "ListAppealCases",
-          "path": "/v1/control-plane/product/appeal/cases",
+          "path": "/control-plane/product/appeal/cases",
           "scopes": [
             "ops.case.read"
           ]
@@ -159,7 +159,7 @@ export const productControlPlane = {
         {
           "method": "GET",
           "operation": "GetAppealCase",
-          "path": "/v1/control-plane/product/appeal/cases/{caseId}",
+          "path": "/control-plane/product/appeal/cases/{caseId}",
           "scopes": [
             "ops.case.read"
           ]
@@ -169,7 +169,7 @@ export const productControlPlane = {
           "danger_level": "high",
           "method": "POST",
           "operation": "SubmitAppealDecision",
-          "path": "/v1/control-plane/product/appeal/cases/{caseId}:submitDecision",
+          "path": "/control-plane/product/appeal/cases/{caseId}:submitDecision",
           "scopes": [
             "ops.case.approve"
           ]
@@ -189,7 +189,7 @@ export const productControlPlane = {
           "contract_operation_id": "ops.experiment.ListExperiments",
           "method": "GET",
           "operation": "ListExperiments",
-          "path": "/v1/control-plane/product/experiments",
+          "path": "/control-plane/product/experiments",
           "scopes": [
             "ops.experiment.read"
           ]
@@ -200,7 +200,7 @@ export const productControlPlane = {
           "danger_level": "high",
           "method": "POST",
           "operation": "UpdateExperimentRollout",
-          "path": "/v1/control-plane/product/experiments/{experimentId}:rollout",
+          "path": "/control-plane/product/experiments/{experimentId}:rollout",
           "scopes": [
             "ops.experiment.write"
           ]
@@ -219,7 +219,7 @@ export const productControlPlane = {
         {
           "method": "GET",
           "operation": "ListRecommendationPolicies",
-          "path": "/v1/control-plane/product/recommendation/policies",
+          "path": "/control-plane/product/recommendation/policies",
           "scopes": [
             "ops.reco.read"
           ]
@@ -227,7 +227,7 @@ export const productControlPlane = {
         {
           "method": "POST",
           "operation": "SimulateRecommendationPolicy",
-          "path": "/v1/control-plane/product/recommendation/policies/{policyId}:simulate",
+          "path": "/control-plane/product/recommendation/policies/{policyId}:simulate",
           "scopes": [
             "ops.reco.write"
           ]
@@ -237,7 +237,7 @@ export const productControlPlane = {
           "danger_level": "high",
           "method": "POST",
           "operation": "ActivateRecommendationPolicy",
-          "path": "/v1/control-plane/product/recommendation/policies/{policyId}:activate",
+          "path": "/control-plane/product/recommendation/policies/{policyId}:activate",
           "scopes": [
             "ops.reco.write"
           ]
@@ -248,7 +248,6 @@ export const productControlPlane = {
       "view_model": "RecommendationPolicy"
     }
   ],
-  "plane": "product-control-plane",
-  "version": 1
+  "plane": "product-control-plane"
 } as const;
 export type ProductControlPlane = typeof productControlPlane;

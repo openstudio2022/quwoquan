@@ -8,9 +8,9 @@ from typing import Any, Mapping
 from core.io import read_json, write_json
 from core.media_asset_url import build_release_media_manifest
 from core.paths import PUBLISH_ROOT
-from core.release_layout import payload_file
+from core.release_layout import payload_file, payload_root
 
-DESIRED_SCHEMA = "quwoquan_data.release_desired_state/1"
+DESIRED_SCHEMA = "quwoquan_data.release_desired_state"
 
 
 def _issue(code: str, message: str, ref: str = "") -> dict[str, str]:
@@ -33,7 +33,12 @@ def _safe_local_ref(ref: str) -> bool:
     return bool(ref) and not candidate.is_absolute() and ".." not in candidate.parts
 
 
-def _creator_issues(root: Path, ref: str) -> list[dict[str, str]]:
+def _creator_issues(
+    root: Path,
+    ref: str,
+    *,
+    media_root: Path | None = None,
+) -> list[dict[str, str]]:
     issues: list[dict[str, str]] = []
     if not _safe_local_ref(ref):
         return [_issue("unsafe_creator_ref", "creator desired ref 非法", ref)]
@@ -43,7 +48,7 @@ def _creator_issues(root: Path, ref: str) -> list[dict[str, str]]:
         return [_issue("desired_creator_missing", "creator object 不存在", ref)]
     header = read_json(header_path)
     if (
-        header.get("schemaVersion") != "quwoquan_data.creator_object/1"
+        header.get("schema") != "quwoquan_data.creator_object"
         or str(header.get("creatorId") or "") != Path(ref).name
     ):
         issues.append(_issue("creator_identity_mismatch", "creatorId/schema 与 desired ref 不一致", ref))
@@ -65,7 +70,7 @@ def _creator_issues(root: Path, ref: str) -> list[dict[str, str]]:
             issues.append(_issue("creator_profile_identity_mismatch", "profile.userId 与 creatorId 不一致", ref))
     assets_path = local_paths.get("assetsRef")
     if assets_path is not None:
-        issues.extend(_cas_issues(root, read_json(assets_path), ref))
+        issues.extend(_cas_issues(media_root or root, read_json(assets_path), ref))
     works_path = local_paths.get("worksRefsRef")
     if works_path is not None:
         for line_number, line in enumerate(works_path.read_text(encoding="utf-8").splitlines(), start=1):
@@ -119,7 +124,8 @@ def _load_object_manifest(root: Path, kind: str, ref: str) -> tuple[Path, dict[s
 def _release_media_issues(
     *,
     contract: Mapping[str, Any],
-    canonical: Path,
+    media_root: Path,
+    objects: Path,
     release_root: Path,
 ) -> list[dict[str, str]]:
     release_id = str(contract.get("releaseId") or "")
@@ -128,7 +134,8 @@ def _release_media_issues(
         release_id=release_id,
         post_refs=sorted({str(ref) for ref in desired.get("posts") or [] if str(ref).strip()}),
         entity_refs=sorted({str(ref) for ref in desired.get("entities") or [] if str(ref).strip()}),
-        publish_root=canonical,
+        object_root=objects,
+        media_root=media_root,
     )
     issues: list[dict[str, str]] = []
     for message in expected["issues"]:
@@ -137,8 +144,8 @@ def _release_media_issues(
     if not path.is_file():
         return issues
     actual = read_json(path)
-    if actual.get("schemaVersion") != "quwoquan_data.release_media_manifest/1":
-        issues.append(_issue("release_media_schema_invalid", "media_manifest schemaVersion 非法", release_id))
+    if actual.get("schema") != "quwoquan_data.release_media_manifest":
+        issues.append(_issue("release_media_schema_invalid", "media_manifest schema 非法", release_id))
     if str(actual.get("releaseId") or "") != release_id:
         issues.append(_issue("release_media_identity_mismatch", "media_manifest releaseId 不一致", release_id))
     actual_assets = actual.get("assets")
@@ -166,12 +173,14 @@ def scan_release_contract(
 ) -> dict[str, Any]:
     del metadata_root
     canonical = publish_root or PUBLISH_ROOT
+    objects = payload_file(release_root, "objects") if release_root is not None else canonical
+    media_root = payload_root(release_root) if release_root is not None else canonical
     issues: list[dict[str, str]] = []
-    if contract.get("schemaVersion") != DESIRED_SCHEMA:
+    if contract.get("schema") != DESIRED_SCHEMA:
         issues.append(
             _issue(
-                "legacy_release_contract_rejected",
-                f"只接受 {DESIRED_SCHEMA}；禁止 v1/v2 dual-read",
+                "release_contract_schema_invalid",
+                f"只接受 {DESIRED_SCHEMA}；禁止多合同读取",
             )
         )
     forbidden = {"env", "environment", "sampleRatio", "activatedAt", "importRun"}
@@ -184,6 +193,7 @@ def scan_release_contract(
     creators = sorted({str(ref) for ref in desired.get("creators") or []})
     tags = sorted({str(ref) for ref in desired.get("tags") or []})
     required_tags: set[str] = set()
+    required_creators: set[str] = set()
     actions = {
         (str(row.get("kind")), str(row.get("ref"))): row
         for row in contract.get("actions") or []
@@ -191,7 +201,7 @@ def scan_release_contract(
     }
     for kind, refs in (("posts", posts), ("entities", entities)):
         for ref in refs:
-            loaded = _load_object_manifest(canonical, kind, ref)
+            loaded = _load_object_manifest(objects, kind, ref)
             if loaded is None:
                 issues.append(_issue("desired_object_missing", f"{kind} object 不存在", ref))
                 continue
@@ -209,30 +219,39 @@ def scan_release_contract(
             if creator_refs_path.is_file():
                 creator_refs = read_json(creator_refs_path).get("creatorRefs") or []
                 for creator_ref in creator_refs:
-                    if not _creator_exists(canonical, str(creator_ref)):
+                    required_creators.add(str(creator_ref))
+                    if not _creator_exists(objects, str(creator_ref)):
                         issues.append(_issue("dangling_creator_ref", str(creator_ref), ref))
             tag_refs_path = object_root / str(manifest.get("tagRefsRef") or "")
             if tag_refs_path.is_file():
                 for tag_ref in read_json(tag_refs_path).get("tagRefs") or []:
                     tag_ref = str(tag_ref)
                     required_tags.add(tag_ref)
-                    if not _tag_exists(canonical, tag_ref):
+                    if not _tag_exists(objects, tag_ref):
                         issues.append(_issue("dangling_tag_ref", tag_ref, ref))
             asset_refs_path = object_root / str(manifest.get("assetRefsRef") or "")
             if asset_refs_path.is_file():
-                issues.extend(_cas_issues(canonical, read_json(asset_refs_path), ref))
+                issues.extend(_cas_issues(media_root, read_json(asset_refs_path), ref))
             action = actions.get((kind[:-1], ref)) or actions.get((kind, ref))
             if action is not None and not action.get("sourceHash"):
                 issues.append(_issue("missing_source_hash", "release action 缺少 sourceHash", ref))
     for ref in creators:
-        issues.extend(_creator_issues(canonical, ref))
-        header_path = canonical / "creators" / ref / "_creator.json"
+        issues.extend(_creator_issues(objects, ref, media_root=media_root))
+        header_path = objects / "creators" / ref / "_creator.json"
         if header_path.is_file():
             required_tags.update(
                 str(item)
                 for item in read_json(header_path).get("tagRefs") or []
                 if str(item).strip()
             )
+    if creators != sorted(required_creators):
+        issues.append(
+            _issue(
+                "release_creator_closure_mismatch",
+                "desiredRefs.creators 必须精确等于 desired consumer objects 的 creatorRefs 闭包",
+                ",".join(sorted(required_creators)),
+            )
+        )
     if tags != sorted(required_tags):
         issues.append(
             _issue(
@@ -242,24 +261,39 @@ def scan_release_contract(
             )
         )
     for ref in tags:
-        if not _tag_exists(canonical, ref):
+        if not _tag_exists(objects, ref):
             issues.append(_issue("desired_tag_missing", "tag snapshot 不存在", ref))
             continue
-        if release_root is not None:
-            release_snapshot = payload_file(release_root, f"objects/tags/{ref}/_definition.json")
-            canonical_snapshot = canonical / "tags" / ref / "_definition.json"
-            if not release_snapshot.is_file():
-                issues.append(_issue("release_tag_snapshot_missing", "release 缺 tag snapshot", ref))
-            elif release_snapshot.read_bytes() != canonical_snapshot.read_bytes():
-                issues.append(_issue("release_tag_snapshot_mismatch", "release tag snapshot 与 canonical 不一致", ref))
     if release_root is not None:
+        for kind, refs in (
+            ("posts", posts),
+            ("entities", entities),
+            ("creators", creators),
+            ("tags", tags),
+        ):
+            marker = "_creator.json" if kind == "creators" else (
+                "_definition.json" if kind == "tags" else "manifest.json"
+            )
+            for ref in refs:
+                object_ref = ref.removeprefix(f"{kind}/")
+                if not payload_file(
+                    release_root, f"objects/{kind}/{object_ref}/{marker}"
+                ).is_file():
+                    issues.append(
+                        _issue(
+                            "release_object_snapshot_missing",
+                            f"release 缺 {kind} object snapshot",
+                            ref,
+                        )
+                    )
         for name in ("release.json", "desired_state.json", "sample_bundle.json", "media_manifest.json", "index/objects.json"):
             if not payload_file(release_root, name).is_file():
                 issues.append(_issue("release_artifact_missing", name, str(release_root)))
         issues.extend(
             _release_media_issues(
                 contract=contract,
-                canonical=canonical,
+                media_root=media_root,
+                objects=objects,
                 release_root=release_root,
             )
         )
@@ -272,7 +306,7 @@ def scan_release_contract(
         if required and not (env_run_root / required).is_file():
             issues.append(_issue("environment_evidence_missing", required, str(env_run_root)))
     return {
-        "schemaVersion": "quwoquan_data.release_consistency_report/2",
+        "schema": "quwoquan_data.release_consistency_report",
         "releaseId": contract.get("releaseId"),
         "phase": phase,
         "status": "failed" if issues else "passed",

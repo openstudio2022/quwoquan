@@ -45,11 +45,11 @@
 
 | 页面面 | alpha 数据源 | beta/gamma 数据源 | 必测路径/方法 |
 |---|---|---|---|
-| 首页关注/精选 | `MockContentRepository` 从 `content_discovery_core` 初始化 | `RemoteContentRepository.listDiscoveryFeedPage` | `GET /v1/content/feed` |
-| 首页圈子/圈子列表 | `MockCircleRepository` 从 `circle_core` 与 `circle_home_feed_core` 初始化 | `RemoteCircleRepository.listCircles` + `listHomeCircleDiscoveryFeed` 聚合圈子 feed | `GET /v1/circles`、`GET /v1/circles/{circleId}/feed` |
-| 趣信消息 | `MockChatRepository` 从 `chat_core` 初始化 | `RemoteChatRepository.listInbox/listConversations/listMessages/listMembers` | `GET /v1/chat/inbox`、`GET /v1/chat/conversations`、`GET /v1/chat/conversations/{conversationId}/messages` |
-| 趣信联系人 | `chat_contacts_core` | `RemoteChatRepository.listContacts`，圈子/趣群 tab 由 `ListCircles/ListConversations` 派生 | `GET /v1/chat/contacts`、`GET /v1/circles`、`GET /v1/chat/conversations` |
-| 我的主页/作者主页 | `MockUserProfileRepository` 从 `user_profile_core/profile_feed_core` 初始化 | `RemoteUserProfileRepository`，当前用户由环境包 `runtime.currentUserId` 注入 | `GET /v1/me`、`GET /v1/user/{id}`、`GET /v1/content/profile-subjects/{id}/posts`、`GET /v1/users/{id}/works`、`GET /v1/users/{id}/circles` |
+| 首页关注/精选 | `MockContentRepository` 从 `content_discovery_core` 初始化 | `RemoteContentRepository.listDiscoveryFeedPage` | `GET /content/feed` |
+| 首页圈子/圈子列表 | `MockCircleRepository` 从 `circle_core` 与 `circle_home_feed_core` 初始化 | `RemoteCircleRepository.listCircles` + `listHomeCircleDiscoveryFeed` 聚合圈子 feed | `GET /circles`、`GET /circles/{circleId}/feed` |
+| 趣信消息 | `MockChatRepository` 从 `chat_core` 初始化 | `RemoteChatRepository.listInbox/listConversations/listMessages/listMembers` | `GET /chat/inbox`、`GET /chat/conversations`、`GET /chat/conversations/{conversationId}/messages` |
+| 趣信联系人 | `chat_contacts_core` | `RemoteChatRepository.listContacts`，圈子/趣群 tab 由 `ListCircles/ListConversations` 派生 | `GET /chat/contacts`、`GET /circles`、`GET /chat/conversations` |
+| 我的主页/作者主页 | `MockUserProfileRepository` 从 `user_profile_core/profile_feed_core` 初始化 | `RemoteUserProfileRepository`，当前用户由环境包 `runtime.currentUserId` 注入 | `GET /me`、`GET /user/{id}`、`GET /content/profile-subjects/{id}/posts`、`GET /users/{id}/works`、`GET /users/{id}/circles` |
 
 **并行运行说明**：
 

@@ -42,7 +42,7 @@ def test_base_draft_candidates_exclude_reject_sources():
     assert reject["sourceRef"] not in refs, refs
 
 def test_base_draft_allowed_lanes_decouples_by_carrier():
-    from content.post.base_draft import base_draft_allowed_lanes
+    from content.post.article.base_draft import base_draft_allowed_lanes
 
     assert base_draft_allowed_lanes("article") == {"article"}
     assert base_draft_allowed_lanes("route") == {"article"}

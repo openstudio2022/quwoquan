@@ -20,10 +20,15 @@ class DataSourceOwner(StrEnum):
     QWQ_DATA = "qwq_data"
 
 
+class ReleaseKind(StrEnum):
+    CONTENT = "content"
+    EMPTY_BASELINE = "empty_baseline"
+
+
 class ReleaseRunKind(StrEnum):
     APPLY = "apply"
     ROLLBACK = "rollback"
-    HOMEPAGE_API_VERIFICATION = "homepage_api_verification"
+    VERIFY = "verify"
 
 
 class ReleaseRunStatus(StrEnum):
@@ -41,6 +46,7 @@ ROLLOUT_MILESTONES = (
     RolloutMilestone.M1,
     RolloutMilestone.M2,
     RolloutMilestone.M3,
+    RolloutMilestone.LAUNCH,
 )
 FULL_SYNC_MILESTONES = (RolloutMilestone.BASELINE, *ROLLOUT_MILESTONES)
 DEPLOYMENT_ENVIRONMENTS = tuple(DeploymentEnvironment)
@@ -55,6 +61,7 @@ __all__ = [
     "DeploymentEnvironment",
     "EvidenceStatus",
     "ImportMode",
+    "ReleaseKind",
     "ReleaseRunKind",
     "ReleaseRunStatus",
     "RolloutMilestone",

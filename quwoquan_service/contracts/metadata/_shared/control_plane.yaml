@@ -1,5 +1,3 @@
-version: 1
-
 planes:
   - id: user-plane
     description: 面向 App / Gateway / Orchestrator 的用户流量面

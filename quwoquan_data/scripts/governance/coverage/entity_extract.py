@@ -233,20 +233,15 @@ def build_entities_sidecar(
     ref: str,
     draft_meta: Mapping[str, Any] | None,
     *,
-    auto_generate: bool = False,
     article_text: str | None = None,
     candidate_repository: CandidateRepository | None = None,
 ) -> dict[str, Any]:
-    """Build the entity sidecar and intake unknown entities for human review.
-
-    ``auto_generate`` is retained for caller compatibility but intentionally ignored.
-    """
-    _ = auto_generate
+    """Build the entity sidecar and intake unknown entities for human review."""
     extracted: Sequence[Mapping[str, Any]] = []
     if draft_meta:
         extracted = draft_meta.get("extractedEntities") or []
     if article_text is None:
-        from content.post.draft_io import read_draft_article
+        from content.post.article.draft_io import read_draft_article
 
         article_text = read_draft_article(execution_id, ref) or ""
     repository = candidate_repository or CandidateRepository(_governance_root())
@@ -380,7 +375,7 @@ def build_entities_sidecar(
         tag_entry["mentionIds"] = mention_ids_by_ref.get(str(tag_entry["ref"]), [])
 
     sidecar = {
-        "schemaVersion": "quwoquan_data.review_entities",
+        "schema": "quwoquan_data.review_entities",
         "ref": ref,
         "entities": out_entities,
         "tags": out_tags,

@@ -31,7 +31,6 @@ void main() {
         ArchiveCircleGroupCommand(
           circleId: 'circle_alpha',
           groupId: created.groupId,
-          expectedVersion: updated.version,
         ),
       );
       final stored = await facet.get(
@@ -45,7 +44,7 @@ void main() {
   );
 
   test(
-    'Alpha CircleGroupMembership fixture is typed and version strict',
+    'Alpha CircleGroupMembership fixture uses server-owned transitions',
     () async {
       final facet = AlphaCircleGroupMembershipFacet();
       final applied = await facet.apply(
@@ -65,23 +64,19 @@ void main() {
           circleId: 'circle_alpha',
           groupId: 'group_alpha',
           personaId: 'alpha_persona',
-          expectedVersion: applied.version,
         ),
       );
 
       expect(applied.state, CircleGroupMembershipState.pending);
       expect(replay.idempotentReplay, isTrue);
       expect(approved.state, CircleGroupMembershipState.active);
-      await expectLater(
-        facet.leave(
-          LeaveCircleGroupMembershipCommand(
-            circleId: 'circle_alpha',
-            groupId: 'group_alpha',
-            expectedVersion: applied.version,
-          ),
+      final left = await facet.leave(
+        LeaveCircleGroupMembershipCommand(
+          circleId: 'circle_alpha',
+          groupId: 'group_alpha',
         ),
-        throwsStateError,
       );
+      expect(left.state, CircleGroupMembershipState.left);
     },
   );
 }

@@ -38,25 +38,30 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 	case "BeginReportReview":
 		h.handleBeginReportReview(w, r)
 	case "BindMediaAssetsToComment":
-		h.handleBindMediaAssetsToComment(w, r, commentIDFromPath(r.URL.Path))
-	case "BindMediaAssetsToPost":
-		h.handleBindMediaAssetsToPost(w, r)
+		h.handleBindMediaAssetsToComment(
+			w,
+			r,
+			strings.TrimSpace(r.PathValue("commentId")),
+		)
 	case "CompleteMediaUpload":
 		h.handleCompleteMediaUpload(w, r)
 	case "CreateComment":
-		h.handleCreateComment(w, r, postIDFromPath(r.URL.Path))
+		h.handleCreateComment(w, r, strings.TrimSpace(r.PathValue("postId")))
 	case "CreateOutboundShare":
 		h.handleCreateOutboundShare(w, r)
-	case "CreatePost":
-		h.handleCreatePost(w, r)
 	case "CreateReport":
 		h.handleCreateReport(w, r)
 	case "DecidePostModeration":
 		h.handleNotImplemented(w, r, operation)
 	case "DeleteComment":
-		h.handleDeleteComment(w, r)
+		h.handleDeleteComment(
+			w,
+			r,
+			strings.TrimSpace(r.PathValue("postId")),
+			strings.TrimSpace(r.PathValue("commentId")),
+		)
 	case "DeletePost":
-		h.handleNotImplemented(w, r, operation)
+		h.handleDeletePost(w, r)
 	case "GenerateArticleSummary":
 		h.handleNotImplemented(w, r, operation)
 	case "GetAppConfig":
@@ -100,9 +105,14 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 	case "ListAuthorImpactEvidence":
 		h.handleListAuthorImpactEvidence(w, r)
 	case "ListCommentReplies":
-		h.handleListCommentReplies(w, r)
+		h.handleListCommentReplies(
+			w,
+			r,
+			strings.TrimSpace(r.PathValue("postId")),
+			strings.TrimSpace(r.PathValue("commentId")),
+		)
 	case "ListComments":
-		h.handleListComments(w, r, postIDFromPath(r.URL.Path))
+		h.handleListComments(w, r, strings.TrimSpace(r.PathValue("postId")))
 	case "ListCommentsByAuthor":
 		h.handleListCommentsByAuthor(w, r)
 	case "ListCommentsForPostAuthor":
@@ -120,13 +130,17 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 	case "OpenPostModerationCase":
 		h.handleNotImplemented(w, r, operation)
 	case "PinComment":
-		h.handleSetCommentPinned(w, r, true)
+		h.handleSetCommentPinned(
+			w,
+			r,
+			strings.TrimSpace(r.PathValue("postId")),
+			strings.TrimSpace(r.PathValue("commentId")),
+			true,
+		)
 	case "PromotePostToWork":
-		h.handleNotImplemented(w, r, operation)
-	case "PublishPost":
-		h.handleNotImplemented(w, r, operation)
+		h.handlePromotePostToWork(w, r)
 	case "ReactToComment":
-		h.handleReactToComment(w, r, commentIDFromPath(r.URL.Path))
+		h.handleReactToComment(w, r, strings.TrimSpace(r.PathValue("commentId")))
 	case "RecordMediaProcessingResult":
 		h.handleRecordMediaProcessingResult(w, r)
 	case "ReportBehaviors":
@@ -143,18 +157,24 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleSelectAutoVideoCover(w, r)
 	case "SelectManualVideoCover":
 		h.handleSelectManualVideoCover(w, r)
+	case "SubmitPostPublication":
+		h.handleSubmitPostPublication(w, r)
 	case "SupersedePostModerationCase":
 		h.handleNotImplemented(w, r, operation)
 	case "UnlikePost":
 		h.handleNotImplemented(w, r, operation)
 	case "UnpinComment":
-		h.handleSetCommentPinned(w, r, false)
+		h.handleSetCommentPinned(
+			w,
+			r,
+			strings.TrimSpace(r.PathValue("postId")),
+			strings.TrimSpace(r.PathValue("commentId")),
+			false,
+		)
 	case "UpdateMediaAssetAccessPolicy":
 		h.handleUpdateMediaAssetAccessPolicy(w, r)
-	case "UpdatePost":
-		h.handleUpdatePost(w, r)
 	case "UpdatePostSettings":
-		h.handleNotImplemented(w, r, operation)
+		h.handleUpdatePostSettings(w, r)
 	case "UpdateProfileInteractionState":
 		h.handleUpdateProfileInteractionState(w, r)
 	default:
@@ -163,68 +183,65 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 }
 
 var generatedRouteTable = []generatedRouteDef{
-	{method: "GET", pathTemplate: "/internal/v1/content/media/{mediaId}", operation: "GetOwnedMediaAsset"},
-	{method: "PATCH", pathTemplate: "/internal/v1/content/media/{mediaId}:access-policy", operation: "UpdateMediaAssetAccessPolicy"},
-	{method: "GET", pathTemplate: "/internal/v1/content/media/{mediaId}:delivery-reference", operation: "GetMediaAssetDeliveryReference"},
-	{method: "POST", pathTemplate: "/internal/v1/content/media/{mediaId}:processing-result", operation: "RecordMediaProcessingResult"},
-	{method: "GET", pathTemplate: "/internal/v1/content/media/{mediaId}:reference", operation: "GetMediaAssetReference"},
-	{method: "GET", pathTemplate: "/internal/v1/content/posts/{postId}/publication-eligibility", operation: "GetPostPublicationEligibility"},
-	{method: "POST", pathTemplate: "/internal/v1/content/posts/{postId}:moderate", operation: "DecidePostModeration"},
-	{method: "POST", pathTemplate: "/internal/v1/content/posts/{postId}:open-moderation-case", operation: "OpenPostModerationCase"},
-	{method: "POST", pathTemplate: "/internal/v1/content/posts/{postId}:review-moderation", operation: "ReviewPostModerationCase"},
-	{method: "POST", pathTemplate: "/internal/v1/content/posts/{postId}:supersede-moderation", operation: "SupersedePostModerationCase"},
-	{method: "GET", pathTemplate: "/v1/config/app", operation: "GetAppConfig"},
-	{method: "POST", pathTemplate: "/v1/content/articles/summary:generate", operation: "GenerateArticleSummary"},
-	{method: "POST", pathTemplate: "/v1/content/behaviors", operation: "ReportBehaviors"},
-	{method: "POST", pathTemplate: "/v1/content/comments/{commentId}/media:bind", operation: "BindMediaAssetsToComment"},
-	{method: "POST", pathTemplate: "/v1/content/comments/{commentId}/reaction", operation: "ReactToComment"},
-	{method: "GET", pathTemplate: "/v1/content/feed", operation: "GetFeed"},
-	{method: "GET", pathTemplate: "/v1/content/footprint", operation: "GetMyFootprint"},
-	{method: "GET", pathTemplate: "/v1/content/helper-read/{contentId}", operation: "GetHelperRead"},
-	{method: "GET", pathTemplate: "/v1/content/intersections", operation: "ListMyIntersections"},
-	{method: "GET", pathTemplate: "/v1/content/intersections/object", operation: "GetObjectIntersections"},
-	{method: "GET", pathTemplate: "/v1/content/intersections/summary", operation: "GetMyIntersectionSummary"},
-	{method: "GET", pathTemplate: "/v1/content/media/uploads/{sessionId}", operation: "GetMediaUploadSession"},
-	{method: "POST", pathTemplate: "/v1/content/media/uploads/{sessionId}:abort", operation: "AbortMediaUpload"},
-	{method: "POST", pathTemplate: "/v1/content/media/uploads/{sessionId}:complete", operation: "CompleteMediaUpload"},
-	{method: "POST", pathTemplate: "/v1/content/media/uploads:init", operation: "InitMediaUpload"},
-	{method: "GET", pathTemplate: "/v1/content/media/{mediaId}", operation: "GetMediaAsset"},
-	{method: "POST", pathTemplate: "/v1/content/media/{mediaId}/cover:auto", operation: "SelectAutoVideoCover"},
-	{method: "POST", pathTemplate: "/v1/content/media/{mediaId}/cover:manual", operation: "SelectManualVideoCover"},
-	{method: "POST", pathTemplate: "/v1/content/media/{mediaId}/original:access", operation: "RequestOriginalImageAccess"},
-	{method: "POST", pathTemplate: "/v1/content/posts", operation: "CreatePost"},
-	{method: "GET", pathTemplate: "/v1/content/posts/search", operation: "SearchPosts"},
-	{method: "DELETE", pathTemplate: "/v1/content/posts/{postId}", operation: "DeletePost"},
-	{method: "GET", pathTemplate: "/v1/content/posts/{postId}", operation: "GetPost"},
-	{method: "PATCH", pathTemplate: "/v1/content/posts/{postId}", operation: "UpdatePost"},
-	{method: "GET", pathTemplate: "/v1/content/posts/{postId}/comments", operation: "ListComments"},
-	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/comments", operation: "CreateComment"},
-	{method: "DELETE", pathTemplate: "/v1/content/posts/{postId}/comments/{commentId}", operation: "DeleteComment"},
-	{method: "DELETE", pathTemplate: "/v1/content/posts/{postId}/comments/{commentId}/pin", operation: "UnpinComment"},
-	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/comments/{commentId}/pin", operation: "PinComment"},
-	{method: "GET", pathTemplate: "/v1/content/posts/{postId}/comments/{commentId}/replies", operation: "ListCommentReplies"},
-	{method: "GET", pathTemplate: "/v1/content/posts/{postId}/counters", operation: "GetCounters"},
-	{method: "DELETE", pathTemplate: "/v1/content/posts/{postId}/like", operation: "UnlikePost"},
-	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/like", operation: "LikePost"},
-	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/media:bind", operation: "BindMediaAssetsToPost"},
-	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/outbound-shares", operation: "CreateOutboundShare"},
-	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/publish", operation: "PublishPost"},
-	{method: "GET", pathTemplate: "/v1/content/posts/{postId}/reactions", operation: "GetContentReactionState"},
-	{method: "PATCH", pathTemplate: "/v1/content/posts/{postId}/settings", operation: "UpdatePostSettings"},
-	{method: "POST", pathTemplate: "/v1/content/posts/{postId}:promoteToWork", operation: "PromotePostToWork"},
-	{method: "GET", pathTemplate: "/v1/content/reports", operation: "ListReports"},
-	{method: "POST", pathTemplate: "/v1/content/reports", operation: "CreateReport"},
-	{method: "GET", pathTemplate: "/v1/content/reports/{reportId}", operation: "GetReport"},
-	{method: "PATCH", pathTemplate: "/v1/content/reports/{reportId}", operation: "ResolveReport"},
-	{method: "POST", pathTemplate: "/v1/content/reports/{reportId}/review", operation: "BeginReportReview"},
-	{method: "GET", pathTemplate: "/v1/content/sub-accounts/{subAccountId}/author-impact", operation: "GetAuthorImpact"},
-	{method: "GET", pathTemplate: "/v1/content/sub-accounts/{subAccountId}/author-impact/evidence", operation: "ListAuthorImpactEvidence"},
-	{method: "GET", pathTemplate: "/v1/content/sub-accounts/{subAccountId}/interactions/received", operation: "ListProfileInteractionActivitiesReceived"},
-	{method: "GET", pathTemplate: "/v1/content/sub-accounts/{subAccountId}/interactions/sent", operation: "ListProfileInteractionActivitiesSent"},
-	{method: "PATCH", pathTemplate: "/v1/content/sub-accounts/{subAccountId}/interactions/{interactionId}/state", operation: "UpdateProfileInteractionState"},
-	{method: "GET", pathTemplate: "/v1/content/sub-accounts/{subAccountId}/posts", operation: "ListUserPosts"},
-	{method: "GET", pathTemplate: "/v1/content/users/me/comments", operation: "ListCommentsByAuthor"},
-	{method: "GET", pathTemplate: "/v1/content/users/me/received-comments", operation: "ListCommentsForPostAuthor"},
+	{method: "GET", pathTemplate: "/config/app", operation: "GetAppConfig"},
+	{method: "POST", pathTemplate: "/content/articles/summary:generate", operation: "GenerateArticleSummary"},
+	{method: "POST", pathTemplate: "/content/behaviors", operation: "ReportBehaviors"},
+	{method: "POST", pathTemplate: "/content/comments/{commentId}/media:bind", operation: "BindMediaAssetsToComment"},
+	{method: "POST", pathTemplate: "/content/comments/{commentId}/reaction", operation: "ReactToComment"},
+	{method: "GET", pathTemplate: "/content/feed", operation: "GetFeed"},
+	{method: "GET", pathTemplate: "/content/footprint", operation: "GetMyFootprint"},
+	{method: "GET", pathTemplate: "/content/helper-read/{contentId}", operation: "GetHelperRead"},
+	{method: "GET", pathTemplate: "/content/intersections", operation: "ListMyIntersections"},
+	{method: "GET", pathTemplate: "/content/intersections/object", operation: "GetObjectIntersections"},
+	{method: "GET", pathTemplate: "/content/intersections/summary", operation: "GetMyIntersectionSummary"},
+	{method: "GET", pathTemplate: "/content/media/uploads/{sessionId}", operation: "GetMediaUploadSession"},
+	{method: "POST", pathTemplate: "/content/media/uploads/{sessionId}:abort", operation: "AbortMediaUpload"},
+	{method: "POST", pathTemplate: "/content/media/uploads/{sessionId}:complete", operation: "CompleteMediaUpload"},
+	{method: "POST", pathTemplate: "/content/media/uploads:init", operation: "InitMediaUpload"},
+	{method: "GET", pathTemplate: "/content/media/{mediaId}", operation: "GetMediaAsset"},
+	{method: "POST", pathTemplate: "/content/media/{mediaId}/cover:auto", operation: "SelectAutoVideoCover"},
+	{method: "POST", pathTemplate: "/content/media/{mediaId}/cover:manual", operation: "SelectManualVideoCover"},
+	{method: "POST", pathTemplate: "/content/media/{mediaId}/original:access", operation: "RequestOriginalImageAccess"},
+	{method: "GET", pathTemplate: "/content/posts/search", operation: "SearchPosts"},
+	{method: "DELETE", pathTemplate: "/content/posts/{postId}", operation: "DeletePost"},
+	{method: "GET", pathTemplate: "/content/posts/{postId}", operation: "GetPost"},
+	{method: "GET", pathTemplate: "/content/posts/{postId}/comments", operation: "ListComments"},
+	{method: "POST", pathTemplate: "/content/posts/{postId}/comments", operation: "CreateComment"},
+	{method: "DELETE", pathTemplate: "/content/posts/{postId}/comments/{commentId}", operation: "DeleteComment"},
+	{method: "DELETE", pathTemplate: "/content/posts/{postId}/comments/{commentId}/pin", operation: "UnpinComment"},
+	{method: "POST", pathTemplate: "/content/posts/{postId}/comments/{commentId}/pin", operation: "PinComment"},
+	{method: "GET", pathTemplate: "/content/posts/{postId}/comments/{commentId}/replies", operation: "ListCommentReplies"},
+	{method: "GET", pathTemplate: "/content/posts/{postId}/counters", operation: "GetCounters"},
+	{method: "DELETE", pathTemplate: "/content/posts/{postId}/like", operation: "UnlikePost"},
+	{method: "POST", pathTemplate: "/content/posts/{postId}/like", operation: "LikePost"},
+	{method: "POST", pathTemplate: "/content/posts/{postId}/outbound-shares", operation: "CreateOutboundShare"},
+	{method: "GET", pathTemplate: "/content/posts/{postId}/reactions", operation: "GetContentReactionState"},
+	{method: "PATCH", pathTemplate: "/content/posts/{postId}/settings", operation: "UpdatePostSettings"},
+	{method: "POST", pathTemplate: "/content/posts/{postId}:promoteToWork", operation: "PromotePostToWork"},
+	{method: "POST", pathTemplate: "/content/posts:publish", operation: "SubmitPostPublication"},
+	{method: "GET", pathTemplate: "/content/reports", operation: "ListReports"},
+	{method: "POST", pathTemplate: "/content/reports", operation: "CreateReport"},
+	{method: "GET", pathTemplate: "/content/reports/{reportId}", operation: "GetReport"},
+	{method: "PATCH", pathTemplate: "/content/reports/{reportId}", operation: "ResolveReport"},
+	{method: "POST", pathTemplate: "/content/reports/{reportId}/review", operation: "BeginReportReview"},
+	{method: "GET", pathTemplate: "/content/sub-accounts/{subAccountId}/author-impact", operation: "GetAuthorImpact"},
+	{method: "GET", pathTemplate: "/content/sub-accounts/{subAccountId}/author-impact/evidence", operation: "ListAuthorImpactEvidence"},
+	{method: "GET", pathTemplate: "/content/sub-accounts/{subAccountId}/interactions/received", operation: "ListProfileInteractionActivitiesReceived"},
+	{method: "GET", pathTemplate: "/content/sub-accounts/{subAccountId}/interactions/sent", operation: "ListProfileInteractionActivitiesSent"},
+	{method: "PATCH", pathTemplate: "/content/sub-accounts/{subAccountId}/interactions/{interactionId}/state", operation: "UpdateProfileInteractionState"},
+	{method: "GET", pathTemplate: "/content/sub-accounts/{subAccountId}/posts", operation: "ListUserPosts"},
+	{method: "GET", pathTemplate: "/content/users/me/comments", operation: "ListCommentsByAuthor"},
+	{method: "GET", pathTemplate: "/content/users/me/received-comments", operation: "ListCommentsForPostAuthor"},
+	{method: "GET", pathTemplate: "/internal/content/media/{mediaId}", operation: "GetOwnedMediaAsset"},
+	{method: "PATCH", pathTemplate: "/internal/content/media/{mediaId}:access-policy", operation: "UpdateMediaAssetAccessPolicy"},
+	{method: "GET", pathTemplate: "/internal/content/media/{mediaId}:delivery-reference", operation: "GetMediaAssetDeliveryReference"},
+	{method: "POST", pathTemplate: "/internal/content/media/{mediaId}:processing-result", operation: "RecordMediaProcessingResult"},
+	{method: "GET", pathTemplate: "/internal/content/media/{mediaId}:reference", operation: "GetMediaAssetReference"},
+	{method: "GET", pathTemplate: "/internal/content/posts/{postId}/publication-eligibility", operation: "GetPostPublicationEligibility"},
+	{method: "POST", pathTemplate: "/internal/content/posts/{postId}:moderate", operation: "DecidePostModeration"},
+	{method: "POST", pathTemplate: "/internal/content/posts/{postId}:open-moderation-case", operation: "OpenPostModerationCase"},
+	{method: "POST", pathTemplate: "/internal/content/posts/{postId}:review-moderation", operation: "ReviewPostModerationCase"},
+	{method: "POST", pathTemplate: "/internal/content/posts/{postId}:supersede-moderation", operation: "SupersedePostModerationCase"},
 }
 
 type generatedRouteDef struct {
@@ -374,22 +391,43 @@ var generatedWritableFieldSetByOperation = map[string]map[string]struct{}{
 		"authorAvatarUrlSnapshot":   {},
 		"personaContextVersion":     {},
 	},
-	"CreatePost": {
+	"PromotePostToWork": {
+		"contentType":             {},
+		"title":                   {},
+		"summary":                 {},
+		"semanticMentions":        {},
+		"coverUrl":                {},
+		"articleMarkdown":         {},
+		"markdownDialect":         {},
+		"articleAssetManifest":    {},
+		"articleRenderProfile":    {},
+		"primaryHomepageId":       {},
+		"primaryHomepageType":     {},
+		"primaryHomepageSnapshot": {},
+		"visibility":              {},
+		"assistantUsePolicy":      {},
+	},
+	"ReactToComment": {
+		"reaction": {},
+	},
+	"ResolveReport": {
+		"resolution": {},
+	},
+	"SubmitPostPublication": {
+		"publishIntentId":           {},
+		"localDraftId":              {},
 		"contentType":               {},
 		"contentIdentity":           {},
 		"title":                     {},
 		"body":                      {},
 		"summary":                   {},
 		"semanticMentions":          {},
-		"mediaUrls":                 {},
+		"mediaAssetIds":             {},
 		"mediaItems":                {},
-		"coverUrl":                  {},
-		"thumbnailUrl":              {},
 		"articleMarkdown":           {},
-		"articleMarkdownVersion":    {},
+		"markdownDialect":           {},
 		"articleAssetManifest":      {},
 		"articleRenderProfile":      {},
-		"videoUrl":                  {},
 		"coverStrategy":             {},
 		"coverFrameTimeMs":          {},
 		"illustrationAssetId":       {},
@@ -407,63 +445,6 @@ var generatedWritableFieldSetByOperation = map[string]map[string]struct{}{
 		"authorDisplayNameSnapshot": {},
 		"authorAvatarUrlSnapshot":   {},
 		"personaContextVersion":     {},
-	},
-	"PromotePostToWork": {
-		"contentType":             {},
-		"title":                   {},
-		"summary":                 {},
-		"semanticMentions":        {},
-		"coverUrl":                {},
-		"articleMarkdown":         {},
-		"articleMarkdownVersion":  {},
-		"articleAssetManifest":    {},
-		"articleRenderProfile":    {},
-		"primaryHomepageId":       {},
-		"primaryHomepageType":     {},
-		"primaryHomepageSnapshot": {},
-		"visibility":              {},
-		"assistantUsePolicy":      {},
-	},
-	"PublishPost": {
-		"contentIdentity":         {},
-		"primaryHomepageId":       {},
-		"primaryHomepageType":     {},
-		"primaryHomepageSnapshot": {},
-		"visibility":              {},
-		"assistantUsePolicy":      {},
-	},
-	"ReactToComment": {
-		"reaction": {},
-	},
-	"ResolveReport": {
-		"resolution": {},
-	},
-	"UpdatePost": {
-		"contentType":             {},
-		"contentIdentity":         {},
-		"title":                   {},
-		"body":                    {},
-		"summary":                 {},
-		"semanticMentions":        {},
-		"mediaUrls":               {},
-		"mediaItems":              {},
-		"coverUrl":                {},
-		"thumbnailUrl":            {},
-		"articleMarkdown":         {},
-		"articleMarkdownVersion":  {},
-		"articleAssetManifest":    {},
-		"articleRenderProfile":    {},
-		"videoUrl":                {},
-		"coverStrategy":           {},
-		"coverFrameTimeMs":        {},
-		"illustrationAssetId":     {},
-		"location":                {},
-		"locationName":            {},
-		"primaryHomepageId":       {},
-		"primaryHomepageType":     {},
-		"primaryHomepageSnapshot": {},
-		"visibility":              {},
-		"assistantUsePolicy":      {},
 	},
 	"UpdatePostSettings": {
 		"visibility":              {},

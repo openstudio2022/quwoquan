@@ -36,11 +36,13 @@ void main() {
         return digest != null && digest.isNotEmpty;
       });
       final postId =
-          dtoFixture.toDiscoveryWireMap()['postId']?.toString() ??
+          dtoFixture.toDiscoveryWireMap()['id']?.toString() ??
           'article_contract_post';
       final mockRepo = MockContentRepository();
       final mockDetail = await mockRepo.getPost(postId: postId);
-      final rawFixture = mockDetail.mergedArticleWireMap;
+      final rawFixture = _getPostResponseFromAppProjection(
+        mockDetail.mergedArticleWireMap,
+      );
       final remoteRepo = RemoteContentPostReaderAdapter(
         client: buildGeneratedCloudOperationClient(
           httpClient: CloudHttpClient(
@@ -120,27 +122,27 @@ void main() {
 
     test('summary snapshot 在 hydration 后切到 canonical articleMarkdown', () {
       const summaryRaw = <String, dynamic>{
-        'postId': 'article_hydration_switch',
-        'contentType': 'article',
+        'id': 'article_hydration_switch',
+        'type': 'article',
         'authorId': 'writer_1',
         'displayName': '水合作者',
-        'authorAvatarUrl': 'https://example.com/avatar.jpg',
+        'avatarUrl': 'https://example.com/avatar.jpg',
         'title': '分发标题',
         'body': '分发摘要正文',
         'coverUrl': 'https://example.com/cover.jpg',
       };
       const hydratedRaw = <String, dynamic>{
-        'postId': 'article_hydration_switch',
-        'contentType': 'article',
+        'id': 'article_hydration_switch',
+        'type': 'article',
         'authorId': 'writer_1',
         'displayName': '水合作者',
-        'authorAvatarUrl': 'https://example.com/avatar.jpg',
+        'avatarUrl': 'https://example.com/avatar.jpg',
         'title': '分发标题',
         'body': '分发摘要正文',
         'coverUrl': 'https://example.com/cover.jpg',
         'articleMarkdown':
             '---\ntitle: 水合后标题\n---\n\n# 水合后标题\n\n## 水合章节\n\n水合后正文第一段。\n\n水合后正文第二段。\n',
-        'articleMarkdownVersion': 'qwq-rich-md/1',
+        'markdownDialect': 'qwq-rich-md',
         'articleAssetManifest': <String, dynamic>{'assets': []},
         'articleRenderProfile': <String, dynamic>{'template': 'journal'},
       };
@@ -163,6 +165,26 @@ void main() {
       expect(after.document.body, contains('水合后正文第一段'));
     });
   });
+}
+
+Map<String, dynamic> _getPostResponseFromAppProjection(
+  Map<String, dynamic> projection,
+) {
+  final response = Map<String, dynamic>.from(projection);
+  response
+    ..remove('id')
+    ..remove('type')
+    ..remove('identity')
+    ..remove('displayName')
+    ..remove('avatarUrl')
+    ..addAll(<String, dynamic>{
+      'postId': projection['id'],
+      'contentType': projection['type'],
+      'contentIdentity': projection['identity'],
+      'authorDisplayName': projection['displayName'],
+      'authorAvatarUrl': projection['avatarUrl'],
+    });
+  return response;
 }
 
 final class _ArticleTestClientContext implements CloudClientContextProvider {

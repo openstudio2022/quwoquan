@@ -26,9 +26,9 @@ pip install -r requirements.txt
 SERVICE_NAME=recommendation-service APP_ENV=dev uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
-- POST `/internal/v1/recommendation/model-releases:score`：打分，请求体与权限见
+- POST `/internal/recommendation/model-releases:score`：打分，请求体与权限见
   `contracts/metadata/recommendation/model_release/service.yaml`
-- POST `/internal/v1/recommendation/model-releases:batch-score`：批量打分
+- POST `/internal/recommendation/model-releases:batch-score`：批量打分
 - GET /health：健康检查
 - 配置契约不满足时，服务启动立即失败（fail-fast）
 

@@ -1,4 +1,3 @@
-version: 1
 domain: recommendation
 entity: RecommendationIntersectionVisitState
 object_kind: aggregate_root

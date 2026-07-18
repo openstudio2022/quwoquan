@@ -31,3 +31,5 @@ allowed_modal_popup:
     kind: intersection_detail_sheet
   - path: quwoquan_app/lib/ui/user/widgets/author_impact_evidence.dart
     kind: author_impact_evidence_sheet
+  - path: quwoquan_app/lib/ui/user/pages/edit_profile_page_sections.dart
+    kind: profile_update_proposal_review_sheet

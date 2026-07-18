@@ -21,7 +21,7 @@ categories:
     verticals: [travel, campus]
     description: 权威结构化事实（位置/历史/门票/开放/海拔），用于 factEvidence 与数值可回溯。
     evidenceFocus: [fact, geo, season]
-    examplePlatforms: [维基百科, 百度百科, 维基, wikipedia, baike, 搜狗百科]
+    examplePlatforms: [维基百科, 百度百科, 今日头条百科, 维基, wikipedia, baike]
   - id: official
     label: 官方信息
     verticals: [travel]
@@ -160,6 +160,7 @@ platformAliases:
   rednote: travelogue
   toutiao: platform_article
   今日头条: platform_article
+  今日头条百科: encyclopedia
   头条号: platform_article
   weibo: community_post
   微博: community_post

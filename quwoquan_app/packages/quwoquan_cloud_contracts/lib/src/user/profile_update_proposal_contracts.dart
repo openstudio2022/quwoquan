@@ -5,6 +5,7 @@ enum ProfileUpdateProposalSource { persona, assistant, external }
 enum ProfileUpdateProposalStatus {
   pending,
   confirmed,
+  applying,
   applied,
   rejected,
   expired,
@@ -95,39 +96,24 @@ final class CreateProfileUpdateProposalCommand {
 }
 
 final class ConfirmProfileUpdateProposalCommand {
-  ConfirmProfileUpdateProposalCommand({
-    required String proposalId,
-    required this.expectedProposalVersion,
-  }) : proposalId = _required(proposalId, 'proposalId') {
-    _positive(expectedProposalVersion, 'expectedProposalVersion');
-  }
+  ConfirmProfileUpdateProposalCommand({required String proposalId})
+    : proposalId = _required(proposalId, 'proposalId');
 
   final String proposalId;
-  final int expectedProposalVersion;
 }
 
 final class ApplyProfileUpdateProposalCommand {
-  ApplyProfileUpdateProposalCommand({
-    required String proposalId,
-    required this.expectedProposalVersion,
-  }) : proposalId = _required(proposalId, 'proposalId') {
-    _positive(expectedProposalVersion, 'expectedProposalVersion');
-  }
+  ApplyProfileUpdateProposalCommand({required String proposalId})
+    : proposalId = _required(proposalId, 'proposalId');
 
   final String proposalId;
-  final int expectedProposalVersion;
 }
 
 final class RejectProfileUpdateProposalCommand {
-  RejectProfileUpdateProposalCommand({
-    required String proposalId,
-    required this.expectedProposalVersion,
-  }) : proposalId = _required(proposalId, 'proposalId') {
-    _positive(expectedProposalVersion, 'expectedProposalVersion');
-  }
+  RejectProfileUpdateProposalCommand({required String proposalId})
+    : proposalId = _required(proposalId, 'proposalId');
 
   final String proposalId;
-  final int expectedProposalVersion;
 }
 
 final class ProfileUpdateProposalQuery {
@@ -176,7 +162,6 @@ final class ProfileUpdateProposalView {
     required this.status,
     required this.changes,
     required this.reviewedBy,
-    required this.targetPersonaExpectedVersion,
     required this.version,
     required this.createdAt,
     required this.updatedAt,
@@ -189,7 +174,6 @@ final class ProfileUpdateProposalView {
   final ProfileUpdateProposalStatus status;
   final ProfileChangeSet changes;
   final String? reviewedBy;
-  final int? targetPersonaExpectedVersion;
   final int version;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -238,27 +222,18 @@ CloudOperationRequestPayload encodeConfirmProfileUpdateProposalCommand(
   ConfirmProfileUpdateProposalCommand command,
 ) => CloudOperationRequestPayload(
   pathParameters: <String, String>{'id': command.proposalId},
-  body: <String, Object?>{
-    'expectedProposalVersion': command.expectedProposalVersion,
-  },
 );
 
 CloudOperationRequestPayload encodeApplyProfileUpdateProposalCommand(
   ApplyProfileUpdateProposalCommand command,
 ) => CloudOperationRequestPayload(
   pathParameters: <String, String>{'id': command.proposalId},
-  body: <String, Object?>{
-    'expectedProposalVersion': command.expectedProposalVersion,
-  },
 );
 
 CloudOperationRequestPayload encodeRejectProfileUpdateProposalCommand(
   RejectProfileUpdateProposalCommand command,
 ) => CloudOperationRequestPayload(
   pathParameters: <String, String>{'id': command.proposalId},
-  body: <String, Object?>{
-    'expectedProposalVersion': command.expectedProposalVersion,
-  },
 );
 
 CloudOperationRequestPayload encodeProfileUpdateProposalQuery(
@@ -323,7 +298,6 @@ ProfileUpdateProposalView _view(Object? value) {
     'isolationLevel',
     'purposeHint',
     'reviewedBy',
-    'targetPersonaExpectedVersion',
     'version',
     'createdAt',
     'updatedAt',
@@ -350,9 +324,6 @@ ProfileUpdateProposalView _view(Object? value) {
     status: _status(map['status']),
     changes: changes,
     reviewedBy: _optionalString(map['reviewedBy']),
-    targetPersonaExpectedVersion: _optionalPositiveInt(
-      map['targetPersonaExpectedVersion'],
-    ),
     version: _positiveInt(map, 'version'),
     createdAt: _date(map, 'createdAt'),
     updatedAt: _date(map, 'updatedAt'),
@@ -391,14 +362,6 @@ int _positiveInt(Map<String, Object?> map, String key) {
   final value = map[key];
   if (value is! int || value <= 0) {
     throw FormatException('$key must be a positive integer');
-  }
-  return value;
-}
-
-int? _optionalPositiveInt(Object? value) {
-  if (value == null) return null;
-  if (value is! int || value <= 0) {
-    throw const FormatException('optional version must be a positive integer');
   }
   return value;
 }
@@ -466,8 +429,4 @@ String? _optionalString(Object? value) {
     throw const FormatException('optional string must be non-empty');
   }
   return value.trim();
-}
-
-void _positive(int value, String name) {
-  if (value <= 0) throw ArgumentError.value(value, name, 'must be positive');
 }

@@ -28,7 +28,7 @@ sys.path.insert(0, str(SCRIPTS_ROOT))
 _OUTPUT_ROOT = Path(tempfile.mkdtemp(prefix="post_dir_layout_output_"))
 
 from content.post.object_index import register_content_object  # noqa: E402
-from content.post.draft_io import write_agent_draft  # noqa: E402
+from content.post.article.draft_io import write_agent_draft  # noqa: E402
 from core.io import read_json  # noqa: E402
 from core.paths import (  # noqa: E402
     execution_command_root,
@@ -181,7 +181,7 @@ def test_prune_materialized_post_refs_removes_only_final_surface():
 
 def test_publish_angle_derives_category_from_carrier_and_intent():
     """底稿中心：angle 为底稿派生类目（载体 + writingIntent 标签），不再用 templateId 模板。"""
-    from content.post.route_core import _publish_angle
+    from content.post.article.route_core import _publish_angle
 
     # 图片/画报作品落「画报」类目。
     assert _publish_angle({"carrier": "image"}) == "画报"

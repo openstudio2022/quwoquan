@@ -1,4 +1,3 @@
-version: 1
 
 service:
   name: user-service
@@ -13,7 +12,8 @@ service:
 
 api_routes:
   - method: POST
-    path: /v1/user/personas/{personaId}/profile-proposals
+    path: /user/personas/{personaId}/profile-proposals
+
     operation: CreateProfileUpdateProposal
     actor: persona
     application:
@@ -70,7 +70,8 @@ api_routes:
       visibility: private
 
   - method: POST
-    path: /v1/user/profile/proposals/{id}/confirm
+    path: /user/profile/proposals/{id}/confirm
+
     operation: ConfirmProposal
     actor: persona
     application:
@@ -80,8 +81,7 @@ api_routes:
       aggregate_owner: ProfileUpdateProposal
       mutation_target: ProfileUpdateProposal
       invariant_target: ProfileUpdateProposal
-    request_entity: ConfirmProfileUpdateProposalRequest
-    request_body_kind: object
+    request_fields: []
     response_entity: ProfileUpdateProposalCommandResult
     response_body: ProfileUpdateProposalCommandResult
     response_body_kind: object
@@ -91,7 +91,7 @@ api_routes:
       response_type: ProfileUpdateProposalCommandResult
       request_encoder: encodeConfirmProfileUpdateProposalCommand
       response_decoder: decodeProfileUpdateProposalCommandResult
-    description: owner 确认提案并绑定目标 Persona expectedVersion
+    description: owner 确认提案；目标 Persona 版本由提案快照携带并在服务端校验
     reliability:
       timeout_ms: 1500
       cancellation: supported
@@ -127,7 +127,8 @@ api_routes:
       visibility: private
 
   - method: POST
-    path: /v1/user/profile/proposals/{id}/apply
+    path: /user/profile/proposals/{id}/apply
+
     operation: ApplyProposal
     actor: persona
     application:
@@ -137,8 +138,7 @@ api_routes:
       aggregate_owner: ProfileUpdateProposal
       mutation_target: ProfileUpdateProposal
       invariant_target: ProfileUpdateProposal
-    request_entity: ApplyProfileUpdateProposalRequest
-    request_body_kind: object
+    request_fields: []
     response_entity: ProfileUpdateProposalCommandResult
     response_body: ProfileUpdateProposalCommandResult
     response_body_kind: object
@@ -184,7 +184,8 @@ api_routes:
       visibility: private
 
   - method: POST
-    path: /v1/user/profile/proposals/{id}/reject
+    path: /user/profile/proposals/{id}/reject
+
     operation: RejectProposal
     actor: persona
     application:
@@ -194,8 +195,7 @@ api_routes:
       aggregate_owner: ProfileUpdateProposal
       mutation_target: ProfileUpdateProposal
       invariant_target: ProfileUpdateProposal
-    request_entity: RejectProfileUpdateProposalRequest
-    request_body_kind: object
+    request_fields: []
     response_entity: ProfileUpdateProposalCommandResult
     response_body: ProfileUpdateProposalCommandResult
     response_body_kind: object
@@ -241,7 +241,8 @@ api_routes:
       visibility: private
 
   - method: GET
-    path: /v1/user/profile/proposals/{id}
+    path: /user/profile/proposals/{id}
+
     operation: GetProfileUpdateProposal
     actor: persona
     application:
@@ -295,7 +296,8 @@ api_routes:
       visibility: private
 
   - method: GET
-    path: /v1/user/personas/{personaId}/profile-proposals
+    path: /user/personas/{personaId}/profile-proposals
+
     operation: ListProfileUpdateProposals
     actor: persona
     application:
@@ -356,7 +358,7 @@ contract_test:
   scenarios:
     - name: owner_and_bola
       assertions: [verified_persona_only, foreign_persona_returns_not_found, no_state_change]
-    - name: version_and_idempotency
-      assertions: [expected_version_required, same_key_same_result, same_key_different_command_conflict]
+    - name: server_owned_cas_and_idempotency
+      assertions: [caller_version_absent, pure_cas_conflict_retried, same_key_same_result, same_key_different_command_conflict]
     - name: aggregate_outbox_atomicity
       assertions: [state_receipt_outbox_same_transaction, one_event_per_version]

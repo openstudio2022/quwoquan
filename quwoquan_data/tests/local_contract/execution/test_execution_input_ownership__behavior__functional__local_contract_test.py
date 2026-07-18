@@ -46,7 +46,7 @@ def test_publish_does_not_contain_runtime_or_configuration_files():
         "execution_manifest.json",
         "execution_spec.yaml",
         "runtime_state.json",
-        "workflow_state.json",
+        "execution_state.json",
         "prompt.md",
     }
     assert not [path for path in paths.PUBLISH_ROOT.rglob("*") if path.name in forbidden_names]
@@ -67,7 +67,7 @@ def test_execution_publish_ref_binds_only_canonical_objects(tmp_path, monkeypatc
 
     payload = workspace.read_json(path)
     assert payload == {
-        "schemaVersion": "quwoquan_data.execution_publish_ref/1",
+        "schema": "quwoquan_data.execution_publish_ref",
         "executionId": EXECUTION_ID,
         "canonicalPublishRoot": "quwoquan_data/publish",
         "publishedRefs": {

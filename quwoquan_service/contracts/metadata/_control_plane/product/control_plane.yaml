@@ -1,4 +1,3 @@
-version: 1
 plane: product-control-plane
 domain: product
 dashboard:
@@ -19,7 +18,7 @@ object_types:
     operations:
       - operation: ListL1L4MetricSnapshots
         method: GET
-        path: /v1/control-plane/product/metrics/l1l4
+        path: /control-plane/product/metrics/l1l4
         scopes: [ops.product.dashboard.read]
 
   - object_type: moderation_case
@@ -32,15 +31,15 @@ object_types:
     operations:
       - operation: GetModerationCase
         method: GET
-        path: /v1/control-plane/product/moderation/cases/{caseId}
+        path: /control-plane/product/moderation/cases/{caseId}
         scopes: [ops.case.read]
       - operation: StartModerationReview
         method: POST
-        path: /v1/control-plane/product/moderation/cases/{caseId}:startReview
+        path: /control-plane/product/moderation/cases/{caseId}:startReview
         scopes: [ops.case.write]
       - operation: ApplyEnforcementAction
         method: POST
-        path: /v1/control-plane/product/moderation/cases/{caseId}:applyAction
+        path: /control-plane/product/moderation/cases/{caseId}:applyAction
         scopes: [ops.case.write]
         danger_level: high
         approval_mode: dual
@@ -55,19 +54,19 @@ object_types:
     operations:
       - operation: ListReports
         method: GET
-        path: /v1/content/reports
+        path: /content/reports
         scopes: [ops.case.read]
       - operation: GetReport
         method: GET
-        path: /v1/content/reports/{reportId}
+        path: /content/reports/{reportId}
         scopes: [ops.case.read]
       - operation: BeginReportReview
         method: POST
-        path: /v1/content/reports/{reportId}/review
+        path: /content/reports/{reportId}/review
         scopes: [ops.case.write]
       - operation: ResolveReport
         method: PATCH
-        path: /v1/content/reports/{reportId}
+        path: /content/reports/{reportId}
         scopes: [ops.case.write]
         danger_level: high
         approval_mode: single
@@ -82,11 +81,11 @@ object_types:
     operations:
       - operation: GetRecoveryCase
         method: GET
-        path: /v1/control-plane/product/recovery/cases/{caseId}
+        path: /control-plane/product/recovery/cases/{caseId}
         scopes: [ops.case.read]
       - operation: SubmitRecoveryDecision
         method: POST
-        path: /v1/control-plane/product/recovery/cases/{caseId}:submitDecision
+        path: /control-plane/product/recovery/cases/{caseId}:submitDecision
         scopes: [ops.case.approve]
         danger_level: critical
         approval_mode: dual
@@ -101,15 +100,15 @@ object_types:
     operations:
       - operation: ListAppealCases
         method: GET
-        path: /v1/control-plane/product/appeal/cases
+        path: /control-plane/product/appeal/cases
         scopes: [ops.case.read]
       - operation: GetAppealCase
         method: GET
-        path: /v1/control-plane/product/appeal/cases/{caseId}
+        path: /control-plane/product/appeal/cases/{caseId}
         scopes: [ops.case.read]
       - operation: SubmitAppealDecision
         method: POST
-        path: /v1/control-plane/product/appeal/cases/{caseId}:submitDecision
+        path: /control-plane/product/appeal/cases/{caseId}:submitDecision
         scopes: [ops.case.approve]
         danger_level: high
         approval_mode: single
@@ -137,15 +136,15 @@ object_types:
     operations:
       - operation: ListRecommendationPolicies
         method: GET
-        path: /v1/control-plane/product/recommendation/policies
+        path: /control-plane/product/recommendation/policies
         scopes: [ops.reco.read]
       - operation: SimulateRecommendationPolicy
         method: POST
-        path: /v1/control-plane/product/recommendation/policies/{policyId}:simulate
+        path: /control-plane/product/recommendation/policies/{policyId}:simulate
         scopes: [ops.reco.write]
       - operation: ActivateRecommendationPolicy
         method: POST
-        path: /v1/control-plane/product/recommendation/policies/{policyId}:activate
+        path: /control-plane/product/recommendation/policies/{policyId}:activate
         scopes: [ops.reco.write]
         danger_level: high
         approval_mode: single

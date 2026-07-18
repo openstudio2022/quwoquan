@@ -45,7 +45,7 @@ def test_detects_forbidden_from_import():
 
 def test_detects_forbidden_endpoint_literal():
     tmp = Path(tempfile.mkdtemp())
-    (tmp / "bad.py").write_text('URL = "https://api.openai.com/v1/chat"\n', encoding="utf-8")
+    (tmp / "bad.py").write_text('URL = "https://api.openai.com/chat"\n', encoding="utf-8")
     issues = scan_agent_executor_contract(tmp)
     assert any("forbidden LLM endpoint 'api.openai.com'" in i for i in issues), issues
 

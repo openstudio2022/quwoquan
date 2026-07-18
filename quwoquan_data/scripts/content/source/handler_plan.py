@@ -6,7 +6,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 import hashlib
 import json
-import os
 from pathlib import Path
 import shutil
 import sys
@@ -15,10 +14,11 @@ from threading import Lock
 from typing import Any, Mapping
 
 from core.paths import ensure_execution_command_layout, execution_root
+from core.media_processing_policy import MEDIA_PROCESSING_POLICY
 from core.io import read_json, write_json
 from content.execution.runtime_state import write_execution_runtime_state, write_source_catalog
 from core.content_source_registry import homepage_source_can_seed_base_draft
-from content.post.evidence_text import clean_source_markdown, score_source_markdown
+from content.post.article.evidence_text import clean_source_markdown, score_source_markdown
 from governance.coverage.entity_extract import entity_ref as build_entity_ref, require_domain_etype
 from core.source_catalog import (
     coverage_issues,
@@ -51,14 +51,11 @@ from content.source.fetch_images import fetch_image_payload
 from content.source.prepare import prepare_source_plan, prepare_source_screen
 from governance.coverage.license import normalize_rights_payload, validate_image_rights
 
-SOURCE_UNIT_MAX_IMAGE_BYTES = max(
-    0,
-    int(os.environ.get("QWQ_SOURCE_UNIT_MAX_IMAGE_BYTES", str(24 * 1024 * 1024))),
-)
+SOURCE_UNIT_MAX_IMAGE_BYTES = MEDIA_PROCESSING_POLICY.source_asset_max_bytes
 
 _DOWNLOAD_PROGRESS_LOCK = Lock()
 
-_ALL_DOWNLOAD_LANES = {"homepage", "article", "image"}
+_ALL_DOWNLOAD_LANES = {"homepage", "article", "image", "video"}
 
 _TEXT_DOWNLOAD_LANES = ("homepage", "article")
 
@@ -67,7 +64,10 @@ def selected_download_lanes(lane: str) -> set[str] | None:
     if lane in ("", "all"):
         return None
     if lane not in _ALL_DOWNLOAD_LANES:
-        raise SystemExit(f"[download] unknown lane={lane!r}; expected all/homepage/article/image")
+        raise SystemExit(
+            f"[download] unknown lane={lane!r}; "
+            "expected all/homepage/article/image/video"
+        )
     return {lane}
 
 def _source_unit_lane_in_scope(lane: str, selected_lanes: set[str] | None) -> bool:
@@ -79,18 +79,11 @@ def _source_unit_lane_in_scope(lane: str, selected_lanes: set[str] | None) -> bo
     return normalized in selected_lanes
 
 def _entity_article_quota(execution_id: str) -> int:
-    try:
-        from content.execution import store
+    from content.execution import store
 
-        spec = store.load_spec(execution_id)
-    except Exception:  # noqa: BLE001
-        return 1
-    content = spec.get("content") if isinstance(spec.get("content"), Mapping) else {}
-    quotas = content.get("quotas") if isinstance(content.get("quotas"), Mapping) else {}
-    try:
-        return max(0, int(quotas.get("entityArticlesPerTarget") or 0))
-    except (TypeError, ValueError):
-        return 0
+    return store.load_spec_model(
+        execution_id
+    ).content.quotas.entity_articles_per_target
 
 def _curated_sources_for_lanes(
     execution_id: str,
@@ -126,7 +119,7 @@ def _homepage_plan_authority_issues(
     ]
     issues = [
         f"{entity_id}: homepage source {source.get('source_id') or '<unknown>'} "
-        "must have explicit encyclopedia-primary-v2 sourceKind/extractor/canonicalUrl"
+        "must have explicit encyclopedia-primary sourceKind/extractor/canonicalUrl"
         for source in homepage_sources
         if not homepage_source_can_seed_base_draft(source)
     ]
@@ -206,8 +199,8 @@ def _source_plan_gate_issues(
             _article_plan_quality_issues(
                 planned_sources,
                 entity_id=entity_id,
-                min_article_sources=int(
-                    requirements.get("minArticleBaseSources") or requirements["minSources"]
+                min_article_sources=(
+                    requirements.min_article_base_sources or requirements.min_sources
                 ),
             )
         )
@@ -244,7 +237,7 @@ def _source_plan_gate_issues(
             execution_id,
             entity_id,
             entity_type,
-            require_explicit=requirements["minSources"] >= 4,
+            require_explicit=requirements.min_sources >= 4,
             research_lane=rights_lane,
         )
     )
@@ -268,7 +261,7 @@ def _write_download_progress(
     shared = execution_root(execution_id) / "_shared"
     shared.mkdir(parents=True, exist_ok=True)
     payload = {
-        "schemaVersion": "quwoquan.content.source.progress",
+        "schema": "quwoquan.content.source.progress",
         "updatedAt": _now_iso(),
         "status": status,
         "entityId": entity_id,

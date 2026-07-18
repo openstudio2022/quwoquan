@@ -140,7 +140,7 @@ gwt_acceptance:
     - 图片背面必须是低饱和、低对比、纸张 wash 的 photo backface，平均亮度需落在对应 front 的 `0.62..0.78`，不得保留高对比镜像图作为主要视觉。
     - 横图、竖图、极端比例图统一 rasterize 成同一书页 logicalSize，图片自然尺寸只影响 cover 裁剪，不改变翻页几何。
     - 手势方向锁定时冻结 current、moving sheet、bottom 三面材质；拖动中 ready/failure 不得改变当前帧。目标页 pending 时翻到中性纸面，commit 后保持与 bottom 相同的冻结纸面，完全落平后才以 `160ms easeOut` 淡入已加载图片；cancel 同样延后异步更新到回弹结束。
-    - 加载超过 `300ms` 后才在静态页显示低对比 loading overlay；终态失败只在落平静态页显示 `image_not_supported`、`imageLoadFailed` 与重试。loading/failure overlay 不参与纹理捕获，失败图标不得随纸张翻动；重试成功走同一落平淡入路径。
+    - 加载超过 `300ms` 后才在静态页显示低对比 loading overlay；终态失败只在落平静态页显示无图标的 `imageLoadFailed` 与文字 `重试`。图片与视频失败态共用 44pt 最小触达区、半透明圆角按钮与 live region；不可恢复视频不得展示无效重试。loading/failure overlay 不参与纹理捕获，失败内容不得随纸张翻动；重试成功走同一落平淡入路径。
     - 静态页与纹理工厂必须消费同一已解码 `ui.Image` 和同一 `coverSourceRect`；当前页、翻页末帧与落页首帧的裁剪/像素一致，图片晚到不得造成落页换图、裁剪或亮度跳变。
     - commit/cancel 到终点时必须与文章一样强制应用 animation plan 最后一帧，再同步执行 `completeAnimation` 与 page index 提交；terminal bottom 与目标静态页使用同一图片和 cover 裁剪。事务中晚到的图片状态在落平后的首个静态帧仍冻结，随后才应用并淡入。
     - 图片作品在内容下方、标题上方显示点状页态，最多 6 点且明确当前位置；单图无指示器。
@@ -160,7 +160,7 @@ gwt_acceptance:
     - local_contract 覆盖 `ImmersiveGestureIntentController` 同一起手区域左滑/右滑分别锁定前/后翻、纵向优势锁上下切、preview 阶段不冻结父级竖向滚动。
     - pageflip release policy 测试覆盖不同 `progress/velocity` 的 commit settle duration 均在 `320ms..520ms`、cancel settle duration 均在 `220ms..360ms`，且图片书 release 后短时间内仍保留动态翻页层。
     - local_contract 覆盖 forward 绑定 `current.front/current.back/next.front`、BACK 绑定 `prev.front/prev.back/current.front`；moving sheet 只有一个完整 `RawImage`，不含纹理用 `FractionallySizedBox`，不得重复完整纹理。
-    - local_contract 覆盖 pending/failed 中性纸面、拖动中 ready/failure 帧冻结、落平首个静态帧继续冻结、随后 `160ms` 淡入、重试成功与 Reduce Motion 无 flipping layer。
+    - local_contract 覆盖 pending/failed 中性纸面、拖动中 ready/failure 帧冻结、落平首个静态帧继续冻结、随后 `160ms` 淡入、重试成功与 Reduce Motion 无 flipping layer；图片/视频失败内容无图标、文字重试样式一致、图片重试触达区至少 44pt。
     - frozen baseline 证据证明共享 `components/pageflip/**`、文章 `ui/content/article_reader/pageflip/**`、BACK 规则与既有测试相对恢复基线零差异；BACK 主线门禁继续保护文章 replacement、bottom clip 与 moving sheet。
     - local_contract 覆盖静态页、翻页末帧、落页首帧使用同一 cover 裁剪与像素；失败 overlay 不进入 moving sheet，`ImageBookPageSurfaceFactory` ready back 亮度为 front 的 `0.62..0.78` 并降低饱和度。
     - local_contract 覆盖 `works_image_pageflip_motion` 字段进入现有 behavior payload；widget/几何回归覆盖连续前后翻 10 次 seam/free-edge 无异常跳变、动态层不黑屏、不 loading、不瞬间换纹理。

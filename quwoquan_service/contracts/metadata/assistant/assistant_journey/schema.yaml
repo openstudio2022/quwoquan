@@ -2,7 +2,6 @@ dart_class: AssistantJourney
 library_path: assistant/contracts/assistant_journey.dart
 output_path: assistant/generated/contracts/assistant_journey.g.dart
 contract: assistant_journey
-version: v1
 kind: explainability_contract
 imports:
   - package:quwoquan_app/assistant/contracts/runtime_enums.dart

@@ -1,11 +1,5 @@
-version: 1
 entity: EventRecord
 
-events:
-  - name: EventBatchReported
-    description: 统一事件批量写入
-    producer: product-ops
-    consumers: [platform-ops, recommendation-engine, assistant-service]
-    channel: direct
-    payload_fields: [eventId, eventType, eventName, pageName, surfaceId, routeId, operationId, targetType, targetKey, entityType, entityId, experimentBucket, occurredAt]
-    recommend_impact: learning_signal
+# 产品日志只用于运营查询，不发布领域事件，也不驱动推荐或 Assistant。
+# 推荐的唯一领域事件是 content-service 发布的 BehaviorBatchReported。
+events: []

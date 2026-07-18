@@ -5,7 +5,7 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "schemaVersion",
+    "schema",
     "transactionId",
     "executionId",
     "sourcePolicyRevision",
@@ -15,9 +15,6 @@
     "objectClosureDigest"
   ],
   "properties": {
-    "schemaVersion": {
-      "const": "quwoquan_data.object_transaction_package/1"
-    },
     "transactionId": {
       "type": "string",
       "minLength": 1,
@@ -28,7 +25,11 @@
       "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(canary|m1|m2|m3)-[0-9]{3,}$"
     },
     "sourcePolicyRevision": {
-      "const": "encyclopedia-primary-v2"
+      "enum": [
+        "encyclopedia-primary",
+        "rights-cleared-content",
+        "governance-projection"
+      ]
     },
     "target": {
       "type": "object",
@@ -42,10 +43,14 @@
       ],
       "properties": {
         "layoutSchema": {
-          "const": "quwoquan_data.canonical_publish/3"
+          "const": "quwoquan_data.canonical_publish"
         },
         "objectKind": {
-          "enum": ["creators", "entities", "posts"]
+          "enum": [
+            "creators",
+            "entities",
+            "posts"
+          ]
         },
         "objectRef": {
           "type": "string",
@@ -54,9 +59,9 @@
         },
         "objectSchema": {
           "enum": [
-            "quwoquan_data.creator_object/1",
-            "quwoquan_data.entity_object/1",
-            "quwoquan_data.post_object/1"
+            "quwoquan_data.creator_object",
+            "quwoquan_data.entity_object",
+            "quwoquan_data.post_object"
           ]
         },
         "packageObjectRef": {
@@ -107,7 +112,12 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["sourceRef", "objectKey", "sha256", "bytes"],
+            "required": [
+              "sourceRef",
+              "objectKey",
+              "sha256",
+              "bytes"
+            ],
             "properties": {
               "sourceRef": {
                 "type": "string",
@@ -127,13 +137,33 @@
               }
             }
           }
+        },
+        "creatorObjects": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["creatorRef", "packageRef", "treeDigest"],
+            "properties": {
+              "creatorRef": { "type": "string", "minLength": 1 },
+              "packageRef": { "type": "string", "minLength": 1 },
+              "treeDigest": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              }
+            }
+          }
         }
       }
     },
     "review": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["attestationRef", "evidenceIndexRef"],
+      "required": [
+        "attestationRef",
+        "evidenceIndexRef"
+      ],
       "properties": {
         "attestationRef": {
           "type": "string",
@@ -148,6 +178,9 @@
     "objectClosureDigest": {
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "schema": {
+      "const": "quwoquan_data.object_transaction_package"
     }
   }
 }

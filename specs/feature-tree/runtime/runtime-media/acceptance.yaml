@@ -7,45 +7,135 @@ node:
   parent_domain_service: runtime
   parent_business_capability: runtime-media
 scope:
-  summary: runtime media 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: 四环境媒体交付、公开 slice key、播放器终态与防羊群验收。
+  in_scope:
+    - publicSliceKey / MediaDeliveryReference 命名与 authority-only 交付
+    - App 图片负缓存与视频控制器槽位退出
+    - manifest 驱动的 canonical media Range/MIME、Dart define parity 与门禁
+    - alpha/beta/gamma-local/prod-sim 的本地 target preflight，以及 prod-hosted gray-initial 的 release canary 证据
+  out_of_scope:
+    - 独立的视频剪辑、转码策略和内容供给能力
 sit_acceptance:
   SIT1:
-    title: runtime media 能力 SIT
+    title: runtime media 交付与加载恢复 SIT
     story_refs: []
     done_when:
-    - 能力内 Story 组合、状态机、异常路径和端云协同可验证。
+    - 同一逻辑资产在四环境仅 authority 不同
+    - 404 负缓存阻止 rebuild 羊群
+    - VideoPlayer dispose 不泄漏槽位；槽满可退出失败态
+    - fixture/seed 媒体字段无环境字面量与 CAS path
+    - canonical public video 在每个已启动 target 返回 HTTPS、Range 206 与 video/* MIME；失败会阻断该 target 的 Patrol/UAT
+    - player ready 与可恢复/不可恢复失败分别有结构化、无 PII 证据
     performance_points: []
     tests:
       planned: []
-      recorded: []
-    status: pending
+      recorded:
+        - file: quwoquan_app/test/local_contract/core/media/media_delivery_reference__local_contract_test.dart
+        - file: quwoquan_app/test/local_contract/core/media/content_media_url__local_contract_test.dart
+        - file: quwoquan_app/test/local_contract/core/media/media_load_failure_cache__local_contract_test.dart
+        - file: quwoquan_app/test/local_contract/ui/components/media/video/video_player_widget__delivery_binding__local_contract_test.dart
+        - file: quwoquan_app/test/local_contract/ui/components/media/video/video_player_widget__failure_experience__local_contract_test.dart
+        - file: quwoquan_ops/tests/local_contract/test_media_delivery_manifest_parity__local_contract_test.py
+        - file: quwoquan_ops/tests/local_contract/test_seeded_media_surface_head_range__local_contract_test.py
+        - file: quwoquan_ops/tests/local_contract/test_environment_patrol_smoke__local_contract_test.py
+        - file: quwoquan_ops/tests/local_contract/test_local_target_tls__local_contract_test.py
+        - file: quwoquan_ops/tests/local_contract/test_local_gamma_media__local_contract_test.py
+        - file: quwoquan_ops/tests/local_contract/test_video_playback_canary__local_contract_test.py
+        - file: quwoquan_service/runtime/media/asset_ref__local_contract_test.go
+        - file: quwoquan_service/services/content-service/internal/application/post/post_media_binding__local_contract_test.go
+        - file: quwoquan_service/services/content-service/tests/api_integration/media_asset_reference__api_integration_test.go
+        - file: quwoquan_app/test/user_acceptance/journeys/discovery/video/works_immersive_video_playback_journey__user_acceptance_test.dart
+        - file: quwoquan_app/test/user_acceptance/patrol/environment/basic_viability__user_acceptance_test.dart
+        - file: quwoquan_app/test/user_acceptance/patrol/environment/video_playback_canary__user_acceptance_test.dart
+    status: partial
     test_evidence:
       primary:
       - layer: local_contract
-        suite: sit1_local_contract
+        suite: media_delivery_contract
         cases:
-        - local_contract.runtime.runtime_media.sit1.sit1_local_contract
+        - local_contract.runtime.runtime_media.delivery_uri.authority_only
+        - local_contract.runtime.runtime_media.negative_cache_404
+        - local_contract.runtime.runtime_media.video_player.controller_slot_dispose
+        - local_contract.runtime.runtime_media.video_player.failure_scene_and_recovery
         envs: &id001
         - local
       - layer: api_integration
-        suite: sit1_api_integration
+        suite: media_asset_reference
         cases:
-        - api_integration.runtime.runtime_media.sit1.sit1_api_integration
+        - api_integration.runtime.runtime_media.projection.no_object_key
+        - api_integration.runtime.runtime_media.public_slice_key.delivery_authority
         envs:
         - beta
         - gamma
       supporting:
       - layer: local_contract
-        suite: sit1_local_contract
+        suite: media_delivery_gate
         cases:
-        - local_contract.runtime.runtime_media.sit1.sit1_local_contract
+        - local_contract.runtime.runtime_media.gate.forbidden_tokens
+        - local_contract.runtime.runtime_media.gate.mock_seed_not_in_feed_refs
+        - local_contract.runtime.runtime_media.gate.runtime_config_and_launch_define_parity
         envs: *id001
-    notes: []
+    notes:
+      - "`prod-sim` 是 prod 语义的本地演练 target；生产播放证据只接受 `prod-hosted` 的 `gray-initial` release canary。"
+      - 未产生真实 beta/gamma-local/prod-hosted 设备 ready 证据时，SIT 状态保持 partial，不能由 curl、dry-run 或页面节点存在替代。
+  SIT2:
+    title: VOD 权威描述符、storyboard、QoE 与有效播放分轨
+    story_refs:
+    - specs/feature-tree/discovery-content/content-display-journey-consistency/video-display-journey
+    done_when:
+    - 内容视频以 `{assetId, assetVersion, processorProfile}` 幂等处理，并且只允许 `processing -> ready | rejected`。
+    - 只有 ready asset 可被 publish 和投影；descriptor 从服务端探测结果提供 verifiedDurationMs、尺寸、codec/container、canonical video/cover slice 与可选 previewTrack。
+    - native duration 只用于 seek 边界和数据质量校验；超容差只产生一次去重事件/修复任务，不覆盖服务端权威值或伪装为播放失败。
+    - previewTrack、缓存 key、帧访问和取消均绑定 asset/version/profile/access policy；缺轨或预览失败退化为时间浮标。
+    - video_playback_qoe 只进入 Ops 强类型遥测，effective_play 只进入 content behavior；两条链路的字段、隐私和推荐消费者互不混用。
+    - 每会话每内容最多一次 effective_play，服务端拒绝未达有效播放门槛、seek 虚增、buffering、后台或离屏时段。
+    - SLS hourly 聚合与 dashboard/alert 能 readback P50/P95 ready/TTFF、rebuffer incidents per ready 和 duration mismatch rate，告警有最小样本量抑制。
+    performance_points:
+    - 首帧真实可用时采集 TTFF；平台无法取得首帧时不得伪报 TTFF，只报告 readyMs。
+    - raw QoE 留存 3 天、去身份 hourly 聚合留存 90 天。
+    tests:
+      planned:
+      - file: quwoquan_service/services/content-service/tests/local_contract/video_playback_descriptor__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/api_integration/video_media_processing__api_integration_test.go
+      - file: quwoquan_service/services/content-service/tests/api_integration/effective_play_behavior__api_integration_test.go
+      - file: quwoquan_ops/tests/local_contract/test_video_playback_qoe_sls__local_contract_test.py
+      - file: quwoquan_app/test/user_acceptance/patrol/video/video_playback_qoe__user_acceptance_test.dart
+      recorded: []
+    status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: video_playback_descriptor
+        cases:
+        - local_contract.runtime.runtime_media.video_descriptor.ready_asset_only
+        - local_contract.runtime.runtime_media.video_descriptor.preview_access_and_version_binding
+        - local_contract.runtime.runtime_media.video_qoe.behavior_isolation
+        envs: &id002
+        - alpha
+      - layer: api_integration
+        suite: video_media_processing
+        cases:
+        - api_integration.runtime.runtime_media.video_processing.ready_publish_projection
+        - api_integration.runtime.runtime_media.effective_play.server_policy
+        envs:
+        - beta
+        - gamma
+      supporting:
+      - layer: user_acceptance
+        suite: video_playback_qoe
+        cases:
+        - user_acceptance.runtime.runtime_media.video_qoe.device_readback
+        envs:
+        - gamma_local
+        - prod
+        rollout_stages:
+        - gray_initial
+    notes:
+    - 2026-07-18：现有播放器仅证明 controller initialize ready，尚不具备真实 TTFF、卡顿、seek 或时长偏差采集；effective_play、处理状态机、SLS readback 和真实设备证据均未实现，状态保持 pending。
 execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
+  - python3 quwoquan_ops/gate/verify_media_delivery_contract.py
   full_gate:
   - make gate

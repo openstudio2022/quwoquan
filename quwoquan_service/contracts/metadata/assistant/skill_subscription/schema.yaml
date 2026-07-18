@@ -2,7 +2,6 @@ dart_class: SkillSubscriptionWire
 library_path: assistant/generated/contracts/skill_subscription.g.dart
 output_path: assistant/generated/contracts/skill_subscription.g.dart
 contract: skill_subscription
-version: skill_subscription.m2
 kind: entity_wire_contract
 fields:
   - { name: subscriptionId, type: string, required: true }

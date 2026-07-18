@@ -18,10 +18,10 @@ class SelectableGroupConversationRowDto {
 
   factory SelectableGroupConversationRowDto.fromMap(Map<String, dynamic> m) {
     return SelectableGroupConversationRowDto(
-      conversationId: m['conversationId']?.toString() ?? m['id']?.toString() ?? m['_id']?.toString() ?? '',
+      conversationId: m['conversationId']?.toString() ?? '',
       title: m['title']?.toString() ?? '',
-      avatarUrl: m['avatarUrl']?.toString() ?? m['avatar']?.toString() ?? '',
-      friendMemberCount: (m['friendMemberCount'] as num?)?.toInt() ?? (m['friendCount'] as num?)?.toInt() ?? 0,
+      avatarUrl: m['avatarUrl']?.toString() ?? '',
+      friendMemberCount: (m['friendMemberCount'] as num?)?.toInt() ?? 0,
       memberCount: (m['memberCount'] as num?)?.toInt() ?? 0,
     );
   }

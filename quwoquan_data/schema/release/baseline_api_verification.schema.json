@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/baseline_api_verification.schema.json",
+  "title": "Empty baseline environment API verification",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "environment",
+    "releaseId",
+    "runId",
+    "sourceImporterReportRef",
+    "apiBaseUrl",
+    "verifiedAt",
+    "passed",
+    "offlined",
+    "preserved",
+    "issues"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.baseline_api_verification"},
+    "environment": {"enum": ["beta", "gamma", "prod"]},
+    "releaseId": {"type": "string", "minLength": 1},
+    "runId": {"type": "string", "minLength": 1},
+    "sourceImporterReportRef": {
+      "type": "string",
+      "pattern": "^env/(beta|gamma|prod)/runs/data-release/.+/homepage-import\\.json$"
+    },
+    "apiBaseUrl": {"type": "string", "pattern": "^https?://"},
+    "apiResolveHost": {"type": "string", "minLength": 1},
+    "verifiedAt": {"type": "string", "minLength": 1},
+    "passed": {"const": true},
+    "offlined": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["homepageId", "status"],
+        "properties": {
+          "homepageId": {"type": "string", "minLength": 1},
+          "status": {"const": 410}
+        }
+      }
+    },
+    "preserved": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["homepageId", "title", "status"],
+      "properties": {
+        "homepageId": {"type": "string", "minLength": 1},
+        "title": {"type": "string", "minLength": 1},
+        "status": {"const": 200}
+      }
+    },
+    "issues": {"type": "array", "maxItems": 0}
+  }
+}

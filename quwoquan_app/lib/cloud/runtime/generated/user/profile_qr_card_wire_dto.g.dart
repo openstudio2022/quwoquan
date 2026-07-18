@@ -34,7 +34,7 @@ class ProfileQrCardWireDto {
       styleVersion: m['styleVersion']?.toString() ?? 'v1',
       avatarUrl: m['avatarUrl']?.toString() ?? '',
       avatarVersion: m['avatarVersion']?.toString() ?? '',
-      displayName: m['displayName']?.toString() ?? m['nickname']?.toString() ?? '',
+      displayName: m['displayName']?.toString() ?? '',
       region: m['region']?.toString() ?? '',
       shareText: m['shareText']?.toString() ?? '',
       expiresAt: _parseDateTime(m['expiresAt']) ?? null,

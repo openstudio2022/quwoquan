@@ -5,6 +5,8 @@
 .PHONY: verify-chat-avatar-commercial-matrix
 .PHONY: run-chat-avatar-commercial-matrix-local
 .PHONY: verify-app-mock-isolation
+.PHONY: verify-api-path-unversioned
+.PHONY: verify-api-path-runtime
 .PHONY: verify-app-runtime-host-literals
 .PHONY: verify-app-concept-naming
 .PHONY: verify-app-auth-policy
@@ -102,6 +104,7 @@ DATA_PYTHON ?= $(QWQ_OUTPUT_ROOT)/env/repo/local/python-envs/cache/quwoquan-data
 PYTEST_RUNNER ?= $(shell if [ -x "$(DATA_PYTHON)" ]; then printf '%s' "$(DATA_PYTHON)"; else printf '%s' python3; fi)
 PYTEST_FLAGS ?= -o cache_dir=$(QWQ_OUTPUT_ROOT)/env/repo/local/tests/cache/pytest
 export PYTHONDONTWRITEBYTECODE := 1
+export PYTHONPYCACHEPREFIX := $(QWQ_OUTPUT_ROOT)/env/repo/local/python-cache/make
 .PHONY: stackctl-health
 .PHONY: stackctl-inspect
 .PHONY: stackctl-doctor
@@ -111,6 +114,15 @@ export PYTHONDONTWRITEBYTECODE := 1
 # 客户端：UI/App/Core 不得直连 cloud/services/*/mock（过渡期见 specs/gates/ui_mock_isolation_allowlist.yaml）
 verify-app-mock-isolation:
 	@python3 quwoquan_app/scripts/env/verify_ui_mock_isolation.py
+
+# HTTP API path 禁止 /vN、/internal/vN、/callbacks/vN（已挂入 gate_repo.sh）
+verify-api-path-unversioned:
+	@python3 quwoquan_ops/gate/verify_api_path_unversioned.py
+
+# 运行时新旧 path 探针（live；密钥/起栈就绪后执行，不强制进静态门禁）
+# 例: make verify-api-path-runtime ENV=gamma
+verify-api-path-runtime:
+	@python3 quwoquan_ops/cli/probes/verify_api_path_runtime_unversioned.py --env $${ENV:-gamma}
 
 verify-app-runtime-host-literals:
 	@python3 quwoquan_app/scripts/env/verify_runtime_host_literals.py
@@ -218,7 +230,7 @@ verify-data-release-consistency:
 		$(if $(PHASE),--phase "$(PHASE)",)
 
 verify-media-release-contract:
-	@python3 quwoquan_data/scripts/verify/verify_media_release_contract.py
+	@python3 quwoquan_data/scripts/cli.py verify media-release-contract
 
 verify-login-dependency-config:
 	@python3 quwoquan_service/scripts/verify/verify_login_dependency_config.py
@@ -721,6 +733,7 @@ test-local-contract:
 	@python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/local_contract/
 	@cd quwoquan_service && go test $$(go list ./services/... | grep -v '/tests/api_integration') -count=1
 	@$(PYTEST_RUNNER) -m pytest $(PYTEST_FLAGS) quwoquan_data/tests/local_contract quwoquan_ops/tests/local_contract -q
+	@python3 quwoquan_data/scripts/verify/verify_data_layout.py
 
 # api_integration：按统一环境名解析 HTTP 基址。API_CONTRACT_ENV 默认为 gamma。
 # 变量格式：{ALPHA|BETA|GAMMA|PROD}_BASE_URL 与 *_PRODUCT_OPS_BASE_URL。

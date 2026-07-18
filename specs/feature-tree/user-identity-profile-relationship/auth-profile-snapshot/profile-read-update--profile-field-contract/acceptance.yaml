@@ -10,7 +10,7 @@ scope:
   summary: 编辑资料字段契约，地区字段统一使用 tag-service 行政区标签引用。
   in_scope:
     - ProfileEditSnapshotWire.region + regionTagRef
-    - PATCH /v1/user/profile regionTagRef
+    - PATCH /user/profile regionTagRef
     - tag-service ListTagChildren 行政区 direct children
     - Data control_plane/governance/taxonomy 行政区真相源完整性
   out_of_scope:

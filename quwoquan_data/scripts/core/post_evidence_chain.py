@@ -13,8 +13,7 @@ from typing import Any, Iterable
 from core.article_package import compute_document_sha256, sha256_file, sha256_text
 from core.paths import RUNTIME_ROOT, execution_root, relative_execution_ref
 
-SOURCE_REFS_SCHEMA = "quwoquan_data.source_refs/2"
-SOURCE_REFS_SCHEMA_LEGACY = "quwoquan_data.source_refs"
+SOURCE_REFS_SCHEMA = "quwoquan_data.source_refs"
 FINALIZATION_REPORT_SCHEMA = "quwoquan_data.finalization_report"
 # 单底稿零参考宪法：source_refs.json 仅登记唯一底稿来源单元，禁止内联原文镜像。
 SOURCE_REFS_MAX_BYTES = 10 * 1024
@@ -136,7 +135,7 @@ def build_source_refs_snapshot(
     *,
     base_source_ref: str,
 ) -> dict[str, Any]:
-    """构造 post 对象 `1.download/source_refs.json`（单底稿零参考宪法 v2）。
+    """构造 post 对象 `1.download/source_refs.json`（单底稿零参考宪法）。
 
     宪法约束：
     - 每个内容对象只有一个底稿来源单元（`sources` 长度恒为 1，`role == base`）。
@@ -155,7 +154,7 @@ def build_source_refs_snapshot(
         normalized_ref=normalized_base,
     )
     return {
-        "schemaVersion": SOURCE_REFS_SCHEMA,
+        "schema": SOURCE_REFS_SCHEMA,
         "baseSourceRef": normalized_base,
         "sources": [entry],
     }
@@ -188,7 +187,7 @@ def build_finalization_report(
     actions = _stable_unique(normalization_actions)
     compose_digest = compute_document_sha256(compose_snapshot_markdown) if compose_snapshot_markdown else None
     return {
-        "schemaVersion": FINALIZATION_REPORT_SCHEMA,
+        "schema": FINALIZATION_REPORT_SCHEMA,
         "ref": ref,
         "articleSource": article_source,
         "draftArticleRef": draft_ref,
@@ -213,7 +212,6 @@ def build_finalization_report(
 __all__ = [
     "FINALIZATION_REPORT_SCHEMA",
     "SOURCE_REFS_SCHEMA",
-    "SOURCE_REFS_SCHEMA_LEGACY",
     "SOURCE_REFS_MAX_BYTES",
     "build_finalization_report",
     "build_source_refs_snapshot",

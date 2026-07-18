@@ -1,5 +1,4 @@
 {
-  "contractVersion": "retrieval_time_contract_v1",
   "defaultScope": "last_30d",
   "defaultFreshnessHoursMax": 72,
   "supportedScopes": [
@@ -31,5 +30,6 @@
     "year": 43800,
     "year_month": 26280,
     "year_month_day": 17520
-  }
+  },
+  "schema": "retrieval_time_contract"
 }

@@ -4,7 +4,7 @@ package model
 import "time"
 
 type CallSession struct {
-	ID                string        `json:"_id" bson:"_id"`
+	ID                string        `json:"callId" bson:"_id"`
 	CallType          string        `json:"callType" bson:"callType"`
 	Status            string        `json:"status" bson:"status"`
 	InitiatorID       string        `json:"initiatorId" bson:"initiatorId"`

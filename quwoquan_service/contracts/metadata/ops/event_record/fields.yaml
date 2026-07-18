@@ -1,343 +1,39 @@
-version: 1
 entity: EventRecord
 
+# 公共 wire contract 只有九个必填字段；其余字段只能由 event_catalog.yaml
+# 针对具体 eventType 声明为强类型扩展，禁止 properties/payload/metrics 自由对象。
 fields:
-  - name: id
-    type: string
-    constraints: [PK]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: drop
-    ops_exposure: read
+  - { name: logType, source: logType, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: eventType, source: eventType, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: sessionId, source: sessionId, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: mask, api_exposure: read_write, ops_exposure: read }
+  - { name: pageName, source: pageName, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: occurredAt, source: occurredAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: deviceManufacturer, source: deviceManufacturer, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: deviceModel, source: deviceModel, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: appVersion, source: appVersion, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: networkClass, source: networkClass, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
 
-  - name: eventId
-    type: string
-    constraints: [NOT_NULL]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: drop
-    ops_exposure: read
+  # 目录控制的强类型扩展字段。
+  - { name: durationMs, source: durationMs, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: result, source: result, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: failReasonCode, source: failReasonCode, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: errorCode, source: errorCode, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: operationId, source: operationId, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: httpStatus, source: httpStatus, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: callStack, source: callStack, type: "[]string", constraints: [NULLABLE], classification: SENSITIVE, log_policy: redacted, api_exposure: read_write, ops_exposure: read }
+  - { name: tClickToFirstFrameMs, source: tClickToFirstFrameMs, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: tFirstFrameToShellMs, source: tFirstFrameToShellMs, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: tShellToContentMs, source: tShellToContentMs, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: tClickToContentMs, source: tClickToContentMs, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: hasError, source: hasError, type: bool, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: readyMs, source: readyMs, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: ttffMs, source: ttffMs, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: rebufferCount, source: rebufferCount, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: rebufferMs, source: rebufferMs, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: seekCount, source: seekCount, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: declaredDurationMs, source: declaredDurationMs, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: observedDurationMs, source: observedDurationMs, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: durationMismatch, source: durationMismatch, type: bool, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: playbackMode, source: playbackMode, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
 
-  - name: eventType
-    type: string
-    constraints: [NOT_NULL]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: read
-    ops_exposure: read
-
-  - name: eventName
-    type: string
-    constraints: [NOT_NULL]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: read
-    ops_exposure: read
-
-  - name: eventVersion
-    type: string
-    constraints: [NOT_NULL]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: read
-    ops_exposure: read
-
-  - name: priority
-    type: string
-    constraints: [NOT_NULL]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: read
-    ops_exposure: read
-
-  - name: producer
-    type: string
-    constraints: [NOT_NULL]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: read
-    ops_exposure: read
-
-  - name: source
-    type: string
-    constraints: [NULLABLE]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: read
-    ops_exposure: read
-
-  - name: userIdHash
-    type: string
-    constraints: [NULLABLE]
-    classification: SENSITIVE
-    log_policy: mask
-    api_exposure: drop
-    ops_exposure: read
-
-  - name: sessionId
-    type: string
-    constraints: [NULLABLE]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: drop
-    ops_exposure: read
-
-  - name: pageVisitId
-    type: string
-    constraints: [NULLABLE]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: drop
-    ops_exposure: read
-
-  - name: surfaceId
-    type: string
-    constraints: [NULLABLE]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: read
-    ops_exposure: read
-
-  - name: routeId
-    type: string
-    constraints: [NULLABLE]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: read
-    ops_exposure: read
-
-  - name: operationId
-    type: string
-    constraints: [NULLABLE]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: read
-    ops_exposure: read
-
-  - name: requestId
-    type: string
-    constraints: [NULLABLE]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: drop
-    ops_exposure: read
-
-  - name: traceId
-    type: string
-    constraints: [NULLABLE]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: drop
-    ops_exposure: read
-
-  - name: pageName
-    type: string
-    constraints: [NULLABLE]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: read
-    ops_exposure: read
-
-  - name: targetType
-    type: string
-    constraints: [NULLABLE]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: read
-    ops_exposure: read
-
-  - name: targetKey
-    type: string
-    constraints: [NULLABLE]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: read
-    ops_exposure: read
-
-  - name: entityType
-    type: string
-    constraints: [NULLABLE]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: read
-    ops_exposure: read
-
-  - name: entityId
-    type: string
-    constraints: [NULLABLE]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: read
-    ops_exposure: read
-
-  - name: experimentBucket
-    type: string
-    constraints: [NULLABLE]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: read
-    ops_exposure: read
-
-  - name: errorCode
-    type: string
-    constraints: [NULLABLE]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: read
-    ops_exposure: read
-
-  - name: errorModule
-    type: string
-    constraints: [NULLABLE]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: read
-    ops_exposure: read
-
-  - name: errorKind
-    type: string
-    constraints: [NULLABLE]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: read
-    ops_exposure: read
-
-  - name: errorReason
-    type: string
-    constraints: [NULLABLE]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: read
-    ops_exposure: read
-
-  - name: origin
-    type: string
-    constraints: [NULLABLE]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: read
-    ops_exposure: read
-
-  - name: nature
-    type: string
-    constraints: [NULLABLE]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: read
-    ops_exposure: read
-
-  - name: failurePoint
-    type: string
-    constraints: [NULLABLE]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: read
-    ops_exposure: read
-
-  - name: stackHash
-    type: string
-    constraints: [NULLABLE]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: read
-    ops_exposure: read
-
-  - name: businessObject
-    type: string
-    constraints: [NULLABLE]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: read
-    ops_exposure: read
-
-  - name: functionModule
-    type: string
-    constraints: [NULLABLE]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: read
-    ops_exposure: read
-
-  - name: appRuntimeEnv
-    type: string
-    constraints: [NULLABLE]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: read
-    ops_exposure: read
-
-  - name: appVersion
-    type: string
-    constraints: [NULLABLE]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: read
-    ops_exposure: read
-
-  - name: platform
-    type: string
-    constraints: [NULLABLE]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: read
-    ops_exposure: read
-
-  - name: networkClass
-    type: string
-    constraints: [NULLABLE]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: read
-    ops_exposure: read
-
-  - name: occurredAt
-    type: timestamp
-    constraints: [NOT_NULL]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: read
-    ops_exposure: read
-
-  - name: clientSentAt
-    type: timestamp
-    constraints: [NULLABLE]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: read
-    ops_exposure: read
-
-  - name: ingestedAt
-    type: timestamp
-    constraints: [NOT_NULL]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: read
-    ops_exposure: read
-
-  - name: eventDate
-    type: string
-    constraints: [NOT_NULL]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: drop
-    ops_exposure: read
-
-  - name: payload
-    type: object
-    constraints: [NULLABLE]
-    classification: SENSITIVE
-    log_policy: mask
-    api_exposure: drop
-    ops_exposure: read
-
-  - name: metrics
-    type: object
-    constraints: [NULLABLE]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: read
-    ops_exposure: read
-
-unique_constraints:
-  - columns: [eventId]
-    description: 统一事件幂等键
+unique_constraints: []

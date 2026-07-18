@@ -73,8 +73,8 @@ sit_acceptance:
     - '[migrated_from_recorded] local_contract quwoquan_app/test/local_contract/cloud/content/intersection_repository_contract__local_contract_test.dart（summary/list/visit
       契约对齐，2026-06-16 green）'
     - '[migrated_from_recorded] PARTIAL api_integration（2026-06-16 gamma-local 实测，已迁移 canonical run evidence：search_intersection_smoke.json）：content-service
-      在 stackctl gamma 运行栈内，`/v1/content/intersections/{summary,object}`、`/v1/content/intersections`
-      GET 路由全部上线并强制 viewer 鉴权（匿名返回 CONTENT.USER.invalid_argument『需要登录』）；`/v1/content/feed/intersections`
+      在 stackctl gamma 运行栈内，`/content/intersections/{summary,object}`、`/content/intersections`
+      GET 路由全部上线并强制 viewer 鉴权（匿名返回 CONTENT.USER.invalid_argument『需要登录』）；`/content/feed/intersections`
       200。BLOCKED：populated summary→list→visit 需网关可识别 token + 已 seed viewer 关系，见 backlog
       R-IX05 衍生待办。'
     - '[recorded] 2026-07-05 continue-dev：`flutter test test/ui/user/widgets/my_intersection_inbox_widget_test.dart
@@ -205,7 +205,7 @@ sit_acceptance:
       过滤，2026-06-16 green）'
     - '[migrated_from_recorded] local_contract quwoquan_app/test/local_contract/ui/discovery/home_intersection_object_nav__local_contract_test.dart（事实/概率交集卡点击经
       metadata 路由进对象页，2026-06-16 green）'
-    - '[migrated_from_recorded] PARTIAL api_integration（2026-06-16 gamma-local 实测，已迁移 canonical run evidence：search_intersection_smoke.json）：`/v1/content/feed/intersections`
+    - '[migrated_from_recorded] PARTIAL api_integration（2026-06-16 gamma-local 实测，已迁移 canonical run evidence：search_intersection_smoke.json）：`/content/feed/intersections`
       经网关 200（匿名诚实返回空 items，不伪造）；BLOCKED：校园/旅行频道分通道混排的 populated 结果需 seed viewer 关系
       + 频道参数，见 backlog R-IX05/R-IX07。'
     - '[recorded] 2026-07-05 continue-dev：`flutter test test/ui/discovery/home_intersection_multiform_feed_widget_test.dart

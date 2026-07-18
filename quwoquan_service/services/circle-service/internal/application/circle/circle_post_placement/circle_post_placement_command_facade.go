@@ -2,7 +2,6 @@ package circlepostplacement
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -24,17 +23,15 @@ type PlaceCommand struct {
 	GroupID  string
 }
 
-type VersionedCommand struct {
-	CircleID        string
-	PlacementID     string
-	ExpectedVersion int64
+type TargetCommand struct {
+	CircleID    string
+	PlacementID string
 }
 
 type PresentationCommand struct {
-	CircleID        string
-	PlacementID     string
-	ExpectedVersion int64
-	Enabled         bool
+	CircleID    string
+	PlacementID string
+	Enabled     bool
 }
 
 type CommandResult struct {
@@ -48,7 +45,6 @@ type CommandFacade struct {
 	store   placementports.AggregateStore
 	readers placementports.PolicyReaders
 	now     func() time.Time
-	newID   func() (string, error)
 }
 
 func NewCommandFacade(store placementports.AggregateStore, readers placementports.PolicyReaders) *CommandFacade {
@@ -56,7 +52,7 @@ func NewCommandFacade(store placementports.AggregateStore, readers placementport
 		readers.Posts == nil || readers.Memberships == nil {
 		panic("CirclePostPlacement CommandFacade requires Store and all named policy Readers")
 	}
-	return &CommandFacade{store: store, readers: readers, now: time.Now, newID: newPlacementID}
+	return &CommandFacade{store: store, readers: readers, now: time.Now}
 }
 
 func (f *CommandFacade) Place(ctx context.Context, command PlaceCommand) (CommandResult, error) {
@@ -94,10 +90,7 @@ func (f *CommandFacade) Place(ctx context.Context, command PlaceCommand) (Comman
 	if actorID != post.OwnerPersonaID && !moderator {
 		return CommandResult{}, generated.AppErrorFromPermissionDenied("actor is neither post owner nor circle moderator")
 	}
-	placementID, err := f.newID()
-	if err != nil {
-		return CommandResult{}, generated.AppErrorFromPlacementStorageWriteFailed(err.Error())
-	}
+	placementID := stablePlacementID(command.CircleID, actorID, current.IdempotencyKey)
 	change := placementmodel.ChangeSet{
 		Kind: placementmodel.ChangePlace, PlacementID: placementID, PostID: command.PostID,
 		OwnerPersonaID: post.OwnerPersonaID, CircleID: command.CircleID, GroupID: command.GroupID,
@@ -106,7 +99,7 @@ func (f *CommandFacade) Place(ctx context.Context, command PlaceCommand) (Comman
 	return f.commit(ctx, current, actorID, change)
 }
 
-func (f *CommandFacade) Remove(ctx context.Context, command VersionedCommand) (CommandResult, error) {
+func (f *CommandFacade) Remove(ctx context.Context, command TargetCommand) (CommandResult, error) {
 	current, actorID, err := trustedCommandContext(ctx)
 	if err != nil {
 		return CommandResult{}, err
@@ -126,9 +119,12 @@ func (f *CommandFacade) Remove(ctx context.Context, command VersionedCommand) (C
 	if actorID != placement.OwnerPersonaID && !moderator {
 		return CommandResult{}, generated.AppErrorFromPermissionDenied("actor is neither post owner nor circle moderator")
 	}
+	if placement.State == placementmodel.CirclePostPlacementStateRemoved {
+		return commandResultFromPlacement(placement, true), nil
+	}
 	return f.commit(ctx, current, actorID, placementmodel.ChangeSet{
 		Kind: placementmodel.ChangeRemove, PlacementID: placement.ID, CircleID: placement.CircleID,
-		ExpectedVersion: command.ExpectedVersion, OccurredAt: f.now().UTC(),
+		ExpectedVersion: placement.Version, OccurredAt: f.now().UTC(),
 	})
 }
 
@@ -160,9 +156,13 @@ func (f *CommandFacade) setPresentation(ctx context.Context, kind placementmodel
 	if !moderator {
 		return CommandResult{}, generated.AppErrorFromPermissionDenied("presentation changes require circle moderator")
 	}
+	if (kind == placementmodel.ChangePin && placement.Pinned == command.Enabled) ||
+		(kind == placementmodel.ChangeFeature && placement.Featured == command.Enabled) {
+		return commandResultFromPlacement(placement, true), nil
+	}
 	return f.commit(ctx, current, actorID, placementmodel.ChangeSet{
 		Kind: kind, PlacementID: placement.ID, CircleID: placement.CircleID,
-		ExpectedVersion: command.ExpectedVersion, Enabled: command.Enabled, OccurredAt: f.now().UTC(),
+		ExpectedVersion: placement.Version, Enabled: command.Enabled, OccurredAt: f.now().UTC(),
 	})
 }
 
@@ -215,17 +215,65 @@ func (f *CommandFacade) commit(ctx context.Context, current operation.Context, a
 	if err != nil {
 		return CommandResult{}, generated.AppErrorFromPlacementStorageWriteFailed(err.Error())
 	}
-	receipt, err := f.store.Commit(ctx, placementports.CommitRequest{
-		Change: change, ReceiptKey: scopedReceiptKey(actorID, current.IdempotencyKey),
-		CommandDigest: digest, ReceiptExpiresAt: f.now().UTC().Add(placementReceiptRetention),
-	})
-	if err != nil {
-		return CommandResult{}, mapCommitError(err)
+	for attempt := 0; attempt < 3; attempt++ {
+		receipt, commitErr := f.store.Commit(ctx, placementports.CommitRequest{
+			Change: change, ReceiptKey: scopedReceiptKey(actorID, current.IdempotencyKey),
+			CommandDigest: digest, ReceiptExpiresAt: f.now().UTC().Add(placementReceiptRetention),
+		})
+		if commitErr == nil {
+			return CommandResult{
+				PlacementID: receipt.PlacementID, Version: receipt.Version,
+				State: string(receipt.State), IdempotentReplay: receipt.Replayed,
+			}, nil
+		}
+		if change.Kind == placementmodel.ChangePlace ||
+			!errors.Is(commitErr, placementmodel.ErrVersionConflict) ||
+			attempt == 2 {
+			return CommandResult{}, mapCommitError(commitErr)
+		}
+		latest, found, loadErr := f.store.Load(ctx, change.PlacementID)
+		if loadErr != nil {
+			return CommandResult{}, generated.AppErrorFromPlacementStorageWriteFailed(loadErr.Error())
+		}
+		if !found {
+			return CommandResult{}, mapCommitError(placementmodel.ErrNotFound)
+		}
+		if transitionAlreadyApplied(latest, change) {
+			return commandResultFromPlacement(latest, true), nil
+		}
+		change.ExpectedVersion = latest.Version
 	}
+	panic("unreachable CirclePostPlacement commit retry")
+}
+
+func transitionAlreadyApplied(
+	placement placementmodel.CirclePostPlacement,
+	change placementmodel.ChangeSet,
+) bool {
+	switch change.Kind {
+	case placementmodel.ChangeRemove:
+		return placement.State == placementmodel.CirclePostPlacementStateRemoved
+	case placementmodel.ChangePin:
+		return placement.State == placementmodel.CirclePostPlacementStateActive &&
+			placement.Pinned == change.Enabled
+	case placementmodel.ChangeFeature:
+		return placement.State == placementmodel.CirclePostPlacementStateActive &&
+			placement.Featured == change.Enabled
+	default:
+		return false
+	}
+}
+
+func commandResultFromPlacement(
+	placement placementmodel.CirclePostPlacement,
+	replayed bool,
+) CommandResult {
 	return CommandResult{
-		PlacementID: receipt.PlacementID, Version: receipt.Version,
-		State: string(receipt.State), IdempotentReplay: receipt.Replayed,
-	}, nil
+		PlacementID:      placement.ID,
+		Version:          placement.Version,
+		State:            string(placement.State),
+		IdempotentReplay: replayed,
+	}
 }
 
 func trustedCommandContext(ctx context.Context) (operation.Context, string, error) {
@@ -238,6 +286,9 @@ func trustedCommandContext(ctx context.Context) (operation.Context, string, erro
 }
 
 func commandDigest(actorID string, change placementmodel.ChangeSet) (string, error) {
+	if change.Kind != placementmodel.ChangePlace {
+		change.ExpectedVersion = 0
+	}
 	payload, err := json.Marshal(struct {
 		ActorID         string                    `json:"actorId"`
 		Kind            placementmodel.ChangeKind `json:"kind"`
@@ -259,6 +310,15 @@ func scopedReceiptKey(actorID, idempotencyKey string) string {
 	return hex.EncodeToString(sum[:])
 }
 
+func stablePlacementID(circleID, actorID, idempotencyKey string) string {
+	sum := sha256.Sum256([]byte(
+		strings.TrimSpace(circleID) + "\x00" +
+			strings.TrimSpace(actorID) + "\x00" +
+			strings.TrimSpace(idempotencyKey),
+	))
+	return "cpp_" + hex.EncodeToString(sum[:16])
+}
+
 func mapCommitError(err error) error {
 	switch {
 	case errors.Is(err, placementmodel.ErrAlreadyExists):
@@ -274,12 +334,4 @@ func mapCommitError(err error) error {
 	default:
 		return generated.AppErrorFromPlacementStorageWriteFailed(err.Error())
 	}
-}
-
-func newPlacementID() (string, error) {
-	var raw [16]byte
-	if _, err := rand.Read(raw[:]); err != nil {
-		return "", err
-	}
-	return "cpp_" + hex.EncodeToString(raw[:]), nil
 }

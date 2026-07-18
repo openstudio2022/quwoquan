@@ -1,4 +1,3 @@
-version: 1
 
 service:
   name: content-service
@@ -13,7 +12,8 @@ service:
 
 api_routes:
   - method: POST
-    path: /internal/v1/content/posts/{postId}:open-moderation-case
+    path: /internal/content/posts/{postId}:open-moderation-case
+
     operation: OpenPostModerationCase
     actor: account
     application:
@@ -60,7 +60,8 @@ api_routes:
     description: 为给定 postVersion + contentDigest 打开独立审核 Case；同一 revision 只能有一个 Case。
 
   - method: POST
-    path: /internal/v1/content/posts/{postId}:review-moderation
+    path: /internal/content/posts/{postId}:review-moderation
+
     operation: ReviewPostModerationCase
     actor: account
     application:
@@ -110,7 +111,8 @@ api_routes:
     description: 有审核权限的 operator 将 Case 从 pending 迁移至 reviewed，并写入 reviewer 审计。
 
   - method: POST
-    path: /internal/v1/content/posts/{postId}:moderate
+    path: /internal/content/posts/{postId}:moderate
+
     operation: DecidePostModeration
     actor: account
     application:
@@ -160,7 +162,8 @@ api_routes:
     description: 对指定 postVersion + contentDigest 的 reviewed Case 作出 approved 或 rejected 决定；先前 revision 的决定不得批准当前发布。
 
   - method: POST
-    path: /internal/v1/content/posts/{postId}:supersede-moderation
+    path: /internal/content/posts/{postId}:supersede-moderation
+
     operation: SupersedePostModerationCase
     actor: account
     application:
@@ -207,7 +210,8 @@ api_routes:
     description: Post revision 变更后由 lifecycle 调用，使旧 Case 不再具备发布资格。
 
   - method: GET
-    path: /internal/v1/content/posts/{postId}/publication-eligibility
+    path: /internal/content/posts/{postId}/publication-eligibility
+
     operation: GetPostPublicationEligibility
     actor: account
     application:

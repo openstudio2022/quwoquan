@@ -1,8 +1,7 @@
-version: 1
 read_model: GreetingReplyResult
 
 description: |
-  POST /v1/user/greeting-request/{requestId}/reply 响应 wire（含会话 ID）。
+  POST /user/greeting-request/{requestId}/reply 响应 wire（含会话 ID）。
 
 source_entities:
   - GreetingRequest
@@ -19,5 +18,4 @@ client_projection:
       dart_type: String
       nullable: false
       source: conversationId
-      aliases: [conversationId, promotedConversationId]
       default: "''"

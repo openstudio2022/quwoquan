@@ -37,6 +37,9 @@
 - 群组分类只允许作为 circle facet，而不是独立结果主域。
 - 结果模型必须可类型化，不允许长期停留在松散 `Map` 拼装层。
 - 联想页中的联系人 / 聊天记录由本地聊天搜索 contract 提供，不再依赖“社交关系搜索”产品语义。
+- 联想阶段本地域与实体主页并行结算，不允许 `Future.wait` 用云端结果阻塞本地分段；单域失败为 partial，所有域成功且为空才是 empty，所有域失败才是整页 error。
+- 正式结果页每次 query/tab generation 只调用一次 canonical `POST /search`，App 不再顺序重复 fan-out。
+- 任何 query/tab generation 被替换、超时或页面销毁时都必须让旧结果失效，并通过真实 cancellation signal 终止可见网络请求；`Future.timeout` 不作为 transport cancellation。
 
 ## 对标输入与吸收结论
 
@@ -73,6 +76,8 @@
 
 - 联想页首批结果分段 P95 在 1.5s 内可见。
 - 任一域失败时，只影响该段或当前 tab，不阻塞整页。
+- 前台云读取以 6 秒为最终预算，空白阻塞 3 秒只显示一次慢提示；已有结果时不增加全页慢提示。
+- `page_lifecycle_state` 复用 `waitMode`、`durationMs` 与 `phase=slow/timeout/cancelled/partial`，禁止记录原始搜索词。
 
 ## 迁移、灰度与回滚要求
 
@@ -84,3 +89,4 @@
 1. 联想页四段结构与网络结果页 tab 结构稳定可理解。
 2. 单域降级不拖垮联想页或网络结果页。
 3. `小趣搜` 与群组分类对象边界不再混乱。
+4. 正式结果页只有一次 canonical 搜索调用，旧 completion 不回写，6 秒后 spinner 必然停止且提供恢复动作。

@@ -53,7 +53,7 @@ func (reader *MediaAssetDeliveryReader) ReadOwnedReadyAsset(
 		return messageports.MediaAssetDeliverySlice{}, false, fmt.Errorf("assetID and ownerPersonaID are required")
 	}
 	endpoint := *reader.baseURL
-	endpoint.Path = strings.TrimRight(endpoint.Path, "/") + "/internal/v1/content/media/" +
+	endpoint.Path = strings.TrimRight(endpoint.Path, "/") + "/internal/content/media/" +
 		url.PathEscape(assetID) + ":delivery-reference"
 	query := endpoint.Query()
 	query.Set("ownerPersonaId", ownerPersonaID)

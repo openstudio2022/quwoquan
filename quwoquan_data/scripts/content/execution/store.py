@@ -16,11 +16,11 @@ from core.paths import (
 )
 from content.execution.workspace import execution_progress_path, execution_root
 
-SPEC_VERSION = "quwoquan.content.execution_spec"
-PROGRESS_VERSION = "quwoquan.content.execution_progress"
-RUN_VERSION = "quwoquan.content.workflow"
-PRESET_VERSION = "quwoquan.content.preset"
-RECIPE_VERSION = "quwoquan.content.recipe"
+SPEC_SCHEMA = "quwoquan.content.execution_spec"
+PROGRESS_SCHEMA = "quwoquan.content.execution_progress"
+RUN_SCHEMA = "quwoquan.content.execution"
+PRESET_SCHEMA = "quwoquan.content.preset"
+RECIPE_SCHEMA = "quwoquan.content.recipe"
 
 # vertical(英文 id，供 --vertical/采样) ↔ 路径顶层中文标签（对齐 app home channel 显示名）
 VERTICAL_LABEL = {
@@ -96,7 +96,7 @@ def scaffold_spec(
     """
     arche = archetype or ORGANIZE_ARCHETYPE.get(organize_by, "region_category_coverage")
     spec: dict[str, Any] = {
-        "schemaVersion": SPEC_VERSION,
+        "schema": SPEC_SCHEMA,
         "executionId": execution_id,
         "title": title or f"{key}{category or ''}{name}",
         "intentLabel": sanitize_intent_label(intent_label or name),
@@ -123,7 +123,7 @@ def scaffold_spec(
 
 def init_progress(execution_id: str, remaining: list[str] | None = None) -> dict[str, Any]:
     return {
-        "schemaVersion": PROGRESS_VERSION,
+        "schema": PROGRESS_SCHEMA,
         "executionId": execution_id,
         "updatedAt": now_iso(),
         "coverage": {
@@ -151,8 +151,10 @@ def read_yaml(path: Path) -> Any:
 
 def save_spec(spec: dict[str, Any]) -> Path:
     from core.schema import assert_valid
+    from content.execution.spec_contract import ExecutionSpec
 
     assert_valid(spec, "execution", "execution_spec", label=f"execution_spec:{spec.get('executionId', '')}")
+    ExecutionSpec.from_mapping(resolve_spec(spec))
     path = execution_spec_path(spec["executionId"])
     write_yaml(path, spec)
     return path
@@ -170,6 +172,13 @@ def load_spec(execution_id: str) -> dict[str, Any]:
     再叠加 execution spec（执行实例显式声明覆盖默认，list 替换语义）。
     """
     return resolve_spec(load_raw_spec(execution_id), execution_id)
+
+
+def load_spec_model(execution_id: str):
+    """Load and validate the immutable effective execution specification."""
+    from content.execution.spec_contract import ExecutionSpec
+
+    return ExecutionSpec.from_mapping(load_spec(execution_id))
 
 
 def spec_exists(execution_id: str) -> bool:
@@ -193,14 +202,14 @@ def spec_preset_ref(spec: dict[str, Any]) -> str:
 
 
 def load_preset(preset_ref: str) -> dict[str, Any]:
-    """读取家族包 preset 文档（schemaVersion 必须是 quwoquan.content.preset）。"""
+    """读取家族包 preset 文档（schema 必须是 quwoquan.content.preset）。"""
     ref = normalize_family_ref(preset_ref)
     path = preset_path(ref)
     if not path.is_file():
         raise FileNotFoundError(f"presetRef '{ref}' 不存在: {path}")
     doc = read_yaml(path)
-    if not isinstance(doc, dict) or doc.get("schemaVersion") != PRESET_VERSION:
-        raise ValueError(f"preset '{ref}' schemaVersion 必须为 {PRESET_VERSION}")
+    if not isinstance(doc, dict) or doc.get("schema") != PRESET_SCHEMA:
+        raise ValueError(f"preset '{ref}' schema 必须为 {PRESET_SCHEMA}")
     return doc
 
 

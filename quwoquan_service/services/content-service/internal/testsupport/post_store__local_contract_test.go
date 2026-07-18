@@ -14,7 +14,7 @@ func TestPostStoreExpiredReceiptDoesNotReplayNewCommand(t *testing.T) {
 
 	store := NewPostStore(nil)
 	store.receipts["expired-key"] = postReceipt{
-		commandName:   "CreatePost",
+		commandName:   "SubmitPostPublication",
 		commandDigest: "old-digest",
 		post:          postmodel.Post{ID: "old-post"},
 		expiresAt:     time.Now().UTC().Add(-time.Second),
@@ -24,7 +24,7 @@ func TestPostStoreExpiredReceiptDoesNotReplayNewCommand(t *testing.T) {
 		Post:             &postmodel.Post{ID: "new-post"},
 		ExpectedVersion:  0,
 		IdempotencyKey:   "expired-key",
-		CommandName:      "CreatePost",
+		CommandName:      "SubmitPostPublication",
 		CommandDigest:    "new-digest",
 		ReceiptExpiresAt: time.Now().UTC().Add(time.Hour),
 	})

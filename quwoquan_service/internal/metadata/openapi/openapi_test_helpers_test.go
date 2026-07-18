@@ -139,6 +139,33 @@ func assertPathParameter(
 	t.Fatalf("%s %s missing required path parameter %s", method, path, name)
 }
 
+func assertHeaderParameter(
+	t *testing.T,
+	document map[string]any,
+	path string,
+	method string,
+	name string,
+	required bool,
+) {
+	t.Helper()
+	operation := operationAt(t, document, path, method)
+	for _, raw := range operation["parameters"].([]any) {
+		parameter := raw.(map[string]any)
+		if parameter["name"] == name &&
+			parameter["in"] == "header" &&
+			parameter["required"] == required {
+			return
+		}
+	}
+	t.Fatalf(
+		"%s %s missing header parameter %s required=%t",
+		method,
+		path,
+		name,
+		required,
+	)
+}
+
 func assertSchemaRef(
 	t *testing.T,
 	container map[string]any,

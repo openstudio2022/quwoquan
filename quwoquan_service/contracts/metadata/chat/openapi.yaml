@@ -4,7 +4,7 @@ info:
     title: quwoquan chat API
     version: v1
 paths:
-    /v1/chat/contact-home:
+    /chat/contact-home:
         get:
             operationId: ListContactHome
             x-contract-operation-id: chat.conversation.ListContactHome
@@ -31,7 +31,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/chat/contacts:
+    /chat/contacts:
         get:
             operationId: ListContacts
             x-contract-operation-id: chat.conversation.ListContacts
@@ -58,7 +58,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/chat/contacts/search:
+    /chat/contacts/search:
         get:
             operationId: SearchContacts
             x-contract-operation-id: chat.conversation.SearchContacts
@@ -85,7 +85,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/chat/conversations:
+    /chat/conversations:
         get:
             operationId: ListConversations
             x-contract-operation-id: chat.conversation.ListConversations
@@ -139,7 +139,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/chat/conversations/{conversationId}:
+    /chat/conversations/{conversationId}:
         get:
             operationId: GetConversation
             x-contract-operation-id: chat.conversation.GetConversation
@@ -236,7 +236,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/chat/conversations/{conversationId}/admins:
+    /chat/conversations/{conversationId}/admins:
         put:
             operationId: UpdateGroupAdmins
             x-contract-operation-id: chat.conversation_membership.UpdateGroupAdmins
@@ -270,7 +270,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/chat/conversations/{conversationId}/assistant:
+    /chat/conversations/{conversationId}/assistant:
         post:
             operationId: InviteAssistant
             x-contract-operation-id: chat.conversation_membership.InviteAssistant
@@ -331,7 +331,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/chat/conversations/{conversationId}/members:
+    /chat/conversations/{conversationId}/members:
         get:
             operationId: ListMembers
             x-contract-operation-id: chat.conversation_membership.ListMembers
@@ -397,7 +397,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/chat/conversations/{conversationId}/members/{userId}:
+    /chat/conversations/{conversationId}/members/{userId}:
         delete:
             operationId: RemoveMember
             x-contract-operation-id: chat.conversation_membership.RemoveMember
@@ -430,7 +430,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/chat/conversations/{conversationId}/messages:
+    /chat/conversations/{conversationId}/messages:
         get:
             operationId: ListMessages
             x-contract-operation-id: chat.message.ListMessages
@@ -479,6 +479,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: true
                 content:
@@ -496,7 +502,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/chat/conversations/{conversationId}/messages/{messageId}/read:
+    /chat/conversations/{conversationId}/messages/{messageId}/read:
         post:
             operationId: MarkAsRead
             x-contract-operation-id: chat.conversation_user_state.MarkAsRead
@@ -535,7 +541,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/chat/conversations/{conversationId}/messages/{messageId}/recall:
+    /chat/conversations/{conversationId}/messages/{messageId}/recall:
         post:
             operationId: RecallMessage
             x-contract-operation-id: chat.message.RecallMessage
@@ -574,7 +580,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/chat/conversations/{conversationId}/messages/{messageId}/receipts:
+    /chat/conversations/{conversationId}/messages/{messageId}/receipts:
         get:
             operationId: GetReceipts
             x-contract-operation-id: chat.conversation.GetReceipts
@@ -612,7 +618,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/chat/conversations/{conversationId}/owner:
+    /chat/conversations/{conversationId}/owner:
         patch:
             operationId: TransferOwnership
             x-contract-operation-id: chat.conversation_membership.TransferOwnership
@@ -646,7 +652,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/chat/conversations/{conversationId}/settings:
+    /chat/conversations/{conversationId}/settings:
         patch:
             operationId: UpdateConversationSettings
             x-contract-operation-id: chat.conversation_user_state.UpdateConversationSettings
@@ -680,7 +686,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/chat/conversations/{conversationId}/sync:
+    /chat/conversations/{conversationId}/sync:
         post:
             operationId: SyncMessages
             x-contract-operation-id: chat.message.SyncMessages
@@ -713,7 +719,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/chat/conversations/batch:
+    /chat/conversations/batch:
         post:
             operationId: BatchGetConversations
             x-contract-operation-id: chat.conversation.BatchGetConversations
@@ -740,7 +746,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/chat/conversations/search:
+    /chat/conversations/search:
         get:
             operationId: SearchConversations
             x-contract-operation-id: chat.conversation.SearchConversations
@@ -767,7 +773,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/chat/conversations/timestamps:
+    /chat/conversations/timestamps:
         get:
             operationId: ListConversationTimestamps
             x-contract-operation-id: chat.conversation.ListConversationTimestamps
@@ -794,7 +800,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/chat/group-candidates:
+    /chat/group-candidates:
         get:
             operationId: ListGroupCandidates
             x-contract-operation-id: chat.conversation.ListGroupCandidates
@@ -821,7 +827,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/chat/groups/{conversationId}/home:
+    /chat/groups/{conversationId}/home:
         get:
             operationId: GetGroupHome
             x-contract-operation-id: chat.conversation.GetGroupHome
@@ -854,7 +860,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/chat/inbox:
+    /chat/inbox:
         get:
             operationId: ListInbox
             x-contract-operation-id: chat.conversation.ListInbox
@@ -881,7 +887,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/chat/message-home:
+    /chat/message-home:
         get:
             operationId: ListMessageHome
             x-contract-operation-id: chat.conversation.ListMessageHome
@@ -908,7 +914,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/chat/messages/search:
+    /chat/messages/search:
         get:
             operationId: SearchMessages
             x-contract-operation-id: chat.message.SearchMessages
@@ -935,7 +941,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/chat/selectable-group-conversations:
+    /chat/selectable-group-conversations:
         get:
             operationId: ListSelectableGroupConversations
             x-contract-operation-id: chat.conversation.ListSelectableGroupConversations
@@ -962,7 +968,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/chat/selectable-group-conversations/{conversationId}/contact-members:
+    /chat/selectable-group-conversations/{conversationId}/contact-members:
         get:
             operationId: ListSelectableGroupContactMembers
             x-contract-operation-id: chat.conversation.ListSelectableGroupContactMembers

@@ -1,4 +1,4 @@
-/// POST `/v1/content/behaviors` 请求体中 `events[]` 的单条载荷。
+/// POST `/content/behaviors` 请求体中 `events[]` 的单条载荷。
 ///
 /// OpenAPI 规范见 `quwoquan_service/contracts/metadata/content/openapi.yaml`
 /// → `BehaviorEvent`（`contentId` / `eventType` / `timestamp` 等）。

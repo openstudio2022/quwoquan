@@ -427,7 +427,7 @@ func openMeteoWeatherSearch(ctx context.Context, client *http.Client, query, loc
 }
 
 func openMeteoWeatherSearchCandidate(ctx context.Context, client *http.Client, candidate string) (string, []map[string]any, string, bool) {
-	geoURL := "https://geocoding-api.open-meteo.com/v1/search?count=5&language=zh&format=json&name=" + url.QueryEscape(candidate)
+	geoURL := "https://geocoding-api.open-meteo.com/search?count=5&language=zh&format=json&name=" + url.QueryEscape(candidate)
 	geoReq, err := http.NewRequestWithContext(ctx, http.MethodGet, geoURL, nil)
 	if err != nil {
 		return "", nil, "", false
@@ -458,7 +458,7 @@ func openMeteoWeatherSearchCandidate(ctx context.Context, client *http.Client, c
 		tz = "auto"
 	}
 	forecastURL := fmt.Sprintf(
-		"https://api.open-meteo.com/v1/forecast?latitude=%s&longitude=%s&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=%s&forecast_days=3",
+		"https://api.open-meteo.com/forecast?latitude=%s&longitude=%s&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=%s&forecast_days=3",
 		strconv.FormatFloat(place.Latitude, 'f', -1, 64),
 		strconv.FormatFloat(place.Longitude, 'f', -1, 64),
 		url.QueryEscape(tz),

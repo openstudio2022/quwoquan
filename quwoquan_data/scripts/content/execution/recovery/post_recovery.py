@@ -1,6 +1,7 @@
-"""Workflow service extracted from the retired monolithic runner."""
+"""Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
-from content.execution.support import Any, DataIssue, DataIssueCode, DataIssueStage, DataRecoveryAction, ExecutionContext, Iterable, Mapping, Sequence, StageResult, data_issues, execution_root, issue_messages, load_workflow_state, read_json, save_workflow_state, shutil, store
+from content.execution.support import Any, DataIssue, DataIssueCode, DataIssueStage, DataRecoveryAction, ExecutionContext, Iterable, Mapping, Sequence, StageResult, data_issues, execution_root, issue_messages, load_execution_state, read_json, save_execution_state, shutil, store
+from core.io import write_json
 
 def _content_issue_matchers(
     ctx: ExecutionContext,
@@ -108,8 +109,8 @@ def _content_plan_base_draft_shortfall_refs(ctx: ExecutionContext, active_refs: 
     的真·图文底稿。
     """
     from content.post import object_index as content_object
-    from content.post.base_draft import base_draft_readiness
-    from content.post.draft_io import read_writing_pack
+    from content.post.article.base_draft import base_draft_readiness
+    from content.post.article.draft_io import read_writing_pack
     short_refs: list[str] = []
     for ref in active_refs:
         coords = content_object.content_coords(ctx.execution_id, ref) or {}
@@ -126,10 +127,11 @@ def _content_plan_base_draft_shortfall_refs(ctx: ExecutionContext, active_refs: 
     return short_refs
 
 def _content_type_for_carrier(carrier: object) -> str:
-    return "image" if str(carrier or "") == "image" else "article"
+    normalized = str(carrier or "").strip()
+    return normalized if normalized in {"article", "image", "video"} else "article"
 
 def _invalidate_ref_for_retry(ctx: ExecutionContext, ref: str, *, preserve_draft: bool = False) -> bool:
-    """清理旧草稿/旧成品，让 rewound workflow 真正回到待重写状态。
+    """清理旧草稿/旧成品，让 rewound execution 真正回到待重写状态。
     ``preserve_draft=True`` 时保留 ``4.draft`` 已写正文与 draft_meta（不 wipe 成
     placeholder / 不下调 generator），只清理已物化成品面与陈旧 review 侧车。配合
     `_write_retry_reports_for_refs` 写入更新的 ``5.review/repair_report.json``，让
@@ -138,7 +140,7 @@ def _invalidate_ref_for_retry(ctx: ExecutionContext, ref: str, *, preserve_draft
     单点失败回退；显式 retry-stage / 写包契约变更仍用默认销毁语义。
     """
     from content.post import object_index as content_object
-    from content.post.draft_io import draft_package_dir, read_writing_pack, write_image_evidence_draft, write_placeholder_draft
+    from content.post.article.draft_io import draft_package_dir, read_writing_pack, write_image_evidence_draft, write_placeholder_draft
     try:
         obj_dir = content_object.content_object_dir(ctx.execution_id, ref)
         draft_dir = draft_package_dir(ctx.execution_id, ref)
@@ -146,12 +148,11 @@ def _invalidate_ref_for_retry(ctx: ExecutionContext, ref: str, *, preserve_draft
         return False
     coords = content_object.content_coords(ctx.execution_id, ref) or {}
     pack = read_writing_pack(ctx.execution_id, ref) or {}
-    is_image = (
-        str(coords.get("contentType") or "") == "image"
-        or str(pack.get("carrier") or "") == "image"
+    content_type = _content_type_for_carrier(
+        coords.get("contentType") or pack.get("carrier")
     )
     if not preserve_draft:
-        if is_image:
+        if content_type == "image":
             write_image_evidence_draft(
                 ctx.execution_id,
                 ref,
@@ -162,12 +163,27 @@ def _invalidate_ref_for_retry(ctx: ExecutionContext, ref: str, *, preserve_draft
                 ],
                 cited_source_paths=[str(path) for path in (pack.get("sourcePaths") or []) if path],
             )
+        elif content_type == "video":
+            from content.post.video.authoring import video_script_path
+
+            script_path = video_script_path(ctx.execution_id, ref)
+            if script_path.is_file():
+                script_path.unlink()
+            write_json(
+                draft_dir / "draft_meta.json",
+                {
+                    "ref": ref,
+                    "generator": "pending",
+                    "status": "pending_agent",
+                    "citedSourcePaths": list(pack.get("sourcePaths") or []),
+                },
+            )
         else:
             write_placeholder_draft(
                 ctx.execution_id,
                 ref,
                 allow_agent_downgrade=True,
-                downgrade_reason="explicit workflow retry invalidated upstream compose/author evidence",
+                downgrade_reason="explicit execution retry invalidated upstream compose/author evidence",
             )
     author_self_check = draft_dir / "author_self_check.json"
     if author_self_check.is_file():
@@ -187,18 +203,18 @@ def _invalidate_ref_for_retry(ctx: ExecutionContext, ref: str, *, preserve_draft
     content_object.write_content_object_index(ctx.execution_id, ref)
     return True
 
-def _purge_author_queue_for_stale_workflow(
+def _purge_stale_author_queue(
     ctx: ExecutionContext,
     *,
     refs: list[str] | None = None,
     reason: str,
 ) -> None:
-    from content.execution.queue.runtime import purge_jobs
+    from content.execution.queue.management import purge_jobs
     result = purge_jobs(ctx.execution_id, stage="author", refs=refs)
     removed = result.get("removed") or []
     if removed:
         print(
-            f"[geo-homepages] 已清理过期 author queue ({reason}): "
+            f"[task execute] 已清理过期 author queue ({reason}): "
             + ", ".join(removed[:12])
             + (" ..." if len(removed) > 12 else "")
         )
@@ -249,10 +265,10 @@ def _record_post_review_retry_history(
 ) -> None:
     if not refs:
         return
-    state = load_workflow_state(ctx.execution_id)
+    state = load_execution_state(ctx.execution_id)
     rows = [
         dict(row)
-        for row in (state.get("produceReviewRetryHistory") or [])
+        for row in (state.produce_review_retry_history or [])
         if isinstance(row, Mapping)
     ]
     rows.append(
@@ -264,14 +280,14 @@ def _record_post_review_retry_history(
             "recordedAt": store.now_iso(),
         }
     )
-    state["produceReviewRetryHistory"] = rows[-50:]
-    save_workflow_state(state)
+    state.produce_review_retry_history = rows[-50:]
+    save_execution_state(state)
 
 def _prepare_post_review_retry(ctx: ExecutionContext, result: StageResult, target_stage: str) -> bool:
-    from content.execution.pipeline.stage_post import _approved_review_refs
+    from content.execution.controller.stage_post_review import _approved_review_refs
     from content.execution.queue.jobs import enqueue_ref_job
-    from content.execution.queue.runtime import requeue_refs
-    from content.post.draft_io import read_writing_pack
+    from content.execution.queue.management import requeue_refs
+    from content.post.article.draft_io import read_writing_pack
     refs, issue_map = _post_review_retry_refs(ctx, result.issue_records)
     # 单点失败隔离（防塌方）：已通过对象级 review gate 的稿件（含已写正文）一律不动，
     # 除非批级发布门直接点名该 ref/path；失败对象的回退绝不波及无关绿对象的已写正文。
@@ -291,7 +307,7 @@ def _prepare_post_review_retry(ctx: ExecutionContext, result: StageResult, targe
     )
     if target_stage == "download_plan":
         _write_retry_reports_for_refs(ctx, refs=refs, issue_map=issue_map, target_stage=target_stage)
-        _purge_author_queue_for_stale_workflow(ctx, reason="post_review->download_plan")
+        _purge_stale_author_queue(ctx, reason="post_review->download_plan")
         return True
     # 底稿中心快速失败：不再用 20% bulk-repair 闸门（QWQ_POST_REVIEW_ALLOW_BULK_REPAIR）
     # 阻塞整批等待人工诊断。失败 ref 一律按有界 ReAct 预算（MAX_REACT_REWINDS）重写；
@@ -299,7 +315,7 @@ def _prepare_post_review_retry(ctx: ExecutionContext, result: StageResult, targe
     # 进度持久化（失败不销毁）：保留失败对象已写正文 + draft_meta，靠 repair_report 触发就地修订，
     # 只清理已物化成品面与陈旧 review 侧车，agent 在原稿基础上改而非从占位从零重写。
     _write_retry_reports_for_refs(ctx, refs=refs, issue_map=issue_map, target_stage=target_stage)
-    _purge_author_queue_for_stale_workflow(ctx, refs=refs, reason="post_review->post_compose")
+    _purge_stale_author_queue(ctx, refs=refs, reason="post_review->post_compose")
     reset = [ref for ref in refs if _invalidate_ref_for_retry(ctx, ref, preserve_draft=True)]
     requeued = requeue_refs(
         ctx.execution_id,
@@ -336,7 +352,7 @@ def _prepare_post_review_retry(ctx: ExecutionContext, result: StageResult, targe
             )
     if reset:
         print(
-            "[geo-homepages] 已为 post_review 回退重置待重写 ref: "
+            "[task execute] 已为 post_review 回退重置待重写 ref: "
             + ", ".join(reset[:12])
             + (" ..." if len(reset) > 12 else "")
         )

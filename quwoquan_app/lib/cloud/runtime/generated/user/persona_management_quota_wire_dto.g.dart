@@ -12,8 +12,8 @@ class PersonaManagementQuotaWireDto {
 
   factory PersonaManagementQuotaWireDto.fromMap(Map<String, dynamic> m) {
     return PersonaManagementQuotaWireDto(
-      maxSubAccounts: (m['maxSubAccounts'] as num?)?.toInt() ?? (m['maxPersonas'] as num?)?.toInt() ?? (m['quotaLimit'] as num?)?.toInt() ?? 5,
-      usedSubAccounts: (m['usedSubAccounts'] as num?)?.toInt() ?? (m['usedPersonas'] as num?)?.toInt() ?? (m['totalCount'] as num?)?.toInt() ?? 0,
+      maxSubAccounts: (m['maxSubAccounts'] as num?)?.toInt() ?? 5,
+      usedSubAccounts: (m['usedSubAccounts'] as num?)?.toInt() ?? 0,
     );
   }
 

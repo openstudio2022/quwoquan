@@ -22,7 +22,6 @@ func TestPlaceRequiresTrustedOwnerOrModeratorAndReplaysReceipt(t *testing.T) {
 	}
 	facade := NewCommandFacade(store, readers.policyReaders())
 	facade.now = func() time.Time { return time.Date(2026, 7, 14, 9, 0, 0, 0, time.UTC) }
-	facade.newID = func() (string, error) { return "placement-1", nil }
 
 	ctx := placementContext("persona-owner", "place-1")
 	first, err := facade.Place(ctx, PlaceCommand{CircleID: "circle-1", PostID: "post-1", GroupID: "group-1"})
@@ -42,7 +41,7 @@ func TestPlaceRequiresTrustedOwnerOrModeratorAndReplaysReceipt(t *testing.T) {
 	}
 }
 
-func TestPresentationRequiresModeratorAndExpectedVersion(t *testing.T) {
+func TestPresentationRequiresModeratorAndRetriesInternalVersion(t *testing.T) {
 	store := newContractStore()
 	store.placement = &placementmodel.CirclePostPlacement{
 		ID: "placement-1", Version: 1, PostID: "post-1", OwnerPersonaID: "persona-owner",
@@ -56,22 +55,26 @@ func TestPresentationRequiresModeratorAndExpectedVersion(t *testing.T) {
 	facade.now = func() time.Time { return time.Date(2026, 7, 14, 9, 0, 0, 0, time.UTC) }
 
 	_, err := facade.SetPinned(placementContext("persona-owner", "pin-owner"), PresentationCommand{
-		CircleID: "circle-1", PlacementID: "placement-1", ExpectedVersion: 1, Enabled: true,
+		CircleID: "circle-1", PlacementID: "placement-1", Enabled: true,
 	})
 	if !hasRuntimeCode(err, generated.ErrPermissionDenied.Error()) {
 		t.Fatalf("post owner without moderator role must not pin, got %v", err)
 	}
-	_, err = facade.SetPinned(placementContext("persona-moderator", "pin-stale"), PresentationCommand{
-		CircleID: "circle-1", PlacementID: "placement-1", ExpectedVersion: 2, Enabled: true,
-	})
-	if !hasRuntimeCode(err, generated.ErrPlacementVersionConflict.Error()) {
-		t.Fatalf("stale version must conflict, got %v", err)
-	}
+	store.conflictOnce = true
 	result, err := facade.SetPinned(placementContext("persona-moderator", "pin-ok"), PresentationCommand{
-		CircleID: "circle-1", PlacementID: "placement-1", ExpectedVersion: 1, Enabled: true,
+		CircleID: "circle-1", PlacementID: "placement-1", Enabled: true,
 	})
 	if err != nil || result.Version != 2 || !store.placement.Pinned {
 		t.Fatalf("moderator pin drift: result=%+v placement=%+v err=%v", result, store.placement, err)
+	}
+	replayed, err := facade.SetPinned(
+		placementContext("persona-moderator", "pin-already-applied"),
+		PresentationCommand{
+			CircleID: "circle-1", PlacementID: "placement-1", Enabled: true,
+		},
+	)
+	if err != nil || !replayed.IdempotentReplay || replayed.Version != 2 {
+		t.Fatalf("semantic pin replay drift: result=%+v err=%v", replayed, err)
 	}
 }
 
@@ -89,8 +92,9 @@ func placementContext(personaID, idempotencyKey string) context.Context {
 }
 
 type contractStore struct {
-	placement *placementmodel.CirclePostPlacement
-	receipts  map[string]struct {
+	placement    *placementmodel.CirclePostPlacement
+	conflictOnce bool
+	receipts     map[string]struct {
 		digest string
 		result placementports.CommitReceipt
 	}
@@ -111,6 +115,10 @@ func (store *contractStore) Load(_ context.Context, id string) (placementmodel.C
 }
 
 func (store *contractStore) Commit(_ context.Context, request placementports.CommitRequest) (placementports.CommitReceipt, error) {
+	if store.conflictOnce {
+		store.conflictOnce = false
+		return placementports.CommitReceipt{}, placementmodel.ErrVersionConflict
+	}
 	if receipt, found := store.receipts[request.ReceiptKey]; found {
 		if receipt.digest != request.CommandDigest {
 			return placementports.CommitReceipt{}, placementmodel.ErrIdempotencyConflict

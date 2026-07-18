@@ -19,9 +19,9 @@ for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
 from core.io import write_json  # noqa: E402
 from core import paths as _paths_mod  # noqa: E402
 from core.paths import execution_root, release_root  # noqa: E402
-from core.release_layout import payload_file  # noqa: E402
-from core.tree_integrity import tree_integrity_stats  # noqa: E402
-from content.release.canonical.integrity import scan_release_integrity, scan_runtime_batch_integrity  # noqa: E402
+from core.release_layout import object_closure_digest, payload_file  # noqa: E402
+from content.release.canonical.integrity import scan_release_integrity  # noqa: E402
+from content.release.canonical.runtime_integrity import scan_runtime_batch_integrity  # noqa: E402
 from content.source.source_unit import resolve_entity_object_dir, write_source_unit  # noqa: E402
 from content.homepage.homepage import _entity_base_draft  # noqa: E402
 from content.release.canonical.assemble import assemble_release  # noqa: E402
@@ -80,8 +80,8 @@ def _seed_source(
     )
     identities = {
         "维基百科": ("wikipedia", "wikipedia_api", f"https://zh.wikipedia.org/wiki/{entity}"),
-        "搜狗百科": ("sogou_baike", "sogou_baike_html", f"https://baike.sogou.com/v{entity}"),
-        "百度百科": ("baidu_baike", "baidu_baike_html", f"https://baike.baidu.com/item/{entity}"),
+        "今日头条百科": ("toutiao_baike", "toutiao_baike_html", f"https://www.baike.com/wiki/{entity}"),
+        "百度百科": ("baidu_baike", "baidu_baike_openapi", f"https://baike.baidu.com/item/{entity}"),
     }
     source_kind, extractor, canonical_url = identities.get(
         kind,
@@ -99,7 +99,7 @@ def _seed_source(
         source_kind=source_kind,
         extractor=extractor,
         policy_revision=(
-            "encyclopedia-primary-v2" if research_lane == "homepage" else ""
+            "encyclopedia-primary" if research_lane == "homepage" else ""
         ),
         source_use_mode=source_use_mode,
         research_lane=research_lane,
@@ -224,14 +224,14 @@ def _seed_release_root() -> None:
     write_json(
         release_root(RELEASE) / "release_manifest.json",
         {
-            "schemaVersion": "quwoquan_data.release_manifest",
+            "schema": "quwoquan_data.release_manifest",
             "releaseId": RELEASE,
             "executionId": TASK,
         },
     )
     write_json(
         execution_root(TASK) / "_shared" / "base_draft_ledger.json",
-        {"schemaVersion": "quwoquan_data.base_draft_ledger", "assignments": {}},
+        {"schema": "quwoquan_data.base_draft_ledger", "assignments": {}},
     )
 
 
@@ -241,7 +241,7 @@ def _seed_v3_creator_only_release(*, broken_profile_ref: bool = False) -> None:
     write_json(
         creator / "_creator.json",
         {
-            "schemaVersion": "quwoquan_data.creator_object/1",
+            "schema": "quwoquan_data.creator_object",
             "creatorId": creator_id,
             "profileRef": "missing.json" if broken_profile_ref else "profile.json",
             "assetsRef": "assets.refs.json",
@@ -255,17 +255,24 @@ def _seed_v3_creator_only_release(*, broken_profile_ref: bool = False) -> None:
     _write(creator / "works.refs.ndjson", "")
     for required in ("entities", "posts", "tags", "media/objects"):
         (_paths_mod.PUBLISH_ROOT / required).mkdir(parents=True, exist_ok=True)
-    canonical_merkle = tree_integrity_stats(_paths_mod.PUBLISH_ROOT)["merkleRoot"]
     root = release_root(RELEASE)
+    release_creator = payload_file(root, f"objects/creators/{creator_id}")
+    shutil.copytree(creator, release_creator)
+    canonical_merkle = object_closure_digest(root)
     desired = {
-        "schemaVersion": "quwoquan_data.release_desired_state/1",
+        "schema": "quwoquan_data.release_desired_state",
         "releaseId": RELEASE,
-        "desiredRefs": {"posts": [], "entities": [], "creators": [creator_id]},
+        "desiredRefs": {
+            "posts": [],
+            "entities": [],
+            "creators": [creator_id],
+            "tags": [],
+        },
     }
     write_json(
         payload_file(root, "release.json"),
         {
-            "schemaVersion": "quwoquan_data.release/3",
+            "schema": "quwoquan_data.release",
             "releaseId": RELEASE,
             "canonicalMerkle": canonical_merkle,
         },
@@ -274,16 +281,18 @@ def _seed_v3_creator_only_release(*, broken_profile_ref: bool = False) -> None:
     write_json(
         payload_file(root, "sample_bundle.json"),
         {
-            "schemaVersion": "quwoquan_data.release_sample/1",
+            "schema": "quwoquan_data.release_sample",
             "releaseId": RELEASE,
             "posts": [],
             "entities": [],
+            "creators": [creator_id],
+            "tags": [],
         },
     )
     write_json(
         payload_file(root, "media_manifest.json"),
         {
-            "schemaVersion": "quwoquan_data.release_media_manifest/1",
+            "schema": "quwoquan_data.release_media_manifest",
             "releaseId": RELEASE,
             "assets": [],
         },
@@ -291,21 +300,23 @@ def _seed_v3_creator_only_release(*, broken_profile_ref: bool = False) -> None:
     write_json(
         payload_file(root, "index/objects.json"),
         {
-            "schemaVersion": "quwoquan_data.release_object_index/1",
+            "schema": "quwoquan_data.release_object_index",
             "posts": [],
             "entities": [],
             "creators": [creator_id],
+            "tags": [],
         },
     )
 
 
-def test_release_integrity_accepts_v3_creator_only_release_with_real_closure():
+def test_release_integrity_blocks_creator_only_release_without_consumer():
     _reset()
     _seed_v3_creator_only_release()
 
     report = scan_release_integrity(RELEASE)
 
-    assert report["passed"], report
+    assert not report["passed"]
+    assert "release_creator_closure_mismatch" in "\n".join(report["issues"])
     assert report["stats"]["creatorCount"] == 1
     assert report["stats"]["entityCount"] == 0
     assert report["stats"]["postCount"] == 0
@@ -338,7 +349,7 @@ def test_runtime_integrity_allows_same_asset_contract_before_release():
     _seed_execution_post("毕棚沟B", "b", base_source=base, asset_source="", asset_sha="sha256:abc")
     write_json(
         execution_root(TASK) / "_shared" / "base_draft_ledger.json",
-        {"schemaVersion": "quwoquan_data.base_draft_ledger", "assignments": {base: "a"}},
+        {"schema": "quwoquan_data.base_draft_ledger", "assignments": {base: "a"}},
     )
 
     report = scan_runtime_batch_integrity(TASK)
@@ -418,11 +429,11 @@ def test_runtime_integrity_blocks_known_wrong_place_image():
 def test_runtime_integrity_allows_article_asset_from_independent_source_unit():
     _reset()
     base = _seed_source("毕棚沟", "01.base", kind="维基百科")
-    other = _seed_source("毕棚沟", "02.other", kind="搜狗百科")
+    other = _seed_source("毕棚沟", "02.other", kind="今日头条百科")
     _seed_execution_post("毕棚沟C", "c", base_source=base, asset_source=other, asset_sha="sha256:def")
     write_json(
         execution_root(TASK) / "_shared" / "base_draft_ledger.json",
-        {"schemaVersion": "quwoquan_data.base_draft_ledger", "assignments": {base: "c"}},
+        {"schema": "quwoquan_data.base_draft_ledger", "assignments": {base: "c"}},
     )
     report = scan_runtime_batch_integrity(TASK)
     text = "\n".join(report["issues"])
@@ -449,7 +460,7 @@ def test_runtime_integrity_allows_factual_reference_prompted_as_adaptation():
     )
     write_json(
         execution_root(TASK) / "_shared" / "base_draft_ledger.json",
-        {"schemaVersion": "quwoquan_data.base_draft_ledger", "assignments": {base: "fact-only"}},
+        {"schema": "quwoquan_data.base_draft_ledger", "assignments": {base: "fact-only"}},
     )
     report = scan_runtime_batch_integrity(TASK)
     text = "\n".join(report["issues"])
@@ -469,7 +480,7 @@ def test_runtime_integrity_allows_text_only_article_without_source_asset():
     )
     write_json(
         execution_root(TASK) / "_shared" / "base_draft_ledger.json",
-        {"schemaVersion": "quwoquan_data.base_draft_ledger", "assignments": {base: "text-only"}},
+        {"schema": "quwoquan_data.base_draft_ledger", "assignments": {base: "text-only"}},
     )
 
     runtime_report = scan_runtime_batch_integrity(TASK)
@@ -484,7 +495,7 @@ def test_runtime_integrity_still_blocks_unmarked_assetless_article():
     _seed_execution_post("毕棚沟NoAsset", "no-asset", base_source=base, asset_source="", with_assets=False)
     write_json(
         execution_root(TASK) / "_shared" / "base_draft_ledger.json",
-        {"schemaVersion": "quwoquan_data.base_draft_ledger", "assignments": {base: "no-asset"}},
+        {"schema": "quwoquan_data.base_draft_ledger", "assignments": {base: "no-asset"}},
     )
     report = scan_runtime_batch_integrity(TASK)
     assert "article must include at least one sourced image asset" in "\n".join(report["issues"])
@@ -493,7 +504,7 @@ def test_runtime_integrity_still_blocks_unmarked_assetless_article():
 def test_runtime_integrity_flags_article_asset_not_belonging_to_declared_source_unit():
     _reset()
     base = _seed_source("毕棚沟", "01.base", kind="维基百科")
-    other = _seed_source("毕棚沟", "02.other", kind="搜狗百科")
+    other = _seed_source("毕棚沟", "02.other", kind="今日头条百科")
     _seed_execution_post("毕棚沟D", "d", base_source=base, asset_source=other, asset_sha="sha256:ghi")
     manifest_path = execution_root(TASK) / "posts/article/攻略/毕棚沟D/1/manifest.json"
     manifest = __import__("json").loads(manifest_path.read_text(encoding="utf-8"))
@@ -501,7 +512,7 @@ def test_runtime_integrity_flags_article_asset_not_belonging_to_declared_source_
     write_json(manifest_path, manifest)
     write_json(
         execution_root(TASK) / "_shared" / "base_draft_ledger.json",
-        {"schemaVersion": "quwoquan_data.base_draft_ledger", "assignments": {base: "d"}},
+        {"schema": "quwoquan_data.base_draft_ledger", "assignments": {base: "d"}},
     )
     report = scan_runtime_batch_integrity(TASK)
     text = "\n".join(report["issues"])
@@ -541,33 +552,25 @@ def test_homepage_base_draft_never_falls_back_to_guide_source():
 def test_homepage_base_draft_picks_best_single_baike_no_cross_source():
     """主权威百科单源择优：主页三件套必须同源，不允许跨源拼接。"""
     _reset()
-    sogou = _seed_source(
-        "毕棚沟", "01.sogou", kind="搜狗百科",
-        source_use_mode="factual_reference_only", research_lane="homepage",
-    )
     baidu = _seed_source(
-        "毕棚沟", "02.baidu", kind="百度百科",
+        "毕棚沟", "01.baidu", kind="百度百科",
         source_use_mode="factual_reference_only", research_lane="homepage",
     )
     wiki = _seed_source(
-        "毕棚沟", "03.wiki", kind="维基百科",
+        "毕棚沟", "02.wiki", kind="维基百科",
         source_use_mode="factual_reference_only", research_lane="homepage",
     )
     chosen = _entity_base_draft(TASK, "地点", "景区", "毕棚沟")
     # registry authority 顺序与质量共同裁决；当前应稳定选到维基百科，且三件套同源。
     assert chosen["sourceRef"] == wiki, chosen
     assert chosen["primaryEvidenceRef"] == wiki
-    assert chosen["sourceRef"] not in (baidu, sogou)
+    assert chosen["sourceRef"] != baidu
     assert chosen.get("text")
 
     # 去掉维基后退而求其次取百度（仍是单一最佳源，绝不跨源拼接）。
     _reset()
-    _seed_source(
-        "毕棚沟", "01.sogou", kind="搜狗百科",
-        source_use_mode="factual_reference_only", research_lane="homepage",
-    )
     baidu_only = _seed_source(
-        "毕棚沟", "02.baidu", kind="百度百科",
+        "毕棚沟", "01.baidu", kind="百度百科",
         source_use_mode="factual_reference_only", research_lane="homepage",
     )
     chosen_baidu = _entity_base_draft(TASK, "地点", "景区", "毕棚沟")
@@ -581,7 +584,7 @@ def test_release_quota_blocks_entity_homepage_outside_primary_post_refs():
     write_json(
         root / "release_manifest.json",
         {
-            "schemaVersion": "quwoquan_data.release_manifest",
+            "schema": "quwoquan_data.release_manifest",
             "releaseId": RELEASE,
             "executionId": TASK,
         },

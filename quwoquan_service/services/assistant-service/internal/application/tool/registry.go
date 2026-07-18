@@ -320,8 +320,7 @@ func canonicalToolDocuments(query string) []rtsearch.Document {
 }
 
 // executeRetrieveToolSearch runs the unified retrieve contract for the cloud
-// search/app_search tools. AI input is targets/ids/names/terms/filters; the
-// compat "query" key is only parsed for backward compatibility.
+// search/app_search tools. AI input is targets/ids/names/terms/filters only.
 func executeRetrieveToolSearch(ctx context.Context, req Request, defaults []rtsearch.Target) rtsearch.RetrieveResponse {
 	rreq := parseRetrieveToolRequest(req, defaults)
 	display := retrieveDisplayQuery(rreq)
@@ -342,11 +341,6 @@ func parseRetrieveToolRequest(req Request, defaults []rtsearch.Target) rtsearch.
 		targets = defaults
 	}
 	terms := toStringSliceInput(in["terms"])
-	if len(terms) == 0 {
-		if q := strings.TrimSpace(fmt.Sprint(in["query"])); q != "" && q != "<nil>" {
-			terms = splitRetrieveTerms(q)
-		}
-	}
 	var filters rtsearch.RetrieveFilters
 	if raw, ok := in["filters"].(map[string]any); ok {
 		filters.Tags = toStringSliceInput(raw["tags"])

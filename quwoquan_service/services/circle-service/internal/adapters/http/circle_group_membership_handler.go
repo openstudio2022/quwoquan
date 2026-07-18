@@ -48,13 +48,8 @@ func (handler *CircleHandler) handleGroupMemberships(w http.ResponseWriter, requ
 			writeHTTPError(w, request, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "self group membership accepts GET or DELETE"))
 			return
 		}
-		expectedVersion, err := parseExpectedVersion(request.Header.Get("If-Match"))
-		if err != nil {
-			writeHTTPError(w, request, rterr.NewInvalidArgument(rterr.ModuleCircle, "请求缺少有效版本", err.Error()))
-			return
-		}
 		result, err := handler.groupMembershipCommands.Leave(request.Context(), app.SelfCommand{
-			CircleID: circleID, GroupID: groupID, ExpectedVersion: expectedVersion,
+			CircleID: circleID, GroupID: groupID,
 		})
 		if err != nil {
 			writeHTTPError(w, request, err)
@@ -80,13 +75,9 @@ func (handler *CircleHandler) handleGroupMemberships(w http.ResponseWriter, requ
 			writeHTTPError(w, request, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "invalid group membership command method"))
 			return
 		}
-		expectedVersion, err := parseExpectedVersion(request.Header.Get("If-Match"))
-		if err != nil {
-			writeHTTPError(w, request, rterr.NewInvalidArgument(rterr.ModuleCircle, "请求缺少有效版本", err.Error()))
-			return
-		}
-		command := app.TargetCommand{CircleID: circleID, GroupID: groupID, TargetPersonaID: target, ExpectedVersion: expectedVersion}
+		command := app.TargetCommand{CircleID: circleID, GroupID: groupID, TargetPersonaID: target}
 		var result app.CommandResult
+		var err error
 		switch kind {
 		case "approve":
 			result, err = handler.groupMembershipCommands.Approve(request.Context(), command)
@@ -103,11 +94,6 @@ func (handler *CircleHandler) handleGroupMemberships(w http.ResponseWriter, requ
 		return
 	}
 	if len(rest) == 2 && rest[1] == "role" && request.Method == http.MethodPatch {
-		expectedVersion, err := parseExpectedVersion(request.Header.Get("If-Match"))
-		if err != nil {
-			writeHTTPError(w, request, rterr.NewInvalidArgument(rterr.ModuleCircle, "请求缺少有效版本", err.Error()))
-			return
-		}
 		var body struct {
 			Role string `json:"role"`
 		}
@@ -117,7 +103,7 @@ func (handler *CircleHandler) handleGroupMemberships(w http.ResponseWriter, requ
 		}
 		result, err := handler.groupMembershipCommands.UpdateRole(request.Context(), app.TargetCommand{
 			CircleID: circleID, GroupID: groupID, TargetPersonaID: strings.TrimSpace(rest[0]),
-			ExpectedVersion: expectedVersion, Role: model.CircleGroupMembershipRole(body.Role),
+			Role: model.CircleGroupMembershipRole(body.Role),
 		})
 		if err != nil {
 			writeHTTPError(w, request, err)

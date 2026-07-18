@@ -35,9 +35,8 @@ type UpdateCommand struct {
 }
 
 type DeleteCommand struct {
-	CircleID        string
-	FileID          string
-	ExpectedVersion int64
+	CircleID string
+	FileID   string
 }
 
 type CommandResult struct {
@@ -137,9 +136,16 @@ func (facade *CommandFacade) Delete(ctx context.Context, command DeleteCommand) 
 	if err != nil {
 		return CommandResult{}, err
 	}
+	if file.Status == filemodel.CircleFileStatusDeleted {
+		return CommandResult{
+			FileID:  file.ID,
+			Version: file.Version,
+			Status:  string(file.Status),
+		}, nil
+	}
 	return facade.commit(ctx, current, actorID, filemodel.ChangeSet{
 		Kind: filemodel.ChangeDelete, FileID: file.ID, CircleID: file.CircleID,
-		ExpectedVersion: command.ExpectedVersion, OccurredAt: facade.now().UTC(),
+		ExpectedVersion: file.Version, OccurredAt: facade.now().UTC(),
 	}, policy.QuotaBytes)
 }
 
@@ -202,14 +208,36 @@ func (facade *CommandFacade) commit(ctx context.Context, current operation.Conte
 	if err != nil {
 		return CommandResult{}, generated.AppErrorFromFileStorageWriteFailed(err.Error())
 	}
-	receipt, err := facade.store.Commit(ctx, fileports.CommitRequest{
-		Change: change, ReceiptKey: fileReceiptKey(actorID, current.IdempotencyKey), CommandDigest: digest,
-		ReceiptExpiresAt: facade.now().UTC().Add(fileReceiptRetention), StorageQuota: quota,
-	})
-	if err != nil {
-		return CommandResult{}, mapFileCommitError(err)
+	for attempt := 0; attempt < 3; attempt++ {
+		receipt, commitErr := facade.store.Commit(ctx, fileports.CommitRequest{
+			Change: change, ReceiptKey: fileReceiptKey(actorID, current.IdempotencyKey), CommandDigest: digest,
+			ReceiptExpiresAt: facade.now().UTC().Add(fileReceiptRetention), StorageQuota: quota,
+		})
+		if commitErr == nil {
+			return CommandResult{FileID: receipt.FileID, Version: receipt.Version, Status: string(receipt.Status), IdempotentReplay: receipt.Replayed}, nil
+		}
+		if change.Kind != filemodel.ChangeDelete ||
+			!errors.Is(commitErr, filemodel.ErrVersionConflict) ||
+			attempt == 2 {
+			return CommandResult{}, mapFileCommitError(commitErr)
+		}
+		latest, found, loadErr := facade.store.Load(ctx, change.FileID)
+		if loadErr != nil {
+			return CommandResult{}, generated.AppErrorFromFileStorageWriteFailed(loadErr.Error())
+		}
+		if !found {
+			return CommandResult{}, mapFileCommitError(filemodel.ErrNotFound)
+		}
+		if latest.Status == filemodel.CircleFileStatusDeleted {
+			return CommandResult{
+				FileID:  latest.ID,
+				Version: latest.Version,
+				Status:  string(latest.Status),
+			}, nil
+		}
+		change.ExpectedVersion = latest.Version
 	}
-	return CommandResult{FileID: receipt.FileID, Version: receipt.Version, Status: string(receipt.Status), IdempotentReplay: receipt.Replayed}, nil
+	panic("unreachable CircleFile commit retry")
 }
 
 func trustedFileCommandContext(ctx context.Context) (operation.Context, string, error) {
@@ -223,6 +251,9 @@ func trustedFileCommandContext(ctx context.Context) (operation.Context, string, 
 func fileCommandDigest(actorID string, change filemodel.ChangeSet) (string, error) {
 	copy := change
 	copy.OccurredAt = time.Time{}
+	if copy.Kind == filemodel.ChangeDelete {
+		copy.ExpectedVersion = 0
+	}
 	payload, err := json.Marshal(struct {
 		ActorID string              `json:"actorId"`
 		Change  filemodel.ChangeSet `json:"change"`

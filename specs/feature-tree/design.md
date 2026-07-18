@@ -84,8 +84,8 @@
 ### 统一 URL
 
 - App 只消费 `CloudRuntimeConfig.gatewayBaseUrl` 与 generated client。
-- 公共 API 统一为 `/v1/{domain}/{resource}`；状态迁移使用 `POST .../{id}:{action}`。
-- 内部 API 使用 `/internal/v1/**`，第三方回调使用 `/callbacks/v1/**`，公开分享/SEO URL 独立于 API。
+- 公共 API 统一为 `/{domain}/{resource}`；状态迁移使用 `POST .../{id}:{action}`。
+- 内部 API 使用 `/internal/**`，第三方回调使用 `/callbacks/**`，公开分享/SEO URL 独立于 API。
 - URL 嵌套只表达导航/过滤，不推断聚合 owner。
 - method/path/operation/route/surface/page 是不同标识，禁止字符串复用和第二映射。
 

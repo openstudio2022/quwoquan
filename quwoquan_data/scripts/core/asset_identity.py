@@ -1,25 +1,22 @@
 """资产 ID 真相源：生成、解析、token 规范化。
 
-命名格式（v2，见 docs/asset_id_zero_collision_spec.md §3）：
+唯一命名格式：
 
     {entity}_{role}_{caption}_{executionSequence}_{digest8}
 
 caption 为图注 token 段（清洗 + 截断 ≤16 字符），退化时按
 sectionSlug → 图{ordinal} → 实体名 降级，保证恒非空且非纯数字。
-caption 不进 hash seed；同批幂等由 batch registry 的 owner key 复用保证。
-旧 v1 四段格式 {entity}_{role}_{seq}_{digest8} 仅作历史产物解析兼容。
+caption 不进 hash seed；同一 execution 的幂等由 asset registry owner key 复用保证。
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 import hashlib
 import re
-from typing import Any
 
 _ROLE_FILE_TOKENS = {"cover": "cover", "closing": "closing", "node": "detail", "detail": "detail"}
-# v2：role 与 seq 之间有图注段（可含下划线，贪婪回溯由右锚定 seq+digest 约束）。
+# role 与 sequence 之间有图注段（可含下划线，右锚定 sequence + digest）。
 _ASSET_ID_RE = re.compile(r"^(.+?)_(cover|closing|detail)_(.+)_([0-9]+)_([0-9a-f]{8})$")
-# v1 历史格式：role 直接邻接 seq，仅解析兼容。
-_ASSET_ID_LEGACY_RE = re.compile(r"^(.+?)_(cover|closing|detail)_([0-9]+)_([0-9a-f]{8})$")
 
 CAPTION_TOKEN_MAX_CHARS = 16
 
@@ -27,6 +24,16 @@ CAPTION_TOKEN_MAX_CHARS = 16
 _DEGENERATE_CAPTION_TOKENS = frozenset(
     {"图", "图片", "配图", "封面", "插图", "题图", "image", "img", "photo", "picture", "cover", "asset"}
 )
+
+
+@dataclass(frozen=True, slots=True)
+class PostAssetIdentity:
+    raw: str
+    entity_name: str
+    role: str
+    caption_token: str
+    execution_sequence: int
+    digest: str
 
 
 def asset_token(value: str) -> str:
@@ -63,7 +70,7 @@ def caption_file_token(
 ) -> str:
     """图注文件名 token：清洗 + 截断 ≤16；退化时降级 sectionSlug→图{ordinal}→实体名。
 
-    返回值恒非空且非纯数字（保证 v2 与 v1 的解析可区分）。
+    返回值恒非空且非纯数字，确保生成的资产 ID 可读且可解析。
     """
     entity_token = asset_token(entity_name) if str(entity_name or "").strip() else ""
     for candidate in (caption, section_slug):
@@ -94,7 +101,7 @@ def compute_post_asset_id(
     section_slug: str = "",
     ordinal: int = 0,
 ) -> str:
-    """成品图统一命名（v2）：实体_角色_图注_全局批次号_hash。
+    """成品图统一命名：实体_角色_图注_全局执行序号_hash。
 
     caption 不进 seed：图注微调不改 digest；批内幂等由 registry owner key 保证。
     """
@@ -112,39 +119,20 @@ def compute_post_asset_id(
     return f"{entity}_{role_token}_{caption_token}_{batch_seq}_{digest}"
 
 
-def parse_post_asset_id(asset_id: str) -> dict[str, Any]:
-    """从右锚定解析 assetId（v2 优先，v1 历史格式兼容）。
-
-    返回 entityName / assetToken / role / captionToken / executionSequence /
-    digest / raw / format。允许 entity 名与图注段含下划线。
-    """
+def parse_post_asset_id(asset_id: str) -> PostAssetIdentity:
+    """按唯一格式解析 assetId；实体名与图注段允许包含下划线。"""
     aid = str(asset_id or "").strip()
     if not aid:
         raise ValueError("asset_id is empty")
     match = _ASSET_ID_RE.match(aid)
     if match:
         entity, role, caption, execution_sequence, digest = match.groups()
-        return {
-            "raw": aid,
-            "entityName": entity,
-            "assetToken": entity,
-            "role": role,
-            "captionToken": caption,
-            "executionSequence": int(execution_sequence),
-            "digest": digest,
-            "format": "v2",
-        }
-    legacy = _ASSET_ID_LEGACY_RE.match(aid)
-    if legacy:
-        entity, role, execution_sequence, digest = legacy.groups()
-        return {
-            "raw": aid,
-            "entityName": entity,
-            "assetToken": entity,
-            "role": role,
-            "captionToken": "",
-            "executionSequence": int(execution_sequence),
-            "digest": digest,
-            "format": "v1",
-        }
+        return PostAssetIdentity(
+            raw=aid,
+            entity_name=entity,
+            role=role,
+            caption_token=caption,
+            execution_sequence=int(execution_sequence),
+            digest=digest,
+        )
     raise ValueError(f"invalid post asset id: {asset_id!r}")

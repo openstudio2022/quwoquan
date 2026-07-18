@@ -31,8 +31,8 @@ def verify_vertical_quality() -> list[str]:
             issues.append(f"{vertical}: missing golden_samples.yaml")
             continue
         data: dict[str, Any] = yaml.safe_load(samples_path.read_text(encoding="utf-8")) or {}
-        if data.get("schemaVersion") != "quwoquan.vertical_quality_samples.v1":
-            issues.append(f"{vertical}: invalid golden sample schemaVersion")
+        if data.get("schema") != "quwoquan.vertical_quality_samples":
+            issues.append(f"{vertical}: invalid golden sample schema")
         samples = data.get("samples") or []
         if len(samples) < 2:
             issues.append(f"{vertical}: at least 2 golden samples required")

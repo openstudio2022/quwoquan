@@ -1,4 +1,3 @@
-version: 1
 aggregate: Connection
 
 entities:
@@ -6,6 +5,7 @@ entities:
     description: WebSocket/Long-polling 连接实体（内存态，不持久化）
     fields:
       - name: connId
+        source: connId
         type: string
         constraints: [PK]
         classification: PUBLIC
@@ -15,6 +15,7 @@ entities:
         description: 连接唯一标识（UUID）
 
       - name: userId
+        source: userId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -23,6 +24,7 @@ entities:
         ops_exposure: read
 
       - name: transport
+        source: transport
         type: enum
         enum_ref: TransportType
         constraints: [NOT_NULL]
@@ -33,6 +35,7 @@ entities:
         description: websocket/long_poll
 
       - name: topics
+        source: topics
         type: "[]string"
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -42,6 +45,7 @@ entities:
         description: 已订阅的 topic 列表
 
       - name: nodeId
+        source: nodeId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -51,6 +55,7 @@ entities:
         description: 所在网关节点 ID
 
       - name: connectedAt
+        source: connectedAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -59,6 +64,7 @@ entities:
         ops_exposure: read
 
       - name: lastActiveAt
+        source: lastActiveAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -70,6 +76,7 @@ entities:
     description: 用户在线状态（Redis Hash，多节点共享）
     fields:
       - name: userId
+        source: userId
         type: string
         constraints: [PK]
         classification: PUBLIC
@@ -78,6 +85,7 @@ entities:
         ops_exposure: read
 
       - name: connId
+        source: connId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -86,6 +94,7 @@ entities:
         ops_exposure: read
 
       - name: nodeId
+        source: nodeId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -94,6 +103,7 @@ entities:
         ops_exposure: read
 
       - name: transport
+        source: transport
         type: enum
         enum_ref: TransportType
         constraints: [NOT_NULL]
@@ -103,6 +113,7 @@ entities:
         ops_exposure: read
 
       - name: lastHeartbeatAt
+        source: lastHeartbeatAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC

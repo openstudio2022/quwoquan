@@ -4,7 +4,6 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "version",
     "domain",
     "aggregate_root",
     "object_kind",
@@ -12,45 +11,119 @@
     "storage_backend"
   ],
   "properties": {
-    "version": { "type": "integer", "minimum": 1 },
-    "domain": { "type": "string", "minLength": 1 },
-    "aggregate_root": { "type": "string", "minLength": 1 },
-    "object_kind": { "const": "aggregate_root" },
-    "aggregate_owner": { "type": "string", "minLength": 1 },
-    "description": { "type": "string", "minLength": 1 },
-    "storage_backend": { "type": "string", "minLength": 1 },
-    "cache_layer": { "type": ["string", "null"] },
-    "cache_ttl_seconds": { "type": ["integer", "null"], "minimum": 1 },
-    "capabilities": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
-    "taggable": { "type": "boolean" },
-    "vector_enabled": { "type": "boolean" },
+    "domain": {
+      "type": "string",
+      "minLength": 1
+    },
+    "aggregate_root": {
+      "type": "string",
+      "minLength": 1
+    },
+    "object_kind": {
+      "const": "aggregate_root"
+    },
+    "aggregate_owner": {
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "storage_backend": {
+      "type": "string",
+      "minLength": 1
+    },
+    "cache_layer": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "cache_ttl_seconds": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "taggable": {
+      "type": "boolean"
+    },
+    "vector_enabled": {
+      "type": "boolean"
+    },
     "members": {
       "type": "array",
       "items": {
         "type": "object",
         "additionalProperties": true,
-        "required": ["entity", "relation", "object_kind"],
+        "required": [
+          "entity",
+          "relation",
+          "object_kind"
+        ],
         "properties": {
-          "entity": { "type": "string", "minLength": 1 },
-          "relation": { "enum": ["1:1", "1:N"] },
+          "entity": {
+            "type": "string",
+            "minLength": 1
+          },
+          "relation": {
+            "enum": [
+              "1:1",
+              "1:N"
+            ]
+          },
           "object_kind": {
             "enum": [
               "owned_entity",
               "value_object"
             ]
           },
-          "max_cardinality": { "type": "integer", "minimum": 1 },
-          "aggregate_owner": { "type": "string", "minLength": 1 }
+          "max_cardinality": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "aggregate_owner": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       }
     },
-    "ddd_layer_mapping": { "type": "object" },
-    "counter_strategy": { "type": "object" },
-    "join_paths": { "type": "array" },
-    "livekit_integration": { "type": "object" },
-    "seq_strategy": { "type": "object" },
-    "dedup_strategy": { "type": "object" },
-    "business_rules": { "type": ["array", "object"] },
-    "lifecycle": { "type": "object" }
+    "ddd_layer_mapping": {
+      "type": "object"
+    },
+    "counter_strategy": {
+      "type": "object"
+    },
+    "join_paths": {
+      "type": "array"
+    },
+    "livekit_integration": {
+      "type": "object"
+    },
+    "seq_strategy": {
+      "type": "object"
+    },
+    "dedup_strategy": {
+      "type": "object"
+    },
+    "business_rules": {
+      "type": [
+        "array",
+        "object"
+      ]
+    },
+    "lifecycle": {
+      "type": "object"
+    }
   }
 }

@@ -63,6 +63,7 @@
           "fileName": { "type": "string" },
           "caption": { "type": "string" },
           "kind": { "type": "string", "enum": ["image", "video"] },
+          "role": { "type": "string", "enum": ["cover", "detail", "embedded"] },
           "sourceCollectionId": { "type": "string" },
           "objectKey": { "type": "string" },
           "cdnUrl": { "type": "string" },
@@ -75,13 +76,22 @@
           "durationMs": { "type": "integer", "minimum": 0 },
           "width": { "type": "integer", "minimum": 1 },
           "height": { "type": "integer", "minimum": 1 },
+          "container": { "type": "string" },
+          "codec": { "type": "string" },
+          "pixelFormat": { "type": "string" },
+          "posterFileName": { "type": "string" },
+          "posterAssetId": { "type": "string" },
+          "subtitlesFileName": { "type": "string" },
+          "posterSha256": { "type": "string" },
+          "subtitlesSha256": { "type": "string" },
+          "provenanceRef": { "type": "string" },
+          "sourceAssetRefs": { "type": "array", "items": { "type": "string" } },
+          "rightsRefs": { "type": "array", "items": { "type": "string" } },
           "creator": { "$ref": "#/$defs/sourceFact" },
           "collectionPageUrl": { "$ref": "#/$defs/sourceFact" },
           "license": { "$ref": "#/$defs/sourceFact" },
           "termsUrl": { "$ref": "#/$defs/sourceFact" },
           "authorizationProof": { "$ref": "#/$defs/sourceFact" },
-          "page": { "$ref": "#/$defs/sourceFact" },
-          "licenseProof": { "$ref": "#/$defs/sourceFact" },
           "imageLayout": { "type": "string", "enum": ["fullWidth", "wrapLeft", "wrapRight", "gallery"] }
         },
         "required": ["assetId", "fileName"]
@@ -93,15 +103,13 @@
     "license": { "$ref": "#/$defs/sourceFact" },
     "termsUrl": { "$ref": "#/$defs/sourceFact" },
     "authorizationProof": { "$ref": "#/$defs/sourceFact" },
-    "page": { "$ref": "#/$defs/sourceFact" },
-    "licenseProof": { "$ref": "#/$defs/sourceFact" },
     "template": { "type": "string", "description": "使用的模板名称" },
-    "carrier": { "type": "string", "enum": ["article", "image", "review"], "description": "内容载体：article 长文 / image 图片作品 / review 评测" },
+    "carrier": { "type": "string", "enum": ["article", "image", "video", "review"] },
     "generator": { "type": "string", "enum": ["agent"], "description": "正文创作来源；交付面仅允许 agent（会话模型创作），脚本拼接/占位被门禁拒绝" },
     "generatorModel": { "type": ["string", "null"], "description": "创作所用模型标识（draft_meta.model）" },
     "citedSourceRefs": { "type": "array", "items": { "type": "string" }, "description": "正文创作时引用的 source 证据路径" },
     "reviewDecision": { "type": "string", "enum": ["approved", "revision_needed", "rejected"] },
-    "articleMarkdownVersion": { "type": "string" },
+    "markdownDialect": { "const": "qwq-rich-md" },
     "articleRenderProfile": { "type": "object" },
     "publishLayout": { "type": "string" },
     "publishAngle": { "type": "string" },
@@ -187,7 +195,7 @@
         "required": ["contentType"]
       },
       "then": {
-        "required": ["assets"],
+        "required": ["title", "caption", "assets", "videoBindings"],
         "properties": {
           "title": { "type": "string", "maxLength": 80 },
           "caption": { "type": "string", "maxLength": 300 },
@@ -197,20 +205,38 @@
             "maxItems": 20,
             "contains": {
               "type": "object",
-              "required": ["kind"],
-              "properties": {
-                "kind": { "const": "video" }
-              },
-              "anyOf": [
-                { "required": ["cdnUrl"] },
-                { "required": ["objectKey"] }
+              "required": [
+                "assetId", "fileName", "kind", "sha256", "mimeType",
+                "durationMs", "width", "height", "container", "codec",
+                "pixelFormat", "posterFileName", "subtitlesFileName",
+                "posterAssetId", "posterSha256", "subtitlesSha256", "provenanceRef",
+                "sourceAssetRefs", "rightsRefs"
               ],
-              "anyOf": [
-                { "required": ["thumbnailUrl"] },
-                { "required": ["coverUrl"] }
+              "properties": {
+                "kind": { "const": "video" },
+                "mimeType": { "const": "video/mp4" },
+                "posterAssetId": { "type": "string", "minLength": 1 },
+                "sourceAssetRefs": { "type": "array", "minItems": 1 },
+                "rightsRefs": { "type": "array", "minItems": 1 }
+              },
+              "allOf": [
+                {
+                  "anyOf": [
+                    { "required": ["cdnUrl"] },
+                    { "required": ["objectKey"] }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    { "required": ["posterFileName"] },
+                    { "required": ["thumbnailUrl"] },
+                    { "required": ["coverUrl"] }
+                  ]
+                }
               ]
             }
-          }
+          },
+          "videoBindings": { "type": "array", "minItems": 1 }
         }
       }
     }

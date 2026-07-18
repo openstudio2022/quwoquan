@@ -18,28 +18,28 @@ class CloudRuntimeConfig {
   /// 通过 `--dart-define=CLOUD_GATEWAY_BASE_URL=...` 注入。
   static const String gatewayBaseUrl = String.fromEnvironment(
     'CLOUD_GATEWAY_BASE_URL',
-    defaultValue: 'https://alpha-api.quwoquan-env.test:17000',
+    defaultValue: '',
   );
 
   /// 头像 CDN Base URL。展示 URL 由服务端返回，App 仅用于环境包审计与 beta 联调报告。
   static const String mediaAvatarCdnBaseUrl = String.fromEnvironment(
     'MEDIA_AVATAR_CDN_BASE_URL',
-    defaultValue: 'https://alpha-avatar.quwoquan-env.test:17100',
+    defaultValue: '',
   );
 
   static const String mediaImageCdnBaseUrl = String.fromEnvironment(
     'MEDIA_IMAGE_CDN_BASE_URL',
-    defaultValue: 'https://alpha-image.quwoquan-env.test:17100',
+    defaultValue: '',
   );
 
   static const String mediaVideoCdnBaseUrl = String.fromEnvironment(
     'MEDIA_VIDEO_CDN_BASE_URL',
-    defaultValue: 'https://alpha-video.quwoquan-env.test:17100',
+    defaultValue: '',
   );
 
   static const String mediaUploadBaseUrl = String.fromEnvironment(
     'MEDIA_UPLOAD_BASE_URL',
-    defaultValue: 'https://alpha-upload.quwoquan-env.test:17100',
+    defaultValue: '',
   );
 
   /// Web 顶部安装提示：移动/Pad 端直接下载 App 或打开商店落地页。
@@ -123,5 +123,41 @@ class CloudRuntimeConfig {
         appRolloutMode == 'gray-initial' ||
         appRolloutMode == 'carry-on' ||
         appRolloutMode == 'full';
+  }
+
+  /// 正式启动必须显式注入同一环境包的网关与四类媒体 authority。
+  ///
+  /// 缺失时直接终止启动，避免直接执行 `flutter run` 意外连接到 alpha。
+  static void validateRequiredEndpoints() {
+    final endpoints = <String, String>{
+      'CLOUD_GATEWAY_BASE_URL': gatewayBaseUrl,
+      'MEDIA_AVATAR_CDN_BASE_URL': mediaAvatarCdnBaseUrl,
+      'MEDIA_IMAGE_CDN_BASE_URL': mediaImageCdnBaseUrl,
+      'MEDIA_VIDEO_CDN_BASE_URL': mediaVideoCdnBaseUrl,
+      'MEDIA_UPLOAD_BASE_URL': mediaUploadBaseUrl,
+    };
+    final invalid = endpoints.entries
+        .where((entry) => !_isValidHttpsBaseUrl(entry.value))
+        .map((entry) => entry.key)
+        .toList(growable: false);
+    if (!isValidAppRuntimeEnv || invalid.isNotEmpty) {
+      final missing = <String>[
+        if (!isValidAppRuntimeEnv) 'APP_RUNTIME_ENV',
+        ...invalid,
+      ];
+      throw StateError(
+        'App runtime endpoints must be injected by the environment launcher: '
+        '${missing.join(', ')}',
+      );
+    }
+  }
+
+  static bool _isValidHttpsBaseUrl(String raw) {
+    final uri = Uri.tryParse(raw.trim());
+    return uri != null &&
+        uri.scheme.toLowerCase() == 'https' &&
+        uri.host.isNotEmpty &&
+        !uri.hasQuery &&
+        !uri.hasFragment;
   }
 }

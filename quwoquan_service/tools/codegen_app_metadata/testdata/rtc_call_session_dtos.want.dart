@@ -43,10 +43,10 @@ class CallParticipantDto {
       );
 }
 
-/// 通话会话（与 metadata `CallSession` 对齐；`id` 对应存储 `_id`，并兼容 wire `id`/`callId`）。
+/// 通话会话（与 metadata `CallSession` 对齐；`callId` 为唯一 wire 键）。
 class CallSessionDto {
   const CallSessionDto({
-    required this.id,
+    required this.callId,
     this.status = 'initiated',
     this.participantCount = 0,
     this.isRecording = false,
@@ -55,7 +55,7 @@ class CallSessionDto {
     required this.updatedAt,
   });
 
-  final String id;
+  final String callId;
   final String status;
   final int participantCount;
   final bool isRecording;
@@ -65,7 +65,7 @@ class CallSessionDto {
 
   factory CallSessionDto.fromMap(Map<String, dynamic> map) {
     return CallSessionDto(
-      id: map['id'] ?? map['_id'] ?? map['callId'] ?? '' as String? ?? '',
+      callId: map['callId'] as String? ?? '',
       status: map['status'] as String? ?? 'initiated',
       participantCount: (map['participantCount'] as num?)?.toInt() ?? 0,
       isRecording: map['isRecording'] as bool? ?? false,
@@ -79,7 +79,7 @@ class CallSessionDto {
 
   Map<String, dynamic> toMap() {
     return {
-      'id': id,
+      'callId': callId,
       'status': status,
       'participantCount': participantCount,
       'isRecording': isRecording,
@@ -90,7 +90,7 @@ class CallSessionDto {
   }
 
   CallSessionDto copyWith({
-    String? id,
+    String? callId,
     String? status,
     int? participantCount,
     bool? isRecording,
@@ -99,7 +99,7 @@ class CallSessionDto {
     DateTime? updatedAt,
   }) {
     return CallSessionDto(
-      id: id ?? this.id,
+      callId: callId ?? this.callId,
       status: status ?? this.status,
       participantCount: participantCount ?? this.participantCount,
       isRecording: isRecording ?? this.isRecording,
@@ -114,7 +114,7 @@ class CallSessionDto {
       identical(this, other) ||
       other is CallSessionDto &&
           runtimeType == other.runtimeType &&
-          id == other.id &&
+          callId == other.callId &&
           status == other.status &&
           participantCount == other.participantCount &&
           isRecording == other.isRecording &&
@@ -123,7 +123,7 @@ class CallSessionDto {
 
   @override
   int get hashCode => Object.hash(
-        id,
+        callId,
         status,
         participantCount,
         isRecording,

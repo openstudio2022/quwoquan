@@ -33,7 +33,7 @@ _TMP = Path(tempfile.mkdtemp(prefix="etype_conflict_read_"))
 from core.paths import execution_entity_object_dir, ensure_execution_command_layout  # noqa: E402
 from content.source.source_unit import resolve_entity_object_dir  # noqa: E402
 from content.execution import store  # noqa: E402
-from content.execution.selection import build_multimodal_spec  # noqa: E402
+from content.execution.selection import build_execution_spec  # noqa: E402
 
 _EXECUTIONS = {
     "未物化": "20260711--travel-homepage-entity-type--cn-zhejiang--canary-001",
@@ -44,7 +44,7 @@ _EXECUTIONS = {
 
 def _mixed_type_task(name: str = "类型冲突读路径批") -> str:
     execution_id = next(value for marker, value in _EXECUTIONS.items() if marker in name)
-    spec = build_multimodal_spec(
+    spec = build_execution_spec(
         execution_id=execution_id,
         name=name,
         title=name,
@@ -58,6 +58,7 @@ def _mixed_type_task(name: str = "类型冲突读路径批") -> str:
         entity_articles_per_target=0,
         entity_homepages_per_target=1,
         image_works_per_target=0,
+        video_works_per_target=0,
         target_entity_count=2,
     )
     store.save_spec(spec)
@@ -103,15 +104,14 @@ def test_audit_managed_execution_usable_on_mixed_type_partition():
     _materialize(execution_id, "地点", "景区", "嵊泗列岛")
     _materialize(execution_id, "地点", "自然景观", "花鸟岛")
     from content.execution.readiness_audit import audit_execution_readiness
+    from core.control_types import ExecutionStateStatus
+    from support.execution_manifest_fixture import ExecutionFixtureBuilder
 
     audit = audit_execution_readiness(
         execution_id,
-        workflow_state_override={
-            "status": "succeeded",
-            "waitingCheckpoint": None,
-            "failedObjects": [],
-            "nextAction": None,
-        },
+        execution_state_override=ExecutionFixtureBuilder(execution_id).state(
+            status=ExecutionStateStatus.SUCCEEDED,
+        ),
     )
     assert int(audit.get("targetCount") or 0) == 2, audit.get("targetCount")
 

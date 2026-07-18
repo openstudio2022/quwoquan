@@ -10,7 +10,8 @@ api_routes:
   description: 授权 Skill
   method: POST
   operation: GrantSkillConsent
-  path: /v1/assistant/skills/{skillId}/consent
+  path: /assistant/skills/{skillId}/consent
+
   security:
     anonymous_policy: deny
     auth_mode: required
@@ -28,7 +29,8 @@ api_routes:
   description: 撤销 Skill 授权
   method: DELETE
   operation: RevokeSkillConsent
-  path: /v1/assistant/skills/{skillId}/consent
+  path: /assistant/skills/{skillId}/consent
+
   security:
     anonymous_policy: deny
     auth_mode: required
@@ -45,7 +47,8 @@ api_routes:
   description: 授权列表
   method: GET
   operation: ListConsents
-  path: /v1/assistant/consents
+  path: /assistant/consents
+
   security:
     anonymous_policy: deny
     auth_mode: required
@@ -71,8 +74,8 @@ contract_test:
         - consent_revoked
         name: consent_lifecycle
         routes:
-        - POST /v1/assistant/skills/{skillId}/consent
-        - DELETE /v1/assistant/skills/{skillId}/consent
+        - POST /assistant/skills/{skillId}/consent
+        - DELETE /assistant/skills/{skillId}/consent
     service_side:
       data_management:
         cleanup: TRUNCATE skill_consents CASCADE
@@ -111,4 +114,3 @@ service:
   domain: assistant
   name: assistant-service
   owner: backend-team
-version: 1

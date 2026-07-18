@@ -22,9 +22,12 @@ import 'package:quwoquan_app/components/post/post_preview_list_tile.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
+import 'package:quwoquan_app/core/services/app_request_wait_controller.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
+import 'package:quwoquan_app/core/widgets/app_request_feedback.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/ui/discovery/services/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
@@ -146,15 +149,10 @@ class _XiaoquSummaryCard extends StatelessWidget {
 }
 
 class _StatusMessage extends StatelessWidget {
-  const _StatusMessage({
-    required this.text,
-    required this.isDark,
-    this.loading = false,
-  });
+  const _StatusMessage({required this.text, required this.isDark});
 
   final String text;
   final bool isDark;
-  final bool loading;
 
   @override
   Widget build(BuildContext context) {
@@ -168,10 +166,6 @@ class _StatusMessage extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (loading) ...[
-              CupertinoActivityIndicator(radius: AppSpacing.iconSmall / 2),
-              SizedBox(height: AppSpacing.containerSm),
-            ],
             Text(
               text,
               style: TextStyle(

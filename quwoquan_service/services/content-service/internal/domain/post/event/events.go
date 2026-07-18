@@ -3,7 +3,6 @@ package event
 
 // Event type constants for Post.
 const (
-	PostCreated         = "PostCreated"
 	PostPublished       = "PostPublished"
 	PostUpdated         = "PostUpdated"
 	PostSettingsUpdated = "PostSettingsUpdated"

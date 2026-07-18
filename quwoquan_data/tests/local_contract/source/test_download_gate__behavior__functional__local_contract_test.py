@@ -38,8 +38,13 @@ from core.data_issue import (  # noqa: E402
     data_issue,
 )
 from content.source.source_unit import iter_source_units, write_source_unit  # noqa: E402
-from content.source.gate import download_requirements, gate_download  # noqa: E402
+from content.source.gate import (  # noqa: E402
+    DownloadRequirements,
+    download_requirements,
+    gate_download,
+)
 from content.execution.recovery.download_gate import _download_repair_active_issues  # noqa: E402
+from support.execution_manifest_fixture import ExecutionFixtureBuilder  # noqa: E402
 
 TASK = "20260711--travel-homepage-download-gate--cn-sichuan--canary-001"
 
@@ -47,30 +52,23 @@ TASK = "20260711--travel-homepage-download-gate--cn-sichuan--canary-001"
 @pytest.fixture(autouse=True)
 def _clean_execution_root():
     shutil.rmtree(execution_root(TASK), ignore_errors=True)
+    ExecutionFixtureBuilder(TASK).build()
     yield
     shutil.rmtree(execution_root(TASK), ignore_errors=True)
 
 
 def test_homepage_only_download_requires_one_verified_text_source(monkeypatch):
     monkeypatch.setattr(
-        "content.execution.store.load_spec",
-        lambda _task_id: {
-            "content": {
-                "modalityContract": "separated_research",
-                "quotas": {
-                    "entityHomepagesPerTarget": 1,
-                    "entityArticlesPerTarget": 0,
-                    "imageWorksPerTarget": 0,
-                },
-            }
-        },
+        "content.execution.store.load_spec_model",
+        lambda _execution_id: ExecutionFixtureBuilder(TASK).spec(),
     )
 
     requirements = download_requirements(TASK)
 
-    assert requirements["minSources"] == 1
-    assert requirements["minHomepageSources"] == 1
-    assert requirements["minArticleBaseSources"] == 0
+    assert requirements.min_sources == 1
+    assert requirements.min_homepage_sources == 1
+    assert requirements.min_homepage_media == 0
+    assert requirements.min_article_base_sources == 0
 
 
 def test_download_repair_active_issues_only_decodes_typed_records():
@@ -132,22 +130,46 @@ def _attach_image(unit_dir: Path, name: str) -> None:
     )
 
 
-def test_gate_download_passes_object_first_sources():
-    ensure_execution_layout(TASK)
-    entity_dir = execution_entity_object_dir(TASK, "地点", "景区", "峨眉山")
+def _write_verified_homepage_source(
+    entity_dir: Path,
+    *,
+    entity_name: str,
+    source_id: str,
+    asset_name: str,
+) -> None:
     write_source_unit(
         entity_dir,
         ordinal=1,
-        source_id="overview_baike",
-        source_md="# 峨眉山\n\n概述",
-        quality={"sourceId": "overview_baike", "quality": "B-fact", "score": 5},
-        platform="baike",
-        source_category="overview_baike",
-        url="https://example.com/1",
-        title="峨眉山（百科）",
-        target_ref="/entity/地点/景区/峨眉山",
+        source_id=source_id,
+        source_md=(
+            f"# {entity_name}\n\n{entity_name}位于四川省。"
+            f"{entity_name}主峰海拔三千余米。"
+            f"{entity_name}是中国著名山岳景区。"
+            f"{entity_name}景区包括多条登山步道。"
+        ),
+        quality={"sourceId": source_id, "quality": "B-fact", "score": 5},
+        platform="Wikipedia",
+        source_category="encyclopedia",
+        source_kind="wikipedia",
+        extractor="wikipedia_api",
+        policy_revision="encyclopedia-primary",
+        research_lane="homepage",
+        url=f"https://zh.wikipedia.org/wiki/{entity_name}",
+        title=entity_name,
+        target_ref=f"/entity/地点/景区/{entity_name}",
     )
-    _attach_image(entity_dir / "1.download/sources/01.overview_baike", "emei_1")
+    _attach_image(entity_dir / f"1.download/sources/01.{source_id}", asset_name)
+
+
+def test_gate_download_passes_object_first_sources():
+    ensure_execution_layout(TASK)
+    entity_dir = execution_entity_object_dir(TASK, "地点", "景区", "峨眉山")
+    _write_verified_homepage_source(
+        entity_dir,
+        entity_name="峨眉山",
+        source_id="overview_baike",
+        asset_name="emei_1",
+    )
     write_source_unit(
         entity_dir,
         ordinal=2,
@@ -182,7 +204,11 @@ def test_gate_download_blocks_single_source_unit():
         target_ref="/entity/地点/景区/乐山大佛",
     )
     issues = gate_download(TASK)
-    assert any("only 1 sources" in issue.message for issue in issues), issues
+    assert any(
+        issue.code is DataIssueCode.SOURCE_PRIMARY_AUTHORITY_MISSING
+        and issue.lane is DataIssueLane.HOMEPAGE
+        for issue in issues
+    ), issues
 
 
 def test_gate_download_blocks_reject_only_units():
@@ -309,13 +335,14 @@ def test_gate_download_ignores_disabled_image_lane_but_blocks_source_shortfall(m
     ensure_execution_layout(TASK)
     monkeypatch.setattr(
         "content.source.gate.download_requirements",
-        lambda _task_id: {
-            "minSources": 4,
-            "minImages": 0,
-            "minArticleImageSources": 0,
-            "minArticleBaseSources": 4,
-            "minHomepageSources": 1,
-        },
+        lambda _execution_id: DownloadRequirements(
+            min_sources=4,
+            min_images=0,
+            min_article_base_sources=4,
+            min_homepage_sources=1,
+            min_homepage_media=0,
+            min_video_frames=0,
+        ),
     )
     entity_dir = execution_entity_object_dir(TASK, "地点", "景区", "软图景区")
     write_source_unit(
@@ -361,16 +388,20 @@ def test_gate_download_ignores_disabled_image_lane_but_blocks_source_shortfall(m
 
 def test_gate_download_image_only_ignores_text_source_bundle_sidecar(monkeypatch):
     ensure_execution_layout(TASK)
-    monkeypatch.setattr("content.source.gate.active_download_lanes", lambda _task_id: {"image"})
+    monkeypatch.setattr(
+        "content.source.gate.active_download_lanes",
+        lambda _execution_id: frozenset({"image"}),
+    )
     monkeypatch.setattr(
         "content.source.gate.download_requirements",
-        lambda _task_id: {
-            "minSources": 4,
-            "minImages": 1,
-            "minArticleImageSources": 0,
-            "minArticleBaseSources": 0,
-            "minHomepageSources": 0,
-        },
+        lambda _execution_id: DownloadRequirements(
+            min_sources=4,
+            min_images=1,
+            min_article_base_sources=0,
+            min_homepage_sources=0,
+            min_homepage_media=0,
+            min_video_frames=0,
+        ),
     )
     entity_dir = execution_entity_object_dir(TASK, "地点", "景区", "图片景区")
     write_source_unit(
@@ -417,13 +448,14 @@ def test_gate_download_reports_rights_and_source_shortfall(monkeypatch):
     ensure_execution_layout(TASK)
     monkeypatch.setattr(
         "content.source.gate.download_requirements",
-        lambda _task_id: {
-            "minSources": 4,
-            "minImages": 0,
-            "minArticleImageSources": 0,
-            "minArticleBaseSources": 4,
-            "minHomepageSources": 1,
-        },
+        lambda _execution_id: DownloadRequirements(
+            min_sources=4,
+            min_images=0,
+            min_article_base_sources=4,
+            min_homepage_sources=1,
+            min_homepage_media=0,
+            min_video_frames=0,
+        ),
     )
     entity_dir = execution_entity_object_dir(TASK, "地点", "景区", "权利风险景区")
     write_source_unit(
@@ -482,8 +514,8 @@ def test_gate_download_blocks_homepage_source_without_base_draft_facts():
         platform="百度百科",
         source_category="encyclopedia",
         source_kind="baidu_baike",
-        extractor="baidu_baike_html",
-        policy_revision="encyclopedia-primary-v2",
+        extractor="baidu_baike_openapi",
+        policy_revision="encyclopedia-primary",
         research_lane="homepage",
         source_use_mode="factual_reference_only",
         url="https://baike.baidu.com/item/织金洞",
@@ -593,19 +625,12 @@ def test_gate_download_includes_failed_stage_gate_sidecars():
 def test_gate_download_scopes_to_target_entities():
     ensure_execution_layout(TASK)
     good_dir = execution_entity_object_dir(TASK, "地点", "景区", "峨眉山")
-    write_source_unit(
+    _write_verified_homepage_source(
         good_dir,
-        ordinal=1,
+        entity_name="峨眉山",
         source_id="overview_baike",
-        source_md="# 峨眉山\n\n概述",
-        quality={"sourceId": "overview_baike", "quality": "B-fact", "score": 5},
-        platform="baike",
-        source_category="overview_baike",
-        url="https://example.com/1",
-        title="峨眉山（百科）",
-        target_ref="/entity/地点/景区/峨眉山",
+        asset_name="emei_scope_1",
     )
-    _attach_image(good_dir / "1.download/sources/01.overview_baike", "emei_scope_1")
     write_source_unit(
         good_dir,
         ordinal=2,

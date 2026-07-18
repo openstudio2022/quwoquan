@@ -40,12 +40,6 @@ abstract interface class ContentMediaOriginalAccessWriter {
   );
 }
 
-abstract interface class ContentPostMediaBindingWriter {
-  Future<BindContentPostMediaAssetsResult> bindPostMediaAssets(
-    BindContentPostMediaAssetsCommand command,
-  );
-}
-
 /// App media capability packet. It stays below the ten-method facet limit and
 /// contains only typed object operations; upload bytes still travel directly
 /// to the server-issued object-storage grant.
@@ -55,5 +49,4 @@ abstract interface class ContentMediaFacet
         ContentMediaUploadQuery,
         ContentMediaAssetQuery,
         ContentMediaCoverCommandWriter,
-        ContentMediaOriginalAccessWriter,
-        ContentPostMediaBindingWriter {}
+        ContentMediaOriginalAccessWriter {}

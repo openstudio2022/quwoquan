@@ -17,8 +17,8 @@ def load_registry(vertical: str) -> dict[str, Any]:
     if not path.is_file():
         raise FileNotFoundError(f"missing coverage registry: {path}")
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    if data.get("schemaVersion") != "quwoquan.vertical_coverage.v1":
-        raise ValueError(f"{path}: invalid schemaVersion")
+    if data.get("schema") != "quwoquan.vertical_coverage":
+        raise ValueError(f"{path}: invalid schema")
     if data.get("vertical") != vertical:
         raise ValueError(f"{path}: vertical mismatch")
     return data
@@ -94,7 +94,7 @@ def evaluate_registry(vertical: str) -> dict[str, Any]:
         if status != "passed":
             totals["gapUnits"] += 1
     return {
-        "schemaVersion": "quwoquan.vertical_coverage_report.v1",
+        "schema": "quwoquan.vertical_coverage_report",
         "vertical": vertical,
         "status": "passed" if totals["gapUnits"] == 0 else "gap",
         "totals": totals,

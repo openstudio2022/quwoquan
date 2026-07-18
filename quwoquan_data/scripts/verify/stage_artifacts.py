@@ -218,7 +218,7 @@ def verify_stage_artifacts(
     issues.extend(_boundary_issues(Path(publish_root), root_kind="publish"))
     issues.extend(_boundary_issues(Path(release_root), root_kind="release"))
     return {
-        "schemaVersion": "quwoquan_data.stage_artifact_verification/1",
+        "schema": "quwoquan_data.stage_artifact_verification",
         "executionId": execution_id,
         "executionRoot": str(root),
         "objectCount": object_count,

@@ -150,7 +150,7 @@ Future<void> _writeAssetManifest() async {
   }
   final manifest = File('assets/brand/app_icon_asset_manifest.json');
   await manifest.writeAsString(
-    '${const JsonEncoder.withIndent('  ').convert(<String, Object>{'schemaVersion': 1, 'source': 'WelcomeAppIconPainter', 'assets': hashes})}\n',
+    '${const JsonEncoder.withIndent('  ').convert(<String, Object>{'schema': 'app-icon-asset-manifest', 'source': 'WelcomeAppIconPainter', 'assets': hashes})}\n',
     flush: true,
   );
 }

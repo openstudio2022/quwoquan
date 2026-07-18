@@ -1,5 +1,4 @@
 {
-  "schemaVersion": "app-seed-manifest",
   "environment": "beta",
   "description": "本地端云 beta 联调 seed manifest，供自动化与人工 beta 共用。",
   "seedRefs": [
@@ -13,8 +12,8 @@
       "resetScope": "fixture_assistant_*",
       "targetStore": "mongodb:assistant.skill_subscriptions+redis:assistant-runtime",
       "verifiedEndpoints": [
-        "/v1/assistant/conversations",
-        "/v1/assistant/skill-subscriptions"
+        "/assistant/conversations",
+        "/assistant/skill-subscriptions"
       ]
     },
     {
@@ -30,21 +29,20 @@
         "intersection_core",
         "footprint_core",
         "home_showcase_core",
-        "creator_authored_core",
         "profile_share_interaction_core"
       ],
       "resetScope": "fixture_content_*",
       "targetStore": "mongodb:content_test.posts",
       "verifiedEndpoints": [
-        "/v1/content/feed",
-        "/v1/content/posts/fixture_photo_001",
-        "/v1/content/posts/fixture_photo_001/comments",
-        "/v1/content/posts/fixture_photo_001/comments?sort=recommended",
-        "/v1/content/posts/fixture_photo_001/comments/fixture_comment_parent_001/replies",
-        "/v1/content/comments/fixture_comment_parent_001/reaction",
-        "/v1/content/comments/fixture_comment_parent_001/media:bind",
-        "/v1/content/sub-accounts/fixture_user_current/interactions/received?type=share",
-        "/v1/content/sub-accounts/fixture_user_current/interactions/sent?type=share"
+        "/content/feed",
+        "/content/posts/fixture_photo_001",
+        "/content/posts/fixture_photo_001/comments",
+        "/content/posts/fixture_photo_001/comments?sort=recommended",
+        "/content/posts/fixture_photo_001/comments/fixture_comment_parent_001/replies",
+        "/content/comments/fixture_comment_parent_001/reaction",
+        "/content/comments/fixture_comment_parent_001/media:bind",
+        "/content/sub-accounts/fixture_user_current/interactions/received?type=share",
+        "/content/sub-accounts/fixture_user_current/interactions/sent?type=share"
       ]
     },
     {
@@ -59,8 +57,8 @@
       "resetScope": "fixture_circle_*",
       "targetStore": "mongodb:circle_test",
       "verifiedEndpoints": [
-        "/v1/circles",
-        "/v1/circles/fixture_circle_photo"
+        "/circles",
+        "/circles/fixture_circle_photo"
       ]
     },
     {
@@ -76,8 +74,8 @@
       "resetScope": "fixture_chat_*",
       "targetStore": "mongodb:chat_test",
       "verifiedEndpoints": [
-        "/v1/chat/inbox",
-        "/v1/chat/conversations/fixture_conv_direct/messages"
+        "/chat/inbox",
+        "/chat/conversations/fixture_conv_direct/messages"
       ]
     },
     {
@@ -94,22 +92,8 @@
       "resetScope": "fixture_user_*",
       "targetStore": "postgres+mongodb:user_test",
       "verifiedEndpoints": [
-        "/v1/user/profile",
-        "/v1/user/following-subjects"
-      ]
-    },
-    {
-      "domain": "creator_pool",
-      "fixturePath": "_shared/test_fixtures/creator_pool/creator_pool_scenarios.json",
-      "refs": [
-        "creator_travel_photo_1k_v1",
-        "creator_travel_photo_1k_v1_core"
-      ],
-      "resetScope": "fixture_creator_pool_*",
-      "targetStore": "postgres+mongodb:user_test",
-      "verifiedEndpoints": [
-        "/v1/user/profile",
-        "/v1/user/{subAccountId}"
+        "/user/profile",
+        "/user/following-subjects"
       ]
     },
     {
@@ -124,9 +108,9 @@
       "targetStore": "mongodb:quwoquan_entity.homepage_state",
       "seedChannel": "promote→qwq-data ship --import（content import + entity-service homepage-import，与 gamma 同通道、env 参数区分）",
       "verifiedEndpoints": [
-        "/v1/homepages/search",
-        "/v1/homepages/{homepageId}/object-page-bundle",
-        "/v1/homepages/{homepageId}/introduction"
+        "/homepages/search",
+        "/homepages/{homepageId}/object-page-bundle",
+        "/homepages/{homepageId}/introduction"
       ]
     },
     {
@@ -138,7 +122,7 @@
       "resetScope": "fixture_integration_*",
       "targetStore": "integration-service:memory",
       "verifiedEndpoints": [
-        "/v1/integration/locations/pois"
+        "/integration/locations/pois"
       ]
     },
     {
@@ -150,7 +134,7 @@
       "resetScope": "fixture_notification_*",
       "targetStore": "notification-service:memory",
       "verifiedEndpoints": [
-        "/v1/app-messages"
+        "/app-messages"
       ]
     },
     {
@@ -162,7 +146,7 @@
       "resetScope": "fixture_rtc_*",
       "targetStore": "mongodb:rtc_test",
       "verifiedEndpoints": [
-        "/v1/rtc/calls"
+        "/rtc/calls"
       ]
     }
   ],
@@ -172,50 +156,51 @@
   "gateway": {
     "routes": [
       {
-        "prefix": "/v1/assistant",
+        "prefix": "/assistant",
         "service": "assistant-service",
         "port": 18087
       },
       {
-        "prefix": "/v1/content",
+        "prefix": "/content",
         "service": "content-service",
         "port": 18101
       },
       {
-        "prefix": "/v1/circles",
+        "prefix": "/circles",
         "service": "circle-service",
         "port": 18102
       },
       {
-        "prefix": "/v1/chat",
+        "prefix": "/chat",
         "service": "chat-service",
         "port": 18103
       },
       {
-        "prefix": "/v1/user",
+        "prefix": "/user",
         "service": "user-service",
         "port": 18104
       },
       {
-        "prefix": "/v1/entity",
+        "prefix": "/entity",
         "service": "entity-service",
         "port": 18105
       },
       {
-        "prefix": "/v1/integration",
+        "prefix": "/integration",
         "service": "integration-service",
         "port": 18106
       },
       {
-        "prefix": "/v1/app-messages",
+        "prefix": "/app-messages",
         "service": "notification-service",
         "port": 18107
       },
       {
-        "prefix": "/v1/rtc",
+        "prefix": "/rtc",
         "service": "rtc-service",
         "port": 18108
       }
     ]
-  }
+  },
+  "schema": "app-seed-manifest"
 }

@@ -9,20 +9,20 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/app_startup_runtime.dart';
+import 'package:quwoquan_app/app/bootstrap_recovery.dart';
 import 'package:quwoquan_app/app/navigation/app_router_module.dart';
 import 'package:quwoquan_app/app/providers/accessibility_provider.dart';
 import 'package:quwoquan_app/app/providers/appearance_settings_provider.dart';
 import 'package:quwoquan_app/app/providers/welcome_state_provider.dart';
 import 'package:quwoquan_app/app/startup_init_scheduler.dart';
 import 'package:quwoquan_app/app/startup_screen_util_scope.dart';
+import 'package:quwoquan_app/app/startup/startup_state_machine.dart';
 import 'package:quwoquan_app/app/startup_welcome_appearance.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_log_models.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_log_service.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_trace_context_store.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_app_exception_payload.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_page_route_exception_payload.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_page_route_exception_summary.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/ops/ops_event_record_errors.g.dart';
 import 'package:quwoquan_app/core/design_system/theme/app_theme.dart';
 import 'package:quwoquan_app/core/services/app_permission_lifecycle_binding.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
@@ -41,131 +41,28 @@ import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/ui/welcome/pages/welcome_screen.dart';
 import 'package:quwoquan_app/ui/welcome/welcome_motion_timeline.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
-void handleQuwoquanAppLifecycleState({
-  required AppLifecycleState state,
-  required VoidCallback refreshAppearance,
-  required VoidCallback onRealtimeForeground,
-  required VoidCallback onRealtimeBackground,
-}) {
-  switch (state) {
-    case AppLifecycleState.resumed:
-      refreshAppearance();
-      onRealtimeForeground();
-      break;
-    case AppLifecycleState.paused:
-    case AppLifecycleState.detached:
-    case AppLifecycleState.hidden:
-      onRealtimeBackground();
-      break;
-    case AppLifecycleState.inactive:
-      break;
-  }
-}
-
-void logQuwoquanAppException({
-  required String source,
-  required String exceptionText,
-  required String stackText,
-}) {
-  final traceStore = AppTraceContextStore.instance;
-  final context = AppLogContext(
-    sessionId: traceStore.sessionId,
-    pageVisitId: traceStore.newPageVisitId(),
-  );
-  unawaited(
-    AppLogService.instance.writeEvent(
-      logType: AppLogType.error,
-      level: AppLogLevel.error,
-      context: context,
-      payload: AppLogAppExceptionPayload(
-        kind: 'app_exception',
-        source: source,
-        exception: exceptionText,
-        stack: stackText,
-      ).toMap(),
-      hasError: true,
-    ),
-  );
-  unawaited(
-    AppExceptionTelemetryService.instance.recordGlobalException(
-      source: source,
-      exceptionText: exceptionText,
-      stackText: stackText,
-    ),
-  );
-  unawaited(
-    AppLogService.instance.writeEvent(
-      logType: AppLogType.pageAccess,
-      level: AppLogLevel.error,
-      context: context,
-      payload: AppLogPageRouteExceptionPayload(
-        event: 'exception',
-        route: 'app',
-        pageName: 'app',
-        source: source,
-        exception: exceptionText,
-      ).toMap(),
-      summaryPayload: AppLogPageRouteExceptionSummaryPayload(
-        event: 'exception',
-        route: 'app',
-        source: source,
-      ).toMap(),
-      hasError: true,
-    ),
-  );
-}
-
-Widget wrapWithQuwoquanAppAppearance({
-  required BuildContext context,
-  required AppearanceSnapshot snapshot,
-  required Widget child,
-}) {
-  return AnnotatedRegion<SystemUiOverlayStyle>(
-    value: AppTheme.systemUiOverlayStyleFor(snapshot.effectiveBrightness),
-    child: MediaQuery(
-      data: MediaQuery.of(context).copyWith(
-        textScaler: TextScaler.linear(snapshot.textScaleFactor),
-        boldText: false,
-        highContrast: false,
-      ),
-      child: DefaultTextStyle.merge(
-        style: const TextStyle(
-          decoration: TextDecoration.none,
-          decorationThickness: 0,
-        ),
-        child: _QuwoquanVisualDebugGuard(child: child),
-      ),
-    ),
-  );
-}
-
-class _QuwoquanVisualDebugGuard extends StatelessWidget {
-  const _QuwoquanVisualDebugGuard({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    assert(() {
-      debugPaintSizeEnabled = false;
-      debugPaintBaselinesEnabled = false;
-      debugPaintPointersEnabled = false;
-      debugPaintLayerBordersEnabled = false;
-      debugRepaintRainbowEnabled = false;
-      return true;
-    }());
-    return Material(type: MaterialType.transparency, child: child);
-  }
-}
+part 'quwoquan_app_shell_runtime_support.dart';
 
 /// 根组件：冷启动先直出轻量欢迎页，首帧后再并行恢复会话、装配路由与预热首页。
 class QuWoQuanAppRoot extends ConsumerStatefulWidget {
-  const QuWoQuanAppRoot({super.key, this.startupPrerequisites});
+  const QuWoQuanAppRoot({
+    super.key,
+    this.postFirstFrameTasks,
+    this.authNetworkPrerequisites,
+  });
 
-  /// Runtime prerequisites that must start before media clients but must not
-  /// block the Flutter welcome first frame.
-  final Future<void>? startupPrerequisites;
+  /// 首帧已实际绘制后才创建的非关键水合任务。
+  ///
+  /// 这里必须是 factory，不能传入已启动的 [Future]；否则 SecureStorage、
+  /// PackageInfo 或 Connectivity 会在 `runApp` 前抢占 Android/iOS 首帧。
+  final Future<void> Function()? postFirstFrameTasks;
+
+  /// 仅用于必须先于认证网络访问完成的本地能力（当前为 debug HTTPS trust）。
+  ///
+  /// 它同样只能在首帧后创建，且不会阻断安全 Shell。
+  final Future<void> Function()? authNetworkPrerequisites;
 
   @override
   ConsumerState<QuWoQuanAppRoot> createState() => _QuWoQuanAppRootState();
@@ -177,24 +74,31 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
     milliseconds: 2500,
   );
 
-  bool _routerEnabled = false;
   bool _startupShellReady = false;
-  bool _startupCompletionStarted = false;
-  bool _welcomeOverlayVisible = false;
-  double _welcomeOverlayOpacity = 1;
+  bool _routerShellFirstPainted = false;
   Timer? _welcomeOverlayRemovalTimer;
+  Timer? _startupDeadlineTimer;
+  Timer? _routerLoadDeadlineTimer;
+  Completer<void>? _routerLoadDeadline;
+  Future<void>? _routerPreload;
+  final Completer<void> _disposeSignal = Completer<void>();
   late final StartupInitScheduler _startupInitScheduler;
+  late final StartupStateMachine _startupStateMachine;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _startupStateMachine = StartupStateMachine();
     _startupInitScheduler = StartupInitScheduler(
       ref: ref,
       logException: logQuwoquanAppException,
-      startupPrerequisites: widget.startupPrerequisites,
+      postFirstFrameTasks: widget.postFirstFrameTasks,
+      authNetworkPrerequisites: widget.authNetworkPrerequisites,
       startupPrerequisiteBudget: _startupPrerequisiteBudget,
     );
+    _armStartupDeadline();
+    unawaited(_hydrateNativeTimingForTelemetry());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       AppStartupRuntime.instance.markFirstFramePainted();
     });
@@ -202,7 +106,13 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
 
   @override
   void dispose() {
+    if (!_disposeSignal.isCompleted) {
+      _disposeSignal.complete();
+    }
+    _startupInitScheduler.dispose();
     _welcomeOverlayRemovalTimer?.cancel();
+    _startupDeadlineTimer?.cancel();
+    _cancelRouterLoadDeadline();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -210,18 +120,55 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    handleQuwoquanAppLifecycleState(
-      state: state,
-      refreshAppearance: () =>
-          ref.read(appearanceSettingsControllerProvider.notifier).refresh(),
-      onRealtimeForeground: () {
-        ref.read(realtimeConnectionManagerProvider.notifier).onAppForeground();
-        unawaited(_refreshAuthSessionOnForegroundIfNeeded());
-      },
-      onRealtimeBackground: () => ref
-          .read(realtimeConnectionManagerProvider.notifier)
-          .onAppBackground(),
-    );
+    try {
+      handleQuwoquanAppLifecycleState(
+        state: state,
+        refreshAppearance: () {
+          try {
+            ref.read(appearanceSettingsControllerProvider.notifier).refresh();
+          } catch (error, stack) {
+            logQuwoquanAppException(
+              source: 'startup_lifecycle_appearance',
+              exceptionText: error.toString(),
+              stackText: stack.toString(),
+            );
+          }
+        },
+        onRealtimeForeground: () {
+          try {
+            ref
+                .read(realtimeConnectionManagerProvider.notifier)
+                .onAppForeground();
+            unawaited(_refreshAuthSessionOnForegroundIfNeeded());
+          } catch (error, stack) {
+            logQuwoquanAppException(
+              source: 'startup_lifecycle_realtime_foreground',
+              exceptionText: error.toString(),
+              stackText: stack.toString(),
+            );
+          }
+        },
+        onRealtimeBackground: () {
+          try {
+            ref
+                .read(realtimeConnectionManagerProvider.notifier)
+                .onAppBackground();
+          } catch (error, stack) {
+            logQuwoquanAppException(
+              source: 'startup_lifecycle_realtime_background',
+              exceptionText: error.toString(),
+              stackText: stack.toString(),
+            );
+          }
+        },
+      );
+    } catch (error, stack) {
+      logQuwoquanAppException(
+        source: 'startup_lifecycle',
+        exceptionText: error.toString(),
+        stackText: stack.toString(),
+      );
+    }
   }
 
   @override
@@ -327,13 +274,23 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
 
   @override
   Widget build(BuildContext context) {
-    if (!_routerEnabled) {
+    final startup = _startupStateMachine.snapshot;
+    if (startup.phase == StartupRootPhase.welcome) {
       return _buildStartupWelcomeApp(startupWelcomeAppearanceSnapshot());
     }
 
     final snapshot = ref.watch(appearanceSnapshotProvider);
+    if (startup.phase == StartupRootPhase.safeRecovery) {
+      return _buildStartupFallbackApp(
+        snapshot,
+        failure: startup.failure == null
+            ? BootstrapFailure.deadline()
+            : BootstrapFailure.fromRuntimeFailure(startup.failure!),
+      );
+    }
+
     final shell = _buildMainShellApp(snapshot);
-    if (!_welcomeOverlayVisible) {
+    if (!startup.welcomeOverlayVisible) {
       return shell;
     }
     return Stack(
@@ -344,9 +301,9 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
         IgnorePointer(
           child: AnimatedOpacity(
             duration: const Duration(milliseconds: 120),
-            opacity: _welcomeOverlayOpacity,
+            opacity: startup.welcomeOverlayOpacity,
             onEnd: () {
-              if (_welcomeOverlayOpacity == 0) {
+              if (_startupStateMachine.snapshot.welcomeOverlayOpacity == 0) {
                 _removeWelcomeOverlay(trigger: 'fade_completed');
               }
             },
@@ -363,7 +320,13 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
   Widget _buildMainShellApp(AppearanceSnapshot snapshot) {
     final router = _watchRouterOrNull();
     if (router == null) {
-      return _buildStartupFallbackApp(snapshot);
+      return _buildStartupFallbackApp(
+        snapshot,
+        failure: BootstrapFailure.router(
+          appRouterLibraryLastLoadError ??
+              StateError('router unavailable after startup transition'),
+        ),
+      );
     }
     return StartupScreenUtilScope(
       child: MaterialApp.router(
@@ -385,7 +348,7 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
           child: wrapWithQuwoquanAppAppearance(
             context: context,
             snapshot: snapshot,
-            child: child ?? const SizedBox.shrink(),
+            child: child ?? _buildRouterChildRecovery(),
           ),
         ),
       ),
@@ -429,115 +392,384 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
   }
 
   void _onWelcomeVisible() {
-    _startupInitScheduler.onFirstFrame(
-      syncWindow: _syncWindowDerivedState,
-      syncTheme: () {
-        ref
-            .read(themeProvider.notifier)
-            .updateSystemBrightness(
-              WidgetsBinding.instance.platformDispatcher.platformBrightness,
-            );
-      },
-    );
-    _startupInitScheduler.onWelcomeVisible(onShellReady: _setStartupShellReady);
-    unawaited(
-      ensureAppRouterLibraryLoaded().catchError((
-        Object error,
-        StackTrace stack,
-      ) {
-        logQuwoquanAppException(
-          source: 'startup_router_preload',
-          exceptionText: error.toString(),
-          stackText: stack.toString(),
-        );
-      }),
-    );
-  }
-
-  void _onWelcomeSequenceEvent(WelcomeSequenceEvent event) {
-    AppStartupRuntime.instance.recordStartupPhase(
-      (provider) => ref.read(provider),
-      phase: event.phase.name,
-      eventName: 'startup_welcome_sequence',
-      properties: <String, dynamic>{
-        ...event.toProperties(),
-        if (event.hintVisible) 'copyKey': 'startupStillStartingInline',
-        'hintHeightPx': event.hintVisible ? AppSpacing.radiusTwentyFour : 0,
-      },
-    );
-  }
-
-  void _onWelcomeCompletedInit() {
-    _startupInitScheduler.onWelcomeCompleted();
-  }
-
-  void _completeStartupWelcome() {
-    if (_startupCompletionStarted) {
-      return;
-    }
-    _startupCompletionStarted = true;
-    final degraded = !_startupShellReady;
-    _onWelcomeCompletedInit();
-    unawaited(_enableRouterAfterWelcome(degraded: degraded));
-  }
-
-  Future<void> _enableRouterAfterWelcome({required bool degraded}) async {
-    if (!mounted || _routerEnabled) {
-      return;
-    }
-    ref.read(welcomeCompletedProvider.notifier).setCompleted(true);
-    setState(() {
-      _routerEnabled = true;
-      _welcomeOverlayVisible = true;
-      _welcomeOverlayOpacity = 1;
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      AppStartupRuntime.instance.markShellFirstPainted();
-      AppStartupRuntime.instance.recordStartupPhase(
-        (provider) => ref.read(provider),
-        phase: 'main_shell_first_paint',
-        eventName: 'startup_welcome_sequence',
-        properties: <String, dynamic>{
-          'result': degraded ? 'degraded' : 'entered',
-          'shellFirstPaintMs': AppStartupRuntime
-              .instance
-              .elapsedSinceProcessStart
-              .inMilliseconds,
+    try {
+      _startupInitScheduler.onFirstFrame(
+        syncWindow: _syncWindowDerivedState,
+        syncTheme: () {
+          ref
+              .read(themeProvider.notifier)
+              .updateSystemBrightness(
+                WidgetsBinding.instance.platformDispatcher.platformBrightness,
+              );
         },
       );
-      setState(() => _welcomeOverlayOpacity = 0);
-      _welcomeOverlayRemovalTimer?.cancel();
-      _welcomeOverlayRemovalTimer = Timer(
-        StartupWelcomeTiming.production.shellTransitionReserve,
-        () => _removeWelcomeOverlay(trigger: 'deadline_fallback'),
-      );
-    });
-    try {
-      await ensureAppRouterLibraryLoaded();
-      await AppStartupRuntime.instance.hydrateNativeProcessSegments();
-    } catch (e, stack) {
+    } catch (error, stack) {
       logQuwoquanAppException(
-        source: 'startup_router_library',
-        exceptionText: e.toString(),
+        source: 'startup_first_frame_scheduler',
+        exceptionText: error.toString(),
         stackText: stack.toString(),
       );
     }
+    try {
+      _startupInitScheduler.onWelcomeVisible(
+        onShellReady: _setStartupShellReady,
+      );
+    } catch (error, stack) {
+      logQuwoquanAppException(
+        source: 'startup_welcome_visible',
+        exceptionText: error.toString(),
+        stackText: stack.toString(),
+      );
+    }
+    unawaited(_preloadRouter());
+  }
+
+  void _armStartupDeadline() {
+    _startupDeadlineTimer?.cancel();
+    final remaining =
+        StartupWelcomeTiming.production.hardEntryDeadline -
+        AppStartupRuntime.instance.deadlineElapsedSinceProcessStart;
+    _startupDeadlineTimer = Timer(
+      remaining.isNegative ? const Duration(milliseconds: 1) : remaining,
+      () {
+        if (!mounted ||
+            _routerShellFirstPainted ||
+            _startupStateMachine.snapshot.phase ==
+                StartupRootPhase.safeRecovery) {
+          return;
+        }
+        logQuwoquanAppException(
+          source: 'startup_absolute_deadline',
+          exceptionText:
+              'safe startup terminal was not reached before deadline',
+          stackText: StackTrace.current.toString(),
+        );
+        _enterSafeRecovery(
+          BootstrapFailure.deadline(),
+          source: 'startup_absolute_deadline',
+        );
+      },
+    );
+  }
+
+  Future<void> _hydrateNativeTimingForTelemetry() async {
+    try {
+      await AppStartupRuntime.instance.hydrateNativeProcessSegments(
+        cancellationSignal: _disposeSignal.future,
+      );
+    } catch (error, stack) {
+      // Native timing bridge 是绝对时间校准的增强项；不可用时继续保留 Dart
+      // fallback deadline，不能让 bridge 错误影响首帧或安全终态。
+      logQuwoquanAppException(
+        source: 'startup_root_deadline_clock',
+        exceptionText: error.toString(),
+        stackText: stack.toString(),
+      );
+      return;
+    }
+  }
+
+  Future<void> _preloadRouter() async {
+    if (_routerPreload != null) {
+      return _routerPreload!;
+    }
+    final preload = _runRouterPreload();
+    _routerPreload = preload;
+    await preload;
+  }
+
+  Future<void> _runRouterPreload() async {
+    try {
+      await ensureAppRouterLibraryLoaded();
+      _recordStartupPhase(phase: 'router_preload_ready', result: 'ready');
+    } catch (error, stack) {
+      logQuwoquanAppException(
+        source: 'startup_router_preload',
+        exceptionText: error.toString(),
+        stackText: stack.toString(),
+      );
+      final failure = BootstrapFailure.router(error);
+      _recordStartupPhase(
+        phase: 'router_preload_failed',
+        result: 'failed',
+        failureCode: failure.runtimeFailure.code,
+        failureSource: 'router',
+      );
+    }
+  }
+
+  void _onWelcomeSequenceEvent(WelcomeSequenceEvent event) {
+    try {
+      AppStartupRuntime.instance.recordStartupPhase(
+        (provider) => ref.read(provider),
+        phase: event.phase.name,
+        eventName: 'startup_welcome_sequence',
+        properties: <String, dynamic>{
+          ...event.toProperties(),
+          if (event.hintVisible) 'copyKey': 'startupStillStartingInline',
+          'hintHeightPx': event.hintVisible ? AppSpacing.radiusTwentyFour : 0,
+        },
+      );
+    } catch (error, stack) {
+      logQuwoquanAppException(
+        source: 'startup_welcome_sequence_observer',
+        exceptionText: error.toString(),
+        stackText: stack.toString(),
+      );
+    }
+  }
+
+  void _onWelcomeCompletedInit() {
+    try {
+      _startupInitScheduler.onWelcomeCompleted();
+    } catch (error, stack) {
+      logQuwoquanAppException(
+        source: 'startup_welcome_completed',
+        exceptionText: error.toString(),
+        stackText: stack.toString(),
+      );
+    }
+  }
+
+  void _completeStartupWelcome() {
+    if (!_startupStateMachine.requestWelcomeCompletion()) {
+      return;
+    }
+    _onWelcomeCompletedInit();
+    _startRouterLoad();
+  }
+
+  void _startRouterLoad({bool retry = false}) {
+    if (!mounted ||
+        _startupStateMachine.snapshot.phase == StartupRootPhase.routerShell) {
+      return;
+    }
+    final attempt = _startupStateMachine.beginRouterLoad();
+    setState(() {
+      // 状态已经在 StartupStateMachine 中推进。
+    });
+    unawaited(_awaitRouterLoad(attempt: attempt, retry: retry));
+  }
+
+  Future<void> _awaitRouterLoad({
+    required int attempt,
+    required bool retry,
+  }) async {
+    final remaining =
+        StartupWelcomeTiming.production.hardEntryDeadline -
+        AppStartupRuntime.instance.deadlineElapsedSinceProcessStart;
+    final budget = retry
+        ? const Duration(seconds: 3)
+        : remaining <= Duration.zero
+        ? const Duration(milliseconds: 1)
+        : remaining;
+    final deadline = _startRouterLoadDeadline(budget);
+    try {
+      _recordStartupPhase(
+        phase: 'router_loading',
+        result: retry ? 'retry' : 'started',
+      );
+      await Future.any<void>([
+        ensureAppRouterLibraryLoaded(retry: retry),
+        deadline.future,
+      ]);
+      unawaited(_hydrateNativeStartupSegments());
+      if (!mounted || !_startupStateMachine.markRouterReady(attempt)) {
+        return;
+      }
+      try {
+        ref.read(welcomeCompletedProvider.notifier).setCompleted(true);
+      } catch (error, stack) {
+        logQuwoquanAppException(
+          source: 'startup_welcome_completed_state',
+          exceptionText: error.toString(),
+          stackText: stack.toString(),
+        );
+      }
+      setState(() {
+        // Router shell 已就绪，下一帧才能开始淡出 welcome overlay。
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _onRouterShellFirstPaint(attempt);
+      });
+    } catch (error, stack) {
+      logQuwoquanAppException(
+        source: 'startup_router_library',
+        exceptionText: error.toString(),
+        stackText: stack.toString(),
+      );
+      final failure = BootstrapFailure.router(error);
+      if (!mounted ||
+          !_startupStateMachine.markRouterFailure(
+            attempt,
+            failure.runtimeFailure,
+          )) {
+        return;
+      }
+      _recordStartupPhase(
+        phase: 'router_loading_failed',
+        result: 'failed',
+        failureCode: failure.runtimeFailure.code,
+        failureSource: 'router',
+      );
+      _showSafeRecovery();
+    } finally {
+      _cancelRouterLoadDeadline(deadline);
+    }
+  }
+
+  Completer<void> _startRouterLoadDeadline(Duration budget) {
+    _cancelRouterLoadDeadline();
+    final deadline = Completer<void>();
+    _routerLoadDeadline = deadline;
+    _routerLoadDeadlineTimer = Timer(budget, () {
+      if (!deadline.isCompleted) {
+        deadline.completeError(
+          TimeoutException('router library load timed out', budget),
+        );
+      }
+    });
+    return deadline;
+  }
+
+  void _cancelRouterLoadDeadline([Completer<void>? deadline]) {
+    if (deadline != null && !identical(_routerLoadDeadline, deadline)) {
+      return;
+    }
+    _routerLoadDeadlineTimer?.cancel();
+    _routerLoadDeadlineTimer = null;
+    _routerLoadDeadline = null;
+  }
+
+  Future<void> _hydrateNativeStartupSegments() async {
+    try {
+      await AppStartupRuntime.instance.hydrateNativeProcessSegments(
+        cancellationSignal: _disposeSignal.future,
+      );
+    } catch (error, stack) {
+      if (!mounted) {
+        return;
+      }
+      logQuwoquanAppException(
+        source: 'startup_native_timing_hydration',
+        exceptionText: error.toString(),
+        stackText: stack.toString(),
+      );
+    }
+  }
+
+  void _onRouterShellFirstPaint(int attempt) {
+    if (!mounted ||
+        attempt != _startupStateMachine.currentRouterAttempt ||
+        _startupStateMachine.snapshot.phase != StartupRootPhase.routerShell) {
+      return;
+    }
+    final degraded = !_startupShellReady;
+    _routerShellFirstPainted = true;
+    _startupDeadlineTimer?.cancel();
+    _startupDeadlineTimer = null;
+    AppStartupRuntime.instance.markShellFirstPainted();
+    _startupInitScheduler.onSafeTerminal();
+    _recordStartupPhase(
+      phase: 'main_shell_first_paint',
+      result: degraded ? 'degraded' : 'entered',
+    );
+    if (_startupStateMachine.beginOverlayFade()) {
+      setState(() {
+        // Welcome overlay 只会在真实 shell 首帧之后移除。
+      });
+    }
+    _welcomeOverlayRemovalTimer?.cancel();
+    _welcomeOverlayRemovalTimer = Timer(
+      const Duration(milliseconds: 120),
+      () => _removeWelcomeOverlay(trigger: 'shell_first_paint'),
+    );
+  }
+
+  void _enterSafeRecovery(BootstrapFailure failure, {required String source}) {
+    final phase = _startupStateMachine.snapshot.phase;
+    if (phase == StartupRootPhase.routerShell ||
+        phase == StartupRootPhase.safeRecovery) {
+      return;
+    }
+    _startupStateMachine.forceSafeRecovery(failure.runtimeFailure);
+    final failureSource = source.contains('deadline')
+        ? 'startup_deadline'
+        : 'router';
+    _recordStartupPhase(
+      phase: 'safe_recovery_shown',
+      result: source,
+      failureCode: failure.runtimeFailure.code,
+      failureSource: failureSource,
+    );
+    _showSafeRecovery();
+  }
+
+  void _showSafeRecovery() {
+    _welcomeOverlayRemovalTimer?.cancel();
+    _welcomeOverlayRemovalTimer = null;
+    _startupDeadlineTimer?.cancel();
+    _startupDeadlineTimer = null;
+    if (mounted) {
+      setState(() {
+        // 安全恢复终态已由 StartupStateMachine 决定。
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted &&
+            _startupStateMachine.snapshot.phase ==
+                StartupRootPhase.safeRecovery) {
+          AppStartupRuntime.instance.markSafeRecoverySurfacePainted();
+        }
+      });
+    }
+  }
+
+  void _retryRouterLoad() {
     if (!mounted) {
       return;
     }
-    setState(() {});
+    _startRouterLoad(retry: true);
+  }
+
+  void _recordStartupPhase({
+    required String phase,
+    required String result,
+    String failureCode = '',
+    String failureSource = '',
+    String deadlineOrigin = '',
+  }) {
+    try {
+      AppStartupRuntime.instance.recordStartupPhase(
+        (provider) => ref.read(provider),
+        phase: phase,
+        eventName: 'startup_welcome_sequence',
+        properties: <String, dynamic>{
+          'result': result,
+          if (failureCode.isNotEmpty) 'failureCode': failureCode,
+          if (failureSource.isNotEmpty) 'failureSource': failureSource,
+          if (deadlineOrigin.isNotEmpty) 'deadlineOrigin': deadlineOrigin,
+        },
+      );
+    } catch (error, stack) {
+      logQuwoquanAppException(
+        source: 'startup_phase_record',
+        exceptionText: error.toString(),
+        stackText: stack.toString(),
+      );
+    }
   }
 
   void _removeWelcomeOverlay({required String trigger}) {
-    if (!mounted || !_welcomeOverlayVisible) {
+    if (!mounted || !_startupStateMachine.removeWelcomeOverlay()) {
       return;
     }
     _welcomeOverlayRemovalTimer?.cancel();
     _welcomeOverlayRemovalTimer = null;
-    setState(() => _welcomeOverlayVisible = false);
+    _startupDeadlineTimer?.cancel();
+    _startupDeadlineTimer = null;
+    setState(() {
+      // Overlay 已移除；Router shell 是唯一可见主界面。
+    });
     final removedMs =
         AppStartupRuntime.instance.elapsedSinceProcessStart.inMilliseconds;
     AppStartupRuntime.instance.recordStartupPhase(
@@ -549,25 +781,38 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
         'result': trigger,
       },
     );
+    AppStartupRuntime.instance.markWelcomeOverlayRemoved();
   }
 
-  GoRouter? _watchRouterOrNull() {
-    if (!isAppRouterLibraryLoaded) {
-      return null;
-    }
-    try {
-      return ref.watch(deferredAppRouterProvider);
-    } catch (e, stack) {
-      logQuwoquanAppException(
-        source: 'startup_router_build',
-        exceptionText: e.toString(),
-        stackText: stack.toString(),
-      );
-      return null;
-    }
+  Widget _buildRouterChildRecovery() {
+    return AppScaffold(
+      body: AppPageErrorState(
+        semantic: UiErrorSemantic(
+          category: UiErrorCategory.pageLoad,
+          scope: UiErrorScope.global,
+          title: UITextConstants.startupRecoveryTitle,
+          message: UITextConstants.startupRecoveryMessage,
+          sourceCode: OpsEventRecordErrorCode.startupRouterUnavailable.code,
+          presentation: UiErrorPresentation.emptyPage,
+          tone: UiErrorTone.critical,
+          primaryAction: UiErrorAction(
+            type: UiErrorActionType.retry,
+            label: UITextConstants.startupRecoveryRetry,
+          ),
+        ),
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry) {
+            _retryRouterLoad();
+          }
+        },
+      ),
+    );
   }
 
-  Widget _buildStartupFallbackApp(AppearanceSnapshot snapshot) {
+  Widget _buildStartupFallbackApp(
+    AppearanceSnapshot snapshot, {
+    required BootstrapFailure failure,
+  }) {
     return MaterialApp(
       title: '趣我圈',
       debugShowCheckedModeBanner: false,
@@ -586,27 +831,31 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
         child: wrapWithQuwoquanAppAppearance(
           context: context,
           snapshot: snapshot,
-          child: child ?? const SizedBox.shrink(),
+          child: child ?? _buildRouterChildRecovery(),
         ),
       ),
       home: AppScaffold(
         body: AppPageErrorState(
           semantic: UiErrorSemantic(
             category: UiErrorCategory.pageLoad,
-            scope: UiErrorScope.page,
-            title: UITextConstants.pageLoadFailedTitle,
-            message: UITextConstants.pageLoadFailedMessage,
-            copyKey: 'pageLoadFailedTitle',
+            scope: UiErrorScope.global,
+            title: UITextConstants.startupRecoveryTitle,
+            message: failure.errorCode.defaultMessage,
+            secondaryMessage: UITextConstants.startupRecoverySupportHint,
+            sourceCode: failure.errorCode.code,
+            failureKind: failure.runtimeFailure.kind,
+            recoveryAction: RuntimeRecoveryAction.retry,
+            copyKey: 'startupRecovery',
             presentation: UiErrorPresentation.emptyPage,
-            tone: UiErrorTone.caution,
+            tone: UiErrorTone.critical,
             primaryAction: UiErrorAction(
               type: UiErrorActionType.retry,
-              label: UITextConstants.tryAgain,
+              label: UITextConstants.startupRecoveryRetry,
             ),
           ),
           onAction: (action) async {
-            if (action.type == UiErrorActionType.retry && mounted) {
-              setState(() {});
+            if (action.type == UiErrorActionType.retry) {
+              _retryRouterLoad();
             }
           },
         ),
@@ -614,36 +863,72 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
     );
   }
 
+  GoRouter? _watchRouterOrNull() {
+    if (!isAppRouterLibraryLoaded) {
+      return null;
+    }
+    try {
+      return ref.watch(deferredAppRouterProvider);
+    } catch (error, stack) {
+      logQuwoquanAppException(
+        source: 'startup_router_build',
+        exceptionText: error.toString(),
+        stackText: stack.toString(),
+      );
+      if (_startupStateMachine.snapshot.phase == StartupRootPhase.routerShell) {
+        scheduleMicrotask(
+          () => _enterSafeRecovery(
+            BootstrapFailure.router(error),
+            source: 'router_build_failed',
+          ),
+        );
+      }
+      return null;
+    }
+  }
+
   Future<void> _refreshAuthSessionOnForegroundIfNeeded() async {
-    final controller = ref.read(authSessionControllerProvider.notifier);
-    final session = ref.read(authSessionControllerProvider);
-    if (!session.isAuthenticated) {
+    if (!mounted ||
+        _startupStateMachine.snapshot.phase != StartupRootPhase.routerShell) {
       return;
     }
-    final refreshed = await controller.refreshIfSessionLooksStale();
-    if (!mounted) {
-      return;
-    }
-    if (!ref.read(authSessionControllerProvider).isAuthenticated) {
-      ref.read(welcomeCompletedProvider.notifier).setCompleted(true);
-      if (!isAppRouterLibraryLoaded) {
+    try {
+      final controller = ref.read(authSessionControllerProvider.notifier);
+      final session = ref.read(authSessionControllerProvider);
+      if (!session.isAuthenticated) {
         return;
       }
-      final router = ref.read(deferredAppRouterProvider);
-      final currentLocation = router.routerDelegate.currentConfiguration.uri
-          .toString();
-      router.go(
-        buildLoginRouteLocation(
-          reasonName: AuthPromptReason.sessionExpired.name,
-          redirect: currentLocation,
-          dismissFallback: currentLocation,
-          dismissPolicy: LoginDismissPolicy.safeFallback,
-        ),
+      final refreshed = await controller.refreshIfSessionLooksStale();
+      if (!mounted) {
+        return;
+      }
+      if (!ref.read(authSessionControllerProvider).isAuthenticated) {
+        ref.read(welcomeCompletedProvider.notifier).setCompleted(true);
+        if (!isAppRouterLibraryLoaded) {
+          return;
+        }
+        final router = ref.read(deferredAppRouterProvider);
+        final currentLocation = router.routerDelegate.currentConfiguration.uri
+            .toString();
+        router.go(
+          buildLoginRouteLocation(
+            reasonName: AuthPromptReason.sessionExpired.name,
+            redirect: currentLocation,
+            dismissFallback: currentLocation,
+            dismissPolicy: LoginDismissPolicy.safeFallback,
+          ),
+        );
+        return;
+      }
+      if (!refreshed) {
+        await controller.markForegroundAuthCheck();
+      }
+    } catch (error, stack) {
+      logQuwoquanAppException(
+        source: 'startup_auth_foreground_refresh',
+        exceptionText: error.toString(),
+        stackText: stack.toString(),
       );
-      return;
-    }
-    if (!refreshed) {
-      await controller.markForegroundAuthCheck();
     }
   }
 }

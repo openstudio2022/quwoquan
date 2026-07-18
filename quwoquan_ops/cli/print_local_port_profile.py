@@ -35,6 +35,10 @@ ENV_EXPORTS = {
         "MEDIA_PROCESSOR_PORT": "media-processor",
         "ASSISTANT_PORT": "assistant-service",
         "CHAT_PORT": "chat-service",
+        "BETA_ENTITY_PORT": "entity-service",
+        "BETA_POSTGRES_PORT": "postgres",
+        "BETA_MONGO_PORT": "mongodb",
+        "BETA_REDIS_PORT": "redis",
     },
     "gamma-local": {
         "LOCAL_GAMMA_HTTP_PORT": "api-edge",
@@ -42,6 +46,7 @@ ENV_EXPORTS = {
         "LOCAL_GAMMA_PLATFORM_OPS_PORT": "platform-ops-edge",
         "LOCAL_GAMMA_MEDIA_EDGE_PORT": "media-edge",
         "LOCAL_GAMMA_MEDIA_ORIGIN_PORT": "media-origin",
+        "LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT": "object-storage-edge",
         "LOCAL_GAMMA_CONTENT_PORT": "content-service",
         "LOCAL_GAMMA_CHAT_PORT": "chat-service",
         "LOCAL_GAMMA_USER_PORT": "user-service",

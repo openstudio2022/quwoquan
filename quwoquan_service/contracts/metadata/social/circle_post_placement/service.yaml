@@ -1,4 +1,3 @@
-version: 1
 service:
   name: circle-service
   domain: circle
@@ -12,7 +11,8 @@ service:
 
 api_routes:
   - method: POST
-    path: /v1/circles/{circleId}/post-placements
+    path: /circles/{circleId}/post-placements
+
     operation: PlacePostInCircle
     actor: persona
     application:
@@ -24,7 +24,8 @@ api_routes:
       invariant_target: CirclePostPlacement
     request_entity: PlacePostInCircleRequest
     response_entity: CirclePostPlacementCommandResult
-    auth: required
+    security:
+      auth_mode: required
     authorization:
       principal: persona
       ownership_policy: post_owner_or_circle_moderator
@@ -48,7 +49,8 @@ api_routes:
       response_decoder: decodeCirclePostPlacementCommandResult
 
   - method: DELETE
-    path: /v1/circles/{circleId}/post-placements/{placementId}
+    path: /circles/{circleId}/post-placements/{placementId}
+
     operation: RemovePostFromCircle
     actor: persona
     application:
@@ -59,7 +61,8 @@ api_routes:
       mutation_target: CirclePostPlacement
       invariant_target: CirclePostPlacement
     response_entity: CirclePostPlacementCommandResult
-    auth: required
+    security:
+      auth_mode: required
     authorization:
       principal: persona
       ownership_policy: post_owner_or_circle_moderator
@@ -68,10 +71,11 @@ api_routes:
     privacy: { request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only }
     telemetry: { metric: circle_post_placement_remove, trace: true, attributes: [outcome, actor_role] }
     slo: { latency_p95_ms: 600, availability_percent: 99.9 }
-    description: expectedVersion 必须通过 If-Match header 提交；幂等键只来自 OperationInvocationContext。
+    description: 删除是服务端加载当前版本并重放的命名状态迁移；幂等键只来自 OperationInvocationContext。
 
   - method: PATCH
-    path: /v1/circles/{circleId}/post-placements/{placementId}/pin
+    path: /circles/{circleId}/post-placements/{placementId}/pin
+
     operation: PinCirclePost
     actor: persona
     application:
@@ -83,19 +87,21 @@ api_routes:
       invariant_target: CirclePostPlacement
     request_entity: UpdateCirclePostPlacementRequest
     response_entity: CirclePostPlacementCommandResult
-    auth: required
+    security:
+      auth_mode: required
     authorization:
       principal: persona
       ownership_policy: circle_moderator
     reliability: { timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required }
-    request_fields: [enabled, expectedVersion]
+    request_fields: [enabled]
     error_codes: [CIRCLE.USER.placement_not_found, CIRCLE.USER.permission_denied, CIRCLE.USER.placement_version_conflict, CIRCLE.USER.placement_idempotency_conflict, CIRCLE.SYSTEM.placement_storage_write_failed]
     privacy: { request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only }
     telemetry: { metric: circle_post_placement_pin, trace: true, attributes: [outcome] }
     slo: { latency_p95_ms: 600, availability_percent: 99.9 }
 
   - method: PATCH
-    path: /v1/circles/{circleId}/post-placements/{placementId}/feature
+    path: /circles/{circleId}/post-placements/{placementId}/feature
+
     operation: FeatureCirclePost
     actor: persona
     application:
@@ -107,12 +113,13 @@ api_routes:
       invariant_target: CirclePostPlacement
     request_entity: UpdateCirclePostPlacementRequest
     response_entity: CirclePostPlacementCommandResult
-    auth: required
+    security:
+      auth_mode: required
     authorization:
       principal: persona
       ownership_policy: circle_moderator
     reliability: { timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required }
-    request_fields: [enabled, expectedVersion]
+    request_fields: [enabled]
     error_codes: [CIRCLE.USER.placement_not_found, CIRCLE.USER.permission_denied, CIRCLE.USER.placement_version_conflict, CIRCLE.USER.placement_idempotency_conflict, CIRCLE.SYSTEM.placement_storage_write_failed]
     privacy: { request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only }
     telemetry: { metric: circle_post_placement_feature, trace: true, attributes: [outcome] }

@@ -14,6 +14,7 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
@@ -528,12 +529,20 @@ void main() {
     await _hubPumpSettled(tester);
     _consumeImageLoadExceptions(tester);
 
-    final horizontalCircleRail = find
-        .byWidgetPredicate(
-          (widget) =>
-              widget is ListView && widget.scrollDirection == Axis.horizontal,
+    final pageScrollView = find
+        .descendant(
+          of: find.byKey(TestKeys.homeCirclesScrollView),
+          matching: find.byType(Scrollable),
         )
-        .last;
+        .first;
+    await tester.scrollUntilVisible(
+      find.byKey(TestKeys.homeCirclesRecommendationRail),
+      AppSpacing.bottomNavHeight,
+      scrollable: pageScrollView,
+    );
+    final horizontalCircleRail = find.byKey(
+      TestKeys.homeCirclesRecommendationRail,
+    );
     await tester.dragUntilVisible(
       find.text(UITextConstants.homeCirclesViewAll),
       horizontalCircleRail,

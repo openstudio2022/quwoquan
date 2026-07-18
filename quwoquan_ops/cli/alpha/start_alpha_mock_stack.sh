@@ -55,7 +55,7 @@ INTERNAL_PRODUCT_OPS_BASE_URL="http://127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}"
 INTERNAL_MEDIA_BASE_URL="http://127.0.0.1:${MEDIA_PROCESSOR_PORT}"
 # TLS profile/topology lives in quwoquan_ops/environments; generated key
 # material is durable PKI state and never belongs to rebuildable output.
-TLS_CA_DIR="$PKI_STATE_DIR/tls/ca"
+TLS_CA_DIR="$PKI_STATE_DIR"
 TLS_ROOT_KEY="$TLS_CA_DIR/root.key"
 TLS_ROOT_CERT="$TLS_CA_DIR/root.crt"
 TLS_DIR="$PKI_STATE_DIR/tls"
@@ -516,14 +516,22 @@ install_macos_login_keychain_trust() {
   echo "[alpha] macOS login keychain trust installed for local root CA"
 }
 
-install_booted_simulator_root_ca() {
-  if ! command -v xcrun >/dev/null 2>&1; then
+install_requested_simulator_root_ca() {
+  local simulator_udid="${QWQ_IOS_SIMULATOR_UDID:-}"
+  if [[ -z "$simulator_udid" ]]; then
+    if [[ "${QWQ_IOS_SIMULATOR_CA_REQUIRED:-0}" == "1" ]]; then
+      echo "[alpha] GATE_BLOCK: iOS Simulator root-CA installation requires an explicit UDID." >&2
+      echo "[alpha] Repair: launch with QWQ_IOS_SIMULATOR_UDID=<simulator-udid>, or run:" >&2
+      echo "[alpha]   python3 $ROOT_DIR/quwoquan_ops/cli/lib/local_target_tls.py install-ios-simulator-ca --target alpha-local --simulator-udid <simulator-udid>" >&2
+      return 1
+    fi
+    echo "[alpha] iOS Simulator CA install not requested; device UAT must pass an explicit Simulator UDID"
     return 0
   fi
-  if ! xcrun simctl list devices booted -j >/dev/null 2>&1; then
-    return 0
-  fi
-  xcrun simctl keychain booted add-root-cert "$TLS_ROOT_CERT" >/dev/null 2>&1 || true
+  python3 "$ROOT_DIR/quwoquan_ops/cli/lib/local_target_tls.py" \
+    install-ios-simulator-ca \
+    --target alpha-local \
+    --simulator-udid "$simulator_udid"
 }
 
 install_local_ca_trust() {
@@ -531,7 +539,7 @@ install_local_ca_trust() {
     return 0
   fi
   install_macos_login_keychain_trust
-  install_booted_simulator_root_ca
+  install_requested_simulator_root_ca
 }
 
 write_report() {
@@ -587,7 +595,7 @@ case "$ACTION" in
         --enable-conversation-avatar-alias
     wait_http_ok "$MEDIA_ORIGIN_BASE_URL/healthz" 30
     wait_http_ok "$MEDIA_ORIGIN_BASE_URL/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" 30
-    wait_http_range_ok "$MEDIA_ORIGIN_BASE_URL/media/video/s/archived-video/beta-sample.mp4" 30
+    wait_http_range_ok "$MEDIA_ORIGIN_BASE_URL/media/video/s/video-primary-0001/post/video-content-0001/source.mp4" 30
     wait_http_ok "$MEDIA_ORIGIN_BASE_URL/media/avatar/conversation/conv_002/v1/mock.png" 30
     wait_http_ok "$MEDIA_ORIGIN_BASE_URL/media/avatar/s/archived-avatar/conversation/conv_grid_7/v1/mock.png" 30
     wait_http_ok "$MEDIA_ORIGIN_BASE_URL/media/avatar/s/archived-avatar/conversation/conv_grid_3/v1/mock.png" 30
@@ -603,7 +611,7 @@ case "$ACTION" in
         --target-base-url "$MEDIA_ORIGIN_BASE_URL"
     wait_http_ok "$INTERNAL_MEDIA_BASE_URL/healthz" 30
     wait_http_ok "$INTERNAL_MEDIA_BASE_URL/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" 30
-    wait_http_range_ok "$INTERNAL_MEDIA_BASE_URL/media/video/s/archived-video/beta-sample.mp4" 30
+    wait_http_range_ok "$INTERNAL_MEDIA_BASE_URL/media/video/s/video-primary-0001/post/video-content-0001/source.mp4" 30
     wait_http_ok "$INTERNAL_MEDIA_BASE_URL/media/avatar/conversation/conv_002/v1/mock.png" 30
     wait_http_ok "$INTERNAL_MEDIA_BASE_URL/media/avatar/s/archived-avatar/conversation/conv_grid_7/v1/mock.png" 30
     wait_http_ok "$INTERNAL_MEDIA_BASE_URL/media/avatar/s/archived-avatar/user/fixture_user_article/v1/avatar.png" 30
@@ -620,7 +628,7 @@ case "$ACTION" in
         --media-base-url "$MEDIA_BASE_URL" \
         --legal-static-root "$LEGAL_STATIC_ROOT"
     wait_http_ok "$INTERNAL_API_BASE_URL/healthz" 30
-    wait_http_ok "$INTERNAL_API_BASE_URL/v1/config/app" 30
+    wait_http_ok "$INTERNAL_API_BASE_URL/config/app" 30
     wait_http_ok "$INTERNAL_API_BASE_URL/legal/user-agreement" 30
     start_bg product-ops \
       python3 "$ROOT_DIR/quwoquan_ops/cli/lib/mock_public_plane.py" \
@@ -637,11 +645,11 @@ case "$ACTION" in
     start_tls_proxy
     if [[ "$PUBLIC_HOST_SETUP_MODE" == "skip" ]]; then
       wait_https_with_ca_ok "localhost" "$API_EDGE_PORT" "/healthz" 30
-      wait_https_with_ca_ok "localhost" "$API_EDGE_PORT" "/v1/config/app" 30
+      wait_https_with_ca_ok "localhost" "$API_EDGE_PORT" "/config/app" 30
       wait_https_with_ca_ok "localhost" "$API_EDGE_PORT" "/legal/user-agreement" 30
       wait_https_with_ca_ok "localhost" "$PRODUCT_OPS_PORT" "/healthz" 30
       wait_https_with_ca_ok "localhost" "$MEDIA_EDGE_PORT" "/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" 30
-      wait_https_with_ca_range_ok "localhost" "$MEDIA_EDGE_PORT" "/media/video/s/archived-video/beta-sample.mp4" 30
+      wait_https_with_ca_range_ok "localhost" "$MEDIA_EDGE_PORT" "/media/video/s/video-primary-0001/post/video-content-0001/source.mp4" 30
       wait_https_with_ca_ok "localhost" "$MEDIA_EDGE_PORT" "/media/avatar/conversation/conv_002/v1/mock.png" 30
       wait_https_with_ca_ok "localhost" "$MEDIA_EDGE_PORT" "/media/avatar/s/archived-avatar/conversation/conv_grid_7/v1/mock.png" 30
       wait_https_with_ca_ok "localhost" "$MEDIA_EDGE_PORT" "/media/avatar/s/archived-avatar/user/fixture_user_article/v1/avatar.png" 30
@@ -650,21 +658,21 @@ case "$ACTION" in
       install_local_ca_trust
       if [[ "$MACOS_KEYCHAIN_TRUST_MODE" == "skip" ]]; then
         wait_https_with_ca_ok "$PUBLIC_API_HOST" "$API_EDGE_PORT" "/healthz" 30
-        wait_https_with_ca_ok "$PUBLIC_API_HOST" "$API_EDGE_PORT" "/v1/config/app" 30
+        wait_https_with_ca_ok "$PUBLIC_API_HOST" "$API_EDGE_PORT" "/config/app" 30
         wait_https_with_ca_ok "$PUBLIC_API_HOST" "$API_EDGE_PORT" "/legal/user-agreement" 30
         wait_https_with_ca_ok "$PUBLIC_PRODUCT_OPS_HOST" "$PRODUCT_OPS_PORT" "/healthz" 30
         wait_https_with_ca_ok "alpha-image.quwoquan-env.test" "$MEDIA_EDGE_PORT" "/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" 30
-        wait_https_with_ca_range_ok "alpha-video.quwoquan-env.test" "$MEDIA_EDGE_PORT" "/media/video/s/archived-video/beta-sample.mp4" 30
+        wait_https_with_ca_range_ok "alpha-video.quwoquan-env.test" "$MEDIA_EDGE_PORT" "/media/video/s/video-primary-0001/post/video-content-0001/source.mp4" 30
         wait_https_with_ca_ok "alpha-avatar.quwoquan-env.test" "$MEDIA_EDGE_PORT" "/media/avatar/conversation/conv_002/v1/mock.png" 30
         wait_https_with_ca_ok "alpha-avatar.quwoquan-env.test" "$MEDIA_EDGE_PORT" "/media/avatar/s/archived-avatar/conversation/conv_grid_7/v1/mock.png" 30
         wait_https_with_ca_ok "alpha-avatar.quwoquan-env.test" "$MEDIA_EDGE_PORT" "/media/avatar/s/archived-avatar/user/fixture_user_article/v1/avatar.png" 30
       else
         wait_https_ok "$PUBLIC_API_HOST" "$API_EDGE_PORT" "/healthz" 30
-        wait_https_ok "$PUBLIC_API_HOST" "$API_EDGE_PORT" "/v1/config/app" 30
+        wait_https_ok "$PUBLIC_API_HOST" "$API_EDGE_PORT" "/config/app" 30
         wait_https_ok "$PUBLIC_API_HOST" "$API_EDGE_PORT" "/legal/user-agreement" 30
         wait_https_ok "$PUBLIC_PRODUCT_OPS_HOST" "$PRODUCT_OPS_PORT" "/healthz" 30
         wait_https_ok "alpha-image.quwoquan-env.test" "$MEDIA_EDGE_PORT" "/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" 30
-        wait_https_range_ok "alpha-video.quwoquan-env.test" "$MEDIA_EDGE_PORT" "/media/video/s/archived-video/beta-sample.mp4" 30
+        wait_https_range_ok "alpha-video.quwoquan-env.test" "$MEDIA_EDGE_PORT" "/media/video/s/video-primary-0001/post/video-content-0001/source.mp4" 30
         wait_https_ok "alpha-avatar.quwoquan-env.test" "$MEDIA_EDGE_PORT" "/media/avatar/conversation/conv_002/v1/mock.png" 30
         wait_https_ok "alpha-avatar.quwoquan-env.test" "$MEDIA_EDGE_PORT" "/media/avatar/s/archived-avatar/conversation/conv_grid_7/v1/mock.png" 30
         wait_https_ok "alpha-avatar.quwoquan-env.test" "$MEDIA_EDGE_PORT" "/media/avatar/s/archived-avatar/user/fixture_user_article/v1/avatar.png" 30

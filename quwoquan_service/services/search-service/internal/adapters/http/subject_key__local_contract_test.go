@@ -25,7 +25,7 @@ func TestSubjectKeyForStableIdentityOnly(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			r := httptest.NewRequest(http.MethodPost, "/v1/search", nil)
+			r := httptest.NewRequest(http.MethodPost, "/search", nil)
 			if tc.session != "" {
 				r.Header.Set("X-Session-Id", tc.session)
 			}

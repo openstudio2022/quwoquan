@@ -17,10 +17,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.pump(const Duration(seconds: 4));
 
-      expect(writer.calls, <String>[
-        'confirm:proposal-1:1',
-        'apply:proposal-1:2',
-      ]);
+      expect(writer.calls, <String>['confirm:proposal-1', 'apply:proposal-1']);
       expect(
         find.byKey(const ValueKey('profile-proposal-review-sheet')),
         findsNothing,
@@ -38,7 +35,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.pump(const Duration(seconds: 4));
 
-      expect(writer.calls, <String>['reject:proposal-1:1']);
+      expect(writer.calls, <String>['reject:proposal-1']);
     },
   );
 
@@ -57,6 +54,28 @@ void main() {
       find.byKey(const ValueKey('profile-proposal-review-sheet')),
       findsOneWidget,
     );
+  });
+
+  testWidgets('applying proposal can resume but cannot be rejected', (
+    tester,
+  ) async {
+    final writer = _RecordingWriter();
+    await _pumpReview(
+      tester,
+      writer: writer,
+      proposal: _proposal(status: ProfileUpdateProposalStatus.applying),
+    );
+
+    expect(
+      find.byKey(const ValueKey('profile-proposal-approve')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('profile-proposal-reject')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('profile-proposal-approve')));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 4));
+
+    expect(writer.calls, <String>['apply:proposal-1']);
   });
 }
 
@@ -83,14 +102,15 @@ Future<void> _pumpReview(
   await tester.pumpAndSettle();
 }
 
-ProfileUpdateProposalView _proposal() => ProfileUpdateProposalView(
+ProfileUpdateProposalView _proposal({
+  ProfileUpdateProposalStatus status = ProfileUpdateProposalStatus.pending,
+}) => ProfileUpdateProposalView(
   id: 'proposal-1',
   personaId: 'persona-1',
   source: ProfileUpdateProposalSource.assistant,
-  status: ProfileUpdateProposalStatus.pending,
+  status: status,
   changes: ProfileChangeSet(displayName: 'new name', bio: ''),
   reviewedBy: null,
-  targetPersonaExpectedVersion: null,
   version: 1,
   createdAt: DateTime.utc(2026, 7, 16),
   updatedAt: DateTime.utc(2026, 7, 16),
@@ -112,9 +132,7 @@ final class _RecordingWriter implements ProfileUpdateProposalCommandWriter {
   Future<ProfileUpdateProposalCommandResult> confirm(
     ConfirmProfileUpdateProposalCommand command,
   ) async {
-    calls.add(
-      'confirm:${command.proposalId}:${command.expectedProposalVersion}',
-    );
+    calls.add('confirm:${command.proposalId}');
     _throwIfNeeded();
     return const ProfileUpdateProposalCommandResult(
       proposalId: 'proposal-1',
@@ -128,7 +146,7 @@ final class _RecordingWriter implements ProfileUpdateProposalCommandWriter {
   Future<ProfileUpdateProposalCommandResult> apply(
     ApplyProfileUpdateProposalCommand command,
   ) async {
-    calls.add('apply:${command.proposalId}:${command.expectedProposalVersion}');
+    calls.add('apply:${command.proposalId}');
     _throwIfNeeded();
     return const ProfileUpdateProposalCommandResult(
       proposalId: 'proposal-1',
@@ -142,9 +160,7 @@ final class _RecordingWriter implements ProfileUpdateProposalCommandWriter {
   Future<ProfileUpdateProposalCommandResult> reject(
     RejectProfileUpdateProposalCommand command,
   ) async {
-    calls.add(
-      'reject:${command.proposalId}:${command.expectedProposalVersion}',
-    );
+    calls.add('reject:${command.proposalId}');
     _throwIfNeeded();
     return const ProfileUpdateProposalCommandResult(
       proposalId: 'proposal-1',

@@ -106,18 +106,66 @@ func (g *ObjectGateway) CompleteUpload(ctx context.Context, params mediaapp.Comp
 	return mediaapp.CompletedUploadObject{ObjectKey: finalObjectKey, SHA256: actualDigest, DeliveryURL: deliveryURL}, nil
 }
 
+// PublishPublicSlice copies a private CAS object to its canonical public
+// delivery slice. The source remains authoritative internal storage; this
+// method deliberately does not turn the public path into a CAS identity.
+func (g *ObjectGateway) PublishPublicSlice(
+	ctx context.Context,
+	sourceObjectKey string,
+	publicSliceKey string,
+) error {
+	source := strings.Trim(strings.TrimSpace(sourceObjectKey), "/")
+	target := strings.Trim(strings.TrimSpace(publicSliceKey), "/")
+	if source == "" || target == "" {
+		return errors.New("public slice materialization requires source and target keys")
+	}
+	if isPublicMediaSliceKey(source) {
+		return errors.New("public slice source must be a private CAS object key")
+	}
+	if !isPublicMediaSliceKey(target) {
+		return errors.New("public slice target is invalid")
+	}
+	if err := g.client.CopyObject(ctx, g.config.Bucket, source, target); err != nil {
+		return fmt.Errorf("materialize public media slice: %w", err)
+	}
+	return nil
+}
+
 func (g *ObjectGateway) DeliveryURL(ctx context.Context, objectKey string) (string, error) {
 	return g.DeliveryURLUntil(ctx, objectKey, g.now().UTC().Add(g.config.DeliveryTTL))
 }
 
 func (g *ObjectGateway) DeliveryURLUntil(_ context.Context, objectKey string, expiresAt time.Time) (string, error) {
-	if strings.TrimSpace(objectKey) == "" {
+	key := strings.TrimSpace(objectKey)
+	if key == "" {
 		return "", errors.New("media delivery object key is required")
 	}
 	if !expiresAt.After(g.now().UTC()) {
 		return "", errors.New("media delivery grant is expired")
 	}
-	return runtimemedia.SignCDNURLUntil(g.config.CDNDomain, objectKey, g.config.CDNSignKey, expiresAt), nil
+	// Public slice keys must not be signed as CAS object keys; build from the
+	// injected HTTPS CDN base so path stays environment-stable.
+	if isPublicMediaSliceKey(key) {
+		cdnBase := g.config.CDNDomain
+		if !strings.HasPrefix(strings.ToLower(cdnBase), "https://") {
+			cdnBase = "https://" + strings.TrimPrefix(strings.TrimPrefix(cdnBase, "http://"), "https://")
+		}
+		deliveryURI := runtimemedia.BuildPublicMediaURL(cdnBase, key, 0)
+		if deliveryURI == "" {
+			return "", errors.New("media delivery public slice key requires HTTPS CDN domain")
+		}
+		return deliveryURI, nil
+	}
+	return runtimemedia.SignCDNURLUntil(g.config.CDNDomain, key, g.config.CDNSignKey, expiresAt), nil
+}
+
+func isPublicMediaSliceKey(key string) bool {
+	trimmed := strings.Trim(key, "/")
+	return strings.HasPrefix(trimmed, "media/avatar/s/") ||
+		strings.HasPrefix(trimmed, "media/image/s/") ||
+		strings.HasPrefix(trimmed, "media/video/s/") ||
+		strings.HasPrefix(trimmed, "media/background/s/") ||
+		strings.HasPrefix(trimmed, "media/attachment/s/")
 }
 
 func (g *ObjectGateway) validatePrepareUpload(params mediaapp.PrepareUploadParams) error {

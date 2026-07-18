@@ -15,7 +15,7 @@ import (
 func TestCreateCircleWithOwner(t *testing.T) {
 	defer cleanCollections(t)
 
-	rec := doRequest(t, http.MethodPost, "/v1/circles", map[string]any{
+	rec := doRequest(t, http.MethodPost, "/circles", map[string]any{
 		"name":     "摄影圈",
 		"category": "interest",
 		"tags":     []string{"photography", "art"},
@@ -27,7 +27,7 @@ func TestCreateCircleWithOwner(t *testing.T) {
 
 	body := decodeBody(t, rec)
 	data := body["data"].(map[string]any)
-	circleID := data["_id"].(string)
+	circleID := data["id"].(string)
 
 	// Verify circle exists in MongoDB
 	var doc bson.M
@@ -58,7 +58,7 @@ func TestGetCircleSuccess(t *testing.T) {
 
 	circleID := createTestCircle(t, "测试圈子")
 
-	rec := doRequest(t, http.MethodGet, "/v1/circles/"+circleID, nil)
+	rec := doRequest(t, http.MethodGet, "/circles/"+circleID, nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
 	}
@@ -75,7 +75,7 @@ func TestListCirclesSuccess(t *testing.T) {
 	createTestCircle(t, "圈子A")
 	createTestCircle(t, "圈子B")
 
-	rec := doRequest(t, http.MethodGet, "/v1/circles?limit=10", nil)
+	rec := doRequest(t, http.MethodGet, "/circles?limit=10", nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
 	}
@@ -91,7 +91,7 @@ func TestUpdateCircleSuccess(t *testing.T) {
 
 	circleID := createTestCircle(t, "原名")
 
-	rec := doRequest(t, http.MethodPatch, "/v1/circles/"+circleID, map[string]any{
+	rec := doRequest(t, http.MethodPatch, "/circles/"+circleID, map[string]any{
 		"name": "新名",
 	})
 	if rec.Code != http.StatusOK {
@@ -113,7 +113,7 @@ func TestArchiveCircleSuccess(t *testing.T) {
 
 	circleID := createTestCircle(t, "待归档圈子")
 
-	rec := doRequest(t, http.MethodDelete, "/v1/circles/"+circleID, nil)
+	rec := doRequest(t, http.MethodDelete, "/circles/"+circleID, nil)
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d", rec.Code)
 	}

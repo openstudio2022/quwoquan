@@ -2,10 +2,23 @@ package application
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
-	messaging "quwoquan_service/runtime/messaging"
+	"quwoquan_service/services/product-ops-service/internal/generated"
+)
+
+var (
+	ErrInvalidEventBatch = errors.New("invalid event batch")
+	ErrBatchInProgress   = errors.New("event batch is still in progress")
+	ErrInvalidEventQuery = errors.New("invalid event query")
 )
 
 type VisitInput struct {
@@ -26,189 +39,188 @@ type VisitRecord struct {
 	Source     string `json:"source,omitempty" bson:"source,omitempty"`
 }
 
-type VisitStatsQuery struct {
-	TargetType string
-	TargetKey  string
-}
-
+type VisitStatsQuery struct{ TargetType, TargetKey string }
 type VisitStats struct {
 	TotalVisits int           `json:"totalVisits"`
 	Items       []VisitRecord `json:"items"`
 }
 
+// EventRecordInput 是 /ops/events 唯一 wire shape。九个公共字段之外只允许
+// event_catalog.yaml 中登记的强类型扩展；JSON decoder 会拒绝任何未知字段。
 type EventRecordInput struct {
-	EventID          string         `json:"eventId"`
-	EventType        string         `json:"eventType"`
-	EventName        string         `json:"eventName"`
-	EventVersion     string         `json:"eventVersion"`
-	Priority         string         `json:"priority"`
-	Producer         string         `json:"producer"`
-	Source           string         `json:"source,omitempty"`
-	UserIDHash       string         `json:"userIdHash,omitempty"`
-	SessionID        string         `json:"sessionId,omitempty"`
-	PageVisitID      string         `json:"pageVisitId,omitempty"`
-	SurfaceID        string         `json:"surfaceId,omitempty"`
-	RouteID          string         `json:"routeId,omitempty"`
-	OperationID      string         `json:"operationId,omitempty"`
-	RequestID        string         `json:"requestId,omitempty"`
-	TraceID          string         `json:"traceId,omitempty"`
-	PageName         string         `json:"pageName,omitempty"`
-	TargetType       string         `json:"targetType,omitempty"`
-	TargetKey        string         `json:"targetKey,omitempty"`
-	EntityType       string         `json:"entityType,omitempty"`
-	EntityID         string         `json:"entityId,omitempty"`
-	ExperimentBucket string         `json:"experimentBucket,omitempty"`
-	OccurredAt       string         `json:"occurredAt"`
-	ClientSentAt     string         `json:"clientSentAt,omitempty"`
-	ErrorCode        string         `json:"errorCode,omitempty"`
-	ErrorModule      string         `json:"errorModule,omitempty"`
-	ErrorKind        string         `json:"errorKind,omitempty"`
-	ErrorReason      string         `json:"errorReason,omitempty"`
-	Origin           string         `json:"origin,omitempty"`
-	Nature           string         `json:"nature,omitempty"`
-	FailurePoint     string         `json:"failurePoint,omitempty"`
-	StackHash        string         `json:"stackHash,omitempty"`
-	BusinessObject   string         `json:"businessObject,omitempty"`
-	FunctionModule   string         `json:"functionModule,omitempty"`
-	AppRuntimeEnv    string         `json:"appRuntimeEnv,omitempty"`
-	AppVersion       string         `json:"appVersion,omitempty"`
-	Platform         string         `json:"platform,omitempty"`
-	NetworkClass     string         `json:"networkClass,omitempty"`
-	Payload          map[string]any `json:"payload,omitempty"`
-	Metrics          map[string]any `json:"metrics,omitempty"`
+	LogType              string   `json:"logType"`
+	EventType            string   `json:"eventType"`
+	SessionID            string   `json:"sessionId"`
+	PageName             string   `json:"pageName"`
+	OccurredAt           string   `json:"occurredAt"`
+	DeviceManufacturer   string   `json:"deviceManufacturer"`
+	DeviceModel          string   `json:"deviceModel"`
+	AppVersion           string   `json:"appVersion"`
+	NetworkClass         string   `json:"networkClass"`
+	DurationMS           *int     `json:"durationMs,omitempty"`
+	Result               *string  `json:"result,omitempty"`
+	FailReasonCode       *string  `json:"failReasonCode,omitempty"`
+	ErrorCode            *string  `json:"errorCode,omitempty"`
+	OperationID          *string  `json:"operationId,omitempty"`
+	HTTPStatus           *int     `json:"httpStatus,omitempty"`
+	CallStack            []string `json:"callStack,omitempty"`
+	TClickToFirstFrameMS *int     `json:"tClickToFirstFrameMs,omitempty"`
+	TFirstFrameToShellMS *int     `json:"tFirstFrameToShellMs,omitempty"`
+	TShellToContentMS    *int     `json:"tShellToContentMs,omitempty"`
+	TClickToContentMS    *int     `json:"tClickToContentMs,omitempty"`
+	HasError             *bool    `json:"hasError,omitempty"`
+	Journey              *string  `json:"journey,omitempty"`
+	Action               *string  `json:"action,omitempty"`
+	ReadyMS              *int     `json:"readyMs,omitempty"`
+	TTFFMS               *int     `json:"ttffMs,omitempty"`
+	RebufferCount        *int     `json:"rebufferCount,omitempty"`
+	RebufferMS           *int     `json:"rebufferMs,omitempty"`
+	SeekCount            *int     `json:"seekCount,omitempty"`
+	DeclaredDurationMS   *int     `json:"declaredDurationMs,omitempty"`
+	ObservedDurationMS   *int     `json:"observedDurationMs,omitempty"`
+	DurationMismatch     *bool    `json:"durationMismatch,omitempty"`
+	PlaybackMode         *string  `json:"playbackMode,omitempty"`
+}
+
+type EventRecord struct {
+	EventRecordInput
+	BatchKey   string    `json:"-"`
+	BatchIndex int       `json:"-"`
+	IngestedAt time.Time `json:"-"`
 }
 
 type EventBatchAck struct {
-	AcceptedCount  int `json:"acceptedCount"`
-	DuplicateCount int `json:"duplicateCount"`
+	AcceptedCount  int  `json:"acceptedCount"`
+	DuplicateBatch bool `json:"duplicateBatch"`
 }
 
 type EventSummaryQuery struct {
-	EventType        string
-	EventName        string
-	PageName         string
-	SurfaceID        string
-	RouteID          string
-	TargetType       string
-	TargetKey        string
-	EntityType       string
-	EntityID         string
-	ExperimentBucket string
-	Source           string
-	From             time.Time
-	To               time.Time
+	LogType, EventType, PageName, AppVersion, NetworkClass, ErrorCode string
+	From, To                                                          time.Time
 }
 
 type EventSummary struct {
 	TotalCount        int64                     `json:"totalCount"`
-	EventType         string                    `json:"eventType,omitempty"`
-	EventName         string                    `json:"eventName,omitempty"`
-	LatestOccurredAt  string                    `json:"latestOccurredAt,omitempty"`
+	SessionCount      int64                     `json:"sessionCount"`
 	DimensionCounters map[string]map[string]int `json:"dimensions"`
+	Source            string                    `json:"source"`
+	Freshness         string                    `json:"freshness"`
+	ActualFrom        string                    `json:"actualFrom"`
+	ActualTo          string                    `json:"actualTo"`
 }
 
 type EventDrilldownQuery struct {
-	EventType        string
-	EventName        string
-	PageName         string
-	SurfaceID        string
-	RouteID          string
-	TargetType       string
-	TargetKey        string
-	EntityType       string
-	EntityID         string
-	ExperimentBucket string
-	Source           string
-	From             time.Time
-	To               time.Time
-	Limit            int
+	LogType, EventType, PageName, AppVersion, NetworkClass, ErrorCode, SessionID string
+	From, To                                                                     time.Time
+	Limit                                                                        int
+	RevealSession                                                                bool
 }
 
 type EventDrilldownItem struct {
-	EventID          string         `json:"eventId" bson:"eventId"`
-	EventType        string         `json:"eventType" bson:"eventType"`
-	EventName        string         `json:"eventName" bson:"eventName"`
-	EventVersion     string         `json:"eventVersion" bson:"eventVersion"`
-	Priority         string         `json:"priority" bson:"priority"`
-	Producer         string         `json:"producer" bson:"producer"`
-	Source           string         `json:"source,omitempty" bson:"source,omitempty"`
-	UserIDHash       string         `json:"userIdHash,omitempty" bson:"userIdHash,omitempty"`
-	SessionID        string         `json:"sessionId,omitempty" bson:"sessionId,omitempty"`
-	PageVisitID      string         `json:"pageVisitId,omitempty" bson:"pageVisitId,omitempty"`
-	SurfaceID        string         `json:"surfaceId,omitempty" bson:"surfaceId,omitempty"`
-	RouteID          string         `json:"routeId,omitempty" bson:"routeId,omitempty"`
-	OperationID      string         `json:"operationId,omitempty" bson:"operationId,omitempty"`
-	RequestID        string         `json:"requestId,omitempty" bson:"requestId,omitempty"`
-	TraceID          string         `json:"traceId,omitempty" bson:"traceId,omitempty"`
-	PageName         string         `json:"pageName,omitempty" bson:"pageName,omitempty"`
-	TargetType       string         `json:"targetType,omitempty" bson:"targetType,omitempty"`
-	TargetKey        string         `json:"targetKey,omitempty" bson:"targetKey,omitempty"`
-	EntityType       string         `json:"entityType,omitempty" bson:"entityType,omitempty"`
-	EntityID         string         `json:"entityId,omitempty" bson:"entityId,omitempty"`
-	ExperimentBucket string         `json:"experimentBucket,omitempty" bson:"experimentBucket,omitempty"`
-	OccurredAt       string         `json:"occurredAt" bson:"occurredAt"`
-	ClientSentAt     string         `json:"clientSentAt,omitempty" bson:"clientSentAt,omitempty"`
-	IngestedAt       string         `json:"ingestedAt" bson:"ingestedAt"`
-	ErrorCode        string         `json:"errorCode,omitempty" bson:"errorCode,omitempty"`
-	ErrorModule      string         `json:"errorModule,omitempty" bson:"errorModule,omitempty"`
-	ErrorKind        string         `json:"errorKind,omitempty" bson:"errorKind,omitempty"`
-	ErrorReason      string         `json:"errorReason,omitempty" bson:"errorReason,omitempty"`
-	Origin           string         `json:"origin,omitempty" bson:"origin,omitempty"`
-	Nature           string         `json:"nature,omitempty" bson:"nature,omitempty"`
-	FailurePoint     string         `json:"failurePoint,omitempty" bson:"failurePoint,omitempty"`
-	StackHash        string         `json:"stackHash,omitempty" bson:"stackHash,omitempty"`
-	BusinessObject   string         `json:"businessObject,omitempty" bson:"businessObject,omitempty"`
-	FunctionModule   string         `json:"functionModule,omitempty" bson:"functionModule,omitempty"`
-	AppRuntimeEnv    string         `json:"appRuntimeEnv,omitempty" bson:"appRuntimeEnv,omitempty"`
-	AppVersion       string         `json:"appVersion,omitempty" bson:"appVersion,omitempty"`
-	Platform         string         `json:"platform,omitempty" bson:"platform,omitempty"`
-	NetworkClass     string         `json:"networkClass,omitempty" bson:"networkClass,omitempty"`
-	Payload          map[string]any `json:"payload,omitempty" bson:"payload,omitempty"`
-	Metrics          map[string]any `json:"metrics,omitempty" bson:"metrics,omitempty"`
+	RowKey               string   `json:"rowKey"`
+	LogType              string   `json:"logType"`
+	EventType            string   `json:"eventType"`
+	SessionID            string   `json:"sessionId"`
+	PageName             string   `json:"pageName"`
+	OccurredAt           string   `json:"occurredAt"`
+	DeviceManufacturer   string   `json:"deviceManufacturer"`
+	DeviceModel          string   `json:"deviceModel"`
+	AppVersion           string   `json:"appVersion"`
+	NetworkClass         string   `json:"networkClass"`
+	DurationMS           *int     `json:"durationMs,omitempty"`
+	Result               *string  `json:"result,omitempty"`
+	FailReasonCode       *string  `json:"failReasonCode,omitempty"`
+	ErrorCode            *string  `json:"errorCode,omitempty"`
+	OperationID          *string  `json:"operationId,omitempty"`
+	HTTPStatus           *int     `json:"httpStatus,omitempty"`
+	CallStack            []string `json:"callStack,omitempty"`
+	TClickToFirstFrameMS *int     `json:"tClickToFirstFrameMs,omitempty"`
+	TFirstFrameToShellMS *int     `json:"tFirstFrameToShellMs,omitempty"`
+	TShellToContentMS    *int     `json:"tShellToContentMs,omitempty"`
+	TClickToContentMS    *int     `json:"tClickToContentMs,omitempty"`
+	HasError             *bool    `json:"hasError,omitempty"`
+	Journey              *string  `json:"journey,omitempty"`
+	Action               *string  `json:"action,omitempty"`
+	ReadyMS              *int     `json:"readyMs,omitempty"`
+	TTFFMS               *int     `json:"ttffMs,omitempty"`
+	RebufferCount        *int     `json:"rebufferCount,omitempty"`
+	RebufferMS           *int     `json:"rebufferMs,omitempty"`
+	SeekCount            *int     `json:"seekCount,omitempty"`
+	DeclaredDurationMS   *int     `json:"declaredDurationMs,omitempty"`
+	ObservedDurationMS   *int     `json:"observedDurationMs,omitempty"`
+	DurationMismatch     *bool    `json:"durationMismatch,omitempty"`
+	PlaybackMode         *string  `json:"playbackMode,omitempty"`
+	IngestedAt           string   `json:"ingestedAt"`
 }
 
 type EventDrilldown struct {
 	TotalCount int64                `json:"totalCount"`
 	Items      []EventDrilldownItem `json:"items"`
+	Source     string               `json:"source"`
+	Freshness  string               `json:"freshness"`
+	ActualFrom string               `json:"actualFrom"`
+	ActualTo   string               `json:"actualTo"`
 }
 
-type VisitTelemetryStore interface {
-	RecordVisit(ctx context.Context, input VisitInput) (VisitRecord, error)
-	GetVisitStats(ctx context.Context, query VisitStatsQuery) (VisitStats, error)
-}
-
-type EventTelemetryStore interface {
-	ReportEventBatch(ctx context.Context, events []EventRecordInput) (EventBatchAck, []EventDrilldownItem, error)
-	GetEventSummary(ctx context.Context, query EventSummaryQuery) (EventSummary, error)
-	GetEventDrilldown(ctx context.Context, query EventDrilldownQuery) (EventDrilldown, error)
-}
-
-type TelemetryStore interface {
-	VisitTelemetryStore
-	EventTelemetryStore
-}
-
-type EventMirror interface {
-	MirrorEvents(ctx context.Context, events []EventDrilldownItem) error
-}
-
-type TelemetryService struct {
-	store     TelemetryStore
-	publisher messaging.EventPublisher
-	mirror    EventMirror
-}
-
+// EventTelemetrySnapshot 是 Portal 聚合卡片的服务端组合视图。它不引入新的
+// 存储或 wire contract，只把闭合小时 summary 与最多三天 raw drilldown 合并。
 type EventTelemetrySnapshot struct {
 	Summary   EventSummary
 	Drilldown EventDrilldown
 }
 
-func NewTelemetryService(store TelemetryStore, publisher messaging.EventPublisher) *TelemetryService {
-	return NewTelemetryServiceWithMirror(store, publisher, nil)
+type StartupDiagnosticRecord struct {
+	EventID, AttemptID, Phase, Outcome, OccurredAt, Platform, RuntimeEnv                  string
+	AppVersion, NetworkClass, RecoverySurface, FailureCode, FailureSource, DeadlineOrigin string
+	Sequence, PhaseDurationMS, ElapsedMS                                                  int
 }
 
-func NewTelemetryServiceWithMirror(store TelemetryStore, publisher messaging.EventPublisher, mirror EventMirror) *TelemetryService {
-	return &TelemetryService{store: store, publisher: publisher, mirror: mirror}
+type VisitTelemetryStore interface {
+	RecordVisit(context.Context, VisitInput) (VisitRecord, error)
+	GetVisitStats(context.Context, VisitStatsQuery) (VisitStats, error)
+}
+
+type EventLogStore interface {
+	PutEventBatch(context.Context, string, []EventRecord) error
+	HasEventBatch(context.Context, string, int) (bool, error)
+	GetEventSummary(context.Context, EventSummaryQuery) (EventSummary, error)
+	GetEventDrilldown(context.Context, EventDrilldownQuery) (EventDrilldown, error)
+	PutStartupDiagnostics(context.Context, string, []StartupDiagnosticRecord) error
+	HasStartupDiagnosticBatch(context.Context, string, int) (bool, error)
+}
+
+type EventBatchLedger interface {
+	Begin(context.Context, string, int) (BatchLedgerState, error)
+	MarkAccepted(context.Context, string, int) error
+}
+
+type BatchLedgerState string
+
+const (
+	BatchLedgerNew      BatchLedgerState = "new"
+	BatchLedgerPending  BatchLedgerState = "pending"
+	BatchLedgerAccepted BatchLedgerState = "accepted"
+)
+
+type TelemetryStore interface {
+	VisitTelemetryStore
+	EventLogStore
+	EventBatchLedger
+}
+
+type TelemetryService struct {
+	visits VisitTelemetryStore
+	events EventLogStore
+	ledger EventBatchLedger
+	now    func() time.Time
+}
+
+func NewTelemetryService(store TelemetryStore, _ any) *TelemetryService {
+	return NewTelemetryServiceWithStores(store, store, store)
+}
+
+func NewTelemetryServiceWithStores(visits VisitTelemetryStore, events EventLogStore, ledger EventBatchLedger) *TelemetryService {
+	return &TelemetryService{visits: visits, events: events, ledger: ledger, now: time.Now}
 }
 
 func (s *TelemetryService) RecordVisit(ctx context.Context, input VisitInput) (VisitRecord, error) {
@@ -218,94 +230,384 @@ func (s *TelemetryService) RecordVisit(ctx context.Context, input VisitInput) (V
 	if input.UserID == "" {
 		input.UserID = "anonymous"
 	}
-	return s.store.RecordVisit(ctx, input)
+	return s.visits.RecordVisit(ctx, input)
 }
 
 func (s *TelemetryService) GetVisitStats(ctx context.Context, query VisitStatsQuery) (VisitStats, error) {
-	return s.store.GetVisitStats(ctx, query)
+	return s.visits.GetVisitStats(ctx, query)
 }
 
-func (s *TelemetryService) ReportEventBatch(ctx context.Context, events []EventRecordInput) (EventBatchAck, error) {
-	ack, inserted, err := s.store.ReportEventBatch(ctx, events)
+func (s *TelemetryService) ReportEventBatch(ctx context.Context, batchKey string, inputs []EventRecordInput) (EventBatchAck, error) {
+	if len(inputs) == 0 || len(inputs) > 50 || len(batchKey) != 64 {
+		return EventBatchAck{}, ErrInvalidEventBatch
+	}
+	now := s.now().UTC()
+	records := make([]EventRecord, len(inputs))
+	for index, input := range inputs {
+		if err := validateEvent(input, now); err != nil {
+			return EventBatchAck{}, fmt.Errorf("%w: event[%d]: %v", ErrInvalidEventBatch, index, err)
+		}
+		occurredAt, _ := time.Parse(time.RFC3339Nano, input.OccurredAt)
+		input.OccurredAt = occurredAt.UTC().Format(time.RFC3339Nano)
+		records[index] = EventRecord{EventRecordInput: input, BatchKey: batchKey, BatchIndex: index, IngestedAt: now}
+	}
+	state, err := s.ledger.Begin(ctx, batchKey, len(records))
 	if err != nil {
 		return EventBatchAck{}, err
 	}
-	if s.publisher != nil {
-		for _, item := range inserted {
-			payload := map[string]any{
-				"eventId":          item.EventID,
-				"eventType":        item.EventType,
-				"eventName":        item.EventName,
-				"pageName":         item.PageName,
-				"surfaceId":        item.SurfaceID,
-				"routeId":          item.RouteID,
-				"operationId":      item.OperationID,
-				"targetType":       item.TargetType,
-				"targetKey":        item.TargetKey,
-				"entityType":       item.EntityType,
-				"entityId":         item.EntityID,
-				"experimentBucket": item.ExperimentBucket,
-				"occurredAt":       item.OccurredAt,
-				"source":           item.Source,
-			}
-			_ = s.publisher.Publish(ctx, messaging.DomainEvent{
-				Type:          "EventBatchReported",
-				AggregateType: "EventRecord",
-				AggregateID:   item.EventID,
-				Payload:       payload,
-				OccurredAt:    item.OccurredAt,
-			})
+	if state == BatchLedgerAccepted {
+		return EventBatchAck{AcceptedCount: len(records), DuplicateBatch: true}, nil
+	}
+	if state == BatchLedgerPending {
+		confirmed, confirmErr := s.events.HasEventBatch(ctx, batchKey, len(records))
+		if confirmErr != nil {
+			return EventBatchAck{}, confirmErr
+		}
+		if !confirmed {
+			return EventBatchAck{}, ErrBatchInProgress
+		}
+		if err := s.ledger.MarkAccepted(ctx, batchKey, len(records)); err != nil {
+			return EventBatchAck{}, err
+		}
+		return EventBatchAck{AcceptedCount: len(records), DuplicateBatch: true}, nil
+	}
+	if err := s.events.PutEventBatch(ctx, batchKey, records); err != nil {
+		confirmed, confirmErr := s.events.HasEventBatch(ctx, batchKey, len(records))
+		if confirmErr != nil || !confirmed {
+			return EventBatchAck{}, err
 		}
 	}
-	if s.mirror != nil && len(inserted) > 0 {
-		items := append([]EventDrilldownItem(nil), inserted...)
-		go func() {
-			mirrorCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			_ = s.mirror.MirrorEvents(mirrorCtx, items)
-		}()
+	if err := s.ledger.MarkAccepted(ctx, batchKey, len(records)); err != nil {
+		return EventBatchAck{}, err
 	}
-	return ack, nil
+	return EventBatchAck{AcceptedCount: len(records)}, nil
+}
+
+func (s *TelemetryService) ReportStartupDiagnostics(ctx context.Context, proof string, records []StartupDiagnosticRecord) (EventBatchAck, error) {
+	if len(records) == 0 || len(records) > 32 || strings.TrimSpace(proof) == "" {
+		return EventBatchAck{}, ErrInvalidEventBatch
+	}
+	digest := sha256.Sum256([]byte("startup:" + proof))
+	batchKey := hex.EncodeToString(digest[:])
+	state, err := s.ledger.Begin(ctx, batchKey, len(records))
+	if err != nil {
+		return EventBatchAck{}, err
+	}
+	if state == BatchLedgerAccepted {
+		return EventBatchAck{AcceptedCount: len(records), DuplicateBatch: true}, nil
+	}
+	if state == BatchLedgerPending {
+		confirmed, confirmErr := s.events.HasStartupDiagnosticBatch(ctx, batchKey, len(records))
+		if confirmErr != nil {
+			return EventBatchAck{}, confirmErr
+		}
+		if !confirmed {
+			return EventBatchAck{}, ErrBatchInProgress
+		}
+		if err := s.ledger.MarkAccepted(ctx, batchKey, len(records)); err != nil {
+			return EventBatchAck{}, err
+		}
+		return EventBatchAck{AcceptedCount: len(records), DuplicateBatch: true}, nil
+	}
+	if err := s.events.PutStartupDiagnostics(ctx, batchKey, records); err != nil {
+		confirmed, confirmErr := s.events.HasStartupDiagnosticBatch(ctx, batchKey, len(records))
+		if confirmErr != nil || !confirmed {
+			return EventBatchAck{}, err
+		}
+	}
+	if err := s.ledger.MarkAccepted(ctx, batchKey, len(records)); err != nil {
+		return EventBatchAck{}, err
+	}
+	return EventBatchAck{AcceptedCount: len(records)}, nil
 }
 
 func (s *TelemetryService) GetEventSummary(ctx context.Context, query EventSummaryQuery) (EventSummary, error) {
-	return s.store.GetEventSummary(ctx, query)
+	if err := normalizeSummaryQuery(&query, s.now().UTC()); err != nil {
+		return EventSummary{}, err
+	}
+	if err := validateQueryFilters(query.LogType, query.EventType, query.PageName, query.AppVersion, query.NetworkClass, query.ErrorCode); err != nil {
+		return EventSummary{}, err
+	}
+	return s.events.GetEventSummary(ctx, query)
 }
 
 func (s *TelemetryService) GetEventDrilldown(ctx context.Context, query EventDrilldownQuery) (EventDrilldown, error) {
+	now := s.now().UTC()
+	if query.From.IsZero() || query.To.IsZero() || !query.From.Before(query.To) || query.To.Sub(query.From) > 72*time.Hour {
+		return EventDrilldown{}, ErrInvalidEventQuery
+	}
+	if query.To.After(now.Add(5*time.Minute)) || query.From.Before(now.Add(-72*time.Hour)) {
+		return EventDrilldown{}, ErrInvalidEventQuery
+	}
 	if query.Limit <= 0 {
 		query.Limit = 50
 	}
-	return s.store.GetEventDrilldown(ctx, query)
+	if query.Limit > 100 {
+		return EventDrilldown{}, ErrInvalidEventQuery
+	}
+	if err := validateQueryFilters(query.LogType, query.EventType, query.PageName, query.AppVersion, query.NetworkClass, query.ErrorCode); err != nil {
+		return EventDrilldown{}, err
+	}
+	if query.SessionID != "" {
+		if err := validateSessionID(query.SessionID); err != nil {
+			return EventDrilldown{}, ErrInvalidEventQuery
+		}
+	}
+	return s.events.GetEventDrilldown(ctx, query)
 }
 
-func (s *TelemetryService) SnapshotEvents(ctx context.Context, summaryQuery EventSummaryQuery, drilldownLimit int) (EventTelemetrySnapshot, error) {
-	summary, err := s.GetEventSummary(ctx, summaryQuery)
+func (s *TelemetryService) SnapshotEvents(
+	ctx context.Context,
+	query EventSummaryQuery,
+	limit int,
+) (EventTelemetrySnapshot, error) {
+	if err := normalizeSummaryQuery(&query, s.now().UTC()); err != nil {
+		return EventTelemetrySnapshot{}, err
+	}
+	summary, err := s.events.GetEventSummary(ctx, query)
 	if err != nil {
 		return EventTelemetrySnapshot{}, err
 	}
-	drilldownQuery := EventDrilldownQuery{
-		EventType:        summaryQuery.EventType,
-		EventName:        summaryQuery.EventName,
-		PageName:         summaryQuery.PageName,
-		SurfaceID:        summaryQuery.SurfaceID,
-		RouteID:          summaryQuery.RouteID,
-		TargetType:       summaryQuery.TargetType,
-		TargetKey:        summaryQuery.TargetKey,
-		EntityType:       summaryQuery.EntityType,
-		EntityID:         summaryQuery.EntityID,
-		ExperimentBucket: summaryQuery.ExperimentBucket,
-		Source:           summaryQuery.Source,
-		From:             summaryQuery.From,
-		To:               summaryQuery.To,
-		Limit:            drilldownLimit,
+	drilldownFrom := query.From
+	oldestRaw := s.now().UTC().Add(-72 * time.Hour)
+	if drilldownFrom.Before(oldestRaw) {
+		drilldownFrom = oldestRaw
 	}
-	drilldown, err := s.GetEventDrilldown(ctx, drilldownQuery)
+	drilldownLimit := limit
+	if drilldownLimit <= 0 || drilldownLimit > 100 {
+		drilldownLimit = 100
+	}
+	drilldown, err := s.GetEventDrilldown(ctx, EventDrilldownQuery{
+		LogType:      query.LogType,
+		EventType:    query.EventType,
+		PageName:     query.PageName,
+		AppVersion:   query.AppVersion,
+		NetworkClass: query.NetworkClass,
+		ErrorCode:    query.ErrorCode,
+		From:         drilldownFrom,
+		To:           query.To,
+		Limit:        drilldownLimit,
+	})
 	if err != nil {
 		return EventTelemetrySnapshot{}, err
 	}
-	return EventTelemetrySnapshot{
-		Summary:   summary,
-		Drilldown: drilldown,
-	}, nil
+	return EventTelemetrySnapshot{Summary: summary, Drilldown: drilldown}, nil
+}
+
+func validateEvent(input EventRecordInput, now time.Time) error {
+	definition, ok := generated.EventCatalog[input.EventType]
+	if !ok || input.LogType != definition.LogType {
+		return fmt.Errorf("unknown eventType/logType")
+	}
+	if _, ok := generated.EventNetworkClasses[input.NetworkClass]; !ok {
+		return fmt.Errorf("unknown networkClass")
+	}
+	if _, ok := generated.AppPageNames[input.PageName]; !ok {
+		return fmt.Errorf("unknown pageName")
+	}
+	for name, value := range map[string]string{
+		"sessionId": input.SessionID, "pageName": input.PageName, "occurredAt": input.OccurredAt,
+		"deviceManufacturer": input.DeviceManufacturer, "deviceModel": input.DeviceModel,
+		"appVersion": input.AppVersion, "networkClass": input.NetworkClass,
+	} {
+		if strings.TrimSpace(value) == "" || !utf8.ValidString(value) || utf8.RuneCountInString(value) > 256 {
+			return fmt.Errorf("%s is invalid", name)
+		}
+	}
+	if err := validateSessionID(input.SessionID); err != nil {
+		return err
+	}
+	occurredAt, err := time.Parse(time.RFC3339Nano, input.OccurredAt)
+	if err != nil || occurredAt.Before(now.Add(-72*time.Hour)) || occurredAt.After(now.Add(5*time.Minute)) {
+		return fmt.Errorf("occurredAt outside accepted window")
+	}
+	extensions := input.extensions()
+	for required := range definition.RequiredExtensions {
+		if _, ok := extensions[required]; !ok {
+			return fmt.Errorf("missing extension %s", required)
+		}
+	}
+	for name, value := range extensions {
+		if _, ok := definition.RequiredExtensions[name]; !ok {
+			if _, ok := definition.OptionalExtensions[name]; !ok {
+				return fmt.Errorf("unknown extension %s", name)
+			}
+		}
+		if err := validateExtension(name, value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (input EventRecordInput) extensions() map[string]any {
+	out := map[string]any{}
+	if input.DurationMS != nil {
+		out["durationMs"] = *input.DurationMS
+	}
+	if input.Result != nil {
+		out["result"] = *input.Result
+	}
+	if input.FailReasonCode != nil {
+		out["failReasonCode"] = *input.FailReasonCode
+	}
+	if input.ErrorCode != nil {
+		out["errorCode"] = *input.ErrorCode
+	}
+	if input.OperationID != nil {
+		out["operationId"] = *input.OperationID
+	}
+	if input.HTTPStatus != nil {
+		out["httpStatus"] = *input.HTTPStatus
+	}
+	if input.CallStack != nil {
+		out["callStack"] = input.CallStack
+	}
+	if input.TClickToFirstFrameMS != nil {
+		out["tClickToFirstFrameMs"] = *input.TClickToFirstFrameMS
+	}
+	if input.TFirstFrameToShellMS != nil {
+		out["tFirstFrameToShellMs"] = *input.TFirstFrameToShellMS
+	}
+	if input.TShellToContentMS != nil {
+		out["tShellToContentMs"] = *input.TShellToContentMS
+	}
+	if input.TClickToContentMS != nil {
+		out["tClickToContentMs"] = *input.TClickToContentMS
+	}
+	if input.HasError != nil {
+		out["hasError"] = *input.HasError
+	}
+	if input.Journey != nil {
+		out["journey"] = *input.Journey
+	}
+	if input.Action != nil {
+		out["action"] = *input.Action
+	}
+	if input.ReadyMS != nil {
+		out["readyMs"] = *input.ReadyMS
+	}
+	if input.TTFFMS != nil {
+		out["ttffMs"] = *input.TTFFMS
+	}
+	if input.RebufferCount != nil {
+		out["rebufferCount"] = *input.RebufferCount
+	}
+	if input.RebufferMS != nil {
+		out["rebufferMs"] = *input.RebufferMS
+	}
+	if input.SeekCount != nil {
+		out["seekCount"] = *input.SeekCount
+	}
+	if input.DeclaredDurationMS != nil {
+		out["declaredDurationMs"] = *input.DeclaredDurationMS
+	}
+	if input.ObservedDurationMS != nil {
+		out["observedDurationMs"] = *input.ObservedDurationMS
+	}
+	if input.DurationMismatch != nil {
+		out["durationMismatch"] = *input.DurationMismatch
+	}
+	if input.PlaybackMode != nil {
+		out["playbackMode"] = *input.PlaybackMode
+	}
+	return out
+}
+
+func validateExtension(name string, value any) error {
+	definition := generated.EventExtensionFields[name]
+	switch definition.Type {
+	case "int":
+		integer, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("%s must be int", name)
+		}
+		if definition.Minimum != nil && integer < *definition.Minimum {
+			return fmt.Errorf("%s below minimum", name)
+		}
+		if definition.Maximum != nil && integer > *definition.Maximum {
+			return fmt.Errorf("%s above maximum", name)
+		}
+	case "string":
+		text, ok := value.(string)
+		if !ok || strings.TrimSpace(text) == "" || (definition.MaxLength > 0 && utf8.RuneCountInString(text) > definition.MaxLength) {
+			return fmt.Errorf("%s is invalid", name)
+		}
+	case "bool":
+		if _, ok := value.(bool); !ok {
+			return fmt.Errorf("%s must be bool", name)
+		}
+	case "string_list":
+		values, ok := value.([]string)
+		if !ok || len(values) == 0 || len(values) > definition.MaxItems {
+			return fmt.Errorf("%s is invalid", name)
+		}
+		for _, text := range values {
+			if strings.TrimSpace(text) == "" || utf8.RuneCountInString(text) > definition.ItemMaxLength {
+				return fmt.Errorf("%s item is invalid", name)
+			}
+		}
+	default:
+		return fmt.Errorf("unsupported extension type")
+	}
+	return nil
+}
+
+func validateSessionID(value string) error {
+	if !strings.HasPrefix(value, "s.") {
+		return fmt.Errorf("sessionId prefix invalid")
+	}
+	separator := strings.LastIndex(value, ".")
+	if separator <= 2 || separator == len(value)-1 {
+		return fmt.Errorf("sessionId shape invalid")
+	}
+	if _, err := strconv.ParseInt(value[separator+1:], 10, 64); err != nil {
+		return fmt.Errorf("sessionId timestamp invalid")
+	}
+	encoded := value[2:separator]
+	if _, err := base64.RawURLEncoding.DecodeString(encoded); err != nil {
+		return fmt.Errorf("sessionId actor invalid")
+	}
+	return nil
+}
+
+func normalizeSummaryQuery(query *EventSummaryQuery, now time.Time) error {
+	if query.To.IsZero() {
+		query.To = now.Truncate(time.Hour)
+	}
+	if query.From.IsZero() {
+		query.From = query.To.Add(-24 * time.Hour)
+	}
+	if !query.From.Before(query.To) || query.To.Sub(query.From) > 90*24*time.Hour || query.To.After(now.Add(5*time.Minute)) {
+		return ErrInvalidEventQuery
+	}
+	return nil
+}
+
+func validateQueryFilters(logType, eventType, pageName, appVersion, networkClass, errorCode string) error {
+	if logType != "" && logType != "event" && logType != "error" {
+		return ErrInvalidEventQuery
+	}
+	if eventType != "" {
+		definition, ok := generated.EventCatalog[eventType]
+		if !ok || logType != "" && definition.LogType != logType {
+			return ErrInvalidEventQuery
+		}
+	}
+	if pageName != "" {
+		if _, ok := generated.AppPageNames[pageName]; !ok {
+			return ErrInvalidEventQuery
+		}
+	}
+	if networkClass != "" {
+		if _, ok := generated.EventNetworkClasses[networkClass]; !ok {
+			return ErrInvalidEventQuery
+		}
+	}
+	for _, value := range []string{appVersion, errorCode} {
+		if !utf8.ValidString(value) || utf8.RuneCountInString(value) > 128 {
+			return ErrInvalidEventQuery
+		}
+	}
+	return nil
 }

@@ -11,7 +11,7 @@
 
 WP5 试点只圈舟山/乐山两市州。两省 coverage 主清单包含大量待核验候选，
 当前唯一主清单已扩展为浙江 922、四川 1977，共 2899 个区县级叶子；
-任何旧 ready 标记都不能绕过 `encyclopedia-primary-v2`。本 Story 把两省推进到「省级全覆盖」
+任何旧 ready 标记都不能绕过 `encyclopedia-primary`。本 Story 把两省推进到「省级全覆盖」
 冻结口径（定义见 L2 spec），并以两省为样板产出下一省复制策略。
 
 ## 目标用户
@@ -22,16 +22,16 @@ WP5 试点只圈舟山/乐山两市州。两省 coverage 主清单包含大量�
 
 ## 功能范围
 
-1. 以省→市州→区县→10 类→六路 discovery source 的 16380-cell 矩阵证明来源发现
+1. 以省→市州→区县→10 类→五路 discovery source 的 coverage 矩阵证明来源发现
    饱和；资源 limit 只作护栏，不得作为饱和证据。
 2. OSM/Wikidata/百科搜索只做候选发现；OSM-only、泛名、商户/物业/普通设施不得直接
    写 master list。身份按 QID/pageid/OSM ID→名称+坐标+区县解析。
 3. 两省候选在每个 execution 内以对象本地 source catalog、来源证据和图片权利结论动态
-   核验；只有四百科 v2 qualification confirmed 对象可以发布。
+   核验；只有三百科闭集 qualification confirmed 对象可以发布。
 4. WP5 尾部 3 分区（乐山沙湾区/市中区、舟山岱山县）补跑收口，验证已落码产线修复
    （全放弃分区收口链、homepage-only promote、双树互杀边界）。
-5. M1（两省各 100 校准批）→ M2（各 500）→ M3（全部主清单目标）三档批次执行、gamma
-   导入与 coverage 账本回写。
+5. M1（两省各 100 校准批）→ M2（各 500）→ M3（全部主清单目标）三档批次执行、四环境
+   promotion 与 coverage 账本回写。
 6. App 标签页/搜索入口 → 实体主页消费路径 user_acceptance 验收。
 7. 所有主页执行使用单一 `executionId` 工作包：规划、来源、对象五阶段、证据与 release
    引用都在 `.qwq_output/data/tasks/<executionId>/`；可复用 recipe/prompt/template/schema
@@ -52,6 +52,15 @@ WP5 试点只圈舟山/乐山两市州。两省 coverage 主清单包含大量�
 12. 冻结目标集在初始化时即为每个目标创建 `1.download` 至 `5.review` 五阶段目录；不得使用
     reserve、replacement、abandoned-as-success 或重试时改变目标。重试仅用新 sequence 并写
     `retryOf`，且不得复用旧阶段文件。
+13. M3 闭包后使用仓内 `verticals/travel/cold_start_supply_policy.yaml` 选择浙江、四川各 10 个
+    代表实体，每实体生成 article、image、video 各 1 篇，共 60 个 approved posts；三类内容
+    复用同一 execution/review/publish/release 主干，不建立冷启动旁路。
+14. video 是正式发布 lane，必须生成 9:16 H.264 MP4、poster、字幕、checksum 与权利 provenance；
+    自生成或明确可商用素材之外的输入一律阻断，不允许 `smoke_only` 成品进入 launch release。
+15. 最终 launch release 是 2899 entities、60 posts 及其实际引用 creator/media/tag 的唯一不可变
+    发布单元。Alpha 只验证同 digest 的 mock/contract 投影，Beta 验证 full-sync/API/幂等/回滚，
+    Gamma 验证全对象 API、29 个主页 UAT 分片和 feed/search/三载体消费；Prod 仅在显式确认和审批
+    证据齐全时按 canary→M1→M2→M3→launch 灰度，任何阶段失败回滚上一 immutable release。
 
 ## 放量数量合同
 
@@ -66,10 +75,15 @@ WP5 试点只圈舟山/乐山两市州。两省 coverage 主清单包含大量�
 从 canary 到当前里程碑的累计 immutable `full-sync` release；回滚目标依次为空基线、
 canary、M1、M2，回滚后必须 replay 当前 release。
 
+M3 之后的 launch release 不改变两省主页集合，只增加冷启动供给合同冻结的 60 个 posts 及其
+引用闭包。feed 至少可消费 20 条，非空率不低于 0.999，重复曝光率低于 0.01；阈值只从
+`cold_start_supply_policy.yaml` 读取，不得在代码或测试复制第二默认值。
+
 ## Out of Scope
 
 - 两省以外省份实跑。
 - 云端 worker 池横向扩展。
+- 未经显式确认和审批证据的 Prod 写入。
 
 ## 约束
 
@@ -78,8 +92,8 @@ canary、M1、M2，回滚后必须 replay 当前 release。
 - 跨省地点单主归属 + 多 geoTagRefs（泸沽湖模式）。
 - 主清单所有目标都可以进入 execution；只有动态来源资格 confirmed 的对象可以发布，blocked
   对象必须以 typed `GATE_BLOCK` 归因落账，并阻断当前累计 release，不得替换目标。
-- M1 吞吐必须不低于 18 approved homepages/hour，P95 单对象耗时不高于 720 秒；容量校准
-  前必须完成 30-job soak、安全并发至少 3 且未恢复 bridge 基础设施失败为 0。
+- M1 真实 approved homepage 吞吐与对象 P95 必须满足 rollout capacity 合同；进入内容放量前必须先完成
+  同一合同定义的 Cursor SDK soak，并明确区分基础设施探针与主页生产证据。
 - review 未批准的对象不得写入 canonical；批准对象只经 object transaction 原子写入，
   不维护第二套 promote 路径或新旧稿兼容裁决。
 
@@ -92,7 +106,7 @@ canary、M1、M2，回滚后必须 replay 当前 release。
    approved 对象原子写 canonical，环境导入只消费对应 immutable release。
 4. App 消费路径 UAT 通过（正文、封面、categoryTags、错误/空态、曝光/停留埋点）。
 5. G0 目录/凭证/输入门、G1 覆盖饱和、G2 v2 来源与逐图权利、G3 双省金丝雀、G4 M1、
-   G5 M2、G6 M3 release/import、G7 Gamma App UAT 必须按顺序准出；任一失败只输出带
+   G5 M2、G6 M3 release/import、G7 launch 冷启动供给与四环境 UAT 必须按顺序准出；任一失败只输出带
    `executionId` 的 `GATE_BLOCK`。
 6. 浙江金丝雀固定验证普陀山与东钱湖，四川金丝雀固定验证海螺沟；普陀山页面图位
    完整性为 17，东钱湖为 infobox lead 1 + Gallery 4。实时页面变化时以执行 revision/hash
@@ -102,3 +116,6 @@ canary、M1、M2，回滚后必须 replay 当前 release。
 8. 浙江金丝雀只能是普陀山、东钱湖，四川金丝雀只能是海螺沟；M1/M2 必须分别达到每省
    100/500 个 approved 实体，M3 必须与覆盖主清单等量。任意数量、范围或 Gamma 证据漂移
    必须阻断下一档 execution 创建。
+9. launch release 必须精确包含 60 个 approved posts，article/image/video 各 20；Alpha、Beta、
+   Gamma、Prod 的 promotion evidence 必须指向相同 release digest。Prod 未经显式确认不得写入，
+   未执行不得登记为通过。

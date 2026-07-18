@@ -56,7 +56,7 @@ func (c *Client) Resolve(ctx context.Context, scope ConfigResolutionScope) (Conf
 	if c == nil || strings.TrimSpace(c.BaseURL) == "" {
 		return ConfigResolveResponse{}, fmt.Errorf("control plane base url is required")
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/v1/control-plane/platform/configs/resolve", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/control-plane/platform/configs/resolve", nil)
 	if err != nil {
 		return ConfigResolveResponse{}, err
 	}
@@ -106,7 +106,7 @@ func (c *Client) ReportInstance(ctx context.Context, report InstanceConfigReport
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodPost,
-		c.BaseURL+"/v1/control-plane/platform/configs/instances/"+report.ID+":report",
+		c.BaseURL+"/control-plane/platform/configs/instances/"+report.ID+":report",
 		bytes.NewReader(payload),
 	)
 	if err != nil {

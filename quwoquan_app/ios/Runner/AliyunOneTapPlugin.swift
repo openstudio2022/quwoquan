@@ -27,7 +27,6 @@ final class AliyunOneTapPlugin {
       result(initialized)
     case "probe":
       result([
-        "isAvailable": initialized,
         // 当前桥接层只能在拉起授权页后取得 token，尚不能在入口解析阶段形成
         // 完整可提交凭据；显式返回 invalidProbe，Flutter 必须隐藏入口并走短信。
         "availability": initialized

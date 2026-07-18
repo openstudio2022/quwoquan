@@ -24,13 +24,13 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    submit = fetch_json(f"https://api.portscan.com/v1/{args.scan_type}", method="POST")
+    submit = fetch_json(f"https://api.portscan.com/{args.scan_type}", method="POST")
     print(json.dumps({"submitted": submit}, ensure_ascii=False))
 
     deadline = time.time() + args.timeout_seconds
     result: dict[str, Any] | None = None
     while time.time() < deadline:
-        result = fetch_json(f"https://api.portscan.com/v1/{args.scan_type}")
+        result = fetch_json(f"https://api.portscan.com/{args.scan_type}")
         status = str(result.get("status", ""))
         print(
             json.dumps(

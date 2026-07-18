@@ -146,8 +146,35 @@ _WIKI_TITLE_ALLOWED_ALIAS_EXACT_2CHAR = {
     "崂山",
 }
 
+_WIKI_ADMIN_DISAMBIGUATION_MARKERS = (
+    "省",
+    "市",
+    "自治区",
+    "特别行政区",
+)
+
+
+def _wiki_admin_disambiguation_matches(title: str, entity_id: str) -> bool:
+    """Accept only an exact entity title plus an administrative qualifier."""
+    raw_title = fold_to_simplified(str(title or "")).strip()
+    raw_entity = fold_to_simplified(str(entity_id or "")).strip()
+    if not raw_title or not raw_entity:
+        return False
+    match = re.fullmatch(
+        rf"{re.escape(raw_entity)}\s*[（(]\s*([^（）()]+?)\s*[）)]",
+        raw_title,
+    )
+    if match is None:
+        return False
+    qualifier = match.group(1).strip()
+    return 2 <= len(qualifier) <= 12 and qualifier.endswith(
+        _WIKI_ADMIN_DISAMBIGUATION_MARKERS
+    )
+
 def _wiki_title_matches_entity(title: str, entity_id: str) -> bool:
     """百科页标题必须是实体本身或景区类同义扩展，不能是机场/镇/城市替代页。"""
+    if _wiki_admin_disambiguation_matches(title, entity_id):
+        return True
     title_key = _normalized_title(title)
     entity_key = _normalized_title(entity_id)
     if not title_key or not entity_key:
@@ -195,6 +222,8 @@ def _wiki_resolved_title_matches_entity(
         if len(alias_key) < 3 and alias_key not in _WIKI_TITLE_ALLOWED_ALIAS_EXACT_2CHAR:
             continue
         if title_key == alias_key:
+            return True
+        if _wiki_admin_disambiguation_matches(title, alias):
             return True
         if title_key.startswith(alias_key):
             suffix = title_key[len(alias_key):]

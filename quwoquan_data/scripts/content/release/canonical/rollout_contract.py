@@ -41,6 +41,48 @@ class ProvinceContract:
 
 
 @dataclass(frozen=True, slots=True)
+class CapacityContract:
+    soak_jobs: int
+    minimum_safe_concurrency: int
+    maximum_unrecovered_bridge_failures: int
+    minimum_probe_jobs_per_hour: float
+    maximum_probe_job_p95_seconds: float
+    minimum_approved_homepages_per_hour: float
+    maximum_homepage_object_p95_seconds: float
+
+
+@dataclass(frozen=True, slots=True)
+class ProvinceTargetCount:
+    province: str
+    count: int
+
+
+@dataclass(frozen=True, slots=True)
+class MilestoneTargetContract:
+    milestone: RolloutMilestone
+    batch_targets: tuple[ProvinceTargetCount, ...]
+    cumulative_targets: tuple[ProvinceTargetCount, ...]
+
+    @staticmethod
+    def _count_for(
+        targets: tuple[ProvinceTargetCount, ...],
+        province: ProvinceContract,
+    ) -> int:
+        for target in targets:
+            if target.province == province.province:
+                return target.count
+        raise RolloutMilestoneError(
+            f"milestone target is missing province: {province.province}"
+        )
+
+    def batch_count(self, province: ProvinceContract) -> int:
+        return self._count_for(self.batch_targets, province)
+
+    def cumulative_count(self, province: ProvinceContract) -> int:
+        return self._count_for(self.cumulative_targets, province)
+
+
+@dataclass(frozen=True, slots=True)
 class RolloutContract:
     rollout_id: str
     vertical: str
@@ -51,8 +93,8 @@ class RolloutContract:
     selection_policy: SelectionPolicy
     replacement_policy: ReplacementPolicy
     uat_shard_size: int
-    milestone_batch_targets: Mapping[RolloutMilestone, Mapping[str, int]]
-    milestone_cumulative_targets: Mapping[RolloutMilestone, Mapping[str, int]]
+    capacity: CapacityContract
+    milestones: tuple[MilestoneTargetContract, ...]
 
     def province_for_scope(self, scope: str) -> ProvinceContract:
         for province in self.provinces:
@@ -61,31 +103,39 @@ class RolloutContract:
         raise RolloutMilestoneError(f"scope is not part of {self.rollout_id}: {scope}")
 
     def batch_count(self, milestone: RolloutMilestone, province: ProvinceContract) -> int:
-        target = self.milestone_batch_targets.get(milestone)
-        if not isinstance(target, Mapping):
-            raise RolloutMilestoneError(f"invalid milestone batch target: {milestone}")
-        value = target.get(province.province)
-        if not isinstance(value, int) or value < 1:
-            raise RolloutMilestoneError(
-                f"invalid {milestone} batch target for {province.province}"
-            )
-        return value
+        return self._milestone(milestone).batch_count(province)
 
     def cumulative_count(self, milestone: RolloutMilestone, province: ProvinceContract) -> int:
-        target = self.milestone_cumulative_targets.get(milestone)
-        if not isinstance(target, Mapping):
-            raise RolloutMilestoneError(f"invalid milestone cumulative target: {milestone}")
-        value = target.get(province.province)
-        if not isinstance(value, int) or value < 1:
-            raise RolloutMilestoneError(
-                f"invalid {milestone} cumulative target for {province.province}"
-            )
-        return value
+        return self._milestone(milestone).cumulative_count(province)
+
+    def _milestone(self, milestone: RolloutMilestone) -> MilestoneTargetContract:
+        for contract in self.milestones:
+            if contract.milestone is milestone:
+                return contract
+        raise RolloutMilestoneError(f"invalid rollout milestone: {milestone}")
 
 
 def _mapping(value: object, *, label: str) -> Mapping[str, Any]:
     if not isinstance(value, Mapping):
         raise RolloutMilestoneError(f"{label} must be an object")
+    return value
+
+
+def _positive_number(value: object, *, label: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
+        raise RolloutMilestoneError(f"{label} must be positive")
+    return float(value)
+
+
+def _positive_int(value: object, *, label: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise RolloutMilestoneError(f"{label} must be a positive integer")
+    return value
+
+
+def _non_negative_int(value: object, *, label: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise RolloutMilestoneError(f"{label} must be a non-negative integer")
     return value
 
 
@@ -123,8 +173,8 @@ def load_rollout_contract(path: Path = ROLLOUT_PATH) -> RolloutContract:
     except (OSError, yaml.YAMLError) as exc:
         raise RolloutMilestoneError(f"rollout contract unreadable: {path}: {exc}") from exc
     doc = _mapping(raw, label="rollout contract")
-    if doc.get("schemaVersion") != "quwoquan.travel.homepage_rollout/3":
-        raise RolloutMilestoneError("rollout contract schemaVersion is invalid")
+    if doc.get("schema") != "quwoquan.travel.homepage_rollout":
+        raise RolloutMilestoneError("rollout contract schema is invalid")
     required = ("rolloutId", "vertical", "contentType", "intent", "releaseScope")
     values = {key: str(doc.get(key) or "").strip() for key in required}
     if not all(values.values()):
@@ -164,32 +214,64 @@ def load_rollout_contract(path: Path = ROLLOUT_PATH) -> RolloutContract:
     uat_shard_size = verification.get("appUatShardSize")
     if not isinstance(uat_shard_size, int) or isinstance(uat_shard_size, bool) or uat_shard_size < 1:
         raise RolloutMilestoneError("verification.appUatShardSize must be a positive integer")
+    raw_capacity = _mapping(doc.get("capacity"), label="capacity")
+    capacity = CapacityContract(
+        soak_jobs=_positive_int(raw_capacity.get("soakJobs"), label="capacity.soakJobs"),
+        minimum_safe_concurrency=_positive_int(
+            raw_capacity.get("minimumSafeConcurrency"),
+            label="capacity.minimumSafeConcurrency",
+        ),
+        maximum_unrecovered_bridge_failures=_non_negative_int(
+            raw_capacity.get("maximumUnrecoveredBridgeFailures"),
+            label="capacity.maximumUnrecoveredBridgeFailures",
+        ),
+        minimum_probe_jobs_per_hour=_positive_number(
+            raw_capacity.get("minimumProbeJobsPerHour"),
+            label="capacity.minimumProbeJobsPerHour",
+        ),
+        maximum_probe_job_p95_seconds=_positive_number(
+            raw_capacity.get("maximumProbeJobP95Seconds"),
+            label="capacity.maximumProbeJobP95Seconds",
+        ),
+        minimum_approved_homepages_per_hour=_positive_number(
+            raw_capacity.get("minimumApprovedHomepagesPerHour"),
+            label="capacity.minimumApprovedHomepagesPerHour",
+        ),
+        maximum_homepage_object_p95_seconds=_positive_number(
+            raw_capacity.get("maximumHomepageObjectP95Seconds"),
+            label="capacity.maximumHomepageObjectP95Seconds",
+        ),
+    )
 
     raw_milestones = _mapping(doc.get("milestones"), label="milestones")
-    batch_targets: dict[RolloutMilestone, Mapping[str, int]] = {}
-    cumulative_targets: dict[RolloutMilestone, Mapping[str, int]] = {}
+    milestone_targets: list[MilestoneTargetContract] = []
     for milestone in MILESTONE_PREDECESSOR:
         row = _mapping(raw_milestones.get(milestone.value), label=f"milestones.{milestone.value}")
-        for field, destination in (
-            ("batchTarget", batch_targets),
-            ("cumulativeTarget", cumulative_targets),
-        ):
+        decoded_targets: dict[str, tuple[ProvinceTargetCount, ...]] = {}
+        for field in ("batchTarget", "cumulativeTarget"):
             values_by_province = _mapping(
                 row.get(field), label=f"milestones.{milestone.value}.{field}"
             )
-            normalized: dict[str, int] = {}
+            normalized: list[ProvinceTargetCount] = []
             for province in provinces:
                 count = values_by_province.get(province.province)
                 if not isinstance(count, int) or count < 1:
                     raise RolloutMilestoneError(
                         f"milestones.{milestone.value}.{field} is invalid for {province.province}"
                     )
-                normalized[province.province] = count
-            if set(values_by_province) != set(normalized):
+                normalized.append(ProvinceTargetCount(province.province, count))
+            if set(values_by_province) != {item.province for item in normalized}:
                 raise RolloutMilestoneError(
                     f"milestones.{milestone.value}.{field} has unknown province target"
                 )
-            destination[milestone] = normalized
+            decoded_targets[field] = tuple(normalized)
+        milestone_targets.append(
+            MilestoneTargetContract(
+                milestone,
+                decoded_targets["batchTarget"],
+                decoded_targets["cumulativeTarget"],
+            )
+        )
 
     contract = RolloutContract(
         values["rolloutId"],
@@ -201,8 +283,8 @@ def load_rollout_contract(path: Path = ROLLOUT_PATH) -> RolloutContract:
         selection_policy,
         replacement_policy,
         uat_shard_size,
-        batch_targets,
-        cumulative_targets,
+        capacity,
+        tuple(milestone_targets),
     )
     for province in contract.provinces:
         if contract.batch_count(RolloutMilestone.CANARY, province) != len(province.canary_targets):
@@ -230,7 +312,10 @@ def identity_matches(identity: ExecutionIdentity, contract: RolloutContract) -> 
 __all__ = [
     "MILESTONE_ORDER",
     "MILESTONE_PREDECESSOR",
+    "CapacityContract",
+    "MilestoneTargetContract",
     "ProvinceContract",
+    "ProvinceTargetCount",
     "RolloutContract",
     "RolloutMilestoneError",
     "identity_matches",

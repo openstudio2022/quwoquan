@@ -56,7 +56,7 @@ Map<String, String> _authHeaders(String pageId) => <String, String>{
 
 /// 创建一个测试会话，返回 conversationId。
 Future<String> _seedConversation() async {
-  final url = Uri.parse('$_apiBase/v1/chat/conversations');
+  final url = Uri.parse('$_apiBase/chat/conversations');
   final resp = await _client
       .post(
         url,
@@ -76,7 +76,8 @@ Future<String> _seedConversation() async {
       '_seedConversation failed: ${resp.statusCode} ${resp.body}',
     );
   }
-  final id = (jsonDecode(resp.body) as Map<String, dynamic>)['_id'] as String;
+  final body = jsonDecode(resp.body) as Map<String, dynamic>;
+  final id = body['id'] as String;
   return id;
 }
 
@@ -86,7 +87,7 @@ Future<Map<String, dynamic>> _sendMessage(
   String clientMsgId,
 ) async {
   final url = Uri.parse(
-    '$_apiBase/v1/chat/conversations/$conversationId/messages',
+    '$_apiBase/chat/conversations/$conversationId/messages',
   );
   final resp = await _client
       .post(
@@ -150,8 +151,8 @@ void main() {
       convId = await _seedConversation();
     });
 
-    test('GET /v1/chat/conversations 返回 200 + items 数组', () async {
-      final url = Uri.parse('$_apiBase/v1/chat/conversations?limit=5');
+    test('GET /chat/conversations 返回 200 + items 数组', () async {
+      final url = Uri.parse('$_apiBase/chat/conversations?limit=5');
       final sw = Stopwatch()..start();
       final resp = await _client
           .get(url, headers: _authHeaders('chat.conversation.list'))
@@ -192,14 +193,14 @@ void main() {
     test('conversation 字段结构完整', () async {
       final resp = await _client
           .get(
-            Uri.parse('$_apiBase/v1/chat/conversations/$convId'),
+            Uri.parse('$_apiBase/chat/conversations/$convId'),
             headers: _authHeaders('chat.conversation.get'),
           )
           .timeout(const Duration(seconds: 10));
 
       expect(resp.statusCode, 200);
       final conv = jsonDecode(resp.body) as Map<String, dynamic>;
-      expect(conv['_id'], convId);
+      expect(conv['id'], convId);
       expect(conv['type'], isNotNull);
       expect(conv['status'], 'active');
       expect(conv.containsKey('createdAt'), isTrue);
@@ -253,7 +254,7 @@ void main() {
       final recallResp = await _client
           .post(
             Uri.parse(
-              '$_apiBase/v1/chat/conversations/$convId/messages/$msgId/recall',
+              '$_apiBase/chat/conversations/$convId/messages/$msgId/recall',
             ),
             headers: {
               ..._authHeaders('chat.message.recall'),
@@ -274,7 +275,7 @@ void main() {
       final resp = await _client
           .get(
             Uri.parse(
-              '$_apiBase/v1/chat/conversations/$convId/messages?limit=10',
+              '$_apiBase/chat/conversations/$convId/messages?limit=10',
             ),
             headers: _authHeaders('chat.message.list'),
           )
@@ -302,7 +303,7 @@ void main() {
         final resp = await _client
             .get(
               Uri.parse(
-                '$_apiBase/v1/chat/conversations/nonexistent_conv_00000',
+                '$_apiBase/chat/conversations/nonexistent_conv_00000',
               ),
               headers: _authHeaders('chat.conversation.get'),
             )
@@ -341,7 +342,7 @@ void main() {
       final sw = Stopwatch()..start();
       final resp = await _client
           .post(
-            Uri.parse('$_apiBase/v1/chat/conversations/$convId/sync'),
+            Uri.parse('$_apiBase/chat/conversations/$convId/sync'),
             headers: {
               ..._authHeaders('chat.message.sync'),
               'Content-Type': 'application/json',
@@ -372,7 +373,7 @@ void main() {
     test('添加成员 → 成员列表包含新成员', () async {
       final addResp = await _client
           .post(
-            Uri.parse('$_apiBase/v1/chat/conversations/$convId/members'),
+            Uri.parse('$_apiBase/chat/conversations/$convId/members'),
             headers: {
               ..._authHeaders('chat.member.add'),
               'Content-Type': 'application/json',
@@ -388,7 +389,7 @@ void main() {
       final listResp = await _client
           .get(
             Uri.parse(
-              '$_apiBase/v1/chat/conversations/$convId/members?limit=50',
+              '$_apiBase/chat/conversations/$convId/members?limit=50',
             ),
             headers: _authHeaders('chat.member.list'),
           )

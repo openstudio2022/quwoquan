@@ -52,12 +52,12 @@ class PersonaManagementItemWireDto {
 
   factory PersonaManagementItemWireDto.fromMap(Map<String, dynamic> m) {
     return PersonaManagementItemWireDto(
-      subAccountId: m['subAccountId']?.toString() ?? m['id']?.toString() ?? '',
-      displayName: m['displayName']?.toString() ?? m['nickname']?.toString() ?? '',
+      subAccountId: m['subAccountId']?.toString() ?? '',
+      displayName: m['displayName']?.toString() ?? '',
       userHandle: m['userHandle']?.toString() ?? '',
       phone: m['phone']?.toString() ?? '',
       email: m['email']?.toString() ?? '',
-      avatarUrl: m['avatarUrl']?.toString() ?? m['avatar']?.toString() ?? '',
+      avatarUrl: m['avatarUrl']?.toString() ?? '',
       avatarVersion: (m['avatarVersion'] as num?)?.toInt() ?? 0,
       isolationLevel: m['isolationLevel']?.toString() ?? 'open',
       profileVisibility: m['profileVisibility']?.toString() ?? 'public',
@@ -67,7 +67,7 @@ class PersonaManagementItemWireDto {
       retiredAt: _parseDateTime(m['retiredAt']) ?? null,
       hasAttributedHistory: m['hasAttributedHistory'] as bool? ?? false,
       hasPublishedContent: m['hasPublishedContent'] as bool? ?? false,
-      inheritsProfileFromOwner: m['inheritsProfileFromOwner'] as bool? ?? m['inheritsFromOwner'] as bool? ?? true,
+      inheritsProfileFromOwner: m['inheritsProfileFromOwner'] as bool? ?? true,
       overriddenProfileFields: _parseStringList(m['overriddenProfileFields']) ?? const <String>[],
       lastProfileSyncAt: _parseDateTime(m['lastProfileSyncAt']) ?? null,
       lastProfileSyncSource: m['lastProfileSyncSource']?.toString() ?? '',

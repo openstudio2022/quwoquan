@@ -104,10 +104,10 @@ func TestInbox_NewMessageIncrementsUnread(t *testing.T) {
 	ctx := context.Background()
 
 	conv := createConversation(t, `{"type":"group","title":"inbox unread test"}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 
 	userId := "user_inbox_reader_001"
-	doPost(t, "/v1/chat/conversations/"+convId+"/members",
+	doPost(t, "/chat/conversations/"+convId+"/members",
 		`{"userIds":["user_inbox_reader_001"]}`, "user_test_001", 200)
 
 	if err := inboxSvc.IncrementUnread(ctx, userId, convId); err != nil {
@@ -143,7 +143,7 @@ func TestInbox_MultipleIncrementsAccumulate(t *testing.T) {
 	ctx := context.Background()
 
 	conv := createConversation(t, `{"type":"group","title":"inbox multi unread"}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 	userId := "user_inbox_multi_001"
 
 	for i := 0; i < 5; i++ {
@@ -177,7 +177,7 @@ func TestInbox_MarkAsReadResetsUnread(t *testing.T) {
 	ctx := context.Background()
 
 	conv := createConversation(t, `{"type":"group","title":"inbox mark read"}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 	userId := "user_inbox_markread_001"
 
 	for i := 0; i < 3; i++ {
@@ -218,7 +218,7 @@ func TestInbox_MarkAsReadOnlyAdvancesSeq(t *testing.T) {
 	ctx := context.Background()
 
 	conv := createConversation(t, `{"type":"direct","title":"inbox seq advance","initialMemberIds":["user_test_002"]}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 	userId := "user_inbox_seqadv_001"
 
 	if err := inboxSvc.MarkAsRead(ctx, userId, convId, 50); err != nil {
@@ -256,10 +256,10 @@ func TestInbox_ListInboxSortedByTime(t *testing.T) {
 	userId := "user_inbox_sort_001"
 
 	conv1 := createConversationAs(t, userId, `{"type":"direct","title":"older conv","initialMemberIds":["user_test_002"]}`)
-	conv1Id := conv1["_id"].(string)
+	conv1Id := conv1["id"].(string)
 
 	conv2 := createConversationAs(t, userId, `{"type":"direct","title":"newer conv","initialMemberIds":["user_test_003"]}`)
-	conv2Id := conv2["_id"].(string)
+	conv2Id := conv2["id"].(string)
 
 	// Increment unread on conv1 first, then conv2 (conv2 should be more recent)
 	if err := inboxSvc.IncrementUnread(ctx, userId, conv1Id); err != nil {
@@ -297,7 +297,7 @@ func TestInbox_ListInboxDefaultLimit(t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		conv := createConversationAs(t, userId, fmt.Sprintf(`{"type":"direct","title":"limit conv %d","initialMemberIds":["peer_limit_%d"]}`, i, i))
-		if err := inboxSvc.IncrementUnread(ctx, userId, conv["_id"].(string)); err != nil {
+		if err := inboxSvc.IncrementUnread(ctx, userId, conv["id"].(string)); err != nil {
 			t.Fatalf("IncrementUnread[%d]: %v", i, err)
 		}
 	}
@@ -340,7 +340,7 @@ func TestInbox_IncrementUnreadCreatesStateIfMissing(t *testing.T) {
 	ctx := context.Background()
 
 	conv := createConversation(t, `{"type":"group","title":"inbox state create"}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 	userId := "user_inbox_newstate_001"
 
 	// No prior state for this user/conversation pair

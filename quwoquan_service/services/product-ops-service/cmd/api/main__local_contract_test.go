@@ -3,9 +3,12 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -58,6 +61,37 @@ func withTestTelemetryPrincipal(request *http.Request) *http.Request {
 	return request.WithContext(rtauth.WithPrincipal(request.Context(), principal))
 }
 
+func newTelemetryBatchRequest(t *testing.T, events []map[string]any) *http.Request {
+	t.Helper()
+	body, err := json.Marshal(map[string]any{"events": events})
+	if err != nil {
+		t.Fatalf("marshal telemetry batch: %v", err)
+	}
+	canonical, err := canonicalJSON(body)
+	if err != nil {
+		t.Fatalf("canonicalize telemetry batch: %v", err)
+	}
+	digest := sha256.Sum256(canonical)
+	request := httptest.NewRequest(http.MethodPost, "/ops/events", bytes.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Idempotency-Key", hex.EncodeToString(digest[:]))
+	return withTestTelemetryPrincipal(request)
+}
+
+func telemetryEvent(eventType, logType string, occurredAt time.Time) map[string]any {
+	return map[string]any{
+		"logType":            logType,
+		"eventType":          eventType,
+		"sessionId":          "s.Z3Vlc3RfdGVzdA." + strconv.FormatInt(occurredAt.UnixMilli(), 10),
+		"pageName":           "home",
+		"occurredAt":         occurredAt.UTC().Format(time.RFC3339Nano),
+		"deviceManufacturer": "Apple",
+		"deviceModel":        "iPhone",
+		"appVersion":         "1.0.0",
+		"networkClass":       "wifi",
+	}
+}
+
 func TestValidateRequiredRuntimeConfigRejectsMissingMongo(t *testing.T) {
 	cfg := config{}
 	cfg.Redis.Rec.Mode = "standalone"
@@ -79,11 +113,22 @@ func TestValidateRequiredRuntimeConfigRejectsMissingRedisEndpoint(t *testing.T) 
 	cfg.Redis.Rec.Mode = "standalone"
 	cfg.Redis.Rec.Addr = "127.0.0.1:6379"
 	cfg.Redis.General.Mode = "standalone"
+	setTestSLSConfig(&cfg)
 
 	err := validateRequiredRuntimeConfig(cfg)
 	if err == nil || !strings.Contains(err.Error(), "redis.general standalone addr is required") {
 		t.Fatalf("expected missing redis endpoint failure, got %v", err)
 	}
+}
+
+func setTestSLSConfig(cfg *config) {
+	cfg.SLS.Region = "cn-hangzhou"
+	cfg.SLS.Endpoint = "cn-hangzhou.log.aliyuncs.com"
+	cfg.SLS.Project = "test-project"
+	cfg.SLS.RawLogstore = "app-product-telemetry-raw"
+	cfg.SLS.StartupDiagnosticLogstore = "app-startup-diagnostic-raw"
+	cfg.SLS.AggregateLogstore = "app-product-telemetry-hourly"
+	cfg.SLS.TimeoutMS = 1200
 }
 
 func TestValidateRequiredRuntimeConfigRejectsMissingPostgres(t *testing.T) {
@@ -121,7 +166,7 @@ func TestExperimentEndpoints(t *testing.T) {
 	}
 	server := newTestServerMux(service)
 
-	assignReq := httptest.NewRequest(http.MethodPost, "/v1/ops/experiments/discovery_feed_v3/assignment", nil)
+	assignReq := httptest.NewRequest(http.MethodPost, "/ops/experiments/discovery_feed_v3/assignment", nil)
 	assignReq.Header.Set("Content-Type", "application/json")
 	assignReq = withTestTelemetryPrincipal(assignReq)
 	assignResp := httptest.NewRecorder()
@@ -145,7 +190,7 @@ func TestExperimentEndpoints(t *testing.T) {
 	}
 	assignedAt := assignment["assignedAt"]
 
-	replayReq := httptest.NewRequest(http.MethodPost, "/v1/ops/experiments/discovery_feed_v3/assignment", nil)
+	replayReq := httptest.NewRequest(http.MethodPost, "/ops/experiments/discovery_feed_v3/assignment", nil)
 	replayReq.Header.Set("Content-Type", "application/json")
 	replayReq = withTestTelemetryPrincipal(replayReq)
 	replayResp := httptest.NewRecorder()
@@ -161,21 +206,21 @@ func TestExperimentEndpoints(t *testing.T) {
 		t.Fatalf("idempotent replay changed immutable fact: first=%v replay=%v", assignment, replayed)
 	}
 
-	getReq := httptest.NewRequest(http.MethodGet, "/v1/ops/experiments/discovery_feed_v3/assignment", nil)
+	getReq := httptest.NewRequest(http.MethodGet, "/ops/experiments/discovery_feed_v3/assignment", nil)
 	getReq = withTestTelemetryPrincipal(getReq)
 	getResp := httptest.NewRecorder()
 	server.ServeHTTP(getResp, getReq)
 	if getResp.Code != http.StatusOK {
 		t.Fatalf("get assignment status=%d body=%s", getResp.Code, getResp.Body.String())
 	}
-	unauthorizedGet := httptest.NewRequest(http.MethodGet, "/v1/ops/experiments/discovery_feed_v3/assignment", nil)
+	unauthorizedGet := httptest.NewRequest(http.MethodGet, "/ops/experiments/discovery_feed_v3/assignment", nil)
 	unauthorizedResp := httptest.NewRecorder()
 	server.ServeHTTP(unauthorizedResp, unauthorizedGet)
 	if unauthorizedResp.Code != http.StatusUnauthorized {
 		t.Fatalf("assignment without verified actor status=%d body=%s", unauthorizedResp.Code, unauthorizedResp.Body.String())
 	}
 
-	statsReq := httptest.NewRequest(http.MethodGet, "/v1/ops/experiments/discovery_feed_v3/stats", nil)
+	statsReq := httptest.NewRequest(http.MethodGet, "/ops/experiments/discovery_feed_v3/stats", nil)
 	statsResp := httptest.NewRecorder()
 	server.ServeHTTP(statsResp, statsReq)
 	if statsResp.Code != http.StatusOK {
@@ -199,7 +244,7 @@ func TestVisitEndpoints(t *testing.T) {
 	server := newTestServerMux(service)
 
 	for range 2 {
-		recordReq := httptest.NewRequest(http.MethodPost, "/v1/ops/visits", bytes.NewBufferString(`{"targetType":"page","targetKey":"platform-onboarding"}`))
+		recordReq := httptest.NewRequest(http.MethodPost, "/ops/visits", bytes.NewBufferString(`{"targetType":"page","targetKey":"platform-onboarding"}`))
 		recordReq.Header.Set("Content-Type", "application/json")
 		recordReq = withTestTelemetryPrincipal(recordReq)
 		recordResp := httptest.NewRecorder()
@@ -209,7 +254,7 @@ func TestVisitEndpoints(t *testing.T) {
 		}
 	}
 
-	statsReq := httptest.NewRequest(http.MethodGet, "/v1/ops/visits/stats?targetType=page&targetKey=platform-onboarding", nil)
+	statsReq := httptest.NewRequest(http.MethodGet, "/ops/visits/stats?targetType=page&targetKey=platform-onboarding", nil)
 	statsResp := httptest.NewRecorder()
 	server.ServeHTTP(statsResp, statsReq)
 	if statsResp.Code != http.StatusOK {
@@ -241,17 +286,20 @@ func TestEventEndpoints(t *testing.T) {
 	}
 	server := newTestServerMux(service)
 
-	body := bytes.NewBufferString(`{"events":[{"eventId":"evt-1","eventType":"experience","eventName":"page_open","eventVersion":"v1","priority":"P0","producer":"app","pageName":"home","surfaceId":"homeFeed","routeId":"home","occurredAt":"2026-04-01T00:00:00Z","payload":{"location":"/home"}},{"eventId":"evt-2","eventType":"analytics","eventName":"bottom_nav_tap","eventVersion":"v1","priority":"P1","producer":"app","pageName":"home","surfaceId":"homeFeed","routeId":"home","experimentBucket":"control","occurredAt":"2026-04-01T00:00:05Z"}]}`)
-	req := httptest.NewRequest(http.MethodPost, "/v1/ops/events", body)
-	req.Header.Set("Content-Type", "application/json")
-	req = withTestTelemetryPrincipal(req)
+	occurredAt := time.Now().UTC().Add(-2 * time.Hour)
+	pageOpen := telemetryEvent("page_open", "event", occurredAt)
+	pageReturn := telemetryEvent("page_return", "event", occurredAt.Add(time.Second))
+	pageOpen["networkClass"] = "5g"
+	pageReturn["networkClass"] = "4g"
+	pageReturn["durationMs"] = 1200
+	req := newTelemetryBatchRequest(t, []map[string]any{pageOpen, pageReturn})
 	resp := httptest.NewRecorder()
 	server.ServeHTTP(resp, req)
 	if resp.Code != http.StatusOK {
 		t.Fatalf("report events status=%d body=%s", resp.Code, resp.Body.String())
 	}
 
-	summaryReq := httptest.NewRequest(http.MethodGet, "/v1/ops/events/summary?pageName=home", nil)
+	summaryReq := httptest.NewRequest(http.MethodGet, "/ops/events/summary?pageName=home&from="+occurredAt.Add(-time.Minute).Format(time.RFC3339Nano)+"&to="+occurredAt.Add(time.Hour).Format(time.RFC3339Nano), nil)
 	summaryResp := httptest.NewRecorder()
 	server.ServeHTTP(summaryResp, summaryReq)
 	if summaryResp.Code != http.StatusOK {
@@ -271,7 +319,7 @@ func TestEventEndpoints(t *testing.T) {
 		t.Fatalf("expected pageName.home=2, got %d", got)
 	}
 
-	drilldownReq := httptest.NewRequest(http.MethodGet, "/v1/ops/events/drilldown?eventType=analytics", nil)
+	drilldownReq := httptest.NewRequest(http.MethodGet, "/ops/events/drilldown?eventType=page_return&from="+occurredAt.Add(-time.Minute).Format(time.RFC3339Nano)+"&to="+occurredAt.Add(time.Hour).Format(time.RFC3339Nano), nil)
 	drilldownResp := httptest.NewRecorder()
 	server.ServeHTTP(drilldownResp, drilldownReq)
 	if drilldownResp.Code != http.StatusOK {
@@ -280,15 +328,233 @@ func TestEventEndpoints(t *testing.T) {
 	var drilldown struct {
 		TotalCount int64 `json:"totalCount"`
 		Items      []struct {
-			EventID   string `json:"eventId"`
-			EventName string `json:"eventName"`
+			RowKey    string `json:"rowKey"`
+			EventType string `json:"eventType"`
+			SessionID string `json:"sessionId"`
 		} `json:"items"`
 	}
 	if err := json.Unmarshal(drilldownResp.Body.Bytes(), &drilldown); err != nil {
 		t.Fatalf("unmarshal event drilldown: %v", err)
 	}
-	if drilldown.TotalCount != 1 || len(drilldown.Items) != 1 || drilldown.Items[0].EventID != "evt-2" {
+	if drilldown.TotalCount != 1 || len(drilldown.Items) != 1 || drilldown.Items[0].EventType != "page_return" || drilldown.Items[0].RowKey == "" || !strings.Contains(drilldown.Items[0].SessionID, "***") {
 		t.Fatalf("unexpected drilldown payload: %+v", drilldown)
+	}
+
+	removedVPN := telemetryEvent("page_open", "event", occurredAt)
+	removedVPN["networkClass"] = "vpn"
+	removedVPNReq := newTelemetryBatchRequest(t, []map[string]any{removedVPN})
+	removedVPNResp := httptest.NewRecorder()
+	server.ServeHTTP(removedVPNResp, removedVPNReq)
+	if removedVPNResp.Code != http.StatusUnprocessableEntity {
+		t.Fatalf(
+			"removed networkClass vpn must be rejected, status=%d body=%s",
+			removedVPNResp.Code,
+			removedVPNResp.Body.String(),
+		)
+	}
+}
+
+func TestStartupTelemetryEndpointIsAnonymousRestrictedAndIdempotent(t *testing.T) {
+	service := newTestProductService(t)
+	server := newTestServerMux(service)
+	body := `{"events":[{"eventId":"startup_attempt_000001_1","attemptId":"startup_attempt_000001","sequence":1,"phase":"dart_bootstrap","phaseDurationMs":12,"elapsedMs":12,"outcome":"started","occurredAt":"2026-07-17T10:00:00Z","platform":"android","runtimeEnv":"alpha","deadlineOrigin":"android_process"}]}`
+
+	for attempt := 0; attempt < 2; attempt++ {
+		request := httptest.NewRequest(
+			http.MethodPost,
+			"/ops/startup-events",
+			bytes.NewBufferString(body),
+		)
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set(startupTelemetryProofHeader, "startup_proof_000000000001")
+		response := httptest.NewRecorder()
+		server.ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			t.Fatalf("startup telemetry status=%d body=%s", response.Code, response.Body.String())
+		}
+		var ack application.EventBatchAck
+		if err := json.Unmarshal(response.Body.Bytes(), &ack); err != nil {
+			t.Fatalf("decode startup telemetry ack: %v", err)
+		}
+		if attempt == 0 && ack.AcceptedCount != 1 {
+			t.Fatalf("first startup telemetry ack=%+v", ack)
+		}
+		if attempt == 1 && !ack.DuplicateBatch {
+			t.Fatalf("retry startup telemetry ack=%+v", ack)
+		}
+	}
+
+	genericRequest := httptest.NewRequest(
+		http.MethodPost,
+		"/ops/events",
+		bytes.NewBufferString(`{"events":[{"eventId":"generic-event","eventType":"experience","eventName":"page_open","eventVersion":"v1","priority":"normal","producer":"app","occurredAt":"2026-07-17T10:00:00Z"}]}`),
+	)
+	genericResponse := httptest.NewRecorder()
+	server.ServeHTTP(genericResponse, genericRequest)
+	if genericResponse.Code != http.StatusUnauthorized {
+		t.Fatalf("generic telemetry must remain authenticated, got %d", genericResponse.Code)
+	}
+}
+
+func TestStartupTelemetryEndpointRejectsUnknownAndPIILikeFields(t *testing.T) {
+	service := newTestProductService(t)
+	server := newTestServerMux(service)
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/ops/startup-events",
+		bytes.NewBufferString(`{"events":[{"eventId":"startup_attempt_000001_1","attemptId":"startup_attempt_000001","sequence":1,"phase":"dart_bootstrap","phaseDurationMs":12,"elapsedMs":12,"outcome":"started","occurredAt":"2026-07-17T10:00:00Z","platform":"android","runtimeEnv":"alpha","userId":"must_not_be_accepted"}]}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set(startupTelemetryProofHeader, "startup_proof_000000000002")
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("unknown/PII field must be rejected, got %d body=%s", response.Code, response.Body.String())
+	}
+	var invalidResponse struct {
+		Code string `json:"code"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &invalidResponse); err != nil {
+		t.Fatalf("decode startup invalid response: %v", err)
+	}
+	if invalidResponse.Code != "OPS.USER.startup_event_invalid" {
+		t.Fatalf("startup invalid response code=%q", invalidResponse.Code)
+	}
+
+	failureCodeRequest := httptest.NewRequest(
+		http.MethodPost,
+		"/ops/startup-events",
+		bytes.NewBufferString(`{"events":[{"eventId":"startup_attempt_000004_1","attemptId":"startup_attempt_000004","sequence":1,"phase":"recovery","phaseDurationMs":12,"elapsedMs":12,"outcome":"shown","occurredAt":"2026-07-17T10:00:00Z","platform":"android","runtimeEnv":"alpha","failureCode":"token_like_diagnostic_must_not_escape"}]}`),
+	)
+	failureCodeRequest.Header.Set("Content-Type", "application/json")
+	failureCodeRequest.Header.Set(
+		startupTelemetryProofHeader,
+		"startup_proof_000000000005",
+	)
+	failureCodeResponse := httptest.NewRecorder()
+	server.ServeHTTP(failureCodeResponse, failureCodeRequest)
+	if failureCodeResponse.Code != http.StatusBadRequest {
+		t.Fatalf(
+			"unallowlisted failure code must be rejected, got %d body=%s",
+			failureCodeResponse.Code,
+			failureCodeResponse.Body.String(),
+		)
+	}
+
+	networkClassRequest := httptest.NewRequest(
+		http.MethodPost,
+		"/ops/startup-events",
+		bytes.NewBufferString(`{"events":[{"eventId":"startup_attempt_000005_1","attemptId":"startup_attempt_000005","sequence":1,"phase":"dart_bootstrap","phaseDurationMs":12,"elapsedMs":12,"outcome":"started","occurredAt":"2026-07-17T10:00:00Z","platform":"android","runtimeEnv":"alpha","networkClass":"user@example.com"}]}`),
+	)
+	networkClassRequest.Header.Set("Content-Type", "application/json")
+	networkClassRequest.Header.Set(
+		startupTelemetryProofHeader,
+		"startup_proof_000000000006",
+	)
+	networkClassResponse := httptest.NewRecorder()
+	server.ServeHTTP(networkClassResponse, networkClassRequest)
+	if networkClassResponse.Code != http.StatusBadRequest {
+		t.Fatalf(
+			"unallowlisted network class must be rejected, got %d body=%s",
+			networkClassResponse.Code,
+			networkClassResponse.Body.String(),
+		)
+	}
+
+	whitespaceLabelRequest := httptest.NewRequest(
+		http.MethodPost,
+		"/ops/startup-events",
+		bytes.NewBufferString(`{"events":[{"eventId":"startup_attempt_000006_1","attemptId":"startup_attempt_000006","sequence":1,"phase":"dart_bootstrap","phaseDurationMs":12,"elapsedMs":12,"outcome":"started","occurredAt":"2026-07-17T10:00:00Z","platform":" android ","runtimeEnv":"alpha"}]}`),
+	)
+	whitespaceLabelRequest.Header.Set("Content-Type", "application/json")
+	whitespaceLabelRequest.Header.Set(
+		startupTelemetryProofHeader,
+		"startup_proof_000000000007",
+	)
+	whitespaceLabelResponse := httptest.NewRecorder()
+	server.ServeHTTP(whitespaceLabelResponse, whitespaceLabelRequest)
+	if whitespaceLabelResponse.Code != http.StatusBadRequest {
+		t.Fatalf(
+			"whitespace metric label must be rejected, got %d body=%s",
+			whitespaceLabelResponse.Code,
+			whitespaceLabelResponse.Body.String(),
+		)
+	}
+
+	mismatchedEventIDRequest := httptest.NewRequest(
+		http.MethodPost,
+		"/ops/startup-events",
+		bytes.NewBufferString(`{"events":[{"eventId":"startup_attempt_000006_99","attemptId":"startup_attempt_000006","sequence":1,"phase":"dart_bootstrap","phaseDurationMs":12,"elapsedMs":12,"outcome":"started","occurredAt":"2026-07-17T10:00:00Z","platform":"android","runtimeEnv":"alpha"}]}`),
+	)
+	mismatchedEventIDRequest.Header.Set("Content-Type", "application/json")
+	mismatchedEventIDRequest.Header.Set(
+		startupTelemetryProofHeader,
+		"startup_proof_000000000007",
+	)
+	mismatchedEventIDResponse := httptest.NewRecorder()
+	server.ServeHTTP(mismatchedEventIDResponse, mismatchedEventIDRequest)
+	if mismatchedEventIDResponse.Code != http.StatusBadRequest {
+		t.Fatalf(
+			"eventId must be derived from attemptId and sequence, got %d body=%s",
+			mismatchedEventIDResponse.Code,
+			mismatchedEventIDResponse.Body.String(),
+		)
+	}
+}
+
+func TestStartupTelemetryEndpointRejectsUnboundedMetricLabels(t *testing.T) {
+	service := newTestProductService(t)
+	server := newTestServerMux(service)
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/ops/startup-events",
+		bytes.NewBufferString(`{"events":[{"eventId":"startup_attempt_000002_1","attemptId":"startup_attempt_000002","sequence":1,"phase":"dart_bootstrap","phaseDurationMs":12,"elapsedMs":12,"outcome":"attacker_controlled_label","occurredAt":"2026-07-17T10:00:00Z","platform":"android","runtimeEnv":"alpha"}]}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set(startupTelemetryProofHeader, "startup_proof_000000000003")
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("unbounded metric label must be rejected, got %d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestStartupTelemetryEndpointAcceptsBoundedJournalDropTerminal(t *testing.T) {
+	service := newTestProductService(t)
+	server := newTestServerMux(service)
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/ops/startup-events",
+		bytes.NewBufferString(`{"events":[{"eventId":"startup_attempt_000003_3","attemptId":"startup_attempt_000003","sequence":3,"phase":"terminal","phaseDurationMs":0,"elapsedMs":120,"outcome":"journal_drop","occurredAt":"2026-07-17T10:00:00Z","platform":"web","runtimeEnv":"alpha","recoverySurface":"native_recovery","failureCode":"OPS.SYSTEM.startup_native_first_frame_timeout","failureSource":"native_watchdog","deadlineOrigin":"web_bootstrap"}]}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set(startupTelemetryProofHeader, "startup_proof_000000000004")
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("bounded journal_drop terminal must be accepted, got %d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestStartupTelemetryRateLimitCannotBeBypassedByChangingProof(t *testing.T) {
+	limiter := newStartupTelemetryLimiter()
+	now := time.Date(2026, time.July, 17, 10, 0, 0, 0, time.UTC)
+	request := httptest.NewRequest(http.MethodPost, "/ops/startup-events", nil)
+	request.RemoteAddr = "203.0.113.42:54321"
+
+	if !limiter.allow(
+		startupTelemetryRateLimitKey(request, "startup_proof_000000000101"),
+		startupTelemetryMaxPerMinute,
+		now,
+	) {
+		t.Fatal("first source window should be allowed")
+	}
+	if limiter.allow(
+		startupTelemetryRateLimitKey(request, "startup_proof_000000000102"),
+		1,
+		now,
+	) {
+		t.Fatal("changing an untrusted proof must not bypass source rate limit")
 	}
 }
 
@@ -299,7 +565,7 @@ func TestControlPlaneWorkflowEndpoints(t *testing.T) {
 	}
 	server := newTestServerMux(service)
 
-	reviewReq := httptest.NewRequest(http.MethodPost, "/v1/control-plane/product/moderation/cases/case_post_901:startReview", nil)
+	reviewReq := httptest.NewRequest(http.MethodPost, "/control-plane/product/moderation/cases/case_post_901:startReview", nil)
 	reviewReq.Header.Set("X-Actor", "reviewer-1")
 	reviewResp := httptest.NewRecorder()
 	server.ServeHTTP(reviewResp, reviewReq)
@@ -308,7 +574,7 @@ func TestControlPlaneWorkflowEndpoints(t *testing.T) {
 	}
 
 	applyBody := bytes.NewBufferString(`{"action":"take_down","actor":"reviewer-1"}`)
-	applyReq := httptest.NewRequest(http.MethodPost, "/v1/control-plane/product/moderation/cases/case_post_901:applyAction", applyBody)
+	applyReq := httptest.NewRequest(http.MethodPost, "/control-plane/product/moderation/cases/case_post_901:applyAction", applyBody)
 	applyReq.Header.Set("Content-Type", "application/json")
 	applyResp := httptest.NewRecorder()
 	server.ServeHTTP(applyResp, applyReq)
@@ -317,7 +583,7 @@ func TestControlPlaneWorkflowEndpoints(t *testing.T) {
 	}
 
 	secondApplyBody := bytes.NewBufferString(`{"action":"take_down","actor":"reviewer-2"}`)
-	secondApplyReq := httptest.NewRequest(http.MethodPost, "/v1/control-plane/product/moderation/cases/case_post_901:applyAction", secondApplyBody)
+	secondApplyReq := httptest.NewRequest(http.MethodPost, "/control-plane/product/moderation/cases/case_post_901:applyAction", secondApplyBody)
 	secondApplyReq.Header.Set("Content-Type", "application/json")
 	secondApplyResp := httptest.NewRecorder()
 	server.ServeHTTP(secondApplyResp, secondApplyReq)
@@ -326,7 +592,7 @@ func TestControlPlaneWorkflowEndpoints(t *testing.T) {
 	}
 
 	recoveryBody := bytes.NewBufferString(`{"decision":"recovered","actor":"approver-1"}`)
-	recoveryReq := httptest.NewRequest(http.MethodPost, "/v1/control-plane/product/recovery/cases/recovery_user_1827:submitDecision", recoveryBody)
+	recoveryReq := httptest.NewRequest(http.MethodPost, "/control-plane/product/recovery/cases/recovery_user_1827:submitDecision", recoveryBody)
 	recoveryReq.Header.Set("Content-Type", "application/json")
 	recoveryResp := httptest.NewRecorder()
 	server.ServeHTTP(recoveryResp, recoveryReq)
@@ -334,7 +600,7 @@ func TestControlPlaneWorkflowEndpoints(t *testing.T) {
 		t.Fatalf("submit recovery decision status=%d body=%s", recoveryResp.Code, recoveryResp.Body.String())
 	}
 
-	policyReq := httptest.NewRequest(http.MethodPost, "/v1/control-plane/product/recommendation/policies/policy_discovery_rank_v12:activate", nil)
+	policyReq := httptest.NewRequest(http.MethodPost, "/control-plane/product/recommendation/policies/policy_discovery_rank_v12:activate", nil)
 	policyReq.Header.Set("X-Actor", "ops-approver")
 	policyResp := httptest.NewRecorder()
 	server.ServeHTTP(policyResp, policyReq)
@@ -343,7 +609,7 @@ func TestControlPlaneWorkflowEndpoints(t *testing.T) {
 	}
 
 	appealBody := bytes.NewBufferString(`{"decision":"approved","actor":"appeal-reviewer"}`)
-	appealReq := httptest.NewRequest(http.MethodPost, "/v1/control-plane/product/appeal/cases/appeal_case_301:submitDecision", appealBody)
+	appealReq := httptest.NewRequest(http.MethodPost, "/control-plane/product/appeal/cases/appeal_case_301:submitDecision", appealBody)
 	appealReq.Header.Set("Content-Type", "application/json")
 	appealResp := httptest.NewRecorder()
 	server.ServeHTTP(appealResp, appealReq)
@@ -351,7 +617,7 @@ func TestControlPlaneWorkflowEndpoints(t *testing.T) {
 		t.Fatalf("submit appeal decision status=%d body=%s", appealResp.Code, appealResp.Body.String())
 	}
 
-	workflowReq := httptest.NewRequest(http.MethodGet, "/v1/control-plane/product/workflows", nil)
+	workflowReq := httptest.NewRequest(http.MethodGet, "/control-plane/product/workflows", nil)
 	workflowResp := httptest.NewRecorder()
 	server.ServeHTTP(workflowResp, workflowReq)
 	if workflowResp.Code != http.StatusOK {
@@ -368,7 +634,7 @@ func TestControlPlaneWorkflowEndpoints(t *testing.T) {
 		t.Fatalf("expected workflows to be populated")
 	}
 
-	auditReq := httptest.NewRequest(http.MethodGet, "/v1/control-plane/product/audits", nil)
+	auditReq := httptest.NewRequest(http.MethodGet, "/control-plane/product/audits", nil)
 	auditResp := httptest.NewRecorder()
 	server.ServeHTTP(auditResp, auditReq)
 	if auditResp.Code != http.StatusOK {
@@ -385,7 +651,7 @@ func TestControlPlaneWorkflowEndpoints(t *testing.T) {
 		t.Fatalf("expected audit events, got %+v", auditPayload.Items)
 	}
 
-	approvalReq := httptest.NewRequest(http.MethodGet, "/v1/control-plane/product/approvals", nil)
+	approvalReq := httptest.NewRequest(http.MethodGet, "/control-plane/product/approvals", nil)
 	approvalResp := httptest.NewRecorder()
 	server.ServeHTTP(approvalResp, approvalReq)
 	if approvalResp.Code != http.StatusOK {
@@ -402,7 +668,7 @@ func TestControlPlaneWorkflowEndpoints(t *testing.T) {
 		t.Fatalf("expected approvals, got %+v", approvalPayload.Items)
 	}
 
-	summaryReq := httptest.NewRequest(http.MethodGet, "/v1/control-plane/product/projections/summary", nil)
+	summaryReq := httptest.NewRequest(http.MethodGet, "/control-plane/product/projections/summary", nil)
 	summaryResp := httptest.NewRecorder()
 	server.ServeHTTP(summaryResp, summaryReq)
 	if summaryResp.Code != http.StatusOK {
@@ -429,7 +695,7 @@ func TestPremiumPoolControlPlaneEndpoints(t *testing.T) {
 
 	invalidScopeReq := httptest.NewRequest(
 		http.MethodPost,
-		"/v1/control-plane/product/recommendation/premium-pool",
+		"/control-plane/product/recommendation/premium-pool",
 		bytes.NewBufferString(`{"contentId":"post_bad","scope":"circle","qualityScore":0.95,"qualityAdmission":"approved","auditId":"audit_bad","expiresAt":"`+expiresAt+`"}`),
 	)
 	invalidScopeResp := httptest.NewRecorder()
@@ -440,7 +706,7 @@ func TestPremiumPoolControlPlaneEndpoints(t *testing.T) {
 
 	lowQualityReq := httptest.NewRequest(
 		http.MethodPost,
-		"/v1/control-plane/product/recommendation/premium-pool",
+		"/control-plane/product/recommendation/premium-pool",
 		bytes.NewBufferString(`{"contentId":"post_low","scope":"global","qualityScore":0.5,"qualityAdmission":"approved","auditId":"audit_low","expiresAt":"`+expiresAt+`"}`),
 	)
 	lowQualityResp := httptest.NewRecorder()
@@ -450,7 +716,7 @@ func TestPremiumPoolControlPlaneEndpoints(t *testing.T) {
 	}
 
 	createBody := `{"contentId":"post_premium_1","scope":"global","qualityScore":0.92,"qualityAdmission":"approved","supplySource":"data_engineering","sourceTaskId":"task_1","auditId":"audit_premium_1","rollbackToken":"rbk-premium-1","expiresAt":"` + expiresAt + `"}`
-	createReq := httptest.NewRequest(http.MethodPost, "/v1/control-plane/product/recommendation/premium-pool", bytes.NewBufferString(createBody))
+	createReq := httptest.NewRequest(http.MethodPost, "/control-plane/product/recommendation/premium-pool", bytes.NewBufferString(createBody))
 	createReq.Header.Set("X-Actor", "premium-editor")
 	createResp := httptest.NewRecorder()
 	server.ServeHTTP(createResp, createReq)
@@ -465,7 +731,7 @@ func TestPremiumPoolControlPlaneEndpoints(t *testing.T) {
 		t.Fatalf("premium entry missing commercial governance fields: %+v", created)
 	}
 
-	listReq := httptest.NewRequest(http.MethodGet, "/v1/control-plane/product/recommendation/premium-pool?activeOnly=true", nil)
+	listReq := httptest.NewRequest(http.MethodGet, "/control-plane/product/recommendation/premium-pool?activeOnly=true", nil)
 	listResp := httptest.NewRecorder()
 	server.ServeHTTP(listResp, listReq)
 	if listResp.Code != http.StatusOK {
@@ -481,7 +747,7 @@ func TestPremiumPoolControlPlaneEndpoints(t *testing.T) {
 		t.Fatalf("expected active premium entry, got %+v", listPayload.Items)
 	}
 
-	rollbackReq := httptest.NewRequest(http.MethodPost, "/v1/control-plane/product/recommendation/premium-pool/post_premium_1:rollback", nil)
+	rollbackReq := httptest.NewRequest(http.MethodPost, "/control-plane/product/recommendation/premium-pool/post_premium_1:rollback", nil)
 	rollbackResp := httptest.NewRecorder()
 	server.ServeHTTP(rollbackResp, rollbackReq)
 	if rollbackResp.Code != http.StatusOK {
@@ -496,13 +762,13 @@ func TestPremiumPoolControlPlaneEndpoints(t *testing.T) {
 	}
 
 	createBody2 := `{"contentId":"post_premium_2","scope":"global","qualityScore":0.91,"qualityAdmission":"approved","auditId":"audit_premium_2","expiresAt":"` + expiresAt + `"}`
-	createReq2 := httptest.NewRequest(http.MethodPost, "/v1/control-plane/product/recommendation/premium-pool", bytes.NewBufferString(createBody2))
+	createReq2 := httptest.NewRequest(http.MethodPost, "/control-plane/product/recommendation/premium-pool", bytes.NewBufferString(createBody2))
 	createResp2 := httptest.NewRecorder()
 	server.ServeHTTP(createResp2, createReq2)
 	if createResp2.Code != http.StatusOK {
 		t.Fatalf("create second premium pool status=%d body=%s", createResp2.Code, createResp2.Body.String())
 	}
-	takedownReq := httptest.NewRequest(http.MethodPost, "/v1/control-plane/product/recommendation/premium-pool/post_premium_2:takedown", nil)
+	takedownReq := httptest.NewRequest(http.MethodPost, "/control-plane/product/recommendation/premium-pool/post_premium_2:takedown", nil)
 	takedownResp := httptest.NewRecorder()
 	server.ServeHTTP(takedownResp, takedownReq)
 	if takedownResp.Code != http.StatusOK {
@@ -516,7 +782,7 @@ func TestPremiumPoolControlPlaneEndpoints(t *testing.T) {
 		t.Fatalf("takedown must eject premium entry, got %+v", ejected)
 	}
 
-	auditReq := httptest.NewRequest(http.MethodGet, "/v1/control-plane/product/audits", nil)
+	auditReq := httptest.NewRequest(http.MethodGet, "/control-plane/product/audits", nil)
 	auditResp := httptest.NewRecorder()
 	server.ServeHTTP(auditResp, auditReq)
 	if auditResp.Code != http.StatusOK {
@@ -571,21 +837,20 @@ func TestL1L4MetricsEndpoint(t *testing.T) {
 	}
 	server := newTestServerMux(service)
 
-	recordReq := httptest.NewRequest(http.MethodPost, "/v1/ops/events", bytes.NewBufferString(`{
-		"events": [
-			{"eventId":"evt-l3-latency","eventType":"experience","eventName":"page_return_perf","occurredAt":"2026-06-07T08:00:01Z","pageName":"home","surfaceId":"homeFeed","metrics":{"durationMs":1300}},
-			{"eventId":"evt-l3-error","eventType":"experience","eventName":"request_failed","occurredAt":"2026-06-07T08:00:02Z","pageName":"home","surfaceId":"homeFeed","errorCode":"OPS.NETWORK.timeout"}
-		]
-	}`))
-	recordReq.Header.Set("Content-Type", "application/json")
-	recordReq = withTestTelemetryPrincipal(recordReq)
+	occurredAt := time.Now().UTC().Add(-2 * time.Hour)
+	performance := telemetryEvent("performance_sample", "event", occurredAt)
+	performance["operationId"] = "feed_first_content_ready"
+	performance["durationMs"] = 1300
+	errorEvent := telemetryEvent("runtime_exception", "error", occurredAt.Add(time.Second))
+	errorEvent["errorCode"] = "OPS.SYSTEM.test_failure"
+	recordReq := newTelemetryBatchRequest(t, []map[string]any{performance, errorEvent})
 	recordResp := httptest.NewRecorder()
 	server.ServeHTTP(recordResp, recordReq)
 	if recordResp.Code != http.StatusOK {
 		t.Fatalf("record metrics events status=%d body=%s", recordResp.Code, recordResp.Body.String())
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/control-plane/product/metrics/l1l4?env=beta&level=L3", nil)
+	req := httptest.NewRequest(http.MethodGet, "/control-plane/product/metrics/l1l4?env=beta&level=L3", nil)
 	resp := httptest.NewRecorder()
 	server.ServeHTTP(resp, req)
 	if resp.Code != http.StatusOK {
@@ -658,21 +923,18 @@ func TestProductTriageSummaryEndpoint(t *testing.T) {
 	}
 	server := newTestServerMux(service)
 
-	recordReq := httptest.NewRequest(http.MethodPost, "/v1/ops/events", bytes.NewBufferString(`{
-		"events": [
-			{"eventId":"evt-open","eventType":"experience","eventName":"page_open","occurredAt":"2026-06-07T08:00:00Z","pageName":"home"},
-			{"eventId":"evt-perf","eventType":"experience","eventName":"page_return_perf","occurredAt":"2026-06-07T08:00:01Z","pageName":"home","surfaceId":"homeFeed","payload":{"durationMs":1300}}
-		]
-	}`))
-	recordReq.Header.Set("Content-Type", "application/json")
-	recordReq = withTestTelemetryPrincipal(recordReq)
+	occurredAt := time.Now().UTC().Add(-5 * time.Minute)
+	pageOpen := telemetryEvent("page_open", "event", occurredAt)
+	pageReturn := telemetryEvent("page_return", "event", occurredAt.Add(time.Second))
+	pageReturn["durationMs"] = 1300
+	recordReq := newTelemetryBatchRequest(t, []map[string]any{pageOpen, pageReturn})
 	recordResp := httptest.NewRecorder()
 	server.ServeHTTP(recordResp, recordReq)
 	if recordResp.Code != http.StatusOK {
 		t.Fatalf("record events status=%d body=%s", recordResp.Code, recordResp.Body.String())
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/control-plane/product/triage/summary?pageName=home&surfaceId=homeFeed", nil)
+	req := httptest.NewRequest(http.MethodGet, "/control-plane/product/triage/summary?pageName=home", nil)
 	resp := httptest.NewRecorder()
 	server.ServeHTTP(resp, req)
 	if resp.Code != http.StatusOK {
@@ -684,9 +946,8 @@ func TestProductTriageSummaryEndpoint(t *testing.T) {
 			TotalCount int `json:"totalCount"`
 		} `json:"eventSummary"`
 		RecentEvents []struct {
-			EventID   string `json:"eventId"`
-			PageName  string `json:"pageName"`
-			SurfaceID string `json:"surfaceId"`
+			RowKey   string `json:"rowKey"`
+			PageName string `json:"pageName"`
 		} `json:"recentEvents"`
 		BacklogCandidates []struct {
 			ID           string `json:"id"`
@@ -707,16 +968,13 @@ func TestProductTriageSummaryEndpoint(t *testing.T) {
 	if payload.Source == "" {
 		t.Fatalf("expected triage source, got %+v", payload)
 	}
-	if payload.EventSummary.TotalCount == 0 {
-		t.Fatalf("expected event summary counts, got %+v", payload)
-	}
 	if len(payload.RecentEvents) == 0 {
 		t.Fatalf("expected recent events, got %+v", payload)
 	}
-	if len(payload.BacklogCandidates) == 0 {
-		t.Fatalf("expected backlog candidates, got %+v", payload)
+	if payload.RecentEvents[0].RowKey == "" {
+		t.Fatalf("recent events must use temporary row keys, got %+v", payload.RecentEvents)
 	}
-	if payload.BacklogCandidates[0].ID == "" || payload.BacklogCandidates[0].NextAction == "" || payload.BacklogCandidates[0].RunbookRoute == "" || payload.BacklogCandidates[0].RepairEntry == "" || payload.BacklogCandidates[0].AlertID == "" || payload.BacklogCandidates[0].AuditRoute == "" {
+	if len(payload.BacklogCandidates) > 0 && (payload.BacklogCandidates[0].ID == "" || payload.BacklogCandidates[0].NextAction == "" || payload.BacklogCandidates[0].RunbookRoute == "" || payload.BacklogCandidates[0].RepairEntry == "" || payload.BacklogCandidates[0].AlertID == "" || payload.BacklogCandidates[0].AuditRoute == "") {
 		t.Fatalf("expected backlog candidate details, got %+v", payload.BacklogCandidates[0])
 	}
 }

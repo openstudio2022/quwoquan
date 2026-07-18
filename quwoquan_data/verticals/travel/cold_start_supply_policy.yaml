@@ -1,0 +1,49 @@
+policyId: travel-cold-start-supply
+feedMinimumPosts: 20
+contentPerEntity:
+  article: 1
+  image: 1
+  video: 1
+quality:
+  nonEmptyRateMinimum: 0.999
+  duplicateExposureRateMaximum: 0.01
+videoDelivery:
+  container: mp4
+  codec: h264
+  width: 1080
+  height: 1920
+  aspectRatio: "9:16"
+  pixelFormat: yuv420p
+  framesPerSecond: 24
+  segmentDurationSeconds: 2
+  minimumDurationSeconds: 6
+  maximumDurationSeconds: 30
+  posterRequired: true
+  subtitlesRequired: true
+  checksumRequired: true
+  rightsProvenanceRequired: true
+provinces:
+  - province: 浙江省
+    targets:
+      - {name: 普陀山, entityType: 地点/景区}
+      - {name: 东钱湖, entityType: 地点/自然景观}
+      - {name: 西湖, entityType: 地点/景区}
+      - {name: 千岛湖, entityType: 地点/景区}
+      - {name: 乌镇, entityType: 地点/景区}
+      - {name: 南浔古镇, entityType: 地点/景区}
+      - {name: 雁荡山, entityType: 地点/景区}
+      - {name: 神仙居, entityType: 地点/景区}
+      - {name: 横店影视城, entityType: 地点/景区}
+      - {name: 天一阁, entityType: 地点/景区}
+  - province: 四川省
+    targets:
+      - {name: 海螺沟, entityType: 地点/景区}
+      - {name: 九寨沟, entityType: 地点/景区}
+      - {name: 黄龙, entityType: 地点/景区}
+      - {name: 峨眉山, entityType: 地点/景区}
+      - {name: 乐山大佛, entityType: 地点/景区}
+      - {name: 都江堰, entityType: 地点/景区}
+      - {name: 青城山, entityType: 地点/景区}
+      - {name: 稻城亚丁, entityType: 地点/景区}
+      - {name: 四姑娘山, entityType: 地点/景区}
+      - {name: 三星堆博物馆, entityType: 地点/景区}

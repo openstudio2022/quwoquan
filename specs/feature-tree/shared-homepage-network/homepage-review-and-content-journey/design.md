@@ -328,8 +328,8 @@ make codegen-app
 
 ### 双读 / 双写
 
-- **不做内容本体双写**
-- entity-service 读模型可在短期双读旧摘要字段和新 module DTO，直到 UI 全面切换
+- **禁止内容本体与 wire 双读双写**
+- entity-service 读模型与 UI 只认 homepage shell / module DTO 当前形状；不得保留旧摘要字段别名解码
 - 退出条件：
   - UI 不再读取旧的散落 header / review / content 临时字段
   - 所有首页模块都从 homepage shell / module DTO 读取

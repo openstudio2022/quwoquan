@@ -161,14 +161,16 @@ final class _FixtureCircleMembershipQuery implements CircleMembershipQuery {
 
 final class _FixtureCircleMembershipCommandWriter
     implements CircleMembershipCommandWriter {
-  const _FixtureCircleMembershipCommandWriter();
+  _FixtureCircleMembershipCommandWriter();
+
+  int _version = 0;
 
   @override
   Future<CircleMembershipCommandResult> join(
     JoinCircleMembershipCommand command,
-  ) async => const CircleMembershipCommandResult(
+  ) async => CircleMembershipCommandResult(
     membershipId: 'fixture_membership',
-    version: 1,
+    version: ++_version,
     state: CircleMembershipState.pending,
     role: CircleMembershipRole.member,
     idempotentReplay: false,
@@ -179,7 +181,7 @@ final class _FixtureCircleMembershipCommandWriter
     LeaveCircleMembershipCommand command,
   ) async => CircleMembershipCommandResult(
     membershipId: 'fixture_membership',
-    version: command.expectedVersion + 1,
+    version: ++_version,
     state: CircleMembershipState.left,
     role: CircleMembershipRole.member,
     idempotentReplay: false,
@@ -190,7 +192,7 @@ final class _FixtureCircleMembershipCommandWriter
     UpdateCircleMembershipRoleCommand command,
   ) async => CircleMembershipCommandResult(
     membershipId: 'fixture_membership',
-    version: command.expectedVersion + 1,
+    version: ++_version,
     state: CircleMembershipState.active,
     role: command.role,
     idempotentReplay: false,
@@ -216,7 +218,7 @@ Widget _scopedApp({
         const _FixtureCircleMembershipQuery(),
       ),
       circleDetailMembershipCommandWriterProvider.overrideWithValue(
-        const _FixtureCircleMembershipCommandWriter(),
+        _FixtureCircleMembershipCommandWriter(),
       ),
       activePersonaContextProvider.overrideWith(
         (_) async => ActivePersonaContextViewData.fallback(

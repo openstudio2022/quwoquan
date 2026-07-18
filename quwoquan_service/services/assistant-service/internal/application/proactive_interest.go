@@ -30,7 +30,7 @@ type ProactiveInterestProfile struct {
 
 // ProactiveInterestReader reads a user's derived interest profile for proactive
 // personalization. Implemented by infrastructure (HTTP to user-service's
-// GET /v1/users/{userId}/interest-profile). A nil profile (with nil error)
+// GET /users/{userId}/interest-profile). A nil profile (with nil error)
 // means "no profile available"; callers degrade to non-personalized output.
 type ProactiveInterestReader interface {
 	GetInterestProfile(ctx context.Context, userID string) (*ProactiveInterestProfile, error)

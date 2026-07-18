@@ -80,7 +80,7 @@ class UserProfileCacheService {
 
   void putAll(List<Map<String, dynamic>> profiles) {
     for (final p in profiles) {
-      final id = p['userId'] as String? ?? p['_id'] as String? ?? '';
+      final id = p['userId'] as String? ?? '';
       if (id.isNotEmpty) put(id, p);
     }
   }

@@ -80,7 +80,10 @@ void main() {
       };
       final e = RtcSignalEvent.fromJson(raw);
       expect(e.payload, isA<RtcCallRingingWsPayload>());
-      expect((e.payload as RtcCallRingingWsPayload).data.callType, equals('video'));
+      expect(
+        (e.payload as RtcCallRingingWsPayload).data.callType,
+        equals('video'),
+      );
     });
 
     test('payload 缺失或类型错误 → 空 map 解析；未知 type → Unknown', () {

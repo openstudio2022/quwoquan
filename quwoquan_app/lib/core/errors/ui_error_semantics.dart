@@ -390,7 +390,22 @@ class UiErrorSemanticResolver {
     required UiErrorCategory category,
   }) {
     if (category == UiErrorCategory.listAppend ||
-        category == UiErrorCategory.backgroundAction) {
+        category == UiErrorCategory.backgroundAction ||
+        category == UiErrorCategory.sectionLoad) {
+      return null;
+    }
+    final failureKind = _effectiveFailureKind(
+      error,
+      _runtimeFailureFromError(error),
+    );
+    if (category == UiErrorCategory.pageLoad &&
+        switch (failureKind) {
+          RuntimeFailureKind.network ||
+          RuntimeFailureKind.timeout ||
+          RuntimeFailureKind.rateLimited ||
+          RuntimeFailureKind.unavailable => true,
+          _ => false,
+        }) {
       return null;
     }
     final l10n = _maybeL10n(context);
@@ -402,13 +417,9 @@ class UiErrorSemanticResolver {
       final code = error.code?.trim() ?? '';
       if (code.isEmpty) {
         final localMessage = error.message.trim();
-        if (error.statusCode == null && localMessage.isNotEmpty) {
+        if (category != UiErrorCategory.pageLoad && localMessage.isNotEmpty) {
           return localMessage;
         }
-        return null;
-      }
-      if (category == UiErrorCategory.pageLoad ||
-          category == UiErrorCategory.sectionLoad) {
         return null;
       }
       if (code.startsWith('CONTENT.')) {

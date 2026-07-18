@@ -1,5 +1,4 @@
 templateId: 主题_地理深读
-version: 1
 subject: { kind: topic, type: 旅行/主题, minEntityRefs: 2, subjectTagRef: Topic/旅行/旅行主题/文化深度游 }
 vertical: travel
 category: travel

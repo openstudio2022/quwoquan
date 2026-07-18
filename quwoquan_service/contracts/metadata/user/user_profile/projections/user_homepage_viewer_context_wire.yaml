@@ -1,4 +1,3 @@
-version: 1
 read_model: UserHomepageViewerContextWire
 
 description: |
@@ -22,29 +21,24 @@ client_projection:
       dart_type: String
       nullable: false
       source: viewerSubAccountId
-      aliases: [viewerSubAccountId]
       default: "''"
     - name: isOwner
       dart_type: bool
       nullable: false
       source: isOwner
-      aliases: [isOwner]
       default: "false"
     - name: isGuest
       dart_type: bool
       nullable: false
       source: isGuest
-      aliases: [isGuest]
       default: "false"
     - name: relationToTarget
       dart_type: String
       nullable: false
       source: relationToTarget
-      aliases: [relationToTarget]
       default: "'not_following'"
     - name: canViewFullProfile
       dart_type: bool
       nullable: false
       source: canViewFullProfile
-      aliases: [canViewFullProfile]
       default: "true"

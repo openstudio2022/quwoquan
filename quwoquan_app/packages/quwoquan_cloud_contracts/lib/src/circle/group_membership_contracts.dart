@@ -46,14 +46,10 @@ final class LeaveCircleGroupMembershipCommand {
   LeaveCircleGroupMembershipCommand({
     required String circleId,
     required String groupId,
-    required this.expectedVersion,
   }) : circleId = _required(circleId, 'circleId'),
-       groupId = _required(groupId, 'groupId') {
-    _positive(expectedVersion, 'expectedVersion');
-  }
+       groupId = _required(groupId, 'groupId');
   final String circleId;
   final String groupId;
-  final int expectedVersion;
 }
 
 final class DecideCircleGroupMembershipCommand {
@@ -61,16 +57,12 @@ final class DecideCircleGroupMembershipCommand {
     required String circleId,
     required String groupId,
     required String personaId,
-    required this.expectedVersion,
   }) : circleId = _required(circleId, 'circleId'),
        groupId = _required(groupId, 'groupId'),
-       personaId = _required(personaId, 'personaId') {
-    _positive(expectedVersion, 'expectedVersion');
-  }
+       personaId = _required(personaId, 'personaId');
   final String circleId;
   final String groupId;
   final String personaId;
-  final int expectedVersion;
 }
 
 final class RemoveCircleGroupMembershipCommand {
@@ -78,16 +70,12 @@ final class RemoveCircleGroupMembershipCommand {
     required String circleId,
     required String groupId,
     required String personaId,
-    required this.expectedVersion,
   }) : circleId = _required(circleId, 'circleId'),
        groupId = _required(groupId, 'groupId'),
-       personaId = _required(personaId, 'personaId') {
-    _positive(expectedVersion, 'expectedVersion');
-  }
+       personaId = _required(personaId, 'personaId');
   final String circleId;
   final String groupId;
   final String personaId;
-  final int expectedVersion;
 }
 
 final class UpdateCircleGroupMembershipRoleCommand {
@@ -95,12 +83,10 @@ final class UpdateCircleGroupMembershipRoleCommand {
     required String circleId,
     required String groupId,
     required String personaId,
-    required this.expectedVersion,
     required this.role,
   }) : circleId = _required(circleId, 'circleId'),
        groupId = _required(groupId, 'groupId'),
        personaId = _required(personaId, 'personaId') {
-    _positive(expectedVersion, 'expectedVersion');
     if (role == CircleGroupMembershipRole.owner) {
       throw ArgumentError.value(
         role,
@@ -112,7 +98,6 @@ final class UpdateCircleGroupMembershipRoleCommand {
   final String circleId;
   final String groupId;
   final String personaId;
-  final int expectedVersion;
   final CircleGroupMembershipRole role;
 }
 
@@ -218,34 +203,19 @@ CloudOperationRequestPayload encodeCircleGroupMembershipListQuery(
 
 CloudOperationRequestPayload encodeLeaveCircleGroupMembershipCommand(
   LeaveCircleGroupMembershipCommand command,
-) => _versionedPath(command.circleId, command.groupId, command.expectedVersion);
+) => _path(command.circleId, command.groupId);
 
 CloudOperationRequestPayload encodeApproveCircleGroupMembershipCommand(
   DecideCircleGroupMembershipCommand command,
-) => _targetPath(
-  command.circleId,
-  command.groupId,
-  command.personaId,
-  command.expectedVersion,
-);
+) => _targetPath(command.circleId, command.groupId, command.personaId);
 
 CloudOperationRequestPayload encodeRejectCircleGroupMembershipCommand(
   DecideCircleGroupMembershipCommand command,
-) => _targetPath(
-  command.circleId,
-  command.groupId,
-  command.personaId,
-  command.expectedVersion,
-);
+) => _targetPath(command.circleId, command.groupId, command.personaId);
 
 CloudOperationRequestPayload encodeRemoveCircleGroupMembershipCommand(
   RemoveCircleGroupMembershipCommand command,
-) => _targetPath(
-  command.circleId,
-  command.groupId,
-  command.personaId,
-  command.expectedVersion,
-);
+) => _targetPath(command.circleId, command.groupId, command.personaId);
 
 CloudOperationRequestPayload encodeUpdateCircleGroupMembershipRoleCommand(
   UpdateCircleGroupMembershipRoleCommand command,
@@ -255,7 +225,6 @@ CloudOperationRequestPayload encodeUpdateCircleGroupMembershipRoleCommand(
     'groupId': command.groupId,
     'personaId': command.personaId,
   },
-  headers: <String, String>{'If-Match': '"${command.expectedVersion}"'},
   body: <String, Object?>{'role': command.role.name},
 );
 
@@ -336,27 +305,16 @@ CloudOperationRequestPayload _path(String circleId, String groupId) =>
       },
     );
 
-CloudOperationRequestPayload _versionedPath(
-  String circleId,
-  String groupId,
-  int version,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'circleId': circleId, 'groupId': groupId},
-  headers: <String, String>{'If-Match': '"$version"'},
-);
-
 CloudOperationRequestPayload _targetPath(
   String circleId,
   String groupId,
   String personaId,
-  int version,
 ) => CloudOperationRequestPayload(
   pathParameters: <String, String>{
     'circleId': circleId,
     'groupId': groupId,
     'personaId': personaId,
   },
-  headers: <String, String>{'If-Match': '"$version"'},
 );
 
 CircleGroupMembershipRole _role(Object? value) => switch (value) {
@@ -434,10 +392,6 @@ DateTime? _optionalDate(Object? value) {
   if (parsed == null)
     throw const FormatException('optional timestamp must be RFC3339');
   return parsed.toUtc();
-}
-
-void _positive(int value, String name) {
-  if (value <= 0) throw ArgumentError.value(value, name, 'must be positive');
 }
 
 void _limit(int value) {

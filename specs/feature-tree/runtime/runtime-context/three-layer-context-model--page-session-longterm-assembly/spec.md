@@ -7,7 +7,7 @@
 - **ContextAssembler**：按 userId 聚合三层，耗时 < 50ms。
 
 ## 实现要点
-- **PageContext API**：POST /v1/context/page，body 含 scene_type、snapshot、userActions；Redis key: context:page:{userId}。
+- **PageContext API**：POST /context/page，body 含 scene_type、snapshot、userActions；Redis key: context:page:{userId}。
 - **Session**：Redis key 与推荐热路径约定一致；读取最近 N 条兴趣信号。
 - **LongTerm**：从 user_holistic_profile 集合或向量存储读取。
 - **Assembler**：并行读取三层，合并后返回。

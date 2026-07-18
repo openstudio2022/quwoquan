@@ -59,7 +59,13 @@ def route_prefixes_from_metadata(domain: str) -> set[str]:
             continue
         for route in data.get("api_routes") or []:
             raw_path = str(route.get("path") or "").strip()
-            if not raw_path.startswith("/v1/"):
+            if not raw_path.startswith("/"):
+                continue
+            if raw_path.startswith("/internal/") or raw_path.startswith("/callbacks/"):
+                continue
+            if raw_path in {"/health", "/healthz", "/metrics", "/livez", "/startupz"}:
+                continue
+            if re.search(r"(^|/)v[0-9]+(/|$)", raw_path):
                 continue
             path = raw_path.split("{", 1)[0].split(":", 1)[0]
             if not path.endswith("/"):
@@ -124,7 +130,7 @@ def main() -> int:
         )
 
     # 3/4. split_candidate 路由前缀 + Service DNS 不变量
-    route_re = re.compile(r"^/v1/[a-z][a-z0-9_-]*(?:/[a-z][a-z0-9_-]*)*/$")
+    route_re = re.compile(r"^/[a-z][a-z0-9_-]*(?:/[a-z][a-z0-9_-]*)*/$")
     for sc in inv.get("split_candidates", []):
         d = sc.get("domain")
         if d not in inv_seed:
@@ -159,16 +165,16 @@ def main() -> int:
     # 6. seed-box 声明承载的 domain 必须被 entrypoint 实际承载。
     runtime_services, runtime_source = seed_box_runtime_contract()
     expected_runtime = {
-        "content": ("content-service", ["/v1/content"]),
-        "integration": ("integration-service", ["/v1/integration"]),
-        "chat": ("chat-service", ["/v1/chat"]),
-        "user": ("user-service", ["/v1/user", "/v1/users"]),
-        "circle": ("circle-service", ["/v1/circles"]),
-        "notification": ("notification-service", ["/v1/notifications", "/v1/app-messages"]),
-        "entity": ("entity-service", ["/v1/homepages"]),
-        "tag": ("tag-service", ["/v1/tag"]),
-        "ops": ("product-ops-service", ["/v1/ops"]),
-        "assistant": ("assistant-service", ["/v1/assistant"]),
+        "content": ("content-service", ["/content"]),
+        "integration": ("integration-service", ["/integration"]),
+        "chat": ("chat-service", ["/chat"]),
+        "user": ("user-service", ["/user", "/users"]),
+        "circle": ("circle-service", ["/circles"]),
+        "notification": ("notification-service", ["/notifications", "/app-messages"]),
+        "entity": ("entity-service", ["/homepages"]),
+        "tag": ("tag-service", ["/tag"]),
+        "ops": ("product-ops-service", ["/ops"]),
+        "assistant": ("assistant-service", ["/assistant"]),
     }
     for domain in sorted(inv_seed):
         spec = expected_runtime.get(domain)

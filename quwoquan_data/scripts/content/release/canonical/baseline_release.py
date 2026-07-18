@@ -6,9 +6,16 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from core.release_layout import attestation_root, payload_digest, payload_file, payload_root
+from core.release_layout import (
+    attestation_root,
+    object_closure_digest,
+    payload_digest,
+    payload_file,
+    payload_root,
+)
+from core.control_types import RolloutMilestone
 from core.schema import assert_valid
-from core.tree_integrity import tree_integrity_stats
+from core.source_digest import current_source_digest
 from content.release.canonical.object_transaction_contract import (
     RELEASE_SCHEMA,
     ObjectTransactionError,
@@ -18,9 +25,10 @@ from content.release.canonical.object_transaction_contract import (
     _write_json,
     assert_environment_neutral,
 )
+from content.release.canonical.release_attestation import ReleaseAttestation
+from content.release.model import ReleaseKind
 
 
-EMPTY_BASELINE_RELEASE_KIND = "empty_baseline"
 _EMPTY_DESIRED_REFS = {"creators": [], "entities": [], "posts": [], "tags": []}
 
 
@@ -36,25 +44,30 @@ def build_empty_baseline_release(
     it clears only the importer-owned data projection and leaves unrelated
     service records untouched.
     """
+    del publish_root
     release_id = _safe_id(release_id, label="releaseId")
+    source_digest = current_source_digest()
     final_root = release_root / release_id
-    canonical = tree_integrity_stats(publish_root)
     if final_root.exists():
         header = _read_json(payload_file(final_root, "release.json"))
         desired = _read_json(payload_file(final_root, "desired_state.json"))
+        aggregate = _read_json(attestation_root(final_root) / "aggregate.json")
         if (
             header.get("releaseId") == release_id
-            and header.get("releaseKind") == EMPTY_BASELINE_RELEASE_KIND
-            and header.get("canonicalMerkle") == canonical["merkleRoot"]
+            and header.get("releaseKind") == ReleaseKind.EMPTY_BASELINE
+            and header.get("canonicalMerkle") == object_closure_digest(final_root)
             and header.get("executionIds") == []
             and header.get("rolloutMilestone") == "baseline"
+            and header.get("sourceDigest") == source_digest.to_document()
+            and aggregate.get("sourceDigest") == source_digest.to_document()
             and desired.get("desiredRefs") == _EMPTY_DESIRED_REFS
+            and aggregate.get("payloadSha256") == payload_digest(final_root)
         ):
             return {
-                "schemaVersion": "quwoquan_data.empty_baseline_release_result/1",
+                "schema": "quwoquan_data.empty_baseline_release_result",
                 "releaseId": release_id,
                 "releaseRoot": str(final_root),
-                "releaseKind": EMPTY_BASELINE_RELEASE_KIND,
+                "releaseKind": ReleaseKind.EMPTY_BASELINE,
                 "idempotent": True,
             }
         raise ObjectTransactionError(f"empty baseline release create-once conflict: {final_root}")
@@ -63,33 +76,35 @@ def build_empty_baseline_release(
     staging = Path(tempfile.mkdtemp(prefix=f".{release_id}.", dir=final_root.parent))
     try:
         payload = payload_root(staging)
+        canonical_merkle = object_closure_digest(staging, create=True)
         _write_json(
             payload / "release.json",
             {
-                "schemaVersion": RELEASE_SCHEMA,
+                "schema": RELEASE_SCHEMA,
                 "releaseId": release_id,
-                "releaseKind": EMPTY_BASELINE_RELEASE_KIND,
-                "canonicalMerkle": canonical["merkleRoot"],
+                "releaseKind": ReleaseKind.EMPTY_BASELINE,
+                "canonicalMerkle": canonical_merkle,
                 "executionIds": [],
                 "rolloutMilestone": "baseline",
+                "sourceDigest": source_digest.to_document(),
             },
         )
         _write_json(
             payload / "desired_state.json",
             {
-                "schemaVersion": "quwoquan_data.release_desired_state/1",
+                "schema": "quwoquan_data.release_desired_state",
                 "releaseId": release_id,
                 "desiredRefs": _EMPTY_DESIRED_REFS,
             },
         )
         _write_json(
             payload / "index/objects.json",
-            {"schemaVersion": "quwoquan_data.release_object_index/1", **_EMPTY_DESIRED_REFS},
+            {"schema": "quwoquan_data.release_object_index", **_EMPTY_DESIRED_REFS},
         )
         _write_json(
             payload / "sample_bundle.json",
             {
-                "schemaVersion": "quwoquan_data.release_sample_bundle/1",
+                "schema": "quwoquan_data.release_sample_bundle",
                 "entities": [],
                 "posts": [],
                 "tags": [],
@@ -98,24 +113,26 @@ def build_empty_baseline_release(
         _write_json(
             payload / "media_manifest.json",
             {
-                "schemaVersion": "quwoquan_data.release_media_manifest/1",
+                "schema": "quwoquan_data.release_media_manifest",
                 "releaseId": release_id,
                 "assets": [],
                 "issues": [],
             },
         )
-        aggregate_attestation = {
-            "schemaVersion": "quwoquan_data.aggregate_release_attestation/2",
-            "releaseId": release_id,
-            "releaseKind": EMPTY_BASELINE_RELEASE_KIND,
-            "executionIds": [],
-            "rolloutMilestone": "baseline",
-            "entityCount": 0,
-            "tagCount": 0,
-            "canonicalMerkle": canonical["merkleRoot"],
-            "payloadSha256": payload_digest(staging),
-            "recordedAt": _now(),
-        }
+        aggregate_attestation = ReleaseAttestation(
+            release_id=release_id,
+            release_kind=ReleaseKind.EMPTY_BASELINE,
+            execution_ids=(),
+            rollout_milestone=RolloutMilestone.BASELINE,
+            entity_count=0,
+            post_count=0,
+            creator_count=0,
+            tag_count=0,
+            canonical_merkle=canonical_merkle,
+            source_digest=source_digest,
+            payload_sha256=payload_digest(staging),
+            recorded_at=_now(),
+        ).to_document()
         assert_valid(
             aggregate_attestation,
             "release",
@@ -126,10 +143,10 @@ def build_empty_baseline_release(
         assert_environment_neutral(staging)
         staging.replace(final_root)
         return {
-            "schemaVersion": "quwoquan_data.empty_baseline_release_result/1",
+            "schema": "quwoquan_data.empty_baseline_release_result",
             "releaseId": release_id,
             "releaseRoot": str(final_root),
-            "releaseKind": EMPTY_BASELINE_RELEASE_KIND,
+            "releaseKind": ReleaseKind.EMPTY_BASELINE,
             "idempotent": False,
         }
     except Exception:

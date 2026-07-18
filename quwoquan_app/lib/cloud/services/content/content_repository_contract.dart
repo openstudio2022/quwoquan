@@ -8,6 +8,7 @@ import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/runtime/models/discovery_feed_page.dart';
 import 'package:quwoquan_app/cloud/runtime/models/discovery_presentation_wire.dart';
 import 'package:quwoquan_app/cloud/runtime/models/post_engagement_counters.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 const String kFeedSortRecommend = 'recommend';
 
@@ -22,6 +23,8 @@ abstract interface class ContentReadRepository {
     String sort = kFeedSortRecommend,
     String? sessionId,
     String? feedRequestId,
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
   });
 
   Future<List<PostBaseDto>> listDiscoveryFeed({
@@ -79,11 +82,6 @@ abstract interface class ContentPostSearchRepository {
 }
 
 abstract interface class ContentWriteRepository {
-  Future<PostBaseDto> updatePost({
-    required String postId,
-    required UpdatePostRequestWire body,
-  });
-
   Future<void> deletePost({required String postId});
 
   Future<PostBaseDto> updatePostSettings({

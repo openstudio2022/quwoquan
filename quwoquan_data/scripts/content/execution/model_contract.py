@@ -10,6 +10,9 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any, Mapping
 
+from core.control_types import AgentProvider
+from core.runtime_policy import active_runtime_policy
+
 
 class ModelFamily(StrEnum):
     CLAUDE = "claude"
@@ -21,11 +24,18 @@ class ModelFamily(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class ExecutionModel:
+    provider: AgentProvider
     model_id: str
     family: ModelFamily
 
     @classmethod
-    def from_execution(cls, execution: Mapping[str, Any], *, role: str) -> "ExecutionModel":
+    def from_execution(
+        cls,
+        execution: Mapping[str, Any],
+        *,
+        role: str,
+        provider: AgentProvider,
+    ) -> "ExecutionModel":
         if role == "author":
             model_key, family_key = "model", "modelFamily"
         elif role == "reviewer":
@@ -45,7 +55,7 @@ class ExecutionModel:
             raise ValueError(
                 f"execution.{family_key} must be one of: {allowed}"
             ) from exc
-        return cls(model_id=model_id, family=family)
+        return cls(provider=provider, model_id=model_id, family=family)
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,7 +74,34 @@ def execution_model_pair(recipe: Mapping[str, Any]) -> ExecutionModelPair:
     execution = recipe.get("execution")
     if not isinstance(execution, Mapping):
         raise ValueError("recipe.execution must be an object")
+    provider = active_runtime_policy().cursor_provider
     return ExecutionModelPair(
-        author=ExecutionModel.from_execution(execution, role="author"),
-        reviewer=ExecutionModel.from_execution(execution, role="reviewer"),
+        author=ExecutionModel.from_execution(
+            execution,
+            role="author",
+            provider=provider,
+        ),
+        reviewer=ExecutionModel.from_execution(
+            execution,
+            role="reviewer",
+            provider=provider,
+        ),
     )
+
+
+def execution_model_pair_for_execution(execution_id: str) -> ExecutionModelPair:
+    """Resolve the immutable model contract referenced by one execution manifest."""
+    from content.execution.recipe import load_recipe
+    from content.execution.workspace import execution_manifest_recipe_ref
+
+    recipe_ref = execution_manifest_recipe_ref(execution_id)
+    return execution_model_pair(load_recipe(recipe_ref))
+
+
+__all__ = [
+    "ExecutionModel",
+    "ExecutionModelPair",
+    "ModelFamily",
+    "execution_model_pair",
+    "execution_model_pair_for_execution",
+]

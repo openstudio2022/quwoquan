@@ -8,42 +8,50 @@ class ChatApiMetadata {
 
   static const String domain = 'chat';
   static const List<String> apiPrefixes = <String>[
-    '/v1/chat',
+    '/chat/contact-home',
+    '/chat/contacts',
+    '/chat/conversations',
+    '/chat/group-candidates',
+    '/chat/groups',
+    '/chat/inbox',
+    '/chat/message-home',
+    '/chat/messages',
+    '/chat/selectable-group-conversations',
   ];
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
-    'AddMembers': '/v1/chat/conversations/{conversationId}/members',
-    'BatchGetConversations': '/v1/chat/conversations/batch',
-    'CreateConversation': '/v1/chat/conversations',
-    'DissolveConversation': '/v1/chat/conversations/{conversationId}',
-    'GetConversation': '/v1/chat/conversations/{conversationId}',
-    'GetGroupHome': '/v1/chat/groups/{conversationId}/home',
-    'GetReceipts': '/v1/chat/conversations/{conversationId}/messages/{messageId}/receipts',
-    'InviteAssistant': '/v1/chat/conversations/{conversationId}/assistant',
-    'ListContactHome': '/v1/chat/contact-home',
-    'ListContacts': '/v1/chat/contacts',
-    'ListConversationTimestamps': '/v1/chat/conversations/timestamps',
-    'ListConversations': '/v1/chat/conversations',
-    'ListGroupCandidates': '/v1/chat/group-candidates',
-    'ListInbox': '/v1/chat/inbox',
-    'ListMembers': '/v1/chat/conversations/{conversationId}/members',
-    'ListMessageHome': '/v1/chat/message-home',
-    'ListMessages': '/v1/chat/conversations/{conversationId}/messages',
-    'ListSelectableGroupContactMembers': '/v1/chat/selectable-group-conversations/{conversationId}/contact-members',
-    'ListSelectableGroupConversations': '/v1/chat/selectable-group-conversations',
-    'MarkAsRead': '/v1/chat/conversations/{conversationId}/messages/{messageId}/read',
-    'RecallMessage': '/v1/chat/conversations/{conversationId}/messages/{messageId}/recall',
-    'RemoveAssistant': '/v1/chat/conversations/{conversationId}/assistant',
-    'RemoveMember': '/v1/chat/conversations/{conversationId}/members/{userId}',
-    'SearchContacts': '/v1/chat/contacts/search',
-    'SearchConversations': '/v1/chat/conversations/search',
-    'SearchMessages': '/v1/chat/messages/search',
-    'SendMessage': '/v1/chat/conversations/{conversationId}/messages',
-    'SyncMessages': '/v1/chat/conversations/{conversationId}/sync',
-    'TransferOwnership': '/v1/chat/conversations/{conversationId}/owner',
-    'UpdateConversationSettings': '/v1/chat/conversations/{conversationId}/settings',
-    'UpdateConversationTitle': '/v1/chat/conversations/{conversationId}',
-    'UpdateGroupAdmins': '/v1/chat/conversations/{conversationId}/admins',
+    'AddMembers': '/chat/conversations/{conversationId}/members',
+    'BatchGetConversations': '/chat/conversations/batch',
+    'CreateConversation': '/chat/conversations',
+    'DissolveConversation': '/chat/conversations/{conversationId}',
+    'GetConversation': '/chat/conversations/{conversationId}',
+    'GetGroupHome': '/chat/groups/{conversationId}/home',
+    'GetReceipts': '/chat/conversations/{conversationId}/messages/{messageId}/receipts',
+    'InviteAssistant': '/chat/conversations/{conversationId}/assistant',
+    'ListContactHome': '/chat/contact-home',
+    'ListContacts': '/chat/contacts',
+    'ListConversationTimestamps': '/chat/conversations/timestamps',
+    'ListConversations': '/chat/conversations',
+    'ListGroupCandidates': '/chat/group-candidates',
+    'ListInbox': '/chat/inbox',
+    'ListMembers': '/chat/conversations/{conversationId}/members',
+    'ListMessageHome': '/chat/message-home',
+    'ListMessages': '/chat/conversations/{conversationId}/messages',
+    'ListSelectableGroupContactMembers': '/chat/selectable-group-conversations/{conversationId}/contact-members',
+    'ListSelectableGroupConversations': '/chat/selectable-group-conversations',
+    'MarkAsRead': '/chat/conversations/{conversationId}/messages/{messageId}/read',
+    'RecallMessage': '/chat/conversations/{conversationId}/messages/{messageId}/recall',
+    'RemoveAssistant': '/chat/conversations/{conversationId}/assistant',
+    'RemoveMember': '/chat/conversations/{conversationId}/members/{userId}',
+    'SearchContacts': '/chat/contacts/search',
+    'SearchConversations': '/chat/conversations/search',
+    'SearchMessages': '/chat/messages/search',
+    'SendMessage': '/chat/conversations/{conversationId}/messages',
+    'SyncMessages': '/chat/conversations/{conversationId}/sync',
+    'TransferOwnership': '/chat/conversations/{conversationId}/owner',
+    'UpdateConversationSettings': '/chat/conversations/{conversationId}/settings',
+    'UpdateConversationTitle': '/chat/conversations/{conversationId}',
+    'UpdateGroupAdmins': '/chat/conversations/{conversationId}/admins',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
@@ -158,132 +166,132 @@ class ChatApiMetadata {
   static const String updateConversationTitleOperation = 'UpdateConversationTitle';
   static const String updateGroupAdminsOperation = 'UpdateGroupAdmins';
 
-  static const String addMembersPathTemplate = '/v1/chat/conversations/{conversationId}/members';
+  static const String addMembersPathTemplate = '/chat/conversations/{conversationId}/members';
   static String addMembersPath({required String conversationId}) {
     return _fillPath(addMembersPathTemplate, <String, String>{
       'conversationId': conversationId,
     });
   }
-  static const String batchGetConversationsPath = '/v1/chat/conversations/batch';
-  static const String createConversationPath = '/v1/chat/conversations';
-  static const String dissolveConversationPathTemplate = '/v1/chat/conversations/{conversationId}';
+  static const String batchGetConversationsPath = '/chat/conversations/batch';
+  static const String createConversationPath = '/chat/conversations';
+  static const String dissolveConversationPathTemplate = '/chat/conversations/{conversationId}';
   static String dissolveConversationPath({required String conversationId}) {
     return _fillPath(dissolveConversationPathTemplate, <String, String>{
       'conversationId': conversationId,
     });
   }
-  static const String getConversationPathTemplate = '/v1/chat/conversations/{conversationId}';
+  static const String getConversationPathTemplate = '/chat/conversations/{conversationId}';
   static String getConversationPath({required String conversationId}) {
     return _fillPath(getConversationPathTemplate, <String, String>{
       'conversationId': conversationId,
     });
   }
-  static const String getGroupHomePathTemplate = '/v1/chat/groups/{conversationId}/home';
+  static const String getGroupHomePathTemplate = '/chat/groups/{conversationId}/home';
   static String getGroupHomePath({required String conversationId}) {
     return _fillPath(getGroupHomePathTemplate, <String, String>{
       'conversationId': conversationId,
     });
   }
-  static const String getReceiptsPathTemplate = '/v1/chat/conversations/{conversationId}/messages/{messageId}/receipts';
+  static const String getReceiptsPathTemplate = '/chat/conversations/{conversationId}/messages/{messageId}/receipts';
   static String getReceiptsPath({required String conversationId, required String messageId}) {
     return _fillPath(getReceiptsPathTemplate, <String, String>{
       'conversationId': conversationId,
       'messageId': messageId,
     });
   }
-  static const String inviteAssistantPathTemplate = '/v1/chat/conversations/{conversationId}/assistant';
+  static const String inviteAssistantPathTemplate = '/chat/conversations/{conversationId}/assistant';
   static String inviteAssistantPath({required String conversationId}) {
     return _fillPath(inviteAssistantPathTemplate, <String, String>{
       'conversationId': conversationId,
     });
   }
-  static const String listContactHomePath = '/v1/chat/contact-home';
-  static const String listContactsPath = '/v1/chat/contacts';
-  static const String listConversationTimestampsPath = '/v1/chat/conversations/timestamps';
-  static const String listConversationsPath = '/v1/chat/conversations';
-  static const String listGroupCandidatesPath = '/v1/chat/group-candidates';
-  static const String listInboxPath = '/v1/chat/inbox';
-  static const String listMembersPathTemplate = '/v1/chat/conversations/{conversationId}/members';
+  static const String listContactHomePath = '/chat/contact-home';
+  static const String listContactsPath = '/chat/contacts';
+  static const String listConversationTimestampsPath = '/chat/conversations/timestamps';
+  static const String listConversationsPath = '/chat/conversations';
+  static const String listGroupCandidatesPath = '/chat/group-candidates';
+  static const String listInboxPath = '/chat/inbox';
+  static const String listMembersPathTemplate = '/chat/conversations/{conversationId}/members';
   static String listMembersPath({required String conversationId}) {
     return _fillPath(listMembersPathTemplate, <String, String>{
       'conversationId': conversationId,
     });
   }
-  static const String listMessageHomePath = '/v1/chat/message-home';
-  static const String listMessagesPathTemplate = '/v1/chat/conversations/{conversationId}/messages';
+  static const String listMessageHomePath = '/chat/message-home';
+  static const String listMessagesPathTemplate = '/chat/conversations/{conversationId}/messages';
   static String listMessagesPath({required String conversationId}) {
     return _fillPath(listMessagesPathTemplate, <String, String>{
       'conversationId': conversationId,
     });
   }
-  static const String listSelectableGroupContactMembersPathTemplate = '/v1/chat/selectable-group-conversations/{conversationId}/contact-members';
+  static const String listSelectableGroupContactMembersPathTemplate = '/chat/selectable-group-conversations/{conversationId}/contact-members';
   static String listSelectableGroupContactMembersPath({required String conversationId}) {
     return _fillPath(listSelectableGroupContactMembersPathTemplate, <String, String>{
       'conversationId': conversationId,
     });
   }
-  static const String listSelectableGroupConversationsPath = '/v1/chat/selectable-group-conversations';
-  static const String markAsReadPathTemplate = '/v1/chat/conversations/{conversationId}/messages/{messageId}/read';
+  static const String listSelectableGroupConversationsPath = '/chat/selectable-group-conversations';
+  static const String markAsReadPathTemplate = '/chat/conversations/{conversationId}/messages/{messageId}/read';
   static String markAsReadPath({required String conversationId, required String messageId}) {
     return _fillPath(markAsReadPathTemplate, <String, String>{
       'conversationId': conversationId,
       'messageId': messageId,
     });
   }
-  static const String recallMessagePathTemplate = '/v1/chat/conversations/{conversationId}/messages/{messageId}/recall';
+  static const String recallMessagePathTemplate = '/chat/conversations/{conversationId}/messages/{messageId}/recall';
   static String recallMessagePath({required String conversationId, required String messageId}) {
     return _fillPath(recallMessagePathTemplate, <String, String>{
       'conversationId': conversationId,
       'messageId': messageId,
     });
   }
-  static const String removeAssistantPathTemplate = '/v1/chat/conversations/{conversationId}/assistant';
+  static const String removeAssistantPathTemplate = '/chat/conversations/{conversationId}/assistant';
   static String removeAssistantPath({required String conversationId}) {
     return _fillPath(removeAssistantPathTemplate, <String, String>{
       'conversationId': conversationId,
     });
   }
-  static const String removeMemberPathTemplate = '/v1/chat/conversations/{conversationId}/members/{userId}';
+  static const String removeMemberPathTemplate = '/chat/conversations/{conversationId}/members/{userId}';
   static String removeMemberPath({required String conversationId, required String userId}) {
     return _fillPath(removeMemberPathTemplate, <String, String>{
       'conversationId': conversationId,
       'userId': userId,
     });
   }
-  static const String searchContactsPath = '/v1/chat/contacts/search';
-  static const String searchConversationsPath = '/v1/chat/conversations/search';
-  static const String searchMessagesPath = '/v1/chat/messages/search';
-  static const String sendMessagePathTemplate = '/v1/chat/conversations/{conversationId}/messages';
+  static const String searchContactsPath = '/chat/contacts/search';
+  static const String searchConversationsPath = '/chat/conversations/search';
+  static const String searchMessagesPath = '/chat/messages/search';
+  static const String sendMessagePathTemplate = '/chat/conversations/{conversationId}/messages';
   static String sendMessagePath({required String conversationId}) {
     return _fillPath(sendMessagePathTemplate, <String, String>{
       'conversationId': conversationId,
     });
   }
-  static const String syncMessagesPathTemplate = '/v1/chat/conversations/{conversationId}/sync';
+  static const String syncMessagesPathTemplate = '/chat/conversations/{conversationId}/sync';
   static String syncMessagesPath({required String conversationId}) {
     return _fillPath(syncMessagesPathTemplate, <String, String>{
       'conversationId': conversationId,
     });
   }
-  static const String transferOwnershipPathTemplate = '/v1/chat/conversations/{conversationId}/owner';
+  static const String transferOwnershipPathTemplate = '/chat/conversations/{conversationId}/owner';
   static String transferOwnershipPath({required String conversationId}) {
     return _fillPath(transferOwnershipPathTemplate, <String, String>{
       'conversationId': conversationId,
     });
   }
-  static const String updateConversationSettingsPathTemplate = '/v1/chat/conversations/{conversationId}/settings';
+  static const String updateConversationSettingsPathTemplate = '/chat/conversations/{conversationId}/settings';
   static String updateConversationSettingsPath({required String conversationId}) {
     return _fillPath(updateConversationSettingsPathTemplate, <String, String>{
       'conversationId': conversationId,
     });
   }
-  static const String updateConversationTitlePathTemplate = '/v1/chat/conversations/{conversationId}';
+  static const String updateConversationTitlePathTemplate = '/chat/conversations/{conversationId}';
   static String updateConversationTitlePath({required String conversationId}) {
     return _fillPath(updateConversationTitlePathTemplate, <String, String>{
       'conversationId': conversationId,
     });
   }
-  static const String updateGroupAdminsPathTemplate = '/v1/chat/conversations/{conversationId}/admins';
+  static const String updateGroupAdminsPathTemplate = '/chat/conversations/{conversationId}/admins';
   static String updateGroupAdminsPath({required String conversationId}) {
     return _fillPath(updateGroupAdminsPathTemplate, <String, String>{
       'conversationId': conversationId,

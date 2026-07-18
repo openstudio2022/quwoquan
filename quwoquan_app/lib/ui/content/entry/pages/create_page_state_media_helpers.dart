@@ -42,51 +42,37 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
     ref.read(createEditorProvider.notifier).setSettings(confirmedSettings);
     _setMountedState(() => _isPublishing = true);
     try {
+      await _saveDraft(silent: true, flushReason: 'pre_publish');
+      final localDraftId = _activeDraftId;
+      if (localDraftId == null) {
+        throw StateError('local draft id unavailable');
+      }
       final media = ref.read(createContentMediaFacetProvider);
-      final postLifecycle = ref.read(
-        createContentPostLifecycleCommandWriterProvider,
-      );
-      final preparedPayload = await buildCreatePostPayloadWithRemoteImageMedia(
+      final preparedPayload = await buildPostPublicationPayloadWithRemoteMedia(
         media: media,
         fileStorageGateway: ref.read(fileStorageGatewayProvider),
         state: publishState,
         uploadObject: ref.read(contentMediaObjectUploadProvider),
       );
-      final createCommand = await attachActivePersonaToCreateCommand(
+      final command = await attachActivePersonaToPostPublicationCommand(
         ref,
-        preparedPayload.payload,
+        preparedPayload,
+        localDraftId: localDraftId,
       );
-      final created = await postLifecycle.createPost(createCommand);
-      final postId = created.post.postId;
+      final activePersona = await ref.read(activePersonaContextProvider.future);
+      final receipt = await ref
+          .read(postPublicationIntentQueueProvider.notifier)
+          .submit(
+            command: command,
+            authorPersonaId: activePersona.subAccountId,
+            circleIds: confirmedSettings.isPublic
+                ? confirmedSettings.circleIds
+                : const <String>[],
+          );
+      final postId = receipt.postId;
       if (postId.isEmpty) {
         throw StateError('missing post id');
       }
-      if (preparedPayload.mediaAssetIds.isNotEmpty) {
-        await media.bindPostMediaAssets(
-          BindContentPostMediaAssetsCommand(
-            postId: postId,
-            assetIds: preparedPayload.mediaAssetIds,
-          ),
-        );
-      }
-      await postLifecycle.publishPost(
-        publishContentPostCommandFromSettings(
-          postId: postId,
-          settings: confirmedSettings,
-        ),
-      );
-      if (confirmedSettings.isPublic &&
-          confirmedSettings.circleIds.isNotEmpty) {
-        final placements = ref.read(
-          createWorkspaceCirclePostPlacementWriterProvider,
-        );
-        for (final circleId in confirmedSettings.circleIds.toSet()) {
-          await placements.placePost(
-            PlaceCirclePostCommand(circleId: circleId, postId: postId),
-          );
-        }
-      }
-      await _clearCurrentDraft();
       await reportCreateEditorSurfaceEvent(
         ref,
         'create_publish_success',
@@ -96,6 +82,13 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
         return;
       }
       AppToast.show(context, UITextConstants.publishAction);
+      _doClose();
+    } on PostPublicationQueuedException {
+      await reportCreateEditorSurfaceEvent(ref, 'create_publish_queued');
+      if (!mounted) {
+        return;
+      }
+      AppToast.show(context, UITextConstants.publishQueued);
       _doClose();
     } catch (error) {
       await reportCreateEditorSurfaceEvent(ref, 'create_publish_failure');

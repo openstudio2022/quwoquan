@@ -1,5 +1,4 @@
 templateId: 民宿_点评
-version: 1
 subject: { kind: entity, type: 地点/民宿 }
 vertical: travel
 category: life

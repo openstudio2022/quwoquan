@@ -17,8 +17,6 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/work_browser_media_
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_statement_synthesizer.dart';
-import 'package:video_player/video_player.dart'
-    show VideoPlayerController, VideoPlayerValue;
 import 'package:quwoquan_app/components/media/image/book/image_book_canvas.dart';
 import 'package:quwoquan_app/components/media/shared/gesture/immersive_gesture_intent_controller.dart';
 import 'package:quwoquan_app/components/media/shared/pageflip/media_page_flip_book.dart';
@@ -54,6 +52,7 @@ import 'package:quwoquan_app/core/auth/auth_gate.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart'
     show authSessionControllerProvider;
 import 'package:quwoquan_app/core/media/content_media_url.dart';
+import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/core/trackers/article_reader_observability.dart';
@@ -64,6 +63,7 @@ import 'package:quwoquan_app/core/trackers/feed_performance_observability.dart';
 import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
+import 'package:quwoquan_app/components/media/video/player/video_playback_session.dart';
 import 'package:quwoquan_app/components/media/video/player/video_player_widget.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart'
     show ActivePersonaContextViewData;
@@ -310,8 +310,8 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   final ImmersiveGestureIntentController _gestureIntentController =
       ImmersiveGestureIntentController();
 
-  // 当前可见视频作品的播放控制器（由 _WorksVideoCanvas 上报，供极简控制条消费）。
-  VideoPlayerController? _activeVideoController;
+  // 当前可见视频作品的播放会话（由 _WorksVideoCanvas 上报，供控件消费）。
+  VideoPlaybackSession? _activeVideoSession;
   String? _activeVideoStageKey;
   late final FeedPerformanceObservability _feedPerformanceObservability;
 
@@ -989,13 +989,10 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     return <String, Object?>{
       ...?raw,
       'postId': post.id,
-      'type': (raw?['type'] ?? raw?['contentType'] ?? 'article').toString(),
-      'contentType': (raw?['contentType'] ?? raw?['type'] ?? 'article')
-          .toString(),
+      'type': (raw?['contentType'] ?? 'article').toString(),
+      'contentType': (raw?['contentType'] ?? 'article').toString(),
       'authorId': (raw?['authorId'] ?? post.authorId).toString(),
-      'displayName':
-          (raw?['displayName'] ?? raw?['authorNickname'] ?? post.displayName)
-              .toString(),
+      'displayName': (raw?['authorDisplayName'] ?? post.displayName).toString(),
       'authorAvatarUrl': (raw?['authorAvatarUrl'] ?? post.avatarUrl).toString(),
       'title': rawTitle.isNotEmpty
           ? rawTitle
@@ -1268,20 +1265,49 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     return item;
   }
 
-  /// 视频集序列：契约 mediaItems[kind=video]，为空时回落单视频。
-  List<WorkBrowserMediaItemDto> _videoItemsFor(PostBaseDto post) {
-    final items = _workItemFor(post).videoItems;
-    if (items.isNotEmpty) return items;
-    if (post.mediaVideoUrl.isEmpty) return const <WorkBrowserMediaItemDto>[];
-    return <WorkBrowserMediaItemDto>[
-      WorkBrowserMediaItemDto(
-        kind: 'video',
-        url: post.mediaVideoUrl,
-        coverUrl: post.mediaVideoCoverUrl.isEmpty
-            ? null
-            : post.mediaVideoCoverUrl,
-      ),
-    ];
+  /// 视频集序列：契约 mediaItems[kind=video]，为空时回落单视频；边界解析为交付引用。
+  List<_WorksVideoDeliveryItem> _videoItemsFor(PostBaseDto post) {
+    final resolver = MediaDeliveryResolver.fromRuntimeConfig();
+    final rawItems = _workItemFor(post).videoItems;
+    final sources = rawItems.isNotEmpty
+        ? rawItems
+        : (post.mediaVideoUrl.isEmpty
+              ? const <WorkBrowserMediaItemDto>[]
+              : <WorkBrowserMediaItemDto>[
+                  WorkBrowserMediaItemDto(
+                    kind: 'video',
+                    url: post.mediaVideoUrl,
+                    coverUrl: post.mediaVideoCoverUrl.isEmpty
+                        ? null
+                        : post.mediaVideoCoverUrl,
+                    durationMs: post.durationMs,
+                  ),
+                ]);
+    final resolved = <_WorksVideoDeliveryItem>[];
+    for (final item in sources) {
+      final delivery = resolver.tryResolve(
+        item.url,
+        kind: MediaDeliveryKind.video,
+        assetId: item.mediaAssetId ?? post.id,
+      );
+      if (delivery == null) {
+        continue;
+      }
+      resolved.add(
+        _WorksVideoDeliveryItem(
+          deliveryReference: delivery,
+          coverReference: resolver.tryResolve(
+            item.coverUrl,
+            kind: MediaDeliveryKind.image,
+            assetId: item.mediaAssetId ?? post.id,
+          ),
+          verifiedDuration: item.durationMs == null
+              ? null
+              : Duration(milliseconds: item.durationMs!),
+        ),
+      );
+    }
+    return resolved;
   }
 
   void _applyFilterSelection(Set<String> selectedIds) {
@@ -1772,21 +1798,21 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     );
   }
 
-  /// 视频画布上报当前激活的播放控制器（stageKey = postId-episodeIndex）。
-  void _handleActiveVideoController(
+  /// 视频画布上报当前激活的播放会话（stageKey = postId-episodeIndex）。
+  void _handleActiveVideoSession(
     String stageKey,
-    VideoPlayerController? controller,
+    VideoPlaybackSession? session,
   ) {
     if (!mounted) return;
     if (_activeVideoStageKey == stageKey &&
-        identical(_activeVideoController, controller)) {
+        identical(_activeVideoSession, session)) {
       return;
     }
     void applyState() {
       if (!mounted) return;
       setState(() {
         _activeVideoStageKey = stageKey;
-        _activeVideoController = controller;
+        _activeVideoSession = session;
       });
     }
 
@@ -1799,7 +1825,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     }
     _feedPerformanceObservability.recordActiveVideoControllerCount(
       surfaceId: 'works_immersive_viewer',
-      activeCount: controller == null ? 0 : 1,
+      activeCount: session == null ? 0 : 1,
     );
   }
 
@@ -2272,26 +2298,30 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     // caption header（内容下方、标题上方）：
     // - 图片多图：点指示器（● ● ○ ● ●，最多 6 点）
     // - 视频：极简播放控制条 + 视频集进度
-    Widget? counterIndicator;
+    Widget? captionHeader;
+    Widget? videoControls;
     if (currentPost != null) {
       if (_isImageLikePost(currentPost) && progress.total > 1) {
-        counterIndicator = _WorksPageIndicator(
+        captionHeader = _WorksPageIndicator(
           total: progress.total,
           current: progress.current,
         );
       } else if (_isVideoLikePost(currentPost)) {
-        counterIndicator = _WorksVideoControlRow(
+        videoControls = _WorksVideoControlRow(
           key: ValueKey<String>('works-video-controls-${currentPost.id}'),
-          controller:
+          session:
               _activeVideoStageKey ==
                   '${currentPost.id}-${(_videoInnerIndex[currentPost.id] ?? 0)}'
-              ? _activeVideoController
+              ? _activeVideoSession
               : null,
           episodeCurrent: progress.current,
           episodeTotal: progress.total,
         );
       }
     }
+    final videoControlsReservedHeight = videoControls == null
+        ? AppSpacing.zero
+        : AppSpacing.minInteractiveSize;
     // 与 welcome_screen 一致：阻断 MaterialApp 默认 TextStyle 合并带来的误装饰（黄下划线等）。
     return DefaultTextStyle.merge(
       style: const TextStyle(
@@ -2462,19 +2492,40 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                 Positioned(
                   left: 0,
                   right: 0,
-                  bottom: _worksContentOverlayBottomClearance(
-                    context,
-                    includeIntersection: showContentIntersection,
-                    gap: AppSpacing.containerSm,
-                  ),
+                  bottom:
+                      _worksContentOverlayBottomClearance(
+                        context,
+                        includeIntersection: showContentIntersection,
+                        gap: AppSpacing.containerSm,
+                      ) +
+                      videoControlsReservedHeight,
                   child: MediaCaptionBlock(
                     layoutSpec: currentLayoutSpec,
                     railKey: const ValueKey<String>('works-caption-rail'),
-                    header: counterIndicator,
+                    header: captionHeader,
                     title: overlayTitle,
                     caption: overlayBody,
                     isExpanded: _isCaptionExpanded(currentPost.id),
                     onToggle: () => _toggleCaptionExpanded(currentPost.id),
+                  ),
+                ),
+
+              if (currentPost != null && videoControls != null)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: _worksContentOverlayBottomClearance(
+                    context,
+                    includeIntersection: showContentIntersection,
+                    gap: AppSpacing.intraGroupSm,
+                  ),
+                  child: ImmersiveViewerLayout.alignToRail(
+                    context: context,
+                    layoutSpec: currentLayoutSpec,
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: videoControls,
+                    ),
                   ),
                 ),
 
@@ -2756,11 +2807,8 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         items: _videoItemsFor(post),
         onEpisodeChanged: (idx) =>
             setState(() => _videoInnerIndex[post.id] = idx),
-        onActiveControllerChanged: (episodeIndex, controller) =>
-            _handleActiveVideoController(
-              '${post.id}-$episodeIndex',
-              controller,
-            ),
+        onActiveSessionChanged: (episodeIndex, session) =>
+            _handleActiveVideoSession('${post.id}-$episodeIndex', session),
       );
     }
     if (_isArticleLikePost(post)) {

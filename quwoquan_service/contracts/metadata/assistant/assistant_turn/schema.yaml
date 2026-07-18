@@ -2,7 +2,6 @@ dart_class: AssistantTurnOutput
 library_path: assistant/contracts/assistant_turn_contract.dart
 output_path: assistant/generated/contracts/assistant_turn.g.dart
 contract: assistant_turn
-version: assistant_turn
 kind: output_contract
 imports:
   - package:quwoquan_app/assistant/contracts/assistant_journey.dart
@@ -15,136 +14,171 @@ imports:
   - package:quwoquan_app/assistant/contracts/understanding_result_contract.dart
 fields:
   - name: contractId
+    source: contractId
     type: string
     required: true
   - name: decision
+    source: decision
     type: object
     ref: decision
     default: {}
   - name: messageKind
+    source: messageKind
     type: enum
     enum_ref: AssistantMessageKind
     default: ''
   - name: userMarkdown
+    source: userMarkdown
     type: string
     default: ''
   - name: result
+    source: result
     type: object
     ref: result
     default: {}
   - name: displayState
+    source: displayState
     type: object
     ref: AssistantDisplayState
     default: {}
   - name: evidence
+    source: evidence
     type: list<object>
     ref: evidence_item
     default: []
   - name: reasoningBasis
+    source: reasoningBasis
     type: list<object>
     ref: reasoning_basis_item
     default: []
   - name: selfCheck
+    source: selfCheck
     type: object
     ref: self_check
     default: {}
   - name: diagnostics
+    source: diagnostics
     type: object
     ref: diagnostics
     default: {}
   - name: modelSelfScore
+    source: modelSelfScore
     type: object
     ref: model_self_score
     default: {}
   - name: askUser
+    source: askUser
     type: object
     ref: ask_user
     default: {}
   - name: toolCalls
+    source: toolCalls
     type: list<object>
     ref: tool_call
     default: []
   - name: slotState
+    source: slotState
     type: object
     ref: SlotStateSnapshot
     default: {}
   - name: subagentPlan
+    source: subagentPlan
     type: list<object>
     ref: SubagentPlan
     default: []
   - name: understandingResult
+    source: understandingResult
     type: object
     ref: UnderstandingResult
     default: {}
   - name: taskGraph
+    source: taskGraph
     type: object
     ref: TaskGraph
     default: {}
   - name: orchestratorState
+    source: orchestratorState
     type: object
     ref: ConversationOrchestratorState
     default: {}
   - name: turnSynthesisState
+    source: turnSynthesisState
     type: object
     ref: TurnSynthesisState
     default: {}
   - name: skillRuns
+    source: skillRuns
     type: list<object>
     ref: SkillRun
     default: []
   - name: aggregationState
+    source: aggregationState
     type: object
     ref: AggregationState
   - name: journey
+    source: journey
     type: object
     ref: AssistantJourney
     default: {}
   - name: missingContextSlots
+    source: missingContextSlots
     type: list<string>
     default: []
   - name: fillGuidance
+    source: fillGuidance
     type: list<object>
     ref: fill_guidance_item
     default: []
   - name: followupPrompt
+    source: followupPrompt
     type: string
     default: ''
   - name: phaseId
+    source: phaseId
     type: enum
     enum_ref: PlannerPhaseId
     default: ''
   - name: actionCode
+    source: actionCode
     type: enum
     enum_ref: PlannerActionCode
     default: ''
   - name: reasonCode
+    source: reasonCode
     type: enum
     enum_ref: PlannerReasonCode
     default: ''
   - name: reasonShort
+    source: reasonShort
     type: string
     default: ''
   - name: understandingSnapshot
+    source: understandingSnapshot
     type: object
     ref: understanding_snapshot
     default: {}
   - name: retrievalProcessing
+    source: retrievalProcessing
     type: object
     ref: RetrievalProcessingSnapshot
     default: {}
   - name: answerProcessing
+    source: answerProcessing
     type: object
     ref: answer_processing
     default: {}
   - name: historicalThinkingSnapshot
+    source: historicalThinkingSnapshot
     type: object
     ref: historical_thinking_snapshot
     default: {}
   - name: sessionPreferenceFacts
+    source: sessionPreferenceFacts
     type: list<object>
     ref: PreferenceFact
     default: []
   - name: longTermPreferenceFacts
+    source: longTermPreferenceFacts
     type: list<object>
     ref: PreferenceFact
     default: []

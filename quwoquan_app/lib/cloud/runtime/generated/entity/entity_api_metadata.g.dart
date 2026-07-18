@@ -8,34 +8,35 @@ class EntityApiMetadata {
 
   static const String domain = 'entity';
   static const List<String> apiPrefixes = <String>[
-    '/v1/homepage-reviews',
-    '/v1/homepages',
-    '/v1/homepages:reload',
+    '/homepage-reviews/{reviewId}',
+    '/homepages/candidates',
+    '/homepages/search',
+    '/homepages/{homepageId}',
   ];
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
-    'CreateHomepageClaimRequest': '/v1/homepages/{homepageId}/claim-requests',
-    'CreateHomepageReview': '/v1/homepages/{homepageId}/reviews',
-    'CreateHomepageStatusReport': '/v1/homepages/{homepageId}/status-reports',
-    'DeleteHomepageReview': '/v1/homepage-reviews/{reviewId}',
-    'FollowHomepage': '/v1/homepages/{homepageId}/follow',
-    'GetEntityImpact': '/v1/homepages/{homepageId}/impact',
-    'GetHomepageDetail': '/v1/homepages/{homepageId}',
-    'GetHomepageIntroduction': '/v1/homepages/{homepageId}/introduction',
-    'GetHomepageRelatedGroups': '/v1/homepages/{homepageId}/related-groups',
-    'GetHomepageReviewSummary': '/v1/homepages/{homepageId}/review-summary',
-    'GetHomepageShell': '/v1/homepages/{homepageId}/shell',
-    'GetObjectPageBundle': '/v1/homepages/{homepageId}/object-page-bundle',
-    'IntakeHomepageCandidate': '/v1/homepages/candidates',
-    'PublishHomepageCandidate': '/v1/homepages/candidates/{homepageId}:publish',
-    'ReloadHomepageState': '/v1/homepages:reload',
-    'ReviewHomepageClaimRequest': '/v1/homepages/{homepageId}/claim-requests/{claimRequestId}:review',
-    'ReviewHomepageStatusReport': '/v1/homepages/{homepageId}/status-reports/{reportId}:review',
-    'SearchHomepages': '/v1/homepages/search',
-    'SuggestHomepageCandidate': '/v1/homepages/candidates/suggest',
-    'UnfollowHomepage': '/v1/homepages/{homepageId}/follow',
-    'UpdateClaimedHomepageBasics': '/v1/homepages/{homepageId}/claimed-basics',
-    'UpdateHomepageReview': '/v1/homepage-reviews/{reviewId}',
+    'CreateHomepageClaimRequest': '/homepages/{homepageId}/claim-requests',
+    'CreateHomepageReview': '/homepages/{homepageId}/reviews',
+    'CreateHomepageStatusReport': '/homepages/{homepageId}/status-reports',
+    'DeleteHomepageReview': '/homepage-reviews/{reviewId}',
+    'FollowHomepage': '/homepages/{homepageId}/follow',
+    'GetEntityImpact': '/homepages/{homepageId}/impact',
+    'GetHomepageDetail': '/homepages/{homepageId}',
+    'GetHomepageIntroduction': '/homepages/{homepageId}/introduction',
+    'GetHomepageRelatedGroups': '/homepages/{homepageId}/related-groups',
+    'GetHomepageReviewSummary': '/homepages/{homepageId}/review-summary',
+    'GetHomepageShell': '/homepages/{homepageId}/shell',
+    'GetObjectPageBundle': '/homepages/{homepageId}/object-page-bundle',
+    'IntakeHomepageCandidate': '/homepages/candidates',
+    'PublishHomepageCandidate': '/homepages/candidates/{homepageId}:publish',
+    'ReloadHomepageState': '/homepages:reload',
+    'ReviewHomepageClaimRequest': '/homepages/{homepageId}/claim-requests/{claimRequestId}:review',
+    'ReviewHomepageStatusReport': '/homepages/{homepageId}/status-reports/{reportId}:review',
+    'SearchHomepages': '/homepages/search',
+    'SuggestHomepageCandidate': '/homepages/candidates/suggest',
+    'UnfollowHomepage': '/homepages/{homepageId}/follow',
+    'UpdateClaimedHomepageBasics': '/homepages/{homepageId}/claimed-basics',
+    'UpdateHomepageReview': '/homepage-reviews/{reviewId}',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
@@ -71,11 +72,11 @@ class EntityApiMetadata {
     'DeleteHomepageReview': 'required',
     'FollowHomepage': 'required',
     'GetEntityImpact': 'required',
-    'GetHomepageDetail': 'required',
+    'GetHomepageDetail': 'optional',
     'GetHomepageIntroduction': 'optional',
-    'GetHomepageRelatedGroups': 'required',
-    'GetHomepageReviewSummary': 'required',
-    'GetHomepageShell': 'required',
+    'GetHomepageRelatedGroups': 'optional',
+    'GetHomepageReviewSummary': 'optional',
+    'GetHomepageShell': 'optional',
     'GetObjectPageBundle': 'optional',
     'IntakeHomepageCandidate': 'required',
     'PublishHomepageCandidate': 'required',
@@ -120,115 +121,115 @@ class EntityApiMetadata {
   static const String updateClaimedHomepageBasicsOperation = 'UpdateClaimedHomepageBasics';
   static const String updateHomepageReviewOperation = 'UpdateHomepageReview';
 
-  static const String createHomepageClaimRequestPathTemplate = '/v1/homepages/{homepageId}/claim-requests';
+  static const String createHomepageClaimRequestPathTemplate = '/homepages/{homepageId}/claim-requests';
   static String createHomepageClaimRequestPath({required String homepageId}) {
     return _fillPath(createHomepageClaimRequestPathTemplate, <String, String>{
       'homepageId': homepageId,
     });
   }
-  static const String createHomepageReviewPathTemplate = '/v1/homepages/{homepageId}/reviews';
+  static const String createHomepageReviewPathTemplate = '/homepages/{homepageId}/reviews';
   static String createHomepageReviewPath({required String homepageId}) {
     return _fillPath(createHomepageReviewPathTemplate, <String, String>{
       'homepageId': homepageId,
     });
   }
-  static const String createHomepageStatusReportPathTemplate = '/v1/homepages/{homepageId}/status-reports';
+  static const String createHomepageStatusReportPathTemplate = '/homepages/{homepageId}/status-reports';
   static String createHomepageStatusReportPath({required String homepageId}) {
     return _fillPath(createHomepageStatusReportPathTemplate, <String, String>{
       'homepageId': homepageId,
     });
   }
-  static const String deleteHomepageReviewPathTemplate = '/v1/homepage-reviews/{reviewId}';
+  static const String deleteHomepageReviewPathTemplate = '/homepage-reviews/{reviewId}';
   static String deleteHomepageReviewPath({required String reviewId}) {
     return _fillPath(deleteHomepageReviewPathTemplate, <String, String>{
       'reviewId': reviewId,
     });
   }
-  static const String followHomepagePathTemplate = '/v1/homepages/{homepageId}/follow';
+  static const String followHomepagePathTemplate = '/homepages/{homepageId}/follow';
   static String followHomepagePath({required String homepageId}) {
     return _fillPath(followHomepagePathTemplate, <String, String>{
       'homepageId': homepageId,
     });
   }
-  static const String getEntityImpactPathTemplate = '/v1/homepages/{homepageId}/impact';
+  static const String getEntityImpactPathTemplate = '/homepages/{homepageId}/impact';
   static String getEntityImpactPath({required String homepageId}) {
     return _fillPath(getEntityImpactPathTemplate, <String, String>{
       'homepageId': homepageId,
     });
   }
-  static const String getHomepageDetailPathTemplate = '/v1/homepages/{homepageId}';
+  static const String getHomepageDetailPathTemplate = '/homepages/{homepageId}';
   static String getHomepageDetailPath({required String homepageId}) {
     return _fillPath(getHomepageDetailPathTemplate, <String, String>{
       'homepageId': homepageId,
     });
   }
-  static const String getHomepageIntroductionPathTemplate = '/v1/homepages/{homepageId}/introduction';
+  static const String getHomepageIntroductionPathTemplate = '/homepages/{homepageId}/introduction';
   static String getHomepageIntroductionPath({required String homepageId}) {
     return _fillPath(getHomepageIntroductionPathTemplate, <String, String>{
       'homepageId': homepageId,
     });
   }
-  static const String getHomepageRelatedGroupsPathTemplate = '/v1/homepages/{homepageId}/related-groups';
+  static const String getHomepageRelatedGroupsPathTemplate = '/homepages/{homepageId}/related-groups';
   static String getHomepageRelatedGroupsPath({required String homepageId}) {
     return _fillPath(getHomepageRelatedGroupsPathTemplate, <String, String>{
       'homepageId': homepageId,
     });
   }
-  static const String getHomepageReviewSummaryPathTemplate = '/v1/homepages/{homepageId}/review-summary';
+  static const String getHomepageReviewSummaryPathTemplate = '/homepages/{homepageId}/review-summary';
   static String getHomepageReviewSummaryPath({required String homepageId}) {
     return _fillPath(getHomepageReviewSummaryPathTemplate, <String, String>{
       'homepageId': homepageId,
     });
   }
-  static const String getHomepageShellPathTemplate = '/v1/homepages/{homepageId}/shell';
+  static const String getHomepageShellPathTemplate = '/homepages/{homepageId}/shell';
   static String getHomepageShellPath({required String homepageId}) {
     return _fillPath(getHomepageShellPathTemplate, <String, String>{
       'homepageId': homepageId,
     });
   }
-  static const String getObjectPageBundlePathTemplate = '/v1/homepages/{homepageId}/object-page-bundle';
+  static const String getObjectPageBundlePathTemplate = '/homepages/{homepageId}/object-page-bundle';
   static String getObjectPageBundlePath({required String homepageId}) {
     return _fillPath(getObjectPageBundlePathTemplate, <String, String>{
       'homepageId': homepageId,
     });
   }
-  static const String intakeHomepageCandidatePath = '/v1/homepages/candidates';
-  static const String publishHomepageCandidatePathTemplate = '/v1/homepages/candidates/{homepageId}:publish';
+  static const String intakeHomepageCandidatePath = '/homepages/candidates';
+  static const String publishHomepageCandidatePathTemplate = '/homepages/candidates/{homepageId}:publish';
   static String publishHomepageCandidatePath({required String homepageId}) {
     return _fillPath(publishHomepageCandidatePathTemplate, <String, String>{
       'homepageId': homepageId,
     });
   }
-  static const String reloadHomepageStatePath = '/v1/homepages:reload';
-  static const String reviewHomepageClaimRequestPathTemplate = '/v1/homepages/{homepageId}/claim-requests/{claimRequestId}:review';
+  static const String reloadHomepageStatePath = '/homepages:reload';
+  static const String reviewHomepageClaimRequestPathTemplate = '/homepages/{homepageId}/claim-requests/{claimRequestId}:review';
   static String reviewHomepageClaimRequestPath({required String homepageId, required String claimRequestId}) {
     return _fillPath(reviewHomepageClaimRequestPathTemplate, <String, String>{
       'homepageId': homepageId,
       'claimRequestId': claimRequestId,
     });
   }
-  static const String reviewHomepageStatusReportPathTemplate = '/v1/homepages/{homepageId}/status-reports/{reportId}:review';
+  static const String reviewHomepageStatusReportPathTemplate = '/homepages/{homepageId}/status-reports/{reportId}:review';
   static String reviewHomepageStatusReportPath({required String homepageId, required String reportId}) {
     return _fillPath(reviewHomepageStatusReportPathTemplate, <String, String>{
       'homepageId': homepageId,
       'reportId': reportId,
     });
   }
-  static const String searchHomepagesPath = '/v1/homepages/search';
-  static const String suggestHomepageCandidatePath = '/v1/homepages/candidates/suggest';
-  static const String unfollowHomepagePathTemplate = '/v1/homepages/{homepageId}/follow';
+  static const String searchHomepagesPath = '/homepages/search';
+  static const String suggestHomepageCandidatePath = '/homepages/candidates/suggest';
+  static const String unfollowHomepagePathTemplate = '/homepages/{homepageId}/follow';
   static String unfollowHomepagePath({required String homepageId}) {
     return _fillPath(unfollowHomepagePathTemplate, <String, String>{
       'homepageId': homepageId,
     });
   }
-  static const String updateClaimedHomepageBasicsPathTemplate = '/v1/homepages/{homepageId}/claimed-basics';
+  static const String updateClaimedHomepageBasicsPathTemplate = '/homepages/{homepageId}/claimed-basics';
   static String updateClaimedHomepageBasicsPath({required String homepageId}) {
     return _fillPath(updateClaimedHomepageBasicsPathTemplate, <String, String>{
       'homepageId': homepageId,
     });
   }
-  static const String updateHomepageReviewPathTemplate = '/v1/homepage-reviews/{reviewId}';
+  static const String updateHomepageReviewPathTemplate = '/homepage-reviews/{reviewId}';
   static String updateHomepageReviewPath({required String reviewId}) {
     return _fillPath(updateHomepageReviewPathTemplate, <String, String>{
       'reviewId': reviewId,

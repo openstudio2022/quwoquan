@@ -176,21 +176,21 @@ def build_checks(args: argparse.Namespace) -> list[dict[str, Any]]:
         {
             "name": "app_config",
             "method": "GET",
-            "url": f"{base}/v1/config/app",
+            "url": f"{base}/config/app",
             "headers": public_headers,
             "expected_statuses": [200],
         },
         {
             "name": "content_feed",
             "method": "GET",
-            "url": f"{base}/v1/content/feed?limit=1",
+            "url": f"{base}/content/feed?limit=1",
             "headers": public_headers,
             "expected_statuses": [200],
         },
         {
             "name": "entity_homepage_search",
             "method": "GET",
-            "url": f"{base}/v1/homepages/search?query=%E8%A5%BF%E6%B9%96&limit=1",
+            "url": f"{base}/homepages/search?query=%E8%A5%BF%E6%B9%96&limit=1",
             "headers": _common_headers(args.test_auth_token),
             "expected_statuses": [200],
         },
@@ -200,7 +200,7 @@ def build_checks(args: argparse.Namespace) -> list[dict[str, Any]]:
             {
                 "name": "user_sync",
                 "method": "POST",
-                "url": f"{base}/v1/user/sync",
+                "url": f"{base}/user/sync",
                 "headers": _json_headers(args.test_auth_token),
                 "body": json.dumps({"afterSeq": 0, "limit": 1}, ensure_ascii=False).encode(
                     "utf-8"
@@ -304,7 +304,7 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
                 + (f" ({detail})" if detail else "")
             )
     return {
-        "schemaVersion": 1,
+        "schema": "environment-integration-probe-report",
         "status": "passed" if not findings else "failed",
         "env": args.env,
         "mode": args.mode,

@@ -1,4 +1,3 @@
-version: 1
 registry: ImpactHelpTypeRegistry
 description: |
   作者 / 圈子「影响力」helpType 机器可读唯一注册表（§23 去桥接，对齐交集 intersection_kind_registry.yaml）。

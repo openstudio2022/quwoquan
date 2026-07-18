@@ -19,7 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
-from content.post.route_review_checks import _check_mixed_layout  # noqa: E402
+from content.post.article.route_review_checks import _check_mixed_layout  # noqa: E402
 
 
 def _fig(aid: str, cap: str) -> str:

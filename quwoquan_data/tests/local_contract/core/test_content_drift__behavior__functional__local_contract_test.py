@@ -40,7 +40,7 @@ def test_promote_to_golden_requires_confirmation_and_is_idempotent():
     with tempfile.TemporaryDirectory() as d:
         gd = Path(d)
         (gd / "labels.json").write_text(
-            json.dumps({"schemaVersion": "quwoquan_data.gate_goldenset/1", "items": []}), encoding="utf-8"
+            json.dumps({"schema": "quwoquan_data.gate_goldenset", "items": []}), encoding="utf-8"
         )
         # 未确认 → 不入集
         res = cd.promote_to_golden(

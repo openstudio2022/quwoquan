@@ -89,8 +89,8 @@ TRUNCATE platform_config_layer_receipts, platform_ops_outbox, platform_config_la
 		t.Fatal(err)
 	}
 	guarded := platformConfigAuthenticatedHandler(t, handler)
-	path := "/v1/control-plane/platform/configs/sys.content.mongo.max_pool_size:update"
-	body := `{"layerId":"service:gamma:gamma-user-a:content-service","expectedVersion":0,"scopeLevel":"service","scopeId":"content-service","environment":"gamma","cluster":"gamma-user-a","service":"content-service","value":{"kind":"int","intValue":120}}`
+	path := "/control-plane/platform/configs/sys.content.mongo.max_pool_size:update"
+	body := `{"layerId":"service:gamma:gamma-user-a:content-service","scopeLevel":"service","scopeId":"content-service","environment":"gamma","cluster":"gamma-user-a","service":"content-service","value":{"kind":"int","intValue":120}}`
 
 	unauthorized := performPlatformConfigRequest(guarded, http.MethodPost, path, body, "", "config-api-1")
 	assertPlatformConfigError(t, unauthorized, http.StatusUnauthorized, "GATEWAY.USER.unauthorized")
@@ -114,14 +114,14 @@ TRUNCATE platform_config_layer_receipts, platform_ops_outbox, platform_config_la
 
 	readToken := platformConfigAccessToken(t, "ops.platform.config.read")
 	layers := performPlatformConfigRequest(
-		guarded, http.MethodGet, "/v1/control-plane/platform/configs/layers", "", readToken, "",
+		guarded, http.MethodGet, "/control-plane/platform/configs/layers", "", readToken, "",
 	)
 	if layers.Code != http.StatusOK || !strings.Contains(layers.Body.String(), "service:gamma:gamma-user-a:content-service") {
 		t.Fatalf("list config layers status=%d body=%s", layers.Code, layers.Body.String())
 	}
 	resolved := performPlatformConfigRequest(
 		guarded, http.MethodGet,
-		"/v1/control-plane/platform/configs/resolve?env=gamma&cluster=gamma-user-a&service=content-service",
+		"/control-plane/platform/configs/resolve?env=gamma&cluster=gamma-user-a&service=content-service",
 		"", readToken, "",
 	)
 	if resolved.Code != http.StatusOK || !strings.Contains(resolved.Body.String(), `"intValue":120`) {
@@ -186,6 +186,7 @@ func performPlatformConfigRequest(
 	}
 	if idempotencyKey != "" {
 		request.Header.Set("Idempotency-Key", idempotencyKey)
+		request.Header.Set("If-Match", `"0"`)
 	}
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)

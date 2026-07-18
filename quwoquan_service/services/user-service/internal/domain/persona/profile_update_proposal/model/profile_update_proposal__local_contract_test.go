@@ -39,14 +39,18 @@ func TestProfileUpdateProposalStateMachineAndInvariants(t *testing.T) {
 		t.Fatalf("unexpected confirmed proposal: %#v", confirmed)
 	}
 
-	applied, _, err := confirmed.MarkApplied(now.Add(2 * time.Minute))
+	applying, _, err := confirmed.BeginApply(now.Add(2 * time.Minute))
+	if err != nil || applying.Status != StatusApplying || applying.Version != 3 {
+		t.Fatalf("begin apply proposal: proposal=%#v err=%v", applying, err)
+	}
+	applied, _, err := applying.MarkApplied(now.Add(3 * time.Minute))
 	if err != nil {
 		t.Fatalf("apply proposal: %v", err)
 	}
-	if applied.Status != StatusApplied || applied.Version != 3 || applied.ResolvedAt == nil {
+	if applied.Status != StatusApplied || applied.Version != 4 || applied.ResolvedAt == nil {
 		t.Fatalf("unexpected applied proposal: %#v", applied)
 	}
-	if _, _, err := applied.Reject("persona-1", now.Add(3*time.Minute)); !errors.Is(err, ErrInvalidTransition) {
+	if _, _, err := applied.Reject("persona-1", now.Add(4*time.Minute)); !errors.Is(err, ErrInvalidTransition) {
 		t.Fatalf("terminal proposal accepted reject: %v", err)
 	}
 }

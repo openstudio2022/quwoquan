@@ -1,18 +1,13 @@
 import 'dart:developer' as developer;
 
-import 'package:quwoquan_app/assistant/observability/logging/app_trace_context_store.dart';
-import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
+import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
 
-/// Lightweight journey event tracker for pages without full behavior tracking.
-///
-/// Emits OpsEvent records for key user actions to enable L1/L2 funnel analysis.
-///
-/// 页级归因优先使用 [AppTraceContextStore.currentPageVisitId]（由导航在打开页面时铸造）；
-/// 调用方若持有更精确的 visit id（如来自 route settings），可通过 [pageVisitId] 显式覆盖。
+/// 无推荐反馈语义的关键产品动作统一投影到 `product_action` 目录事件。
 class JourneyEventTracker {
-  JourneyEventTracker({required this.eventRepository});
+  JourneyEventTracker({required this.telemetryReporter});
 
-  final OpsEventRepository eventRepository;
+  final AppTelemetryRecorder telemetryReporter;
 
   Future<void> trackAction({
     required String journey,
@@ -25,41 +20,26 @@ class JourneyEventTracker {
     String? pageVisitId,
     Map<String, dynamic> payload = const {},
   }) async {
-    final trace = AppTraceContextStore.instance;
-    final now = DateTime.now().toUtc().toIso8601String();
-    final eventId = trace.newRequestId();
-    final requestId = trace.newRequestId();
-    final resolvedPageVisitId =
-        pageVisitId ?? trace.currentPageVisitId ?? '';
+    final duration = payload['durationMs'];
+    final result = (payload['result'] ?? '').toString().trim();
+    final failReasonCode = (payload['failReasonCode'] ?? '').toString().trim();
     try {
-      await eventRepository.reportEventBatch(
-        events: <OpsEventRecordInput>[
-          OpsEventRecordInput(
-            eventId: eventId,
-            eventType: 'journey',
-            eventName: '$journey.$action',
-            occurredAt: now,
-            clientSentAt: now,
-            sessionId: trace.sessionId,
-            pageVisitId: resolvedPageVisitId,
-            requestId: requestId,
-            producer: 'app.journey_tracker',
-            source: journey,
-            pageName: pageName,
-            targetType: targetType,
-            targetKey: targetKey,
-            entityType: entityType,
-            entityId: entityId,
-            payload: payload,
-          ),
-        ],
+      await telemetryReporter.record(
+        AppTelemetryPayload.productAction(
+          journey: journey,
+          action: action,
+          durationMs: duration is num ? duration.round() : null,
+          result: result.isEmpty ? null : result,
+          failReasonCode: failReasonCode.isEmpty ? null : failReasonCode,
+        ),
+        pageName: pageName,
       );
-    } catch (e, st) {
+    } catch (error, stackTrace) {
       developer.log(
-        'JourneyEventTracker.trackAction failed: $e',
+        'JourneyEventTracker.trackAction failed',
         name: 'JourneyEventTracker',
-        error: e,
-        stackTrace: st,
+        error: error,
+        stackTrace: stackTrace,
       );
     }
   }

@@ -175,10 +175,10 @@ class CallParticipantDto {
       );
 }
 
-/// 通话会话（与 metadata `CallSession` 对齐；`id` 对应存储 `_id`，并兼容 wire `id`/`callId`）。
+/// 通话会话（与 metadata `CallSession` 对齐；`callId` 为唯一 wire 键）。
 class CallSessionDto {
   const CallSessionDto({
-    required this.id,
+    required this.callId,
     this.callType = 'audio',
     this.status = 'initiated',
     required this.initiatorId,
@@ -201,7 +201,7 @@ class CallSessionDto {
     required this.updatedAt,
   });
 
-  final String id;
+  final String callId;
   final String callType;
   final String status;
   final String initiatorId;
@@ -238,7 +238,7 @@ class CallSessionDto {
       }
     }
     return CallSessionDto(
-      id: map['id'] ?? map['_id'] ?? map['callId'] ?? '' as String? ?? '',
+      callId: map['callId'] as String? ?? '',
       callType: map['callType'] as String? ?? 'audio',
       status: map['status'] as String? ?? 'initiated',
       initiatorId: map['initiatorId'] as String? ?? '',
@@ -270,7 +270,7 @@ class CallSessionDto {
 
   Map<String, dynamic> toMap() {
     return {
-      'id': id,
+      'callId': callId,
       'callType': callType,
       'status': status,
       'initiatorId': initiatorId,
@@ -295,7 +295,7 @@ class CallSessionDto {
   }
 
   CallSessionDto copyWith({
-    String? id,
+    String? callId,
     String? callType,
     String? status,
     String? initiatorId,
@@ -318,7 +318,7 @@ class CallSessionDto {
     DateTime? updatedAt,
   }) {
     return CallSessionDto(
-      id: id ?? this.id,
+      callId: callId ?? this.callId,
       callType: callType ?? this.callType,
       status: status ?? this.status,
       initiatorId: initiatorId ?? this.initiatorId,
@@ -347,7 +347,7 @@ class CallSessionDto {
       identical(this, other) ||
       other is CallSessionDto &&
           runtimeType == other.runtimeType &&
-          id == other.id &&
+          callId == other.callId &&
           status == other.status &&
           participantCount == other.participantCount &&
           isRecording == other.isRecording &&
@@ -356,7 +356,7 @@ class CallSessionDto {
 
   @override
   int get hashCode => Object.hash(
-        id,
+        callId,
         status,
         participantCount,
         isRecording,

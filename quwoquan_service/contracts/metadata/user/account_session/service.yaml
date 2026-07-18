@@ -1,4 +1,3 @@
-version: 1
 service:
   name: user-service
   domain: user
@@ -11,7 +10,8 @@ service:
     target_story: app-cloud-business-object-commercial-closure
 api_routes:
   - method: POST
-    path: /v1/auth/login/phone
+    path: /auth/login/phone
+
     operation: LoginWithPhone
     actor: device
     application:
@@ -65,7 +65,8 @@ api_routes:
       visibility: private
 
   - method: POST
-    path: /v1/auth/login/wechat
+    path: /auth/login/wechat
+
     operation: LoginWithWechat
     actor: device
     application:
@@ -120,7 +121,8 @@ api_routes:
       visibility: private
 
   - method: POST
-    path: /v1/auth/login/alipay
+    path: /auth/login/alipay
+
     operation: LoginWithAlipay
     actor: device
     application:
@@ -175,7 +177,8 @@ api_routes:
       visibility: private
 
   - method: POST
-    path: /v1/auth/login/qq
+    path: /auth/login/qq
+
     operation: LoginWithQq
     actor: device
     application:
@@ -230,7 +233,8 @@ api_routes:
       visibility: private
 
   - method: POST
-    path: /v1/auth/login/one-tap
+    path: /auth/login/one-tap
+
     operation: LoginOneTap
     actor: device
     application:
@@ -287,7 +291,8 @@ api_routes:
       visibility: private
 
   - method: POST
-    path: /v1/auth/login/anonymous
+    path: /auth/login/anonymous
+
     operation: LoginAnonymous
     # Anonymous login bootstraps a device-bound account from request evidence;
     # it must not pretend a bearer-authenticated device actor already exists.
@@ -315,7 +320,7 @@ api_routes:
       cancellation: supported
       retry_mode: idempotent
       max_attempts: 2
-      idempotency: none
+      idempotency: optional
     error_codes:
       - USER.USER.invalid_argument
       - USER.SYSTEM.internal_error
@@ -338,7 +343,8 @@ api_routes:
       visibility: private
 
   - method: POST
-    path: /v1/auth/token/refresh
+    path: /auth/token/refresh
+
     operation: RefreshToken
     actor: account
     application:
@@ -351,12 +357,14 @@ api_routes:
     # 云侧子任务：登录/刷新响应需下发 sessionRememberTtlSeconds（快速登录有效期，秒，
     # 默认 2592000=30 天，可由系统配置调整）；端侧据此推算软退出后免验证码快速登录过期时间。
     description: 刷新 access token（滑动延期）
-    auth_required: false
+    security:
+      auth_mode: public
     request_fields: [refreshToken]
     response_fields: [accessToken, refreshToken, sessionRememberTtlSeconds]
 
   - method: POST
-    path: /v1/auth/logout
+    path: /auth/logout
+
     operation: Logout
     actor: account
     application:

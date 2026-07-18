@@ -190,14 +190,11 @@ def test_image_materialize_is_structured_only():
     assert len(manifest["assets"]) == 2
     assert manifest["sourceCollectionId"] == "collection-alpine-001"
     assert manifest["creator"]["name"] == "摄影师甲"
-    assert manifest["page"] == "https://example.com/collections/alpine"
-    assert manifest["sourceCollectionUrl"] == "https://example.com/collections/alpine"
-    assert manifest["licenseProof"] == {
-        "license": "CC-BY-4.0",
-        "termsUrl": "https://example.com/licenses/alpine",
-        "proofUrl": "https://example.com/licenses/alpine",
-    }
-    assert manifest["licenseProofRef"] == "https://example.com/licenses/alpine"
+    assert manifest["collectionPageUrl"] == "https://example.com/collections/alpine"
+    assert manifest["license"] == "CC-BY-4.0"
+    assert manifest["termsUrl"] == "https://example.com/licenses/alpine"
+    assert manifest["authorizationProof"] == "https://example.com/licenses/alpine"
+    assert "licenseProof" not in manifest
     assert provenance_issues(post_dir, manifest) == []
 
 
@@ -214,8 +211,8 @@ def test_image_materialize_writes_download_stage_source_refs():
     snapshot = post_dir / "1.download" / "source_refs.json"
     assert snapshot.is_file(), "图片作品缺 1.download/source_refs.json"
     data = read_json(snapshot)
-    # 单底稿零参考 v2：图片作品的底稿来源单元 = 资产所属同一图集 source unit。
-    assert data["schemaVersion"] == "quwoquan_data.source_refs/2"
+    # 图片作品的底稿来源单元 = 资产所属同一图集 source unit。
+    assert data["schema"] == "quwoquan_data.source_refs"
     assert data["baseSourceRef"], data
     assert len(data["sources"]) == 1
     assert data["sources"][0]["role"] == "base"
@@ -245,6 +242,29 @@ def test_image_source_contract_rejects_mixed_pages():
         raise AssertionError("mixed source pages must be rejected")
 
 
+def test_image_source_contract_rejects_retired_alias_keys():
+    try:
+        _image_source_contract(
+            {
+                "collectionId": "collection-1",
+                "credit": "creator-1",
+                "page": "https://example.com/page",
+                "license": "CC-BY-4.0",
+                "licenseProof": {
+                    "termsUrl": "https://example.com/license",
+                    "proofUrl": "https://example.com/proof",
+                },
+            },
+            [],
+            ref="retired-aliases",
+        )
+    except RuntimeError as exc:
+        assert "sourceCollectionId" in str(exc)
+        assert "license proof" in str(exc)
+    else:
+        raise AssertionError("retired image source aliases must be rejected")
+
+
 def test_release_assembles_image_without_markdown_and_article_with_article_only():
     image_dir = _materialize_image()
     execution_dir = Path(tempfile.mkdtemp(prefix="image_contract_execution_"))
@@ -265,7 +285,7 @@ def test_release_assembles_image_without_markdown_and_article_with_article_only(
     write_json(article_src / "5.review" / "attestation.json", {"decision": "approved"})
     write_json(
         article_src / "5.review" / "evidence_index.json",
-        {"schemaVersion": "quwoquan_data.evidence_index/1", "evidence": []},
+        {"schema": "quwoquan_data.evidence_index", "evidence": []},
     )
     write_json(
         article_src / "manifest.json",

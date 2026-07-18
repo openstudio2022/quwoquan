@@ -11,31 +11,38 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from core.paths import CONTROL_PLANE_TAXONOMY_ROOT
+from core.control_types import SourcePolicyRevision
 from core.schema import assert_valid
 from core.tree_integrity import tree_integrity_stats
 
-PACKAGE_SCHEMA = "quwoquan_data.object_transaction_package/1"
+PACKAGE_SCHEMA = "quwoquan_data.object_transaction_package"
 
-DRY_RUN_SCHEMA = "quwoquan_data.object_transaction_dry_run/1"
+DRY_RUN_SCHEMA = "quwoquan_data.object_transaction_dry_run"
 
-APPLY_SCHEMA = "quwoquan_data.object_transaction_apply/1"
+APPLY_SCHEMA = "quwoquan_data.object_transaction_apply"
 
-ROLLBACK_SCHEMA = "quwoquan_data.object_transaction_rollback/1"
+ROLLBACK_SCHEMA = "quwoquan_data.object_transaction_rollback"
 
-LAYOUT_SCHEMA = "quwoquan_data.canonical_publish/3"
+LAYOUT_SCHEMA = "quwoquan_data.canonical_publish"
 
-RELEASE_SCHEMA = "quwoquan_data.release/3"
+RELEASE_SCHEMA = "quwoquan_data.release"
 
-REQUIRED_SOURCE_POLICY = "encyclopedia-primary-v2"
+REQUIRED_SOURCE_POLICY = SourcePolicyRevision.ENCYCLOPEDIA_PRIMARY.value
 
 ALLOWED_OBJECT_KINDS = {"creators", "entities", "posts"}
 
 ALLOWED_CANONICAL_ROOTS = {"creators", "entities", "posts", "tags", "media"}
 
 EXPECTED_OBJECT_SCHEMAS = {
-    "creators": "quwoquan_data.creator_object/1",
-    "entities": "quwoquan_data.entity_object/1",
-    "posts": "quwoquan_data.post_object/1",
+    "creators": "quwoquan_data.creator_object",
+    "entities": "quwoquan_data.entity_object",
+    "posts": "quwoquan_data.post_object",
+}
+
+EXPECTED_SOURCE_POLICIES = {
+    "creators": SourcePolicyRevision.GOVERNANCE_PROJECTION,
+    "entities": SourcePolicyRevision.ENCYCLOPEDIA_PRIMARY,
+    "posts": SourcePolicyRevision.RIGHTS_CLEARED_CONTENT,
 }
 
 FORBIDDEN_RELEASE_KEYS = {
@@ -368,6 +375,18 @@ def _closure_digest(
                         closure.get("sourceCatalogRef") or ""
                     ),
                     "rightsRef": str(closure.get("rightsRef") or ""),
+                    "creatorObjects": sorted(
+                        (
+                            {
+                                "creatorRef": str(item.get("creatorRef") or ""),
+                                "packageRef": str(item.get("packageRef") or ""),
+                                "treeDigest": str(item.get("treeDigest") or ""),
+                            }
+                            for item in closure.get("creatorObjects") or []
+                            if isinstance(item, Mapping)
+                        ),
+                        key=lambda item: item["creatorRef"],
+                    ),
                 },
                 "cas": sorted(cas_rows, key=lambda row: row["objectKey"]),
                 "review": dict(review),
@@ -379,12 +398,11 @@ def _verify_package(
     package_root: Path,
     *,
     canonical_root: Path,
-    required_source_policy_revision: str,
     require_target_absent: bool,
 ) -> dict[str, Any]:
     package_path = package_root / "object_transaction_package.json"
     package = _read_json(package_path)
-    if package.get("schemaVersion") != PACKAGE_SCHEMA:
+    if package.get("schema") != PACKAGE_SCHEMA:
         raise ObjectTransactionError("object transaction package schema 不匹配")
     try:
         assert_valid(
@@ -401,17 +419,18 @@ def _verify_package(
     )
     execution_id = _execution_id(str(package.get("executionId") or ""))
     source_policy_revision = str(package.get("sourcePolicyRevision") or "")
-    if source_policy_revision != required_source_policy_revision:
-        raise ObjectTransactionError(
-            "sourcePolicyRevision 不匹配："
-            f"expected={required_source_policy_revision} actual={source_policy_revision}"
-        )
     target = package.get("target")
     if not isinstance(target, dict) or target.get("layoutSchema") != LAYOUT_SCHEMA:
         raise ObjectTransactionError("target layout schema 不匹配")
     object_kind = str(target.get("objectKind") or "")
     if object_kind not in ALLOWED_OBJECT_KINDS:
         raise ObjectTransactionError(f"objectKind 不支持：{object_kind}")
+    expected_source_policy = EXPECTED_SOURCE_POLICIES[object_kind].value
+    if source_policy_revision != expected_source_policy:
+        raise ObjectTransactionError(
+            "sourcePolicyRevision 不匹配："
+            f"expected={expected_source_policy} actual={source_policy_revision}"
+        )
     target_schema = str(target.get("objectSchema") or "")
     if target_schema != EXPECTED_OBJECT_SCHEMAS[object_kind]:
         raise ObjectTransactionError("target object schema 不匹配")
@@ -438,13 +457,42 @@ def _verify_package(
         raise ObjectTransactionError("对象包缺 closure")
     creator_refs = [str(item) for item in closure.get("creatorRefs") or []]
     tag_refs = [str(item) for item in closure.get("tagRefs") or []]
+    creator_objects: dict[str, dict[str, Any]] = {}
+    for raw in closure.get("creatorObjects") or []:
+        if not isinstance(raw, Mapping):
+            raise ObjectTransactionError("creatorObjects item 必须为 object")
+        creator_ref = str(raw.get("creatorRef") or "").strip()
+        package_ref = _safe_rel(
+            str(raw.get("packageRef") or ""),
+            label="creatorObjects.packageRef",
+        )
+        creator_root = package_root / package_ref
+        if not creator_ref or creator_ref in creator_objects:
+            raise ObjectTransactionError("creatorObjects creatorRef 为空或重复")
+        if not (creator_root / "_creator.json").is_file():
+            raise ObjectTransactionError(f"creatorObjects 缺 _creator.json：{creator_ref}")
+        tree_digest = _tree_digest(creator_root)
+        if tree_digest != str(raw.get("treeDigest") or ""):
+            raise ObjectTransactionError(f"creatorObjects treeDigest 不匹配：{creator_ref}")
+        creator_objects[creator_ref] = {
+            "creatorRef": creator_ref,
+            "packageRef": package_ref.as_posix(),
+            "treeDigest": tree_digest,
+            "objectRoot": creator_root,
+        }
     for creator_ref in creator_refs:
         creator = canonical_root / "creators" / _safe_rel(
             creator_ref,
             label="creatorRef",
         )
-        if not (creator / "_creator.json").is_file():
+        packaged = creator_objects.get(creator_ref)
+        if (creator / "_creator.json").is_file():
+            if packaged and _tree_digest(creator) != packaged["treeDigest"]:
+                raise ObjectTransactionError(f"creator canonical 与 projection 漂移：{creator_ref}")
+        elif packaged is None:
             raise ObjectTransactionError(f"creator closure 不可解析：{creator_ref}")
+    if not set(creator_objects).issubset(creator_refs):
+        raise ObjectTransactionError("creatorObjects 不得包含 creatorRefs 之外的对象")
     for tag_ref in tag_refs:
         if not _tag_exists(tag_ref):
             raise ObjectTransactionError(f"tag closure 不可解析：{tag_ref}")
@@ -526,6 +574,7 @@ def _verify_package(
         "objectRoot": object_root,
         "objectClosureDigest": closure_digest,
         "creatorRefs": creator_refs,
+        "creatorObjects": list(creator_objects.values()),
         "tagRefs": tag_refs,
         "casRows": cas_rows,
         "review": review,

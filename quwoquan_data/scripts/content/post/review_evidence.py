@@ -22,11 +22,11 @@ def write_review_evidence(
     reviewer_model = str(review_payload.get("model") or "deterministic")
     reviewer_family = str(review_payload.get("modelFamily") or "deterministic")
     reviewer_result = {
-        "schemaVersion": "quwoquan_data.reviewer_result/1",
+        "schema": "quwoquan_data.reviewer_result",
         "stage": "5.review",
         **execution,
         "objectRef": object_ref,
-        "provider": str(review_payload.get("provider") or "review_pipeline"),
+        "provider": str(review_payload.get("provider") or "review_controller"),
         "model": reviewer_model,
         "modelFamily": reviewer_family,
         "runId": reviewer_run_id,
@@ -35,7 +35,7 @@ def write_review_evidence(
         "resultHash": canonical_sha256(review_payload),
     }
     deterministic_gate = {
-        "schemaVersion": "quwoquan_data.deterministic_gate/1",
+        "schema": "quwoquan_data.deterministic_gate",
         "stage": "5.review",
         **execution,
         "objectRef": object_ref,
@@ -44,7 +44,7 @@ def write_review_evidence(
         "checks": list(review_payload.get("checks") or []),
     }
     media_ref_review = {
-        "schemaVersion": "quwoquan_data.media_ref_review/1",
+        "schema": "quwoquan_data.media_ref_review",
         "stage": "5.review",
         **execution,
         "objectRef": object_ref,
@@ -71,7 +71,7 @@ def write_review_evidence(
     write_json(
         review_dir / "evidence_index.json",
         {
-            "schemaVersion": "quwoquan_data.evidence_index/1",
+            "schema": "quwoquan_data.evidence_index",
             "stage": "5.review",
             **execution,
             "objectRef": object_ref,
@@ -86,7 +86,7 @@ def write_review_evidence(
         },
     )
     attestation = {
-            "schemaVersion": "quwoquan_data.review_attestation/1",
+            "schema": "quwoquan_data.review_attestation",
             "stage": "5.review",
             **execution,
             "objectRef": object_ref,

@@ -73,6 +73,10 @@ class AppSpacing {
 
   static const double md = 16.0;
 
+  /// 字段、表单与局部操作错误行的图标和图文间距。
+  static const double inlineErrorIconSize = 16.0;
+  static const double inlineErrorIconTextGap = 6.0;
+
   static const double lg = 24.0;
 
   static const double xl = 32.0;

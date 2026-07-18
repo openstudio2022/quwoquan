@@ -2,7 +2,10 @@ import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_request_page_
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 typedef CirclePostPlacementInvocationContextFactory =
-    CloudOperationInvocationContext Function(String clientPageId);
+    CloudOperationInvocationContext Function(
+      String clientPageId,
+      String idempotencyKey,
+    );
 
 final class RemoteCirclePostPlacementCommandWriter
     implements CirclePostPlacementCommandWriter {
@@ -19,6 +22,13 @@ final class RemoteCirclePostPlacementCommandWriter
     PlaceCirclePostCommand command,
   ) => client.circleCirclePostPlacementPlacePostInCircle(
     command,
-    context: invocationContext(CircleRequestPageIds.placePostInCircle),
+    context: invocationContext(
+      CircleRequestPageIds.placePostInCircle,
+      _placementIdempotencyKey(command),
+    ),
   );
+}
+
+String _placementIdempotencyKey(PlaceCirclePostCommand command) {
+  return 'circle-placement:${command.circleId}:${command.groupId ?? '-'}:${command.postId}';
 }

@@ -37,7 +37,7 @@ def load_json(path: Path) -> dict:
 
 def validate_baseline_shape(raw: dict) -> list[str]:
     errors: list[str] = []
-    for key in ("schemaVersion", "metric", "p50"):
+    for key in ("schema", "metric", "p50"):
         if key not in raw:
             errors.append(f"missing key: {key}")
     p50 = raw.get("p50")
@@ -146,7 +146,7 @@ def main() -> int:
         ratchet_path.write_text(
             json.dumps(
                 {
-                    "schemaVersion": 1,
+                    "schema": "startup-ttid-ratchet-baseline",
                     "metric": "brandWelcomeFirstVisibleMs",
                     "p50": {"firstVisibleMs": current_p50},
                     "sourceBaseline": str(baseline_path.relative_to(ROOT)),

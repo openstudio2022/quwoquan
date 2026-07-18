@@ -65,7 +65,6 @@ void main() {
         'NativeWelcomeView',
         'StartupActivity',
         'addContentView',
-        'FlutterUiDisplayListener',
         'drawFlower',
         'flutterWelcomeReady',
         'flutterWelcomeCompleted',
@@ -146,7 +145,13 @@ void main() {
       expect(shell, contains('Duration(milliseconds: 120)'));
       expect(shell, contains("phase: 'welcome_overlay_removed'"));
       expect(shell, contains("'overlayRemovedMs': removedMs"));
-      expect(shell, contains("trigger: 'deadline_fallback'"));
+      expect(shell, contains("trigger: 'shell_first_paint'"));
+      expect(shell, contains('StartupStateMachine'));
+      expect(shell, contains('_armStartupDeadline'));
+      expect(
+        shell,
+        isNot(contains('remaining + const Duration(milliseconds: 800)')),
+      );
       expect(shell, contains('_buildStartupFallbackApp'));
     });
 
@@ -163,17 +168,42 @@ void main() {
 
       expect(bridge, contains('elapsedSinceProcessStartMs'));
       expect(bridge, contains('deadlineOrigin'));
+      expect(bridge, contains('StartupJournalNativeBridge'));
+      expect(bridge, contains('readStartupJournal'));
+      expect(bridge, contains('clearStartupJournal'));
       expect(runtime, contains('elapsedSinceProcessStart'));
       expect(runtime, contains("'fallbackDart'"));
       final welcome = _readAppFile('lib/ui/welcome/pages/welcome_screen.dart');
       expect(welcome, contains('hydrateNativeProcessSegments'));
       expect(welcome, contains('unawaited('));
       expect(welcome, contains('_armDeadline();'));
-      expect(welcome, isNot(contains('await AppStartupRuntime.instance')));
+      expect(welcome, contains('_refreshNativeSegmentsWithoutBlockingWelcome'));
       expect(android, contains('SystemClock.elapsedRealtime()'));
       expect(android, contains('android_process'));
       expect(android, contains('recordStartupEvent'));
       expect(android, contains('startup_event'));
+      expect(android, contains('FLUTTER_FIRST_FRAME_DEADLINE_MS'));
+      expect(
+        android,
+        contains('FLUTTER_FIRST_FRAME_DEADLINE_MS = 6000L'),
+      );
+      expect(android, contains('FlutterUiDisplayListener'));
+      expect(android, contains('addIsDisplayingFlutterUiListener'));
+      expect(android, contains('NATIVE_TERMINAL_RECONCILIATION_WINDOW_MS = 120L'));
+      expect(android, contains('scheduleNativeRecoveryTerminal'));
+      expect(android, contains('cancelNativeRecoveryTerminalReconciliation'));
+      expect(android, contains('showNativeStartupRecovery'));
+      expect(android, contains('flutter_first_frame'));
+      expect(android, contains('patch_android_plugin_registrant.sh'));
+      expect(android, contains('ScheduledExecutorService'));
+      expect(android, contains('consumeForegroundFirstFrameBudget'));
+      expect(android, contains('startupWatchdogExecutor.schedule'));
+      expect(android, contains('nativeRecoveryDeadlineReached'));
+      expect(android, contains('startup_probe phase='));
+      expect(android, contains('startupSafeTerminalConfirmed'));
+      expect(android, contains('startup_safe_terminal'));
+      expect(android, contains('dismissNativeStartupRecoveryForSafeTerminalRace'));
+      expect(android, contains('android_startup_safe_terminal_race_dismissed'));
       expect(
         android.indexOf('registerStartupTimingsChannel(flutterEngine);'),
         lessThan(
@@ -183,12 +213,55 @@ void main() {
       expect(ios, contains('ProcessInfo.processInfo.systemUptime'));
       expect(ios, contains('ios_process'));
       expect(ios, contains('recordStartupEvent'));
+      expect(ios, contains('flutterFirstFrameDeadline'));
+      expect(ios, contains('showNativeStartupRecovery'));
+      expect(ios, contains('consumeForegroundFirstFrameBudget'));
+      expect(ios, contains('nativeRecoveryDeadlineReached'));
+      expect(ios, contains('startup_probe phase='));
+      expect(ios, contains('startupSafeTerminalConfirmed'));
+      expect(ios, contains('startup_safe_terminal'));
+      expect(ios, contains('setFlutterViewDidRenderCallback'));
+      expect(ios, contains('scheduleNativeRecoveryTerminal'));
+      expect(ios, contains('cancelNativeRecoveryTerminalReconciliation'));
+      expect(ios, contains('dismissNativeStartupRecoveryForSafeTerminalRace'));
+      expect(ios, contains('ios_startup_safe_terminal_race_dismissed'));
+      final iosFirstFrameConfirmation = ios.substring(
+        ios.indexOf('private func confirmFlutterFirstFrame'),
+        ios.indexOf('private func confirmStartupSafeTerminal'),
+      );
       expect(
-        ios.indexOf('registerStartupTimingsChannel('),
-        lessThan(ios.indexOf('GeneratedPluginRegistrant.register')),
+        iosFirstFrameConfirmation.indexOf('registerGeneratedPluginsAfterFirstFrame()'),
+        greaterThan(
+          iosFirstFrameConfirmation.indexOf('flutterFirstFrameConfirmed = true'),
+        ),
       );
       expect(web, contains('__qwqStartupStartedAtMs'));
       expect(web, contains('__qwqStartupElapsedMs'));
+      expect(web, contains('__qwqShowStartupRecovery'));
+      expect(web, contains('web_first_frame_timeout'));
+      expect(web, contains('__qwqStartupSafeTerminalConfirmed'));
+      expect(web, contains('startup_safe_terminal'));
+      expect(web, contains("getElementById('qwq-startup-recovery')"));
+      expect(web, contains('indexedDB.open'));
+      expect(web, contains('event && event.error'));
+      expect(web, contains("window.addEventListener('unhandledrejection'"));
+      expect(web, contains('__qwqReadStartupJournal'));
+      expect(web, contains('__qwqClearStartupJournal'));
+      expect(android, contains('StartupNativeTelemetryJournal'));
+      expect(android, contains('readStartupJournal'));
+      expect(android, contains('clearStartupJournal'));
+      final androidJournal = _readAppFile(
+        'android/app/src/main/java/com/quwoquan/quwoquan_app/StartupNativeTelemetryJournal.java',
+      );
+      expect(androidJournal, contains('startup_telemetry_native_attempt_v1'));
+      expect(androidJournal, contains('lastElapsedMs'));
+      expect(androidJournal, contains('phaseDurationMs'));
+      expect(ios, contains('StartupNativeTelemetryJournal'));
+      expect(ios, contains('readStartupJournal'));
+      expect(ios, contains('clearStartupJournal'));
+      expect(ios, contains('lastElapsedMs'));
+      expect(web, contains('__qwqStartupNativeLastElapsedMs'));
+      expect(ios, contains('registerGeneratedPluginsAfterFirstFrame'));
       for (final source in <String>[android, ios, bridge]) {
         expect(source, isNot(contains('animationProgress')));
         expect(source, isNot(contains('replayCount')));
@@ -269,21 +342,135 @@ void main() {
       expect(motionProbe, contains('frame_displacement'));
     });
 
-    test('启动 prerequisites 首帧后并行且失败不阻断 Shell readiness', () {
+    test('本地 HTTPS trust 先于认证网络且不阻断安全 Shell readiness', () {
       final bootstrap = _readAppFile('lib/app_bootstrap.dart');
       final scheduler = _readAppFile('lib/app/startup_init_scheduler.dart');
       final beforeRunApp = bootstrap.substring(0, bootstrap.indexOf('runApp('));
       expect(beforeRunApp, isNot(contains('await startupPrerequisites')));
       expect(beforeRunApp, isNot(contains('hydrateNativeProcessSegments')));
+      // SecureStorage / package_info 不得阻塞 runApp，否则挤爆原生首帧预算。
+      expect(beforeRunApp, contains('bootstrapForColdStart'));
       expect(
-        scheduler,
-        contains('_markShellReadyAndObserveStartupPrerequisites'),
+        beforeRunApp,
+        isNot(contains('await AppTelemetrySessionStore.instance.initialize')),
       );
+      expect(
+        beforeRunApp,
+        isNot(contains('await AppTelemetryContextProvider.instance.initialize')),
+      );
+      expect(bootstrap, contains('reconcilePersistedGuestKey'));
+      expect(bootstrap, contains('_hydratePostFirstFrameStartupState'));
+      expect(bootstrap, contains('postFirstFrameTasks:'));
+      expect(bootstrap, contains('authNetworkPrerequisites:'));
+      expect(
+        bootstrap,
+        contains('_installLocalDevHttpsTrustBeforeMediaClients()'),
+      );
+      expect(
+        bootstrap,
+        contains('LocalDevHttpsTrust.installForCurrentRuntime()'),
+      );
+      expect(
+        beforeRunApp,
+        isNot(contains('_hydratePostFirstFrameStartupState()')),
+      );
+      expect(scheduler, contains('void _markShellReady('));
+      expect(scheduler, contains('void _startPostFirstFrameTasks()'));
+      expect(scheduler, contains('void _startAuthNetworkPrerequisite()'));
+      expect(scheduler, contains('ensureStartupPostFirstFrame'));
+      expect(scheduler, contains('_startAuthAfterStartupPrerequisites'));
       expect(scheduler, contains('onShellReady(true)'));
       expect(
-        scheduler.indexOf('onShellReady(true)'),
-        lessThan(scheduler.indexOf('await prerequisites.timeout')),
+        scheduler.indexOf('_markShellReady(onShellReady);'),
+        lessThan(
+          scheduler.indexOf('_startAuthAfterStartupPrerequisites();'),
+        ),
       );
+      expect(
+        scheduler.indexOf('onShellReady(true)'),
+        lessThan(scheduler.indexOf('_startupPrerequisiteTimer = Timer')),
+      );
+      expect(scheduler, isNot(contains('await prerequisites')));
+    });
+
+    test('iOS 直接构建从同一环境包注入完整 Dart defines', () {
+      final script = _readAppFile('scripts/ios/prepare_dart_defines.sh');
+      final project = _readAppFile('ios/Runner.xcodeproj/project.pbxproj');
+      expect(script, contains('print_app_env_dart_defines.py'));
+      expect(script, contains('QWQ_IOS_DART_DEFINES_READY'));
+      expect(project, contains('prepare_dart_defines.sh'));
+    });
+
+    test('Android 重插件由构建期注册表补丁剥离，原生商业 SDK 按需初始化', () {
+      final patch = _readAppFile('scripts/patch_android_plugin_registrant.sh');
+      final pluginPolicy = _readAppFile('configs/plugin_registration_policy.json');
+      final policyVerifier = _readAppFile(
+        'scripts/runtime/verify_plugin_registration_policy.py',
+      );
+      final registrant = _readAppFile(
+        'android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java',
+      );
+      final deferredRegistry = _readAppFile(
+        'android/app/src/main/java/com/quwoquan/quwoquan_app/StartupDeferredPluginRegistry.java',
+      );
+      final gradle = _readAppFile('android/app/build.gradle.kts');
+      final activity = _readAppFile(
+        'android/app/src/main/java/com/quwoquan/quwoquan_app/MainActivity.java',
+      );
+      expect(patch, contains('startup_deferred_plugin_classes'));
+      expect(pluginPolicy, contains('startupPostFirstFrame'));
+      expect(pluginPolicy, contains('eagerRuntime'));
+      expect(pluginPolicy, contains('contentEntry'));
+      expect(policyVerifier, contains('eager generated registration remains'));
+      expect(
+        registrant,
+        contains('new com.github.dart_lang.jni.JniPlugin()'),
+      );
+      expect(
+        deferredRegistry,
+        isNot(contains('com.github.dart_lang.jni.JniPlugin')),
+      );
+      expect(patch, contains('FlutterWebRTCPlugin'));
+      expect(patch, contains('CameraAndroidCameraxPlugin'));
+      expect(gradle, contains('afterEvaluate {'));
+      expect(gradle, contains('dartDefines = mergeAlphaLocalDartDefines'));
+      expect(gradle, contains('requireCompleteRuntimeDartDefines'));
+      expect(
+        gradle,
+        contains(
+          'Release Flutter build requires complete runtime dart-defines',
+        ),
+      );
+      expect(
+        activity,
+        contains('private CommercialAuthPlugin commercialAuthPlugin;'),
+      );
+      expect(
+        activity,
+        contains('private CommercialAuthPlugin commercialAuthPlugin()'),
+      );
+      expect(
+        activity,
+        contains('private AliyunOneTapPlugin aliyunOneTapPlugin()'),
+      );
+      expect(
+        activity.indexOf('super.configureFlutterEngine(flutterEngine);'),
+        lessThan(activity.indexOf('commercialAuthPlugin().handle')),
+      );
+    });
+
+    test('Root deadline 只在安全终态真实绘制后取消，不能以 Router 状态提前豁免', () {
+      final shell = _readAppFile('lib/quwoquan_app_shell.dart');
+      final deadlineStart = shell.indexOf('void _armStartupDeadline()');
+      final deadlineEnd = shell.indexOf(
+        'Future<void> _hydrateNativeTimingForTelemetry()',
+        deadlineStart,
+      );
+      expect(deadlineStart, greaterThanOrEqualTo(0));
+      expect(deadlineEnd, greaterThan(deadlineStart));
+      final deadlineBody = shell.substring(deadlineStart, deadlineEnd);
+      expect(deadlineBody, contains('_routerShellFirstPainted'));
+      expect(deadlineBody, isNot(contains('StartupRootPhase.routerShell')));
     });
   });
 }

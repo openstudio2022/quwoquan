@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schema", "executionId", "canonicalPublishRoot", "publishedRefs"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": "quwoquan_data.execution_publish_ref"},
+    "executionId": {"type": "string", "minLength": 1},
+    "canonicalPublishRoot": {"const": "quwoquan_data/publish"},
+    "publishedRefs": {
+      "type": "object",
+      "required": ["entities", "posts"],
+      "additionalProperties": false,
+      "properties": {
+        "entities": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"}
+        },
+        "posts": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"}
+        }
+      }
+    }
+  }
+}

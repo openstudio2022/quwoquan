@@ -3,7 +3,6 @@ from __future__ import annotations
 
 _WRITERS = {}
 
-
 def configure_writers(**writers):
     _WRITERS.update(writers)
 
@@ -596,5 +595,4 @@ def gen_topic_verticals_part1():
         ("应急避险", "Emergency & Safety", "旅行安全与应急处理"),
         ("行后回顾", "Post-trip Review", "旅行归来的总结与回顾"),
     ])
-
 

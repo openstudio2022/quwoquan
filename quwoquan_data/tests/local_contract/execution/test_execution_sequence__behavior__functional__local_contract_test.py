@@ -23,6 +23,7 @@ _TMP = Path(tempfile.mkdtemp(prefix="execution_sequence_"))
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from content.execution.runtime_state import load_execution_runtime_state, write_execution_runtime_state  # noqa: E402
+from content.execution.contracts import ExecutionRuntimeState  # noqa: E402
 from core.asset_sequence import allocate_execution_sequence, read_latest_execution_sequence  # noqa: E402
 from core.paths import execution_sequence_path  # noqa: E402
 from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
@@ -42,11 +43,13 @@ def test_write_execution_runtime_state_reuses_execution_sequence():
     build_execution_fixture(EXECUTION_ID)
     write_execution_runtime_state(EXECUTION_ID, command="execution")
     manifest = load_execution_runtime_state(EXECUTION_ID)
-    seq = int(manifest["executionSequence"])
+    assert isinstance(manifest, ExecutionRuntimeState)
+    seq = manifest.execution_sequence
     write_execution_runtime_state(EXECUTION_ID, command="source")
     manifest2 = load_execution_runtime_state(EXECUTION_ID)
-    assert int(manifest2["executionSequence"]) == seq
-    assert manifest2["commandChain"] == ["execution", "source"]
+    assert manifest2 is not None
+    assert manifest2.execution_sequence == seq
+    assert manifest2.command_chain == ("execution", "source")
 
 
 def test_write_execution_runtime_state_rejects_retired_workspace_names():

@@ -1,4 +1,3 @@
-version: 1
 read_model: RecommendFeature
 
 description: |
@@ -23,7 +22,7 @@ source_events:
   - PostCreated
   - ContentReactionActivated
   - ContentReactionRemoved
-  - EventBatchReported
+  - BehaviorBatchReported
   - CircleMembershipJoined
   - PersonaFollowStateChanged
   - SearchRecommendationSignalPublished
@@ -34,6 +33,7 @@ consumers:
 fields:
   - { name: userId, type: string }
   - name: userFeatures
+    source: userFeatures
     type: object
     description: |
       用户侧特征：tagInteraction / authorInteraction /
@@ -49,18 +49,20 @@ fields:
       投影到 user 域 rm_user_profile_view.interestProfile，不在本宽表持久化(单一真相源)。
   - { name: contentFeatures, type: "[]object", description: 候选内容特征 }
   - name: socialFeatures
+    source: socialFeatures
     type: object
     description: |
       社交图谱特征。intersection 子对象（事实 + 概率分通道，与 IntersectionReason 对齐）：
         sharedFolloweesCount / sharedCircleCount / coCommentedCount / coVisitedEntityCount /
         followeeInObjectActive / followeeViewingActive / affinityIntersectionScore /
         intersectionSourceRefTop（viewer 与 object 间最强 fact kind，§5.4 标准名）
-      其中 intersection.kindCounts.<kind> 是按 EventBatchReported 中 intersectionSourceRef
+      其中 intersection.kindCounts.<kind> 是按 BehaviorBatchReported 中 intersectionSourceRef
       在「真正参与」事件上 $inc 的揭示偏好直方图（曝光不计入）；FeatureStore 由该直方图派生上述
       6 个事实计数字段 + intersectionSourceRefTop，经 ModelPredictRequest.UserFeatures 单点注入精排
       （ranking-signal-fusion）。affinityIntersectionScore 属概率分通道，由 affinity 模型旁路填充。
   - { name: contextFeatures, type: object, description: 上下文特征（时间/设备/位置） }
   - name: segments
+    source: segments
     type: "[]string"
     description: |
       规则人群 segment 命中集(顶层)。content 在派生 interestProfile 后按

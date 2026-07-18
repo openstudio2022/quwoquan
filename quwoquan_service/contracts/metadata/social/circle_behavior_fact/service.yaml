@@ -1,4 +1,3 @@
-version: 1
 service:
   name: circle-service
   domain: circle
@@ -11,10 +10,12 @@ service:
     target_story: app-cloud-business-object-commercial-closure
 api_routes:
   - method: POST
-    path: /v1/circles/behaviors
+    path: /circles/behaviors
+
     operation: ReportCircleBehavior
     actor: persona_or_device
-    auth: optional
+    security:
+      auth_mode: optional
     application:
       kind: command
       facet: CircleBehaviorFactWriter

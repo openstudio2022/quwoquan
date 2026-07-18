@@ -2,31 +2,23 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
 
 void main() {
-  // ──────────────────────────────────────────────────────────────────
-  // 常规契约
-  // ──────────────────────────────────────────────────────────────────
   group('ConversationDto — 常规契约', () {
     test('fromMap 解析全字段', () {
-      final raw = <String, dynamic>{
-        '_id': 'conv_001',
-        'type': 'group',
-        'title': '周末登山群',
-        'avatarUrl': 'https://example.com/avatar.jpg',
-        'creatorId': 'user_001',
-        'circleId': 'circle_001',
-        'maxSeq': 256,
-        'memberCount': 15,
-        'maxGroupSize': 1000,
-        'receiptEnabled': true,
-        'lastMessageId': 'msg_last',
-        'lastMessagePreview': '周六早上8点出发',
-        'lastMessageTime': '2026-03-07T09:15:00Z',
-        'messageCount': 256,
-        'status': 'active',
-        'createdAt': '2026-02-01T10:00:00Z',
-        'updatedAt': '2026-03-07T09:15:00Z',
-      };
-      final dto = ConversationDto.fromMap(raw);
+      final dto = ConversationDto.fromMap(
+        _conversationWire(<String, dynamic>{
+          'id': 'conv_001',
+          'title': '周末登山群',
+          'avatarUrl': 'https://example.com/avatar.jpg',
+          'circleId': 'circle_001',
+          'maxSeq': 256,
+          'memberCount': 15,
+          'lastMessageId': 'msg_last',
+          'lastMessagePreview': '周六早上8点出发',
+          'lastMessageTime': '2026-03-07T09:15:00Z',
+          'messageCount': 256,
+          'updatedAt': '2026-03-07T09:15:00Z',
+        }),
+      );
 
       expect(dto.id, equals('conv_001'));
       expect(dto.type, equals('group'));
@@ -40,195 +32,107 @@ void main() {
       expect(dto.receiptEnabled, isTrue);
       expect(dto.lastMessageId, equals('msg_last'));
       expect(dto.lastMessagePreview, equals('周六早上8点出发'));
-      expect(dto.lastMessageTime, isNotNull);
-      expect(dto.lastMessageTime!.year, equals(2026));
+      expect(dto.lastMessageTime, DateTime.parse('2026-03-07T09:15:00Z'));
       expect(dto.messageCount, equals(256));
       expect(dto.status, equals('active'));
-      expect(dto.createdAt.year, equals(2026));
-      expect(dto.updatedAt.month, equals(3));
     });
 
-    test('fromMap 使用 id 字段（非 _id）', () {
-      final raw = <String, dynamic>{
-        'id': 'conv_002',
-        'type': 'direct',
-        'creatorId': 'user_002',
-        'maxSeq': 42,
-        'memberCount': 2,
-        'maxGroupSize': 2,
-        'receiptEnabled': true,
-        'messageCount': 42,
-        'status': 'active',
-        'createdAt': '2026-01-15T08:00:00Z',
-        'updatedAt': '2026-03-07T10:30:00Z',
-      };
-      final dto = ConversationDto.fromMap(raw);
-      expect(dto.id, equals('conv_002'));
-    });
-
-    test('toMap round-trip 保持字段完整', () {
-      final raw = <String, dynamic>{
-        '_id': 'conv_rt',
-        'type': 'group',
-        'title': '测试群',
-        'avatarUrl': 'https://example.com/av.jpg',
-        'creatorId': 'u1',
-        'circleId': 'c1',
-        'maxSeq': 10,
-        'memberCount': 5,
-        'maxGroupSize': 500,
-        'receiptEnabled': false,
-        'lastMessageId': 'msg_rt',
-        'lastMessagePreview': '你好',
-        'lastMessageTime': '2026-01-01T00:00:00.000Z',
-        'messageCount': 10,
-        'status': 'active',
-        'createdAt': '2026-01-01T00:00:00.000Z',
-        'updatedAt': '2026-01-01T00:00:00.000Z',
-      };
-      final dto = ConversationDto.fromMap(raw);
+    test('toMap round-trip 保持公开字段且不泄漏存储键', () {
+      final dto = ConversationDto.fromMap(
+        _conversationWire(<String, dynamic>{
+          'id': 'conv_round_trip',
+          'receiptEnabled': false,
+        }),
+      );
       final map = dto.toMap();
+      final decoded = ConversationDto.fromMap(map);
 
-      expect(map['id'], equals('conv_rt'));
-      expect(map['type'], equals('group'));
-      expect(map['title'], equals('测试群'));
-      expect(map['maxGroupSize'], equals(500));
-      expect(map['receiptEnabled'], isFalse);
-      expect(map['lastMessageId'], equals('msg_rt'));
+      expect(decoded.id, equals(dto.id));
+      expect(decoded.maxSeq, equals(dto.maxSeq));
+      expect(decoded.memberCount, equals(dto.memberCount));
+      expect(decoded.receiptEnabled, isFalse);
+      expect(map.containsKey('_id'), isFalse);
+      expect(map.containsKey('conversationId'), isFalse);
     });
   });
 
-  // ──────────────────────────────────────────────────────────────────
-  // 兼容性契约
-  // ──────────────────────────────────────────────────────────────────
-  group('ConversationDto — 兼容性契约', () {
-    test('_id alias → id 正确解析', () {
-      final raw = <String, dynamic>{
-        '_id': 'conv_alias',
-        'type': 'direct',
-        'creatorId': 'u1',
-        'createdAt': '2026-01-01T00:00:00Z',
-        'updatedAt': '2026-01-01T00:00:00Z',
-      };
-      final dto = ConversationDto.fromMap(raw);
-      expect(dto.id, equals('conv_alias'));
+  group('ConversationDto — 单轨契约', () {
+    test('拒绝 _id 与 conversationId alias，只认 id', () {
+      final storageAlias = _conversationWire(<String, dynamic>{
+        '_id': 'conv_storage_alias',
+      })..remove('id');
+      final projectionAlias = _conversationWire(<String, dynamic>{
+        'conversationId': 'conv_projection_alias',
+      })..remove('id');
+
+      expect(
+        () => ConversationDto.fromMap(storageAlias),
+        throwsFormatException,
+      );
+      expect(
+        () => ConversationDto.fromMap(projectionAlias),
+        throwsFormatException,
+      );
     });
 
-    test('缺少新字段 maxGroupSize 使用默认值 1000', () {
-      final raw = <String, dynamic>{
-        '_id': 'conv_old',
-        'type': 'group',
-        'creatorId': 'u1',
-        'createdAt': '2026-01-01T00:00:00Z',
-        'updatedAt': '2026-01-01T00:00:00Z',
-      };
-      final dto = ConversationDto.fromMap(raw);
-      expect(dto.maxGroupSize, equals(1000));
-    });
+    test('metadata 默认字段缺失时只应用已声明默认值', () {
+      final wire = _conversationWire()
+        ..remove('maxSeq')
+        ..remove('memberCount')
+        ..remove('messageCount')
+        ..remove('originType')
+        ..remove('bindingType')
+        ..remove('lifecyclePolicy');
+      final dto = ConversationDto.fromMap(wire);
 
-    test('缺少 receiptEnabled 默认为 true', () {
-      final raw = <String, dynamic>{
-        '_id': 'conv_no_receipt',
-        'type': 'direct',
-        'creatorId': 'u1',
-        'createdAt': '2026-01-01T00:00:00Z',
-        'updatedAt': '2026-01-01T00:00:00Z',
-      };
-      final dto = ConversationDto.fromMap(raw);
-      expect(dto.receiptEnabled, isTrue);
-    });
-
-    test('缺少 type 默认为 direct', () {
-      final raw = <String, dynamic>{
-        '_id': 'conv_no_type',
-        'creatorId': 'u1',
-        'createdAt': '2026-01-01T00:00:00Z',
-        'updatedAt': '2026-01-01T00:00:00Z',
-      };
-      final dto = ConversationDto.fromMap(raw);
-      expect(dto.type, equals('direct'));
-    });
-
-    test('toMap round-trip 保持 maxSeq 和 memberCount', () {
-      final raw = <String, dynamic>{
-        '_id': 'conv_compat_rt',
-        'type': 'group',
-        'creatorId': 'u1',
-        'maxSeq': 42,
-        'memberCount': 10,
-        'maxGroupSize': 500,
-        'receiptEnabled': true,
-        'messageCount': 42,
-        'status': 'active',
-        'createdAt': '2026-01-01T00:00:00.000Z',
-        'updatedAt': '2026-01-01T00:00:00.000Z',
-      };
-      final dto = ConversationDto.fromMap(raw);
-      final map = dto.toMap();
-      final dto2 = ConversationDto.fromMap(map);
-      expect(dto2.maxSeq, equals(dto.maxSeq));
-      expect(dto2.memberCount, equals(dto.memberCount));
-      expect(dto2.maxGroupSize, equals(dto.maxGroupSize));
+      expect(dto.maxSeq, isZero);
+      expect(dto.memberCount, isZero);
+      expect(dto.messageCount, isZero);
+      expect(dto.originType, equals('direct_init'));
+      expect(dto.bindingType, equals('none'));
+      expect(dto.lifecyclePolicy, equals('persistent'));
     });
   });
 
-  // ──────────────────────────────────────────────────────────────────
-  // 异常/边界契约
-  // ──────────────────────────────────────────────────────────────────
   group('ConversationDto — 异常/边界契约', () {
-    test('空 map 不崩溃', () {
-      expect(() => ConversationDto.fromMap(const {}), returnsNormally);
-      final dto = ConversationDto.fromMap(const {});
-      expect(dto.id, isEmpty);
-      expect(dto.type, equals('direct'));
-      expect(dto.creatorId, isEmpty);
-      expect(dto.maxSeq, equals(0));
-      expect(dto.memberCount, equals(0));
-      expect(dto.messageCount, equals(0));
-      expect(dto.status, equals('active'));
+    test('缺失必填字段立即失败', () {
+      for (final field in <String>{
+        'id',
+        'type',
+        'creatorId',
+        'maxGroupSize',
+        'receiptEnabled',
+        'status',
+        'createdAt',
+        'updatedAt',
+      }) {
+        final wire = _conversationWire()..remove(field);
+        expect(
+          () => ConversationDto.fromMap(wire),
+          throwsFormatException,
+          reason: field,
+        );
+      }
     });
 
-    test('null 值字段安全', () {
-      final raw = <String, dynamic>{
-        '_id': null,
-        'type': null,
-        'title': null,
-        'avatarUrl': null,
-        'creatorId': null,
-        'circleId': null,
-        'maxSeq': null,
-        'memberCount': null,
-        'maxGroupSize': null,
-        'receiptEnabled': null,
-        'lastMessageId': null,
-        'lastMessagePreview': null,
-        'lastMessageTime': null,
-        'messageCount': null,
-        'status': null,
-        'createdAt': null,
-        'updatedAt': null,
-      };
-      expect(() => ConversationDto.fromMap(raw), returnsNormally);
-      final dto = ConversationDto.fromMap(raw);
-      expect(dto.id, isEmpty);
-      expect(dto.maxSeq, equals(0));
-      expect(dto.memberCount, equals(0));
-      expect(dto.maxGroupSize, equals(1000));
-      expect(dto.receiptEnabled, isTrue);
-      expect(dto.title, isNull);
-      expect(dto.lastMessageTime, isNull);
+    test('无效必填时间与可选时间立即失败', () {
+      expect(
+        () => ConversationDto.fromMap(
+          _conversationWire(<String, dynamic>{'createdAt': 'not-a-time'}),
+        ),
+        throwsFormatException,
+      );
+      expect(
+        () => ConversationDto.fromMap(
+          _conversationWire(<String, dynamic>{'lastMessageTime': 'not-a-time'}),
+        ),
+        throwsFormatException,
+      );
     });
 
-    test('optional 字段缺失不影响 required 字段', () {
-      final raw = <String, dynamic>{
-        '_id': 'conv_minimal',
-        'type': 'direct',
-        'creatorId': 'u1',
-        'createdAt': '2026-01-01T00:00:00Z',
-        'updatedAt': '2026-01-01T00:00:00Z',
-      };
-      final dto = ConversationDto.fromMap(raw);
-      expect(dto.id, equals('conv_minimal'));
+    test('可选字段缺失不影响完整必填契约', () {
+      final dto = ConversationDto.fromMap(_conversationWire());
+
       expect(dto.title, isNull);
       expect(dto.avatarUrl, isNull);
       expect(dto.circleId, isNull);
@@ -237,4 +141,26 @@ void main() {
       expect(dto.lastMessageTime, isNull);
     });
   });
+}
+
+Map<String, dynamic> _conversationWire([
+  Map<String, dynamic> overrides = const <String, dynamic>{},
+]) {
+  return <String, dynamic>{
+    'id': 'conv_default',
+    'type': 'group',
+    'creatorId': 'user_001',
+    'originType': 'direct_init',
+    'bindingType': 'none',
+    'lifecyclePolicy': 'persistent',
+    'maxSeq': 0,
+    'memberCount': 0,
+    'maxGroupSize': 1000,
+    'receiptEnabled': true,
+    'messageCount': 0,
+    'status': 'active',
+    'createdAt': '2026-02-01T10:00:00Z',
+    'updatedAt': '2026-02-01T10:00:00Z',
+    ...overrides,
+  };
 }

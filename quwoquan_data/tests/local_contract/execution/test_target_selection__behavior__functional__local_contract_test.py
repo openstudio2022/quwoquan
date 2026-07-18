@@ -6,7 +6,8 @@ from pathlib import Path
 
 import yaml
 
-from content.execution.selection import build_multimodal_spec, select_targets, write_selected_task
+from content.execution.selection import build_execution_spec, select_targets, write_selected_task
+from content.execution import store
 
 
 DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
@@ -42,7 +43,7 @@ def _coverage_file(path: Path) -> Path:
 
 
 def _spec() -> dict:
-    return build_multimodal_spec(
+    return build_execution_spec(
         execution_id=EXECUTION_ID,
         name="浙江省实体主页金丝雀",
         title="浙江省实体主页金丝雀",
@@ -61,6 +62,7 @@ def _spec() -> dict:
         entity_articles_per_target=0,
         entity_homepages_per_target=1,
         image_works_per_target=0,
+        video_works_per_target=0,
         target_entity_count=1,
     )
 
@@ -79,17 +81,68 @@ def test_select_targets_uses_static_coverage_identity_only(tmp_path: Path):
     assert report["selectedCount"] == 1
 
 
+def test_select_targets_preserves_leaf_name_as_canonical_alias(tmp_path: Path):
+    path = tmp_path / "杭州市.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "districts": [
+                    {
+                        "district": "钱塘区",
+                        "leaves": [
+                            {
+                                "name": "金沙湖",
+                                "canonicalName": "杭州金沙湖",
+                                "entityType": "地点/公园",
+                                "aliases": ["金沙湖公园"],
+                            }
+                        ],
+                    }
+                ]
+            },
+            allow_unicode=True,
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    targets, _report = select_targets(
+        discovery_path=path,
+        limit=1,
+        mandatory=["杭州金沙湖"],
+        excluded=set(),
+    )
+
+    assert targets[0]["name"] == "杭州金沙湖"
+    assert targets[0]["sourceName"] == "金沙湖"
+    assert targets[0]["aliases"] == ["金沙湖", "金沙湖公园"]
+
+
 def test_execution_spec_has_one_identity_and_readable_intent():
     spec = _spec()
-    assert spec["schemaVersion"] == "quwoquan.content.execution_spec"
+    assert spec["schema"] == "quwoquan.content.execution_spec"
     assert spec["executionId"] == EXECUTION_ID
     assert spec["intentLabel"] == "zhejiang-homepage-canary"
     assert "taskId" not in spec
     assert "batchId" not in spec
 
 
+def test_homepage_execution_inherits_media_policy_from_preset_only():
+    raw = _spec()
+    research_override = raw["content"]["research"]
+    assert "imageAssetStrategy" not in research_override
+    assert "imageCountPolicy" not in research_override
+    assert "minimumPublishableImagesPerTarget" not in research_override
+
+    effective = store.resolve_spec(raw)
+    research = effective["content"]["research"]
+    assert research["imageAssetStrategy"] == "open_license_publish"
+    assert research["imageCountPolicy"] == "hard_quota"
+    assert research["minimumPublishableImagesPerTarget"] == 1
+
+
 def test_execution_spec_derives_entity_types_from_selected_targets():
-    spec = build_multimodal_spec(
+    spec = build_execution_spec(
         execution_id="20260712--travel-homepage-coverage--cn-zhejiang--m1-001",
         name="浙江省实体主页M1百级放量",
         title="浙江省实体主页M1百级放量",
@@ -104,6 +157,7 @@ def test_execution_spec_derives_entity_types_from_selected_targets():
         entity_articles_per_target=0,
         entity_homepages_per_target=1,
         image_works_per_target=0,
+        video_works_per_target=0,
         target_entity_count=3,
     )
 
@@ -115,7 +169,7 @@ def test_execution_spec_derives_entity_types_from_selected_targets():
 
 
 def test_execution_spec_supports_strict_full_delivery():
-    spec = build_multimodal_spec(
+    spec = build_execution_spec(
         execution_id="20260712--travel-homepage-coverage--cn-zhejiang--m1-002",
         name="浙江省实体主页M1严格放量",
         title="浙江省实体主页M1严格放量",
@@ -126,19 +180,20 @@ def test_execution_spec_supports_strict_full_delivery():
         entity_articles_per_target=0,
         entity_homepages_per_target=1,
         image_works_per_target=0,
+        video_works_per_target=0,
         target_entity_count=1,
     )
 
-    assert spec["workflowPolicy"]["selectionPolicy"] == "frozen"
-    assert spec["workflowPolicy"]["targetEntityCount"] == 1
-    assert spec["workflowPolicy"]["targetObjectCount"] == 1
+    assert spec["executionPolicy"]["selectionPolicy"] == "frozen"
+    assert spec["executionPolicy"]["targetEntityCount"] == 1
+    assert spec["executionPolicy"]["targetObjectCount"] == 1
     assert not {
         "allowPartialContent",
         "allowQuotaShortfall",
         "deliveryMode",
         "minCompletionMode",
         "replacementPolicy",
-    } & set(spec["workflowPolicy"])
+    } & set(spec["executionPolicy"])
 
 
 def test_write_selected_execution_creates_only_canonical_plan_and_shared_evidence():
@@ -171,13 +226,13 @@ def test_write_selected_execution_creates_only_canonical_plan_and_shared_evidenc
         assert "batchId" not in text, artifact
 
     progress = json.loads((root / "_shared/execution_progress.json").read_text(encoding="utf-8"))
-    assert progress["schemaVersion"] == "quwoquan.content.execution_progress"
+    assert progress["schema"] == "quwoquan.content.execution_progress"
     assert progress["executionId"] == EXECUTION_ID
 
 
 def test_execution_spec_requires_readable_execution_id():
     try:
-        build_multimodal_spec(
+        build_execution_spec(
             execution_id="old-task-id",
             name="bad",
             title="bad",
@@ -185,6 +240,10 @@ def test_execution_spec_requires_readable_execution_id():
             category="景区",
             targets=[],
             created_by="test",
+            entity_articles_per_target=0,
+            entity_homepages_per_target=1,
+            image_works_per_target=0,
+            video_works_per_target=0,
         )
     except ValueError as exc:
         assert "executionId" in str(exc)

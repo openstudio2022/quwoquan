@@ -99,7 +99,7 @@ func resolveUserID(r *http.Request) string {
 
 // resolvePersonaID returns the verified public business actor. Account IDs must
 // never be persisted as Post author IDs because persona is the aggregate owner
-// declared by the CreatePost operation contract. Header fallbacks exist only
+// declared by the SubmitPostPublication operation contract. Header fallbacks exist only
 // for unguarded local transport tests.
 func resolvePersonaID(r *http.Request) string {
 	if r != nil {

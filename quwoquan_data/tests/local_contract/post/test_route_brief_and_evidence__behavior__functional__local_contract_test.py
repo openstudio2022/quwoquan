@@ -38,17 +38,17 @@ from core.evidence_contract import quality_payload_contract_issues  # noqa: E402
 from content.execution.runtime_state import write_execution_runtime_state  # noqa: E402
 from core.io import write_json  # noqa: E402
 from core.paths import execution_inputs_dir, ensure_execution_command_layout, ensure_execution_layout  # noqa: E402
-from content.post.evidence_bundle import (  # noqa: E402
+from content.post.article.evidence_bundle import (  # noqa: E402
     extract_source_evidence,
     gate_route_evidence_bundle,
     public_byline_label,
 )
-from content.post.draft_io import read_writing_pack, write_agent_draft, prompt_path, read_draft_meta  # noqa: E402
+from content.post.article.draft_io import read_writing_pack, write_agent_draft, prompt_path, read_draft_meta  # noqa: E402
 from content.source.source_unit import resolve_entity_object_dir, write_source_unit  # noqa: E402
 from content.execution.planning.brief import resolve_compose_brief  # noqa: E402
-from content.post.route_analysis import analyze_route_ref  # noqa: E402
-from content.post.route_compose import build_route_writing_pack  # noqa: E402
-from content.post.route_review import review_route_draft  # noqa: E402
+from content.post.article.route_analysis import analyze_route_ref  # noqa: E402
+from content.post.article.route_compose import build_route_writing_pack  # noqa: E402
+from content.post.article.route_review import review_route_draft  # noqa: E402
 from content.templates.registry import TemplateRegistry  # noqa: E402
 from content.templates.router import RouteRequest  # noqa: E402
 from support.helpers.agent_draft_kit import route_article  # noqa: E402
@@ -565,7 +565,7 @@ def test_article_prompt_preserves_whole_base_draft_no_irrelevant_city_trim():
     1:1 源中心：底稿写到的所有目的地/行程段落都是正文内容，必须整篇保留，实体只是标签不是
     裁剪边界；prompt 只允许删平台/广告/隐私噪声，不得以「与本篇实体无关」为由删其它城市段落。
     """
-    from content.post.writing_pack import render_prompt_md
+    from content.post.article.prompt_renderer import render_prompt_md
 
     pack = {
         "ref": "都江堰__article_qunar_base_1",
@@ -591,7 +591,7 @@ def test_article_prompt_preserves_whole_base_draft_no_irrelevant_city_trim():
 
 def test_article_section_intents_do_not_force_single_entity_focus():
     """章节意图不得把多目的地底稿框成「关于某实体的那篇」诱导裁剪。"""
-    from content.post.entity_workflow import _entity_section_intents
+    from content.post.article.entity_composition import _entity_section_intents
 
     intents = _entity_section_intents({"subject": {"type": "地点/景区"}}, "都江堰")
     joined = "\n".join(intents)
@@ -602,7 +602,7 @@ def test_article_section_intents_do_not_force_single_entity_focus():
 def test_article_prompt_first_pass_hardening_contract():
     """0704a 弃稿主因修复（cs100 可靠性 S1）：同实体多篇骨架/开篇趋同、底稿重复段落轻改保留、
     平台词泄漏、单章节吞篇/时间线回跳，都必须在 prompt 合同中有明确针对性指令。"""
-    from content.post.writing_pack import _preferred_opening_index, render_prompt_md
+    from content.post.article.prompt_renderer import _preferred_opening_index, render_prompt_md
 
     def _pack(ref: str) -> dict:
         return {
@@ -649,7 +649,7 @@ def test_article_prompt_first_pass_hardening_contract():
 def test_base_aware_word_count_tracks_long_base_draft():
     """根因：wordCount 固定上限(1600)远小于长底稿(~8900字)时，baseDraftFidelity>=55% 数学不可达
     （成稿最多覆盖底稿 ~18% 三连）。light-edit 文章字数目标必须按清洗底稿长度派生。"""
-    from content.post.base_draft import base_aware_word_count, clean_base_draft_length
+    from content.post.article.base_draft_analysis import base_aware_word_count, clean_base_draft_length
 
     long_base = "都江堰的清晨薄雾未散，我们沿着秦堰楼一路下行，江风裹着水汽扑面而来。\n" * 200
     clean_len = clean_base_draft_length(long_base)

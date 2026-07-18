@@ -7,7 +7,7 @@ from collections.abc import Iterable
 from core.io import read_json
 from core.paths import execution_post_roots
 from verify.post_verify import verify_posts_root
-from content.release.canonical.integrity import scan_runtime_batch_integrity
+from content.release.canonical.runtime_integrity import scan_runtime_batch_integrity
 from content.execution.stage_reports import iter_stage_envelopes
 from content.source.media.gate import gate_media_check
 
@@ -49,7 +49,7 @@ def _content_post_leaves(
                 leaves.append(pd)
             else:
                 manifest = read_json(manifest_path)
-                if str(manifest.get("carrier") or manifest.get("contentType") or "") == "image":
+                if str(manifest.get("carrier") or manifest.get("contentType") or "") in {"image", "video"}:
                     leaves.append(pd)
     return leaves
 

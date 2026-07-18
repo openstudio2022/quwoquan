@@ -34,7 +34,7 @@ from core.intersection_signal import (  # noqa: E402
     contract_field_names,
     intersection_hint_issues,
 )
-from content.post.draft_io import write_agent_draft  # noqa: E402
+from content.post.article.draft_io import write_agent_draft  # noqa: E402
 from core.io import read_json, write_json  # noqa: E402
 from core.paths import execution_command_root, ensure_execution_command_layout, ensure_execution_layout  # noqa: E402
 from content.execution.stage_reports import write_stage_result  # noqa: E402

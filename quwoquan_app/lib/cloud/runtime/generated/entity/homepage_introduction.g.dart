@@ -32,11 +32,11 @@ class HomepageIntroduction {
 
   factory HomepageIntroduction.fromMap(Map<String, dynamic> m) {
     return HomepageIntroduction(
-      homepageId: m['homepageId']?.toString() ?? m['id']?.toString() ?? m['_id']?.toString() ?? '',
-      displayName: m['displayName']?.toString() ?? m['title']?.toString() ?? m['name']?.toString() ?? '',
-      homepageType: m['homepageType']?.toString() ?? m['objectType']?.toString() ?? '',
+      homepageId: m['homepageId']?.toString() ?? '',
+      displayName: m['displayName']?.toString() ?? '',
+      homepageType: m['homepageType']?.toString() ?? '',
       coverUrl: m['coverUrl']?.toString() ?? null,
-      summary: m['summary']?.toString() ?? m['subtitle']?.toString() ?? '',
+      summary: m['summary']?.toString() ?? '',
       sections: _parseProjectionDtoList(m['sections'], HomepageIntroductionSection.fromMap),
       relatedObjects: _parseProjectionDtoList(m['relatedObjects'], HomepageRelatedGroupSummary.fromMap),
       primarySource: m['primarySource'] == null ? null : HomepageSource.fromMap(_parseStringKeyMap(m['primarySource'])!),

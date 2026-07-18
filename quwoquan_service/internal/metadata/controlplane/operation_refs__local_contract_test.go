@@ -20,7 +20,7 @@ func TestHydrateOperationReferencesUsesContractGraphTransportAndScopes(t *testin
 	}
 	contractGraph := &graph.ContractGraph{Operations: []ast.Operation{{
 		ID: "ops.experiment.UpdateExperimentRollout", LocalID: "UpdateExperimentRollout",
-		Method: "POST", PathTemplate: "/v1/control-plane/product/experiments/{experimentId}:rollout",
+		Method: "POST", PathTemplate: "/control-plane/product/experiments/{experimentId}:rollout",
 		Scopes: []string{"ops.experiment.write"},
 	}}}
 

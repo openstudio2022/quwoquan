@@ -2,7 +2,7 @@ import 'package:flutter/services.dart';
 
 /// Anti-corruption boundary for app-owned native `MethodChannel` surfaces.
 ///
-/// The app currently owns four native channels:
+/// The app currently owns five native channels:
 ///  - `quwoquan/auth/one_tap`        -> already abstracted by `OneTapLoginClient`
 ///                                      (core/auth/one_tap_login_channel.dart),
 ///                                      gated by `PlatformCapabilities.oneTapLogin`.
@@ -12,6 +12,8 @@ import 'package:flutter/services.dart';
 ///                                      [AssistantLocalContextBridge].
 ///  - `quwoquan/share/native_bridge` -> abstracted here as
 ///                                      [NativeShareBridge].
+///  - `quwoquan/network/cellular_generation` -> 由此处的
+///                                      [CellularNetworkProbe] 防腐抽象。
 ///
 /// New native surfaces MUST be added behind an interface here (never a raw
 /// `MethodChannel` in business code), and unimplemented platforms must return a
@@ -32,6 +34,12 @@ enum NativeShareTarget { wechatFriend, wechatMoments }
 enum NativeShareAvailability { available, unavailable }
 
 enum NativeShareOutcome { accepted, completed, cancelled, unavailable, failed }
+
+/// 蜂窝接入代际的最小、隐私安全结果。
+///
+/// 仅用于将已确认的 mobile transport 细分为 telemetry `4g`/`5g`；
+/// 无权限、未知或不支持的运行时必须返回 [unknown]，不得推断。
+enum CellularNetworkGeneration { g5, g4, unknown }
 
 class NativeShareWebpageCard {
   const NativeShareWebpageCard({
@@ -178,6 +186,46 @@ abstract interface class AssistantLocalContextBridge {
   Future<Map<String, dynamic>> getLocalContext({
     List<String> requestedFields = const <String>[],
   });
+}
+
+/// App-owned native cellular generation bridge.
+///
+/// 该桥接层负责平台 API、权限和缺失插件的差异；业务与遥测代码只能消费
+/// [CellularNetworkGeneration]，不能直接使用 MethodChannel 或平台判断。
+abstract interface class CellularNetworkProbe {
+  Future<CellularNetworkGeneration> readGeneration();
+}
+
+class MethodChannelCellularNetworkProbe implements CellularNetworkProbe {
+  MethodChannelCellularNetworkProbe({
+    this.channel = const MethodChannel('quwoquan/network/cellular_generation'),
+  });
+
+  final MethodChannel channel;
+
+  @override
+  Future<CellularNetworkGeneration> readGeneration() async {
+    try {
+      final value = await channel.invokeMethod<String>('readGeneration');
+      return switch (value) {
+        'g5' => CellularNetworkGeneration.g5,
+        'g4' => CellularNetworkGeneration.g4,
+        _ => CellularNetworkGeneration.unknown,
+      };
+    } on MissingPluginException {
+      return CellularNetworkGeneration.unknown;
+    } on PlatformException {
+      return CellularNetworkGeneration.unknown;
+    }
+  }
+}
+
+class UnsupportedCellularNetworkProbe implements CellularNetworkProbe {
+  const UnsupportedCellularNetworkProbe();
+
+  @override
+  Future<CellularNetworkGeneration> readGeneration() async =>
+      CellularNetworkGeneration.unknown;
 }
 
 class MethodChannelNativeShareBridge implements NativeShareBridge {

@@ -5,6 +5,7 @@ import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/models/publish_settings_models.dart';
 import 'package:quwoquan_app/ui/content/entry/publish_draft_projection_bridge.dart';
 import 'package:quwoquan_app/ui/content/entry/services/create_page_remote_helpers.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
   group('publish_draft_projection_bridge', () {
@@ -69,63 +70,72 @@ void main() {
       expect(wire['coverUrl'], '/tmp/cover.jpg');
     });
 
-    test('buildCreatePostPayloadMap video writes cover contract fields', () {
-      final state =
-          CreateEditorState.initial(
-            editorKind: CreateEditorKind.media,
-          ).copyWith(
-            mediaKind: CreateMediaKind.video,
-            videoPath: '/tmp/video.mp4',
-            videoThumbnail: '/tmp/cover.jpg',
-            videoDurationMs: 12000,
-            videoCoverTimeMs: 420,
-            videoMuted: true,
-            title: '视频作品',
-            body: '视频简介',
-          );
+    test(
+      'buildPostPublicationPayloadMap video writes cover contract fields',
+      () {
+        final state =
+            CreateEditorState.initial(
+              editorKind: CreateEditorKind.media,
+            ).copyWith(
+              mediaKind: CreateMediaKind.video,
+              videoPath: '/tmp/video.mp4',
+              videoThumbnail: '/tmp/cover.jpg',
+              videoDurationMs: 12000,
+              videoCoverTimeMs: 420,
+              videoMuted: true,
+              title: '视频作品',
+              body: '视频简介',
+            );
 
-      final payload = buildCreatePostPayloadMap(state);
-      expect(payload['contentType'], 'video');
-      expect(payload['videoUrl'], '/tmp/video.mp4');
-      expect(payload['thumbnailUrl'], '/tmp/cover.jpg');
-      expect(payload['coverUrl'], '/tmp/cover.jpg');
-      expect(payload['coverStrategy'], 'manual');
-      expect(payload['coverFrameTimeMs'], 420);
-      expect(payload['durationMs'], 12000);
-      expect(payload['mediaItems'], [
-        <String, Object?>{
-          'kind': 'video',
-          'url': '/tmp/video.mp4',
-          'thumbnailUrl': '/tmp/cover.jpg',
-          'coverUrl': '/tmp/cover.jpg',
-          'coverStrategy': 'manual',
-          'coverFrameTimeMs': 420,
-          'durationMs': 12000,
-        },
-      ]);
+        final payload = buildPostPublicationPayloadMap(state);
+        expect(payload['contentType'], 'video');
+        expect(payload['videoUrl'], '/tmp/video.mp4');
+        expect(payload['thumbnailUrl'], '/tmp/cover.jpg');
+        expect(payload['coverUrl'], '/tmp/cover.jpg');
+        expect(payload['coverStrategy'], 'manual');
+        expect(payload['coverFrameTimeMs'], 420);
+        expect(payload['durationMs'], 12000);
+        expect(payload['mediaItems'], [
+          <String, Object?>{
+            'kind': 'video',
+            'url': '/tmp/video.mp4',
+            'thumbnailUrl': '/tmp/cover.jpg',
+            'coverUrl': '/tmp/cover.jpg',
+            'coverStrategy': 'manual',
+            'coverFrameTimeMs': 420,
+            'durationMs': 12000,
+          },
+        ]);
 
-      final wire = CreatePostRequestWire.fromMap(
-        Map<String, dynamic>.from(payload),
-      ).toWire();
-      expect(wire['thumbnailUrl'], '/tmp/cover.jpg');
-      expect(wire['coverUrl'], '/tmp/cover.jpg');
-      expect(wire['coverStrategy'], 'manual');
-      expect(wire['coverFrameTimeMs'], '420');
-      expect(wire['mediaItems'], isA<List>());
-    });
+        final command = submitContentPostPublicationCommandFromPreparedPayload(
+          payload,
+          localDraftId: 'draft-video-contract',
+          mediaAssetIds: const <String>['video-asset-contract'],
+        );
+        final wire = Map<String, Object?>.from(
+          encodeSubmitContentPostPublicationCommand(command).body! as Map,
+        );
+        expect(wire, isNot(contains('thumbnailUrl')));
+        expect(wire, isNot(contains('coverUrl')));
+        expect(wire['coverStrategy'], 'manual');
+        expect(wire['coverFrameTimeMs'], 420);
+        expect(wire['mediaAssetIds'], const <String>['video-asset-contract']);
+        expect(wire['mediaItems'], isA<List>());
+      },
+    );
 
     test(
-      'buildCreatePostPayloadMap article branch uses Markdown truth source',
+      'buildPostPublicationPayloadMap article branch uses Markdown truth source',
       () {
         final state = CreateEditorState.initial().copyWith(
           title: 'T',
           body: 'x' * 200,
         );
         expect(shouldPublishAsArticleForPayload(state), isTrue);
-        final payload = buildCreatePostPayloadMap(state);
+        final payload = buildPostPublicationPayloadMap(state);
         expect(payload['contentType'], 'article');
         expect(payload['articleMarkdown'], isA<String>());
-        expect(payload['articleMarkdownVersion'], 'qwq-rich-md/1');
+        expect(payload['markdownDialect'], 'qwq-rich-md');
         expect(payload['articleAssetManifest'], isA<Map>());
         expect(payload['articleRenderProfile'], isA<Map>());
         expect(payload.containsKey('articleDocument'), isFalse);
@@ -133,7 +143,7 @@ void main() {
     );
 
     test(
-      'buildCreatePostPayloadMap writes confirmed summary refs and assistant policy',
+      'buildPostPublicationPayloadMap writes confirmed summary refs and assistant policy',
       () {
         final state = CreateEditorState.initial().copyWith(
           title: 'T',
@@ -146,7 +156,7 @@ void main() {
           ),
         );
 
-        final payload = buildCreatePostPayloadMap(state);
+        final payload = buildPostPublicationPayloadMap(state);
 
         expect(payload['summary'], '用户确认摘要');
         expect(payload['tagRefs'], <String>['Topic/旅行/城市漫步']);
@@ -159,7 +169,7 @@ void main() {
     );
 
     test(
-      'buildCreatePostPayloadMap derives entityRefs from inline mentions',
+      'buildPostPublicationPayloadMap derives entityRefs from inline mentions',
       () {
         final document = ArticleDocumentData(
           nodes: <ArticleDocumentNode>[
@@ -186,7 +196,7 @@ void main() {
           articleDocument: document,
         );
 
-        final payload = buildCreatePostPayloadMap(state);
+        final payload = buildPostPublicationPayloadMap(state);
 
         expect(payload['entityRefs'], contains('entity:sight:lingyin'));
         expect(
@@ -197,7 +207,7 @@ void main() {
     );
 
     test(
-      'buildCreatePostPayloadMap derives tagRefs from inline mentions and keeps entity',
+      'buildPostPublicationPayloadMap derives tagRefs from inline mentions and keeps entity',
       () {
         final document = ArticleDocumentData(
           nodes: <ArticleDocumentNode>[
@@ -236,7 +246,7 @@ void main() {
           ),
         );
 
-        final payload = buildCreatePostPayloadMap(state);
+        final payload = buildPostPublicationPayloadMap(state);
 
         final tagRefs = (payload['tagRefs'] as List).cast<String>();
         // 正文 tag span 剥离 tag: 前缀后注入，并与 settings 已有 ref 去重。
@@ -452,7 +462,7 @@ void main() {
     );
 
     test(
-      'buildCreatePostPayloadMap injects semanticMentions and wire keeps structured array',
+      'buildPostPublicationPayloadMap injects semanticMentions and wire keeps structured array',
       () {
         final document = ArticleDocumentData(
           nodes: <ArticleDocumentNode>[
@@ -480,13 +490,17 @@ void main() {
           settings: const PublishSettings(tagRefs: <String>['Topic/旅行/城市漫步']),
         );
 
-        final payload = buildCreatePostPayloadMap(state);
+        final payload = buildPostPublicationPayloadMap(state);
         expect(payload['semanticMentions'], isA<List>());
 
-        final wire = CreatePostRequestWire.fromMap(
-          Map<String, dynamic>.from(payload),
+        final command = submitContentPostPublicationCommandFromPreparedPayload(
+          payload,
+          localDraftId: 'draft-semantic-contract',
+          mediaAssetIds: const <String>[],
         );
-        final body = wire.toWire();
+        final body = Map<String, Object?>.from(
+          encodeSubmitContentPostPublicationCommand(command).body! as Map,
+        );
         expect(
           body['semanticMentions'],
           isA<List>(),
@@ -548,7 +562,7 @@ void main() {
 
       final map = draft.toStorageMap();
       expect(map['articleMarkdown'], isA<String>());
-      expect(map['articleMarkdownVersion'], 'qwq-rich-md/1');
+      expect(map['markdownDialect'], 'qwq-rich-md');
       expect(map['articleAssetManifest'], isA<Map>());
       expect(map['articleRenderProfile'], isA<Map>());
       expect(map.containsKey('articleDocument'), isFalse);

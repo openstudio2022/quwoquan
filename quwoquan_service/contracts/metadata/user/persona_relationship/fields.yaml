@@ -1,10 +1,10 @@
-version: 1
 aggregate: PersonaRelationship
 
 entities:
   PersonaRelationship:
     fields:
       - name: pairId
+        source: pairId
         type: string
         constraints: [PK]
         classification: INTERNAL
@@ -14,6 +14,7 @@ entities:
         description: lowerPersonaId 与 upperPersonaId 的 canonical digest
 
       - name: version
+        source: version
         type: int
         constraints: [NOT_NULL, DEFAULT_1]
         classification: INTERNAL
@@ -22,6 +23,7 @@ entities:
         ops_exposure: read
 
       - name: lowerPersonaId
+        source: lowerPersonaId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -31,6 +33,7 @@ entities:
         description: 规范化后字典序较小的 persona ID
 
       - name: upperPersonaId
+        source: upperPersonaId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -40,6 +43,7 @@ entities:
         description: 规范化后字典序较大的 persona ID
 
       - name: directions
+        source: directions
         type: "[]RelationshipDirection"
         constraints: [NOT_NULL, MAX_2]
         classification: PRIVATE
@@ -48,6 +52,7 @@ entities:
         ops_exposure: read
 
       - name: updatedAt
+        source: updatedAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: INTERNAL
@@ -100,6 +105,7 @@ entities:
     description: sub-account 级别 follow / unfollow 命令请求
     fields:
       - name: actorSubAccountId
+        source: actorSubAccountId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -109,6 +115,7 @@ entities:
         description: 显式覆盖当前 active persona 时使用；为空表示由服务端从上下文解析
 
       - name: source
+        source: source
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -118,6 +125,7 @@ entities:
         description: 关注来源（profile / recommendation / circle）
 
       - name: clientRequestId
+        source: clientRequestId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -130,6 +138,7 @@ entities:
     description: sub-account 级别 follow / unfollow 命令返回
     fields:
       - name: actorSubAccountId
+        source: actorSubAccountId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -138,6 +147,7 @@ entities:
         ops_exposure: read
 
       - name: targetSubAccountId
+        source: targetSubAccountId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -146,6 +156,7 @@ entities:
         ops_exposure: read
 
       - name: relationState
+        source: relationState
         type: enum
         enum_ref: RelationshipState
         constraints: [NOT_NULL]
@@ -155,6 +166,7 @@ entities:
         ops_exposure: read
 
       - name: idempotentReplay
+        source: idempotentReplay
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -163,6 +175,7 @@ entities:
         ops_exposure: read
 
       - name: updatedAt
+        source: updatedAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -174,6 +187,7 @@ entities:
     description: 基础关系态查询视图
     fields:
       - name: viewerSubAccountId
+        source: viewerSubAccountId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -182,6 +196,7 @@ entities:
         ops_exposure: read
 
       - name: targetSubAccountId
+        source: targetSubAccountId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -190,6 +205,7 @@ entities:
         ops_exposure: read
 
       - name: relationState
+        source: relationState
         type: enum
         enum_ref: RelationshipState
         constraints: [NOT_NULL]
@@ -199,6 +215,7 @@ entities:
         ops_exposure: read
 
       - name: isBlocked
+        source: isBlocked
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -207,6 +224,7 @@ entities:
         ops_exposure: read
 
       - name: isBlockedBy
+        source: isBlockedBy
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -218,6 +236,7 @@ entities:
     description: 当前 persona 的屏蔽列表项；只暴露目标与屏蔽时间。
     fields:
       - name: targetSubAccountId
+        source: targetSubAccountId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -225,6 +244,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: blockedAt
+        source: blockedAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PRIVATE
@@ -236,6 +256,7 @@ entities:
     description: following 列表项；以 subAccountId 为展示主键
     fields:
       - name: subAccountId
+        source: subAccountId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -244,6 +265,7 @@ entities:
         ops_exposure: read
 
       - name: username
+        source: username
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -252,6 +274,7 @@ entities:
         ops_exposure: read
 
       - name: userHandle
+        source: userHandle
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -261,6 +284,7 @@ entities:
         description: 公开主页 handle；兼容别名 username，但主页列表页应优先消费该字段显示 @handle
 
       - name: displayName
+        source: displayName
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -269,6 +293,7 @@ entities:
         ops_exposure: read
 
       - name: avatarUrl
+        source: avatarUrl
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -277,6 +302,7 @@ entities:
         ops_exposure: read
 
       - name: profileVisibility
+        source: profileVisibility
         type: enum
         enum_ref: ProfileVisibility
         constraints: [NOT_NULL]
@@ -286,6 +312,7 @@ entities:
         ops_exposure: read
 
       - name: relationState
+        source: relationState
         type: enum
         enum_ref: RelationshipState
         constraints: [NOT_NULL]
@@ -295,6 +322,7 @@ entities:
         ops_exposure: read
 
       - name: followedAt
+        source: followedAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -303,6 +331,7 @@ entities:
         ops_exposure: read
 
       - name: relationshipCapability
+        source: relationshipCapability
         type: RelationshipCapabilityView
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -315,6 +344,7 @@ entities:
     description: 粉丝列表项（ListFollowers API）；以 subAccountId 为展示主键
     fields:
       - name: subAccountId
+        source: subAccountId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -323,6 +353,7 @@ entities:
         ops_exposure: read
 
       - name: username
+        source: username
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -331,6 +362,7 @@ entities:
         ops_exposure: read
 
       - name: userHandle
+        source: userHandle
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -340,6 +372,7 @@ entities:
         description: 公开主页 handle；兼容别名 username，但主页列表页应优先消费该字段显示 @handle
 
       - name: displayName
+        source: displayName
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -348,6 +381,7 @@ entities:
         ops_exposure: read
 
       - name: avatarUrl
+        source: avatarUrl
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -356,6 +390,7 @@ entities:
         ops_exposure: read
 
       - name: profileVisibility
+        source: profileVisibility
         type: enum
         enum_ref: ProfileVisibility
         constraints: [NOT_NULL]
@@ -365,6 +400,7 @@ entities:
         ops_exposure: read
 
       - name: relationState
+        source: relationState
         type: enum
         enum_ref: RelationshipState
         constraints: [NOT_NULL]
@@ -374,6 +410,7 @@ entities:
         ops_exposure: read
 
       - name: followedAt
+        source: followedAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -382,6 +419,7 @@ entities:
         ops_exposure: read
 
       - name: relationshipCapability
+        source: relationshipCapability
         type: RelationshipCapabilityView
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -394,6 +432,7 @@ entities:
     description: 主页按钮矩阵与聊天/通话门禁统一消费的关系能力视图
     fields:
       - name: viewerSubAccountId
+        source: viewerSubAccountId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -402,6 +441,7 @@ entities:
         ops_exposure: read
 
       - name: targetSubAccountId
+        source: targetSubAccountId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -410,6 +450,7 @@ entities:
         ops_exposure: read
 
       - name: relationState
+        source: relationState
         type: enum
         enum_ref: RelationshipState
         constraints: [NOT_NULL]
@@ -419,6 +460,7 @@ entities:
         ops_exposure: read
 
       - name: canFollow
+        source: canFollow
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -427,6 +469,7 @@ entities:
         ops_exposure: read
 
       - name: canUnfollow
+        source: canUnfollow
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -435,6 +478,7 @@ entities:
         ops_exposure: read
 
       - name: canFollowBack
+        source: canFollowBack
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -443,6 +487,7 @@ entities:
         ops_exposure: read
 
       - name: canGreet
+        source: canGreet
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -451,6 +496,7 @@ entities:
         ops_exposure: read
 
       - name: canCreateDirectConversation
+        source: canCreateDirectConversation
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -459,6 +505,7 @@ entities:
         ops_exposure: read
 
       - name: canSendMessage
+        source: canSendMessage
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -467,6 +514,7 @@ entities:
         ops_exposure: read
 
       - name: hasPendingGreeting
+        source: hasPendingGreeting
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -475,6 +523,7 @@ entities:
         ops_exposure: read
 
       - name: hasFormalConversation
+        source: hasFormalConversation
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -483,6 +532,7 @@ entities:
         ops_exposure: read
 
       - name: canStartVoiceCall
+        source: canStartVoiceCall
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -491,6 +541,7 @@ entities:
         ops_exposure: read
 
       - name: canStartVideoCall
+        source: canStartVideoCall
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -499,6 +550,7 @@ entities:
         ops_exposure: read
 
       - name: isBlocked
+        source: isBlocked
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
@@ -507,6 +559,7 @@ entities:
         ops_exposure: read
 
       - name: isBlockedBy
+        source: isBlockedBy
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC

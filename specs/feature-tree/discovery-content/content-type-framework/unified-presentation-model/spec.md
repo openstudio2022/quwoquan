@@ -46,7 +46,7 @@ micro/image/video/article 的差异由 `ContentSurfaceView` 内的强类型可�
 
 ### P5. 灰度可回滚
 
-迁移用 feature flag 双读：新 model 路径异常可回退旧投影路径，旧投影类在切换完成后标 `@Deprecated`，不立即删除。
+破坏性单轨切换：只保留 `ContentSurfaceView` 投影路径；禁止 feature flag 双读旧投影，旧投影类必须同变更删除（不得 `@Deprecated` 长期并存）。
 
 ## 功能范围
 
@@ -66,11 +66,11 @@ micro/image/video/article 的差异由 `ContentSurfaceView` 内的强类型可�
 - feed / immersive / detail / share 四 surface 改为消费 `ContentSurfaceView`。
 - 接入顺序与 D3 超大文件强拆协同：接入即顺带拆分 `works_immersive_viewer` / `discovery_page` / `home_multi_form_feed`。
 
-### F4. 迁移灰度与回滚
+### F4. 迁移与回滚
 
-- feature flag `unified_surface_view` 双读：新路径产出 `ContentSurfaceView`，异常回退旧投影。
-- 观测：新旧路径字段差异打点 + surface 渲染异常上报。
-- 旧投影类（`PostSummaryView`/`_wireMapForPresentation`/share 模板内 fallback）切换完成后标 `@Deprecated`。
+- 只产出 `ContentSurfaceView`；禁止 `unified_surface_view` 双读旧投影。
+- 观测：统一 model 字段完整性打点 + surface 渲染异常上报。
+- 旧投影类（`PostSummaryView`/`_wireMapForPresentation`/share 模板内 fallback）必须同变更删除。
 
 ## 权限边界与数据生命周期
 
@@ -121,5 +121,5 @@ micro/image/video/article 的差异由 `ContentSurfaceView` 内的强类型可�
 2. 四 surface（feed/immersive/detail/share）均消费统一 model，无各自投影分叉。
 3. 抽象接口与投影无 `Map<String, dynamic>` 穿透（`discoveryPresentationWireForPost` 已强类型化）。
 4. local_contract 投影契约 + local_contract 四 surface 同源 widget 测试通过；旧投影类已 `@Deprecated`。
-5. feature flag 双读、观测、回滚边界已就绪。
+5. 单轨投影、观测与回滚边界已就绪（无旧投影并存）。
 6. 接入顺带完成三超大文件强拆，现有测试无回归。

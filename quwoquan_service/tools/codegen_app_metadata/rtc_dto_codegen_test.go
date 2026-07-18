@@ -66,3 +66,13 @@ func TestRtcCallSessionDtoGeneration_Golden(t *testing.T) {
 		t.Fatalf("golden mismatch: run with UPDATE_RTC_GOLDEN=1 after intentional emitter changes\ngot len=%d want len=%d", len(got), len(want))
 	}
 }
+
+func TestRtcCallSessionDtoGeneration_RequiresCanonicalIdentityName(t *testing.T) {
+	defer func() {
+		if recovered := recover(); recovered == nil {
+			t.Fatal("expected storage _id without client_dart_name to fail")
+		}
+	}()
+
+	rtcToJsonKey(fieldDef{Name: "_id", Source: "_id", Type: "ObjectId"})
+}

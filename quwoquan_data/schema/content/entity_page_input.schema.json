@@ -3,7 +3,7 @@
   "title": "3.compose entity homepage packet",
   "type": "object",
   "required": [
-    "schemaVersion",
+    "schema",
     "stage",
     "executionId",
     "executionBinding",
@@ -17,30 +17,67 @@
     "payload"
   ],
   "properties": {
-    "schemaVersion": { "const": "quwoquan_data.stage_envelope" },
-    "stage": { "const": "3.compose" },
-    "executionId": { "type": "string", "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(canary|m1|m2|m3)-[0-9]{3,}$" },
-    "executionBinding": { "enum": ["frozen", "standalone"] },
-    "sourcePolicyRevision": { "const": "encyclopedia-primary-v2" },
-    "sourceRevision": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
-    "promptBundleRevision": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
-    "executionId": { "type": "string", "minLength": 1 },
-    "step": { "const": "entity_page" },
-    "ref": { "type": "string", "minLength": 1 },
+    "stage": {
+      "const": "3.compose"
+    },
+    "executionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "executionBinding": {
+      "enum": [
+        "frozen",
+        "standalone"
+      ]
+    },
+    "sourcePolicyRevision": {
+      "const": "encyclopedia-primary"
+    },
+    "sourceRevision": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "promptBundleRevision": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "step": {
+      "const": "entity_page"
+    },
+    "ref": {
+      "type": "string",
+      "minLength": 1
+    },
     "selectedSourceUrls": {
       "type": "array",
-      "items": { "type": "string", "pattern": "^https://" }
+      "items": {
+        "type": "string",
+        "pattern": "^https://"
+      }
     },
     "payload": {
       "type": "object",
-      "required": ["name", "entityRef", "baseDraft", "draftPage"],
+      "required": [
+        "name",
+        "entityRef",
+        "baseDraft",
+        "draftPage"
+      ],
       "properties": {
-        "name": { "type": "string", "minLength": 1 },
-        "entityRef": { "type": "string", "minLength": 1 },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "entityRef": {
+          "type": "string",
+          "minLength": 1
+        },
         "baseDraft": {
           "type": "object",
           "oneOf": [
-            { "maxProperties": 0 },
+            {
+              "maxProperties": 0
+            },
             {
               "additionalProperties": false,
               "required": [
@@ -55,25 +92,58 @@
                 "text"
               ],
               "properties": {
-                "sourceRef": { "type": "string", "minLength": 1 },
-                "primaryEvidenceRef": { "type": "string", "minLength": 1 },
-                "entityName": { "type": "string", "minLength": 1 },
+                "sourceRef": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "primaryEvidenceRef": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "entityName": {
+                  "type": "string",
+                  "minLength": 1
+                },
                 "sourceKind": {
-                  "enum": ["wikipedia", "baidu_baike", "sogou_baike", "toutiao_baike"]
+                  "enum": [
+                    "wikipedia",
+                    "baidu_baike",
+                    "toutiao_baike"
+                  ]
                 },
                 "extractor": {
-                  "enum": ["wikipedia_api", "baidu_baike_html", "sogou_baike_html", "toutiao_baike_html"]
+                  "enum": [
+                    "wikipedia_api",
+                    "baidu_baike_openapi",
+                    "toutiao_baike_html"
+                  ]
                 },
-                "canonicalUrl": { "type": "string", "pattern": "^https://" },
-                "sourceTitle": { "type": "string", "minLength": 1 },
-                "policyRevision": { "const": "encyclopedia-primary-v2" },
-                "text": { "type": "string", "minLength": 1 }
+                "canonicalUrl": {
+                  "type": "string",
+                  "pattern": "^https://"
+                },
+                "sourceTitle": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "policyRevision": {
+                  "const": "encyclopedia-primary"
+                },
+                "text": {
+                  "type": "string",
+                  "minLength": 1
+                }
               }
             }
           ]
         },
-        "draftPage": { "const": "4.draft/page.md" }
+        "draftPage": {
+          "const": "4.draft/page.md"
+        }
       }
+    },
+    "schema": {
+      "const": "quwoquan_data.stage_envelope"
     }
   }
 }

@@ -28,21 +28,10 @@ void main() {
     expect(reaction.reaction, ContentCommentReactionValue.like);
     expect(reaction.likeCount, 1);
 
-    await expectLater(
-      comments.deleteComment(
-        DeleteContentCommentCommand(
-          postId: 'alpha-contract-post',
-          commentId: created.id,
-          version: 99,
-        ),
-      ),
-      throwsStateError,
-    );
     final deleted = await comments.deleteComment(
       DeleteContentCommentCommand(
         postId: 'alpha-contract-post',
         commentId: created.id,
-        version: created.version,
       ),
     );
     expect(deleted.status, ContentCommentStatus.deleted);

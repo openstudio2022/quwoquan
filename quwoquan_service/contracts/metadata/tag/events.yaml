@@ -1,4 +1,3 @@
-version: 1
 entity: TagNodeView
 
 # 只读服务：标签数据来自 control_plane/governance/taxonomy 的发布导入，不产生领域事件。

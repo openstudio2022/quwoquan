@@ -38,7 +38,7 @@
 
 ### 2. 作品 feed = 服务端混排
 
-- 端点：`GET /v1/content/works-feed?filter_type=&cursor=&limit=`
+- 端点：`GET /content/works-feed?filter_type=&cursor=&limit=`
 - `filter_type` 为空 = 全部混排；`image`/`video`/`article` = 类型筛选
 - 服务端初期策略：按时间+类型交替（规则排序），后续接推荐信号
 - 响应类型：`CursorPage<PostBaseDto>`，通过 `postBaseDtoFromMap()` 多态派发

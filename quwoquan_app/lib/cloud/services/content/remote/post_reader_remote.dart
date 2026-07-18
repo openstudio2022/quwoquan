@@ -72,8 +72,8 @@ final class RemoteContentPostReaderAdapter
           'articleFontPreset': slice.articleFontPreset,
         if (slice.articleMarkdown != null)
           'articleMarkdown': slice.articleMarkdown,
-        if (slice.articleMarkdownVersion != null)
-          'articleMarkdownVersion': slice.articleMarkdownVersion,
+        if (slice.markdownDialect != null)
+          'markdownDialect': slice.markdownDialect,
         if (slice.articleMarkdownDigest != null)
           'articleMarkdownDigest': slice.articleMarkdownDigest,
         if (slice.articleAssetManifest != null)
@@ -84,6 +84,20 @@ final class RemoteContentPostReaderAdapter
           'articleRenderProfile': _structuredValueToWire(
             slice.articleRenderProfile!,
           ),
+        if (slice.mediaItems.isNotEmpty)
+          'mediaItems': slice.mediaItems
+              .map(
+                (item) => <String, dynamic>{
+                  'kind': item.kind,
+                  'url': item.url,
+                  if (item.coverUrl != null) 'coverUrl': item.coverUrl,
+                  if (item.durationMs != null) 'durationMs': item.durationMs,
+                  if (item.width != null) 'width': item.width,
+                  if (item.height != null) 'height': item.height,
+                  if (item.title != null) 'title': item.title,
+                },
+              )
+              .toList(growable: false),
         if (slice.contentVertical != null)
           'contentVertical': slice.contentVertical,
         if (slice.paperThemeMode != null)
@@ -117,16 +131,16 @@ final class RemoteContentPostReaderAdapter
     ContentPostProjection projection,
   ) {
     return <String, dynamic>{
-      'postId': projection.postId,
-      'contentType': projection.contentType,
+      'id': projection.postId,
+      'type': projection.contentType,
       if (projection.contentIdentity != null)
-        'contentIdentity': projection.contentIdentity,
+        'identity': projection.contentIdentity,
       'assistantUsePolicy': projection.assistantUsePolicy,
       if (projection.authorId != null) 'authorId': projection.authorId,
       if (projection.authorDisplayName != null)
         'displayName': projection.authorDisplayName,
       if (projection.authorAvatarUrl != null)
-        'authorAvatarUrl': projection.authorAvatarUrl,
+        'avatarUrl': projection.authorAvatarUrl,
       if (projection.authorBackgroundUrl != null)
         'authorBackgroundUrl': projection.authorBackgroundUrl,
       if (projection.authorRoleLabel != null)

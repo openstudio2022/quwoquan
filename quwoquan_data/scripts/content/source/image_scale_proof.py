@@ -17,9 +17,10 @@ from content.source.research.source_quality import _license_allows_app_publish  
 from content.source.source_inputs import curated_images_for_entity
 from content.execution import store
 from content.execution.coverage import coverage_entity_ids, coverage_entity_type
+from core.control_types import ContentType
 
 
-SCHEMA_VERSION = "quwoquan_data.open_license_scale_proof/1"
+OPEN_LICENSE_SCALE_PROOF_SCHEMA = "quwoquan_data.open_license_scale_proof"
 
 
 def _quota_int(spec: Mapping[str, Any], key: str, default: int = 0) -> int:
@@ -37,12 +38,16 @@ def _ratio_score(value: int, saturation: int) -> float:
     return round(min(max(value, 0) / saturation, 1.0), 4)
 
 
-def _publishable_image_issue(image: Mapping[str, Any]) -> str:
+def _publishable_image_issue(
+    image: Mapping[str, Any],
+    *,
+    expected_lane: ContentType,
+) -> str:
     url = str(image.get("url") or "").strip()
     if not url:
         return "missing url"
-    if str(image.get("researchLane") or "image") != "image":
-        return "not image research lane"
+    if str(image.get("researchLane") or expected_lane.value) != expected_lane.value:
+        return f"not {expected_lane.value} research lane"
     for field in ("license", "credit", "sourceUrl", "termsUrl", "authorizationProof", "usageScope"):
         if not str(image.get(field) or "").strip():
             return f"missing {field}"
@@ -69,14 +74,18 @@ def build_open_license_scale_proof(execution_id: str) -> dict[str, Any]:
     spec = store.load_spec(execution_id)
     entity_ids = coverage_entity_ids(spec)
     entity_type = coverage_entity_type(spec)
-    desired_image_works = _quota_int(spec, "imageWorksPerTarget", default=0)
-    minimum_image_works = (
-        desired_image_works
-        if image_count_is_hard_quota(spec)
-        else minimum_publishable_images_per_target(spec)
+    spec_model = store.load_spec_model(execution_id)
+    content_type = spec_model.content.carriers[0]
+    desired_images_per_target = _quota_int(spec, "imageWorksPerTarget", default=0)
+    configured_minimum = minimum_publishable_images_per_target(spec)
+    minimum_images_per_target = max(
+        configured_minimum,
+        desired_images_per_target if image_count_is_hard_quota(spec) else 0,
     )
-    desired_assets = len(entity_ids) * desired_image_works
-    minimum_assets = len(entity_ids) * minimum_image_works
+    if content_type is ContentType.HOMEPAGE:
+        desired_images_per_target = minimum_images_per_target
+    desired_assets = len(entity_ids) * desired_images_per_target
+    minimum_assets = len(entity_ids) * minimum_images_per_target
     count_policy = image_count_policy(spec)
     root = execution_root(execution_id)
     entity_rows: list[dict[str, Any]] = []
@@ -89,7 +98,7 @@ def build_open_license_scale_proof(execution_id: str) -> dict[str, Any]:
             execution_id,
             entity_id,
             entity_type,
-            research_lane="image",
+            research_lane=content_type.value,
         )
         publishable: list[dict[str, str]] = []
         rejected: list[dict[str, str]] = []
@@ -97,7 +106,7 @@ def build_open_license_scale_proof(execution_id: str) -> dict[str, Any]:
         for image in images:
             url = str(image.get("url") or "").strip()
             collection_id = str(image.get("sourceCollectionId") or "").strip()
-            issue = _publishable_image_issue(image)
+            issue = _publishable_image_issue(image, expected_lane=content_type)
             if issue:
                 rejected.append({"url": url, "sourceCollectionId": collection_id, "reason": issue})
                 continue
@@ -115,25 +124,24 @@ def build_open_license_scale_proof(execution_id: str) -> dict[str, Any]:
                 continue
             publishable.append({"url": url, "sourceCollectionId": collection_id})
             used_collections.add(collection_id)
-            if desired_image_works and len(publishable) >= desired_image_works:
+            if desired_images_per_target and len(publishable) >= desired_images_per_target:
                 break
         for item in publishable:
             all_urls.add(item["url"])
             all_collection_ids.add(item["sourceCollectionId"])
-        minimum_passed = len(publishable) >= minimum_image_works
-        desired_passed = desired_image_works <= 0 or len(publishable) >= desired_image_works
+        minimum_passed = len(publishable) >= minimum_images_per_target
+        desired_passed = desired_images_per_target <= 0 or len(publishable) >= desired_images_per_target
         if minimum_passed:
             minimum_passed_entities += 1
         if desired_passed:
             desired_passed_entities += 1
-        image_count_score = _ratio_score(len(publishable), desired_image_works)
+        image_count_score = _ratio_score(len(publishable), desired_images_per_target)
         entity_rows.append(
             {
                 "entityId": entity_id,
                 "imageCountPolicy": count_policy,
-                "desiredImageWorks": desired_image_works,
-                "minimumImageWorks": minimum_image_works,
-                "requiredImageWorks": minimum_image_works,
+                "desiredPublishableImages": desired_images_per_target,
+                "minimumPublishableImages": minimum_images_per_target,
                 "publishableImageAssets": len(publishable),
                 "publishableSourceCollections": len({item["sourceCollectionId"] for item in publishable}),
                 "minimumPassed": minimum_passed,
@@ -157,8 +165,9 @@ def build_open_license_scale_proof(execution_id: str) -> dict[str, Any]:
         "publishableImageAssets": len(all_urls),
         "sourceCollectionCount": len(all_collection_ids),
         "imageCountPolicy": count_policy,
-        "desiredImageWorksPerTarget": desired_image_works,
-        "minimumImageWorksPerTarget": minimum_image_works,
+        "contentType": content_type.value,
+        "desiredPublishableImagesPerTarget": desired_images_per_target,
+        "minimumPublishableImagesPerTarget": minimum_images_per_target,
         "desiredPublishableImageAssets": desired_assets,
         "minimumPublishableImageAssets": minimum_assets,
         "averageImageCountScore": average_image_count_score,
@@ -171,7 +180,7 @@ def build_open_license_scale_proof(execution_id: str) -> dict[str, Any]:
         and len(all_urls) >= minimum_assets
         and (
             count_policy != "hard_quota"
-            or desired_image_works <= 0
+            or desired_images_per_target <= 0
             or (
                 desired_passed_entities >= len(entity_ids)
                 and len(all_urls) >= desired_assets
@@ -179,13 +188,13 @@ def build_open_license_scale_proof(execution_id: str) -> dict[str, Any]:
         )
     )
     report = {
-        "schemaVersion": SCHEMA_VERSION,
+        "schema": OPEN_LICENSE_SCALE_PROOF_SCHEMA,
         "executionId": execution_id,
         "requiredEntityCount": len(entity_ids),
         "imageCountPolicy": count_policy,
-        "imageWorksPerTarget": desired_image_works,
-        "desiredImageWorksPerTarget": desired_image_works,
-        "minimumImageWorksPerTarget": minimum_image_works,
+        "contentType": content_type.value,
+        "desiredPublishableImagesPerTarget": desired_images_per_target,
+        "minimumPublishableImagesPerTarget": minimum_images_per_target,
         "desiredPublishableImageAssets": desired_assets,
         "minimumPublishableImageAssets": minimum_assets,
         "requiredPublishableImageAssets": minimum_assets,
@@ -234,23 +243,7 @@ def write_open_license_scale_proof(report: Mapping[str, Any]) -> Path:
     return path
 
 
-def apply_open_license_scale_proof_to_execution(execution_id: str, proof: Mapping[str, Any]) -> Path:
-    spec = store.load_raw_spec(execution_id)
-    content = spec.setdefault("content", {})
-    if not isinstance(content, dict):
-        raise ValueError("execution content must be a mapping")
-    research = content.setdefault("research", {})
-    if not isinstance(research, dict):
-        raise ValueError("execution content.research must be a mapping")
-    research["imageAssetStrategy"] = "open_license_publish"
-    research["imageCountPolicy"] = str(proof.get("imageCountPolicy") or "score_bonus")
-    research["allowAiImages"] = False
-    research["openLicenseScaleProof"] = dict(proof)
-    return store.save_spec(spec)
-
-
 __all__ = [
-    "apply_open_license_scale_proof_to_execution",
     "build_open_license_scale_proof",
     "write_open_license_scale_proof",
 ]

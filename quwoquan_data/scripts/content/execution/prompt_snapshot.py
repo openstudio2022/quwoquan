@@ -106,7 +106,7 @@ def build_prompt_snapshot(
     execution = stage_execution_context(execution_id)
     bundle_revision = prompt_bundle_revision(template_family)
     return {
-        "schemaVersion": "quwoquan_data.prompt_snapshot/1",
+        "schema": "quwoquan_data.prompt_snapshot",
         "stage": stage,
         **execution,
         "templateFamily": template_family,

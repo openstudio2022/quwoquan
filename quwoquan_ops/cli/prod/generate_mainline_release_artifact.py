@@ -359,7 +359,7 @@ def main() -> int:
         release_files[service] = relative_path.as_posix()
 
     manifest = {
-        "schemaVersion": 1,
+        "schema": "mainline-release-artifact",
         "artifactName": ARTIFACT_NAME,
         "generatedAt": utc_now(),
         "source": {

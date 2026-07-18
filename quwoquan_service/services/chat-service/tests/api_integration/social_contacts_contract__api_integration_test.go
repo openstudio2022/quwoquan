@@ -19,7 +19,7 @@ func TestListContacts_IncludesSocialContactSources(t *testing.T) {
 	socialServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
-		case "/v1/user/sub-accounts/viewer_1/following":
+		case "/user/sub-accounts/viewer_1/following":
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"items": []map[string]any{
 					{
@@ -32,7 +32,7 @@ func TestListContacts_IncludesSocialContactSources(t *testing.T) {
 				},
 				"cursor": "",
 			})
-		case "/v1/user/sub-accounts/viewer_1/followers":
+		case "/user/sub-accounts/viewer_1/followers":
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"items": []map[string]any{
 					{
@@ -52,7 +52,7 @@ func TestListContacts_IncludesSocialContactSources(t *testing.T) {
 				},
 				"cursor": "",
 			})
-		case "/v1/user/contact-discovery/latest":
+		case "/user/contact-discovery/latest":
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"id":                   "discovery_1",
 				"matchedSubAccountIds": []string{"user_c"},
@@ -89,7 +89,7 @@ func TestListContacts_IncludesSocialContactSources(t *testing.T) {
 		nil,
 	).Routes()
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/chat/contacts?limit=10", nil)
+	req := httptest.NewRequest(http.MethodGet, "/chat/contacts?limit=10", nil)
 	req.Header.Set("X-Client-User-Id", "viewer_1")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
@@ -145,7 +145,7 @@ func TestListContacts_FiltersBlockedContacts(t *testing.T) {
 	socialServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
-		case "/v1/user/sub-accounts/viewer_1/following":
+		case "/user/sub-accounts/viewer_1/following":
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"items": []map[string]any{
 					{
@@ -158,7 +158,7 @@ func TestListContacts_FiltersBlockedContacts(t *testing.T) {
 				},
 				"cursor": "",
 			})
-		case "/v1/user/sub-accounts/viewer_1/followers":
+		case "/user/sub-accounts/viewer_1/followers":
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"items": []map[string]any{
 					{
@@ -171,7 +171,7 @@ func TestListContacts_FiltersBlockedContacts(t *testing.T) {
 				},
 				"cursor": "",
 			})
-		case "/v1/user/contact-discovery/latest":
+		case "/user/contact-discovery/latest":
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"id":                   "discovery_1",
 				"matchedSubAccountIds": []string{"user_b"},
@@ -212,7 +212,7 @@ func TestListContacts_FiltersBlockedContacts(t *testing.T) {
 		nil,
 	).Routes()
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/chat/contacts?limit=10", nil)
+	req := httptest.NewRequest(http.MethodGet, "/chat/contacts?limit=10", nil)
 	req.Header.Set("X-Client-User-Id", "viewer_1")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)

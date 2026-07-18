@@ -213,7 +213,7 @@ def store_artifact(
     if not head or head.get("sha256") != sha256 or stored_bytes != path.stat().st_size:
         raise ValueError(f"missing/corrupt object after publish: {key}")
     manifest = {
-        "schemaVersion": "quwoquan_data.object_storage_manifest/1",
+        "schema": "quwoquan_data.object_storage_manifest",
         "backend": storage.backend,
         "kind": kind,
         "logicalRef": logical_ref,
@@ -255,7 +255,7 @@ def sync_artifact_tree(
             )
         )
     return {
-        "schemaVersion": "quwoquan_data.object_storage_sync_report/1",
+        "schema": "quwoquan_data.object_storage_sync_report",
         "backend": storage.backend,
         "kind": kind,
         "sourceRoot": str(root),

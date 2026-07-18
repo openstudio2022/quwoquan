@@ -8,10 +8,12 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
+
+	postevent "quwoquan_service/services/content-service/internal/domain/post/event"
 )
 
 // DiscoveryFeedProjector maintains the rm_discovery_feed read model.
-// Source events: Post lifecycle and EventBatchReported. ContentReaction uses
+// Source events: Post lifecycle and BehaviorBatchReported. ContentReaction uses
 // its own aggregate outbox + exact-count projector and must not enter this delta path.
 // Aligned with contracts/metadata/_projections/discovery_feed.yaml.
 type DiscoveryFeedProjector struct {
@@ -26,12 +28,11 @@ func (p *DiscoveryFeedProjector) Name() string { return "DiscoveryFeedProjector"
 
 func (p *DiscoveryFeedProjector) EventTypes() []string {
 	return []string{
-		"PostCreated",
-		"PostPublished",
-		"PostSettingsUpdated",
-		"PostPromotedToWork",
-		"PostDeleted",
-		"EventBatchReported",
+		postevent.PostPublished,
+		postevent.PostSettingsUpdated,
+		postevent.PostPromotedToWork,
+		postevent.PostDeleted,
+		"BehaviorBatchReported",
 	}
 }
 
@@ -47,25 +48,19 @@ type ProjectorEvent struct {
 
 func (p *DiscoveryFeedProjector) Project(ctx context.Context, event ProjectorEvent) error {
 	switch event.Type {
-	case "PostCreated":
-		return p.onPostCreated(ctx, event)
-	case "PostPublished":
+	case postevent.PostPublished:
 		return p.onPostPublished(ctx, event)
-	case "PostSettingsUpdated":
+	case postevent.PostSettingsUpdated:
 		return p.onPostSettingsUpdated(ctx, event)
-	case "PostPromotedToWork":
+	case postevent.PostPromotedToWork:
 		return p.onPostPromotedToWork(ctx, event)
-	case "PostDeleted":
+	case postevent.PostDeleted:
 		return p.onPostDeleted(ctx, event)
-	case "EventBatchReported":
+	case "BehaviorBatchReported":
 		return p.onBehaviorReported(ctx, event)
 	default:
 		return nil
 	}
-}
-
-func (p *DiscoveryFeedProjector) onPostCreated(ctx context.Context, event ProjectorEvent) error {
-	return p.syncPost(ctx, event)
 }
 
 func (p *DiscoveryFeedProjector) onPostPublished(ctx context.Context, event ProjectorEvent) error {
@@ -81,7 +76,7 @@ func (p *DiscoveryFeedProjector) onPostPromotedToWork(ctx context.Context, event
 }
 
 func (p *DiscoveryFeedProjector) onPostDeleted(ctx context.Context, event ProjectorEvent) error {
-	postID := strVal(event.Payload, "_id")
+	postID := strVal(event.Payload, "postId")
 	if postID == "" {
 		return nil
 	}
@@ -90,7 +85,7 @@ func (p *DiscoveryFeedProjector) onPostDeleted(ctx context.Context, event Projec
 }
 
 func (p *DiscoveryFeedProjector) syncPost(ctx context.Context, event ProjectorEvent) error {
-	postID := strVal(event.Payload, "_id")
+	postID := strVal(event.Payload, "postId")
 	if postID == "" {
 		return nil
 	}

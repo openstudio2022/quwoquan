@@ -18,7 +18,6 @@ import (
 func TestContractGraphCompileValidateCommercial(t *testing.T) {
 	metadataDir := t.TempDir()
 	writeObjectFixture(t, metadataDir, "content/post", `
-version: 1
 domain: content
 aggregate_root: Post
 object_kind: aggregate_root
@@ -29,17 +28,17 @@ business_rules: [author_owns_post]
 lifecycle:
   states: [draft, published]
 `, `
-version: 1
 service:
   name: content-service
   domain: content
   owner: content-team
 api_routes:
   - method: GET
-    path: /v1/content/posts/{postId}
+    path: /content/posts/{postId}
     operation: GetPost
     actor: persona_or_device
-    auth: optional
+    security:
+      auth_mode: optional
     application:
       kind: query
       facet: PostQueryFacade
@@ -69,10 +68,11 @@ api_routes:
       latency_p95_ms: 300
       availability_percent: 99.9
   - method: POST
-    path: /v1/content/posts/{postId}:publish
+    path: /content/posts/{postId}:publish
     operation: PublishPost
     actor: persona
-    auth: required
+    security:
+      auth_mode: required
     application:
       kind: command
       facet: PostCommandFacade
@@ -104,13 +104,11 @@ api_routes:
       availability_percent: 99.9
 `)
 	writeFile(t, filepath.Join(metadataDir, "content/post/projections/post_detail.yaml"), `
-version: 1
 read_model: PostDetailSlice
 client_projection:
   dart_class: PostDetailSlice
 `)
 	writeFile(t, filepath.Join(metadataDir, "content/post/fields.yaml"), `
-version: 1
 aggregate: Post
 entities:
   Post:
@@ -237,8 +235,8 @@ objects:
 
 func TestContractGraphRejectsDuplicateTransport(t *testing.T) {
 	metadataDir := t.TempDir()
-	writeObjectFixture(t, metadataDir, "content/post", commercialAggregate("content", "Post"), commercialQueryService("content", "Post", "GetPost", "/v1/content/shared"))
-	writeObjectFixture(t, metadataDir, "content/report", commercialAggregate("content", "Report"), commercialQueryService("content", "Report", "GetReport", "/v1/content/shared"))
+	writeObjectFixture(t, metadataDir, "content/post", commercialAggregate("content", "Post"), commercialQueryService("content", "Post", "GetPost", "/content/shared"))
+	writeObjectFixture(t, metadataDir, "content/report", commercialAggregate("content", "Report"), commercialQueryService("content", "Report", "GetReport", "/content/shared"))
 
 	catalog, err := load.Load(metadataDir)
 	if err != nil {
@@ -252,7 +250,7 @@ func TestContractGraphRejectsDuplicateTransport(t *testing.T) {
 
 func TestContractGraphRejectsUnknownTopLevelField(t *testing.T) {
 	metadataDir := t.TempDir()
-	writeObjectFixture(t, metadataDir, "content/post", commercialAggregate("content", "Post")+"\nunsupported_repository: true\n", commercialQueryService("content", "Post", "GetPost", "/v1/content/posts/{postId}"))
+	writeObjectFixture(t, metadataDir, "content/post", commercialAggregate("content", "Post")+"\nunsupported_repository: true\n", commercialQueryService("content", "Post", "GetPost", "/content/posts/{postId}"))
 
 	_, err := load.Load(metadataDir)
 	if err == nil || !strings.Contains(err.Error(), "unknown top-level fields: unsupported_repository") {
@@ -260,10 +258,21 @@ func TestContractGraphRejectsUnknownTopLevelField(t *testing.T) {
 	}
 }
 
+func TestContractGraphRejectsRetiredAggregateVersionField(t *testing.T) {
+	metadataDir := t.TempDir()
+	aggregate := "version: 1\n" + commercialAggregate("content", "Post")
+	writeObjectFixture(t, metadataDir, "content/post", aggregate, commercialQueryService("content", "Post", "GetPost", "/content/posts/{postId}"))
+
+	_, err := load.Load(metadataDir)
+	if err == nil || !strings.Contains(err.Error(), "unknown top-level fields: version") {
+		t.Fatalf("expected retired aggregate version failure, got %v", err)
+	}
+}
+
 func TestContractGraphCommercialConsumesVersionedSchema(t *testing.T) {
 	metadataDir := t.TempDir()
 	writeSchemas(t, metadataDir)
-	service := commercialQueryService("content", "Post", "GetPost", "/v1/content/posts/{postId}")
+	service := commercialQueryService("content", "Post", "GetPost", "/content/posts/{postId}")
 	service = strings.Replace(service, "      slice: PostSlice", "      slice: PostSlice\n      unsupported_dispatch: true", 1)
 	writeObjectFixture(t, metadataDir, "content/post", commercialAggregate("content", "Post"), service)
 
@@ -280,11 +289,55 @@ func TestContractGraphCommercialConsumesVersionedSchema(t *testing.T) {
 	}
 }
 
+func TestContractGraphRejectsLegacyAuthFields(t *testing.T) {
+	for _, legacy := range []string{
+		"    auth: public",
+		"    auth_required: false",
+	} {
+		t.Run(strings.TrimSpace(legacy), func(t *testing.T) {
+			metadataDir := t.TempDir()
+			service := strings.Replace(
+				commercialQueryService(
+					"content",
+					"Post",
+					"GetPost",
+					"/content/posts/{postId}",
+				),
+				"    security:\n      auth_mode: public",
+				legacy,
+				1,
+			)
+			writeObjectFixture(
+				t,
+				metadataDir,
+				"content/post",
+				commercialAggregate("content", "Post"),
+				service,
+			)
+
+			catalog, err := load.Load(metadataDir)
+			if err != nil {
+				t.Fatalf("load metadata: %v", err)
+			}
+			issues, err := validate.All(
+				graph.Build(catalog),
+				validate.ProfileCommercial,
+				metadataDir,
+			)
+			if err != nil {
+				t.Fatalf("validate commercial metadata: %v", err)
+			}
+			if !hasIssueCode(issues, "CONTRACT.SCHEMA.INVALID") {
+				t.Fatalf("legacy auth field must fail schema validation, got %+v", issues)
+			}
+		})
+	}
+}
+
 func TestContractGraphRejectsSeparateAggregateAlias(t *testing.T) {
 	metadataDir := t.TempDir()
 	writeSchemas(t, metadataDir)
 	writeFile(t, filepath.Join(metadataDir, "content/report/entity.yaml"), `
-version: 1
 domain: content
 entity: Report
 object_kind: separate_aggregate
@@ -301,14 +354,13 @@ func TestContractGraphRejectsCrossObjectCommandOwner(t *testing.T) {
 	metadataDir := t.TempDir()
 	writeSchemas(t, metadataDir)
 	writeObjectFixture(t, metadataDir, "content/post", commercialAggregate("content", "Post"), `
-version: 1
 service:
   name: content-service
   domain: content
   owner: content-team
 api_routes:
   - method: POST
-    path: /v1/content/posts/{postId}:report
+    path: /content/posts/{postId}:report
     operation: ReportPost
     actor: persona
     commercial:
@@ -322,7 +374,6 @@ api_routes:
       invariant_target: Report
 `)
 	writeFile(t, filepath.Join(metadataDir, "content/report/entity.yaml"), `
-version: 1
 domain: content
 entity: Report
 object_kind: aggregate_root
@@ -343,9 +394,8 @@ storage_backend: postgres
 func TestContractGraphRejectsOwnedEntityStoreAndProjectionCommand(t *testing.T) {
 	metadataDir := t.TempDir()
 	writeSchemas(t, metadataDir)
-	writeObjectFixture(t, metadataDir, "content/post", commercialAggregate("content", "Post"), commercialQueryService("content", "Post", "GetPost", "/v1/content/posts/{postId}"))
+	writeObjectFixture(t, metadataDir, "content/post", commercialAggregate("content", "Post"), commercialQueryService("content", "Post", "GetPost", "/content/posts/{postId}"))
 	writeFile(t, filepath.Join(metadataDir, "content/post_draft/entity.yaml"), `
-version: 1
 domain: content
 entity: PostDraft
 object_kind: owned_entity
@@ -354,21 +404,19 @@ description: bounded draft state
 storage_backend: mongodb
 `)
 	writeFile(t, filepath.Join(metadataDir, "content/post_search/entity.yaml"), `
-version: 1
 domain: content
 entity: PostSearch
 object_kind: projection
 description: search projection
 `)
 	writeFile(t, filepath.Join(metadataDir, "content/post_search/service.yaml"), `
-version: 1
 service:
   name: content-service
   domain: content
   owner: content-team
 api_routes:
   - method: POST
-    path: /v1/content/post-search:rebuild
+    path: /content/post-search:rebuild
     operation: RebuildPostSearch
     actor: account
     commercial:
@@ -402,7 +450,6 @@ func TestContractGraphRejectsFactUpdateOrDelete(t *testing.T) {
 	metadataDir := t.TempDir()
 	writeSchemas(t, metadataDir)
 	writeFile(t, filepath.Join(metadataDir, "behavior/event/entity.yaml"), `
-version: 1
 domain: behavior
 entity: BehaviorEvent
 object_kind: append_only_fact
@@ -410,14 +457,13 @@ description: immutable behavior fact
 storage_backend: mongodb
 `)
 	writeFile(t, filepath.Join(metadataDir, "behavior/event/service.yaml"), `
-version: 1
 service:
   name: behavior-service
   domain: behavior
   owner: behavior-team
 api_routes:
   - method: DELETE
-    path: /v1/behaviors/{eventId}
+    path: /behaviors/{eventId}
     operation: DeleteBehavior
     actor: account
     commercial:
@@ -446,7 +492,6 @@ func TestBusinessObjectMapRequiresExactFieldClassification(t *testing.T) {
 	writeSchemas(t, metadataDir)
 	writeFile(t, filepath.Join(metadataDir, "content/post/aggregate.yaml"), commercialAggregate("content", "Post"))
 	writeFile(t, filepath.Join(metadataDir, "content/post/fields.yaml"), `
-version: 1
 aggregate: Post
 entities:
   Post:
@@ -513,7 +558,6 @@ func TestBusinessObjectMapRequiresIdentityLikeFieldSemantics(t *testing.T) {
 	writeSchemas(t, metadataDir)
 	writeFile(t, filepath.Join(metadataDir, "content/post/aggregate.yaml"), commercialAggregate("content", "Post"))
 	writeFile(t, filepath.Join(metadataDir, "content/post/fields.yaml"), `
-version: 1
 aggregate: Post
 entities:
   Post:
@@ -598,7 +642,6 @@ objects:
 
 func commercialAggregate(domain, name string) string {
 	return `
-version: 1
 domain: ` + domain + `
 aggregate_root: ` + name + `
 object_kind: aggregate_root
@@ -610,7 +653,6 @@ members: []
 
 func commercialQueryService(domain, object, operation, path string) string {
 	return `
-version: 1
 service:
   name: ` + domain + `-service
   domain: ` + domain + `
@@ -620,7 +662,8 @@ api_routes:
     path: ` + path + `
     operation: ` + operation + `
     actor: persona_or_device
-    auth: public
+    security:
+      auth_mode: public
     application:
       kind: query
       facet: ` + object + `QueryFacade

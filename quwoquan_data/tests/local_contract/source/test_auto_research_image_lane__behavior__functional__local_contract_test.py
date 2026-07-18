@@ -3,6 +3,7 @@ from __future__ import annotations
 
 
 from support.source_plan_guidance_fixtures import *  # noqa: F401,F403
+from support.execution_manifest_fixture import ExecutionFixtureBuilder  # noqa: E402
 
 
 
@@ -12,6 +13,10 @@ def test_auto_research_image_lane_prefers_non_homepage_alias_matched_image():
 
     task = "20260711--travel-image-source-isolation--cn-zhejiang--canary-001"
     entity = "三苏祠"
+    ExecutionFixtureBuilder(
+        task,
+        targets=({"entityType": "地点/景区", "name": entity},),
+    ).build()
     home_image = {
         "url": "https://img.example/home.jpg",
         "license": "CC BY-SA 4.0",
@@ -96,30 +101,13 @@ def test_auto_research_image_lane_prefers_non_homepage_alias_matched_image():
 def test_auto_research_rescues_image_lane_when_first_open_license_discovery_is_empty():
     import content.source.research.auto_plan_writer as research_mod
 
-    spec = store.scaffold_spec(
-        execution_id="20260711--travel-image-source-rescue--cn-zhejiang--canary-002",
-        vertical="travel",
-        organize_by="地域",
-        key="测试省",
-        category="景区",
-        name="图片救援发现",
-        scope={
-            "region": "测试省",
-            "entityTypes": ["地点/景区"],
-            "coverageTargets": [{"entityType": "地点/景区", "name": "故宫博物院"}],
-        },
-        content={
-            "modalityContract": "separated_research",
-            "quotas": {
-                "entityHomepagesPerTarget": 0,
-                "entityArticlesPerTarget": 0,
-                "imageWorksPerTarget": 2,
-            },
-        },
-        acceptance={"minEntities": 1},
-        created_by="test",
-    )
-    spec.update(workflowPolicy={}, queuePolicy={})
+    spec = ExecutionFixtureBuilder(
+        "20260711--travel-image-source-rescue--cn-zhejiang--canary-002",
+        targets=({"entityType": "地点/景区", "name": "故宫博物院"},),
+    ).spec_payload()
+    spec["content"]["quotas"]["imageWorksPerTarget"] = 2
+    spec["acceptance"]["minPostsPerEntity"] = 2
+    spec["executionPolicy"]["targetObjectCount"] = 2
     task = spec["executionId"]
     store.save_spec(spec)
     entity = "故宫博物院"
@@ -229,30 +217,13 @@ def test_auto_research_rescues_image_lane_when_first_open_license_discovery_is_e
 def test_auto_research_uses_registry_image_aliases_for_visual_discovery():
     import content.source.research.auto_plan_writer as research_mod
 
-    spec = store.scaffold_spec(
-        execution_id="20260711--travel-image-alias-discovery--cn-zhejiang--canary-003",
-        vertical="travel",
-        organize_by="地域",
-        key="测试省",
-        category="景区",
-        name="图片别名发现",
-        scope={
-            "region": "测试省",
-            "entityTypes": ["地点/景区"],
-            "coverageTargets": [{"entityType": "地点/景区", "name": "黄山风景区"}],
-        },
-        content={
-            "modalityContract": "separated_research",
-            "quotas": {
-                "entityHomepagesPerTarget": 0,
-                "entityArticlesPerTarget": 0,
-                "imageWorksPerTarget": 2,
-            },
-        },
-        acceptance={"minEntities": 1},
-        created_by="test",
-    )
-    spec.update(workflowPolicy={}, queuePolicy={})
+    spec = ExecutionFixtureBuilder(
+        "20260711--travel-image-alias-discovery--cn-zhejiang--canary-003",
+        targets=({"entityType": "地点/景区", "name": "黄山风景区"},),
+    ).spec_payload()
+    spec["content"]["quotas"]["imageWorksPerTarget"] = 2
+    spec["acceptance"]["minPostsPerEntity"] = 2
+    spec["executionPolicy"]["targetObjectCount"] = 2
     task = spec["executionId"]
     store.save_spec(spec)
     entity = "黄山风景区"

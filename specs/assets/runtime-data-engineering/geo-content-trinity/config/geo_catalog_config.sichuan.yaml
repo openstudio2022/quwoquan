@@ -1,4 +1,4 @@
-schemaVersion: quwoquan_data.geo_catalog_config
+schema: quwoquan_data.geo_catalog_config
 name: 四川地理目录候选层
 topic_id_prefix: poi
 output_defaults:

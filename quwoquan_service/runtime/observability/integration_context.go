@@ -93,9 +93,6 @@ func buildCorrelationMetaFromHeaders(h http.Header) CorrelationMeta {
 
 func buildOperationContextFromHeaders(h http.Header, meta CorrelationMeta) operation.Context {
 	idempotencyKey := strings.TrimSpace(h.Get(headerIdempotencyKey))
-	if idempotencyKey == "" {
-		idempotencyKey = strings.TrimSpace(meta.RequestID)
-	}
 	return operation.Context{
 		OperationID:      strings.TrimSpace(h.Get(headerClientOperationID)),
 		RequestID:        strings.TrimSpace(meta.RequestID),

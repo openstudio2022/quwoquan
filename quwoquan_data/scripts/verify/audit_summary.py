@@ -21,7 +21,7 @@ from core.paths import (
 )
 from content.execution import store
 
-AUDIT_SUMMARY_SCHEMA = "quwoquan_data.execution_audit_summary/1"
+AUDIT_SUMMARY_SCHEMA = "quwoquan_data.execution_audit_summary"
 _FOCUS_ENTITY_NAME = "都江堰"
 
 
@@ -454,7 +454,7 @@ def write_execution_audit_summary(execution_id: str, *, roots: list[Path], issue
         post_count=len(post_dirs),
     )
     summary = {
-        "schemaVersion": AUDIT_SUMMARY_SCHEMA,
+        "schema": AUDIT_SUMMARY_SCHEMA,
         "executionId": execution_id,
         "generatedAt": now_iso(),
         "scriptGate": {

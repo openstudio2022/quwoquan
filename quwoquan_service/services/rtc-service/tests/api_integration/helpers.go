@@ -60,7 +60,7 @@ func doGet(t *testing.T, path, userID string) (int, map[string]any) {
 func createTestCall(t *testing.T, userID string) map[string]any {
 	t.Helper()
 	payload := `{"callType":"audio","inviteeIds":["user_invitee_001"]}`
-	return doPost(t, "/v1/rtc/calls", payload, userID, http.StatusCreated)
+	return doPost(t, "/rtc/calls", payload, userID, http.StatusCreated)
 }
 
 func extractSessionID(t *testing.T, resp map[string]any) string {
@@ -69,9 +69,9 @@ func extractSessionID(t *testing.T, resp map[string]any) string {
 	if !ok {
 		t.Fatal("response missing session object")
 	}
-	id, ok := session["_id"].(string)
+	id, ok := session["callId"].(string)
 	if !ok {
-		t.Fatal("session missing _id")
+		t.Fatal("session missing callId")
 	}
 	return id
 }

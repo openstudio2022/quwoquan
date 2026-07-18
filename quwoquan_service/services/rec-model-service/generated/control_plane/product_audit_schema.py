@@ -96,7 +96,6 @@ _PRODUCT_AUDIT_SCHEMA_JSON = r'''{
         "rollout_scope"
       ]
     }
-  ],
-  "version": 1
+  ]
 }'''
 PRODUCT_AUDIT_SCHEMA = json.loads(_PRODUCT_AUDIT_SCHEMA_JSON)

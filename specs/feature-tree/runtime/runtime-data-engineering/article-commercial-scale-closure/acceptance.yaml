@@ -39,7 +39,7 @@ gwt_acceptance:
     - quwoquan_data/verticals/travel/sources/source_registry.yaml
     - quwoquan_data/scripts/content/source/source_inputs.py
     - quwoquan_data/scripts/content/source/research/auto_plan_writer.py
-    - quwoquan_data/scripts/content/execution/pipeline/content_plan.py
+    - quwoquan_data/scripts/content/execution/controller/content_plan.py
     tests:
       planned:
       - file: quwoquan_data/tests/local_contract/governance/test_travel_source_registry__behavior__functional__local_contract_test.py
@@ -63,17 +63,17 @@ gwt_acceptance:
     when:
     - 运营运行一条 H100 article+homepage 真实 batch，从 download 到 publish 全链闭环。
     then:
-    - "批次必须同时生成 `env_ready_report.json`、`workflow_state.json`、`token_ledger.json`、`managed_batch_audit.json`、`sdk_monitoring_report.json` 与 `scale_readiness` 报告。"
+    - "批次必须同时生成 `env_ready_report.json`、`execution_state.json`、`token_ledger.json`、`managed_batch_audit.json`、`sdk_monitoring_report.json` 与 `scale_readiness` 报告。"
     - "H100 准出账本口径（2026-07-06 用户裁定）：本地 cursor_sdk bridge 尚不回传 usage 字段，`TokenLedger.measurementMode=estimated_from_artifacts` 在 H100 可准出，但必须通过 `verify scale-readiness --accept-estimated-token-ledger` 与 `verify sdk-monitoring --accept-estimated-token-ledger` 显式声明接受；门禁默认仍严格阻断，禁止静默放宽。authoritative usage 账本保留为后续升级项（见 backlog R-CS03）。"
     - "`firstPassRate`、`objectsPerHour`、release/import/search/reco visibility 必须来自真实批次证据，而不是结构化注入。"
     done_when:
     - "H100 以真实批次证据通过（账本允许显式接受的 estimated 口径），且 `firstPassRate >= 0.9`、source sufficiency 与 text_only 口径下的 homepage closure 门同时满足。"
     edge_cases:
     - "`allowPartialContent=true` 时允许失败对象诚实降级，但不得污染成功对象 release/import。"
-    - "`cursorStartup.ready=false`、`task_workflow_state != succeeded` 或 `managedBatchAudit.failedLaneCount > 0` 时，必须 `GATE_BLOCK`。"
+    - "`cursorStartup.ready=false`、`task_execution_state != succeeded` 或 `managedBatchAudit.failedLaneCount > 0` 时，必须 `GATE_BLOCK`。"
     contract_refs:
-    - quwoquan_data/scripts/content/execution/pipeline/pipeline_run.py
-    - quwoquan_data/scripts/content/execution/pipeline/metrics.py
+    - quwoquan_data/scripts/content/execution/controller/orchestrator.py
+    - quwoquan_data/scripts/content/execution/controller/metrics.py
     - quwoquan_data/scripts/content/execution/readiness_audit.py
     - quwoquan_data/AGENTS.md
     performance_points:
@@ -121,7 +121,7 @@ gwt_acceptance:
     - source-ready capacity 不足时允许诚实 shortfall，但不允许伪造 homepage/article 成功。
     - factual_reference_only 仍需经过底稿贴合度与 mixed-layout 同源门，不得用“站点多了”掩盖质量退化。
     contract_refs:
-    - quwoquan_data/scripts/content/execution/pipeline/pipeline_run.py
+    - quwoquan_data/scripts/content/execution/controller/orchestrator.py
     - quwoquan_data/scripts/content/source/research/source_quality.py
     - quwoquan_data/scripts/core/base_draft.py
     - quwoquan_data/scripts/content/release/canonical/gate.py

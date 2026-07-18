@@ -28,7 +28,7 @@ class HomepageStatusReportRecord {
 
   factory HomepageStatusReportRecord.fromMap(Map<String, dynamic> m) {
     return HomepageStatusReportRecord(
-      id: m['_id']?.toString() ?? m['id']?.toString() ?? '',
+      id: m['id']?.toString() ?? '',
       homepageId: m['homepageId']?.toString() ?? '',
       reporterUserId: m['reporterUserId']?.toString() ?? '',
       reason: m['reason']?.toString() ?? '',

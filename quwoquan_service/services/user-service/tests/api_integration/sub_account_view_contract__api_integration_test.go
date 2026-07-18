@@ -32,7 +32,7 @@ func TestSubAccountView_GetMeProfileUsesActiveSubAccount(t *testing.T) {
 		t.Fatalf("seed persona background: %v", err)
 	}
 
-	rec := doRequest(t, http.MethodGet, "/v1/me", "", authHeaders("owner_me_profile"))
+	rec := doRequest(t, http.MethodGet, "/me", "", authHeaders("owner_me_profile"))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("get me profile: expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -93,7 +93,7 @@ func TestSubAccountView_GetSubAccountProfile(t *testing.T) {
 		t.Fatalf("seed public persona background: %v", err)
 	}
 
-	rec := doRequest(t, http.MethodGet, "/v1/user/public_view", "", authHeaders("viewer_subject"))
+	rec := doRequest(t, http.MethodGet, "/user/public_view", "", authHeaders("viewer_subject"))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("get sub-account profile: expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -147,7 +147,7 @@ func TestSubAccountView_PersonaAvatarVersionOverridesOwner(t *testing.T) {
 		t.Fatalf("seed owner avatar version: %v", err)
 	}
 
-	rec := doRequest(t, http.MethodGet, "/v1/user/persona_avatar_handle", "", authHeaders("viewer_subject"))
+	rec := doRequest(t, http.MethodGet, "/user/persona_avatar_handle", "", authHeaders("viewer_subject"))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("get persona profile: expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -169,7 +169,7 @@ func TestSubAccountView_StrictPersonaReturnsNotFound(t *testing.T) {
 		t.Fatalf("seed user_handle: %v", err)
 	}
 
-	rec := doRequest(t, http.MethodGet, "/v1/user/strict_hidden", "", authHeaders("viewer_subject"))
+	rec := doRequest(t, http.MethodGet, "/user/strict_hidden", "", authHeaders("viewer_subject"))
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("strict persona should be hidden with 404, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -184,7 +184,7 @@ func TestSubAccountView_RetiredPersonaReturnsNotFound(t *testing.T) {
 	}
 	seedPersonaPostHistory(t, "sa_retired_profile")
 
-	rec := doRequest(t, http.MethodGet, "/v1/user/retired_hidden", "", authHeaders("viewer_subject"))
+	rec := doRequest(t, http.MethodGet, "/user/retired_hidden", "", authHeaders("viewer_subject"))
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("retired persona should be hidden with 404, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -204,11 +204,11 @@ func TestSubAccountMetrics_PublicReadAndVisibilityMiss(t *testing.T) {
 		t.Fatalf("seed hidden handle: %v", err)
 	}
 
-	visibleRec := doRequest(t, http.MethodGet, "/v1/user/metrics_visible", "", authHeaders("viewer_subject"))
+	visibleRec := doRequest(t, http.MethodGet, "/user/metrics_visible", "", authHeaders("viewer_subject"))
 	if visibleRec.Code != http.StatusOK {
 		t.Fatalf("expected visible persona 200, got %d: %s", visibleRec.Code, visibleRec.Body.String())
 	}
-	hiddenRec := doRequest(t, http.MethodGet, "/v1/user/metrics_hidden", "", authHeaders("viewer_subject"))
+	hiddenRec := doRequest(t, http.MethodGet, "/user/metrics_hidden", "", authHeaders("viewer_subject"))
 	if hiddenRec.Code != http.StatusNotFound {
 		t.Fatalf("expected strict persona 404, got %d: %s", hiddenRec.Code, hiddenRec.Body.String())
 	}
@@ -250,7 +250,7 @@ func TestSearchSocialRelations_DoesNotExposeOwnerUserID(t *testing.T) {
 	blockRec := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/sub-accounts/ps_search_viewer/block",
+		"/user/sub-accounts/ps_search_viewer/block",
 		"",
 		authHeadersForPersona("search_owner_profile", "ps_search_target"),
 	)
@@ -261,7 +261,7 @@ func TestSearchSocialRelations_DoesNotExposeOwnerUserID(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodGet,
-		"/v1/user/search/social-relations?query=search_target_persona",
+		"/user/search/social-relations?query=search_target_persona",
 		"",
 		authHeadersForPersona("search_viewer_profile", "ps_search_viewer"),
 	)
@@ -303,7 +303,7 @@ func TestRelationshipCapabilityView_States(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodGet,
-		"/v1/user/sub-accounts/ps_target_rel/relationship/capability",
+		"/user/sub-accounts/ps_target_rel/relationship/capability",
 		"",
 		authHeadersForPersona("viewer_rel", "ps_viewer_rel"),
 	)
@@ -324,7 +324,7 @@ func TestRelationshipCapabilityView_States(t *testing.T) {
 	followRec := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/sub-accounts/ps_target_rel/follow",
+		"/user/sub-accounts/ps_target_rel/follow",
 		"",
 		authHeadersForPersona("viewer_rel", "ps_viewer_rel"),
 	)
@@ -334,7 +334,7 @@ func TestRelationshipCapabilityView_States(t *testing.T) {
 	rec = doRequest(
 		t,
 		http.MethodGet,
-		"/v1/user/sub-accounts/ps_target_rel/relationship/capability",
+		"/user/sub-accounts/ps_target_rel/relationship/capability",
 		"",
 		authHeadersForPersona("viewer_rel", "ps_viewer_rel"),
 	)
@@ -352,7 +352,7 @@ func TestRelationshipCapabilityView_States(t *testing.T) {
 	followBackRec := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/sub-accounts/ps_viewer_rel/follow",
+		"/user/sub-accounts/ps_viewer_rel/follow",
 		"",
 		authHeadersForPersona("target_rel", "ps_target_rel"),
 	)
@@ -362,7 +362,7 @@ func TestRelationshipCapabilityView_States(t *testing.T) {
 	rec = doRequest(
 		t,
 		http.MethodGet,
-		"/v1/user/sub-accounts/ps_target_rel/relationship/capability",
+		"/user/sub-accounts/ps_target_rel/relationship/capability",
 		"",
 		authHeadersForPersona("viewer_rel", "ps_viewer_rel"),
 	)

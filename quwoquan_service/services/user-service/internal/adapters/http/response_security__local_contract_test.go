@@ -26,7 +26,7 @@ func TestWriteHTTPErrorRedactsSensitiveDebugDataInEveryEnvironment(t *testing.T)
 	for _, environment := range []string{"alpha", "beta", "gamma", "prod"} {
 		t.Run(environment, func(t *testing.T) {
 			recorder := httptest.NewRecorder()
-			request := httptest.NewRequest("POST", "/v1/users/auth/wechat", nil)
+			request := httptest.NewRequest("POST", "/users/auth/wechat", nil)
 			request.Header.Set("X-App-Environment", environment)
 			request.Header.Set("X-Request-Id", "request-"+environment)
 			request.Header.Set("X-Trace-Id", "trace-"+environment)

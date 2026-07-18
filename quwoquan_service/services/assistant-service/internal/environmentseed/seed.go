@@ -24,7 +24,7 @@ type AppSeedDomainEntry struct {
 }
 
 type AssistantScenarioPack struct {
-	SchemaVersion          string                      `json:"schemaVersion"`
+	Schema          string                      `json:"schema"`
 	RepositoryExpectations map[string]string           `json:"repositoryExpectations"`
 	SeedSets               map[string]AssistantSeedSet `json:"seedSets"`
 	Scenarios              []AssistantScenarioFixture  `json:"scenarios"`

@@ -42,7 +42,7 @@ L4/L5 的 acceptance 与 tasks 见各子目录，按 `/dev` 逐项实施时使�
 | contracts/metadata/_projections/ | learning_events、training_samples、model_registry | ✅ 已就绪 |
 | entity_catalog.yaml | ModelScoreRequest、ModelScoreResponse 归属 rec-model-service | ✅ |
 | endpoint_catalog | recommendation.score.predict、recommendation.health | ✅ |
-| contracts/metadata/recommendation/rec_model/service.yaml | POST /v1/score、GET /health | ✅ |
+| contracts/metadata/recommendation/rec_model/service.yaml | POST /score、GET /health | ✅ |
 | services/rec-model-service/generated/ | codegen 产出（勿手改） | ✅ 已生成 |
 
 详见 [rec-model-service/readiness.md](rec-model-service/readiness.md)。
@@ -91,7 +91,7 @@ L4/L5 的 acceptance 与 tasks 见各子目录，按 `/dev` 逐项实施时使�
 
 | 对象 | 检查项 | 参考 |
 |------|--------|------|
-| **rec-model-service** | inference-api：main.py、POST /v1/score 真实实现、scenario 路由、content_feed 模型或占位、/health；inference-deployment：Dockerfile、docker-compose 条目 | [rec-model-service/树内任务文档](rec-model-service/树内任务文档) Phase 2/3 |
+| **rec-model-service** | inference-api：main.py、POST /score 真实实现、scenario 路由、content_feed 模型或占位、/health；inference-deployment：Dockerfile、docker-compose 条目 | [rec-model-service/树内任务文档](rec-model-service/树内任务文档) Phase 2/3 |
 | **rec-model-training** | 代码落点（如 services/rec-model-service/scripts/）、feature_registry 约定、training-pipeline 与 training-deployment 可跑通或占位 | [rec-model-training/树内任务文档](rec-model-training/树内任务文档) |
 | **门禁** | `make verify-metadata`、`make build`（Go）、rec-model-service 测试（若有） | quwoquan_service |
 
@@ -100,7 +100,7 @@ L4/L5 的 acceptance 与 tasks 见各子目录，按 `/dev` 逐项实施时使�
 按 [rec-model-service/go-integration/树内任务文档](rec-model-service/go-integration/树内任务文档) 顺序：
 
 1. **ModelPredictRequest 增加 Scenario 字段**：在 `runtime/recommendation/scorer.go` 中为 `ModelPredictRequest` 增加 `Scenario string`，与 metadata/OpenAPI 一致；`RemoteModelScorer.ScoreBatch` 请求体带 scenario（如 `content_feed`）。
-2. **HTTPModelServiceClient**：实现 `ModelServiceClient` 接口，HTTP POST 到 rec-model-service 的 `/v1/score`，请求/响应与 OpenAPI 一致；可放在 `content-service/internal/infrastructure/recommendation/` 或 `runtime/recommendation/`。
+2. **HTTPModelServiceClient**：实现 `ModelServiceClient` 接口，HTTP POST 到 rec-model-service 的 `/score`，请求/响应与 OpenAPI 一致；可放在 `content-service/internal/infrastructure/recommendation/` 或 `runtime/recommendation/`。
 3. **content-service 配置**：config 结构体与 config.yaml 增加 `rec_model_service.url`、`timeout`、`enabled`。
 4. **content-service main 装配**：按配置若 enabled 则创建 HTTPModelServiceClient → RemoteModelScorer → CascadeScorer(primary=Remote, fallback=RuleScorer)，`WithScorer(cascade)` 注入 Engine；否则保持仅 RuleScorer。
 5. **回退测试**：已有或补充：HTTP 失败/超时时 CascadeScorer 回退 RuleScorer 的测试。

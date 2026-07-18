@@ -74,7 +74,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                 .where(
                   (proposal) =>
                       proposal.status == ProfileUpdateProposalStatus.pending ||
-                      proposal.status == ProfileUpdateProposalStatus.confirmed,
+                      proposal.status ==
+                          ProfileUpdateProposalStatus.confirmed ||
+                      proposal.status == ProfileUpdateProposalStatus.applying,
                 )
                 .toList(growable: false) ??
             const <ProfileUpdateProposalView>[];
@@ -451,7 +453,8 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
             .where(
               (proposal) =>
                   proposal.status == ProfileUpdateProposalStatus.pending ||
-                  proposal.status == ProfileUpdateProposalStatus.confirmed,
+                  proposal.status == ProfileUpdateProposalStatus.confirmed ||
+                  proposal.status == ProfileUpdateProposalStatus.applying,
             )
             .toList(growable: false);
         _profileProposalLoadError = null;
@@ -560,11 +563,14 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                             ),
                             title: UITextConstants.editProfileProposalTitle,
                             trailing: Text(
-                              proposal.status ==
-                                      ProfileUpdateProposalStatus.pending
-                                  ? UITextConstants.editProfileProposalPending
-                                  : UITextConstants
-                                        .editProfileProposalConfirmed,
+                              switch (proposal.status) {
+                                ProfileUpdateProposalStatus.pending =>
+                                  UITextConstants.editProfileProposalPending,
+                                ProfileUpdateProposalStatus.applying =>
+                                  UITextConstants.editProfileProposalApplying,
+                                _ =>
+                                  UITextConstants.editProfileProposalConfirmed,
+                              },
                               style: TextStyle(
                                 fontSize: AppTypography.iosSubheadline,
                                 color: AppColors.iosAccent(context),

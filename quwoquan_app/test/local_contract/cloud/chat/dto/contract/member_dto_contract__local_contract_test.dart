@@ -8,7 +8,7 @@ void main() {
   group('ConversationMemberDto — 常规契约', () {
     test('fromMap 解析 user 类型成员全字段', () {
       final raw = <String, dynamic>{
-        '_id': 'cm_001',
+        'id': 'cm_001',
         'conversationId': 'conv_002',
         'userId': 'user_001',
         'displayName': '群主小王',
@@ -34,7 +34,7 @@ void main() {
 
     test('fromMap 解析 assistant 类型成员含 assistantSkillId', () {
       final raw = <String, dynamic>{
-        '_id': 'cm_ast',
+        'id': 'cm_ast',
         'conversationId': 'conv_002',
         'userId': 'assistant',
         'displayName': '小趣助手',
@@ -52,7 +52,7 @@ void main() {
 
     test('toMap round-trip 保持字段完整', () {
       final raw = <String, dynamic>{
-        '_id': 'cm_rt',
+        'id': 'cm_rt',
         'conversationId': 'conv_002',
         'userId': 'u1',
         'displayName': '测试用户',
@@ -75,12 +75,12 @@ void main() {
   });
 
   // ──────────────────────────────────────────────────────────────────
-  // 兼容性契约
+  // 单轨契约
   // ──────────────────────────────────────────────────────────────────
-  group('ConversationMemberDto — 兼容性契约', () {
+  group('ConversationMemberDto — 单轨契约', () {
     test('无 memberType 降级为 user', () {
       final raw = <String, dynamic>{
-        '_id': 'cm_old',
+        'id': 'cm_old',
         'conversationId': 'conv_001',
         'userId': 'u1',
         'role': 'member',
@@ -92,7 +92,7 @@ void main() {
 
     test('无 role 降级为 member', () {
       final raw = <String, dynamic>{
-        '_id': 'cm_no_role',
+        'id': 'cm_no_role',
         'conversationId': 'conv_001',
         'userId': 'u1',
         'memberType': 'user',
@@ -102,26 +102,30 @@ void main() {
       expect(dto.role, equals('member'));
     });
 
-    test('_id alias → id round-trip 稳定', () {
-      final raw = <String, dynamic>{
+    test('拒绝 _id alias，只认 id', () {
+      final retired = ConversationMemberDto.fromMap(<String, dynamic>{
         '_id': 'cm_alias_rt',
         'conversationId': 'conv_001',
         'userId': 'u1',
         'memberType': 'user',
         'role': 'member',
         'joinedAt': '2026-01-01T00:00:00.000Z',
-      };
-      final dto = ConversationMemberDto.fromMap(raw);
-      final map = dto.toMap();
-      final dto2 = ConversationMemberDto.fromMap(map);
-      expect(dto2.id, equals(dto.id));
-      expect(dto2.memberType, equals(dto.memberType));
-      expect(dto2.role, equals(dto.role));
+      });
+      final canonical = ConversationMemberDto.fromMap(<String, dynamic>{
+        'id': 'cm_canonical',
+        'conversationId': 'conv_001',
+        'userId': 'u1',
+        'memberType': 'user',
+        'role': 'member',
+        'joinedAt': '2026-01-01T00:00:00.000Z',
+      });
+      expect(retired.id, isEmpty);
+      expect(canonical.id, equals('cm_canonical'));
     });
 
     test('toMap 省略 null optional 字段', () {
       final raw = <String, dynamic>{
-        '_id': 'cm_minimal',
+        'id': 'cm_minimal',
         'conversationId': 'conv_001',
         'userId': 'u1',
         'memberType': 'user',
@@ -157,7 +161,7 @@ void main() {
 
     test('null 值字段安全', () {
       final raw = <String, dynamic>{
-        '_id': null,
+        'id': null,
         'conversationId': null,
         'userId': null,
         'displayName': null,
@@ -177,8 +181,8 @@ void main() {
       expect(dto.assistantSkillId, isNull);
     });
 
-    test('仅有 _id 字段时其余均为默认值', () {
-      final raw = <String, dynamic>{'_id': 'cm_only_id'};
+    test('仅有 id 字段时其余均为默认值', () {
+      final raw = <String, dynamic>{'id': 'cm_only_id'};
       final dto = ConversationMemberDto.fromMap(raw);
       expect(dto.id, equals('cm_only_id'));
       expect(dto.conversationId, isEmpty);

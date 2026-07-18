@@ -73,8 +73,8 @@ ruby -ryaml -e '
   fail("recommendation service domain drifted") unless service["domain"] == "recommendation"
   routes = metadata["api_routes"] || []
   expected = {
-    "ScoreRecommendationCandidates" => "/internal/v1/recommendation/model-releases:score",
-    "BatchScoreRecommendationCandidates" => "/internal/v1/recommendation/model-releases:batch-score",
+    "ScoreRecommendationCandidates" => "/internal/recommendation/model-releases:score",
+    "BatchScoreRecommendationCandidates" => "/internal/recommendation/model-releases:batch-score",
   }
   expected.each do |operation, path|
     route = routes.find { |candidate| candidate["operation"] == operation }
@@ -100,7 +100,7 @@ for kw in 'SCORE_RECOMMENDATION_CANDIDATES_PATH' 'BATCH_SCORE_RECOMMENDATION_CAN
   fi
 done
 
-for retired in '/v1/score' '/v1/model/reload' '/v1/model/status'; do
+for retired in '/score' '/model/reload' '/model/status'; do
   if grep -F -n "$retired" "$PY_API" >/dev/null 2>&1; then
     echo "[verify] FAIL: recommendation-service retains retired route '$retired'" >&2
     exit 1

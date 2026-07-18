@@ -107,7 +107,7 @@ asset://cover
       expect(doc.html, isNot(contains('javascript:alert')));
     });
 
-    test('resolves objectKey-only asset manifest through shared resolver', () {
+    test('resolves public slice asset manifest through shared resolver', () {
       final doc = renderer.render(
         const MarkdownSeoRenderInput(
           postId: 'post_object_key',
@@ -121,8 +121,7 @@ asset://cover
             'assets': <Object?>[
               <String, Object?>{
                 'assetId': 'cover',
-                'objectKey':
-                    'media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg',
+                'objectKey': 'media/image/s/seo/post-object-key/v1/cover.jpg',
               },
             ],
           },
@@ -132,9 +131,7 @@ asset://cover
       expect(
         doc.html,
         contains(
-          resolvedMedia(
-            'media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg',
-          ),
+          resolvedMedia('media/image/s/seo/post-object-key/v1/cover.jpg'),
         ),
       );
       expect(doc.html, contains('data-asset-id="cover"'));
@@ -291,13 +288,15 @@ coverImage: asset://海螺沟_cover_01
           'assetId': '海螺沟_cover_01',
           'fileName': '海螺沟_cover_01.jpg',
           'sourceAssetRef': 'source/海螺沟_cover_01.jpg',
-          'objectKey': 'media/image/s/runtime-preview/海螺沟_cover_01.jpg',
+          'objectKey':
+              'media/image/s/runtime-preview/topic-layout-sample/v1/cover-01.jpg',
         },
         <String, Object?>{
           'assetId': '海螺沟_detail_02',
           'fileName': '海螺沟_detail_02.jpg',
           'sourceAssetRef': 'source/海螺沟_detail_02.jpg',
-          'objectKey': 'media/image/s/runtime-preview/海螺沟_detail_02.jpg',
+          'objectKey':
+              'media/image/s/runtime-preview/topic-layout-sample/v1/detail-02.jpg',
         },
       ];
       for (final asset in declaredAssets) {
@@ -306,17 +305,7 @@ coverImage: asset://海螺沟_cover_01
         sourceFile.parent.createSync(recursive: true);
         sourceFile.writeAsStringSync('fake-source-image', encoding: utf8);
       }
-      final renderManifest = <String, Object?>{
-        'assets': declaredAssets
-            .map(
-              (asset) => <String, Object?>{
-                ...asset,
-                'objectKey':
-                    'media/image/s/runtime-preview/${asset['assetId']}.jpg',
-              },
-            )
-            .toList(),
-      };
+      final renderManifest = <String, Object?>{'assets': declaredAssets};
       File('${postDir.path}/manifest.json').writeAsStringSync(
         jsonEncode(<String, Object?>{
           'topicId': 'topic_layout_sample',

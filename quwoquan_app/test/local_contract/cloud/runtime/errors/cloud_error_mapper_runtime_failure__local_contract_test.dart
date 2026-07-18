@@ -1,5 +1,5 @@
-import 'dart:convert';
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -78,14 +78,27 @@ void main() {
     final invalidJson = CloudErrorMapper.runtimeFailureFromException(
       const FormatException('bad json'),
     );
-    final unknown = CloudErrorMapper.runtimeFailureFromException(
+    final invalidState = CloudErrorMapper.runtimeFailureFromException(
       StateError('unexpected'),
+    );
+    final invalidArgument = CloudErrorMapper.runtimeFailureFromException(
+      ArgumentError('actor context missing'),
     );
 
     expect(timeout.kind, RuntimeFailureKind.timeout);
+    expect(timeout.code, RuntimeFailureCodes.appTimeoutRequestTimeout);
     expect(offline.kind, RuntimeFailureKind.network);
+    expect(offline.code, RuntimeFailureCodes.appNetworkOffline);
+    expect(offline.origin, RuntimeFailureOrigin.environment);
     expect(invalidJson.kind, RuntimeFailureKind.parsing);
-    expect(unknown.kind, RuntimeFailureKind.internal);
+    expect(invalidState.kind, RuntimeFailureKind.contract);
+    expect(invalidState.code, RuntimeFailureCodes.appContractInvalidResponse);
+    expect(invalidState.origin, RuntimeFailureOrigin.developer);
+    expect(invalidArgument.kind, RuntimeFailureKind.contract);
+    expect(
+      invalidArgument.code,
+      RuntimeFailureCodes.appContractInvalidResponse,
+    );
   });
 
   test(
@@ -130,7 +143,7 @@ void main() {
     },
   );
 
-  test('forward-compat: 未知/新错误码仍下发 userMessage + recovery 兜底（端侧未升级亦可处理）', () {
+  test('未知错误码仍下发 userMessage + recovery 结构化兜底', () {
     // 模拟云侧新增了一个客户端尚无 typed 枚举的错误码：端侧不认识该 code，
     // 但必须仍能展示云端下发的 userMessage，并消费结构化 recovery。
     final body = jsonEncode(<String, dynamic>{

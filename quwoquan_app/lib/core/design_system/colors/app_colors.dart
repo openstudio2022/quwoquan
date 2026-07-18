@@ -26,6 +26,9 @@ class AppColors {
 
   static const Color accentColor = Color(0xFF34C759);
   static const Color error = Color(0xFFFF3B30);
+  static const Color errorForegroundLight = Color(0xFFE5484D);
+  static const Color errorForegroundDark = Color(0xFFFF6B6B);
+  static const Color errorBackground = transparent;
   static const Color success = Color(0xFF34C759);
   static const Color warning = Color(0xFFFF9F0A);
 
@@ -68,6 +71,9 @@ class AppColors {
 
   /// 图片书页背面轻微压暗洗色。
   static const Color imageBookBackFaceWash = Color(0xFF111821);
+
+  /// 图片书阅读遮罩底部发丝线，避免在浅色图片上丢失边界。
+  static const Color imageBookReadabilityHairline = Color(0x2E000000);
 
   /// 发现页作品宫格卡片内层占位（浅灰）
   static const Color discoveryPostGridInnerFallback = Color(0xFFE0E0E0);
@@ -456,6 +462,19 @@ class AppColors {
 
   static Color iosDestructive(BuildContext context) =>
       CupertinoDynamicColor.resolve(CupertinoColors.systemRed, context);
+
+  /// 字段、表单与局部操作错误共用的高保前景/边框色。
+  static Color errorForeground(BuildContext context) {
+    return CupertinoDynamicColor.resolve(
+      const CupertinoDynamicColor.withBrightness(
+        color: errorForegroundLight,
+        darkColor: errorForegroundDark,
+      ),
+      context,
+    );
+  }
+
+  static Color errorBorder(BuildContext context) => errorForeground(context);
 
   static Color iosTintedFill(BuildContext context) {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;

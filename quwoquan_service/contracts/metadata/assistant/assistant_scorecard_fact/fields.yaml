@@ -1,4 +1,3 @@
-version: 1
 aggregate: AssistantScorecardFact
 
 entities:
@@ -6,6 +5,7 @@ entities:
     description: 助手交互指标评分卡
     fields:
       - name: scoreId
+        source: scoreId
         type: string
         constraints: [PK]
         classification: PUBLIC
@@ -13,6 +13,7 @@ entities:
         api_exposure: read_write
         ops_exposure: read
       - name: eventId
+        source: eventId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -20,6 +21,7 @@ entities:
         api_exposure: read_write
         ops_exposure: read
       - name: runId
+        source: runId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -27,6 +29,7 @@ entities:
         api_exposure: read_write
         ops_exposure: read
       - name: userId
+        source: userId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -34,6 +37,7 @@ entities:
         api_exposure: read_write
         ops_exposure: read
       - name: domainId
+        source: domainId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -41,6 +45,7 @@ entities:
         api_exposure: read_write
         ops_exposure: read
       - name: metricId
+        source: metricId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -48,6 +53,7 @@ entities:
         api_exposure: read_write
         ops_exposure: read
       - name: scoreValue
+        source: scoreValue
         type: float
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -55,6 +61,7 @@ entities:
         api_exposure: read_write
         ops_exposure: read
       - name: scoreSource
+        source: scoreSource
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -62,6 +69,7 @@ entities:
         api_exposure: read_write
         ops_exposure: read
       - name: createdAt
+        source: createdAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC

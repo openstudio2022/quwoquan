@@ -282,13 +282,13 @@ domains:
         target_edit_draft: N/A
       - path: quwoquan_app/lib/ui/user/pages/my_intersection_inbox_page.dart
         status: compliant
-        note: 我的交集分维度列表，消费 GET /v1/content/intersections（list）+ POST /v1/content/intersections/visit（打开即清零已读水位）；IntersectionRepository 三层，intersectionRepositoryProvider 切换；一级交集/影响力使用统一 multiOptionList 分段控。
+        note: 我的交集分维度列表，消费 GET /content/intersections（list）+ POST /content/intersections/visit（打开即清零已读水位）；IntersectionRepository 三层，intersectionRepositoryProvider 切换；一级交集/影响力使用统一 multiOptionList 分段控。
         target_dto: IntersectionReason
         target_read_projection: IntersectionInboxSummary
         target_edit_draft: N/A
       - path: quwoquan_app/lib/ui/user/pages/my_footprint_page.dart
         status: compliant
-        note: 我的足迹私有只读列表，消费 GET /v1/content/footprint（type 过滤 + cursor 分页）；FootprintRepository 三层，footprintRepositoryProvider 切换；type 枚举由云侧定义、端侧只透传
+        note: 我的足迹私有只读列表，消费 GET /content/footprint（type 过滤 + cursor 分页）；FootprintRepository 三层，footprintRepositoryProvider 切换；type 枚举由云侧定义、端侧只透传
         target_dto: FootprintEntry
         target_read_projection: N/A
         target_edit_draft: N/A

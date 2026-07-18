@@ -90,7 +90,7 @@ canonical 只含最终业务对象，不得包含 raw source、草稿、prompt�
 ## 唯一任务门面
 
 ```bash
-python3 quwoquan_data/scripts/cli.py task geo-homepages --execution-id <id> ...
+python3 quwoquan_data/scripts/cli.py task execute --execution-id <id> ...
 ```
 
 `geo-homepages` 是唯一任务门面，聚合 target selection、执行、readiness、publish 与 ship，不建立独立 schema、runner 或输出根。

@@ -69,7 +69,7 @@ def tree_integrity_stats(root: Path) -> dict[str, Any]:
     entries, redacted = _entries(root)
     inventory = json.dumps(entries, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return {
-        "algorithm": "sha256-path-blob-merkle-v1",
+        "algorithm": "sha256-path-blob-merkle",
         "merkleRoot": _merkle_root(entries),
         "fileCount": len(entries),
         "totalBytes": sum(int(row["bytes"]) for row in entries),

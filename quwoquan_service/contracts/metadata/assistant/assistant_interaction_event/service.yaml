@@ -1,4 +1,3 @@
-version: 1
 service:
   name: assistant-service
   domain: assistant
@@ -11,7 +10,8 @@ service:
     target_story: app-cloud-business-object-commercial-closure
 api_routes:
   - method: POST
-    path: /v1/assistant/learning/events
+    path: /assistant/learning/events
+
     operation: ReportInteractionEvent
     actor: persona
     application:

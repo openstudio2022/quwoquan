@@ -1,4 +1,3 @@
-version: 1
 
 events:
   - audit_id: moderation_action_applied

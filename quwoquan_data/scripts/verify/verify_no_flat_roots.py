@@ -2,7 +2,7 @@
 """Root layout gate: quwoquan_data 根层目录 allowlist + scripts/tests 根平铺 ratchet.
 
 - quwoquan_data 根层 tracked 条目必须在目录规范 allowlist 内
-  （docs/pipeline_directory_layout_spec.md 仓内层规范），禁止新开根层目录/平铺文件；
+  （specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/execution.md 仓内层规范），禁止新开根层目录/平铺文件；
 - 禁止 quwoquan_data/scripts/ 与 quwoquan_data/tests/ 根层级再次出现业务平铺文件。
   允许 scripts/ 根仅保留 cli.py；tests/ 根仅保留 conftest.py。
 """
@@ -24,17 +24,15 @@ from core.paths import DATA_ROOT as _DATA_ROOT  # noqa: E402
 ALLOWED_SCRIPT_ROOT_FILES = {"cli.py"}
 ALLOWED_TEST_ROOT_FILES = {"conftest.py"}
 
-# quwoquan_data 根层 tracked 目录规范（与 docs/pipeline_directory_layout_spec.md 同源）。
+# quwoquan_data 根层 tracked 目录规范（与 specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/execution.md 同源）。
 ALLOWED_TRACKED_ROOT_DIRS = {
-    "control_plane",  # 任务控制面：tasks 注册表 + families 家族包 + _shared runtime profile
-    "docs",           # 数据工程文档
+    "control_plane",  # 可复用 families、catalogs、governance policy 与 runtime profile
     "prompts",        # 提示词模板库
-    "publish",        # 发布主线（部分版本控制）
+    "publish",        # canonical approved 对象真相源
     "reference",      # 长期静态参考数据（行政区划等）
     "schema",         # JSON schema 契约
     "scripts",        # 唯一 CLI 与能力实现
-    "sop",            # 内容生产 SOP
-    "templates",      # 内容层模板库（blueprints/creator_profiles/_registry）
+    "templates",      # 内容层可复用模板库
     "tests",          # 测试
     "verticals",      # 垂类资产（coverage/rights 等）
 }
@@ -72,7 +70,7 @@ def verify_no_flat_roots() -> list[str]:
         if entry not in allowed_root:
             issues.append(
                 f"data root entry not in layout allowlist: quwoquan_data/{entry}"
-                "（新增根层目录/文件须先改 docs/pipeline_directory_layout_spec.md 与本 allowlist）"
+                "（新增根层目录/文件须先改 specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/execution.md 与本 allowlist）"
             )
     scripts_root = _DATA_ROOT / "scripts"
     tests_root = _DATA_ROOT / "tests"

@@ -1,5 +1,4 @@
 {
-  "contractVersion": "progress_text_policy_v1",
   "jsonEnvelopeSignatures": [
     "\"contractId\"",
     "\"decision\"",
@@ -40,5 +39,6 @@
     "HTTP 400",
     "HTTP 500",
     "HTTP 503"
-  ]
+  ],
+  "schema": "progress_text_policy"
 }

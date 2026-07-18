@@ -10,7 +10,7 @@ scope:
   summary: 端侧推荐反馈统一上报通道、七态分级、采样合并、clientEventId 幂等与 feedRequestId/channelId/rankingVersion/reasonVersion/recallPath/contentVertical/supplySource
     归因闭环，降低云侧流量冲击并支撑推荐分桶评估。
   in_scope:
-  - 统一 BehaviorReporter 通道与双通道合并。
+  - 将历史双出口收敛为统一 BehaviorReporter 网络通道。
   - 可见性阈值、端侧聚合采样、分级上报。
   - clientEventId 幂等与 feedRequestId 归因闭环。
   - 全事件携带 referralSource/position/channelId/rankingVersion/reasonVersion/recallPath/contentVertical/supplySource
@@ -49,9 +49,10 @@ gwt_acceptance:
       - file: quwoquan_app/test/local_contract/cloud/behavior/contract/behavior_repository_contract__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/cloud/content/content_behavior_tracker__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/core/trackers/intersection_attribution__local_contract_test.dart
+      - file: quwoquan_app/test/api_integration/cloud/content/api_contract_runner.dart
       - file: quwoquan_service/services/content-service/tests/api_integration/post_behavior_contract__api_integration_test.go
       - file: quwoquan_service/services/content-service/tests/local_contract/runtime/recommendation/observability_attribution__local_contract_test.go
-    status: implemented
+    status: partial
     test_evidence:
       primary:
       - layer: local_contract
@@ -75,6 +76,7 @@ gwt_acceptance:
         - gamma
     notes:
     - '[migrated_from_planned] quwoquan_app/test/user_acceptance/patrol/discovery/feed_exposure_governance_journey_test.dart'
+    - '2026-07-18: ContentBehaviorTracker 与 ContentEngagementTracker 已闭合到 BehaviorReporter 单一网络出口，behaviors/ops 双写已删除；gamma /content/behaviors 的 impression/dwell/click/share 与 like 拒绝边界通过定向 API contract。完整 HotPath→投影→下一次 feed 应用及真实指标增量 UAT 尚未闭合，状态保持 partial。'
 execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh

@@ -97,7 +97,7 @@ abstract class TagRepository {
 
 // ── DTO / Value Objects ──────────────────────────────────────────
 
-/// 交集锚点（tag-service /v1/tag/shared-tags 返回项，对齐 service.yaml SharedTagView）。
+/// 交集锚点（tag-service /tag/shared-tags 返回项，对齐 service.yaml SharedTagView）。
 class SharedTagView {
   final String tagRef;
   final String label;
@@ -119,7 +119,7 @@ class SharedTagView {
   );
 }
 
-/// 标签解析结果（tag-service /v1/tag/resolve 返回项）。
+/// 标签解析结果（tag-service /tag/resolve 返回项）。
 class TagResolve {
   final String tagRef;
   final String group;
@@ -147,7 +147,7 @@ class TagResolve {
   );
 }
 
-/// 标签层级直接子节点（tag-service /v1/tag/children 返回项）。
+/// 标签层级直接子节点（tag-service /tag/children 返回项）。
 class TagChild {
   final String tagRef;
   final String label;
@@ -174,8 +174,7 @@ class TagChild {
   factory TagChild.fromJson(Map<String, dynamic> json) => TagChild(
     tagRef: json['tagRef'] as String? ?? '',
     label: json['label'] as String? ?? '',
-    displayLabel:
-        json['displayLabel'] as String? ?? json['label'] as String? ?? '',
+    displayLabel: json['displayLabel'] as String? ?? '',
     labelEn: json['labelEn'] as String? ?? '',
     parentTagRef: json['parentTagRef'] as String? ?? '',
     depth: (json['depth'] as num?)?.toInt() ?? 0,

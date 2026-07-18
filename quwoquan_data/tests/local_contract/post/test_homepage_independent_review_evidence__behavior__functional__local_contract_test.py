@@ -33,7 +33,7 @@ def _review_dir(tmp_path: Path) -> Path:
     _write_json(
         review_dir / "attestation.json",
         {
-            "schemaVersion": "quwoquan_data.review_attestation/1",
+            "schema": "quwoquan_data.review_attestation",
             "stage": "5.review",
             "executionId": EXECUTION_ID,
             "executionBinding": "frozen",
@@ -57,7 +57,7 @@ def _review_dir(tmp_path: Path) -> Path:
     _write_json(
         review_dir / "evidence_index.json",
         {
-            "schemaVersion": "quwoquan_data.evidence_index/1",
+            "schema": "quwoquan_data.evidence_index",
             "stage": "5.review",
             "executionId": EXECUTION_ID,
             "objectRef": OBJECT_REF,
@@ -72,7 +72,7 @@ def test_homepage_independent_review__binds_typed_response_to_canonical_evidence
 ) -> None:
     review_dir = _review_dir(tmp_path)
     response = {
-        "schemaVersion": "quwoquan_data.homepage_reviewer_response/1",
+        "schema": "quwoquan_data.homepage_reviewer_response",
         "executionId": EXECUTION_ID,
         "objectRef": OBJECT_REF,
         "decision": "approved",
@@ -103,7 +103,7 @@ def test_homepage_independent_review__rejects_canonical_result_shaped_agent_repl
 ) -> None:
     review_dir = _review_dir(tmp_path)
     wrong_response = {
-        "schemaVersion": "quwoquan_data.reviewer_result/1",
+        "schema": "quwoquan_data.reviewer_result",
         "executionId": EXECUTION_ID,
         "objectRef": OBJECT_REF,
         "decision": "approved",
@@ -129,7 +129,7 @@ def test_homepage_independent_review__rejects_synthetic_contract_output_run_id__
 ) -> None:
     review_dir = _review_dir(tmp_path)
     response = {
-        "schemaVersion": "quwoquan_data.homepage_reviewer_response/1",
+        "schema": "quwoquan_data.homepage_reviewer_response",
         "executionId": EXECUTION_ID,
         "objectRef": OBJECT_REF,
         "decision": "approved",

@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "policyId": { "const": "travel-cold-start-supply" },
+    "feedMinimumPosts": { "type": "integer", "minimum": 1 },
+    "contentPerEntity": {
+      "type": "object",
+      "properties": {
+        "article": { "type": "integer", "minimum": 1 },
+        "image": { "type": "integer", "minimum": 1 },
+        "video": { "type": "integer", "minimum": 1 }
+      },
+      "required": ["article", "image", "video"],
+      "additionalProperties": false
+    },
+    "quality": {
+      "type": "object",
+      "properties": {
+        "nonEmptyRateMinimum": { "type": "number", "minimum": 0, "maximum": 1 },
+        "duplicateExposureRateMaximum": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "required": ["nonEmptyRateMinimum", "duplicateExposureRateMaximum"],
+      "additionalProperties": false
+    },
+    "videoDelivery": {
+      "type": "object",
+      "properties": {
+        "container": { "const": "mp4" },
+        "codec": { "const": "h264" },
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 },
+        "aspectRatio": { "const": "9:16" },
+        "pixelFormat": { "const": "yuv420p" },
+        "framesPerSecond": { "type": "integer", "minimum": 1 },
+        "segmentDurationSeconds": { "type": "integer", "minimum": 1 },
+        "minimumDurationSeconds": { "type": "integer", "minimum": 1 },
+        "maximumDurationSeconds": { "type": "integer", "minimum": 1 },
+        "posterRequired": { "const": true },
+        "subtitlesRequired": { "const": true },
+        "checksumRequired": { "const": true },
+        "rightsProvenanceRequired": { "const": true }
+      },
+      "required": [
+        "container", "codec", "width", "height", "aspectRatio", "pixelFormat",
+        "framesPerSecond", "segmentDurationSeconds", "minimumDurationSeconds",
+        "maximumDurationSeconds",
+        "posterRequired", "subtitlesRequired", "checksumRequired", "rightsProvenanceRequired"
+      ],
+      "additionalProperties": false
+    },
+    "provinces": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "properties": {
+          "province": { "enum": ["浙江省", "四川省"] },
+          "targets": {
+            "type": "array",
+            "minItems": 10,
+            "maxItems": 10,
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": { "type": "string", "minLength": 1 },
+                "entityType": { "type": "string", "pattern": "^地点/" }
+              },
+              "required": ["name", "entityType"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["province", "targets"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "policyId", "feedMinimumPosts", "contentPerEntity", "quality",
+    "videoDelivery", "provinces"
+  ],
+  "additionalProperties": false
+}

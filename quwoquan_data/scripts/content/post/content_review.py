@@ -85,7 +85,7 @@ def check_narrative_quality(article: str, manifest: dict) -> list[str]:
     # 字数门形态自适应（唯一真相源 base_draft_readiness）：image/gallery 图片作品不受
     # 正文长度门约束；article 长文≥600，图文混排正文≥200且有足量内联图/图注。
     if str(manifest.get("carrier") or "") != "image":
-        from content.post.base_draft import base_draft_readiness
+        from content.post.article.base_draft import base_draft_readiness
 
         readiness = base_draft_readiness(
             article,

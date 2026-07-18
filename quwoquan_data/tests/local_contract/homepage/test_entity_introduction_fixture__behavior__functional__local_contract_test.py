@@ -79,7 +79,7 @@ def seed_entity(root: Path, *, materialized: bool = True) -> Path:
 
 def minimal_scenarios() -> dict:
     return {
-        "schemaVersion": "contract-fixture",
+        "schema": "contract-fixture",
         "seedSets": {
             "entity_homepage_core": {
                 "description": "",

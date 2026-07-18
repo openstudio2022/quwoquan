@@ -68,7 +68,7 @@ func (r *UserProfileResolver) resolveOne(
 	ctx context.Context,
 	userID string,
 ) (application.ProfileSnapshot, error) {
-	requestURL := fmt.Sprintf("%s/v1/user/profile/%s", r.baseURL, url.PathEscape(userID))
+	requestURL := fmt.Sprintf("%s/user/profile/%s", r.baseURL, url.PathEscape(userID))
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
 	if err != nil {
 		return application.ProfileSnapshot{}, err

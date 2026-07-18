@@ -1,4 +1,3 @@
-version: 1
 domain: chat
 aggregate_root: Message
 object_kind: aggregate_root

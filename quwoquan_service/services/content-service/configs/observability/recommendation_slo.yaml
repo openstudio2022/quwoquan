@@ -64,8 +64,8 @@ commercial_maturity:
         - quality_score_coverage
 
 routes:
-  content_feed: /v1/content/feed
-  content_behaviors: /v1/content/behaviors
+  content_feed: /content/feed
+  content_behaviors: /content/behaviors
 
 dashboards:
   recommendation_commercial_maturity: quwoquan_ops/observability/monitoring/dashboards/l2_recommendation_commercial_maturity.json
@@ -148,7 +148,7 @@ slis:
   - id: recommendation_feed_latency
     description: 内容 feed 读路由用户感知延迟，分位数取自 http_server histogram。
     source: http_server_duration_seconds
-    sli: histogram_quantile(q, sum(rate(http_server_duration_seconds_bucket{service="content-service", route="/v1/content/feed"}[5m])) by (le))
+    sli: histogram_quantile(q, sum(rate(http_server_duration_seconds_bucket{service="content-service", route="/content/feed"}[5m])) by (le))
     objectives:
       p50_ms: 80
       p95_ms: 200
@@ -157,13 +157,13 @@ slis:
   - id: recommendation_feed_availability
     description: feed 读路由可用性 = 1 - 5xx 错误率。
     source: http_server_requests_total
-    sli: 1 - sum(rate(http_server_requests_total{service="content-service", route="/v1/content/feed", status=~"5.."}[5m])) / sum(rate(http_server_requests_total{service="content-service", route="/v1/content/feed"}[5m]))
+    sli: 1 - sum(rate(http_server_requests_total{service="content-service", route="/content/feed", status=~"5.."}[5m])) / sum(rate(http_server_requests_total{service="content-service", route="/content/feed"}[5m]))
     objective: 0.995
 
   - id: behavior_ingest_latency
     description: 行为上报入口 HTTP 延迟；HotPath 真正生效延迟由 Phase 1 业务指标补齐。
     source: http_server_duration_seconds
-    sli: histogram_quantile(q, sum(rate(http_server_duration_seconds_bucket{service="content-service", route="/v1/content/behaviors"}[5m])) by (le))
+    sli: histogram_quantile(q, sum(rate(http_server_duration_seconds_bucket{service="content-service", route="/content/behaviors"}[5m])) by (le))
     objectives:
       p95_ms: 100
 

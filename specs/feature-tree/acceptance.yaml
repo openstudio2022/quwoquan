@@ -48,6 +48,50 @@ uat_acceptance:
         envs:
         - local
     notes: []
+  UAT_COLD_START_SAFE_HANDOFF:
+    title: 冷启动安全交接与可观测恢复
+    journey: 用户从系统 LaunchScreen 到 Flutter 欢迎页和主壳时，遇到配置、Router、首帧或网络异常仍在有限预算内进入可解释、可恢复的终态，并让同一启动尝试可在云端分析。
+    scenario_refs:
+    - cold-start-safe-handoff-and-telemetry
+    done_when:
+    - Android/iPhone/Web 正常冷启动或硬刷新在既定 3 秒 Shell 目标与 6 秒终态上限内完成。
+    - 缺配置、Router 失败、Welcome observer 失败和 native first-frame timeout 不会永久显示原生 LaunchScreen、Welcome 或空白页。
+    - 每种故障都有 recovery surface、稳定 attemptId 和脱敏云端阶段/终态记录。
+    - journal 离线、重载、认证切换和部分 ACK 的补传不会丢失或重复已确认事件。
+    experience_points:
+    - native to Flutter handoff
+    - safe recovery after bootstrap or router failure
+    - router shell retry action and native first-frame recovery
+    performance_points:
+    - shell first paint normal target <= 3s
+    - terminal surface <= 6s for every controllable startup path
+    - startup telemetry end-to-cloud visibility P95 <= 5min
+    tests:
+      planned:
+      - file: quwoquan_app/test/local_contract/app/startup_recovery__local_contract_test.dart
+      - file: quwoquan_service/services/product-ops-service/tests/api_integration/startup_telemetry__api_integration_test.go
+      - file: quwoquan_app/scripts/device/verify_startup_first_frame.py
+      recorded: []
+    status: pending
+    test_evidence:
+      primary:
+      - layer: user_acceptance
+        suite: cold_start_fault_recovery
+        cases:
+        - user_acceptance.app_root.cold_start_safe_handoff.cross_platform
+        envs: [gamma_local]
+      supporting:
+      - layer: local_contract
+        suite: cold_start_failure_state_machine
+        cases:
+        - local_contract.app_root.cold_start_safe_handoff.recovery
+        envs: [local]
+      - layer: api_integration
+        suite: cold_start_telemetry_ingress
+        cases:
+        - api_integration.app_root.cold_start_safe_handoff.telemetry
+        envs: [gamma]
+    notes: []
   UAT_PROFILE_SHARE_INTERACTION:
     title: 我的主页转发互动双向历史
     journey: 当前用户在我的主页互动二级控制行查看收到的与我发起的转发，可靠恢复方向状态，正确打开目标，且任何他人或旧分身均不可读取。

@@ -40,9 +40,9 @@ func TestContentConsumptionJourneyMetrics(t *testing.T) {
 	)
 
 	mux := http.NewServeMux()
-	mux.Handle("/v1/content/feed", feedHandler)
-	mux.Handle("/v1/content/posts/post-1", detailHandler)
-	mux.Handle("/v1/content/interactions/like", interactionHandler)
+	mux.Handle("/content/feed", feedHandler)
+	mux.Handle("/content/posts/post-1", detailHandler)
+	mux.Handle("/content/interactions/like", interactionHandler)
 	mux.Handle("/metrics", promhttp.Handler())
 
 	server := httptest.NewServer(mux)
@@ -52,9 +52,9 @@ func TestContentConsumptionJourneyMetrics(t *testing.T) {
 		method string
 		path   string
 	}{
-		{"GET", "/v1/content/feed"},
-		{"GET", "/v1/content/posts/post-1"},
-		{"POST", "/v1/content/interactions/like"},
+		{"GET", "/content/feed"},
+		{"GET", "/content/posts/post-1"},
+		{"POST", "/content/interactions/like"},
 	}
 
 	for _, step := range steps {
@@ -84,9 +84,9 @@ func TestContentConsumptionJourneyMetrics(t *testing.T) {
 	metricsOutput := string(body)
 
 	journeyEndpoints := []string{
-		"/v1/content/feed",
-		"/v1/content/posts/post-1",
-		"/v1/content/interactions/like",
+		"/content/feed",
+		"/content/posts/post-1",
+		"/content/interactions/like",
 	}
 	for _, ep := range journeyEndpoints {
 		if !strings.Contains(metricsOutput, ep) {

@@ -1,4 +1,3 @@
-version: 1
 service:
   name: user-service
   domain: user
@@ -10,10 +9,12 @@ service:
     target_story: app-cloud-business-object-commercial-closure
 api_routes:
   - method: POST
-    path: /v1/relationships/subjects/{subjectType}/{subjectId}/follow
+    path: /relationships/subjects/{subjectType}/{subjectId}/follow
+
     operation: FollowSubject
     actor: persona
-    auth: required
+    security:
+      auth_mode: required
     application:
       kind: command
       facet: SubjectFollowCommandFacade
@@ -22,10 +23,12 @@ api_routes:
       mutation_target: SubjectFollow
       invariant_target: SubjectFollow
   - method: DELETE
-    path: /v1/relationships/subjects/{subjectType}/{subjectId}/follow
+    path: /relationships/subjects/{subjectType}/{subjectId}/follow
+
     operation: UnfollowSubject
     actor: persona
-    auth: required
+    security:
+      auth_mode: required
     application:
       kind: command
       facet: SubjectFollowCommandFacade

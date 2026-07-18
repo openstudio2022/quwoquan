@@ -23,11 +23,11 @@ domain_acceptance:
     - 领域边界、上下游依赖、工程映射和服务治理清晰；search-service（domain=search，18095）为云侧 canonical 入口。
     - 各域灌数（R-S05a~e）落地：content.post/entity.homepage/circle.circle/circle.group/user.profile
       + 第一方 location.place 进统一索引 quwoquan_objects。
-    - App remote /v1/search 接线（R-S06）：RemoteSearchRepository 走 CloudHttpClient + codegen
+    - App remote /search 接线（R-S06）：RemoteSearchRepository 走 CloudHttpClient + codegen
       path，透传商用字段，按数据源切换。
     - 反馈/热力/排序（R-S07）与搜索信号注入推荐 Feed（R-S07-5）落地；结果页排序 term-heat 已闭环。
-    - 端到端 /v1/search 真实冒烟（R-S06-S）：stackctl gamma 实例化 search-service，网关 /v1/search
-      200、/v1/search/feedback 202（证据 QWQ_OUTPUT_ROOT/env/gamma/local/gamma-local/process/search_smoke_report.json）。
+    - 端到端 /search 真实冒烟（R-S06-S）：stackctl gamma 实例化 search-service，网关 /search
+      200、/search/feedback 202（证据 QWQ_OUTPUT_ROOT/env/gamma/local/gamma-local/process/search_smoke_report.json）。
     - 两阶段商用合同成立：suggest 本地对象即时，result 云侧最终结果不混入本地对象。
     - 搜索准确性/可重复性/热力推荐闭环具备 local_contract/local_contract/api_integration/user_acceptance
       证据；真集群 measured 容量和版本落盘仍作为发布阻断项跟踪。

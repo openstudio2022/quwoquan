@@ -68,12 +68,12 @@ class GreetingRequestDto {
 /// 打招呼 Repository（三层模式）
 ///
 /// 对应云侧路由（contracts/metadata/user/greeting_request/service.yaml）：
-///   POST   /v1/user/greeting-request
-///   GET    /v1/user/greeting-request/inbox
-///   GET    /v1/user/greeting-request/outbox
-///   POST   /v1/user/greeting-request/{requestId}/reply
-///   POST   /v1/user/greeting-request/{requestId}/ignore
-///   DELETE /v1/user/greeting-request/{requestId}
+///   POST   /user/greeting-request
+///   GET    /user/greeting-request/inbox
+///   GET    /user/greeting-request/outbox
+///   POST   /user/greeting-request/{requestId}/reply
+///   POST   /user/greeting-request/{requestId}/ignore
+///   DELETE /user/greeting-request/{requestId}
 abstract class GreetingRepository {
   Future<GreetingRequestDto> sendGreeting({
     required String targetSubAccountId,

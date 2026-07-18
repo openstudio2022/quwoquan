@@ -11,12 +11,34 @@ class ContentType(StrEnum):
     VIDEO = "video"
 
 
+class ExecutionSpecStatus(StrEnum):
+    DRAFT = "draft"
+    ACTIVE = "active"
+
+
+class ModalityContract(StrEnum):
+    SEPARATED_RESEARCH = "separated_research"
+
+
+class ImageAssetStrategy(StrEnum):
+    OPEN_LICENSE_PUBLISH = "open_license_publish"
+    LICENSED_PROVIDER_PUBLISH = "licensed_provider_publish"
+    AI_GENERATED_ORIGINAL = "ai_generated_original"
+    REFERENCE_ONLY_NO_IMAGE_RELEASE = "reference_only_no_image_release"
+
+
+class ImageCountPolicy(StrEnum):
+    SCORE_BONUS = "score_bonus"
+    HARD_QUOTA = "hard_quota"
+
+
 class RolloutMilestone(StrEnum):
     BASELINE = "baseline"
     CANARY = "canary"
     M1 = "m1"
     M2 = "m2"
     M3 = "m3"
+    LAUNCH = "launch"
 
 
 class DeploymentEnvironment(StrEnum):
@@ -34,6 +56,12 @@ class ReplacementPolicy(StrEnum):
     FORBIDDEN = "forbidden"
 
 
+class SourcePolicyRevision(StrEnum):
+    ENCYCLOPEDIA_PRIMARY = "encyclopedia-primary"
+    RIGHTS_CLEARED_CONTENT = "rights-cleared-content"
+    GOVERNANCE_PROJECTION = "governance-projection"
+
+
 class RuntimeEnvironment(StrEnum):
     LOCAL = "local"
     CLOUD = "cloud"
@@ -41,7 +69,6 @@ class RuntimeEnvironment(StrEnum):
 
 class AgentProvider(StrEnum):
     CURSOR_SDK = "cursor_sdk"
-    CODEX_CLI = "codex_cli"
 
 
 class ReadinessMode(StrEnum):
@@ -76,6 +103,22 @@ class StageStatus(StrEnum):
     SKIPPED = "skipped"
 
 
+class ExecutionStateStatus(StrEnum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    STOPPED_AT_UNTIL = "stopped_at_until"
+    WAITING_AGENT = "waiting_agent"
+    REPAIRING = "repairing"
+    MANUAL_REQUIRED = "manual_required"
+    SUCCEEDED = "succeeded"
+
+
+class PostStage(StrEnum):
+    COMPOSE_BRIEF = "compose-brief"
+    ANNOTATE_ENTITIES = "annotate-entities"
+    REVIEW = "review"
+
+
 EXECUTION_MILESTONES = (
     RolloutMilestone.CANARY,
     RolloutMilestone.M1,
@@ -99,11 +142,14 @@ __all__ = [
     "ContentType",
     "DeploymentEnvironment",
     "ExecutionStage",
+    "ExecutionStateStatus",
+    "PostStage",
     "ReadinessMode",
     "ReplacementPolicy",
     "RolloutMilestone",
     "RuntimeEnvironment",
     "SelectionPolicy",
+    "SourcePolicyRevision",
     "StageKind",
     "StageStatus",
 ]

@@ -55,7 +55,7 @@ def test_homepage_source_catalog_closes_primary_evidence(
             "fetchedAt": "2026-07-11T00:00:00Z",
             "snapshotHash": "sha256:" + ("a" * 64),
             "sourceUseMode": "licensed_adaptation",
-                "policyRevision": "encyclopedia-primary-v2",
+                "policyRevision": "encyclopedia-primary",
             "license": "CC BY-SA 4.0",
         },
     )

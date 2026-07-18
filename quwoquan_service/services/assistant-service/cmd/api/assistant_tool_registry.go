@@ -129,7 +129,7 @@ func appSearchMetadata() tool.Metadata {
 }
 
 // contentAppSearchHandler 让 app_search 直连 content-service 站内检索接口
-// （GET /v1/content/posts/search），返回真实 posts 供小艺 ReAct 消费与引用。
+// （GET /content/posts/search），返回真实 posts 供小艺 ReAct 消费与引用。
 // 复用 searchHTTPClient（含 rtgov 熔断）的 egress 客户端。
 func contentAppSearchHandler(baseURL string, timeoutMs int) tool.Handler {
 	base := strings.TrimRight(strings.TrimSpace(baseURL), "/")
@@ -150,7 +150,7 @@ func contentAppSearchHandler(baseURL string, timeoutMs int) tool.Handler {
 		}
 		usedQuery := strings.TrimSpace(query)
 		for _, candidate := range contentSearchQueryCandidates(query) {
-			endpoint := base + "/v1/content/posts/search?limit=10&query=" + url.QueryEscape(candidate)
+			endpoint := base + "/content/posts/search?limit=10&query=" + url.QueryEscape(candidate)
 			httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 			if err != nil {
 				return tool.Result{}, fmt.Errorf("app_search build request: %w", err)
@@ -322,10 +322,8 @@ func appendStructuredSearchQueries(raw any, appendOne func(string)) {
 func searchQueryText(raw any) string {
 	switch item := raw.(type) {
 	case map[string]any:
-		for _, key := range []string{"query", "text", "keyword"} {
-			if value := strings.TrimSpace(fmt.Sprint(item[key])); value != "" && value != "<nil>" {
-				return value
-			}
+		if value := strings.TrimSpace(fmt.Sprint(item["query"])); value != "" && value != "<nil>" {
+			return value
 		}
 		return ""
 	case string:

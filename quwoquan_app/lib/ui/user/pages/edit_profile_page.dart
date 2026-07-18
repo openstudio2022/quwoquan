@@ -4,7 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/app/navigation/page_access_internal_routes.dart';
+import 'package:quwoquan_app/app/navigation/generated/page_access_internal_routes.g.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/services/tag/tag_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_edit_models.dart';
@@ -336,12 +336,9 @@ class _BirthdayEditPageState extends State<_BirthdayEditPage> {
           ),
           if (_error.isNotEmpty) ...<Widget>[
             SizedBox(height: AppSpacing.intraGroupSm),
-            Text(
-              _error,
-              style: TextStyle(
-                fontSize: AppTypography.iosFootnote,
-                color: AppColors.iosDestructive(context),
-              ),
+            AppInlineFieldError(
+              key: const ValueKey<String>('edit-profile-birthday-error'),
+              message: _error,
             ),
           ],
         ],

@@ -9,6 +9,8 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from quwoquan_ops.ci.device_matrix.android import resolve_android_debug_bridge
+
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -85,7 +87,18 @@ def capture_device_screenshot(device: dict[str, Any], output_path: Path) -> dict
     target_platform = str(device.get("targetPlatform", "")).lower()
 
     if target_platform.startswith("android"):
-        command = ["adb", "-s", device_id, "exec-out", "screencap", "-p"]
+        adb = resolve_android_debug_bridge()
+        if not adb:
+            return {
+                "status": "failed",
+                "path": repo_relative(output_path),
+                "command": [],
+                "stderrSummary": (
+                    "adb unavailable; set ANDROID_SDK_ROOT/ANDROID_HOME "
+                    "or install Android platform-tools"
+                ),
+            }
+        command = [adb, "-s", device_id, "exec-out", "screencap", "-p"]
         result = subprocess.run(
             command,
             stdout=subprocess.PIPE,

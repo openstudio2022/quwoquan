@@ -54,7 +54,7 @@ environments:
 强约束：
 - 同一环境下，一个 `domain` 只能出现一次
 - `beta`、`gamma`、`prod` 映射必须一致
-- 对外接口仍按领域服务暴露（如 `/v1/content/*`），不受进程组合影响
+- 对外接口仍按领域服务暴露（如 `/content/*`），不受进程组合影响
 - onebox 只是 deployment package 组合，不是业务代码目录
 - package 中 module 的 domain 必须属于该 package/process 的 domains
 - module 命名必须采用 `{domain}.{capability}`，例如 `chat.task_outbox_dispatcher`

@@ -86,46 +86,34 @@ final class DeleteContentCommentCommand {
   DeleteContentCommentCommand({
     required String postId,
     required String commentId,
-    required this.version,
   }) : postId = _requiredText(postId, 'postId'),
-       commentId = _requiredText(commentId, 'commentId') {
-    _requireVersion(version);
-  }
+       commentId = _requiredText(commentId, 'commentId');
 
   final String postId;
   final String commentId;
-  final int version;
 }
 
 final class ChangeContentCommentPinCommand {
   ChangeContentCommentPinCommand({
     required String postId,
     required String commentId,
-    required this.version,
   }) : postId = _requiredText(postId, 'postId'),
-       commentId = _requiredText(commentId, 'commentId') {
-    _requireVersion(version);
-  }
+       commentId = _requiredText(commentId, 'commentId');
 
   final String postId;
   final String commentId;
-  final int version;
 }
 
 final class BindContentCommentAttachmentsCommand {
   BindContentCommentAttachmentsCommand({
     required String commentId,
-    required this.version,
     required Iterable<String> attachmentMediaIds,
   }) : commentId = _requiredText(commentId, 'commentId'),
        attachmentMediaIds = List<String>.unmodifiable(
          attachmentMediaIds.map((id) => _requiredText(id, 'attachmentMediaId')),
-       ) {
-    _requireVersion(version);
-  }
+       );
 
   final String commentId;
-  final int version;
   final List<String> attachmentMediaIds;
 }
 
@@ -385,7 +373,6 @@ CloudOperationRequestPayload encodeDeleteContentCommentCommand(
     'postId': command.postId,
     'commentId': command.commentId,
   },
-  body: <String, Object?>{'version': command.version},
 );
 
 CloudOperationRequestPayload encodeChangeContentCommentPinCommand(
@@ -395,17 +382,13 @@ CloudOperationRequestPayload encodeChangeContentCommentPinCommand(
     'postId': command.postId,
     'commentId': command.commentId,
   },
-  body: <String, Object?>{'version': command.version},
 );
 
 CloudOperationRequestPayload encodeBindContentCommentAttachmentsCommand(
   BindContentCommentAttachmentsCommand command,
 ) => CloudOperationRequestPayload(
   pathParameters: <String, String>{'commentId': command.commentId},
-  body: <String, Object?>{
-    'version': command.version,
-    'attachmentMediaIds': command.attachmentMediaIds,
-  },
+  body: <String, Object?>{'attachmentMediaIds': command.attachmentMediaIds},
 );
 
 CloudOperationRequestPayload encodeListContentCommentsQuery(
@@ -682,12 +665,6 @@ String _requiredText(String value, String name) {
 String? _optionalText(String? value) {
   final normalized = value?.trim() ?? '';
   return normalized.isEmpty ? null : normalized;
-}
-
-void _requireVersion(int version) {
-  if (version <= 0) {
-    throw ArgumentError.value(version, 'version', 'must be > 0');
-  }
 }
 
 void _requireLimit(int limit) {

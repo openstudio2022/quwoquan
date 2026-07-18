@@ -33,7 +33,6 @@ DISCOVERY_SOURCES: tuple[str, ...] = (
     "wikidata_geo",
     "osm_poi",
     "baidu_baike_search",
-    "sogou_baike_search",
     "toutiao_baike_search",
 )
 
@@ -191,7 +190,7 @@ def prepare_coverage_matrix(
     revisions = {
         "adminTreeRevision": _digest(tree),
         "typeTaxonomyRevision": _digest(ENTITY_TYPES),
-        "adapterRevision": "coverage-discovery-matrix-v3",
+        "adapterRevision": "coverage-discovery-matrix",
     }
     checkpoint_paths: list[str] = []
     cell_count = 0
@@ -261,7 +260,7 @@ def prepare_coverage_matrix(
                             }
                         cells.append(cell)
             checkpoint = {
-                "schemaVersion": "quwoquan_data.coverage_city_checkpoint/3",
+                "schema": "quwoquan_data.coverage_city_checkpoint",
                 "runId": run_id,
                 "province": province,
                 "city": city,
@@ -275,7 +274,7 @@ def prepare_coverage_matrix(
             cell_count += len(cells)
 
     matrix = {
-        "schemaVersion": "quwoquan_data.coverage_discovery_matrix/3",
+        "schema": "quwoquan_data.coverage_discovery_matrix",
         "runId": run_id,
         "createdAt": (
             json.loads(matrix_path.read_text(encoding="utf-8")).get("createdAt")
@@ -296,7 +295,7 @@ def prepare_coverage_matrix(
     _atomic_write_json(
         run_dir / "rollup.json",
         {
-            "schemaVersion": "quwoquan_data.coverage_discovery_rollup/1",
+            "schema": "quwoquan_data.coverage_discovery_rollup",
             "runId": run_id,
             "updatedAt": _now_iso(),
             **status,
@@ -413,7 +412,7 @@ def record_cell_page(
         fh.write(
             json.dumps(
                 {
-                    "schemaVersion": "quwoquan_data.coverage_raw_page/1",
+                    "schema": "quwoquan_data.coverage_raw_page",
                     "cellId": cell_id,
                     "identity": cell["identity"],
                     "capturedAt": captured_at,
@@ -454,7 +453,7 @@ def record_cell_page(
         json.loads(gaps_path.read_text(encoding="utf-8"))
         if gaps_path.is_file()
         else {
-            "schemaVersion": "quwoquan_data.coverage_city_gaps/1",
+            "schema": "quwoquan_data.coverage_city_gaps",
             "province": checkpoint.get("province"),
             "city": checkpoint.get("city"),
             "rejectReasons": {},
@@ -542,7 +541,7 @@ def record_cell_page(
     _atomic_write_json(
         run_dir / "rollup.json",
         {
-            "schemaVersion": "quwoquan_data.coverage_discovery_rollup/1",
+            "schema": "quwoquan_data.coverage_discovery_rollup",
             "runId": checkpoint.get("runId"),
             "updatedAt": _now_iso(),
             **coverage_matrix_status(run_dir=run_dir),
@@ -551,77 +550,4 @@ def record_cell_page(
     return cell
 
 
-def coverage_matrix_status(*, run_dir: Path) -> dict[str, Any]:
-    checkpoints = sorted(run_dir.glob("checkpoint_*.json"))
-    statuses = {status: 0 for status in sorted(CELL_STATUSES)}
-    province_totals: dict[str, dict[str, int]] = {}
-    district_type_statuses: dict[str, dict[tuple[str, str, str], list[dict[str, Any]]]] = {}
-    for path in checkpoints:
-        checkpoint = json.loads(path.read_text(encoding="utf-8"))
-        province = str(checkpoint.get("province") or "")
-        province_row = province_totals.setdefault(
-            province,
-            {
-                "total": 0,
-                "terminal": 0,
-                "saturated": 0,
-                "failed": 0,
-                "driverComplete": 0,
-            },
-        )
-        for cell in checkpoint.get("cells") or []:
-            status = str(cell.get("status") or "pending")
-            statuses[status] = statuses.get(status, 0) + 1
-            province_row["total"] += 1
-            if status in TERMINAL_CELL_STATUSES:
-                province_row["terminal"] += 1
-            if status in SATURATED_CELL_STATUSES:
-                province_row["saturated"] += 1
-            if status == "failed":
-                province_row["failed"] += 1
-            if bool((cell.get("saturationEvidence") or {}).get("driverComplete")):
-                province_row["driverComplete"] += 1
-            identity = cell.get("identity") or {}
-            key = (
-                str(identity.get("city") or ""),
-                str(identity.get("district") or ""),
-                str(identity.get("entityType") or ""),
-            )
-            district_type_statuses.setdefault(province, {}).setdefault(key, []).append(cell)
-    provinces: dict[str, Any] = {}
-    for province, row in province_totals.items():
-        total = int(row["total"])
-        failed_ratio = row["failed"] / max(1, total)
-        groups = district_type_statuses.get(province, {})
-        district_type_complete = sum(
-            1
-            for cells in groups.values()
-            if cells
-            and all(
-                str(cell.get("status") or "") in TERMINAL_CELL_STATUSES
-                and bool((cell.get("saturationEvidence") or {}).get("driverComplete"))
-                for cell in cells
-            )
-        )
-        provinces[province] = {
-            **row,
-            "failedRatio": failed_ratio,
-            "allCellsTerminal": bool(total) and row["terminal"] == total,
-            "saturated": (
-                bool(total)
-                and row["saturated"] == total
-                and row["driverComplete"] == total
-                and failed_ratio < 0.01
-            ),
-            "coverage": {
-                "districtTypeCellsTotal": len(groups),
-                "districtTypeCellsCompleted": district_type_complete,
-                "sourceDriversTotal": total,
-                "sourceDriversCompleted": row["driverComplete"],
-            },
-        }
-    return {
-        "checkpointCount": len(checkpoints),
-        "cellStatuses": statuses,
-        "provinces": provinces,
-    }
+from governance.coverage.coverage_status import coverage_matrix_status

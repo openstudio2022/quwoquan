@@ -1,4 +1,4 @@
-schemaVersion: quwoquan.vertical_coverage.v1
+schema: quwoquan.vertical_coverage
 vertical: travel
 description: 旅行垂类覆盖边界。四川/浙江两试点省已区县级全量枚举；其余 32 省仅目录骨架（未枚举）；海外出国游仍需 coverage seed。
 units:

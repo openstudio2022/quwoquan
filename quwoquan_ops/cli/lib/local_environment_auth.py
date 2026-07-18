@@ -1,0 +1,358 @@
+from __future__ import annotations
+
+import base64
+import ipaddress
+import json
+import os
+import secrets
+import shlex
+import socket
+import ssl
+import stat
+import subprocess
+import sys
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+from urllib import error, request
+from urllib.parse import urlparse
+
+from .output_paths import deployment_work_root
+
+
+_SECRET_KEYS = ("jwt_secret", "device_ticket_secret", "otp_code_ref_key_b64")
+_LOCAL_TARGETS = {"beta": "beta-local", "gamma": "gamma-local"}
+
+
+@dataclass(frozen=True)
+class LocalEnvironmentAuth:
+    environment: dict[str, str]
+    secret_path: Path
+
+
+@dataclass(frozen=True)
+class LocalAcceptanceSession:
+    """Ephemeral bearer session for a local integration environment."""
+
+    owner_id: str
+    persona_id: str
+    access_token: str = field(repr=False)
+
+    def authorization_header(self) -> str:
+        return "Bearer " + self.access_token
+
+
+@dataclass(frozen=True)
+class LocalEnvironmentHTTPError(RuntimeError):
+    """Redacted local-environment HTTP failure with a machine-readable status."""
+
+    method: str
+    path: str
+    status: int
+
+    def __str__(self) -> str:
+        return f"local environment request {self.method} {self.path} failed with HTTP {self.status}"
+
+
+def prepare_local_environment_auth(
+    environment: str,
+    target_name: str,
+) -> LocalEnvironmentAuth:
+    """Create target-isolated auth material in the external deploy workspace."""
+    _require_local_environment(environment, target_name)
+    secret_path = deployment_work_root(target_name) / "secrets" / "auth.env"
+    values = _load_or_create_secrets(secret_path)
+    key_version = f"local-{environment}-k1"
+    return LocalEnvironmentAuth(
+        environment={
+            "AUTH_JWT_SECRET": values["jwt_secret"],
+            "AUTH_JWT_ISSUER": f"quwoquan.{environment}.local",
+            "AUTH_JWT_AUDIENCE": "quwoquan-app",
+            "AUTH_JWT_TOKEN_VERSION": "1",
+            "AUTH_DEVICE_TICKET_SECRET": values["device_ticket_secret"],
+            "AUTH_DEVICE_TICKET_ISSUER": f"quwoquan.{environment}.local.device",
+            "AUTH_DEVICE_TICKET_AUDIENCE": "quwoquan-app-device",
+            "AUTH_DEVICE_TICKET_TOKEN_VERSION": "1",
+            "OTP_CODE_REF_ACTIVE_KEY_VERSION": key_version,
+            "OTP_CODE_REF_KEYS_JSON": json.dumps(
+                {key_version: values["otp_code_ref_key_b64"]},
+                separators=(",", ":"),
+            ),
+        },
+        secret_path=secret_path,
+    )
+
+
+def open_local_acceptance_session(
+    base_url: str,
+    *,
+    environment: str,
+    target_name: str,
+    subject: str | None = None,
+    resolve_host: str = "127.0.0.1",
+    timeout_seconds: float = 30.0,
+) -> LocalAcceptanceSession:
+    """Issue a local-only session with the user-service canonical JWT signer.
+
+    The seeded acceptance identity is declared by the shared acceptance fixture. The
+    signing secret and resulting bearer token stay in subprocess memory and are
+    never placed in argv, reports, or logs.
+    """
+
+    _require_local_environment(environment, target_name)
+    _require_loopback(resolve_host)
+    normalized_base = base_url.rstrip("/") + "/"
+    parsed = urlparse(normalized_base)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise ValueError("local environment auth base URL must be an absolute HTTP(S) URL")
+    if subject is None:
+        owner_id, persona_id = _load_acceptance_principal()
+    else:
+        canonical_subject = subject.strip()
+        allowed = frozenset(
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
+        )
+        if (
+            not canonical_subject
+            or len(canonical_subject) > 128
+            or any(character not in allowed for character in canonical_subject)
+        ):
+            raise ValueError("local environment acceptance subject is invalid")
+        owner_id = canonical_subject
+        persona_id = canonical_subject
+    auth = prepare_local_environment_auth(environment, target_name)
+    process_env = os.environ.copy()
+    process_env.update(auth.environment)
+    process_env.update(
+        {
+            "APP_ENV": environment,
+            "QWQ_LOCAL_ACCEPTANCE_TARGET": target_name,
+            "QWQ_ACCEPTANCE_OWNER_ID": owner_id,
+            "QWQ_ACCEPTANCE_PERSONA_ID": persona_id,
+        }
+    )
+    result = subprocess.run(
+        ["go", "run", "./services/user-service/cmd/acceptance-session"],
+        cwd=Path(__file__).resolve().parents[3] / "quwoquan_service",
+        env=process_env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=max(1.0, timeout_seconds),
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError("local environment acceptance token issuer failed")
+    try:
+        body = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("local environment acceptance token issuer returned invalid JSON") from exc
+    if not isinstance(body, dict):
+        raise RuntimeError("local environment acceptance token issuer returned non-object JSON")
+    return LocalAcceptanceSession(
+        owner_id=_required_string(body, "ownerId", "acceptance token response"),
+        persona_id=_required_string(body, "personaId", "acceptance token response"),
+        access_token=_required_string(body, "accessToken", "acceptance token response"),
+    )
+
+
+def request_local_environment_json(
+    base_url: str,
+    *,
+    path: str,
+    session: LocalAcceptanceSession,
+    resolve_host: str = "127.0.0.1",
+    method: str = "GET",
+    body: dict[str, Any] | None = None,
+    timeout_seconds: float = 12.0,
+) -> dict[str, Any]:
+    """Call a local environment JSON endpoint using bearer auth without logging it."""
+
+    normalized_path = path if path.startswith("/") else "/" + path
+    payload = (
+        json.dumps(body, ensure_ascii=False).encode("utf-8") if body is not None else None
+    )
+    headers = {
+        "Accept": "application/json",
+        "Authorization": session.authorization_header(),
+        "X-Client-Session-Id": "local-acceptance-" + session.owner_id[-12:],
+    }
+    if payload is not None:
+        headers["Content-Type"] = "application/json"
+    status, response = _loopback_json_request(
+        method=method,
+        url=base_url.rstrip("/") + normalized_path,
+        resolve_host=resolve_host,
+        body=payload,
+        headers=headers,
+        timeout_seconds=timeout_seconds,
+    )
+    if status < 200 or status >= 300:
+        raise LocalEnvironmentHTTPError(method=method, path=normalized_path, status=status)
+    return response
+
+
+def _loopback_json_request(
+    *,
+    method: str,
+    url: str,
+    resolve_host: str,
+    body: bytes | None,
+    headers: dict[str, str],
+    timeout_seconds: float,
+) -> tuple[int, dict[str, Any]]:
+    _require_loopback(resolve_host)
+    target_host = urlparse(url).hostname
+    if not target_host:
+        raise ValueError("local environment request URL has no hostname")
+    original_getaddrinfo = socket.getaddrinfo
+
+    def getaddrinfo(host: str | bytes | None, *args: Any, **kwargs: Any) -> Any:
+        if host == target_host:
+            return original_getaddrinfo(resolve_host, *args, **kwargs)
+        return original_getaddrinfo(host, *args, **kwargs)
+
+    req = request.Request(url, data=body, headers=headers, method=method)
+    opener = request.build_opener(
+        request.ProxyHandler({}),
+        request.HTTPSHandler(context=ssl._create_unverified_context()),
+    )
+    socket.getaddrinfo = getaddrinfo
+    try:
+        try:
+            with opener.open(
+                req,
+                timeout=max(1.0, timeout_seconds),
+            ) as response:
+                status = int(response.status)
+                raw = response.read().decode("utf-8", errors="replace")
+        except error.HTTPError as exc:
+            status = int(exc.code)
+            raw = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(f"local environment request transport failed: {type(exc).__name__}") from exc
+    finally:
+        socket.getaddrinfo = original_getaddrinfo
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"local environment request {method} returned non-JSON HTTP {status}") from exc
+    if not isinstance(parsed, dict):
+        raise RuntimeError(f"local environment request {method} returned non-object JSON HTTP {status}")
+    return status, parsed
+
+
+def _require_loopback(resolve_host: str) -> None:
+    try:
+        address = ipaddress.ip_address(resolve_host)
+    except ValueError as exc:
+        raise ValueError("local environment resolve host must be an IP address") from exc
+    if not address.is_loopback:
+        raise ValueError("local environment auth only permits a loopback resolve host")
+
+
+def _require_local_environment(environment: str, target_name: str) -> None:
+    expected_target = _LOCAL_TARGETS.get(environment)
+    if expected_target != target_name:
+        raise ValueError(
+            f"unsupported local environment target: environment={environment} target={target_name}"
+        )
+
+
+def _required_string(payload: dict[str, Any], field: str, context: str) -> str:
+    value = payload.get(field)
+    if not isinstance(value, str) or not value.strip():
+        raise RuntimeError(f"{context} missing required {field}")
+    return value.strip()
+
+
+def _load_acceptance_principal() -> tuple[str, str]:
+    root = Path(__file__).resolve().parents[3]
+    manifest_path = (
+        root
+        / "quwoquan_service/contracts/metadata/_shared/test_fixtures/app_gamma_seed_manifest.json"
+    )
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    principal = payload.get("acceptancePrincipal")
+    if not isinstance(principal, dict):
+            raise RuntimeError("acceptance fixture manifest missing acceptancePrincipal")
+    return (
+        _required_string(principal, "ownerId", "acceptance principal"),
+        _required_string(principal, "personaId", "acceptance principal"),
+    )
+
+
+def _load_or_create_secrets(path: Path) -> dict[str, str]:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    os.chmod(path.parent, 0o700)
+    if path.is_file():
+        _require_mode(path, 0o600)
+        values = _read_secret_file(path)
+        missing = [key for key in _SECRET_KEYS if not values.get(key)]
+        if missing == ["otp_code_ref_key_b64"]:
+            values["otp_code_ref_key_b64"] = base64.b64encode(
+                secrets.token_bytes(32)
+            ).decode("ascii")
+            with path.open("a", encoding="utf-8") as handle:
+                handle.write(
+                    "otp_code_ref_key_b64="
+                    + values["otp_code_ref_key_b64"]
+                    + "\n"
+                )
+                handle.flush()
+                os.fsync(handle.fileno())
+            return values
+        if missing:
+            raise RuntimeError("local environment auth secret file is incomplete: " + ", ".join(missing))
+        return values
+    if path.exists():
+        raise RuntimeError(f"local environment auth secret path is not a file: {path}")
+    values = {
+        "jwt_secret": secrets.token_urlsafe(48),
+        "device_ticket_secret": secrets.token_urlsafe(48),
+        "otp_code_ref_key_b64": base64.b64encode(secrets.token_bytes(32)).decode("ascii"),
+    }
+    fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            for key in _SECRET_KEYS:
+                handle.write(f"{key}={values[key]}\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+    except Exception:
+        path.unlink(missing_ok=True)
+        raise
+    return values
+
+
+def _read_secret_file(path: Path) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        key, separator, value = line.partition("=")
+        if not separator or not key or not value:
+            raise RuntimeError(f"invalid local environment auth secret file: {path}")
+        values[key] = value
+    return values
+
+
+def _require_mode(path: Path, expected: int) -> None:
+    actual = stat.S_IMODE(path.stat().st_mode)
+    if actual != expected:
+        raise RuntimeError(f"local environment auth secret file must use mode {expected:04o}: {path}")
+
+
+def _print_shell_environment(environment: str, target_name: str) -> None:
+    auth = prepare_local_environment_auth(environment, target_name)
+    for key, value in sorted(auth.environment.items()):
+        print(f"export {key}={shlex.quote(value)}")
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 4 or sys.argv[1] != "--shell":
+        raise SystemExit(
+            "usage: python -m quwoquan_ops.cli.lib.local_environment_auth "
+            "--shell <beta|gamma> <beta-local|gamma-local>"
+        )
+    _print_shell_environment(sys.argv[2], sys.argv[3])

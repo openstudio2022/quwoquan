@@ -15,7 +15,7 @@ scope:
   - contentVertical/supplySource/recallPath 观测分桶。
   out_of_scope:
   - intersection-only ranker。
-  - 同步 /v1/score 读路径打分。
+  - 同步 /score 读路径打分。
   - MMoE/PLE/ESMM、双塔 ANN、IPS/Thompson 深排平台。
 gwt_acceptance:
   GWT1:

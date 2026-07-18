@@ -2,7 +2,6 @@ dart_class: ToolUseWire
 library_path: assistant/generated/contracts/tool_use.g.dart
 output_path: assistant/generated/contracts/tool_use.g.dart
 contract: tool_use
-version: tool_use.m2
 kind: shared_wire_contract
 imports:
   - package:quwoquan_app/assistant/generated/contracts/runtime_failure.g.dart

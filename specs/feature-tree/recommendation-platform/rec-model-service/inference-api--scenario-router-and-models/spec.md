@@ -6,6 +6,6 @@
 
 ## 验收标准
 
-- A1：POST /v1/score scenario=content_feed 返回正确 scores；其他 scenario 可 501 或占位。
+- A1：POST /score scenario=content_feed 返回正确 scores；其他 scenario 可 501 或占位。
 - A7：请求/响应与 ModelPredictRequest/ModelPredictResponse 一致。
-- A8：有 /v1/score 的接口测试。
+- A8：有 /score 的接口测试。

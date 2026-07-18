@@ -52,8 +52,8 @@ def verify_profiles() -> dict[str, dict]:
     if not PROFILE_PATH.is_file():
         fail(f"missing service asset profile registry: {rel(PROFILE_PATH)}")
     registry = load_json(PROFILE_PATH)
-    if registry.get("schemaVersion") != 1:
-        fail("service_asset_profiles.json schemaVersion must be 1")
+    if set(registry) != {"profiles", "assets"}:
+        fail("service_asset_profiles.json must contain only profiles and assets")
     if set(registry.get("profiles", [])) != ALL_PROFILES:
         fail("service asset profile closed set drifted")
     assets = registry.get("assets")

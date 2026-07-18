@@ -35,8 +35,8 @@ func (s *countingSource) ObjectReasons(context.Context, string, string, string) 
 
 // TestIntersectionService_ReadPathZeroSynchronousScoring（R-IX01 不变量）：
 // 交集读路径（Feed/List/Summary）只消费读模型通道（FactReasons/AffinityReasons），
-// 不得对候选发起同步模型打分（/v1/score）。本测试把"读路径零同步 RPC + affinity
-// 分数直出不重算"固化为契约，防止未来回归到把 /v1/score 拉进读路径的错误设计。
+// 不得对候选发起同步模型打分（/score）。本测试把"读路径零同步 RPC + affinity
+// 分数直出不重算"固化为契约，防止未来回归到把 /score 拉进读路径的错误设计。
 func TestIntersectionService_ReadPathZeroSynchronousScoring(t *testing.T) {
 	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
 	const materializedStrength = 0.4242

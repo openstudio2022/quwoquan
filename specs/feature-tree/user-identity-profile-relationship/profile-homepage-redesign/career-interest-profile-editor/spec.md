@@ -19,7 +19,7 @@
 - 职业标签根为 `Audience/用户/职业`，V1 保存一个职业叶子 tagRef。
 - 兴趣标签根为 `Audience/用户/兴趣偏好`，分类为 `全部 / 旅行摄影 / 校园 / 生活 / 艺术 / 科技`，保存有序叶子 tagRefs，最多 30 个、允许 0 个。
 - 查询复用 tag-service `ListTagChildren(parentTagRef)`、`ResolveTag(tagRef)`、`ValidateTagRefs(tagRefs)`。
-- 保存复用 user-service `GET /v1/user/profile/edit-snapshot` 与 `PATCH /v1/user/profile`，字段为 `occupationTagRef`、`interestTagRefs` 和派生 `identityTags`。
+- 保存复用 user-service `GET /user/profile/edit-snapshot` 与 `PATCH /user/profile`，字段为 `occupationTagRef`、`interestTagRefs` 和派生 `identityTags`。
 - user-service 保存校验必须拒绝旧 `Topic/兴趣/*`、非职业/兴趣根、职业多选、分类父节点、兴趣超过 30。
 - 保存成功后投影到 Mongo `object_tag_index`：`objectType=user`、`objectId=userId`、`tagRefs=[occupationTagRef, ...interestTagRefs]`。
 

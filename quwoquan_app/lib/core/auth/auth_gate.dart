@@ -77,174 +77,177 @@ class LoginReasonCopy {
 
 /// 受登录约束的 App 功能入口矩阵（覆盖主导航、内容互动、评论、创作、消息、
 /// 用户关系、设置、媒体上传、举报）。
-const Map<AuthGateReason, AuthGateEntry>
-authGateMatrix = <AuthGateReason, AuthGateEntry>{
-  AuthGateReason.profileTab: AuthGateEntry(
-    reason: AuthGateReason.profileTab,
-    title: UITextConstants.authGateTitleProfile,
-    subtitle: UITextConstants.authGateSubtitleProfile,
-    prompt: UITextConstants.authGatePromptProfile,
-    requiredOperations: <String>[
-      AppCloudOperationIds.userUserProfileGetSubAccountProfile,
-    ],
-  ),
-  AuthGateReason.createPost: AuthGateEntry(
-    reason: AuthGateReason.createPost,
-    title: UITextConstants.authGateTitleCreate,
-    subtitle: UITextConstants.authGateSubtitleCreate,
-    prompt: UITextConstants.authGatePromptCreate,
-    requiredOperations: <String>[
-      AppCloudOperationIds.contentPostCreatePost,
-      AppCloudOperationIds.contentPostPublishPost,
-    ],
-  ),
-  AuthGateReason.openChat: AuthGateEntry(
-    reason: AuthGateReason.openChat,
-    title: UITextConstants.authGateTitleOpenChat,
-    subtitle: UITextConstants.authGateSubtitleOpenChat,
-    prompt: UITextConstants.authGatePromptOpenChat,
-    requiredOperations: <String>[
-      AppCloudOperationIds.chatConversationListConversations,
-      AppCloudOperationIds.chatConversationGetConversation,
-    ],
-  ),
-  AuthGateReason.sendMessage: AuthGateEntry(
-    reason: AuthGateReason.sendMessage,
-    title: UITextConstants.authGateTitleSendMessage,
-    subtitle: UITextConstants.authGateSubtitleSendMessage,
-    prompt: UITextConstants.authGatePromptSendMessage,
-    requiredOperations: <String>[AppCloudOperationIds.chatMessageSendMessage],
-  ),
-  AuthGateReason.comment: AuthGateEntry(
-    reason: AuthGateReason.comment,
-    title: UITextConstants.authGateTitleComment,
-    subtitle: UITextConstants.authGateSubtitleComment,
-    prompt: UITextConstants.authGatePromptComment,
-    requiredOperations: <String>[],
-  ),
-  // 点赞已下放为「游客设备态可写」：LikePost 鉴权为 optional + anonymous_policy=allow，
-  // 游客按 deviceActorId 维度真实写入、登录用户按账号维度写入，互不并账。
-  // 因此点赞不再触发登录门，requiredOperations 留空；reason 仅表达设备态动作的
-  // UX 分类，不映射到 required operation。
-  AuthGateReason.like: AuthGateEntry(
-    reason: AuthGateReason.like,
-    title: UITextConstants.authGateTitleLike,
-    subtitle: UITextConstants.authGateSubtitleLike,
-    prompt: UITextConstants.authGatePromptLike,
-    requiredOperations: <String>[],
-  ),
-  AuthGateReason.follow: AuthGateEntry(
-    reason: AuthGateReason.follow,
-    title: UITextConstants.authGateTitleFollow,
-    subtitle: UITextConstants.authGateSubtitleFollow,
-    prompt: UITextConstants.authGatePromptFollow,
-    requiredOperations: <String>[
-      AppCloudOperationIds.userPersonaRelationshipFollowUser,
-    ],
-  ),
-  AuthGateReason.greet: AuthGateEntry(
-    reason: AuthGateReason.greet,
-    title: UITextConstants.authGateTitleGreet,
-    subtitle: UITextConstants.authGateSubtitleGreet,
-    prompt: UITextConstants.authGatePromptGreet,
-    requiredOperations: <String>[],
-  ),
-  // 关注频道展示「关注的人」的内容流，游客无关注关系，需登录后查看。
-  // 关注流走 GetFeed（鉴权快照为 optional），故此处不声明 requiredOperations，
-  // 登录约束是产品决策而非 API 强制。
-  AuthGateReason.followingFeed: AuthGateEntry(
-    reason: AuthGateReason.followingFeed,
-    title: UITextConstants.authGateTitleFollowingFeed,
-    subtitle: UITextConstants.authGateSubtitleFollowingFeed,
-    prompt: UITextConstants.authGatePromptFollowingFeed,
-    requiredOperations: <String>[],
-  ),
-  // 系统分享、复制链接和转发本身不要求账号；只有圈内投放等实际业务写命令
-  // 在其独立入口通过对应 operation 的登录门处理。
-  AuthGateReason.share: AuthGateEntry(
-    reason: AuthGateReason.share,
-    title: UITextConstants.authGateTitleShare,
-    subtitle: UITextConstants.authGateSubtitleShare,
-    prompt: UITextConstants.authGatePromptShare,
-    requiredOperations: <String>[],
-  ),
-  AuthGateReason.personaManage: AuthGateEntry(
-    reason: AuthGateReason.personaManage,
-    title: UITextConstants.authGateTitlePersona,
-    subtitle: UITextConstants.authGateSubtitlePersona,
-    prompt: UITextConstants.authGatePromptPersona,
-    requiredOperations: <String>[],
-  ),
-  AuthGateReason.settingsAccount: AuthGateEntry(
-    reason: AuthGateReason.settingsAccount,
-    title: UITextConstants.authGateTitleSettingsAccount,
-    subtitle: UITextConstants.authGateSubtitleSettingsAccount,
-    prompt: UITextConstants.authGatePromptSettingsAccount,
-    requiredOperations: <String>[],
-  ),
-  AuthGateReason.mediaUpload: AuthGateEntry(
-    reason: AuthGateReason.mediaUpload,
-    title: UITextConstants.authGateTitleMediaUpload,
-    subtitle: UITextConstants.authGateSubtitleMediaUpload,
-    prompt: UITextConstants.authGatePromptMediaUpload,
-    requiredOperations: <String>[AppCloudOperationIds.contentPostCreatePost],
-  ),
-  AuthGateReason.deletePost: AuthGateEntry(
-    reason: AuthGateReason.deletePost,
-    title: UITextConstants.authGateTitleDeletePost,
-    subtitle: UITextConstants.authGateSubtitleDeletePost,
-    prompt: UITextConstants.authGatePromptDeletePost,
-    requiredOperations: <String>[],
-  ),
-  AuthGateReason.report: AuthGateEntry(
-    reason: AuthGateReason.report,
-    title: UITextConstants.authGateTitleReport,
-    subtitle: UITextConstants.authGateSubtitleReport,
-    prompt: UITextConstants.authGatePromptReport,
-    requiredOperations: <String>[
-      AppCloudOperationIds.contentReportCreateReport,
-    ],
-  ),
-  AuthGateReason.joinCircle: AuthGateEntry(
-    reason: AuthGateReason.joinCircle,
-    title: UITextConstants.authGateTitleJoinCircle,
-    subtitle: UITextConstants.authGateSubtitleJoinCircle,
-    prompt: UITextConstants.authGatePromptJoinCircle,
-    requiredOperations: <String>[
-      AppCloudOperationIds.circleCircleMembershipJoinCircle,
-    ],
-  ),
-  // 添加联系人 / 发起群聊 / 建圈子 属「先开面板、动作再登录」的产品级动作门，
-  // 登录约束是产品决策而非单一 required API，故 requiredOperations 留空。
-  AuthGateReason.addContact: AuthGateEntry(
-    reason: AuthGateReason.addContact,
-    title: UITextConstants.authGateTitleAddContact,
-    subtitle: UITextConstants.authGateSubtitleAddContact,
-    prompt: UITextConstants.authGatePromptAddContact,
-    requiredOperations: <String>[],
-  ),
-  AuthGateReason.startGroupChat: AuthGateEntry(
-    reason: AuthGateReason.startGroupChat,
-    title: UITextConstants.authGateTitleStartGroupChat,
-    subtitle: UITextConstants.authGateSubtitleStartGroupChat,
-    prompt: UITextConstants.authGatePromptStartGroupChat,
-    requiredOperations: <String>[],
-  ),
-  AuthGateReason.createCircle: AuthGateEntry(
-    reason: AuthGateReason.createCircle,
-    title: UITextConstants.authGateTitleCreateCircle,
-    subtitle: UITextConstants.authGateSubtitleCreateCircle,
-    prompt: UITextConstants.authGatePromptCreateCircle,
-    requiredOperations: <String>[],
-  ),
-  AuthGateReason.generic: AuthGateEntry(
-    reason: AuthGateReason.generic,
-    title: UITextConstants.authGateTitleGeneric,
-    subtitle: UITextConstants.authGateSubtitleGeneric,
-    prompt: UITextConstants.authGatePromptGeneric,
-    requiredOperations: <String>[],
-  ),
-};
+const Map<AuthGateReason, AuthGateEntry> authGateMatrix =
+    <AuthGateReason, AuthGateEntry>{
+      AuthGateReason.profileTab: AuthGateEntry(
+        reason: AuthGateReason.profileTab,
+        title: UITextConstants.authGateTitleProfile,
+        subtitle: UITextConstants.authGateSubtitleProfile,
+        prompt: UITextConstants.authGatePromptProfile,
+        requiredOperations: <String>[
+          AppCloudOperationIds.userUserProfileGetSubAccountProfile,
+        ],
+      ),
+      AuthGateReason.createPost: AuthGateEntry(
+        reason: AuthGateReason.createPost,
+        title: UITextConstants.authGateTitleCreate,
+        subtitle: UITextConstants.authGateSubtitleCreate,
+        prompt: UITextConstants.authGatePromptCreate,
+        requiredOperations: <String>[
+          AppCloudOperationIds.contentPostSubmitPostPublication,
+        ],
+      ),
+      AuthGateReason.openChat: AuthGateEntry(
+        reason: AuthGateReason.openChat,
+        title: UITextConstants.authGateTitleOpenChat,
+        subtitle: UITextConstants.authGateSubtitleOpenChat,
+        prompt: UITextConstants.authGatePromptOpenChat,
+        requiredOperations: <String>[
+          AppCloudOperationIds.chatConversationListConversations,
+          AppCloudOperationIds.chatConversationGetConversation,
+        ],
+      ),
+      AuthGateReason.sendMessage: AuthGateEntry(
+        reason: AuthGateReason.sendMessage,
+        title: UITextConstants.authGateTitleSendMessage,
+        subtitle: UITextConstants.authGateSubtitleSendMessage,
+        prompt: UITextConstants.authGatePromptSendMessage,
+        requiredOperations: <String>[
+          AppCloudOperationIds.chatMessageSendMessage,
+        ],
+      ),
+      AuthGateReason.comment: AuthGateEntry(
+        reason: AuthGateReason.comment,
+        title: UITextConstants.authGateTitleComment,
+        subtitle: UITextConstants.authGateSubtitleComment,
+        prompt: UITextConstants.authGatePromptComment,
+        requiredOperations: <String>[],
+      ),
+      // 点赞已下放为「游客设备态可写」：LikePost 鉴权为 optional + anonymous_policy=allow，
+      // 游客按 deviceActorId 维度真实写入、登录用户按账号维度写入，互不并账。
+      // 因此点赞不再触发登录门，requiredOperations 留空；reason 仅表达设备态动作的
+      // UX 分类，不映射到 required operation。
+      AuthGateReason.like: AuthGateEntry(
+        reason: AuthGateReason.like,
+        title: UITextConstants.authGateTitleLike,
+        subtitle: UITextConstants.authGateSubtitleLike,
+        prompt: UITextConstants.authGatePromptLike,
+        requiredOperations: <String>[],
+      ),
+      AuthGateReason.follow: AuthGateEntry(
+        reason: AuthGateReason.follow,
+        title: UITextConstants.authGateTitleFollow,
+        subtitle: UITextConstants.authGateSubtitleFollow,
+        prompt: UITextConstants.authGatePromptFollow,
+        requiredOperations: <String>[
+          AppCloudOperationIds.userPersonaRelationshipFollowUser,
+        ],
+      ),
+      AuthGateReason.greet: AuthGateEntry(
+        reason: AuthGateReason.greet,
+        title: UITextConstants.authGateTitleGreet,
+        subtitle: UITextConstants.authGateSubtitleGreet,
+        prompt: UITextConstants.authGatePromptGreet,
+        requiredOperations: <String>[],
+      ),
+      // 关注频道展示「关注的人」的内容流，游客无关注关系，需登录后查看。
+      // 关注流走 GetFeed（鉴权快照为 optional），故此处不声明 requiredOperations，
+      // 登录约束是产品决策而非 API 强制。
+      AuthGateReason.followingFeed: AuthGateEntry(
+        reason: AuthGateReason.followingFeed,
+        title: UITextConstants.authGateTitleFollowingFeed,
+        subtitle: UITextConstants.authGateSubtitleFollowingFeed,
+        prompt: UITextConstants.authGatePromptFollowingFeed,
+        requiredOperations: <String>[],
+      ),
+      // 系统分享、复制链接和转发本身不要求账号；只有圈内投放等实际业务写命令
+      // 在其独立入口通过对应 operation 的登录门处理。
+      AuthGateReason.share: AuthGateEntry(
+        reason: AuthGateReason.share,
+        title: UITextConstants.authGateTitleShare,
+        subtitle: UITextConstants.authGateSubtitleShare,
+        prompt: UITextConstants.authGatePromptShare,
+        requiredOperations: <String>[],
+      ),
+      AuthGateReason.personaManage: AuthGateEntry(
+        reason: AuthGateReason.personaManage,
+        title: UITextConstants.authGateTitlePersona,
+        subtitle: UITextConstants.authGateSubtitlePersona,
+        prompt: UITextConstants.authGatePromptPersona,
+        requiredOperations: <String>[],
+      ),
+      AuthGateReason.settingsAccount: AuthGateEntry(
+        reason: AuthGateReason.settingsAccount,
+        title: UITextConstants.authGateTitleSettingsAccount,
+        subtitle: UITextConstants.authGateSubtitleSettingsAccount,
+        prompt: UITextConstants.authGatePromptSettingsAccount,
+        requiredOperations: <String>[],
+      ),
+      AuthGateReason.mediaUpload: AuthGateEntry(
+        reason: AuthGateReason.mediaUpload,
+        title: UITextConstants.authGateTitleMediaUpload,
+        subtitle: UITextConstants.authGateSubtitleMediaUpload,
+        prompt: UITextConstants.authGatePromptMediaUpload,
+        requiredOperations: <String>[
+          AppCloudOperationIds.contentMediaUploadSessionInitMediaUpload,
+        ],
+      ),
+      AuthGateReason.deletePost: AuthGateEntry(
+        reason: AuthGateReason.deletePost,
+        title: UITextConstants.authGateTitleDeletePost,
+        subtitle: UITextConstants.authGateSubtitleDeletePost,
+        prompt: UITextConstants.authGatePromptDeletePost,
+        requiredOperations: <String>[],
+      ),
+      AuthGateReason.report: AuthGateEntry(
+        reason: AuthGateReason.report,
+        title: UITextConstants.authGateTitleReport,
+        subtitle: UITextConstants.authGateSubtitleReport,
+        prompt: UITextConstants.authGatePromptReport,
+        requiredOperations: <String>[
+          AppCloudOperationIds.contentReportCreateReport,
+        ],
+      ),
+      AuthGateReason.joinCircle: AuthGateEntry(
+        reason: AuthGateReason.joinCircle,
+        title: UITextConstants.authGateTitleJoinCircle,
+        subtitle: UITextConstants.authGateSubtitleJoinCircle,
+        prompt: UITextConstants.authGatePromptJoinCircle,
+        requiredOperations: <String>[
+          AppCloudOperationIds.circleCircleMembershipJoinCircle,
+        ],
+      ),
+      // 添加联系人 / 发起群聊 / 建圈子 属「先开面板、动作再登录」的产品级动作门，
+      // 登录约束是产品决策而非单一 required API，故 requiredOperations 留空。
+      AuthGateReason.addContact: AuthGateEntry(
+        reason: AuthGateReason.addContact,
+        title: UITextConstants.authGateTitleAddContact,
+        subtitle: UITextConstants.authGateSubtitleAddContact,
+        prompt: UITextConstants.authGatePromptAddContact,
+        requiredOperations: <String>[],
+      ),
+      AuthGateReason.startGroupChat: AuthGateEntry(
+        reason: AuthGateReason.startGroupChat,
+        title: UITextConstants.authGateTitleStartGroupChat,
+        subtitle: UITextConstants.authGateSubtitleStartGroupChat,
+        prompt: UITextConstants.authGatePromptStartGroupChat,
+        requiredOperations: <String>[],
+      ),
+      AuthGateReason.createCircle: AuthGateEntry(
+        reason: AuthGateReason.createCircle,
+        title: UITextConstants.authGateTitleCreateCircle,
+        subtitle: UITextConstants.authGateSubtitleCreateCircle,
+        prompt: UITextConstants.authGatePromptCreateCircle,
+        requiredOperations: <String>[],
+      ),
+      AuthGateReason.generic: AuthGateEntry(
+        reason: AuthGateReason.generic,
+        title: UITextConstants.authGateTitleGeneric,
+        subtitle: UITextConstants.authGateSubtitleGeneric,
+        prompt: UITextConstants.authGatePromptGeneric,
+        requiredOperations: <String>[],
+      ),
+    };
 
 extension AuthGateReasonX on AuthGateReason {
   AuthGateEntry get entry =>

@@ -471,7 +471,7 @@ void main() {
       expect(petalBloomAmounts(tester), everyElement(1));
     });
 
-    testWidgets('后台暂停动画，恢复时若超过硬期限直接退出', (tester) async {
+    testWidgets('后台暂停不取消硬截止，超时仍退出', (tester) async {
       var finishCount = 0;
       final events = <WelcomeSequenceEvent>[];
       await tester.pumpWidget(
@@ -480,13 +480,58 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 25));
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      // 硬截止在后台继续计时（test hardEntryDeadline=300ms）。
       await tester.pump(const Duration(milliseconds: 400));
-      expect(finishCount, 0);
+      expect(finishCount, 1);
+      expect(events.last.exitReason, WelcomeExitReason.deadline);
 
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       await tester.pump();
       expect(finishCount, 1);
-      expect(events.last.exitReason, WelcomeExitReason.deadline);
+    });
+
+    testWidgets('onWelcomeVisible 抛错仍启动并 finish，不永久停在终态', (tester) async {
+      var finishCount = 0;
+      await tester.pumpWidget(
+        CupertinoApp(
+          home: WelcomeScreen(
+            onFinish: () => finishCount++,
+            flowMode: WelcomeFlowMode.startup,
+            shellEntryReady: true,
+            timing: timing,
+            elapsedSinceProcessStart: () => Duration.zero,
+            deadlineOrigin: () => 'test_process',
+            onWelcomeVisible: () {
+              throw StateError('welcome visible side effect failed');
+            },
+          ),
+        ),
+      );
+      await tester.pump();
+      await pumpUntil(tester, () => finishCount == 1);
+      expect(finishCount, 1);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('exit 观测回调抛错仍保证 onFinish 只回调一次', (tester) async {
+      var finishCount = 0;
+      await tester.pumpWidget(
+        wrap(
+          tester,
+          shellEntryReady: true,
+          onFinish: () => finishCount++,
+          onEvent: (event) {
+            if (event.exitReason != null) {
+              throw StateError('sequence telemetry failed');
+            }
+          },
+        ),
+      );
+      await tester.pump();
+      await pumpUntil(tester, () => finishCount == 1);
+      expect(finishCount, 1);
+      await pumpFor(tester, const Duration(milliseconds: 200));
+      expect(finishCount, 1);
     });
 
     testWidgets('dispose 后不发生 controller 或 timer 回写', (tester) async {
@@ -510,6 +555,22 @@ void main() {
     expect(source, isNot(contains('rotateY')));
     expect(source, isNot(contains('Curves.')));
     expect(source, isNot(contains('scaleY')));
+  });
+
+  test('欢迎退出防护：finish 不受 emit 阻断，Root 有绝对 deadline', () {
+    final welcome = _readAppFile('lib/ui/welcome/pages/welcome_screen.dart');
+    expect(welcome, contains('scheduleMicrotask(() {'));
+    expect(welcome, contains('widget.onFinish()'));
+    expect(welcome, contains('观测回调失败不得阻断进入主壳'));
+    expect(welcome, contains('可见回调失败不得阻断动效/退出'));
+    expect(welcome, contains('不取消硬截止'));
+    expect(welcome, contains('phaseDeadline'));
+
+    final shell = _readAppFile('lib/quwoquan_app_shell.dart');
+    expect(shell, contains('_armStartupDeadline'));
+    expect(shell, contains('startup_absolute_deadline'));
+    expect(shell, contains('StartupStateMachine'));
+    expect(shell, contains('_completeStartupWelcome()'));
   });
 
   test('全开首帧与最终全开 golden 字节一致', () {

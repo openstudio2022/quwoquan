@@ -7,19 +7,19 @@ from typing import Any
 from content.execution import store
 from content.execution.selection import (
     execution_planned_entity_ids,
-    source_precheck_report,
-    workflow_failure_items,
+    execution_failure_items,
 )
+from content.execution.source_precheck import source_precheck_report
+from content.execution.contracts import ExecutionStateTransition
 from core.entity_artifacts import inactive_entity_artifact_rows
-from core.io import read_json
-from core.paths import execution_entity_page_input_path, execution_root
+from core.paths import execution_entity_page_input_path
 from governance.coverage.entity_extract import require_domain_etype
 
 
 def audit_execution_readiness(
     execution_id: str,
     *,
-    workflow_state_override: Mapping[str, Any] | None = None,
+    execution_state_override: ExecutionStateTransition | None = None,
 ) -> dict[str, Any]:
     """Return one typed report for all enabled content lanes of an execution."""
     from content.homepage.homepage import validate_entity_page_inputs
@@ -28,7 +28,7 @@ def audit_execution_readiness(
         coverage_entity_type,
         coverage_entity_type_for_entity,
     )
-    from content.execution.context import ExecutionContext
+    from content.execution.context import ExecutionContext, load_execution_state
     from content.execution.active_spec import active_spec
     from content.execution.recovery.download_gate import _download_research_lane_issues
     from content.source.source_inputs import curated_images_for_entity
@@ -41,10 +41,7 @@ def audit_execution_readiness(
         "article": int(quotas.get("entityArticlesPerTarget") or 0),
         "image": int(quotas.get("imageWorksPerTarget") or 0),
     }
-    state_path = execution_root(execution_id) / "_shared" / "workflow_state.json"
-    state = read_json(state_path) if state_path.is_file() else {}
-    if workflow_state_override is not None:
-        state = dict(workflow_state_override)
+    state = execution_state_override or load_execution_state(execution_id)
     coverage_ids = coverage_entity_ids(spec)
     planned_ids = execution_planned_entity_ids(execution_id)
     if len(planned_ids) < len(coverage_ids):
@@ -100,7 +97,7 @@ def audit_execution_readiness(
         homepage_failed_entities={str(item.get("entity") or "") for item in failures if item.get("lane") == "homepage"},
     )
     _merge_failures(failures, [dict(item) for item in precheck.get("failedLanes") or [] if isinstance(item, Mapping)])
-    _merge_failures(failures, workflow_failure_items(state), skip_when_passed=passed_entities)
+    _merge_failures(failures, execution_failure_items(state), skip_when_passed=passed_entities)
     inactive = inactive_entity_artifact_rows(execution_id, active_entity_names=ctx.entity_ids) if quota_by_lane["homepage"] else []
     _merge_failures(
         failures,
@@ -118,7 +115,7 @@ def audit_execution_readiness(
         if lane in passed_entities:
             passed_entities[lane].discard(entity)
     return {
-        "schemaVersion": "quwoquan_data.execution_audit",
+        "schema": "quwoquan_data.execution_audit",
         "executionId": execution_id,
         "targetCount": len(ctx.entity_ids),
         "targetScope": "execution_planned" if planned_ids else "execution_coverage",
@@ -129,8 +126,25 @@ def audit_execution_readiness(
         "failedLanes": failures,
         "sourcePrecheck": precheck,
         "imageCapacity": {str(row["entity"]): image_capacity[str(row["entity"])] for row in failures if row.get("lane") == "image" and str(row.get("entity") or "") in image_capacity},
-        "workflowState": {key: state.get(key) for key in ("status", "waitingCheckpoint", "nextAction", "retryCounts", "infrastructureRetryCounts", "failedObjects")},
-        "lastAgentRun": {key: (state.get("lastAgentRun") or {}).get(key) for key in ("stage", "jobCount", "startedCount", "finishedCount", "infrastructureFailures", "finishedAt")},
+        "executionState": {
+            "status": state.status.value,
+            "waitingCheckpoint": state.waiting_checkpoint,
+            "nextAction": state.next_action,
+            "retryCounts": dict(state.retry_counts),
+            "infrastructureRetryCounts": dict(state.infrastructure_retry_counts),
+            "failedObjects": list(state.failed_objects),
+        },
+        "lastAgentRun": {
+            key: (state.last_agent_run or {}).get(key)
+            for key in (
+                "stage",
+                "jobCount",
+                "startedCount",
+                "finishedCount",
+                "infrastructureFailures",
+                "finishedAt",
+            )
+        },
     }
 
 

@@ -45,7 +45,7 @@ def _materialize_homepage_source_catalog(
         policy_revision=policy_revision,
     ):
         raise ValueError(
-            "homepage primaryEvidenceRef must resolve to explicit encyclopedia-primary-v2 identity"
+            "homepage primaryEvidenceRef must resolve to explicit encyclopedia-primary identity"
         )
     if (
         not source_unit_id.strip()
@@ -57,7 +57,7 @@ def _materialize_homepage_source_catalog(
     evidence_dir = obj / "evidence" / "sources" / source_unit_id
     evidence_dir.mkdir(parents=True, exist_ok=True)
     compact_meta = {
-        "schemaVersion": "quwoquan_data.object_source_evidence/1",
+        "schema": "quwoquan_data.object_source_evidence",
         "sourceUnitId": source_unit_id,
         "entityName": str(meta.get("entityName") or fallback_title),
         "sourceKind": source_kind,
@@ -84,8 +84,8 @@ def _materialize_homepage_source_catalog(
     evidence_ref = f"evidence/sources/{source_unit_id}/meta.json"
     catalog_source = {**compact_meta, "evidenceRef": evidence_ref}
     catalog = {
-        "schemaVersion": "quwoquan_data.object_source_catalog/1",
-        "policyRevision": "encyclopedia-primary-v2",
+        "schema": "quwoquan_data.object_source_catalog",
+        "policyRevision": "encyclopedia-primary",
         "primaryEvidenceRef": evidence_ref,
         "primarySource": catalog_source,
         "sources": [catalog_source],

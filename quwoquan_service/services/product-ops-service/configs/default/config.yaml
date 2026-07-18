@@ -17,6 +17,15 @@ mongodb:
 postgres:
   dsn: ""
 
+sls:
+  region: "${PRODUCT_OPS_SLS_REGION}"
+  endpoint: "${PRODUCT_OPS_SLS_ENDPOINT}"
+  project: "${PRODUCT_OPS_SLS_PROJECT}"
+  raw_logstore: "app-product-telemetry-raw"
+  startup_diagnostic_logstore: "app-startup-diagnostic-raw"
+  aggregate_logstore: "app-product-telemetry-hourly"
+  timeout_ms: 1200
+
 # Redis scenes (defaults)
 redis:
   rec:

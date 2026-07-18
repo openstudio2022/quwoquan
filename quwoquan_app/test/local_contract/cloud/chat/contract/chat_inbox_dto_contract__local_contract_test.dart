@@ -5,10 +5,11 @@ void main() {
   group('ChatInboxDto — 常规契约', () {
     test('fromMap parses canonical inbox row', () {
       final dto = ChatInboxDto.fromMap(const <String, dynamic>{
-        'conversationId': 'conv_006',
+        'id': 'conv_006',
         'type': 'group',
         'title': '产品共创群',
         'avatarUrl': 'https://cdn.example.com/group.png',
+        'groupAvatarVersion': 1,
         'lastMessagePreview': '今晚 8 点前把评审意见同步到文档里',
         'lastMessageType': 'text',
         'lastMessageTime': '2026-03-18T12:18:00Z',
@@ -17,6 +18,7 @@ void main() {
         'mentionUnreadCount': 2,
         'muted': false,
         'pinned': true,
+        'circleId': '',
       });
 
       expect(dto.id, equals('conv_006'));
@@ -33,36 +35,32 @@ void main() {
     });
   });
 
-  group('ChatInboxDto — 兼容性契约', () {
-    test('deprecated memberAvatars 不反推 avatarUrl，端侧不再据此拼群头像', () {
-      final dto = ChatInboxDto.fromMap(const <String, dynamic>{
-        '_id': 'current_conv',
-        'type': 'group',
-        'title': '老字段群聊',
-        'memberAvatars': <String>['1.png', '2.png'],
-        'lastMessage': '路线图已经发到群文件了',
-        'messageType': 'image',
-        'lastMessageAt': '2026-03-17T13:00:00Z',
-        'maxSeq': 256,
-        'unreadCount': 6,
-        'mentionCount': 1,
-      });
-
-      expect(dto.id, equals('current_conv'));
-      expect(dto.avatarUrl, isEmpty);
-      expect(dto.lastMessagePreview, equals('路线图已经发到群文件了'));
-      expect(dto.lastMessageType, equals('image'));
-      expect(dto.lastSeq, equals(256));
-      expect(dto.mentionUnreadCount, equals(1));
-      expect(dto.hasMention, isTrue);
+  group('ChatInboxDto — 单轨契约', () {
+    test('拒绝已退休字段，不创建第二套 wire 方言', () {
+      expect(
+        () => ChatInboxDto.fromMap(const <String, dynamic>{
+          '_id': 'current_conv',
+          'type': 'group',
+          'title': '老字段群聊',
+          'memberAvatars': <String>['1.png', '2.png'],
+          'lastMessage': '路线图已经发到群文件了',
+          'messageType': 'image',
+          'lastMessageAt': '2026-03-17T13:00:00Z',
+          'maxSeq': 256,
+          'unreadCount': 6,
+          'mentionCount': 1,
+        }),
+        throwsFormatException,
+      );
     });
 
     test('toMap round-trip preserves core fields', () {
       final original = ChatInboxDto.fromMap(const <String, dynamic>{
-        'conversationId': 'conv_001',
+        'id': 'conv_001',
         'type': 'direct',
         'title': '李明',
         'avatarUrl': 'avatar.png',
+        'groupAvatarVersion': 0,
         'lastMessagePreview': '好的，明天见',
         'lastMessageType': 'text',
         'lastMessageTime': '2026-03-18T00:32:00Z',
@@ -71,6 +69,7 @@ void main() {
         'mentionUnreadCount': 0,
         'muted': false,
         'pinned': false,
+        'circleId': '',
       });
 
       final roundTrip = ChatInboxDto.fromMap(original.toMap());
@@ -84,16 +83,8 @@ void main() {
   });
 
   group('ChatInboxDto — 异常/边界契约', () {
-    test('missing fields do not crash', () {
-      expect(() => ChatInboxDto.fromMap(const {}), returnsNormally);
-      final dto = ChatInboxDto.fromMap(const {});
-      expect(dto.id, isEmpty);
-      expect(dto.title, isEmpty);
-      expect(dto.avatarUrl, isEmpty);
-      expect(dto.unreadCount, equals(0));
-      expect(dto.mentionUnreadCount, equals(0));
-      expect(dto.hasUnread, isFalse);
-      expect(dto.hasMention, isFalse);
+    test('缺失必填字段立即失败', () {
+      expect(() => ChatInboxDto.fromMap(const {}), throwsFormatException);
     });
   });
 }

@@ -1,5 +1,4 @@
 templateId: 线路_跟团攻略
-version: 1
 subject: { kind: topic, type: 旅行/线路, minEntityRefs: 3, subjectTagRef: Topic/旅行/行程形态/跟团游 }
 vertical: travel
 category: travel

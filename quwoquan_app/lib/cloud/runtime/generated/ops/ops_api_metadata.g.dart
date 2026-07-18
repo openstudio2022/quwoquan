@@ -8,25 +8,30 @@ class OpsApiMetadata {
 
   static const String domain = 'ops';
   static const List<String> apiPrefixes = <String>[
-    '/v1/control-plane',
-    '/v1/ops',
+    '/control-plane/platform',
+    '/control-plane/product',
+    '/ops/events',
+    '/ops/experiments',
+    '/ops/startup-events',
+    '/ops/visits',
   ];
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
-    'AssignExperimentVariant': '/v1/ops/experiments/{experimentId}/assignment',
-    'GetEventDrilldown': '/v1/ops/events/drilldown',
-    'GetEventSummary': '/v1/ops/events/summary',
-    'GetExperimentAssignment': '/v1/ops/experiments/{experimentId}/assignment',
-    'GetExperimentStats': '/v1/ops/experiments/{experimentId}/stats',
-    'GetVisitStats': '/v1/ops/visits/stats',
-    'ListConfigLayers': '/v1/control-plane/platform/configs/layers',
-    'ListExperiments': '/v1/control-plane/product/experiments',
-    'ListServiceConfigs': '/v1/control-plane/platform/configs',
-    'RecordVisit': '/v1/ops/visits',
-    'ReportEventBatch': '/v1/ops/events',
-    'ResolveEffectiveConfig': '/v1/control-plane/platform/configs/resolve',
-    'UpdateExperimentRollout': '/v1/control-plane/product/experiments/{experimentId}:rollout',
-    'UpdateServiceConfig': '/v1/control-plane/platform/configs/{configKey}:update',
+    'AssignExperimentVariant': '/ops/experiments/{experimentId}/assignment',
+    'GetEventDrilldown': '/ops/events/drilldown',
+    'GetEventSummary': '/ops/events/summary',
+    'GetExperimentAssignment': '/ops/experiments/{experimentId}/assignment',
+    'GetExperimentStats': '/ops/experiments/{experimentId}/stats',
+    'GetVisitStats': '/ops/visits/stats',
+    'ListConfigLayers': '/control-plane/platform/configs/layers',
+    'ListExperiments': '/control-plane/product/experiments',
+    'ListServiceConfigs': '/control-plane/platform/configs',
+    'RecordVisit': '/ops/visits',
+    'ReportEventBatch': '/ops/events',
+    'ReportStartupEventBatch': '/ops/startup-events',
+    'ResolveEffectiveConfig': '/control-plane/platform/configs/resolve',
+    'UpdateExperimentRollout': '/control-plane/product/experiments/{experimentId}:rollout',
+    'UpdateServiceConfig': '/control-plane/platform/configs/{configKey}:update',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
@@ -41,6 +46,7 @@ class OpsApiMetadata {
     'ListServiceConfigs': 'GET',
     'RecordVisit': 'POST',
     'ReportEventBatch': 'POST',
+    'ReportStartupEventBatch': 'POST',
     'ResolveEffectiveConfig': 'GET',
     'UpdateExperimentRollout': 'POST',
     'UpdateServiceConfig': 'POST',
@@ -59,6 +65,7 @@ class OpsApiMetadata {
     'ListServiceConfigs': 'required',
     'RecordVisit': 'required',
     'ReportEventBatch': 'required',
+    'ReportStartupEventBatch': 'optional',
     'ResolveEffectiveConfig': 'required',
     'UpdateExperimentRollout': 'required',
     'UpdateServiceConfig': 'required',
@@ -83,44 +90,46 @@ class OpsApiMetadata {
   static const String listServiceConfigsOperation = 'ListServiceConfigs';
   static const String recordVisitOperation = 'RecordVisit';
   static const String reportEventBatchOperation = 'ReportEventBatch';
+  static const String reportStartupEventBatchOperation = 'ReportStartupEventBatch';
   static const String resolveEffectiveConfigOperation = 'ResolveEffectiveConfig';
   static const String updateExperimentRolloutOperation = 'UpdateExperimentRollout';
   static const String updateServiceConfigOperation = 'UpdateServiceConfig';
 
-  static const String assignExperimentVariantPathTemplate = '/v1/ops/experiments/{experimentId}/assignment';
+  static const String assignExperimentVariantPathTemplate = '/ops/experiments/{experimentId}/assignment';
   static String assignExperimentVariantPath({required String experimentId}) {
     return _fillPath(assignExperimentVariantPathTemplate, <String, String>{
       'experimentId': experimentId,
     });
   }
-  static const String getEventDrilldownPath = '/v1/ops/events/drilldown';
-  static const String getEventSummaryPath = '/v1/ops/events/summary';
-  static const String getExperimentAssignmentPathTemplate = '/v1/ops/experiments/{experimentId}/assignment';
+  static const String getEventDrilldownPath = '/ops/events/drilldown';
+  static const String getEventSummaryPath = '/ops/events/summary';
+  static const String getExperimentAssignmentPathTemplate = '/ops/experiments/{experimentId}/assignment';
   static String getExperimentAssignmentPath({required String experimentId}) {
     return _fillPath(getExperimentAssignmentPathTemplate, <String, String>{
       'experimentId': experimentId,
     });
   }
-  static const String getExperimentStatsPathTemplate = '/v1/ops/experiments/{experimentId}/stats';
+  static const String getExperimentStatsPathTemplate = '/ops/experiments/{experimentId}/stats';
   static String getExperimentStatsPath({required String experimentId}) {
     return _fillPath(getExperimentStatsPathTemplate, <String, String>{
       'experimentId': experimentId,
     });
   }
-  static const String getVisitStatsPath = '/v1/ops/visits/stats';
-  static const String listConfigLayersPath = '/v1/control-plane/platform/configs/layers';
-  static const String listExperimentsPath = '/v1/control-plane/product/experiments';
-  static const String listServiceConfigsPath = '/v1/control-plane/platform/configs';
-  static const String recordVisitPath = '/v1/ops/visits';
-  static const String reportEventBatchPath = '/v1/ops/events';
-  static const String resolveEffectiveConfigPath = '/v1/control-plane/platform/configs/resolve';
-  static const String updateExperimentRolloutPathTemplate = '/v1/control-plane/product/experiments/{experimentId}:rollout';
+  static const String getVisitStatsPath = '/ops/visits/stats';
+  static const String listConfigLayersPath = '/control-plane/platform/configs/layers';
+  static const String listExperimentsPath = '/control-plane/product/experiments';
+  static const String listServiceConfigsPath = '/control-plane/platform/configs';
+  static const String recordVisitPath = '/ops/visits';
+  static const String reportEventBatchPath = '/ops/events';
+  static const String reportStartupEventBatchPath = '/ops/startup-events';
+  static const String resolveEffectiveConfigPath = '/control-plane/platform/configs/resolve';
+  static const String updateExperimentRolloutPathTemplate = '/control-plane/product/experiments/{experimentId}:rollout';
   static String updateExperimentRolloutPath({required String experimentId}) {
     return _fillPath(updateExperimentRolloutPathTemplate, <String, String>{
       'experimentId': experimentId,
     });
   }
-  static const String updateServiceConfigPathTemplate = '/v1/control-plane/platform/configs/{configKey}:update';
+  static const String updateServiceConfigPathTemplate = '/control-plane/platform/configs/{configKey}:update';
   static String updateServiceConfigPath({required String configKey}) {
     return _fillPath(updateServiceConfigPathTemplate, <String, String>{
       'configKey': configKey,

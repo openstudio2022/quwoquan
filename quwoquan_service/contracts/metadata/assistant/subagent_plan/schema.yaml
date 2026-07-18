@@ -13,73 +13,94 @@ defaults:
   answerThreshold: 0.0
 fields:
   - name: subagentId
+    source: subagentId
     dart_type: String
     json_key: subagentId
   - name: domainId
+    source: domainId
     dart_type: String
     json_key: domainId
   - name: problemClass
+    source: problemClass
     dart_type: String
     json_key: problemClass
   - name: goal
+    source: goal
     dart_type: String
     json_key: goal
   - name: role
+    source: role
     dart_type: String
     json_key: role
     default: supporting
   - name: taskBrief
+    source: taskBrief
     dart_type: String
     json_key: taskBrief
     default: ''
   - name: routeNarrative
+    source: routeNarrative
     dart_type: String
     json_key: routeNarrative
     default: ''
   - name: localContextSeed
+    source: localContextSeed
     dart_type: String
     json_key: localContextSeed
     default: ''
   - name: needClarify
+    source: needClarify
     dart_type: bool
     json_key: needClarify
     default: false
   - name: pendingClarifications
+    source: pendingClarifications
     dart_type: List<String>
     json_key: pendingClarifications
     default: const <String>[]
   - name: mode
+    source: mode
     dart_type: String
     json_key: mode
   - name: timeoutMs
+    source: timeoutMs
     dart_type: int
     json_key: timeoutMs
   - name: maxIterations
+    source: maxIterations
     dart_type: int
     json_key: maxIterations
   - name: toolBudget
+    source: toolBudget
     dart_type: int
     json_key: toolBudget
   - name: toolWhitelist
+    source: toolWhitelist
     dart_type: List<String>
     json_key: toolWhitelist
     default: const <String>[]
   - name: stopPolicy
+    source: stopPolicy
     dart_type: String
     json_key: stopPolicy
   - name: searchIntensity
+    source: searchIntensity
     dart_type: String
     json_key: searchIntensity
   - name: providerPolicy
+    source: providerPolicy
     dart_type: String
     json_key: providerPolicy
   - name: freshnessHoursMax
+    source: freshnessHoursMax
     dart_type: int
     json_key: freshnessHoursMax
   - name: answerThreshold
+    source: answerThreshold
     dart_type: double
     json_key: answerThreshold
   - name: dependencies
+    source: dependencies
     dart_type: List<String>
     json_key: dependencies
     default: const <String>[]

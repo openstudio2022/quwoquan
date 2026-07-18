@@ -1,4 +1,4 @@
-schemaVersion: quwoquan.travel_source_registry
+schema: quwoquan.travel_source_registry
 vertical: travel
 defaultAction: block
 qualityTiers:
@@ -16,8 +16,8 @@ licensePolicies:
   - licensed_asset_required
 extractors:
   - wikipedia_api
-  - baidu_baike_html
-  - sogou_baike_html
+  - baidu_baike_openapi
+  - toutiao_baike_html
   - static_official_html
   - qunar_html
   - generic_html
@@ -82,21 +82,22 @@ sites:
     urlPatterns:
       - https://baike.baidu.com/item/*
     fetchable: true
-    extractor: baidu_baike_html
+    extractor: baidu_baike_openapi
     licensePolicy: factual_citation_only
     qualityTier: A
-    notes: 百科主页候选源；反抓取不稳定时由 fetch/source_screen 按真实正文快照决定 retained/rejected，不得用空页补证据。
-  - siteId: sogou_baike
-    platform: 搜狗百科
+    notes: 百科卡片 API 候选源；research 必须先校验标题与地域，空响应不得写入 source plan。
+  - siteId: toutiao_baike
+    platform: 今日头条百科
     category: encyclopedia
-    domains: [baike.sogou.com]
+    domains: [www.baike.com, baike.com]
     urlPatterns:
-      - https://baike.sogou.com/*
+      - https://www.baike.com/wikiid/*
+      - https://baike.com/wikiid/*
     fetchable: true
-    extractor: sogou_baike_html
+    extractor: toutiao_baike_html
     licensePolicy: factual_citation_only
     qualityTier: B
-    notes: 百科主页候选源；反抓取不稳定时由 fetch/source_screen 按真实正文快照决定 retained/rejected，不得用空页补证据。
+    notes: 百科主页候选源；只准入公开解析到 wikiid 且通过实体标题与地域上下文校验的正文页。
   - siteId: scenic_official
     platform: 景区官网
     category: official

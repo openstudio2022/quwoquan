@@ -7,7 +7,7 @@ from verify.verify_no_active_data_runtime import active_runtime_processes
 def test_active_runtime_preflight_blocks_long_running_recipe_process():
     lines = [
         (
-            "12345 python3 quwoquan_data/scripts/cli.py task geo-homepages "
+            "12345 python3 quwoquan_data/scripts/cli.py task execute "
             "--execution-id 20260713--travel-homepage-coverage--cn-zhejiang--canary-001"
         ),
         "22222 python3 quwoquan_data/scripts/cli.py verify output-root-isolation",
@@ -16,13 +16,13 @@ def test_active_runtime_preflight_blocks_long_running_recipe_process():
     active = active_runtime_processes(lines)
 
     assert len(active) == 1
-    assert "task geo-homepages" in active[0]
+    assert "task execute" in active[0]
 
 
-def test_active_runtime_preflight_blocks_nested_workflow_process():
+def test_active_runtime_preflight_blocks_nested_execution_process():
     lines = [
         (
-            "12345 python3 /repo/quwoquan_data/scripts/cli.py task geo-homepages "
+            "12345 python3 /repo/quwoquan_data/scripts/cli.py task execute "
             "--task task-a --batch b1"
         )
     ]

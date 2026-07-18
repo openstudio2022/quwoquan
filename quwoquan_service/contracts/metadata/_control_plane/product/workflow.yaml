@@ -1,4 +1,3 @@
-version: 1
 
 workflows:
   - workflow_id: moderation_case_v1

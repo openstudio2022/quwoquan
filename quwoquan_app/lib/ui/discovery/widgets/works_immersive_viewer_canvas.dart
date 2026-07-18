@@ -99,14 +99,14 @@ class _WorksVideoCanvas extends StatefulWidget {
     required this.post,
     required this.items,
     required this.onEpisodeChanged,
-    required this.onActiveControllerChanged,
+    required this.onActiveSessionChanged,
   });
 
   final PostBaseDto post;
-  final List<WorkBrowserMediaItemDto> items;
+  final List<_WorksVideoDeliveryItem> items;
   final ValueChanged<int> onEpisodeChanged;
-  final void Function(int episodeIndex, VideoPlayerController? controller)
-  onActiveControllerChanged;
+  final void Function(int episodeIndex, VideoPlaybackSession? session)
+  onActiveSessionChanged;
 
   @override
   State<_WorksVideoCanvas> createState() => _WorksVideoCanvasState();
@@ -117,8 +117,8 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
   int _currentEpisodeIndex = 0;
   bool _episodePlaybackSettled = true;
   Timer? _episodeSettleTimer;
-  final Map<int, VideoPlayerController> _controllersByIndex =
-      <int, VideoPlayerController>{};
+  final Map<int, VideoPlaybackSession> _sessionsByIndex =
+      <int, VideoPlaybackSession>{};
 
   @override
   void initState() {
@@ -132,8 +132,11 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
   @override
   void dispose() {
     _episodeSettleTimer?.cancel();
-    _controllersByIndex.clear();
-    widget.onActiveControllerChanged(_currentEpisodeIndex, null);
+    for (final session in _sessionsByIndex.values) {
+      session.dispose();
+    }
+    _sessionsByIndex.clear();
+    widget.onActiveSessionChanged(_currentEpisodeIndex, null);
     _episodeController.dispose();
     super.dispose();
   }
@@ -161,26 +164,19 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
     });
   }
 
-  void _registerController(int index, VideoPlayerController controller) {
-    _pruneControllerRegistry(aroundIndex: _currentEpisodeIndex);
-    _controllersByIndex[index] = controller;
-    if (index == _currentEpisodeIndex) {
-      widget.onActiveControllerChanged(index, controller);
-    }
+  VideoPlaybackSession _sessionFor(int index) {
+    return _sessionsByIndex.putIfAbsent(index, VideoPlaybackSession.new);
   }
 
-  void _pruneControllerRegistry({required int aroundIndex}) {
-    _controllersByIndex.removeWhere((index, _) => index != aroundIndex);
+  void _registerSession(int index, VideoPlaybackSession session) {
+    _sessionsByIndex[index] = session;
+    if (index == _currentEpisodeIndex) {
+      widget.onActiveSessionChanged(index, session);
+    }
   }
 
   void _togglePlayback(int index) {
-    final controller = _controllersByIndex[index];
-    if (controller == null || !controller.value.isInitialized) return;
-    if (controller.value.isPlaying) {
-      controller.pause();
-    } else {
-      controller.play();
-    }
+    unawaited(_sessionFor(index).toggle());
   }
 
   @override
@@ -204,36 +200,40 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
                 _currentEpisodeIndex = index;
                 _episodePlaybackSettled = false;
               });
-              _pruneControllerRegistry(aroundIndex: index);
               _scheduleEpisodePlaybackSettle();
               widget.onEpisodeChanged(index);
-              widget.onActiveControllerChanged(
-                index,
-                _controllersByIndex[index],
-              );
+              widget.onActiveSessionChanged(index, _sessionsByIndex[index]);
             },
             itemBuilder: (context, index) {
               final item = items[index];
-              if (item.url.isEmpty) {
-                return Container(color: AppColors.worksBackground);
-              }
               final isCurrent = index == _currentEpisodeIndex;
               final keepAlive = isCurrent;
+              final session = _sessionFor(index);
               return _KeepAliveStage(
                 key: ValueKey<String>(
                   'works-video-stage-${widget.post.id}-$index',
                 ),
                 keepAlive: keepAlive,
-                child: VideoPlayerWidget(
-                  key: ValueKey<String>('works-video-${widget.post.id}-$index'),
-                  videoUrl: item.url,
-                  thumbnailUrl: item.coverUrl,
-                  initialize: isCurrent,
-                  autoPlay: isCurrent && _episodePlaybackSettled,
-                  showControls: false,
-                  onTap: () => _togglePlayback(index),
-                  onControllerCreated: (controller) =>
-                      _registerController(index, controller),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    VideoPlayerWidget(
+                      key: ValueKey<String>(
+                        'works-video-${widget.post.id}-$index',
+                      ),
+                      deliveryReference: item.deliveryReference,
+                      thumbnailReference: item.coverReference,
+                      initialize: isCurrent,
+                      autoPlay: isCurrent && _episodePlaybackSettled,
+                      showControls: false,
+                      verifiedDuration: item.verifiedDuration,
+                      onTap: () => _togglePlayback(index),
+                      playbackSession: session,
+                      onPlaybackSessionCreated: (registeredSession) =>
+                          _registerSession(index, registeredSession),
+                    ),
+                    _WorksPausedPlaybackOverlay(session: session),
+                  ],
                 ),
               );
             },
@@ -256,6 +256,54 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _WorksPausedPlaybackOverlay extends StatelessWidget {
+  const _WorksPausedPlaybackOverlay({required this.session});
+
+  final VideoPlaybackSession session;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: AnimatedBuilder(
+        animation: session,
+        builder: (context, _) {
+          final snapshot = session.snapshot;
+          final show =
+              snapshot.isInitialized &&
+              !snapshot.isPlaying &&
+              !snapshot.isScrubbing &&
+              snapshot.transport != VideoPlaybackTransport.buffering &&
+              snapshot.transport != VideoPlaybackTransport.failure;
+          return AnimatedOpacity(
+            duration: const Duration(milliseconds: 160),
+            opacity: show ? 1 : 0,
+            child: Center(
+              child: Container(
+                key: const ValueKey<String>('works-video-paused-play-overlay'),
+                width: AppSpacing.videoPlayOverlaySize,
+                height: AppSpacing.videoPlayOverlaySize,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.black.withValues(alpha: 0.20),
+                  border: Border.all(
+                    color: AppColors.white.withValues(alpha: 0.38),
+                    width: AppSpacing.hairline,
+                  ),
+                ),
+                child: Icon(
+                  CupertinoIcons.play_fill,
+                  color: AppColors.white.withValues(alpha: 0.94),
+                  size: AppSpacing.videoPlayOverlayIconSize,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 }
@@ -543,4 +591,17 @@ class _WorksTextCanvas extends StatelessWidget {
       ],
     );
   }
+}
+
+@immutable
+class _WorksVideoDeliveryItem {
+  const _WorksVideoDeliveryItem({
+    required this.deliveryReference,
+    this.coverReference,
+    this.verifiedDuration,
+  });
+
+  final MediaDeliveryReference deliveryReference;
+  final MediaDeliveryReference? coverReference;
+  final Duration? verifiedDuration;
 }

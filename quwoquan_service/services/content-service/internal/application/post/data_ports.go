@@ -2,8 +2,6 @@ package post
 
 import (
 	"context"
-	"fmt"
-	"time"
 
 	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
 	postports "quwoquan_service/services/content-service/internal/domain/post/ports"
@@ -19,13 +17,28 @@ type DataPorts struct {
 }
 
 type MediaAssetBindingSlice struct {
-	AssetID string
-	OwnerID string
-	Ready   bool
+	AssetID                      string
+	OwnerID                      string
+	Ready                        bool
+	MediaType                    string
+	ContentType                  string
+	Version                      int64
+	PublicSliceKey               string
+	VerifiedDurationMs           int64
+	VideoWidth                   int
+	VideoHeight                  int
+	VideoPublicSliceKey          string
+	CoverPublicSliceKey          string
+	PreviewTrackVersion          int
+	PreviewTrackManifestSliceKey string
+	CoverStrategy                string
+	ManualCoverAssetID           string
+	CoverFrameTimeMs             int64
 }
 
 type MediaAssetBindingReader interface {
 	FindMediaAssetsForBinding(context.Context, []string) (map[string]MediaAssetBindingSlice, error)
+	MaterializePublicSlices(context.Context, []string) error
 }
 
 // BindDataPorts 供同一个对象 adapter 同时实现多个细粒度端口时装配使用。
@@ -53,35 +66,20 @@ type postDataAccess struct {
 	ports DataPorts
 }
 
-func (a postDataAccess) Create(ctx context.Context, post *postmodel.Post) error {
-	_, err := a.ports.Aggregate.Commit(ctx, postports.Commit{
-		Post:             post,
-		ExpectedVersion:  0,
-		IdempotencyKey:   "create:" + post.ID,
-		CommandName:      "CreatePost",
-		CommandDigest:    post.ID,
-		ReceiptExpiresAt: time.Now().UTC().Add(24 * time.Hour),
-	})
-	return err
-}
-
-func (a postDataAccess) Update(ctx context.Context, postID string, post *postmodel.Post) bool {
-	if post == nil {
-		return false
-	}
-	result, err := a.ports.Aggregate.Commit(ctx, postports.Commit{
-		Post:             post,
-		ExpectedVersion:  post.Version,
-		IdempotencyKey:   fmt.Sprintf("update:%s:%d", postID, post.Version),
-		CommandName:      "UpdatePost",
-		CommandDigest:    fmt.Sprintf("%s:%d", postID, post.Version),
-		ReceiptExpiresAt: time.Now().UTC().Add(24 * time.Hour),
-	})
-	return err == nil && result.Post != nil
-}
-
 func (a postDataAccess) FindByID(ctx context.Context, postID string) (*postmodel.Post, bool) {
 	return a.ports.Detail.FindByID(ctx, postID)
+}
+
+func (a postDataAccess) FindByPublicationIntent(
+	ctx context.Context,
+	authorID string,
+	publishIntentID string,
+) (*postmodel.Post, bool) {
+	return a.ports.Detail.FindByPublicationIntent(
+		ctx,
+		authorID,
+		publishIntentID,
+	)
 }
 
 func (a postDataAccess) ListAll(ctx context.Context) ([]postmodel.Post, error) {

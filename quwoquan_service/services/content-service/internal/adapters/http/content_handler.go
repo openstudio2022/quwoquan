@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	rtauth "quwoquan_service/runtime/auth"
@@ -52,6 +53,116 @@ type ContentHandler struct {
 	authorImpactStore         ports.AuthorImpactStore
 	authorImpactEvidenceStore ports.AuthorImpactEvidenceStore
 	healthChecker             *rthealth.Checker
+}
+
+// postDetailClientWire is the explicit GET /content/posts/{postId} contract.
+// Storage/read-model names such as _id and authorDisplayNameSnapshot must not
+// leak across this adapter boundary because generated clients consume the
+// projection field names below.
+type postDetailClientWire struct {
+	PostID                  postports.PostID                         `json:"postId"`
+	ContentType             postports.ContentType                    `json:"contentType"`
+	ContentIdentity         postports.ContentIdentity                `json:"contentIdentity,omitempty"`
+	AssistantUsePolicy      string                                   `json:"assistantUsePolicy,omitempty"`
+	AuthorID                postports.PersonaID                      `json:"authorId,omitempty"`
+	AuthorDisplayName       string                                   `json:"authorDisplayName,omitempty"`
+	AuthorAvatarURL         string                                   `json:"authorAvatarUrl,omitempty"`
+	Title                   string                                   `json:"title,omitempty"`
+	Body                    string                                   `json:"body,omitempty"`
+	Summary                 string                                   `json:"summary,omitempty"`
+	TagRefs                 []string                                 `json:"tagRefs,omitempty"`
+	EntityRefs              []string                                 `json:"entityRefs,omitempty"`
+	SemanticMentions        []postports.PostSemanticMentionSlice     `json:"semanticMentions,omitempty"`
+	MediaAssetIDs           []string                                 `json:"mediaAssetIds,omitempty"`
+	MediaURLs               []string                                 `json:"mediaUrls,omitempty"`
+	MediaItems              []postports.PostMediaItemSlice           `json:"mediaItems,omitempty"`
+	CoverURL                string                                   `json:"coverUrl,omitempty"`
+	ThumbnailURL            string                                   `json:"thumbnailUrl,omitempty"`
+	VideoURL                string                                   `json:"videoUrl,omitempty"`
+	Width                   int64                                    `json:"width,omitempty"`
+	Height                  int64                                    `json:"height,omitempty"`
+	DurationMS              int64                                    `json:"durationMs,omitempty"`
+	ArticleMarkdown         string                                   `json:"articleMarkdown,omitempty"`
+	MarkdownDialect         string                                   `json:"markdownDialect,omitempty"`
+	ArticleMarkdownDigest   string                                   `json:"articleMarkdownDigest,omitempty"`
+	ArticleAssetManifest    *postports.PostArticleAssetManifestSlice `json:"articleAssetManifest,omitempty"`
+	ArticleRenderProfile    *postports.PostArticleRenderProfileSlice `json:"articleRenderProfile,omitempty"`
+	ContentVertical         string                                   `json:"contentVertical,omitempty"`
+	EntityMentions          []postports.PostEntityMentionSlice       `json:"entityMentions,omitempty"`
+	ArticleTemplate         string                                   `json:"articleTemplate,omitempty"`
+	ArticleFontPreset       string                                   `json:"articleFontPreset,omitempty"`
+	CoverStrategy           string                                   `json:"coverStrategy,omitempty"`
+	CoverFrameTimeMS        int64                                    `json:"coverFrameTimeMs,omitempty"`
+	Location                *postports.PostLocationSlice             `json:"location,omitempty"`
+	LocationName            string                                   `json:"locationName,omitempty"`
+	PrimaryHomepageID       string                                   `json:"primaryHomepageId,omitempty"`
+	CanonicalEntityID       string                                   `json:"canonicalEntityId,omitempty"`
+	PrimaryHomepageType     string                                   `json:"primaryHomepageType,omitempty"`
+	PrimaryHomepageSnapshot *postports.PostHomepageSnapshotSlice     `json:"primaryHomepageSnapshot,omitempty"`
+	Status                  postports.PostStatus                     `json:"status"`
+	Visibility              postports.PostVisibility                 `json:"visibility"`
+	LikeCount               int64                                    `json:"likeCount"`
+	CommentCount            int64                                    `json:"commentCount"`
+	ShareCount              int64                                    `json:"shareCount"`
+	ViewCount               int64                                    `json:"viewCount"`
+	CreatedAt               time.Time                                `json:"createdAt"`
+	UpdatedAt               time.Time                                `json:"updatedAt"`
+	PublishedAt             time.Time                                `json:"publishedAt,omitempty"`
+}
+
+func projectPostDetailForClient(
+	detail postports.PostDetailSlice,
+) postDetailClientWire {
+	return postDetailClientWire{
+		PostID:                  detail.PostID,
+		ContentType:             detail.ContentType,
+		ContentIdentity:         detail.ContentIdentity,
+		AssistantUsePolicy:      detail.AssistantUsePolicy,
+		AuthorID:                detail.AuthorPersonaID,
+		AuthorDisplayName:       detail.AuthorDisplayName,
+		AuthorAvatarURL:         detail.AuthorAvatarURL,
+		Title:                   detail.Title,
+		Body:                    detail.Body,
+		Summary:                 detail.Summary,
+		TagRefs:                 detail.TagRefs,
+		EntityRefs:              detail.EntityRefs,
+		SemanticMentions:        detail.SemanticMentions,
+		MediaAssetIDs:           detail.MediaAssetIDs,
+		MediaURLs:               detail.MediaURLs,
+		MediaItems:              detail.MediaItems,
+		CoverURL:                detail.CoverURL,
+		ThumbnailURL:            detail.ThumbnailURL,
+		VideoURL:                detail.VideoURL,
+		Width:                   detail.Width,
+		Height:                  detail.Height,
+		DurationMS:              detail.DurationMS,
+		ArticleMarkdown:         detail.ArticleMarkdown,
+		MarkdownDialect:         detail.MarkdownDialect,
+		ArticleMarkdownDigest:   detail.ArticleMarkdownDigest,
+		ArticleAssetManifest:    detail.ArticleAssetManifest,
+		ArticleRenderProfile:    detail.ArticleRenderProfile,
+		ContentVertical:         detail.ContentVertical,
+		EntityMentions:          detail.EntityMentions,
+		ArticleTemplate:         detail.ArticleTemplate,
+		ArticleFontPreset:       detail.ArticleFontPreset,
+		CoverStrategy:           detail.CoverStrategy,
+		CoverFrameTimeMS:        detail.CoverFrameTimeMS,
+		Location:                detail.Location,
+		LocationName:            detail.LocationName,
+		PrimaryHomepageID:       detail.PrimaryHomepageID,
+		CanonicalEntityID:       detail.CanonicalEntityID,
+		PrimaryHomepageType:     detail.PrimaryHomepageType,
+		PrimaryHomepageSnapshot: detail.PrimaryHomepageSnapshot,
+		Status:                  detail.Status,
+		Visibility:              detail.Visibility,
+		LikeCount:               detail.LikeCount,
+		CommentCount:            detail.CommentCount,
+		ShareCount:              detail.ShareCount,
+		ViewCount:               detail.ViewCount,
+		CreatedAt:               detail.CreatedAt,
+		UpdatedAt:               detail.UpdatedAt,
+		PublishedAt:             detail.PublishedAt,
+	}
 }
 
 func NewContentHandler(
@@ -118,15 +229,13 @@ func (h *ContentHandler) Routes() http.Handler {
 	mux.HandleFunc("/startupz", h.handleHealthz)
 	mux.HandleFunc("/metrics/rec", h.handleRecMetrics)
 	mux.HandleFunc("/metrics/rec/engagement", h.handleEngagementMetrics)
+	mux.HandleFunc("/metrics/rec/behavior-attribution", h.handleBehaviorAttributionMetrics)
 	mux.HandleFunc("/metrics/rec/prometheus", h.handlePrometheusMetrics)
 	mux.HandleFunc("/admin/import", h.handleBulkImport)
 	mux.HandleFunc("/admin/content/semantic-mentions:apply", h.handleApplySemanticMentionGovernanceEvent)
 	RegisterGeneratedRoutes(mux, h)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		idempotencyKey := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
-		if idempotencyKey == "" {
-			idempotencyKey = strings.TrimSpace(r.Header.Get("X-Request-Id"))
-		}
 		ctx := commandmeta.WithIdempotencyKey(r.Context(), idempotencyKey)
 		mux.ServeHTTP(w, r.WithContext(ctx))
 	})
@@ -168,6 +277,49 @@ func (h *ContentHandler) handleRecMetrics(w http.ResponseWriter, _ *http.Request
 
 func (h *ContentHandler) handleEngagementMetrics(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, rtrec.SnapshotEngagementMetrics())
+}
+
+type behaviorAttributionMetricSeries struct {
+	Labels map[string]string `json:"labels"`
+	Value  float64           `json:"value"`
+}
+
+func (h *ContentHandler) handleBehaviorAttributionMetrics(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid method", "only GET is supported"))
+		return
+	}
+	families, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		writeHTTPError(w, r, rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "metrics_unavailable"),
+			"推荐指标暂不可用",
+			err.Error(),
+		))
+		return
+	}
+	series := make([]behaviorAttributionMetricSeries, 0)
+	for _, family := range families {
+		if family.GetName() != "recommendation_behavior_by_attribution_total" {
+			continue
+		}
+		for _, metric := range family.GetMetric() {
+			labels := make(map[string]string, len(metric.GetLabel()))
+			for _, label := range metric.GetLabel() {
+				labels[label.GetName()] = label.GetValue()
+			}
+			series = append(series, behaviorAttributionMetricSeries{
+				Labels: labels,
+				Value:  metric.GetCounter().GetValue(),
+			})
+		}
+		break
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"source":    "recommendation_behavior_by_attribution_total",
+		"freshness": "process_realtime",
+		"series":    series,
+	})
 }
 
 func (h *ContentHandler) handlePrometheusMetrics(w http.ResponseWriter, r *http.Request) {
@@ -294,7 +446,7 @@ func (h *ContentHandler) handleGetAuthorImpact(w http.ResponseWriter, r *http.Re
 }
 
 func authorImpactPathSubAccountID(path string) string {
-	const prefix = "/v1/content/sub-accounts/"
+	const prefix = "/content/sub-accounts/"
 	const suffix = "/author-impact"
 	if !strings.HasPrefix(path, prefix) || !strings.HasSuffix(path, suffix) {
 		return ""
@@ -363,7 +515,7 @@ func (h *ContentHandler) handleListAuthorImpactEvidence(w http.ResponseWriter, r
 }
 
 func authorImpactEvidencePathSubAccountID(path string) string {
-	const prefix = "/v1/content/sub-accounts/"
+	const prefix = "/content/sub-accounts/"
 	const suffix = "/author-impact/evidence"
 	if !strings.HasPrefix(path, prefix) || !strings.HasSuffix(path, suffix) {
 		return ""
@@ -376,8 +528,8 @@ func (h *ContentHandler) handleGetPost(w http.ResponseWriter, r *http.Request) {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid method", "only GET is supported"))
 		return
 	}
-	postID := strings.TrimPrefix(r.URL.Path, "/v1/content/posts/")
-	if postID == "" || strings.Contains(postID, "/") {
+	postID := strings.TrimSpace(r.PathValue("postId"))
+	if postID == "" {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid post id", "missing postId path segment"))
 		return
 	}
@@ -392,7 +544,7 @@ func (h *ContentHandler) handleGetPost(w http.ResponseWriter, r *http.Request) {
 		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, detail)
+	writeJSON(w, http.StatusOK, projectPostDetailForClient(detail))
 }
 
 // projectPostForClient strips fields that must never be client-visible:
@@ -409,10 +561,21 @@ func projectPostForClient(post any) map[string]any {
 	}
 	delete(m, "embedding")
 	delete(m, "moderationStatus")
+	delete(m, "_id")
+	if postID, ok := m["postId"].(string); ok && strings.TrimSpace(postID) != "" {
+		return m
+	}
+	if id, ok := m["id"].(string); ok && strings.TrimSpace(id) != "" {
+		m["postId"] = id
+		delete(m, "id")
+	}
 	return m
 }
 
-func (h *ContentHandler) handleCreatePost(w http.ResponseWriter, r *http.Request) {
+func (h *ContentHandler) handleSubmitPostPublication(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
 	if shouldHonorTestErrorInject(r, "CONTENT.USER.media_not_ready") {
 		writeHTTPError(w, r, rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "media_not_ready"),
@@ -421,7 +584,10 @@ func (h *ContentHandler) handleCreatePost(w http.ResponseWriter, r *http.Request
 		))
 		return
 	}
-	payload, err := BindGeneratedWritableBodyFromRequest(r, "CreatePost")
+	payload, err := BindGeneratedWritableBodyFromRequest(
+		r,
+		"SubmitPostPublication",
+	)
 	if err != nil {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(
 			rterr.ModuleContent,
@@ -436,18 +602,45 @@ func (h *ContentHandler) handleCreatePost(w http.ResponseWriter, r *http.Request
 			w,
 			r,
 			contentgenerated.AppErrorFromUnauthorized(
-				"verified persona actor missing for CreatePost",
+				"verified persona actor missing for SubmitPostPublication",
 			),
 		)
 		return
 	}
-	payload["authorId"] = personaID
-	post, err := h.postService.CreatePost(r.Context(), payload)
+	encodedContent, err := json.Marshal(payload)
+	if err != nil {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(
+			rterr.ModuleContent,
+			"发布内容格式不合法",
+			err.Error(),
+		))
+		return
+	}
+	var content postmodel.Post
+	if err := json.Unmarshal(encodedContent, &content); err != nil {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(
+			rterr.ModuleContent,
+			"发布内容格式不合法",
+			err.Error(),
+		))
+		return
+	}
+	publishIntentID, _ := payload["publishIntentId"].(string)
+	localDraftID, _ := payload["localDraftId"].(string)
+	receipt, err := h.postService.SubmitPostPublication(
+		r.Context(),
+		postapp.SubmitPostPublicationCommand{
+			PublishIntentID: strings.TrimSpace(publishIntentID),
+			LocalDraftID:    strings.TrimSpace(localDraftID),
+			AuthorID:        personaID,
+			Content:         content,
+		},
+	)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, post)
+	writeJSON(w, http.StatusAccepted, receipt)
 }
 
 func shouldHonorTestErrorInject(r *http.Request, code string) bool {
@@ -456,33 +649,6 @@ func shouldHonorTestErrorInject(r *http.Request, code string) bool {
 		return false
 	}
 	return strings.TrimSpace(r.Header.Get("X-Test-Error-Inject")) == code
-}
-
-func (h *ContentHandler) handleUpdatePost(w http.ResponseWriter, r *http.Request) {
-	payload, err := BindGeneratedWritableBodyFromRequest(r, "UpdatePost")
-	if err != nil {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(
-			rterr.ModuleContent,
-			"请求体字段不合法",
-			err.Error(),
-		))
-		return
-	}
-	postID := strings.TrimSpace(r.PathValue("postId"))
-	if postID == "" {
-		postID = postIDFromPath(r.URL.Path)
-	}
-	post, err := h.postService.UpdatePost(
-		r.Context(),
-		postID,
-		resolvePersonaID(r),
-		payload,
-	)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, post)
 }
 
 func (h *ContentHandler) handleCreateReport(w http.ResponseWriter, r *http.Request) {
@@ -531,30 +697,6 @@ func (h *ContentHandler) handleCreateReport(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *ContentHandler) handlePublishPost(w http.ResponseWriter, r *http.Request) {
-	postID := postIDFromPath(r.URL.Path)
-	payload, err := BindGeneratedWritableBodyFromRequest(r, "PublishPost")
-	if err != nil {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(
-			rterr.ModuleContent,
-			"请求体字段不合法",
-			err.Error(),
-		))
-		return
-	}
-	post, err := h.postService.PublishPost(
-		r.Context(),
-		postID,
-		resolvePersonaID(r),
-		payload,
-	)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, post)
-}
-
 func (h *ContentHandler) handleUpdatePostSettings(w http.ResponseWriter, r *http.Request) {
 	payload, err := BindGeneratedWritableBodyFromRequest(r, "UpdatePostSettings")
 	if err != nil {
@@ -576,7 +718,7 @@ func (h *ContentHandler) handleUpdatePostSettings(w http.ResponseWriter, r *http
 		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, post)
+	writeJSON(w, http.StatusOK, projectPostForClient(post))
 }
 
 func (h *ContentHandler) handlePromotePostToWork(w http.ResponseWriter, r *http.Request) {
@@ -600,7 +742,7 @@ func (h *ContentHandler) handlePromotePostToWork(w http.ResponseWriter, r *http.
 		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, post)
+	writeJSON(w, http.StatusOK, projectPostForClient(post))
 }
 
 func (h *ContentHandler) handleDeletePost(w http.ResponseWriter, r *http.Request) {
@@ -749,7 +891,7 @@ func (h *ContentHandler) handleGetCounters(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *ContentHandler) handleGetHelperRead(w http.ResponseWriter, r *http.Request) {
-	contentID := pathParamAfter(r.URL.Path, "/v1/content/helper-read/", "")
+	contentID := pathParamAfter(r.URL.Path, "/content/helper-read/", "")
 	result, err := h.postService.GetHelperRead(r.Context(), contentID)
 	if err != nil {
 		writeHTTPError(w, r, err)
@@ -761,12 +903,12 @@ func (h *ContentHandler) handleGetHelperRead(w http.ResponseWriter, r *http.Requ
 func (h *ContentHandler) handleListUserPosts(w http.ResponseWriter, r *http.Request) {
 	viewerID := resolvePersonaID(r)
 	userID := viewerID
-	if raw := strings.TrimPrefix(r.URL.Path, "/v1/users/"); raw != r.URL.Path {
+	if raw := strings.TrimPrefix(r.URL.Path, "/users/"); raw != r.URL.Path {
 		if idx := strings.Index(raw, "/posts"); idx > 0 {
 			userID = strings.TrimSpace(raw[:idx])
 		}
 	}
-	if raw := strings.TrimPrefix(r.URL.Path, "/v1/content/sub-accounts/"); raw != r.URL.Path {
+	if raw := strings.TrimPrefix(r.URL.Path, "/content/sub-accounts/"); raw != r.URL.Path {
 		if idx := strings.Index(raw, "/posts"); idx > 0 {
 			userID = strings.TrimSpace(raw[:idx])
 		}
@@ -809,12 +951,12 @@ func postIDFromPath(path string) string {
 		return ""
 	}
 	parts := strings.Split(strings.Trim(p, "/"), "/")
-	// /v1/content/posts/{postId}/...
-	if len(parts) < 4 {
+	// /content/posts/{postId}/...
+	if len(parts) < 3 {
 		return ""
 	}
-	if parts[0] != "v1" || parts[1] != "content" || parts[2] != "posts" {
+	if parts[0] != "content" || parts[1] != "posts" {
 		return ""
 	}
-	return strings.TrimSpace(strings.SplitN(parts[3], ":", 2)[0])
+	return strings.TrimSpace(strings.SplitN(parts[2], ":", 2)[0])
 }

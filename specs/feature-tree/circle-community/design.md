@@ -292,10 +292,10 @@
 
 ### 双读 / 双写
 
-- 迁移阶段允许 `Circle.conversationId` 与 `CircleGroup.conversationId` 短期并行读取。
-- dev 完成后，`Circle.conversationId` 只保留为兼容字段，最终退出条件：
+- **禁止短期并行读取**：只认 `CircleGroup.conversationId`；`Circle.conversationId` 不得作为 wire/读模型别名。
+- 退出条件（必须已满足或同变更达成）：
   - 所有公共群均有 `CircleGroup`
-  - 端侧与 chat 域全部改读 `CircleGroup.conversationId`
+  - 端侧与 chat 域全部只读 `CircleGroup.conversationId`
 
 ## feature flag、观测、SLO 验证与回滚方案
 

@@ -54,9 +54,9 @@ SubAccountProfileWireDto resolveMockUserProfileWire(String userId) {
       return contractWire;
     }
   }
-  final creatorWire = PrefabUserResolver.creatorProfileWireFor(userId);
-  if (creatorWire != null) {
-    return SubAccountProfileWireDto.fromMap(creatorWire);
+  final sharedProfileWire = PrefabUserResolver.profileWireFor(userId);
+  if (sharedProfileWire != null) {
+    return SubAccountProfileWireDto.fromMap(sharedProfileWire);
   }
   return SubAccountProfileWireDto.fromMap(_defaultProfile(userId));
 }

@@ -9,7 +9,7 @@ func TestMarkAsRead_UnreadCountCorrectlyDecremented(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"group","title":"unread test","initialMemberIds":["user_sender"]}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 
 	sendMessageAs(t, "user_sender", convId, `{"type":"text","content":"msg1","clientMsgId":"unread-1"}`)
 	sendMessageAs(t, "user_sender", convId, `{"type":"text","content":"msg2","clientMsgId":"unread-2"}`)
@@ -21,9 +21,9 @@ func TestMarkAsRead_UnreadCountCorrectlyDecremented(t *testing.T) {
 	msg5Id := msg5["messageId"].(string)
 
 	// Mark msg3 as read by user_test_001 → should have unreadCount = maxSeq - msg3.seq
-	doPost(t, "/v1/chat/conversations/"+convId+"/messages/"+msg3Id+"/read", `{}`, "user_test_001", http.StatusOK)
+	doPost(t, "/chat/conversations/"+convId+"/messages/"+msg3Id+"/read", `{}`, "user_test_001", http.StatusOK)
 
-	code, inbox := doGet(t, "/v1/chat/inbox?limit=50", "user_test_001")
+	code, inbox := doGet(t, "/chat/inbox?limit=50", "user_test_001")
 	if code != http.StatusOK {
 		t.Fatalf("inbox GET: expected 200, got %d", code)
 	}
@@ -56,9 +56,9 @@ func TestMarkAsRead_UnreadCountCorrectlyDecremented(t *testing.T) {
 	}
 
 	// Mark msg5 as read → unreadCount should be 0
-	doPost(t, "/v1/chat/conversations/"+convId+"/messages/"+msg5Id+"/read", `{}`, "user_test_001", http.StatusOK)
+	doPost(t, "/chat/conversations/"+convId+"/messages/"+msg5Id+"/read", `{}`, "user_test_001", http.StatusOK)
 
-	code2, inbox2 := doGet(t, "/v1/chat/inbox?limit=50", "user_test_001")
+	code2, inbox2 := doGet(t, "/chat/inbox?limit=50", "user_test_001")
 	if code2 != http.StatusOK {
 		t.Fatalf("inbox GET: expected 200, got %d", code2)
 	}
@@ -84,11 +84,11 @@ func TestMarkAsRead_IdempotentOnSameMessage(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"direct","title":"idempotent read","initialMemberIds":["user_test_002"]}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 
 	msg := sendMessage(t, convId, `{"type":"text","content":"hello","clientMsgId":"idem-read-1"}`)
 	msgId := msg["messageId"].(string)
 
-	doPost(t, "/v1/chat/conversations/"+convId+"/messages/"+msgId+"/read", `{}`, "user_test_001", http.StatusOK)
-	doPost(t, "/v1/chat/conversations/"+convId+"/messages/"+msgId+"/read", `{}`, "user_test_001", http.StatusOK)
+	doPost(t, "/chat/conversations/"+convId+"/messages/"+msgId+"/read", `{}`, "user_test_001", http.StatusOK)
+	doPost(t, "/chat/conversations/"+convId+"/messages/"+msgId+"/read", `{}`, "user_test_001", http.StatusOK)
 }

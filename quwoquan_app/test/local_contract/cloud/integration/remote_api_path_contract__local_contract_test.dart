@@ -43,6 +43,7 @@ import 'package:quwoquan_app/cloud/services/user/user_repository.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../support/recording_cloud_operation_telemetry_sink.dart';
+import '../../../support/homepage_remote_test_support.dart';
 
 const _baseUrl = 'https://test-gateway.example.com';
 
@@ -70,6 +71,51 @@ MockClient _captureClient(List<_CapturedRequest> log) {
     ));
 
     final path = request.url.path;
+    if (request.method == 'GET' &&
+        path == EntityApiMetadata.getHomepageShellPath(homepageId: 'hp1')) {
+      return http.Response(
+        json.encode({
+          'homepage': {
+            'homepageId': 'hp1',
+            'homepageType': 'sight',
+            'title': '测试主页',
+          },
+        }),
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    }
+    if (request.method == 'GET' &&
+        path == EntityApiMetadata.getObjectPageBundlePath(homepageId: 'hp1')) {
+      return http.Response(
+        json.encode({
+          'objectType': 'homepage',
+          'objectId': 'hp1',
+          'canonicalEntityId': 'entity:hp1',
+          'title': '测试主页',
+        }),
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    }
+    if (request.method == 'GET' &&
+        path ==
+            EntityApiMetadata.getHomepageReviewSummaryPath(homepageId: 'hp1')) {
+      return http.Response(
+        '{"ratingCount":0}',
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    }
+    if (request.method == 'GET' &&
+        path ==
+            EntityApiMetadata.getHomepageRelatedGroupsPath(homepageId: 'hp1')) {
+      return http.Response(
+        '{"groups":[]}',
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    }
     if (request.method == 'POST' &&
         path == ContentApiMetadata.createReportPath) {
       return http.Response('', 204);
@@ -175,7 +221,7 @@ void main() {
       );
     });
 
-    test('listCircles → GET /v1/circles', () async {
+    test('listCircles → GET /circles', () async {
       try {
         await repo.listCircles();
       } catch (_) {}
@@ -183,7 +229,7 @@ void main() {
       expect(log.last.path, CircleApiMetadata.listCirclesPath);
     });
 
-    test('searchCircles → GET /v1/circles/search', () async {
+    test('searchCircles → GET /circles/search', () async {
       await repo.searchCircles(
         query: '摄影',
         categoryId: 'art',
@@ -202,7 +248,7 @@ void main() {
       );
     });
 
-    test('getCircle → GET /v1/circles/{circleId}', () async {
+    test('getCircle → GET /circles/{circleId}', () async {
       try {
         await repo.getCircle('c1');
       } catch (_) {}
@@ -210,13 +256,13 @@ void main() {
       expect(log.last.path, CircleApiMetadata.getCirclePath(circleId: 'c1'));
     });
 
-    test('createCircle → POST /v1/circles', () async {
+    test('createCircle → POST /circles', () async {
       await repo.createCircle(CircleCreateWireDto.fromMap({'name': 'test'}));
       expect(log.last.method, 'POST');
       expect(log.last.path, CircleApiMetadata.createCirclePath);
     });
 
-    test('updateCircle → PATCH /v1/circles/{circleId}', () async {
+    test('updateCircle → PATCH /circles/{circleId}', () async {
       await repo.updateCircle(
         'c1',
         CircleUpdateWireDto.fromMap({'name': 'updated'}),
@@ -225,7 +271,7 @@ void main() {
       expect(log.last.path, CircleApiMetadata.updateCirclePath(circleId: 'c1'));
     });
 
-    test('archiveCircle → DELETE /v1/circles/{circleId}', () async {
+    test('archiveCircle → DELETE /circles/{circleId}', () async {
       await repo.archiveCircle('c1');
       expect(log.last.method, 'DELETE');
       expect(
@@ -234,7 +280,7 @@ void main() {
       );
     });
 
-    test('getCircleFeed → GET /v1/circles/{circleId}/feed', () async {
+    test('getCircleFeed → GET /circles/{circleId}/feed', () async {
       try {
         await repo.getCircleFeed('c1');
       } catch (_) {}
@@ -253,7 +299,7 @@ void main() {
       expect(log.last.query['type'], 'article');
     });
 
-    test('getCircleStats → GET /v1/circles/{circleId}/stats', () async {
+    test('getCircleStats → GET /circles/{circleId}/stats', () async {
       await repo.getCircleStats('c1');
       expect(log.last.method, 'GET');
       expect(
@@ -262,7 +308,7 @@ void main() {
       );
     });
 
-    test('updateSections → PATCH /v1/circles/{circleId}/sections', () async {
+    test('updateSections → PATCH /circles/{circleId}/sections', () async {
       await repo.updateSections('c1', []);
       expect(log.last.method, 'PATCH');
       expect(
@@ -306,7 +352,7 @@ void main() {
       );
     });
 
-    test('listDiscoveryFeed → GET /v1/content/feed', () async {
+    test('listDiscoveryFeed → GET /content/feed', () async {
       await repo.listDiscoveryFeed(category: 'all');
       expect(log.last.method, 'GET');
       expect(log.last.path, ContentApiMetadata.getFeedPath);
@@ -339,7 +385,7 @@ void main() {
     });
 
     test(
-      'updatePostSettings → PATCH /v1/content/posts/{postId}/settings',
+      'updatePostSettings → PATCH /content/posts/{postId}/settings',
       () async {
         try {
           await repo.updatePostSettings(
@@ -358,7 +404,7 @@ void main() {
     );
 
     test(
-      'promotePostToWork → POST /v1/content/posts/{postId}:promoteToWork',
+      'promotePostToWork → POST /content/posts/{postId}:promoteToWork',
       () async {
         try {
           await repo.promotePostToWork(
@@ -376,7 +422,7 @@ void main() {
       },
     );
 
-    test('likePost → POST /v1/content/posts/{postId}/like', () async {
+    test('likePost → POST /content/posts/{postId}/like', () async {
       try {
         await reactions.likePost(LikeContentPostCommand(postId: 'p1'));
       } catch (_) {}
@@ -384,7 +430,7 @@ void main() {
       expect(log.last.path, ContentApiMetadata.likePostPath(postId: 'p1'));
     });
 
-    test('unlikePost → DELETE /v1/content/posts/{postId}/like', () async {
+    test('unlikePost → DELETE /content/posts/{postId}/like', () async {
       try {
         await reactions.unlikePost(UnlikeContentPostCommand(postId: 'p1'));
       } catch (_) {}
@@ -392,13 +438,13 @@ void main() {
       expect(log.last.path, ContentApiMetadata.unlikePostPath(postId: 'p1'));
     });
 
-    test('reportBehaviors → POST /v1/content/behaviors', () async {
+    test('reportBehaviors → POST /content/behaviors', () async {
       await repo.reportBehaviors(events: []);
       expect(log.last.method, 'POST');
       expect(log.last.path, ContentApiMetadata.reportBehaviorsPath);
     });
 
-    test('getCounters → GET /v1/content/posts/{postId}/counters', () async {
+    test('getCounters → GET /content/posts/{postId}/counters', () async {
       await repo.getCounters(postId: 'p1');
       expect(log.last.method, 'GET');
       expect(log.last.path, ContentApiMetadata.getCountersPath(postId: 'p1'));
@@ -437,7 +483,7 @@ void main() {
       );
     });
 
-    test('createReport → POST /v1/content/reports', () async {
+    test('createReport → POST /content/reports', () async {
       await adapter.createReport(
         CreateContentReportCommand(
           targetId: 'p1',
@@ -516,7 +562,7 @@ void main() {
       );
     });
 
-    test('searchPosts → GET /v1/content/posts/search', () async {
+    test('searchPosts → GET /content/posts/search', () async {
       await searchAdapter.searchPosts(
         query: '摄影',
         identity: 'work',
@@ -541,7 +587,7 @@ void main() {
       );
     });
 
-    test('getMyFootprint → GET /v1/content/footprint', () async {
+    test('getMyFootprint → GET /content/footprint', () async {
       await footprintAdapter.getMyFootprint(
         type: 'viewed',
         cursor: '2026-07-13T09:00:00Z',
@@ -560,7 +606,7 @@ void main() {
       );
     });
 
-    test('getPost → GET /v1/content/posts/{postId}', () async {
+    test('getPost → GET /content/posts/{postId}', () async {
       try {
         await workBrowserReader.getPost(postId: 'p1');
       } catch (_) {
@@ -629,34 +675,31 @@ void main() {
       );
     });
 
-    test('listPersonas → GET /v1/user/personas', () async {
+    test('listPersonas → GET /user/personas', () async {
       await repo.listPersonas();
       expect(log.last.method, 'GET');
       expect(log.last.path, UserApiMetadata.listPersonasPath);
     });
 
-    test(
-      'getPersonaManagementSummary → GET /v1/user/personas/summary',
-      () async {
-        await repo.getPersonaManagementSummary();
-        expect(log.last.method, 'GET');
-        expect(log.last.path, UserApiMetadata.getPersonaManagementSummaryPath);
-      },
-    );
+    test('getPersonaManagementSummary → GET /user/personas/summary', () async {
+      await repo.getPersonaManagementSummary();
+      expect(log.last.method, 'GET');
+      expect(log.last.path, UserApiMetadata.getPersonaManagementSummaryPath);
+    });
 
-    test('getActivePersonaContext → GET /v1/user/personas/active', () async {
+    test('getActivePersonaContext → GET /user/personas/active', () async {
       await repo.getActivePersonaContext();
       expect(log.last.method, 'GET');
       expect(log.last.path, UserApiMetadata.getActivePersonaContextPath);
     });
 
-    test('createPersona → POST /v1/user/personas', () async {
+    test('createPersona → POST /user/personas', () async {
       await repo.createPersona(displayName: '摄影分身');
       expect(log.last.method, 'POST');
       expect(log.last.path, UserApiMetadata.createPersonaPath);
     });
 
-    test('updatePersona → PATCH /v1/user/personas/{id}', () async {
+    test('updatePersona → PATCH /user/personas/{id}', () async {
       await repo.updatePersona('persona_1', displayName: '新分身名');
       expect(log.last.method, 'PATCH');
       expect(
@@ -665,7 +708,7 @@ void main() {
       );
     });
 
-    test('activatePersona → POST /v1/user/personas/{id}/activate', () async {
+    test('activatePersona → POST /user/personas/{id}/activate', () async {
       await repo.activatePersona('persona_1');
       expect(log.last.method, 'POST');
       expect(
@@ -675,7 +718,7 @@ void main() {
     });
 
     test(
-      'deleteEmptyPersona → DELETE /v1/user/personas/{id}:delete-empty',
+      'deleteEmptyPersona → DELETE /user/personas/{id}:delete-empty',
       () async {
         await repo.deleteEmptyPersona('persona_1');
         expect(log.last.method, 'DELETE');
@@ -687,7 +730,7 @@ void main() {
     );
 
     test(
-      'applyPersonaProfileSync → POST /v1/user/personas/{id}/profile-sync',
+      'applyPersonaProfileSync → POST /user/personas/{id}/profile-sync',
       () async {
         await repo.applyPersonaProfileSync(
           'persona_1',
@@ -704,7 +747,7 @@ void main() {
     );
 
     test(
-      'getPersonaLifecycleGuard → GET /v1/user/personas/{id}/lifecycle-guard',
+      'getPersonaLifecycleGuard → GET /user/personas/{id}/lifecycle-guard',
       () async {
         await repo.getPersonaLifecycleGuard('persona_1');
         expect(log.last.method, 'GET');
@@ -717,7 +760,7 @@ void main() {
       },
     );
 
-    test('retirePersona → POST /v1/user/personas/{id}/retire', () async {
+    test('retirePersona → POST /user/personas/{id}/retire', () async {
       await repo.retirePersona('persona_1');
       expect(log.last.method, 'POST');
       expect(
@@ -727,7 +770,7 @@ void main() {
     });
 
     test(
-      'getNotificationSettings → GET /v1/user/settings/notifications',
+      'getNotificationSettings → GET /user/settings/notifications',
       () async {
         await repo.getNotificationSettings();
         expect(log.last.method, 'GET');
@@ -735,7 +778,7 @@ void main() {
       },
     );
 
-    test('getPrivacySettings → GET /v1/user/settings/privacy', () async {
+    test('getPrivacySettings → GET /user/settings/privacy', () async {
       await repo.getPrivacySettings();
       expect(log.last.method, 'GET');
       expect(log.last.path, UserApiMetadata.getPrivacySettingsPath);
@@ -755,7 +798,7 @@ void main() {
     });
 
     test(
-      'blockUser → POST /v1/user/sub-accounts/{targetSubAccountId}/block',
+      'blockUser → POST /user/sub-accounts/{targetSubAccountId}/block',
       () async {
         await repo.blockUser('u1');
         expect(log.last.method, 'POST');
@@ -767,7 +810,7 @@ void main() {
     );
 
     test(
-      'unblockUser → DELETE /v1/user/sub-accounts/{targetSubAccountId}/block',
+      'unblockUser → DELETE /user/sub-accounts/{targetSubAccountId}/block',
       () async {
         await repo.unblockUser('u1');
         expect(log.last.method, 'DELETE');
@@ -790,7 +833,7 @@ void main() {
       );
     });
 
-    test('getUserStats → GET /v1/user/profile/{userId}/stats', () async {
+    test('getUserStats → GET /user/profile/{userId}/stats', () async {
       try {
         await repo.getUserStats('u1');
       } catch (_) {}
@@ -805,13 +848,13 @@ void main() {
 
     setUp(() {
       log = [];
-      repo = RemoteHomepageRepository(
+      repo = buildRemoteHomepageRepositoryForTest(
         httpClient: CloudHttpClient(client: _captureClient(log)),
         baseUrl: _baseUrl,
       );
     });
 
-    test('searchHomepages → GET /v1/homepages/search', () async {
+    test('searchHomepages → GET /homepages/search', () async {
       await repo.searchHomepages(
         query: '书店',
         homepageType: 'storefront',
@@ -830,11 +873,11 @@ void main() {
         log.last.headers,
         clientPageId: EntityRequestPageIds.searchHomepages,
         surfaceId: AppUiSurfaces.homepagePicker.id,
-        operationId: EntityApiMetadata.searchHomepagesOperation,
+        operationId: AppCloudOperationIds.entityHomepageSearchHomepages,
       );
     });
 
-    test('getHomepageShell → GET /v1/homepages/{homepageId}/shell', () async {
+    test('getHomepageShell → GET /homepages/{homepageId}/shell', () async {
       await repo.getHomepageShell('hp1');
       expect(log.last.method, 'GET');
       expect(
@@ -845,12 +888,12 @@ void main() {
         log.last.headers,
         clientPageId: EntityRequestPageIds.getHomepageShell,
         surfaceId: AppUiSurfaces.homepageDetail.id,
-        operationId: EntityApiMetadata.getHomepageShellOperation,
+        operationId: AppCloudOperationIds.entityHomepageGetHomepageShell,
       );
     });
 
     test(
-      'getObjectPageBundle → GET /v1/homepages/{homepageId}/object-page-bundle',
+      'getObjectPageBundle → GET /homepages/{homepageId}/object-page-bundle',
       () async {
         await repo.getObjectPageBundle(
           'hp1',
@@ -874,13 +917,13 @@ void main() {
           log.last.headers,
           clientPageId: EntityRequestPageIds.getObjectPageBundle,
           surfaceId: AppUiSurfaces.homepageDetail.id,
-          operationId: EntityApiMetadata.getObjectPageBundleOperation,
+          operationId: AppCloudOperationIds.entityHomepageGetObjectPageBundle,
         );
       },
     );
 
     test(
-      'getHomepageReviewSummary → GET /v1/homepages/{homepageId}/review-summary',
+      'getHomepageReviewSummary → GET /homepages/{homepageId}/review-summary',
       () async {
         await repo.getHomepageReviewSummary('hp1');
         expect(log.last.method, 'GET');
@@ -892,13 +935,14 @@ void main() {
           log.last.headers,
           clientPageId: EntityRequestPageIds.getHomepageReviewSummary,
           surfaceId: AppUiSurfaces.homepageDetail.id,
-          operationId: EntityApiMetadata.getHomepageReviewSummaryOperation,
+          operationId:
+              AppCloudOperationIds.entityHomepageGetHomepageReviewSummary,
         );
       },
     );
 
     test(
-      'getHomepageRelatedGroups → GET /v1/homepages/{homepageId}/related-groups',
+      'getHomepageRelatedGroups → GET /homepages/{homepageId}/related-groups',
       () async {
         await repo.getHomepageRelatedGroups('hp1');
         expect(log.last.method, 'GET');
@@ -910,7 +954,8 @@ void main() {
           log.last.headers,
           clientPageId: EntityRequestPageIds.getHomepageRelatedGroups,
           surfaceId: AppUiSurfaces.homepageDetail.id,
-          operationId: EntityApiMetadata.getHomepageRelatedGroupsOperation,
+          operationId:
+              AppCloudOperationIds.entityHomepageGetHomepageRelatedGroups,
         );
       },
     );
@@ -942,7 +987,7 @@ void main() {
       );
     });
 
-    test('getNearbyLocations → GET /v1/integration/location/nearby', () async {
+    test('getNearbyLocations → GET /integration/location/nearby', () async {
       await adapter.getNearbyLocations(
         const NearbyLocationQueryParams(
           latitude: 30.2431,
@@ -965,7 +1010,7 @@ void main() {
       );
     });
 
-    test('searchLocations → GET /v1/integration/location/search', () async {
+    test('searchLocations → GET /integration/location/search', () async {
       await adapter.searchLocations(
         const LocationSearchQueryParams(
           query: '西湖',

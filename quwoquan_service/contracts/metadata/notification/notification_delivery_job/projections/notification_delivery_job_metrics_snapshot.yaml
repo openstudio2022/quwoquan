@@ -1,4 +1,3 @@
-version: 1
 read_model: NotificationDeliveryJobMetricsSnapshot
 
 description: NotificationDeliveryJob 的 operator-only 权威指标快照。

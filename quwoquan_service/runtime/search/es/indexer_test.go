@@ -81,6 +81,23 @@ func TestLocationDimensionRoundTrip(t *testing.T) {
 	}
 }
 
+func TestIndexToDocumentRequiresCanonicalContentTypeField(t *testing.T) {
+	document := IndexToDocument(map[string]any{
+		"objectType": rtsearch.ObjectTypeContentPost,
+		"objectId":   "post_legacy",
+		"target":     string(rtsearch.TargetVideo),
+		"type":       "video",
+		"tags":       []any{"video"},
+	})
+
+	if document.ContentType != "" {
+		t.Fatalf(
+			"contentType must not be inferred from retired fields: %q",
+			document.ContentType,
+		)
+	}
+}
+
 func TestDocumentToIndexOmitsGeoWhenAbsent(t *testing.T) {
 	doc := rtsearch.Document{
 		ObjectType: rtsearch.ObjectTypeUserProfile, ObjectID: "user_1", Title: "alice",

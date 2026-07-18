@@ -40,10 +40,12 @@ Future<void> reportCreateEditorSurfaceEvent(
   }
 }
 
-Future<CreateContentPostCommand> attachActivePersonaToCreateCommand(
+Future<SubmitContentPostPublicationCommand>
+attachActivePersonaToPostPublicationCommand(
   WidgetRef ref,
-  Map<String, Object?> payload,
-) async {
+  PreparedPostPublicationPayload prepared, {
+  required String localDraftId,
+}) async {
   final activeContext = await ref.read(activePersonaContextProvider.future);
   if (ref
           .read(contentConfigRepositoryProvider)
@@ -52,8 +54,10 @@ Future<CreateContentPostCommand> attachActivePersonaToCreateCommand(
     throw StateError('active persona context unavailable');
   }
   final personaVersion = int.tryParse(activeContext.personaContextVersion);
-  return createContentPostCommandFromPreparedPayload(
-    payload,
+  return submitContentPostPublicationCommandFromPreparedPayload(
+    prepared.payload,
+    localDraftId: localDraftId,
+    mediaAssetIds: prepared.mediaAssetIds,
     authorDisplayNameSnapshot: activeContext.displayName,
     authorAvatarUrlSnapshot: activeContext.avatarUrl,
     personaContextVersion: personaVersion,

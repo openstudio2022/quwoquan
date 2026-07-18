@@ -1,4 +1,3 @@
-version: 1
 entity: FollowingSubject
 
 # FollowingSubject 是组合读模型，不发布领域事件；Projector 消费各 owner 的事件。

@@ -95,7 +95,7 @@ def _reliabletask_ref(
         "partitionKey": partition_key,
         "payloadAllowlist": "object_job",
         "payload": {
-            "schemaVersion": OBJECT_JOB_SCHEMA,
+            "schema": OBJECT_JOB_SCHEMA,
             "jobId": job_id,
             "executionId": execution_id,
             "ref": ref,

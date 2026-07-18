@@ -13,7 +13,7 @@ flowchart LR
     factMV --> factCache[cache viewer_intersections]
   end
   subgraph probCh [概率通道]
-    cand[候选召回] --> score[POST /v1/score]
+    cand[候选召回] --> score[POST /score]
     score --> affinity[RecommendationAffinity]
   end
   factCache --> merge[合并与排序]
@@ -34,7 +34,7 @@ flowchart LR
 
 ### D2：请求期零打分，事实预物化
 
-事实交集来自增量物化读模型 `viewer_object_intersections`（消费关系/行为/成员事件），请求期只查询 + 缓存，不做实时打分，保证高并发低延迟。概率交集走现有 `/v1/score` 批量打分并缓存。
+事实交集来自增量物化读模型 `viewer_object_intersections`（消费关系/行为/成员事件），请求期只查询 + 缓存，不做实时打分，保证高并发低延迟。概率交集走现有 `/score` 批量打分并缓存。
 
 ### D3：跨会话推荐冷却窗口
 
@@ -46,7 +46,7 @@ flowchart LR
 
 ### D5：我的主页聚合入口复用未读水位机制
 
-复用 `following_subject` 的 `lastVisitedAt`/`unreadChangeCount` 思路：per-user per-dimension 维护已读水位；未读 = `computedAt > watermark`。打开按维度列表即调用 `POST /v1/intersections/visit` 推进水位并清零红点。最多展示 3 个维度，超出收起"展开更多"。
+复用 `following_subject` 的 `lastVisitedAt`/`unreadChangeCount` 思路：per-user per-dimension 维护已读水位；未读 = `computedAt > watermark`。打开按维度列表即调用 `POST /intersections/visit` 推进水位并清零红点。最多展示 3 个维度，超出收起"展开更多"。
 
 ### D6：端侧统一原子，零文案拼装
 
@@ -61,11 +61,11 @@ flowchart LR
 ### 新增 `recommendation/intersection` 域
 
 - `service.yaml`
-  - `GET /v1/intersections/summary` → 我的主页聚合（per-dimension 计数 + 未读）
-  - `GET /v1/intersections?dimension=&cursor=` → 按维度分页列表（自上次新增）
-  - `POST /v1/intersections/visit` → 推进已读水位、清零
-  - `GET /v1/feed/intersections?channel=` → 频道交集推荐（事实 + 概率混排、过冷却）
-  - `POST /v1/intersections/exposure` → 曝光上报（写冷却集）
+  - `GET /intersections/summary` → 我的主页聚合（per-dimension 计数 + 未读）
+  - `GET /intersections?dimension=&cursor=` → 按维度分页列表（自上次新增）
+  - `POST /intersections/visit` → 推进已读水位、清零
+  - `GET /feed/intersections?channel=` → 频道交集推荐（事实 + 概率混排、过冷却）
+  - `POST /intersections/exposure` → 曝光上报（写冷却集）
 - `fields.yaml`：请求/响应实体。
 - `events.yaml`：交集曝光/点击/转化/清零事件（可与 content behaviors 协同）。
 - `policy.yaml`：`intersectionCooldownDays`（默认 14）、各维度 freshness TTL、混排权重。
@@ -167,8 +167,8 @@ feed 内混排见 `feed_intersection_mixer.go`。
 
 ### P0-5 feed 交集 API 的 Phase 0 处置（交接会话 E）
 
-上文「新增 `recommendation/intersection` 域」列出的 `GET /v1/feed/intersections` 与
-`POST /v1/intersections/exposure` 属**首页推荐页（会话 E）**范围：Phase 0 决定**删除 feed spotlight 独立 API**，
+上文「新增 `recommendation/intersection` 域」列出的 `GET /feed/intersections` 与
+`POST /intersections/exposure` 属**首页推荐页（会话 E）**范围：Phase 0 决定**删除 feed spotlight 独立 API**，
 交集改由 post 内 `intersection_reason_chip` 承载（详见 §20.6 删除清单）。`Feed()` 内部数据路径
 （`feed_service.go` post-chip 用）**保留**。Phase 0 不在本会话执行该删除，避免触发会话 E 的推荐页 UI 大改。
 

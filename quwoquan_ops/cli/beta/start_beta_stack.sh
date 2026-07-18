@@ -15,7 +15,7 @@ OPS_PORTAL_DIR="$ROOT_DIR/quwoquan_ops/portal"
 
 eval "$(python3 "$ROOT_DIR/quwoquan_ops/cli/print_local_port_profile.py" --profile beta-local --format shell-defaults)"
 eval "$(python3 "$ROOT_DIR/quwoquan_ops/cli/print_local_port_profile.py" --profile gamma-local --format shell-defaults)"
-eval "$(PYTHONPATH="$ROOT_DIR" python3 -m quwoquan_ops.cli.lib.local_gamma_auth --shell)"
+eval "$(PYTHONPATH="$ROOT_DIR" python3 -m quwoquan_ops.cli.lib.local_environment_auth --shell beta beta-local)"
 
 if [[ $# -gt 0 ]]; then
   shift
@@ -26,7 +26,10 @@ PLATFORM_OPS_PORT="${PLATFORM_OPS_PORT}"
 OPS_PORTAL_PORT="${OPS_PORTAL_PORT}"
 CONTENT_PORT="${CONTENT_PORT}"
 PRODUCT_OPS_SERVICE_PORT="${PRODUCT_OPS_SERVICE_PORT}"
-OPS_POSTGRES_DSN="${OPS_POSTGRES_DSN:-postgres://quwoquan:quwoquan@127.0.0.1:${LOCAL_GAMMA_POSTGRES_PORT}/quwoquan?sslmode=disable}"
+BETA_POSTGRES_PORT="${BETA_POSTGRES_PORT}"
+BETA_MONGO_PORT="${BETA_MONGO_PORT}"
+BETA_REDIS_PORT="${BETA_REDIS_PORT}"
+OPS_POSTGRES_DSN="${OPS_POSTGRES_DSN:-postgres://quwoquan:quwoquan@127.0.0.1:${BETA_POSTGRES_PORT}/quwoquan?sslmode=disable}"
 CDN_DOMAIN="${CDN_DOMAIN:-cdn.beta.local}"
 DEVICE_ID="${DEVICE_ID:-}"
 START_APP="${START_APP:-1}"
@@ -34,7 +37,10 @@ AUTO_OPEN_OPS="${AUTO_OPEN_OPS:-1}"
 SEED_VERIFY_MODE="${SEED_VERIFY_MODE:-}"
 MEDIA_MODE="${MEDIA_MODE:-}"
 LOCAL_PUBLIC_HOST="${LOCAL_PUBLIC_HOST:-}"
-MEDIA_BASE_URL="${MEDIA_BASE_URL:-}"
+MEDIA_AVATAR_BASE_URL="${MEDIA_AVATAR_BASE_URL:-}"
+MEDIA_IMAGE_BASE_URL="${MEDIA_IMAGE_BASE_URL:-}"
+MEDIA_VIDEO_BASE_URL="${MEDIA_VIDEO_BASE_URL:-}"
+MEDIA_UPLOAD_BASE_URL="${MEDIA_UPLOAD_BASE_URL:-}"
 GATEWAY_BASE_URL_OVERRIDE="${GATEWAY_BASE_URL_OVERRIDE:-}"
 DEV_UP_HELPER="$ROOT_DIR/quwoquan_ops/cli/lib/dev_up.py"
 
@@ -53,7 +59,10 @@ Options for "up":
   --seed-verify <mode>     透传给 start_app_beta_manual.sh。
   --media-mode <mode>      透传给 start_app_beta_manual.sh。
   --local-public-host <h>  透传给 start_app_beta_manual.sh。
-  --media-base-url <url>   透传给 start_app_beta_manual.sh。
+  --media-avatar-base-url <url>  透传头像 authority。
+  --media-image-base-url <url>   透传图片 authority。
+  --media-video-base-url <url>   透传视频 authority。
+  --media-upload-base-url <url>  透传上传 authority。
   --gateway-base-url <u>   透传给 start_app_beta_manual.sh。
   --full-matrix            等价于 --seed-verify full --media-mode copy。
 EOF
@@ -96,8 +105,20 @@ while [[ $# -gt 0 ]]; do
       LOCAL_PUBLIC_HOST="${2:-}"
       shift 2
       ;;
-    --media-base-url)
-      MEDIA_BASE_URL="${2:-}"
+    --media-avatar-base-url)
+      MEDIA_AVATAR_BASE_URL="${2:-}"
+      shift 2
+      ;;
+    --media-image-base-url)
+      MEDIA_IMAGE_BASE_URL="${2:-}"
+      shift 2
+      ;;
+    --media-video-base-url)
+      MEDIA_VIDEO_BASE_URL="${2:-}"
+      shift 2
+      ;;
+    --media-upload-base-url)
+      MEDIA_UPLOAD_BASE_URL="${2:-}"
       shift 2
       ;;
     --gateway-base-url)
@@ -231,12 +252,24 @@ wait_service_ok() {
   local name="$1"
   local url="$2"
   local timeout="${3:-45}"
-  if wait_http_ok "$url" "$timeout"; then
-    echo "[beta] ${name} ready: ${url}"
-    return 0
-  fi
-  echo "[beta] WARN: ${name} not ready within ${timeout}s: ${url}" >&2
-  return 1
+  local deadline=$((SECONDS + timeout))
+  local pid_file="$STATE_DIR/${name}.pid"
+  local log_file="$LOG_DIR/${name}/local/runtime.log"
+  while ! curl -fsS "$url" >/dev/null 2>&1; do
+    if [[ -f "$pid_file" ]] && ! kill -0 "$(cat "$pid_file")" >/dev/null 2>&1; then
+      echo "[beta] ${name} exited before readiness: ${url}" >&2
+      if [[ -f "$log_file" ]]; then
+        tail -20 "$log_file" >&2
+      fi
+      return 1
+    fi
+    if (( SECONDS >= deadline )); then
+      echo "[beta] ${name} not ready within ${timeout}s: ${url}" >&2
+      return 1
+    fi
+    sleep 0.5
+  done
+  echo "[beta] ${name} ready: ${url}"
 }
 
 maybe_open_ops() {
@@ -261,7 +294,6 @@ build_app_beta_command() {
   APP_BETA_CMD=(
     env
     QWQ_OUTPUT_ROOT="$QWQ_OUTPUT_ROOT"
-    QWQ_OUTPUT_ROOT="$QWQ_OUTPUT_ROOT"
     QWQ_OBSERVABILITY_RUN_ROOT="$QWQ_OBSERVABILITY_RUN_ROOT"
     QWQ_RUN_ROOT="$QWQ_RUN_ROOT"
     CDN_DOMAIN="${CDN_DOMAIN}"
@@ -283,8 +315,17 @@ build_app_beta_command() {
   if [[ -n "$LOCAL_PUBLIC_HOST" ]]; then
     APP_BETA_CMD+=(--local-public-host "$LOCAL_PUBLIC_HOST")
   fi
-  if [[ -n "$MEDIA_BASE_URL" ]]; then
-    APP_BETA_CMD+=(--media-base-url "$MEDIA_BASE_URL")
+  if [[ -n "$MEDIA_AVATAR_BASE_URL" ]]; then
+    APP_BETA_CMD+=(--media-avatar-base-url "$MEDIA_AVATAR_BASE_URL")
+  fi
+  if [[ -n "$MEDIA_IMAGE_BASE_URL" ]]; then
+    APP_BETA_CMD+=(--media-image-base-url "$MEDIA_IMAGE_BASE_URL")
+  fi
+  if [[ -n "$MEDIA_VIDEO_BASE_URL" ]]; then
+    APP_BETA_CMD+=(--media-video-base-url "$MEDIA_VIDEO_BASE_URL")
+  fi
+  if [[ -n "$MEDIA_UPLOAD_BASE_URL" ]]; then
+    APP_BETA_CMD+=(--media-upload-base-url "$MEDIA_UPLOAD_BASE_URL")
   fi
   if [[ -n "$GATEWAY_BASE_URL_OVERRIDE" ]]; then
     APP_BETA_CMD+=(--gateway-base-url "$GATEWAY_BASE_URL_OVERRIDE")
@@ -319,12 +360,16 @@ case "$ACTION" in
     # beta services alive while launching Flutter separately.
     build_app_beta_command
     start_bg app-beta "${APP_BETA_CMD[@]}"
+    wait_service_ok app-beta "http://127.0.0.1:${CONTENT_PORT}/healthz" 120 || {
+      echo "[beta] app-beta backend did not become ready" >&2
+      exit 1
+    }
     start_bg platform-ops bash -lc "cd '$ROOT_DIR/quwoquan_service/services/platform-ops-service' && REPO_ROOT='$ROOT_DIR' QWQ_OUTPUT_ROOT='$QWQ_OUTPUT_ROOT' APP_ENV='beta' POSTGRES_DSN='$OPS_POSTGRES_DSN' AUTH_JWT_SECRET='$AUTH_JWT_SECRET' AUTH_JWT_ISSUER='$AUTH_JWT_ISSUER' AUTH_JWT_AUDIENCE='$AUTH_JWT_AUDIENCE' AUTH_JWT_TOKEN_VERSION='$AUTH_JWT_TOKEN_VERSION' PLATFORM_OPS_SERVICE_ADDR='127.0.0.1:${PLATFORM_OPS_PORT}' go run ./cmd/api"
-    wait_service_ok platform-ops "http://127.0.0.1:${PLATFORM_OPS_PORT}/healthz" 60 || true
-    start_bg product-ops bash -lc "cd '$ROOT_DIR/quwoquan_service/services/product-ops-service' && REPO_ROOT='$ROOT_DIR' QWQ_OUTPUT_ROOT='$QWQ_OUTPUT_ROOT' APP_ENV='beta' POSTGRES_DSN='$OPS_POSTGRES_DSN' AUTH_JWT_SECRET='$AUTH_JWT_SECRET' AUTH_JWT_ISSUER='$AUTH_JWT_ISSUER' AUTH_JWT_AUDIENCE='$AUTH_JWT_AUDIENCE' AUTH_JWT_TOKEN_VERSION='$AUTH_JWT_TOKEN_VERSION' AUTH_DEVICE_TICKET_SECRET='$AUTH_DEVICE_TICKET_SECRET' AUTH_DEVICE_TICKET_ISSUER='$AUTH_DEVICE_TICKET_ISSUER' AUTH_DEVICE_TICKET_AUDIENCE='$AUTH_DEVICE_TICKET_AUDIENCE' AUTH_DEVICE_TICKET_TOKEN_VERSION='$AUTH_DEVICE_TICKET_TOKEN_VERSION' PRODUCT_OPS_SERVICE_ADDR='127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}' PLATFORM_OPS_BASE_URL='http://127.0.0.1:${PLATFORM_OPS_PORT}' go run ./cmd/api"
+    wait_service_ok platform-ops "http://127.0.0.1:${PLATFORM_OPS_PORT}/healthz" 60
+    start_bg product-ops bash -lc "cd '$ROOT_DIR/quwoquan_service/services/product-ops-service' && REPO_ROOT='$ROOT_DIR' QWQ_OUTPUT_ROOT='$QWQ_OUTPUT_ROOT' APP_ENV='beta' POSTGRES_DSN='$OPS_POSTGRES_DSN' MONGODB_URI='mongodb://127.0.0.1:${BETA_MONGO_PORT}/?directConnection=true' MONGODB_DATABASE='quwoquan_product_ops' REDIS_GENERAL_ADDR='127.0.0.1:${BETA_REDIS_PORT}' REDIS_REC_ADDR='127.0.0.1:${BETA_REDIS_PORT}' AUTH_JWT_SECRET='$AUTH_JWT_SECRET' AUTH_JWT_ISSUER='$AUTH_JWT_ISSUER' AUTH_JWT_AUDIENCE='$AUTH_JWT_AUDIENCE' AUTH_JWT_TOKEN_VERSION='$AUTH_JWT_TOKEN_VERSION' AUTH_DEVICE_TICKET_SECRET='$AUTH_DEVICE_TICKET_SECRET' AUTH_DEVICE_TICKET_ISSUER='$AUTH_DEVICE_TICKET_ISSUER' AUTH_DEVICE_TICKET_AUDIENCE='$AUTH_DEVICE_TICKET_AUDIENCE' AUTH_DEVICE_TICKET_TOKEN_VERSION='$AUTH_DEVICE_TICKET_TOKEN_VERSION' PRODUCT_OPS_SERVICE_ADDR='127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}' PLATFORM_OPS_BASE_URL='http://127.0.0.1:${PLATFORM_OPS_PORT}' go run ./cmd/api"
     start_bg ops-portal env VITE_PRODUCT_OPS_BASE_URL="http://127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}" VITE_PLATFORM_OPS_BASE_URL="http://127.0.0.1:${PLATFORM_OPS_PORT}" VITE_GATEWAY_BASE_URL="http://127.0.0.1:${CONTENT_PORT}" npm --prefix "$OPS_PORTAL_DIR" run dev -- --host 127.0.0.1 --port "${OPS_PORTAL_PORT}"
-    wait_service_ok product-ops "http://127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}/healthz" 60 || true
-    wait_service_ok ops-portal "http://127.0.0.1:${OPS_PORTAL_PORT}/" 60 || true
+    wait_service_ok product-ops "http://127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}/healthz" 60
+    wait_service_ok ops-portal "http://127.0.0.1:${OPS_PORTAL_PORT}/" 60
     maybe_open_ops
     status_one app-beta "http://127.0.0.1:${CONTENT_PORT}/healthz"
     status_one product-ops "http://127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}/healthz"

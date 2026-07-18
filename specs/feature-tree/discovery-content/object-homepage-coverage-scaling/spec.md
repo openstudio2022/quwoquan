@@ -21,7 +21,7 @@ WP5 省级批量跑已验证 `decompose → fanout by-partition → leaf` 全链
    失真且失败归因滞后。
 3. **来源资格必须运行期确认**：两省主清单已扩展到 2899 项（浙江 922 / 四川 1977）；主清单
    只保存稳定身份与分类，每个 execution 必须以对象本地来源目录和证据重新确认
-   `encyclopedia-primary-v2` 资格。
+   `encyclopedia-primary` 资格。
 4. **放量硬前置未落**：entity-service 导入停服窗口（R-HSE02）、tag inverted 无祖先展开
   （省/市级聚合断链）、prod 磁盘 90% 未决策。
 
@@ -33,7 +33,7 @@ WP5 省级批量跑已验证 `decompose → fanout by-partition → leaf` 全链
 一个省达到「全覆盖」当且仅当同时满足：
 
 1. **市州文件齐全**：`quwoquan_data/verticals/travel/coverage/中国/{省}/` 下每个地级行政区
-   恰有一个主清单文件（浙江 11 市、四川 21 市州），schema `quwoquan_data.discovery_seed/2`。
+   恰有一个主清单文件（浙江 11 市、四川 21 市州），schema `quwoquan_data.discovery_seed`。
 2. **区县分组无缺口**：每个市州文件的 `districts` 覆盖行政区树
    `Topic/地理/行政区/中国/{省}/{市州}/` 下全部叶子区县，且每区县 `leaves` 非空。
 3. **10 类旅行地点类型覆盖**：省级汇总维度上，`地点/景区、自然景观、打卡地、遗址、古镇、
@@ -43,7 +43,7 @@ WP5 省级批量跑已验证 `decompose → fanout by-partition → leaf` 全链
    `geoTagRefs` 数组表达（泸沽湖模式）。
 5. **来源发现饱和**：官方文旅、政府名录、OTA 公共索引、地图 POI、Wikidata/OSM 与百科
    搜索可用于发现名称线索；主页正文、底稿、writing pack 与 `primaryEvidenceRef` 只允许
-   `encyclopedia-primary-v2` 四百科闭集。Wikivoyage、360 与上述 discovery provider 均不得
+   `encyclopedia-primary` 四百科闭集。Wikivoyage、360 与上述 discovery provider 均不得
    投影正文或主证据。新一轮发现增量 < 5% 视为饱和。
 6. **数值目标（证据约束）**：当前唯一主清单为浙江 922、四川 1977、合计 2899 个叶子；
    全覆盖准出按该主清单动态计算，不维护硬编码副本。后续扩容会自动提高准出目标。

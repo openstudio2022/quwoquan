@@ -24,7 +24,7 @@ from typing import Any, Mapping, Sequence
 
 from core.localization import fold_to_simplified
 
-SOURCE_JUDGE_SCHEMA_VERSION = "quwoquan_data.homepage_source_judge/1"
+SOURCE_JUDGE_SCHEMA = "quwoquan_data.homepage_source_judge"
 SOURCE_JUDGE_REQUEST_FILE = "source.judge.request.json"
 SOURCE_JUDGE_VERDICT_FILE = "source.judge.json"
 
@@ -77,7 +77,7 @@ _WIKI_HOST_RE = re.compile(r"(?:wikipedia|wikivoyage|wiki)", re.IGNORECASE)
 # 站点标题后缀（`秀山岛 - 维基百科，自由的百科全书` / `xx_百度百科` / `xx 维基百科`），
 # 比较前剥离；分隔符可为连字符/下划线/竖线/间隔号或纯空白。
 _SITE_TITLE_SUFFIX_RE = re.compile(
-    r"\s*(?:[-—–_|·]\s*)?(?:Wikipedia|Wikivoyage|维基百科.*|维基导游.*|百度百科.*|搜狗百科.*|快懂百科.*)\s*$",
+    r"\s*(?:[-—–_|·]\s*)?(?:Wikipedia|Wikivoyage|维基百科.*|维基导游.*|百度百科.*|今日头条百科.*|快懂百科.*)\s*$",
     re.IGNORECASE,
 )
 
@@ -316,7 +316,7 @@ def build_judge_request(
     meta = meta or {}
     body = re.sub(r"\s+", " ", str(source_text or "")).strip()
     return {
-        "schemaVersion": SOURCE_JUDGE_SCHEMA_VERSION,
+        "schema": SOURCE_JUDGE_SCHEMA,
         "targetEntity": str(entity_name or ""),
         "entityType": str(entity_type or ""),
         "canonicalAliases": [str(a) for a in (aliases or ()) if str(a).strip()],
@@ -364,9 +364,9 @@ def judge_verdict_issues(
     issues: list[str] = []
     if not isinstance(verdict, Mapping):
         return ["verdict must be a JSON object"]
-    if str(verdict.get("schemaVersion") or "") != SOURCE_JUDGE_SCHEMA_VERSION:
+    if str(verdict.get("schema") or "") != SOURCE_JUDGE_SCHEMA:
         issues.append(
-            f"schemaVersion must be {SOURCE_JUDGE_SCHEMA_VERSION}, got {verdict.get('schemaVersion')!r}"
+            f"schema must be {SOURCE_JUDGE_SCHEMA}, got {verdict.get('schema')!r}"
         )
     target = normalize_page_title(str(verdict.get("targetEntity") or ""))
     if target != normalize_page_title(entity_name):
@@ -417,71 +417,13 @@ ADMISSION_PENDING_JUDGE = "pending_judge"
 
 # 创作阶段失败协议：Agent 发现底稿与实体不一致时写 4.draft/failure.json，
 # finalize 消费后结构化阻断（不再让模型硬写错误实体的主页）。
-ENTITY_PAGE_FAILURE_FILE = "failure.json"
-ENTITY_PAGE_FAILURE_SCHEMA_VERSION = "quwoquan_data.entity_page_failure/1"
-class EntityPageFailureKind(StrEnum):
-    SOURCE_ENTITY_MISMATCH = "source_entity_mismatch"
-    SOURCE_INSUFFICIENT = "source_insufficient"
-    SOURCE_PAGE_TYPE_INVALID = "source_page_type_invalid"
-    OTHER = "other"
 
 
-ENTITY_PAGE_FAILURE_KINDS = frozenset(kind.value for kind in EntityPageFailureKind)
-SOURCE_RECOVERY_FAILURE_KINDS = frozenset(
-    {
-        EntityPageFailureKind.SOURCE_ENTITY_MISMATCH,
-        EntityPageFailureKind.SOURCE_INSUFFICIENT,
-        EntityPageFailureKind.SOURCE_PAGE_TYPE_INVALID,
-    }
-)
 
 
-def entity_page_failure_kind(
-    failure: Mapping[str, Any] | None,
-) -> EntityPageFailureKind | None:
-    if not isinstance(failure, Mapping):
-        return None
-    try:
-        return EntityPageFailureKind(str(failure.get("failureKind") or ""))
-    except ValueError:
-        return None
 
 
-def read_entity_page_failure(draft_dir: Path) -> dict[str, Any] | None:
-    path = Path(draft_dir) / ENTITY_PAGE_FAILURE_FILE
-    if not path.is_file():
-        return None
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {"schemaVersion": "", "_unreadable": True}
-    return payload if isinstance(payload, dict) else {"schemaVersion": "", "_unreadable": True}
 
-
-def entity_page_failure_issues(
-    failure: Mapping[str, Any] | None,
-    *,
-    entity_name: str,
-) -> list[str]:
-    """failure.json schema 校验：返回问题列表（空 = 合法失败报告）。"""
-    issues: list[str] = []
-    if not isinstance(failure, Mapping) or failure.get("_unreadable"):
-        return ["failure.json unreadable or not a JSON object"]
-    if str(failure.get("schemaVersion") or "") != ENTITY_PAGE_FAILURE_SCHEMA_VERSION:
-        issues.append(
-            f"schemaVersion must be {ENTITY_PAGE_FAILURE_SCHEMA_VERSION}, got {failure.get('schemaVersion')!r}"
-        )
-    if normalize_page_title(str(failure.get("targetEntity") or "")) != normalize_page_title(entity_name):
-        issues.append(
-            f"targetEntity mismatch: failure={failure.get('targetEntity')!r} expected={entity_name!r}"
-        )
-    kind = entity_page_failure_kind(failure)
-    if kind is None:
-        issues.append(f"failureKind invalid: {failure.get('failureKind')!r}")
-    reasons = failure.get("reasons")
-    if not isinstance(reasons, list) or not any(str(r).strip() for r in reasons):
-        issues.append("reasons must be a non-empty list")
-    return issues
 
 
 def source_judge_admission(
@@ -601,38 +543,3 @@ def render_judge_prompt(request: Mapping[str, Any]) -> str:
             "head_text_block": str(source.get("headText") or "（无正文摘录）"),
         },
     )
-
-
-__all__ = [
-    "SOURCE_JUDGE_SCHEMA_VERSION",
-    "SOURCE_JUDGE_REQUEST_FILE",
-    "SOURCE_JUDGE_VERDICT_FILE",
-    "SOURCE_PAGE_TYPES",
-    "ENTITY_MATCH_VERDICTS",
-    "RECOMMENDED_ACTIONS",
-    "PRIMARY_MIN_CONFIDENCE",
-    "PRESCREEN_AUTO_PRIMARY",
-    "PRESCREEN_AUTO_REJECT",
-    "PRESCREEN_NEEDS_MODEL",
-    "ADMISSION_PRIMARY",
-    "ADMISSION_SUPPORTING_ONLY",
-    "ADMISSION_REJECT",
-    "ADMISSION_PENDING_JUDGE",
-    "ENTITY_PAGE_FAILURE_FILE",
-    "ENTITY_PAGE_FAILURE_SCHEMA_VERSION",
-    "EntityPageFailureKind",
-    "ENTITY_PAGE_FAILURE_KINDS",
-    "SOURCE_RECOVERY_FAILURE_KINDS",
-    "read_entity_page_failure",
-    "entity_page_failure_kind",
-    "entity_page_failure_issues",
-    "normalize_page_title",
-    "collect_title_evidence",
-    "deterministic_prescreen",
-    "build_judge_request",
-    "write_judge_request",
-    "read_judge_verdict",
-    "judge_verdict_issues",
-    "source_judge_admission",
-    "render_judge_prompt",
-]

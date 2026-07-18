@@ -80,8 +80,12 @@ class ConversationCacheRecord {
       creatorId: dto.creatorId.trim(),
       circleId: dto.circleId?.trim() ?? '',
       circleGroupId: dto.circleGroupId?.trim(),
-      originType: dto.originType.trim().isEmpty ? 'direct_init' : dto.originType.trim(),
-      bindingType: dto.bindingType.trim().isEmpty ? 'none' : dto.bindingType.trim(),
+      originType: dto.originType.trim().isEmpty
+          ? 'direct_init'
+          : dto.originType.trim(),
+      bindingType: dto.bindingType.trim().isEmpty
+          ? 'none'
+          : dto.bindingType.trim(),
       lifecyclePolicy: dto.lifecyclePolicy.trim().isEmpty
           ? 'persistent'
           : dto.lifecyclePolicy.trim(),
@@ -123,61 +127,36 @@ class ConversationCacheRecord {
     );
   }
 
-  factory ConversationCacheRecord.fromWireMap(Map<String, dynamic> map) {
-    final id = _firstNonEmpty(<Object?>[
-      map['conversationId'],
-      map['id'],
-      map['_id'],
-    ]);
+  factory ConversationCacheRecord.fromCacheMap(Map<String, dynamic> map) {
     return ConversationCacheRecord(
-      id: id,
+      id: _requiredCacheString(map, 'conversationId'),
       type: _string(map['type']),
-      title: _firstNonEmpty(<Object?>[map['title'], map['conversationTitle']]),
-      avatarUrl: _firstNonEmpty(<Object?>[map['avatarUrl'], map['avatar']]),
+      title: _string(map['title']),
+      avatarUrl: _string(map['avatarUrl']),
       groupAvatarVersion: _int(map['groupAvatarVersion']),
       groupAvatarSourceHash: _optionalString(map['groupAvatarSourceHash']),
       creatorId: _string(map['creatorId']),
       circleId: _string(map['circleId']),
       circleGroupId: _optionalString(map['circleGroupId']),
-      originType: _firstNonEmpty(<Object?>[map['originType'], 'direct_init']),
-      bindingType: _firstNonEmpty(<Object?>[map['bindingType'], 'none']),
-      lifecyclePolicy: _firstNonEmpty(<Object?>[
-        map['lifecyclePolicy'],
-        'persistent',
-      ]),
+      originType: _string(map['originType']),
+      bindingType: _string(map['bindingType']),
+      lifecyclePolicy: _string(map['lifecyclePolicy']),
       maxSeq: _int(map['maxSeq']),
-      lastSeq: _int(map['lastSeq'], fallback: _int(map['maxSeq'])),
+      lastSeq: _int(map['lastSeq']),
       memberCount: _int(map['memberCount']),
       maxGroupSize: _int(map['maxGroupSize']),
       receiptEnabled: _bool(map['receiptEnabled'], fallback: true),
       lastMessageId: _optionalString(map['lastMessageId']),
-      lastMessagePreview: _firstNonEmpty(<Object?>[
-        map['lastMessagePreview'],
-        map['lastMessage'],
-        map['preview'],
-      ]),
-      lastMessageType: _firstNonEmpty(<Object?>[
-        map['lastMessageType'],
-        map['messageType'],
-        'text',
-      ]),
-      lastMessageAt: _firstNonEmpty(<Object?>[
-        _normalizeIsoString(map['lastMessageAt']),
-        _normalizeIsoString(map['lastMessageTime']),
-      ]),
+      lastMessagePreview: _string(map['lastMessagePreview']),
+      lastMessageType: _string(map['lastMessageType']),
+      lastMessageAt: _normalizeIsoString(map['lastMessageAt']) ?? '',
       messageCount: _int(map['messageCount']),
       status: _string(map['status']),
       createdAt: _string(map['createdAt']),
-      updatedAt: _firstNonEmpty(<Object?>[map['updatedAt'], map['createdAt']]),
-      settingsUpdatedAt: _firstNonEmpty(<Object?>[
-        map['settingsUpdatedAt'],
-        map['updatedAt'],
-      ]),
+      updatedAt: _string(map['updatedAt']),
+      settingsUpdatedAt: _string(map['settingsUpdatedAt']),
       unreadCount: _int(map['unreadCount']),
-      mentionUnreadCount: _int(
-        map['mentionUnreadCount'],
-        fallback: _int(map['mentionCount']),
-      ),
+      mentionUnreadCount: _int(map['mentionUnreadCount']),
       muted: _bool(map['muted']),
       pinned: _bool(map['pinned']),
       membersRosterRevision: _optionalInt(map['membersRosterRevision']),
@@ -224,11 +203,40 @@ class ConversationCacheRecord {
     );
   }
 
-  Map<String, dynamic> toWireMap() {
+  ConversationDto toConversationDto() {
+    return ConversationDto(
+      id: id,
+      type: type,
+      title: title.isEmpty ? null : title,
+      avatarUrl: avatarUrl.isEmpty ? null : avatarUrl,
+      groupAvatarVersion: groupAvatarVersion,
+      groupAvatarSourceHash: groupAvatarSourceHash,
+      creatorId: creatorId,
+      circleId: circleId.isEmpty ? null : circleId,
+      circleGroupId: circleGroupId,
+      originType: originType,
+      bindingType: bindingType,
+      lifecyclePolicy: lifecyclePolicy,
+      maxSeq: maxSeq,
+      memberCount: memberCount,
+      maxGroupSize: maxGroupSize,
+      receiptEnabled: receiptEnabled,
+      lastMessageId: lastMessageId,
+      lastMessagePreview: lastMessagePreview.isEmpty
+          ? null
+          : lastMessagePreview,
+      lastMessageTime: _parseDateTime(lastMessageAt),
+      messageCount: messageCount,
+      status: status,
+      createdAt: _requiredCacheDateTime(createdAt, 'createdAt'),
+      updatedAt: _requiredCacheDateTime(updatedAt, 'updatedAt'),
+      membersRosterRevision: membersRosterRevision,
+    );
+  }
+
+  Map<String, dynamic> toCacheMap() {
     return <String, dynamic>{
       'conversationId': id,
-      'id': id,
-      '_id': id,
       if (type.isNotEmpty) 'type': type,
       if (title.isNotEmpty) 'title': title,
       if (avatarUrl.isNotEmpty) 'avatarUrl': avatarUrl,
@@ -250,10 +258,7 @@ class ConversationCacheRecord {
       if (lastMessagePreview.isNotEmpty)
         'lastMessagePreview': lastMessagePreview,
       if (lastMessageType.isNotEmpty) 'lastMessageType': lastMessageType,
-      if (lastMessageAt.isNotEmpty) ...<String, dynamic>{
-        'lastMessageAt': lastMessageAt,
-        'lastMessageTime': lastMessageAt,
-      },
+      if (lastMessageAt.isNotEmpty) 'lastMessageAt': lastMessageAt,
       'messageCount': messageCount,
       if (status.isNotEmpty) 'status': status,
       if (createdAt.isNotEmpty) 'createdAt': createdAt,
@@ -383,17 +388,23 @@ DateTime? _parseDateTime(String? value) {
   return DateTime.tryParse(normalized);
 }
 
-String _string(Object? value) => value?.toString().trim() ?? '';
-
-String _firstNonEmpty(List<Object?> values) {
-  for (final value in values) {
-    final text = _string(value);
-    if (text.isNotEmpty) {
-      return text;
-    }
+String _requiredCacheString(Map<String, dynamic> map, String key) {
+  final value = map[key];
+  if (value is! String || value.trim().isEmpty) {
+    throw FormatException('ConversationCacheRecord.$key is required');
   }
-  return '';
+  return value.trim();
 }
+
+DateTime _requiredCacheDateTime(String value, String key) {
+  final parsed = _parseDateTime(value);
+  if (parsed == null) {
+    throw StateError('ConversationCacheRecord.$key is invalid');
+  }
+  return parsed;
+}
+
+String _string(Object? value) => value?.toString().trim() ?? '';
 
 String? _optionalString(Object? value) {
   final text = _string(value);

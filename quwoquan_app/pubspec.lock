@@ -312,7 +312,7 @@ packages:
     source: hosted
     version: "0.7.14"
   device_info_plus:
-    dependency: "direct overridden"
+    dependency: "direct main"
     description:
       path: "vendor/plugins/device_info_plus"
       relative: true

@@ -246,7 +246,7 @@ func TestMiddlewareUsesVerifiedPrincipalAndRejectsInvalidCredential(t *testing.T
 			w.WriteHeader(http.StatusNoContent)
 		}),
 	)
-	req := httptest.NewRequest(http.MethodGet, "/v1/me/profile", nil)
+	req := httptest.NewRequest(http.MethodGet, "/me/profile", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set(clientUserIDHeader, "forged-account")
 	req.Header.Set(clientPersonaIDHeader, "forged-persona")
@@ -264,7 +264,7 @@ func TestMiddlewareUsesVerifiedPrincipalAndRejectsInvalidCredential(t *testing.T
 			nextCalled = true
 		}),
 	)
-	invalidRequest := httptest.NewRequest(http.MethodGet, "/v1/me/profile", nil)
+	invalidRequest := httptest.NewRequest(http.MethodGet, "/me/profile", nil)
 	invalidRequest.Header.Set("Authorization", "Bearer invalid")
 	invalidResponse := httptest.NewRecorder()
 	invalidHandler.ServeHTTP(invalidResponse, invalidRequest)

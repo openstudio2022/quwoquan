@@ -1,4 +1,3 @@
-version: 2
 domain: rtc
 aggregate_root: CallSession
 object_kind: aggregate_root

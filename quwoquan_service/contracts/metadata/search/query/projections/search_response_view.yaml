@@ -1,8 +1,7 @@
-version: 1
 read_model: SearchResponseView
 
 description: |
-  POST /v1/search 响应 envelope。服务端返回 runtime/search.RetrieveResponse
+  POST /search 响应 envelope。服务端返回 runtime/search.RetrieveResponse
   的 hits/citations/facets/degradeSignals/provenance，并补充 requestId、
   rankingVersion、experimentBucket、relatedTerms。App 结果模式按 hits 平铺消费，
   搜索反馈与推荐信号回流以 requestId/rankingVersion 归因。

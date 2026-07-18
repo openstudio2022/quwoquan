@@ -1,4 +1,3 @@
-version: 1
 domain: assistant
 aggregate_root: AssistantConversation
 object_kind: aggregate_root
@@ -9,7 +8,7 @@ members: []
 business_rules:
   - conversation 创建后 owner persona 不可变
   - 同一 conversation 最多一个 active run
-  - summary 只由完成 run 的事件按 expectedVersion 推进
+  - summary 只由完成 run 的事件按 source sequence 与服务端内部 version CAS 推进
   - archived conversation 不接受新 run
 lifecycle:
   states: [active, archived]

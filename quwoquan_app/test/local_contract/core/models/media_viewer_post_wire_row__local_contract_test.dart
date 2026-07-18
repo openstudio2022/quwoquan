@@ -4,7 +4,7 @@ import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 void main() {
   test('MediaViewerPostWireRow round-trip 保持键与标量', () {
     const original = <String, dynamic>{
-      'postId': 'p1',
+      'id': 'p1',
       'title': 't',
       'likeCount': 3,
     };
@@ -13,7 +13,7 @@ void main() {
     expect(row.toDynamicMap()['likeCount'], 3);
     expect(row.feedItem.id, 'p1');
     final back = row.toDynamicMap();
-    expect(back['postId'], 'p1');
+    expect(back['id'], 'p1');
     expect(back['title'], 't');
     expect(back['likeCount'], 3);
   });

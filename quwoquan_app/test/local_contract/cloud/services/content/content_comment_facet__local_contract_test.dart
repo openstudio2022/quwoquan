@@ -30,7 +30,7 @@ void main() {
       ]);
     });
 
-    test('创建、查询投影回读和版本化删除同源', () async {
+    test('创建、查询投影回读和服务端版本删除同源', () async {
       final facet = TestContentCommentFacet();
       final created = await facet.createComment(
         CreateContentCommentCommand(
@@ -46,22 +46,8 @@ void main() {
       expect(page.items.single.content, '新建评论');
       expect(page.items.single.personaContextVersion, 4);
 
-      await expectLater(
-        facet.deleteComment(
-          DeleteContentCommentCommand(
-            postId: 'post_1',
-            commentId: created.id,
-            version: 9,
-          ),
-        ),
-        throwsStateError,
-      );
       final deleted = await facet.deleteComment(
-        DeleteContentCommentCommand(
-          postId: 'post_1',
-          commentId: created.id,
-          version: created.version,
-        ),
+        DeleteContentCommentCommand(postId: 'post_1', commentId: created.id),
       );
       expect(deleted.status, ContentCommentStatus.deleted);
       expect((await facet.listComments(postId: 'post_1')).items, isEmpty);

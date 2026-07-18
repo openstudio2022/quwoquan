@@ -33,9 +33,6 @@ from .identity import validate_execution_id
 from .workspace import execution_root
 
 
-QUALIFICATION_VERSION = "execution-source-qualification-v1"
-
-
 class QualificationStatus(StrEnum):
     CONFIRMED = "confirmed"
     BLOCKED = "blocked"
@@ -116,7 +113,6 @@ def prepare_execution_qualification(execution_id: str) -> Path:
     """Persist immutable identity-only qualification input for this execution."""
     normalized = validate_execution_id(execution_id)
     payload = {
-        "contractVersion": QUALIFICATION_VERSION,
         "executionId": normalized,
         "policyRevision": HOMEPAGE_SOURCE_POLICY_REVISION,
         "createdAt": now_iso(),
@@ -131,7 +127,7 @@ def prepare_execution_qualification(execution_id: str) -> Path:
     path = qualification_request_path(normalized)
     if path.is_file():
         existing = read_json(path)
-        immutable = ("contractVersion", "executionId", "policyRevision", "targets")
+        immutable = ("executionId", "policyRevision", "targets")
         if not isinstance(existing, Mapping) or any(existing.get(key) != payload[key] for key in immutable):
             raise ValueError(
                 "source qualification request input drift; create a new execution sequence"
@@ -337,7 +333,6 @@ def finalize_execution_qualification(execution_id: str) -> QualificationReport:
             }
         )
     payload = {
-        "contractVersion": QUALIFICATION_VERSION,
         "executionId": normalized,
         "policyRevision": HOMEPAGE_SOURCE_POLICY_REVISION,
         "verifiedAt": now_iso(),

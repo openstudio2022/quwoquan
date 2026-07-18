@@ -9,7 +9,7 @@ from content.release.canonical import object_transaction as transaction
 
 TRANSACTION_ID = "object-one"
 RELEASE_ID = "release-one"
-SOURCE_POLICY = "encyclopedia-primary-v2"
+SOURCE_POLICY = "encyclopedia-primary"
 CREATOR_ID = "creator_a"
 TAG_REF = "Topic/旅行"
 OBJECT_REF = "地点/景区/真实地点"
@@ -31,7 +31,7 @@ def build_canonical(root: Path) -> Path:
     write_json(
         creator / "_creator.json",
         {
-            "schemaVersion": "quwoquan_data.creator_object/1",
+            "schema": "quwoquan_data.creator_object",
             "creatorId": CREATOR_ID,
             "profileRef": "profile.json",
             "assetsRef": "assets.refs.json",
@@ -48,7 +48,7 @@ def build_canonical(root: Path) -> Path:
 
 def _review_attestation() -> dict:
     return {
-        "schemaVersion": "quwoquan_data.review_attestation/1",
+        "schema": "quwoquan_data.review_attestation",
         "decision": "approved",
         "deterministicGate": {"status": "passed", "issues": []},
         "independentReviewer": {
@@ -102,7 +102,7 @@ def build_package(root: Path, canonical: Path) -> Path:
     write_json(
         object_root / "manifest.json",
         {
-            "schemaVersion": "quwoquan_data.entity_object/1",
+            "schema": "quwoquan_data.entity_object",
             "finalContentRef": "page.md",
             "sourceCatalogRef": "evidence/source_catalog.json",
             "rightsRef": "evidence/rights.json",
@@ -133,7 +133,7 @@ def build_package(root: Path, canonical: Path) -> Path:
     write_json(
         object_root / "evidence/rights.json",
         {
-            "schemaVersion": "quwoquan_data.asset_rights_closure/1",
+            "schema": "quwoquan_data.asset_rights_closure",
             "assets": [
                 {
                     "assetId": "cover",
@@ -205,7 +205,7 @@ def build_package(root: Path, canonical: Path) -> Path:
     write_json(object_root / "attestation.json", _review_attestation())
     write_json(
         object_root / "evidence_index.json",
-        {"schemaVersion": "quwoquan_data.release_evidence_index/1", "refs": []},
+        {"schema": "quwoquan_data.release_evidence_index", "refs": []},
     )
     closure = {
         "creatorRefs": [CREATOR_ID],
@@ -230,7 +230,7 @@ def build_package(root: Path, canonical: Path) -> Path:
         object_root=object_root,
         object_kind="entities",
         object_ref=OBJECT_REF,
-        target_schema="quwoquan_data.entity_object/1",
+        target_schema="quwoquan_data.entity_object",
         source_policy_revision=SOURCE_POLICY,
         closure=closure,
         cas_rows=[dict(closure["casRefs"][0])],
@@ -239,7 +239,7 @@ def build_package(root: Path, canonical: Path) -> Path:
     write_json(
         package_root / "object_transaction_package.json",
         {
-            "schemaVersion": transaction.PACKAGE_SCHEMA,
+            "schema": transaction.PACKAGE_SCHEMA,
             "transactionId": TRANSACTION_ID,
             "executionId": "20260711--travel-homepage-coverage--cn-test--canary-001",
             "sourcePolicyRevision": SOURCE_POLICY,
@@ -247,7 +247,7 @@ def build_package(root: Path, canonical: Path) -> Path:
                 "layoutSchema": transaction.LAYOUT_SCHEMA,
                 "objectKind": "entities",
                 "objectRef": OBJECT_REF,
-                "objectSchema": "quwoquan_data.entity_object/1",
+                "objectSchema": "quwoquan_data.entity_object",
                 "packageObjectRef": "object",
             },
             "closure": closure,

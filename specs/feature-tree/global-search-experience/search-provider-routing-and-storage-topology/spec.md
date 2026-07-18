@@ -55,9 +55,9 @@
 
 凡与下文“具体搜索引擎不在本期实施”“未来统一高性能读库”等表述冲突处，以本节为准：
 
-- 本期落地**专用 ES/OpenSearch 集群**为统一搜索读库（`quwoquan_objects` 索引），并新建**独立可部署 `search-service`** 承载 canonical `search(request)` 的云侧统一入口 `POST /v1/search` 与 `POST /v1/search/feedback`。
+- 本期落地**专用 ES/OpenSearch 集群**为统一搜索读库（`quwoquan_objects` 索引），并新建**独立可部署 `search-service`** 承载 canonical `search(request)` 的云侧统一入口 `POST /search` 与 `POST /search/feedback`。
 - 召回后端 ES 主 + native 透明回退；canonical contract 与 object taxonomy 保持不变，ES 仅替换读侧实现。
-- 各域 remote searchable object 改为 indexer 数据源灌入统一索引；`gateway`（seed-box 反向代理）新增 `/v1/search` 前缀路由指向 `search-service`。
+- 各域 remote searchable object 改为 indexer 数据源灌入统一索引；`gateway`（seed-box 反向代理）新增 `/search` 前缀路由指向 `search-service`。
 
 ## 约束
 
@@ -78,8 +78,8 @@
 - `cross-domain-search-journey`: 消费本 L2 提供的 contract 与 execution policy。
 - `messages`: 提供本地聊天 snapshot / sync 真相源。
 - `content / circle / entity / integration`: 提供 remote searchable object 的域契约，并作为统一 ES 索引的 indexer 数据源。
-- `search-service`: 装配 ES 主 + native 回退后端，承载统一 `POST /v1/search` / `POST /v1/search/feedback`，运行统一 indexer 灌数到 `quwoquan_objects`。
-- `gateway / orchestrator / platform`: 提供云侧路由代理（`/v1/search` 指向 search-service）、缓存、限流与观测基础设施。
+- `search-service`: 装配 ES 主 + native 回退后端，承载统一 `POST /search` / `POST /search/feedback`，运行统一 indexer 灌数到 `quwoquan_objects`。
+- `gateway / orchestrator / platform`: 提供云侧路由代理（`/search` 指向 search-service）、缓存、限流与观测基础设施。
 
 ## 数据生命周期合同
 
@@ -127,7 +127,7 @@
 App / assistant tool
         │ canonical search(request)  (mode=suggest|result)
         ▼
-   gateway(/v1/search*) ──► search-service(18095)
+   gateway(/search*) ──► search-service(18095)
         │                         │ runtime/search.Retrieve（唯一跨类型排序真相源）
         │                         ▼
         │                  FallbackBackend(Primary=ES, Fallback=native)
@@ -210,7 +210,7 @@ App / assistant tool
 |---|---|---|---|
 | local_contract contract/static | GWT/contract | `runtime/search/*_test.go`、`make verify-metadata`、`search-service tests/*_contract_test.go` | 已绿 |
 | local_contract module | SIT/GWT | `search-service application/*_test.go`、`quwoquan_app/test/ui/search/**` | 服务侧绿；App 全量受 intersection 重构外部阻塞 |
-| api_integration integration | SIT | stackctl gamma：package/up/health/verify + 已迁移 canonical run evidence（`search_smoke_report.json`，`/v1/search` 200、`/v1/search/feedback` 202） | gamma 真实冒烟已绿；推荐信号真实 Redis 双服务 api_integration 已绿（WP-F，已迁移 canonical run evidence：`search_signal_t3_report.json`）；真集群/长稳待 WP-E |
+| api_integration integration | SIT | stackctl gamma：package/up/health/verify + 已迁移 canonical run evidence（`search_smoke_report.json`，`/search` 200、`/search/feedback` 202） | gamma 真实冒烟已绿；推荐信号真实 Redis 双服务 api_integration 已绿（WP-F，已迁移 canonical run evidence：`search_signal_t3_report.json`）；真集群/长稳待 WP-E |
 | user_acceptance journey | UAT | 搜索 Journey 端到端（埋点 / 降级 / 弱网 / 权限 / 可重复性） | 🟢 已 recorded：`cross_domain_search_journey_test.dart`（suggest 本地两阶段、result 云侧固定 Tab、本地对象不进 result、最近搜索水合、单域降级不阻塞整页、整页错误态可重试、默认页/结果页 `referralSource=search`+`feedRequestId` 归因链）；高并发负载模型/背压/缓存/可重复性已冻结并有证据（`QWQ_OUTPUT_ROOT/env/repo/runs/search-load/**`、已迁移 canonical run evidence：`search_repeatability_golden_diff.json`）；故障/回滚演练已迁移 canonical run evidence（`search_rollback_rehearsal.md`） |
 
 商用上线门槛（全部满足方可宣称商用上线）：

@@ -16,6 +16,8 @@ import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
 import 'package:quwoquan_app/cloud/services/entity/mock/homepage_mock_data.dart';
 
+import '../../../../support/homepage_remote_test_support.dart';
+
 void main() {
   test('HomepageRelatedGroupSummary 只接受 canonical circleId 与证据快照', () {
     final group = HomepageRelatedGroupSummary.fromMap(<String, dynamic>{
@@ -51,7 +53,7 @@ void main() {
         'sourceKind': 'wikipedia',
         'sourceUrl': 'https://zh.wikipedia.org/wiki/西湖',
         'title': '西湖',
-        'policyRevision': 'encyclopedia-primary-v2',
+        'policyRevision': 'encyclopedia-primary',
       },
       'sourceUrls': <String>['https://zh.wikipedia.org/wiki/西湖'],
       'sourceRefs': <String>['internal/source/unit-1'],
@@ -63,25 +65,19 @@ void main() {
     expect(introduction.toMap().containsKey('sourceRefs'), isFalse);
   });
 
-  test(
-    'CloudResponseDecoder.mapListFirstPresent 优先使用 groups 而非 relatedGroups',
-    () {
-      final obj = <String, dynamic>{
-        'groups': [
-          {'circleId': 'g', 'name': 'FromGroups'},
-        ],
-        'relatedGroups': [
-          {'circleId': 'r', 'name': 'FromRelated'},
-        ],
-      };
-      final rows = CloudResponseDecoder.mapListFirstPresent(obj, const <String>[
-        'groups',
-        'relatedGroups',
-      ]);
-      expect(rows, hasLength(1));
-      expect(rows.single['circleId'], 'g');
-    },
-  );
+  test('CloudResponseDecoder.mapList 读取 groups 列表', () {
+    final obj = <String, dynamic>{
+      'groups': [
+        {'circleId': 'g', 'name': 'FromGroups'},
+      ],
+      'relatedGroups': [
+        {'circleId': 'r', 'name': 'FromRelated'},
+      ],
+    };
+    final rows = CloudResponseDecoder.mapList(obj, 'groups');
+    expect(rows, hasLength(1));
+    expect(rows.single['circleId'], 'g');
+  });
 
   group('MockHomepageRepository', () {
     late MockHomepageRepository repo;
@@ -290,7 +286,7 @@ void main() {
           headers: {'content-type': 'application/json'},
         );
       });
-      final repo = RemoteHomepageRepository(
+      final repo = buildRemoteHomepageRepositoryForTest(
         httpClient: CloudHttpClient(client: client),
         baseUrl: 'https://gw.test',
       );
@@ -320,7 +316,7 @@ void main() {
           headers: {'content-type': 'application/json'},
         );
       });
-      final repo = RemoteHomepageRepository(
+      final repo = buildRemoteHomepageRepositoryForTest(
         httpClient: CloudHttpClient(client: client),
         baseUrl: 'https://gw.test',
       );
@@ -339,33 +335,30 @@ void main() {
   });
 
   group('RemoteHomepageRepository — related groups & detail JSON', () {
-    test(
-      'getHomepageRelatedGroups 解析 relatedGroups 键（与 groups 等价优先级）',
-      () async {
-        final client = MockClient((request) async {
-          if (request.url.path.endsWith('/related-groups')) {
-            return http.Response(
-              json.encode({
-                'relatedGroups': [
-                  {'circleId': 'c2', 'name': 'RG', 'memberCount': 1},
-                ],
-              }),
-              200,
-              headers: {'content-type': 'application/json'},
-            );
-          }
-          return http.Response('not found', 404);
-        });
-        final repo = RemoteHomepageRepository(
-          httpClient: CloudHttpClient(client: client),
-          baseUrl: 'https://gw.test',
-        );
-        final groups = await repo.getHomepageRelatedGroups('h1');
-        expect(groups, hasLength(1));
-        expect(groups.single.circleId, 'c2');
-        expect(groups.single.name, 'RG');
-      },
-    );
+    test('getHomepageRelatedGroups 只解析服务合同 groups 键', () async {
+      final client = MockClient((request) async {
+        if (request.url.path.endsWith('/related-groups')) {
+          return http.Response(
+            json.encode({
+              'groups': [
+                {'circleId': 'c2', 'name': 'RG', 'memberCount': 1},
+              ],
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        return http.Response('not found', 404);
+      });
+      final repo = buildRemoteHomepageRepositoryForTest(
+        httpClient: CloudHttpClient(client: client),
+        baseUrl: 'https://gw.test',
+      );
+      final groups = await repo.getHomepageRelatedGroups('h1');
+      expect(groups, hasLength(1));
+      expect(groups.single.circleId, 'c2');
+      expect(groups.single.name, 'RG');
+    });
 
     test('getHomepageRelatedGroups 遇到坏 groups 元素必须失败关闭', () async {
       final client = MockClient((request) async {
@@ -383,7 +376,7 @@ void main() {
         }
         return http.Response('not found', 404);
       });
-      final repo = RemoteHomepageRepository(
+      final repo = buildRemoteHomepageRepositoryForTest(
         httpClient: CloudHttpClient(client: client),
         baseUrl: 'https://gw.test',
       );
@@ -393,7 +386,7 @@ void main() {
           isA<CloudException>().having(
             (error) => error.runtimeFailure.code,
             'runtimeFailure.code',
-            'APP.CONTRACT.invalid_response',
+            'APP.CONTRACT.invalid_json',
           ),
         ),
       );
@@ -428,7 +421,7 @@ void main() {
         respondMissingGroups,
         respondEmptyGroups,
       ]) {
-        final repo = RemoteHomepageRepository(
+        final repo = buildRemoteHomepageRepositoryForTest(
           httpClient: CloudHttpClient(client: MockClient(handler)),
           baseUrl: 'https://gw.test',
         );
@@ -455,7 +448,7 @@ void main() {
         }
         return http.Response('not found', 404);
       });
-      final repo = RemoteHomepageRepository(
+      final repo = buildRemoteHomepageRepositoryForTest(
         httpClient: CloudHttpClient(client: client),
         baseUrl: 'https://gw.test',
       );
@@ -483,7 +476,7 @@ void main() {
           headers: {'content-type': 'application/json'},
         );
       });
-      final repo = RemoteHomepageRepository(
+      final repo = buildRemoteHomepageRepositoryForTest(
         httpClient: CloudHttpClient(client: client),
         baseUrl: 'https://gw.test',
       );
@@ -570,7 +563,7 @@ void main() {
           headers: {'content-type': 'application/json'},
         );
       });
-      final repo = RemoteHomepageRepository(
+      final repo = buildRemoteHomepageRepositoryForTest(
         httpClient: CloudHttpClient(client: client),
         baseUrl: 'https://gw.test',
       );
@@ -584,7 +577,7 @@ void main() {
         rolloutCohort: 'cohort-a',
       );
 
-      expect(capturedUri?.path, '/v1/homepages/h-bundle/object-page-bundle');
+      expect(capturedUri?.path, '/homepages/h-bundle/object-page-bundle');
       expect(capturedUri?.queryParameters['referralSource'], 'entity_page');
       expect(capturedUri?.queryParameters['feedRequestId'], 'feed-1');
       expect(capturedUri?.queryParameters['recommendationTraceId'], 'trace-1');

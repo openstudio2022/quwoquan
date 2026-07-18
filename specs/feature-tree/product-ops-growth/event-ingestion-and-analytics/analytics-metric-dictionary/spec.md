@@ -2,9 +2,8 @@
 
 ## 功能说明
 
-定义全链路埋点与反馈基础设施的统一指标字典，作为产品体验、用户行为、持续运营、在线学习与实验分析的唯一口径源。
-
-字典覆盖全 App 域，并支持从领域服务 -> 页面表面 -> 内容/实体 -> 事件 -> 实验桶的下钻。
+定义产品日志、推荐反馈和服务 RED 指标的统一口径与来源边界。产品日志只覆盖页面、启动、关键动作、
+性能和异常；推荐/社交/Assistant 等业务事实继续由各自 metadata 与指标提供，不塞入产品日志信封。
 
 ### 指标域
 
@@ -14,6 +13,8 @@
    - 首帧时间
    - 页面错误率
    - 降级触发率
+   - `ops_startup_phase_total`、启动阶段耗时 histogram、`attempt_started → first_frame → shell` 漏斗、
+     未终态 attempt、离线补传延迟与本地 journal 溢出率
 2. `qoe`
    - 视频首帧、解码失败率、卡顿率、播放进度分布
    - RTC 接通率、掉线率、弱网重试率
@@ -35,21 +36,20 @@
 
 ## 统一维度标准
 
-### 公共维度
-- `sessionId`
-- `pageVisitId`
-- `traceId`
-- `requestId`
-- `surfaceId`
-- `routeId`
-- `operationId`
-- `requestId`
-- `experimentBucket`
-- `userIdHash`
-- `appVersion`
-- `platform`
-- `networkClass`
+### 产品日志公共维度
+
+- `logType`
+- `eventType`
+- `sessionId`（仅三天 raw、高权限精确查询，不进入 Prometheus label）
+- `pageName`
 - `occurredAt`
+- `deviceManufacturer`
+- `deviceModel`
+- `appVersion`
+- `networkClass`
+
+`operationId/errorCode/httpStatus/durationMs` 等只在目录允许的具体事件中作为强类型扩展，
+不属于所有事件的公共维度。
 
 ### 业务维度
 - 内容：`contentId`、`contentType`、`authorId`、`circleId`
@@ -69,7 +69,7 @@
   - 支持的下钻维度；
   - 是否可用于训练/实验；
   - 数据延迟与 freshness 预期。
-- 页级指标优先复用 `pageVisitId`；内容级指标优先复用 `contentId`；实体级指标优先复用 `entityType/entityId`。
+- 产品日志页级指标只使用目录生成的 `pageName/sessionId`；内容级、实体级与推荐指标分别复用其业务契约中的 `contentId`、`entityType/entityId` 与 attribution 字段，不把这些字段塞回公共日志信封。
 
 ## 对标吸收映射
 
@@ -80,38 +80,37 @@
 
 ## 约束
 
-- 指标字典必须与 `event-schema-governance` 的字段与 envelope 兼容。
+- 指标字典必须与 `event_catalog.yaml` 和各领域业务 metadata 同源；不得把 BehaviorSignal 伪装成 Ops 事件。
 - 新增指标不得绕过字典直接进入 dashboard 或模型特征表。
 - 用户可见体验指标与训练指标共享口径，但可有不同聚合层。
-- 指标名称、分组与含义必须稳定，版本升级必须记录兼容策略。
+- 指标名称、分组与含义必须稳定；当前未上线阶段采用单轨替换，不维护事件版本兼容信封。
+- 启动指标的低基数标签只允许 `phase`、`outcome`、`platform`、`runtime_env` 与
+  `recovery_surface`；`attemptId`、eventId、设备/账号标识和原始错误不得成为指标标签。
 
 ## 五栏小趣 L1-L4 指标口径
 
-本节冻结“五栏全局小趣”收口后的四层指标唯一口径，供 App 埋点、服务端 RED 指标、product-ops 汇总和 ops-portal 看板共同消费。
+本节冻结“五栏全局小趣”收口后的四层指标口径。每层必须读取下表声明的真实来源；“统一口径”不表示所有指标统一写入 `/ops/events`。
 
-| 层级 | 主口径 | 核心指标 | 必带维度 |
+| 层级 | 主口径 | 核心指标 | 真实来源 |
 | --- | --- | --- | --- |
-| L1 产品结果 | 用户是否形成“遇见同趣”的核心旅程 | `five_tab_journey_completion_rate`、`xiaoqu_entry_to_reply_rate`、`campus_or_travel_homepage_open_rate`、`circle_join_rate` | `surfaceId`、`routeId`、`feedRequestId`、`primaryDomain` |
-| L2 业务质量 | 内容、圈子、主页、消息是否形成闭环 | `featured_ctr`、`circle_scenario_ctr`、`homepage_content_attach_rate`、`xiaoqu_comment_accept_rate`、`message_delivery_clickback_rate` | `feedType`、`circleId`、`homepageId`、`topicId`、`conversationId` |
-| L3 系统健康 | 端云请求和推荐链路是否稳定 | `api_red_requests_total`、`api_red_error_rate`、`api_red_duration_p95_ms`、`recommendation_recall_hit_rate`、`assistant_reply_latency_p95_ms` | `service`、`operationId`、`runtimeEnv`、`statusCode` |
-| L4 基础设施 | 存储、队列、网关、监控是否支撑 beta 验证 | `gateway_up`、`ops_portal_up`、`product_ops_up`、`queue_lag_seconds`、`redis_latency_p95_ms`、`mongo_latency_p95_ms` | `component`、`region`、`runtimeEnv`、`instanceId` |
+| L1 产品结果 | 用户是否形成“遇见同趣”的核心旅程 | `five_tab_journey_completion_rate`、`xiaoqu_entry_to_reply_rate`、`campus_or_travel_homepage_open_rate`、`circle_join_rate` | 页面产品事件小时聚合 + 各领域业务事实，按服务端门面组合，不做 App 胖事件 |
+| L2 业务质量 | 内容、圈子、主页、消息是否形成闭环 | `featured_ctr`、`circle_scenario_ctr`、`homepage_content_attach_rate`、`xiaoqu_comment_accept_rate`、`message_delivery_clickback_rate` | `/content/behaviors`、内容事务 outbox、消息/Assistant 领域指标 |
+| L3 系统健康 | 端云请求和推荐链路是否稳定 | `api_red_requests_total`、`api_red_error_rate`、`api_red_duration_p95_ms`、`recommendation_recall_hit_rate`、`assistant_reply_latency_p95_ms` | Prometheus RED 与 recommendation attribution 指标；禁止从产品事件反推 |
+| L4 基础设施 | 存储、网关、监控是否支撑 beta 验证 | `gateway_up`、`ops_portal_up`、`product_ops_up`、`redis_latency_p95_ms`、`mongo_latency_p95_ms` | 基础设施 exporter 与服务 health；产品日志链路不新增消息队列 |
 
 ### SLO 基线
 
 - L1：user_acceptance 旅程 `首页精品 -> 圈子校园 -> 北京大学主页 -> 评论 @小趣 -> 消息承接 -> ops 可见` 完成率 beta ≥ 90%。
-- L2：推荐 surface `featured / circle / campus / travel / homepage_detail / search_xiaoqu` 均必须上报曝光、点击、CTR 和停留；缺任一维度视为看板不可发布。
+- L2：推荐 surface `featured / circle / campus / travel / homepage_detail / search_xiaoqu` 均必须通过 `BehaviorReporter` 上报曝光、点击与停留，由服务端归因指标计算 CTR；缺既有 behavior attribution 维度视为看板不可发布。
 - L3：核心 API RED p95 < 800ms，错误率 < 1%；assistant 评论回复 p95 < 5s；recommendation recall hit rate ≥ 95%。
 - L4：`gateway / product-ops / ops-portal / observability` beta health check 可用率 ≥ 99%，队列延迟 p95 < 30s。
 
-### 埋点事件覆盖
+### 信号覆盖与入口边界
 
-- 底栏切换：`app.bottom_tab.switch`，维度 `fromTab / toTab / routeId`。
-- Surface 展示：`surface.view`，维度 `surfaceId / routeId / pageVisitId`。
-- Feed 曝光：`feed.impression`，维度 `feedRequestId / feedType / surfaceId / itemId / rank`。
-- 实体主页打开：`homepage.open`，维度 `homepageId / homepageType / sourceSurface`。
-- 问小趣：`xiaoqu.open`，维度 `assistantOpenContext / routeId / surfaceId`。
-- 评论/群聊 `@小趣`：`xiaoqu.mention.triggered`，维度 `postId / commentId / conversationId / circleId / homepageId`。
-- 创作绑定实体：`content.homepage.attach`，维度 `postId / homepageId / bindPosition`。
+- 底栏和内部导航只更新生成的 `AppPageContextStore`，页面变化产生目录登记的 `page_open/page_return`；不额外维护 route/surface 公共字段。
+- Feed/Surface 的曝光、点击、停留和负反馈只经 `BehaviorReporter → /content/behaviors`，使用 `behaviors.yaml` 的既有强类型归因字段。
+- like/comment/report 等专用命令由 content-service 事务 outbox 投影一次 canonical `BehaviorSignal`，App 不补发第二条。
+- 实体主页、问小趣、`@小趣` 和创作绑定实体的业务标识由各自领域事件与指标承载；如需页面趋势，只关联 `pageName` 聚合，不扩张产品日志公共信封。
 
 ## 交集转化北极星指标（S6 增长商业化）
 
@@ -132,9 +131,9 @@
 
 ## 验收标准
 
-- A1：体验/行为/QoE/社交/分享/实体/学习/实验/运营九大指标域完整登记。
-- A3：支持从领域到页面到内容/实体/实验桶的下钻分析。
-- A4：推荐、Assistant、运营可基于同一指标口径消费数据。
-- A7：新增指标必须经过字典治理与版本评审。
+- A1：页面/启动/性能/异常指标与推荐业务指标分别声明真实来源，不混用日志入口。
+- A3：产品日志支持页面/版本/设备/网络下钻；推荐指标支持既有 attribution 维度下钻。
+- A4：Portal 通过 product-ops 查询产品日志，通过真实 Prometheus/业务投影读取推荐指标。
+- A7：新增指标必须经过字典、事件目录或领域 metadata 的单轨评审。
 - A8：形成可支撑 baseline 的指标词典与维度标准文档。
 - A9：交集转化北极星 `intersection_conversion_rate` 可按 `intersectionDimension` / `action` 下钻；三类交集行动（follow/join_circle/add_contact）端云字段一致且可区分漏斗。

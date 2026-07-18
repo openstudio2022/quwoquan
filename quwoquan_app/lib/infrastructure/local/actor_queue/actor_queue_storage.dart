@@ -212,7 +212,6 @@ void _recordActorQueueSignal(ActorQueueSignal signal) {
       'metric': 'app_actor_queue_transition_total',
       'kind': signal.kind.name,
       'queue': signal.queueName,
-      'actorPartition': signal.partitionKey,
       'reason': signal.reason,
     }),
     name: 'ActorQueueStorage.metric',

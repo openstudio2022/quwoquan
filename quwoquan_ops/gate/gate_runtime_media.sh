@@ -33,18 +33,20 @@ if [[ "${FULL_MODE}" == "--full" ]]; then
     echo "[runtime-media] FAIL: T4 evidence file not found: ${evidence_path}"
     exit 2
   fi
+  python3 "${ROOT_DIR}/quwoquan_ops/gate/verify_runtime_media_t4_evidence.py" \
+    --evidence "${evidence_path}"
 fi
 
-echo "[runtime-media] go test runtime/sync internal/application chat-service/tests"
+echo "[runtime-media] go test runtime/sync internal/application chat-service/tests/local_contract"
 (
   cd "${ROOT_DIR}/quwoquan_service"
-  go test ./runtime/sync ./services/chat-service/internal/application ./services/chat-service/tests
+  go test ./runtime/sync ./services/chat-service/internal/application ./services/chat-service/tests/local_contract
 )
 
 echo "[runtime-media] go test user-service avatar sync contract"
 (
   cd "${ROOT_DIR}/quwoquan_service"
-  go test ./services/user-service/tests -run TestUpdateProfile_AvatarVersionAndSyncPatch
+  go test ./services/user-service/tests/api_integration -run TestUpdateProfile_AvatarVersionAndSyncPatch
 )
 
 
@@ -55,6 +57,31 @@ python3 "${ROOT_DIR}/quwoquan_app/scripts/media/verify_app_avatar_rendering_poli
 python3 "${ROOT_DIR}/quwoquan_app/scripts/chat/verify_chat_mock_remote_parity.py"
 python3 "${ROOT_DIR}/quwoquan_app/scripts/media/verify_app_media_url_policy.py"
 python3 "${ROOT_DIR}/quwoquan_service/scripts/media/verify_media_variant_registry_metadata.py"
+python3 "${ROOT_DIR}/quwoquan_ops/gate/verify_media_delivery_contract.py"
+
+echo "[runtime-media] video delivery and playback failure contracts"
+(
+  cd "${ROOT_DIR}/quwoquan_app"
+  python3 scripts/env/run_flutter_test_guarded.py \
+    test/local_contract/core/media/media_delivery_reference__local_contract_test.dart \
+    test/local_contract/core/media/media_load_failure_cache__local_contract_test.dart \
+    test/local_contract/core/media/media_playback_failure__local_contract_test.dart \
+    test/local_contract/ui/components/media/video/video_player_widget__delivery_binding__local_contract_test.dart \
+    test/local_contract/ui/components/media/video/video_player_widget__failure_experience__local_contract_test.dart
+)
+(
+  cd "${ROOT_DIR}"
+  python3 -m unittest \
+    quwoquan_ops.tests.local_contract.test_environment_patrol_smoke__local_contract_test \
+    quwoquan_ops.tests.local_contract.test_local_gamma_media__local_contract_test \
+    quwoquan_ops.tests.local_contract.test_local_target_tls__local_contract_test \
+    quwoquan_ops.tests.local_contract.test_runtime_media_t4_evidence__local_contract_test \
+    quwoquan_ops.tests.local_contract.test_video_playback_canary__local_contract_test
+)
+(
+  cd "${ROOT_DIR}/quwoquan_service"
+  go test ./services/content-service/internal/application/post
+)
 
 echo "[runtime-media] alpha HTTPS media fixture surface gate"
 QWQ_ALPHA_LOCAL_PUBLIC_HOST_SETUP=skip bash "${ROOT_DIR}/quwoquan_ops/cli/alpha/start_alpha_mock_stack.sh" up

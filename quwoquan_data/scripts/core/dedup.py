@@ -13,15 +13,15 @@ from __future__ import annotations
 
 import fcntl
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Iterator
 
 from .io import read_json, write_json
 
-LEDGER_SCHEMA = "quwoquan_data.dedup_ledger/1"
+LEDGER_SCHEMA = "quwoquan_data.dedup_ledger"
 
 
-def _ledger_path() -> "Path":
-    from pathlib import Path
+def _ledger_path() -> Path:
     from . import paths
 
     return Path(paths.DATA_LOCAL_ROOT) / "cache" / "coverage_dedup.json"
@@ -45,7 +45,7 @@ def load_manifest(execution_id: str) -> dict:
     if path.exists():
         return read_json(path)
     return {
-        "schemaVersion": LEDGER_SCHEMA,
+        "schema": LEDGER_SCHEMA,
         "executionId": execution_id,
         "completedEntities": [],
         "completedTopics": [],
@@ -54,7 +54,7 @@ def load_manifest(execution_id: str) -> dict:
 
 
 def save_manifest(execution_id: str, manifest: dict) -> None:
-    manifest.setdefault("schemaVersion", LEDGER_SCHEMA)
+    manifest.setdefault("schema", LEDGER_SCHEMA)
     write_json(_ledger_path(), manifest)
 
 

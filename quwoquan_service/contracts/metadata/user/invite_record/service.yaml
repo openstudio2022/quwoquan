@@ -1,4 +1,3 @@
-version: 1
 
 service:
   name: user-service
@@ -13,7 +12,8 @@ service:
 
 api_routes:
   - method: POST
-    path: /v1/me/invites
+    path: /me/invites
+
     operation: GenerateInvite
     actor: persona
     application:
@@ -24,13 +24,15 @@ api_routes:
       mutation_target: InviteRecord
       invariant_target: InviteRecord
     description: 生成邀请（幂等，同 subAccountId+channel+inviteePhone 复用已有记录）
-    auth_required: true
+    security:
+      auth_mode: required
     request_fields: [channel, inviteePhone]
     response_fields: [id, linkCode, expireAt, status]
     rate_limit: 1000次/24h/subAccountId
 
   - method: GET
-    path: /v1/me/invites
+    path: /me/invites
+
     operation: ListMyInvites
     actor: persona
     application:
@@ -40,13 +42,15 @@ api_routes:
       reader: ListMyInvitesReader
       slice: ListMyInvitesSlice
     description: 查看我发出的邀请列表（按状态筛选）
-    auth_required: true
+    security:
+      auth_mode: required
     query_params: [status, cursor, limit]
     response_entity: InviteRecord
     response_fields: [id, channel, status, generatedAt, acceptedAt, convertedAt]
 
   - method: GET
-    path: /v1/invites/{linkCode}
+    path: /invites/{linkCode}
+
     operation: GetInviteByCode
     actor: persona_or_device
     application:
@@ -56,12 +60,14 @@ api_routes:
       reader: GetInviteByCodeReader
       slice: GetInviteByCodeSlice
     description: 根据邀请码获取邀请信息（注册页使用，无需登录）
-    auth_required: false
+    security:
+      auth_mode: public
     response_fields: [inviterDisplayName, inviterAvatarUrl, channel, expireAt, status]
     security_note: 不暴露 inviterSubAccountId / inviterOwnerAccountId
 
   - method: POST
-    path: /v1/invites/{linkCode}/accept
+    path: /invites/{linkCode}/accept
+
     operation: AcceptInvite
     actor: persona
     application:
@@ -72,7 +78,8 @@ api_routes:
       mutation_target: InviteRecord
       invariant_target: InviteRecord
     description: 接受邀请（注册成功后调用，幂等）
-    auth_required: true
+    security:
+      auth_mode: required
     response_fields: [id, status, acceptedAt]
 
 consumers:
@@ -84,7 +91,7 @@ contract_test:
     - name: generate_invite_idempotent
       description: 同参数重复调用返回相同记录
       assertions:
-        - "两次 POST /v1/me/invites 同参数 → 相同 id"
+        - "两次 POST /me/invites 同参数 → 相同 id"
 
     - name: invite_attribution
       description: 被邀请人注册后归因到正确 subAccountId
@@ -100,5 +107,5 @@ contract_test:
     - name: owner_id_not_exposed
       description: API 不暴露 inviterOwnerAccountId
       assertions:
-        - "GET /v1/invites/{code} response 不含 inviterOwnerAccountId"
-        - "GET /v1/me/invites response 不含 inviterOwnerAccountId"
+        - "GET /invites/{code} response 不含 inviterOwnerAccountId"
+        - "GET /me/invites response 不含 inviterOwnerAccountId"

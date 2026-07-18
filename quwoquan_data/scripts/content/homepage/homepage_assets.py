@@ -12,6 +12,7 @@ from typing import Any
 from content.execution.asset_registry import allocate_post_asset_id, load_execution_asset_registry
 from content.execution.runtime_state import load_execution_runtime_state
 from core.io import read_json, write_json
+from core.page_media import HomepageMediaDisposition
 from core.paths import execution_entity_object_dir, execution_root
 from content.homepage.homepage_refs import same_source_unit as _same_source_unit
 
@@ -104,7 +105,7 @@ def select_homepage_assets(
             return placement_by_name.get(key, {})
         return {}
     all_images = object_image_candidates(obj, execution_id)
-    from core.page_media import HomepageAssetDisposition, HomepageMediaDisposition
+    from core.page_media import HomepageAssetDisposition
 
     excluded: list[HomepageMediaDisposition] = []
 
@@ -314,10 +315,7 @@ def copy_homepage_asset(
     if not src.is_file():
         return {}
     manifest = load_execution_runtime_state(execution_id)
-    try:
-        execution_sequence = int(manifest.get("executionSequence") or 0)
-    except (TypeError, ValueError):
-        execution_sequence = 0
+    execution_sequence = manifest.execution_sequence if manifest is not None else 0
     if execution_sequence <= 0:
         return {}
     registry = load_execution_asset_registry(execution_id, execution_sequence)
@@ -374,7 +372,7 @@ def write_homepage_media_dispositions(
     if len(refs) != len(set(refs)):
         raise ValueError(f"{object_ref}: homepage media disposition duplicates source assets")
     payload = {
-        "schemaVersion": "quwoquan_data.homepage_media_dispositions/1",
+        "schema": "quwoquan_data.homepage_media_dispositions",
         "executionId": execution_id,
         "objectRef": object_ref,
         "assets": [record.as_dict() for record in records],

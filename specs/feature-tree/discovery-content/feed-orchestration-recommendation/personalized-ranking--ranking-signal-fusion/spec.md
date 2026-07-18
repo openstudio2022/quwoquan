@@ -21,7 +21,7 @@
 
 - 契约与字段策略必须与 metadata 保持一致。
 - 交集 kind 注册表唯一真相源：`specs/product/intersection-definition-and-application.md` §5.4。
-- 本轮禁止新增 intersection-only ranker，也不把 `/v1/score` 同步塞进 feed 读路径。
+- 本轮禁止新增 intersection-only ranker，也不把 `/score` 同步塞进 feed 读路径。
 - `affinityIntersectionScore` 没有 `intersectionConfidenceLabel` 时不得参与候选级融合。
 
 ## 验收标准

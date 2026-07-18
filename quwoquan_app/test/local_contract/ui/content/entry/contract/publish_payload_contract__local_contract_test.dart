@@ -1,18 +1,18 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_metadata.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_post_mutation_wires.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/ui/content/models/publish_settings_models.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// L1a 契约测试：创作入口发布 payload 与 content/post metadata 对齐
 ///
 /// 验证 Post 发布字段与 CirclePostPlacement 跨上下文输入严格分离。
 /// 不依赖 lib/features/create/，仅引用 cloud 元数据。
 void main() {
-  const writable = GeneratedPostRuntimeMetadata.createWritableFields;
+  const writable = GeneratedPostRuntimeMetadata.publicationWritableFields;
 
   group('PublishPayload — 常规契约', () {
-    test('createWritableFields 包含 Post 字段且排除 CirclePostPlacement 输入', () {
+    test('publicationWritableFields 包含 Post 字段且排除 CirclePostPlacement 输入', () {
       expect(writable, contains('visibility'));
       expect(writable, contains('location'));
       expect(writable, contains('locationName'));
@@ -29,7 +29,7 @@ void main() {
 
     test('文章发布 payload 可写字段包含封面与展示真相源', () {
       expect(writable, contains('articleMarkdown'));
-      expect(writable, contains('articleMarkdownVersion'));
+      expect(writable, contains('markdownDialect'));
       expect(writable, contains('articleAssetManifest'));
       expect(writable, contains('articleRenderProfile'));
       expect(writable, isNot(contains('articleDocument')));
@@ -52,7 +52,7 @@ void main() {
         expect(
           writable,
           contains(k),
-          reason: 'payload 字段 $k 应在 createWritableFields 中',
+          reason: 'payload 字段 $k 应在 publicationWritableFields 中',
         );
       }
       expect(payload['visibility'], 'public');
@@ -101,25 +101,33 @@ void main() {
       expect(payload['assistantUsePolicy'], 'exclude');
     });
 
-    test('CreatePostRequestWire semanticMentions 为结构化数组且不被 stringify', () {
+    test('SubmitPostPublication semanticMentions 为结构化数组且不被 stringify', () {
       // R-CS06：semanticMentions 是 []object 可写字段，wire 必须以结构化数组承载，
       // 不得 .toString() 破坏；顶层只读投影 tagRefs/entityRefs 仍被 wire 剥离。
-      final wire = CreatePostRequestWire.fromMap(<String, dynamic>{
-        'contentType': 'article',
-        'summary': '摘要',
-        'semanticMentions': <Map<String, dynamic>>[
-          {'kind': 'tag', 'status': 'published', 'targetRef': 'Topic/旅行/城市漫步'},
-          {
-            'kind': 'entity',
-            'status': 'published',
-            'targetRef': 'entity:sight:west_lake',
-          },
+      final command = SubmitContentPostPublicationCommand(
+        publishIntentId: 'intent-contract',
+        localDraftId: 'draft-contract',
+        contentType: ContentPostType.article,
+        summary: '摘要',
+        semanticMentions: <ContentPostStructuredObject>[
+          ContentPostStructuredObject(<String, ContentPostStructuredValue>{
+            'kind': const ContentPostStructuredText('tag'),
+            'status': const ContentPostStructuredText('published'),
+            'targetRef': const ContentPostStructuredText('Topic/旅行/城市漫步'),
+          }),
+          ContentPostStructuredObject(<String, ContentPostStructuredValue>{
+            'kind': const ContentPostStructuredText('entity'),
+            'status': const ContentPostStructuredText('published'),
+            'targetRef': const ContentPostStructuredText(
+              'entity:sight:west_lake',
+            ),
+          }),
         ],
-        'tagRefs': <String>['Topic/旅行/城市漫步'],
-        'entityRefs': <String>['entity:sight:west_lake'],
-        'assistantUsePolicy': 'inherit',
-      });
-      final body = wire.toWire();
+        assistantUsePolicy: ContentPostAssistantUsePolicy.inherit,
+      );
+      final body = Map<String, Object?>.from(
+        encodeSubmitContentPostPublicationCommand(command).body! as Map,
+      );
       expect(body['contentType'], 'article');
       expect(body, isNot(contains('type')));
       expect(body['semanticMentions'], isA<List>());

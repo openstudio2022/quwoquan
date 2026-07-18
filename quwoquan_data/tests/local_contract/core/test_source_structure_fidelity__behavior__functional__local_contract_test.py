@@ -17,7 +17,7 @@ for _path in (DATA_ROOT, SCRIPTS_ROOT):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
-from content.post.evidence_text import clean_source_markdown  # noqa: E402
+from content.post.article.evidence_text import clean_source_markdown  # noqa: E402
 from core.source_layout import render_source_markdown  # noqa: E402
 from core.wiki_wikitext import parse_wikitext_layout  # noqa: E402
 

@@ -1,26 +1,49 @@
-version: 1
 entity: EventRecord
-backend: mongodb
+backend: aliyun_sls
 
-collections:
-  event_records:
-    entity: EventRecord
-    indexes:
-      - { name: idx_event_event_id, keys: { eventId: 1 }, unique: true }
-      - { name: idx_event_type_name_time, keys: { eventType: 1, eventName: 1, occurredAt: -1 } }
-      - { name: idx_event_page_time, keys: { pageName: 1, occurredAt: -1 }, sparse: true }
-      - { name: idx_event_surface_route_time, keys: { surfaceId: 1, routeId: 1, occurredAt: -1 }, sparse: true }
-      - { name: idx_event_target_time, keys: { targetType: 1, targetKey: 1, occurredAt: -1 }, sparse: true }
-      - { name: idx_event_entity_time, keys: { entityType: 1, entityId: 1, occurredAt: -1 }, sparse: true }
-      - { name: idx_event_experiment_time, keys: { experimentBucket: 1, occurredAt: -1 }, sparse: true }
-      - { name: idx_event_session_time, keys: { sessionId: 1, occurredAt: -1 }, sparse: true }
-    ttl_index:
-      field: occurredAt
-      expire_after_seconds: 7776000
-      description: 统一事件明细 90 天热存保留
+logstores:
+  raw:
+    config_key: sls.raw_logstore
+    default_name: app-product-telemetry-raw
+    ttl_days: 3
+    time_field: ingestedAt
+    business_time_field: occurredAt
+    internal_fields: [_batchKey, _batchIndex, ingestedAt]
+    indexed_fields:
+      - logType
+      - eventType
+      - pageName
+      - appVersion
+      - networkClass
+      - deviceManufacturer
+      - deviceModel
+      - errorCode
+      - operationId
+      - httpStatus
+      - occurredAt
+      - sessionId
+    non_indexed_fields: [callStack]
+  startup_diagnostic:
+    config_key: sls.startup_diagnostic_logstore
+    default_name: app-startup-diagnostic-raw
+    ttl_days: 3
+    forbidden_fields: [sessionId, userId, pageName, callStack]
+  aggregate:
+    config_key: sls.aggregate_logstore
+    default_name: app-product-telemetry-hourly
+    ttl_days: 90
+    forbidden_fields: [sessionId, userId, callStack, _batchKey]
 
-redis_cache:
-  - key: "ops:event:summary:{eventType}:{eventName}:{dimension}:{window}"
-    ttl_seconds: 300
-    type: hash
-    description: 统一事件聚合摘要缓存
+idempotency:
+  request_header: Idempotency-Key
+  digest: canonical_json_sha256
+  batch_key: sha256_first_128_bits
+  redis_state_ttl_hours: 72
+  raw_deduplication_fields: [_batchKey, _batchIndex]
+
+query_facade:
+  portal_direct_cloud_access: false
+  summary_source: sls_aggregate
+  drilldown_source: sls_raw
+  raw_window_days: 3
+  drilldown_max_items: 100

@@ -327,8 +327,8 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleGetPost(w, r)
 		{{- else if eq . "ListUserPosts" }}
 		h.handleListUserPosts(w, r)
-		{{- else if eq . "CreatePost" }}
-		h.handleCreatePost(w, r)
+		{{- else if eq . "SubmitPostPublication" }}
+		h.handleSubmitPostPublication(w, r)
 		{{- else if eq . "CreateReport" }}
 		h.handleCreateReport(w, r)
 		{{- else if eq . "ListReports" }}
@@ -339,30 +339,60 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleBeginReportReview(w, r)
 		{{- else if eq . "ResolveReport" }}
 		h.handleResolveReport(w, r)
-		{{- else if eq . "UpdatePost" }}
-		h.handleUpdatePost(w, r)
+		{{- else if eq . "UpdatePostSettings" }}
+		h.handleUpdatePostSettings(w, r)
+		{{- else if eq . "PromotePostToWork" }}
+		h.handlePromotePostToWork(w, r)
+		{{- else if eq . "DeletePost" }}
+		h.handleDeletePost(w, r)
 		{{- else if eq . "ReportBehaviors" }}
 		h.handleReportBehaviors(w, r)
 		{{- else if eq . "CreateComment" }}
-		h.handleCreateComment(w, r, postIDFromPath(r.URL.Path))
+		h.handleCreateComment(w, r, strings.TrimSpace(r.PathValue("postId")))
 		{{- else if eq . "DeleteComment" }}
-		h.handleDeleteComment(w, r)
+		h.handleDeleteComment(
+			w,
+			r,
+			strings.TrimSpace(r.PathValue("postId")),
+			strings.TrimSpace(r.PathValue("commentId")),
+		)
 		{{- else if eq . "PinComment" }}
-		h.handleSetCommentPinned(w, r, true)
+		h.handleSetCommentPinned(
+			w,
+			r,
+			strings.TrimSpace(r.PathValue("postId")),
+			strings.TrimSpace(r.PathValue("commentId")),
+			true,
+		)
 		{{- else if eq . "UnpinComment" }}
-		h.handleSetCommentPinned(w, r, false)
+		h.handleSetCommentPinned(
+			w,
+			r,
+			strings.TrimSpace(r.PathValue("postId")),
+			strings.TrimSpace(r.PathValue("commentId")),
+			false,
+		)
 		{{- else if eq . "BindMediaAssetsToComment" }}
-		h.handleBindMediaAssetsToComment(w, r, commentIDFromPath(r.URL.Path))
+		h.handleBindMediaAssetsToComment(
+			w,
+			r,
+			strings.TrimSpace(r.PathValue("commentId")),
+		)
 		{{- else if eq . "ListComments" }}
-		h.handleListComments(w, r, postIDFromPath(r.URL.Path))
+		h.handleListComments(w, r, strings.TrimSpace(r.PathValue("postId")))
 		{{- else if eq . "ListCommentReplies" }}
-		h.handleListCommentReplies(w, r)
+		h.handleListCommentReplies(
+			w,
+			r,
+			strings.TrimSpace(r.PathValue("postId")),
+			strings.TrimSpace(r.PathValue("commentId")),
+		)
 		{{- else if eq . "ListCommentsByAuthor" }}
 		h.handleListCommentsByAuthor(w, r)
 		{{- else if eq . "ListCommentsForPostAuthor" }}
 		h.handleListCommentsForPostAuthor(w, r)
 		{{- else if eq . "ReactToComment" }}
-		h.handleReactToComment(w, r, commentIDFromPath(r.URL.Path))
+		h.handleReactToComment(w, r, strings.TrimSpace(r.PathValue("commentId")))
 		{{- else if eq . "GetMyIntersectionSummary" }}
 		h.handleGetMyIntersectionSummary(w, r)
 		{{- else if eq . "ListMyIntersections" }}
@@ -409,8 +439,6 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleSelectAutoVideoCover(w, r)
 		{{- else if eq . "SelectManualVideoCover" }}
 		h.handleSelectManualVideoCover(w, r)
-		{{- else if eq . "BindMediaAssetsToPost" }}
-		h.handleBindMediaAssetsToPost(w, r)
 		{{- else if eq . "CreateOutboundShare" }}
 		h.handleCreateOutboundShare(w, r)
 		{{- else }}

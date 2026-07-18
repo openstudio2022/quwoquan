@@ -8,13 +8,11 @@ void main() {
   group('PostReadPresentation single-rail projection', () {
     test('subAccountId 与 authorId 保持同一真相源', () {
       final dto = MicroPostDto.fromMap(<String, dynamic>{
-        '_id': 'p_canonical',
-        'postId': 'p_canonical',
+        'id': 'p_canonical',
         'type': 'micro',
-        'contentType': 'micro',
         'authorId': 'current_author',
         'displayName': 'User',
-        'authorAvatarUrl': '',
+        'avatarUrl': '',
         'body': 'hello',
         'likeCount': 1,
         'commentCount': 2,
@@ -27,13 +25,11 @@ void main() {
 
     test('fromPostBase 投射 feedCard 字段', () {
       final dto = MicroPostDto.fromMap(<String, dynamic>{
-        '_id': 'p1',
-        'postId': 'p1',
+        'id': 'p1',
         'type': 'micro',
-        'contentType': 'micro',
         'authorId': 'a1',
         'displayName': 'User',
-        'authorAvatarUrl': '',
+        'avatarUrl': '',
         'body': 'hello',
         'likeCount': 1,
         'commentCount': 2,
@@ -47,13 +43,11 @@ void main() {
 
     test('wire articleTemplate 经 fromPostBase 透传', () {
       final dto = ArticlePostDto.fromMap(<String, dynamic>{
-        '_id': 'a1',
-        'postId': 'a1',
+        'id': 'a1',
         'type': 'article',
-        'contentType': 'article',
         'authorId': 'u',
         'displayName': 'U',
-        'authorAvatarUrl': '',
+        'avatarUrl': '',
         'title': 'T',
         'body': 'B',
         'likeCount': 0,
@@ -72,13 +66,11 @@ void main() {
   group('PostReadUiBundle', () {
     test('fromPost carries surface', () {
       final dto = MicroPostDto.fromMap(<String, dynamic>{
-        '_id': 'p1',
-        'postId': 'p1',
+        'id': 'p1',
         'type': 'micro',
-        'contentType': 'micro',
         'authorId': 'a1',
         'displayName': 'User',
-        'authorAvatarUrl': '',
+        'avatarUrl': '',
         'body': 'x',
         'likeCount': 0,
         'commentCount': 0,

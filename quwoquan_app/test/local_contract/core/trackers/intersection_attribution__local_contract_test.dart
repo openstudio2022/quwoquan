@@ -16,7 +16,7 @@ void main() {
   setUp(() {
     repo = MockBehaviorRepository();
     tracker = ContentBehaviorTracker(
-      repository: repo,
+      reporter: repo,
       maxBatchSize: 100,
       enablePeriodicFlush: false,
     );

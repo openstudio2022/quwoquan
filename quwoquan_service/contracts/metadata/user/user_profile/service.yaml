@@ -9,7 +9,8 @@ api_routes:
   description: 查看已绑定的凭证列表（脱敏展示）
   method: GET
   operation: ListCredentials
-  path: /v1/owner/credentials
+  path: /owner/credentials
+
   response_entity: CredentialBinding
   response_fields:
   - id
@@ -33,7 +34,8 @@ api_routes:
   description: 查看自己所有分身列表
   method: GET
   operation: ListPersonas
-  path: /v1/user/personas
+  path: /user/personas
+
   response_entity: PersonaManagementItemView
   response_fields:
   - subAccountId
@@ -75,7 +77,8 @@ api_routes:
   description: 获取分身管理台摘要（数量、配额、主分身与当前激活分身）
   method: GET
   operation: GetPersonaManagementSummary
-  path: /v1/user/personas/summary
+  path: /user/personas/summary
+
   response_entity: PersonaManagementQuotaView
   response_fields:
   - ownerUserId
@@ -100,7 +103,8 @@ api_routes:
   description: 获取当前激活分身上下文快照（供跨域动作主体透传）
   method: GET
   operation: GetActivePersonaContext
-  path: /v1/user/personas/active
+  path: /user/personas/active
+
   response_entity: ActivePersonaContextView
   response_fields:
   - ownerUserId
@@ -128,7 +132,8 @@ api_routes:
   description: 获取该分身当前可否删除/退役的保护状态
   method: GET
   operation: GetPersonaLifecycleGuard
-  path: /v1/user/personas/{subAccountId}/lifecycle-guard
+  path: /user/personas/{subAccountId}/lifecycle-guard
+
   response_entity: PersonaLifecycleGuardView
   response_fields:
   - subAccountId
@@ -154,7 +159,8 @@ api_routes:
   method: GET
   note: 不暴露 owner 映射字段；IsolationLevel 是公开访问真相源，strict 时返回 404
   operation: GetSubAccountProfile
-  path: /v1/user/{subAccountId}
+  path: /user/{subAccountId}
+
   response_entity: SubAccountProfileView
   response_fields:
   - subAccountId
@@ -184,7 +190,8 @@ api_routes:
     method: getUserHomepageBundle
     reader: GetUserHomepageBundleReader
     slice: GetUserHomepageBundleSlice
-  auth: optional
+  security:
+    auth_mode: optional
   description: '主页首屏聚合（锁定决策 #1）：一次返回身份域真相 profile/stats/relationshipCapability/
 
     tabCounts/viewerContext/cacheVersion，消除首屏串行阻塞。交集与影响力 evidence 仍由 content
@@ -195,7 +202,8 @@ api_routes:
   method: GET
   note: viewer 由鉴权头解析；本人态返回 viewerContext.isOwner=true，游客可读公开档案
   operation: GetUserHomepageBundle
-  path: /v1/user/sub-accounts/{subAccountId}/homepage-bundle
+  path: /user/sub-accounts/{subAccountId}/homepage-bundle
+
   response_body: UserHomepageBundleWire
   response_body_kind: object
   response_entity: UserHomepageBundleWire
@@ -216,7 +224,8 @@ api_routes:
   description: 当前激活子账号快捷视图（等同于 GetSubAccountProfile(activeSub)）
   method: GET
   operation: GetMeProfile
-  path: /v1/me
+  path: /me
+
   commercial:
     status: ready
   authorization:
@@ -276,13 +285,15 @@ api_routes:
     method: searchSocialRelations
     reader: SearchSocialRelationsReader
     slice: SearchSocialRelationsSlice
-  auth: required
+  security:
+    auth_mode: required
   description: '全局搜索社交关系结果，统一承接“人”的搜索对象。匹配规则：先按趣我圈号(userHandle)精确命中并置顶 （隐私 strict 分身不暴露，与 GetSubAccountProfile strict→404 一致），再按昵称/资料模糊匹配补全去重。 不支持按手机号查人（隐私默认），手机号匹配仅走 contact_discovery 批量哈希。
 
     '
   method: GET
   operation: SearchSocialRelations
-  path: /v1/user/search/social-relations
+  path: /user/search/social-relations
+
   query_params:
   - query
   - cursor
@@ -306,7 +317,8 @@ api_routes:
   - USER.SYSTEM.internal_error
   method: POST
   operation: PullUserSync
-  path: /v1/user/sync
+  path: /user/sync
+
   privacy:
     log_policy: metadata_only
     request_classification: PII
@@ -314,8 +326,8 @@ api_routes:
   reliability:
     cancellation: supported
     idempotency: none
-    max_attempts: 2
-    retry_mode: idempotent
+    max_attempts: 1
+    retry_mode: none
     timeout_ms: 1500
   request_fields:
   - afterSeq
@@ -353,7 +365,8 @@ api_routes:
   join_path: owner_full_snapshot
   method: GET
   operation: GetUserProfile
-  path: /v1/user/profile/{userId}
+  path: /user/profile/{userId}
+
   authorization:
     principal: public
     ownership_policy: public_profile_visibility
@@ -392,7 +405,8 @@ api_routes:
   description: 当前登录 owner/active persona 的私有资料编辑快照；包含手机号凭证摘要与系统分配 userHandle，只供本人编辑页使用
   method: GET
   operation: GetProfileEditSnapshot
-  path: /v1/user/profile/edit-snapshot
+  path: /user/profile/edit-snapshot
+
   response_entity: ProfileEditSnapshotWire
   response_fields:
   - ownerUserId
@@ -432,7 +446,8 @@ api_routes:
   description: 返回我的二维码卡片渲染所需快照与可撤销 QR token 摘要；二维码 payload 为公开主页 HTTPS link，不编码手机号或 bearer token
   method: GET
   operation: GetProfileQrCard
-  path: /v1/user/profile/qr-card
+  path: /user/profile/qr-card
+
   response_entity: ProfileQrCardWire
   response_fields:
   - publicProfileUrl
@@ -460,7 +475,8 @@ api_routes:
   description: 公开扫码落地解析入口；校验 HTTPS payload 中的 opaque QR token，记录扫码观测后返回规范主页目标
   method: GET
   operation: ResolveProfileQrToken
-  path: /v1/public/profile/qr/resolve
+  path: /public/profile/qr/resolve
+
   response_entity: ProfileQrResolveWire
   response_fields:
   - subAccountId
@@ -482,7 +498,8 @@ api_routes:
     slice: GetNotificationSettingsSlice
   method: GET
   operation: GetNotificationSettings
-  path: /v1/user/settings/notifications
+  path: /user/settings/notifications
+
   response_entity: UserSetting
   security:
     anonymous_policy: deny
@@ -499,7 +516,8 @@ api_routes:
     slice: GetPrivacySettingsSlice
   method: GET
   operation: GetPrivacySettings
-  path: /v1/user/settings/privacy
+  path: /user/settings/privacy
+
   response_entity: UserSetting
   security:
     anonymous_policy: deny
@@ -517,7 +535,8 @@ api_routes:
   description: 获取来电与铃声设置
   method: GET
   operation: GetCallSettings
-  path: /v1/user/settings/calls
+  path: /user/settings/calls
+
   response_entity: UserSetting
   response_fields:
   - defaultIncomingCallRingtoneId
@@ -540,7 +559,8 @@ api_routes:
   description: 获取 owner 默认值与当前子账号 override 聚合后的外观与字号设置
   method: GET
   operation: GetAppearanceSettings
-  path: /v1/user/settings/appearance
+  path: /user/settings/appearance
+
   response_entity: AppearanceSettingsView
   response_fields:
   - themeMode
@@ -567,7 +587,8 @@ api_routes:
   description: 用户作品集列表（用户主页-创作 Tab 作品子分类）
   method: GET
   operation: ListUserWorks
-  path: /v1/users/{userId}/works
+  path: /users/{userId}/works
+
   query_params:
   - cursor
   - limit
@@ -584,7 +605,8 @@ api_routes:
   description: 用户生活记录列表（用户主页-生活 Tab）
   method: GET
   operation: ListUserLifeItems
-  path: /v1/users/{userId}/life-items
+  path: /users/{userId}/life-items
+
   query_params:
   - category
   - cursor
@@ -602,7 +624,8 @@ api_routes:
   description: 用户获赞列表（用户主页-统计-获赞）
   method: GET
   operation: ListUserLikes
-  path: /v1/users/{userId}/likes
+  path: /users/{userId}/likes
+
   query_params:
   - cursor
   - limit
@@ -616,7 +639,8 @@ api_routes:
   description: 读取用户派生兴趣画像（topN 兴趣 + 维度 tops + 生命周期分层 + 新鲜度 + 规则人群 segment）；由 content 基于 rm_recommend_feature 四维 affinities 派生并匹配 segments.yaml 规则人群，经 UserInterestRecomputed 事件投影到 rm_user_profile_view.interestProfile/segments（user 域单一真相源）。供 assistant 主动服务与 recommendation 策略自调消费
   method: GET
   operation: GetUserInterestProfile
-  path: /v1/users/{userId}/interest-profile
+  path: /users/{userId}/interest-profile
+
   response_fields:
   - userId
   - topInterests
@@ -685,35 +709,35 @@ contract_test:
         - pii_fields_filtered
         mock_response: auto_from_fields
         name: get_profile_success
-        route: GET /v1/user/profile/{userId}
+        route: GET /user/profile/{userId}
       - assertions:
         - status_200
         - updated_fields_reflected
         mock_request: auto_from_writable_fields
         name: update_profile_success
-        route: PATCH /v1/user/profile
+        route: PATCH /user/profile
       - assertions:
         - status_200
         - only_one_active
         name: persona_activate
-        route: POST /v1/user/personas/{subAccountId}/activate
+        route: POST /user/personas/{subAccountId}/activate
       - assertions:
         - status_200
         - tokens_returned
         name: login_flow
-        route: POST /v1/user/auth/login
+        route: POST /user/auth/login
       - assertions:
         - status_200
         - response_matches_schema
         mock_response: auto_from_fields
         name: get_appearance_settings
-        route: GET /v1/user/settings/appearance
+        route: GET /user/settings/appearance
       - assertions:
         - status_200
         - updated_fields_reflected
         mock_request: auto_from_writable_fields
         name: update_appearance_settings
-        route: PATCH /v1/user/settings/appearance
+        route: PATCH /user/settings/appearance
     service_side:
       data_management:
         cleanup: TRUNCATE user_profiles, personas, user_auth, user_devices, user_settings, profile_update_proposals CASCADE
@@ -768,7 +792,7 @@ contract_test:
       - assertions:
         - SELECT theme_mode_override, font_size_preset_override FROM personas WHERE user_id=? AND is_active=true → updated to requested values
         - SELECT default_theme_mode, default_font_size_preset FROM user_settings WHERE user_id=? → unchanged
-        - GET /v1/user/settings/appearance → source='sub_override'
+        - GET /user/settings/appearance → source='sub_override'
         command: UpdateAppearanceSettings(applyScope='current_sub_account')
         name: update_appearance_current_sub_account
         seed:
@@ -796,4 +820,3 @@ service:
   domain: user
   name: user-service
   owner: backend-team
-version: 1

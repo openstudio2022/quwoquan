@@ -105,7 +105,7 @@ def write_stage_result(
     write_json(
         path,
         {
-            "schemaVersion": "quwoquan_data.stage_envelope",
+            "schema": "quwoquan_data.stage_envelope",
             "executionId": execution_id,
             "step": step,
             "ref": ref,
@@ -127,7 +127,7 @@ def build_gate_report(
     next_step: str | None = None,
 ) -> dict[str, Any]:
     return {
-        "schemaVersion": "quwoquan_data.stage_gate_report",
+        "schema": "quwoquan_data.stage_gate_report",
         "executionId": execution_id,
         "command": command,
         "step": step,
@@ -177,7 +177,7 @@ def build_repair_report(
     evidence_summary: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     payload = {
-        "schemaVersion": "quwoquan_data.repair_report",
+        "schema": "quwoquan_data.repair_report",
         "executionId": execution_id,
         "command": command,
         "ref": ref,

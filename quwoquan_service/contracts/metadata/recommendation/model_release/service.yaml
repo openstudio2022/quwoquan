@@ -9,7 +9,8 @@ api_routes:
     method: stage
   method: POST
   operation: StageRecommendationModelRelease
-  path: /internal/v1/recommendation/model-releases
+  path: /internal/recommendation/model-releases
+
   reliability:
     cancellation: supported
     idempotency: required
@@ -34,7 +35,8 @@ api_routes:
     method: activate
   method: POST
   operation: ActivateRecommendationModelRelease
-  path: /internal/v1/recommendation/model-releases/{releaseId}:activate
+  path: /internal/recommendation/model-releases/{releaseId}:activate
+
   reliability:
     cancellation: supported
     idempotency: required
@@ -59,7 +61,8 @@ api_routes:
     method: rollback
   method: POST
   operation: RollbackRecommendationModelRelease
-  path: /internal/v1/recommendation/model-releases/{releaseId}:rollback
+  path: /internal/recommendation/model-releases/{releaseId}:rollback
+
   reliability:
     cancellation: supported
     idempotency: required
@@ -88,7 +91,8 @@ api_routes:
     - recommendation.model.score
   method: POST
   operation: ScoreRecommendationCandidates
-  path: /internal/v1/recommendation/model-releases:score
+  path: /internal/recommendation/model-releases:score
+
   reliability:
     cancellation: supported
     idempotency: none
@@ -117,7 +121,8 @@ api_routes:
     - recommendation.model.score
   method: POST
   operation: BatchScoreRecommendationCandidates
-  path: /internal/v1/recommendation/model-releases:batch-score
+  path: /internal/recommendation/model-releases:batch-score
+
   reliability:
     cancellation: supported
     idempotency: none
@@ -155,4 +160,3 @@ service:
   domain: recommendation
   name: recommendation-service
   owner: ml-platform
-version: 1

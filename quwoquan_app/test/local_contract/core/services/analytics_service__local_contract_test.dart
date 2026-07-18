@@ -1,16 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
-import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
-import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
+
+import '../../../support/recording_app_telemetry_recorder.dart';
 
 void main() {
   group('AnalyticsService', () {
-    test('remote 模式下会将 façade 事件上报到 ops 统一事件仓储', () async {
-      final remote = MockOpsEventRepository();
-      final analytics = AnalyticsService.forTesting(
-        mode: AppDataSourceMode.remote,
-        eventRepository: remote,
-      );
+    test('façade 事件只投影到强类型 product_action', () async {
+      final remote = RecordingAppTelemetryRecorder();
+      final analytics = AnalyticsService.forTesting(telemetryReporter: remote);
 
       await analytics.initialize(const AnalyticsConfig());
       await analytics.trackEvent(
@@ -22,12 +19,16 @@ void main() {
       );
 
       expect(remote.recorded, hasLength(1));
-      expect(remote.recorded.first.eventType, equals('article_reader_metric'));
+      expect(remote.recorded.first.eventType, equals('product_action'));
       expect(
-        remote.recorded.first.targetKey,
-        equals('article_reader_metric.article_reader_open_ms'),
+        remote.recorded.first.extensions['journey'],
+        equals('article_reader_metric'),
       );
-      expect(remote.recorded.first.source, equals('analytics_facade'));
+      expect(
+        remote.recorded.first.extensions['action'],
+        equals('article_reader_open_ms'),
+      );
+      expect(remote.recorded.first.extensions.containsKey('postId'), isFalse);
     });
   });
 }

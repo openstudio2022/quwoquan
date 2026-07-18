@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from core.article_package import (
-    MARKDOWN_VERSION,
+    MARKDOWN_DIALECT,
     build_markdown_frontmatter,
     compute_asset_manifest_sha256,
     compute_document_sha256,
@@ -20,12 +20,11 @@ from content.execution.asset_registry import allocate_post_asset_id, load_execut
 from content.execution.runtime_contract import stage_execution_context
 from content.execution.runtime_state import load_execution_runtime_state
 from content.execution.stage_reports import iter_stage_envelopes, read_stage_envelope
-from content.post.draft_io import read_draft_article, read_draft_meta, read_writing_pack
-from content.post.materialize_article import _resolve_materialized_article
+from content.post.article.draft_io import read_draft_article, read_draft_meta, read_writing_pack
+from content.post.article.materialize_article import _resolve_materialized_article
 from content.post.materialize_contract import (
     _ensure_published_manifest_mentions,
     _image_source_contract,
-    _image_source_import_aliases,
     _materialized_alignment_evidence,
     _materialized_asset_refs,
     _materialized_source_refs_snapshot,
@@ -54,7 +53,7 @@ def materialize_posts(
     from content.execution.stage_reports import iter_stage_envelopes, read_stage_envelope
 
     materialized: list[Path] = []
-    batch_manifest = load_execution_runtime_state(execution_id)
+    execution_state = load_execution_runtime_state(execution_id)
 
     allowed_refs = {str(ref) for ref in refs or []}
     review_envelopes = iter_stage_envelopes(execution_id, "post", "review")
@@ -77,6 +76,27 @@ def materialize_posts(
             continue
 
         compose_payload = compose.get("payload", compose)
+
+        if content_type == "video":
+            from content.post.video.materialize import materialize_video_post
+
+            execution_sequence = (
+                execution_state.execution_sequence if execution_state is not None else 0
+            )
+            if execution_sequence <= 0:
+                raise RuntimeError(f"missing executionSequence for execution={execution_id}")
+            post_dir = content_object.content_object_dir(execution_id, ref)
+            materialize_video_post(
+                execution_id=execution_id,
+                ref=ref,
+                post_dir=post_dir,
+                compose_payload=compose_payload,
+                review_payload=payload,
+                execution_sequence=execution_sequence,
+            )
+            content_object.write_content_object_index(execution_id, ref)
+            materialized.append(post_dir)
+            continue
 
         is_image = content_type == "image"
         # 出处门：文章正文必须由 generator=agent 创作；图片作品不生成正文，
@@ -140,9 +160,11 @@ def materialize_posts(
 
         raw_assets = compose_payload.get("assets") or []
         if not raw_assets and compose_payload.get("coverAssetRef"):
-            execution_sequence = int(batch_manifest.get("executionSequence") or 0)
+            execution_sequence = (
+                execution_state.execution_sequence if execution_state is not None else 0
+            )
             if execution_sequence <= 0:
-                raise RuntimeError(f"missing executionSequence for task={execution_id} batch={execution_id}")
+                raise RuntimeError(f"missing executionSequence for execution={execution_id}")
             asset_registry = load_execution_asset_registry(execution_id, execution_sequence)
             first_entity = ""
             if isinstance(entity_refs, list) and entity_refs:
@@ -189,12 +211,12 @@ def materialize_posts(
                 article_path.unlink()
         else:
             had_frontmatter = article_md.lstrip().startswith("---")
-            if article_md and "articleMarkdownVersion" not in article_md[:200]:
+            if article_md and "markdownDialect" not in article_md[:200]:
                 if not article_md.lstrip().startswith("---"):
                     frontmatter = {
                         "title": title,
                         "template": template,
-                        "articleMarkdownVersion": MARKDOWN_VERSION,
+                        "markdownDialect": MARKDOWN_DIALECT,
                     }
                     if assets:
                         frontmatter["coverImage"] = f"asset://{assets[0]['assetId']}"
@@ -214,7 +236,7 @@ def materialize_posts(
         creator_payload = compose_payload.get("creator") if isinstance(compose_payload.get("creator"), dict) else {}
         # 最小发布契约：只保留发布/渲染/出处必需字段。
         manifest = {
-            "schemaVersion": "quwoquan_data.post_manifest",
+            "schema": "quwoquan_data.post_manifest",
             "topicId": ref,
             "contentType": content_type,
             "entityRefs": entity_refs,
@@ -280,7 +302,7 @@ def materialize_posts(
             # 叙事骨架：发布门 storySpine 真相源。优先 compose 显式 storySpine，
             # 回退到 progression（叙事主线）/ sectionIntents（章节意图），保证发布契约闭合。
             "storySpine": _publication_story_spine(compose_payload),
-            # 溯源：内容来自哪个任务/批次（task trace/hydrate、推荐归因消费）
+            # 溯源：内容来自哪个 execution，供 trace/hydrate 与推荐归因消费。
             "executionId": execution_id,
         }
         if is_image:
@@ -289,20 +311,19 @@ def materialize_posts(
                     "title": title,
                     "caption": caption,
                     **image_source,
-                    **_image_source_import_aliases(image_source),
                 }
             )
         else:
             manifest.update(
                 {
-                    "articleMarkdownVersion": MARKDOWN_VERSION,
+                    "markdownDialect": MARKDOWN_DIALECT,
                     "articleRenderProfile": render_profile,
                 }
             )
         created_at, updated_at = materialized_manifest_times(
             compose_payload,
             payload,
-            batch_manifest,
+            execution_state,
         )
         manifest["createdAt"] = created_at
         manifest["updatedAt"] = updated_at

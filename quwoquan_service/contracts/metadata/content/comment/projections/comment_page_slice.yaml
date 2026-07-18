@@ -1,4 +1,3 @@
-version: 1
 read_model: CommentPageSlice
 description: |
   一级评论商用投影分页；由 Comment 白名单字段、回复摘要、ContentReaction 批量计数与

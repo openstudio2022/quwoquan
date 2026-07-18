@@ -2,16 +2,56 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "One final verdict for a gate and a given input/output hash pair.",
   "type": "object",
-  "required": ["schemaVersion", "gateId", "decision", "final", "inputHash", "outputHash"],
+  "required": [
+    "schema",
+    "gateId",
+    "decision",
+    "final",
+    "inputHash",
+    "outputHash"
+  ],
   "properties": {
-    "schemaVersion": { "const": "quwoquan.gate_verdict" },
-    "gateId": { "type": "string", "minLength": 1 },
-    "decision": { "enum": ["passed", "approved", "failed", "manual_required", "rejected"] },
-    "final": { "const": true },
-    "inputHash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
-    "outputHash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
-    "issues": { "type": "array", "items": { "type": "string" } },
-    "failureFingerprint": { "type": ["string", "null"] },
-    "retryable": { "type": "boolean" }
+    "gateId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "decision": {
+      "enum": [
+        "passed",
+        "approved",
+        "failed",
+        "manual_required",
+        "rejected"
+      ]
+    },
+    "final": {
+      "const": true
+    },
+    "inputHash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "outputHash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "failureFingerprint": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "retryable": {
+      "type": "boolean"
+    },
+    "schema": {
+      "const": "quwoquan.gate_verdict"
+    }
   }
 }

@@ -9,7 +9,7 @@
 
 ## 范围
 - 云侧：
-  - `GET /v1/content/feed` 支持 `sort` 查询参数。
+  - `GET /content/feed` 支持 `sort` 查询参数。
   - 推荐引擎支持基于 token 的 future offset 分页。
   - 强反馈即时过滤未来窗口；弱反馈影响未来重排权重。
 - 端侧：

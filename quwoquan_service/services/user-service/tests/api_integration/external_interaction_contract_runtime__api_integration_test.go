@@ -53,7 +53,7 @@ func (client *capturingExternalInteractionClient) OTPCode(phone string) string {
 
 func startExternalInteractionContractRuntime() (*externalInteractionContractRuntime, error) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/integrations/external-requests", handleExternalInteractionRequest)
+	mux.HandleFunc("/integrations/external-requests", handleExternalInteractionRequest)
 	server := httptest.NewTLSServer(mux)
 	client, err := integration.NewExternalInteractionClient(server.URL, "beta", server.Client(), testAccessSigner)
 	if err != nil {

@@ -1,4 +1,3 @@
-version: 1
 
 service:
   name: circle-service
@@ -13,7 +12,8 @@ service:
 
 api_routes:
   - method: GET
-    path: /v1/circles
+    path: /circles
+
     operation: ListCircles
     actor: none
     commercial:
@@ -56,7 +56,8 @@ api_routes:
     response_entity: Circle
 
   - method: GET
-    path: /v1/circles/search
+    path: /circles/search
+
     operation: SearchCircles
     actor: persona
     application:
@@ -68,10 +69,11 @@ api_routes:
     description: 全局搜索群组结果与 facet buckets
     query_params: [query, categoryId, subCategory, cursor, limit]
     response_entity: CircleSearchResultView
-    auth: required
-
+    security:
+      auth_mode: required
   - method: POST
-    path: /v1/circles
+    path: /circles
+
     operation: CreateCircle
     actor: persona
     application:
@@ -86,7 +88,8 @@ api_routes:
     writable_fields: [name, description, coverUrl, category, subCategory, tags, visibility, joinPolicy, kind, displaySubjectType, followEnabled, linkedHomepageId, linkedHomepageType, linkedHomepageTitle]
 
   - method: GET
-    path: /v1/circles/{circleId}
+    path: /circles/{circleId}
+
     operation: GetCircle
     actor: none
     authorization:
@@ -126,7 +129,8 @@ api_routes:
     response_entity: Circle
 
   - method: PATCH
-    path: /v1/circles/{circleId}
+    path: /circles/{circleId}
+
     operation: UpdateCircle
     actor: persona
     application:
@@ -140,7 +144,8 @@ api_routes:
     writable_fields: [name, description, coverUrl, category, subCategory, tags, visibility, joinPolicy, kind, displaySubjectType, followEnabled, linkedHomepageId, linkedHomepageType, linkedHomepageTitle]
 
   - method: DELETE
-    path: /v1/circles/{circleId}
+    path: /circles/{circleId}
+
     operation: ArchiveCircle
     actor: persona
     application:
@@ -153,7 +158,8 @@ api_routes:
     description: 归档圈子
 
   - method: GET
-    path: /v1/circles/{circleId}/feed
+    path: /circles/{circleId}/feed
+
     operation: GetCircleFeed
     actor: none
     application:
@@ -166,7 +172,8 @@ api_routes:
     query_params: [identity, type, cursor, limit, sort]
 
   - method: GET
-    path: /v1/circles/{circleId}/stats
+    path: /circles/{circleId}/stats
+
     operation: GetCircleStats
     actor: none
     application:
@@ -178,7 +185,8 @@ api_routes:
     description: 圈子统计
 
   - method: GET
-    path: /v1/circles/{circleId}/impact
+    path: /circles/{circleId}/impact
+
     operation: GetCircleImpact
     actor: persona
     application:
@@ -189,11 +197,12 @@ api_routes:
       slice: CircleImpactSlice
     description: 圈子影响摘要（连接型帮助结果，端侧圈子影响模块使用）
     response_entity: CircleImpactSummary
-    auth: required
-
+    security:
+      auth_mode: required
   # --- 板块配置 ---
   - method: PATCH
-    path: /v1/circles/{circleId}/sections
+    path: /circles/{circleId}/sections
+
     operation: UpdateCircleSections
     actor: persona
     application:
@@ -228,16 +237,16 @@ contract_test:
       data_source: fields.yaml
       scenarios:
         - name: circle_discovery
-          route: GET /v1/circles
+          route: GET /circles
           query_params: [category=interest]
           assertions: [status_200, items_match_schema, sorted_by_member_count]
 
         - name: create_circle
-          route: POST /v1/circles
+          route: POST /circles
           assertions: [circle_created, no_hidden_membership_write, member_count_projection_initialized]
 
         - name: circle_feed
-          route: GET /v1/circles/{id}/feed
+          route: GET /circles/{id}/feed
           assertions: [status_200, posts_within_circle]
 
         - name: visibility_and_join_policy
@@ -265,17 +274,17 @@ contract_test:
             - "eventSpy.AssertPublished('CircleCreated', {name, ownerId, tags})"
 
         - name: section_config_update
-          route: PATCH /v1/circles/{id}/sections
+          route: PATCH /circles/{id}/sections
           assertions: [section_config_persisted, event_published]
 
         - name: feed_pin_and_feature
           routes:
-            - PATCH /v1/circles/{id}/feed/{postId}/pin
-            - PATCH /v1/circles/{id}/feed/{postId}/feature
+            - PATCH /circles/{id}/feed/{postId}/pin
+            - PATCH /circles/{id}/feed/{postId}/feature
           assertions: [pinned_state_toggled, featured_state_toggled]
 
         - name: recommended_circles
-          route: GET /v1/circles?recommendFor={userId}
+          route: GET /circles?recommendFor={userId}
           assertions: [status_200, sorted_by_relevance, domain_id_present]
 
   coverage_requirements:

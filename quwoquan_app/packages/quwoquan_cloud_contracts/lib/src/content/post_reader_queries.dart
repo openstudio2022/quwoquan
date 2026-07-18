@@ -61,20 +61,15 @@ CloudOperationRequestPayload encodeContentAuthorPostsQuery(
 
 ContentPostDetailSlice decodeContentPostDetailSlice(Object? response) {
   final root = _expectObject(response, 'Content post detail response');
-  final nestedPost = root['post'];
-  final post = nestedPost is Map
-      ? _decodeContentPostProjection(
-          _expectObject(nestedPost, 'Content post detail response.post'),
-        )
-      : _decodeContentPostProjection(root);
   return ContentPostDetailSlice(
-    post: post,
+    post: _decodeContentPostProjection(root),
+    mediaItems: _decodeMediaItems(root['mediaItems']),
     isOfficial: _optionalBool(root['isOfficial']),
     badge: _optionalText(root['badge']),
     articleTemplate: _optionalText(root['articleTemplate']),
     articleFontPreset: _optionalText(root['articleFontPreset']),
     articleMarkdown: _optionalText(root['articleMarkdown']),
-    articleMarkdownVersion: _optionalText(root['articleMarkdownVersion']),
+    markdownDialect: _optionalText(root['markdownDialect']),
     articleMarkdownDigest: _optionalText(root['articleMarkdownDigest']),
     articleAssetManifest: _optionalStructuredObject(
       root['articleAssetManifest'],
@@ -84,22 +79,32 @@ ContentPostDetailSlice decodeContentPostDetailSlice(Object? response) {
       root['articleRenderProfile'],
       'articleRenderProfile',
     ),
-    contentVertical: _optionalAliasText(root, const <String>[
-      'contentVertical',
-      'categoryId',
-      'category',
-      'vertical',
-    ]),
+    contentVertical: _optionalText(root['contentVertical']),
     paperThemeMode: _optionalText(root['paperThemeMode']),
-    paperTexture: _optionalAliasText(root, const <String>[
-      'paperTexture',
-      'articlePaperTexture',
-    ]),
+    paperTexture: _optionalText(root['paperTexture']),
     entityMentions: _decodeEntityMentions(root['entityMentions']),
     coverUrl: _optionalText(root['coverUrl']),
     tagRefs: _optionalStringList(root['tagRefs'], 'tagRefs'),
     visibility: _optionalText(root['visibility']),
   );
+}
+
+List<ContentPostMediaItem> _decodeMediaItems(Object? raw) {
+  if (raw == null) return const <ContentPostMediaItem>[];
+  return _expectList(raw, 'mediaItems')
+      .map((item) {
+        final value = _expectObject(item, 'mediaItems item');
+        return ContentPostMediaItem(
+          kind: _requiredText(value['kind'], 'mediaItems.kind'),
+          url: _requiredText(value['url'], 'mediaItems.url'),
+          coverUrl: _optionalText(value['coverUrl']),
+          durationMs: _optionalInt(value['durationMs']),
+          width: _optionalInt(value['width']),
+          height: _optionalInt(value['height']),
+          title: _optionalText(value['title']),
+        );
+      })
+      .toList(growable: false);
 }
 
 ContentAuthorPostPageSlice decodeContentAuthorPostPageSlice(Object? response) {
@@ -114,7 +119,7 @@ ContentAuthorPostPageSlice decodeContentAuthorPostPageSlice(Object? response) {
         _expectObject(item, 'Content author posts item'),
       ),
     ),
-    nextCursor: _optionalText(root['nextCursor'] ?? root['cursor']),
+    nextCursor: _optionalText(root['nextCursor']),
     totalCount: _optionalInt(root['totalCount']),
   );
 }
@@ -122,125 +127,43 @@ ContentAuthorPostPageSlice decodeContentAuthorPostPageSlice(Object? response) {
 ContentPostProjection _decodeContentPostProjection(Map<Object?, Object?> item) {
   final rawReasons = item['intersectionReasons'];
   return ContentPostProjection(
-    postId: _requiredAliasText(item, const <String>['postId', 'id', '_id']),
-    contentType:
-        _optionalAliasText(item, const <String>['contentType', 'type']) ??
-        'image',
-    contentIdentity: _optionalAliasText(item, const <String>[
-      'contentIdentity',
-      'identity',
-    ]),
+    postId: _requiredText(item['postId'], 'postId'),
+    contentType: _optionalText(item['contentType']) ?? 'image',
+    contentIdentity: _optionalText(item['contentIdentity']),
     assistantUsePolicy: _optionalText(item['assistantUsePolicy']) ?? 'inherit',
-    authorId: _optionalAliasText(item, const <String>[
-      'authorId',
-      'userId',
-      'author_id',
-    ]),
-    authorDisplayName: _optionalAliasText(item, const <String>[
-      'authorDisplayName',
-      'authorDisplayNameSnapshot',
-      'authorNickname',
-      'nickname',
-      'username',
-      'displayName',
-    ]),
-    authorAvatarUrl: _optionalAliasText(item, const <String>[
-      'authorAvatarUrl',
-      'authorAvatarUrlSnapshot',
-      'avatarUrl',
-      'avatar',
-    ]),
+    authorId: _optionalText(item['authorId']),
+    authorDisplayName: _optionalText(item['authorDisplayName']),
+    authorAvatarUrl: _optionalText(item['authorAvatarUrl']),
     authorBackgroundUrl: _optionalText(item['authorBackgroundUrl']),
-    authorRoleLabel: _optionalAliasText(item, const <String>[
-      'authorRoleLabel',
-      'roleLabel',
-      'authorRole',
-    ]),
+    authorRoleLabel: _optionalText(item['authorRoleLabel']),
     authorIdentityTags:
         _optionalStringList(
-          item['authorIdentityTags'] ??
-              item['identityTags'] ??
-              item['authorTags'],
+          item['authorIdentityTags'],
           'author identity tags',
         ) ??
         const <String>[],
-    authorVerified:
-        _optionalBool(
-          item['authorVerified'] ?? item['verified'] ?? item['isVerified'],
-        ) ??
-        false,
+    authorVerified: _optionalBool(item['authorVerified']) ?? false,
     title: _optionalText(item['title']),
-    body: _optionalAliasText(item, const <String>[
-      'body',
-      'description',
-      'content',
-      'caption',
-    ]),
+    body: _optionalText(item['body']),
     summary: _optionalText(item['summary']),
-    coverUrl: _optionalAliasText(item, const <String>[
-      'coverUrl',
-      'cover',
-      'thumbnailUrl',
-      'thumbnail',
-    ]),
+    coverUrl: _optionalText(item['coverUrl']),
     imageUrls:
-        _optionalStringList(
-          item['mediaUrls'] ??
-              item['images'] ??
-              item['imageUrls'] ??
-              item['image_urls'],
-          'content post image URLs',
-        ) ??
+        _optionalStringList(item['imageUrls'], 'content post image URLs') ??
         const <String>[],
-    videoUrl: _optionalAliasText(item, const <String>['videoUrl', 'video_url']),
-    thumbnailUrl: _optionalAliasText(item, const <String>[
-      'thumbnailUrl',
-      'thumbnail',
-      'coverUrl',
-      'cover',
-    ]),
-    width: _optionalInt(
-      item['width'] ?? item['imageWidth'] ?? item['image_width'] ?? item['w'],
-    ),
-    height: _optionalInt(
-      item['height'] ??
-          item['imageHeight'] ??
-          item['image_height'] ??
-          item['h'],
-    ),
-    durationMs: _optionalInt(item['durationMs'] ?? item['duration']),
-    likeCount:
-        _optionalInt(
-          item['likeCount'] ?? item['likesCount'] ?? item['likes'],
-        ) ??
-        0,
-    commentCount:
-        _optionalInt(
-          item['commentCount'] ?? item['commentsCount'] ?? item['comments'],
-        ) ??
-        0,
-    shareCount:
-        _optionalInt(
-          item['shareCount'] ?? item['sharesCount'] ?? item['shares'],
-        ) ??
-        0,
-    createdAt: _optionalDateTime(item['createdAt'] ?? item['created_at']),
-    updatedAt: _optionalDateTime(item['updatedAt'] ?? item['updated_at']),
-    publishedAt: _optionalDateTime(item['publishedAt'] ?? item['published_at']),
-    contentVertical: _optionalAliasText(item, const <String>[
-      'contentVertical',
-      'categoryId',
-      'category',
-      'vertical',
-    ]),
-    recallPath: _optionalAliasText(item, const <String>[
-      'recallPath',
-      'recall_path',
-    ]),
-    supplySource: _optionalAliasText(item, const <String>[
-      'supplySource',
-      'supply_source',
-    ]),
+    videoUrl: _optionalText(item['videoUrl']),
+    thumbnailUrl: _optionalText(item['thumbnailUrl']),
+    width: _optionalInt(item['width']),
+    height: _optionalInt(item['height']),
+    durationMs: _optionalInt(item['durationMs']),
+    likeCount: _optionalInt(item['likeCount']) ?? 0,
+    commentCount: _optionalInt(item['commentCount']) ?? 0,
+    shareCount: _optionalInt(item['shareCount']) ?? 0,
+    createdAt: _optionalDateTime(item['createdAt']),
+    updatedAt: _optionalDateTime(item['updatedAt']),
+    publishedAt: _optionalDateTime(item['publishedAt']),
+    contentVertical: _optionalText(item['contentVertical']),
+    recallPath: _optionalText(item['recallPath']),
+    supplySource: _optionalText(item['supplySource']),
     intersectionReasons: rawReasons == null
         ? null
         : _decodeIntersectionReasons(rawReasons),
@@ -252,13 +175,7 @@ List<ContentPostIntersectionReason> _decodeIntersectionReasons(Object? raw) {
       .map((item) {
         final reason = _expectObject(item, 'intersection reason');
         return ContentPostIntersectionReason(
-          kind:
-              _optionalAliasText(reason, const <String>[
-                'kind',
-                'intersectionKind',
-                'sourceRef',
-              ]) ??
-              '',
+          kind: _optionalText(reason['kind']) ?? '',
           primaryText: _optionalText(reason['primaryText']) ?? '',
           secondaryText: _optionalText(reason['secondaryText']) ?? '',
           strength:
@@ -276,29 +193,11 @@ List<ContentPostEntityMention> _decodeEntityMentions(Object? raw) {
       .map((item) {
         final mention = _expectObject(item, 'entity mention');
         return ContentPostEntityMention(
-          subjectType:
-              _optionalAliasText(mention, const <String>[
-                'subjectType',
-                'type',
-              ]) ??
-              '',
-          subjectId:
-              _optionalAliasText(mention, const <String>[
-                'subjectId',
-                'id',
-                'homepageId',
-              ]) ??
-              '',
-          displayName:
-              _optionalAliasText(mention, const <String>[
-                'displayName',
-                'label',
-                'name',
-              ]) ??
-              '',
-          rangeStart:
-              _optionalInt(mention['rangeStart'] ?? mention['start']) ?? 0,
-          rangeEnd: _optionalInt(mention['rangeEnd'] ?? mention['end']) ?? 0,
+          subjectType: _optionalText(mention['subjectType']) ?? '',
+          subjectId: _optionalText(mention['subjectId']) ?? '',
+          displayName: _optionalText(mention['displayName']) ?? '',
+          rangeStart: _optionalInt(mention['rangeStart']) ?? 0,
+          rangeEnd: _optionalInt(mention['rangeEnd']) ?? 0,
         );
       })
       .toList(growable: false);
@@ -356,32 +255,12 @@ List<Object?> _expectList(Object? value, String context) {
   throw FormatException('$context must be a list');
 }
 
-String _requiredAliasText(Map<Object?, Object?> map, List<String> keys) {
-  for (final key in keys) {
-    final text = _optionalText(map[key]);
-    if (text != null) {
-      return text;
-    }
-  }
-  throw FormatException('${keys.first} must be a non-empty string');
-}
-
 String _requiredText(Object? value, String name) {
   final text = _optionalText(value);
   if (text == null) {
     throw FormatException('$name must be a non-empty string');
   }
   return text;
-}
-
-String? _optionalAliasText(Map<Object?, Object?> map, List<String> keys) {
-  for (final key in keys) {
-    final text = _optionalText(map[key]);
-    if (text != null) {
-      return text;
-    }
-  }
-  return null;
 }
 
 String? _optionalText(Object? value) {

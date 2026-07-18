@@ -23,7 +23,7 @@ VALID_EXPERIENCE_CLAIM_MODES = {
     "visual_discovery",
 }
 
-COMPACT_CREATOR_PROFILE_VERSION = "compact_profile_v1"
+COMPACT_CREATOR_PROFILE_VERSION = "compact_profile"
 DEFAULT_CREATOR_DISCLOSURE = {
     "type": "platform_virtual_creator",
     "visible": True,
@@ -37,7 +37,7 @@ def creator_assignment_required(spec: Mapping[str, Any]) -> bool:
     Scale workflows can enable this explicitly. Reliable-task authoring also
     requires it because those jobs are expected to be governed end to end.
     """
-    policy = spec.get("workflowPolicy") if isinstance(spec.get("workflowPolicy"), Mapping) else {}
+    policy = spec.get("executionPolicy") if isinstance(spec.get("executionPolicy"), Mapping) else {}
     content = spec.get("content") if isinstance(spec.get("content"), Mapping) else {}
     queue_policy = spec.get("queuePolicy") if isinstance(spec.get("queuePolicy"), Mapping) else {}
     content_queue_policy = content.get("queuePolicy") if isinstance(content.get("queuePolicy"), Mapping) else {}

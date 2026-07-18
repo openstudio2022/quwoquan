@@ -1,4 +1,4 @@
-schemaVersion: quwoquan.vertical_coverage.v1
+schema: quwoquan.vertical_coverage
 vertical: campus
 description: 校园垂类覆盖边界。高校已有全国 seed；K12/幼儿园仍需全国扩展。
 units:

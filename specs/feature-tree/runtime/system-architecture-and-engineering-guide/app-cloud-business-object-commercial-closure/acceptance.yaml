@@ -155,10 +155,10 @@ gwt_acceptance:
         - file: quwoquan_service/internal/metadata/validate/openapi__contract__local_contract_test.go
         - file: quwoquan_app/test/local_contract/cloud/generated_operation_client__contract__local_contract_test.dart
         - file: quwoquan_app/test/local_contract/cloud/circle/circle_file_facets__local_contract_test.dart
-        - file: quwoquan_app/test/local_contract/cloud/remote/content/post/post_lifecycle_remote__local_contract_test.dart
+        - file: quwoquan_app/test/local_contract/cloud/remote/content/post/post_publication_remote__local_contract_test.dart
         - file: quwoquan_app/test/local_contract/ui/content/entry/contract/publish_payload_contract__local_contract_test.dart
         - file: quwoquan_app/test/local_contract/ui/content/entry/publish_identity_confirmation_widget__local_contract_test.dart
-        - file: quwoquan_app/packages/quwoquan_cloud_mock/test/local_contract/content/alpha_post_lifecycle_writer__local_contract_test.dart
+        - file: quwoquan_app/packages/quwoquan_cloud_mock/test/local_contract/content/alpha_post_publication_writer__local_contract_test.dart
         - file: quwoquan_app/test/local_contract/cloud/runtime/generated_cloud_operation_executor__local_contract_test.dart
         - file: quwoquan_service/services/notification-service/tests/local_contract/notification_delivery_ops_facades__local_contract_test.go
         - file: quwoquan_app/test/local_contract/cloud/user/profile_update_proposal_facets__local_contract_test.dart
@@ -443,134 +443,167 @@ gwt_acceptance:
             - user_acceptance.page.appShell.empty_permission_error
             - user_acceptance.page.appShell.primary_cta
             - user_acceptance.page.appShell.trace_context
+            - user_acceptance.page.appShell.request_wait_recovery
             - user_acceptance.page.circlesList.load_success
             - user_acceptance.page.circlesList.empty_permission_error
             - user_acceptance.page.circlesList.primary_cta
             - user_acceptance.page.circlesList.trace_context
+            - user_acceptance.page.circlesList.request_wait_recovery
             - user_acceptance.page.circleStats.load_success
             - user_acceptance.page.circleStats.empty_permission_error
             - user_acceptance.page.circleStats.primary_cta
             - user_acceptance.page.circleStats.trace_context
+            - user_acceptance.page.circleStats.request_wait_recovery
             - user_acceptance.page.assistantManagement.load_success
             - user_acceptance.page.assistantManagement.empty_permission_error
             - user_acceptance.page.assistantManagement.primary_cta
             - user_acceptance.page.assistantManagement.trace_context
+            - user_acceptance.page.assistantManagement.request_wait_recovery
             - user_acceptance.page.assistantSkills.load_success
             - user_acceptance.page.assistantSkills.empty_permission_error
             - user_acceptance.page.assistantSkills.primary_cta
             - user_acceptance.page.assistantSkills.trace_context
+            - user_acceptance.page.assistantSkills.request_wait_recovery
             - user_acceptance.page.homeFeed.load_success
             - user_acceptance.page.homeFeed.empty_permission_error
             - user_acceptance.page.homeFeed.primary_cta
             - user_acceptance.page.homeFeed.trace_context
+            - user_acceptance.page.homeFeed.request_wait_recovery
             - user_acceptance.page.welcome.load_success
             - user_acceptance.page.welcome.empty_permission_error
             - user_acceptance.page.welcome.primary_cta
             - user_acceptance.page.welcome.trace_context
+            - user_acceptance.page.welcome.request_wait_recovery
             - user_acceptance.page.profileHome.load_success
             - user_acceptance.page.profileHome.empty_permission_error
             - user_acceptance.page.profileHome.primary_cta
             - user_acceptance.page.profileHome.trace_context
+            - user_acceptance.page.profileHome.request_wait_recovery
             - user_acceptance.page.interestMatch.load_success
             - user_acceptance.page.interestMatch.empty_permission_error
             - user_acceptance.page.interestMatch.primary_cta
             - user_acceptance.page.interestMatch.trace_context
+            - user_acceptance.page.interestMatch.request_wait_recovery
             - user_acceptance.page.login.load_success
             - user_acceptance.page.login.empty_permission_error
             - user_acceptance.page.login.primary_cta
             - user_acceptance.page.login.trace_context
+            - user_acceptance.page.login.request_wait_recovery
             - user_acceptance.page.legalUserAgreement.load_success
             - user_acceptance.page.legalUserAgreement.empty_permission_error
             - user_acceptance.page.legalUserAgreement.primary_cta
             - user_acceptance.page.legalUserAgreement.trace_context
+            - user_acceptance.page.legalUserAgreement.request_wait_recovery
             - user_acceptance.page.legalPrivacyPolicy.load_success
             - user_acceptance.page.legalPrivacyPolicy.empty_permission_error
             - user_acceptance.page.legalPrivacyPolicy.primary_cta
             - user_acceptance.page.legalPrivacyPolicy.trace_context
+            - user_acceptance.page.legalPrivacyPolicy.request_wait_recovery
             - user_acceptance.page.legalPermissions.load_success
             - user_acceptance.page.legalPermissions.empty_permission_error
             - user_acceptance.page.legalPermissions.primary_cta
             - user_acceptance.page.legalPermissions.trace_context
+            - user_acceptance.page.legalPermissions.request_wait_recovery
             - user_acceptance.page.legalThirdPartySdkList.load_success
             - user_acceptance.page.legalThirdPartySdkList.empty_permission_error
             - user_acceptance.page.legalThirdPartySdkList.primary_cta
             - user_acceptance.page.legalThirdPartySdkList.trace_context
+            - user_acceptance.page.legalThirdPartySdkList.request_wait_recovery
             - user_acceptance.page.createWorkspace.load_success
             - user_acceptance.page.createWorkspace.empty_permission_error
             - user_acceptance.page.createWorkspace.primary_cta
             - user_acceptance.page.createWorkspace.trace_context
+            - user_acceptance.page.createWorkspace.request_wait_recovery
             - user_acceptance.page.imageEditor.load_success
             - user_acceptance.page.imageEditor.empty_permission_error
             - user_acceptance.page.imageEditor.primary_cta
             - user_acceptance.page.imageEditor.trace_context
+            - user_acceptance.page.imageEditor.request_wait_recovery
             - user_acceptance.page.workBrowser.load_success
             - user_acceptance.page.workBrowser.empty_permission_error
             - user_acceptance.page.workBrowser.primary_cta
             - user_acceptance.page.workBrowser.trace_context
+            - user_acceptance.page.workBrowser.request_wait_recovery
             - user_acceptance.page.personalAssistantChatAlias.load_success
             - user_acceptance.page.personalAssistantChatAlias.empty_permission_error
             - user_acceptance.page.personalAssistantChatAlias.primary_cta
             - user_acceptance.page.personalAssistantChatAlias.trace_context
+            - user_acceptance.page.personalAssistantChatAlias.request_wait_recovery
             - user_acceptance.page.settingsHome.load_success
             - user_acceptance.page.settingsHome.empty_permission_error
             - user_acceptance.page.settingsHome.primary_cta
             - user_acceptance.page.settingsHome.trace_context
+            - user_acceptance.page.settingsHome.request_wait_recovery
             - user_acceptance.page.settingsPermissions.load_success
             - user_acceptance.page.settingsPermissions.empty_permission_error
             - user_acceptance.page.settingsPermissions.primary_cta
             - user_acceptance.page.settingsPermissions.trace_context
+            - user_acceptance.page.settingsPermissions.request_wait_recovery
             - user_acceptance.page.settingsDarkMode.load_success
             - user_acceptance.page.settingsDarkMode.empty_permission_error
             - user_acceptance.page.settingsDarkMode.primary_cta
             - user_acceptance.page.settingsDarkMode.trace_context
+            - user_acceptance.page.settingsDarkMode.request_wait_recovery
             - user_acceptance.page.settingsAbout.load_success
             - user_acceptance.page.settingsAbout.empty_permission_error
             - user_acceptance.page.settingsAbout.primary_cta
             - user_acceptance.page.settingsAbout.trace_context
+            - user_acceptance.page.settingsAbout.request_wait_recovery
             - user_acceptance.page.profileEdit.load_success
             - user_acceptance.page.profileEdit.empty_permission_error
             - user_acceptance.page.profileEdit.primary_cta
             - user_acceptance.page.profileEdit.trace_context
+            - user_acceptance.page.profileEdit.request_wait_recovery
             - user_acceptance.page.profilePersonas.load_success
             - user_acceptance.page.profilePersonas.empty_permission_error
             - user_acceptance.page.profilePersonas.primary_cta
             - user_acceptance.page.profilePersonas.trace_context
+            - user_acceptance.page.profilePersonas.request_wait_recovery
             - user_acceptance.page.profileComments.load_success
             - user_acceptance.page.profileComments.empty_permission_error
             - user_acceptance.page.profileComments.primary_cta
             - user_acceptance.page.profileComments.trace_context
+            - user_acceptance.page.profileComments.request_wait_recovery
             - user_acceptance.page.profileStats.load_success
             - user_acceptance.page.profileStats.empty_permission_error
             - user_acceptance.page.profileStats.primary_cta
             - user_acceptance.page.profileStats.trace_context
+            - user_acceptance.page.profileStats.request_wait_recovery
             - user_acceptance.page.myIntersections.load_success
             - user_acceptance.page.myIntersections.empty_permission_error
             - user_acceptance.page.myIntersections.primary_cta
             - user_acceptance.page.myIntersections.trace_context
+            - user_acceptance.page.myIntersections.request_wait_recovery
             - user_acceptance.page.objectIntersections.load_success
             - user_acceptance.page.objectIntersections.empty_permission_error
             - user_acceptance.page.objectIntersections.primary_cta
             - user_acceptance.page.objectIntersections.trace_context
+            - user_acceptance.page.objectIntersections.request_wait_recovery
             - user_acceptance.page.rtcOutgoing.load_success
             - user_acceptance.page.rtcOutgoing.empty_permission_error
             - user_acceptance.page.rtcOutgoing.primary_cta
             - user_acceptance.page.rtcOutgoing.trace_context
+            - user_acceptance.page.rtcOutgoing.request_wait_recovery
             - user_acceptance.page.rtcIncoming.load_success
             - user_acceptance.page.rtcIncoming.empty_permission_error
             - user_acceptance.page.rtcIncoming.primary_cta
             - user_acceptance.page.rtcIncoming.trace_context
+            - user_acceptance.page.rtcIncoming.request_wait_recovery
             - user_acceptance.page.rtcVoice.load_success
             - user_acceptance.page.rtcVoice.empty_permission_error
             - user_acceptance.page.rtcVoice.primary_cta
             - user_acceptance.page.rtcVoice.trace_context
+            - user_acceptance.page.rtcVoice.request_wait_recovery
             - user_acceptance.page.rtcVideo.load_success
             - user_acceptance.page.rtcVideo.empty_permission_error
             - user_acceptance.page.rtcVideo.primary_cta
             - user_acceptance.page.rtcVideo.trace_context
+            - user_acceptance.page.rtcVideo.request_wait_recovery
             - user_acceptance.page.rtcPickParticipants.load_success
             - user_acceptance.page.rtcPickParticipants.empty_permission_error
             - user_acceptance.page.rtcPickParticipants.primary_cta
             - user_acceptance.page.rtcPickParticipants.trace_context
+            - user_acceptance.page.rtcPickParticipants.request_wait_recovery
           envs: [gamma_local]
           test_object: workflow
           quality_facet: experience

@@ -20,21 +20,14 @@ _OBJECT_ALLOWED = {
     "evidence_index.json",
 }
 
-_IMAGE_SOURCE_ALIASES = {
-    "sourceCollectionId": ("sourceCollectionId", "collectionId", "sourceId"),
-    "creator": ("creator", "credit"),
-    "collectionPageUrl": (
-        "collectionPageUrl",
-        "page",
-        "sourcePage",
-        "sourcePageUrl",
-        "sourceUrl",
-        "url",
-    ),
-    "license": ("license",),
-    "termsUrl": ("termsUrl",),
-    "authorizationProof": ("authorizationProof", "licenseProof", "licenseSnapshot"),
-}
+_IMAGE_SOURCE_FIELDS = (
+    "sourceCollectionId",
+    "creator",
+    "collectionPageUrl",
+    "license",
+    "termsUrl",
+    "authorizationProof",
+)
 
 
 def _payload(path: Path) -> dict:
@@ -163,29 +156,11 @@ def _release_entity_scope_issues(root: Path) -> list[str]:
 
 
 def _source_fact(payload: dict, field: str):
-    for alias in _IMAGE_SOURCE_ALIASES[field]:
-        value = payload.get(alias)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-        if isinstance(value, dict) and value:
-            return value
-    if field == "collectionPageUrl":
-        urls = [str(url).strip() for url in (payload.get("sourceUrls") or []) if str(url).strip()]
-        if len(set(urls)) == 1:
-            return urls[0]
-    legacy_proof = payload.get("licenseProof")
-    if isinstance(legacy_proof, dict):
-        legacy_key = {
-            "license": "license",
-            "termsUrl": "termsUrl",
-            "authorizationProof": "proofUrl",
-        }.get(field)
-        if legacy_key:
-            value = legacy_proof.get(legacy_key)
-            if isinstance(value, str) and value.strip():
-                return value.strip()
-            if isinstance(value, dict) and value:
-                return value
+    value = payload.get(field)
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    if isinstance(value, dict) and value:
+        return value
     return None
 
 
@@ -216,7 +191,7 @@ def _post_contract_issues(leaf: Path, root: Path, manifest: dict) -> list[str]:
             assets = assets if isinstance(assets, list) else []
         source_facts = {
             field: _source_fact(manifest, field)
-            for field in _IMAGE_SOURCE_ALIASES
+            for field in _IMAGE_SOURCE_FIELDS
         }
         for field in ("sourceCollectionId", "creator", "collectionPageUrl", "license"):
             value = source_facts[field]
@@ -256,20 +231,26 @@ def _post_contract_issues(leaf: Path, root: Path, manifest: dict) -> list[str]:
         ]
         if not video_assets:
             issues.append(f"{rel}: video work must contain a kind=video asset")
+        assets_by_id = {
+            str(asset.get("assetId") or "").strip(): asset
+            for asset in assets
+            if isinstance(asset, dict) and str(asset.get("assetId") or "").strip()
+        }
         for asset in video_assets:
             asset_id = str(asset.get("assetId") or asset.get("fileName") or "<unknown>").strip()
-            has_video_ref = any(
-                str(asset.get(field) or "").strip()
-                for field in ("cdnUrl", "objectKey", "videoUrl", "videoAssetId")
-            )
-            if not has_video_ref:
-                issues.append(f"{rel}: video asset {asset_id} missing videoUrl/objectKey/cdnUrl")
-            has_cover_ref = any(
-                str(asset.get(field) or "").strip()
-                for field in ("thumbnailUrl", "coverUrl")
-            )
-            if not has_cover_ref:
-                issues.append(f"{rel}: video asset {asset_id} missing thumbnailUrl or coverUrl")
+            if not str(asset.get("objectKey") or "").strip():
+                issues.append(f"{rel}: video asset {asset_id} missing CAS objectKey")
+            poster_id = str(asset.get("posterAssetId") or "").strip()
+            poster = assets_by_id.get(poster_id)
+            if (
+                not poster_id
+                or not isinstance(poster, dict)
+                or str(poster.get("kind") or "").strip() != "image"
+                or str(poster.get("role") or "").strip() != "cover"
+            ):
+                issues.append(
+                    f"{rel}: video asset {asset_id} posterAssetId must resolve to an image cover asset"
+                )
     else:
         if not article_path.is_file():
             issues.append(f"{rel}: article work missing article.md")
@@ -281,12 +262,21 @@ def _post_contract_issues(leaf: Path, root: Path, manifest: dict) -> list[str]:
         if not isinstance(asset, dict):
             issues.append(f"{rel}: manifest asset must be an object")
             continue
+        for field in ("cdnUrl", "thumbnailUrl", "coverUrl", "videoUrl"):
+            if str(asset.get(field) or "").strip():
+                issues.append(f"{rel}: canonical asset must not contain environment URL field {field}")
         caption = asset.get("caption", "")
         if is_image and (not isinstance(caption, str) or len(caption) > 300):
             issues.append(f"{rel}: image asset caption must be a string with at most 300 characters")
         file_name = str(asset.get("fileName") or "")
-        if not file_name or not (leaf / "assets" / file_name).is_file():
-            issues.append(f"{rel}: asset file missing: assets/{file_name or '<empty>'}")
+        relative_file = Path(file_name)
+        if relative_file.is_absolute() or ".." in relative_file.parts:
+            issues.append(f"{rel}: unsafe asset file path: {file_name or '<empty>'}")
+            continue
+        direct = leaf / relative_file
+        nested = leaf / "assets" / relative_file
+        if not file_name or (not direct.is_file() and not nested.is_file()):
+            issues.append(f"{rel}: asset file missing: {file_name or '<empty>'}")
     return issues
 
 
@@ -379,7 +369,7 @@ def _release_is_homepage_only(root: Path) -> bool:
 
 
 def gate_publish(release_id: str) -> list[str]:
-    """Validate the only supported immutable v3 release contract."""
+    """Validate the only supported immutable release contract."""
     root = release_root(release_id)
     if not root.exists():
         return [f"Release directory not found: {root}"]

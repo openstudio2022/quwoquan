@@ -12,7 +12,7 @@ import (
 
 func TestTagServiceRegionResolverValidatesActiveDirectChild(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/tag/children" {
+		if r.URL.Path != "/tag/children" {
 			t.Fatalf("unexpected path %s", r.URL.Path)
 		}
 		if got := r.URL.Query().Get("parentTagRef"); got != "Topic/地理/行政区/中国/广东省" {

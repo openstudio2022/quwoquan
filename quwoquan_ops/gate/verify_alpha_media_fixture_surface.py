@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import json
 import re
 import subprocess
@@ -17,7 +18,10 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.lib.environment_topology import get_target, load_environment_topology
-from quwoquan_ops.cli.lib.output_paths import certificate_export_dir
+from quwoquan_ops.cli.lib.local_target_tls import (
+    LocalTargetTlsError,
+    resolve_local_target_root_ca,
+)
 
 
 BUNDLE_PATH = ROOT / "quwoquan_ops" / "environments" / "gamma_curated_media_bundle.json"
@@ -50,6 +54,7 @@ DEFAULT_TARGET_BY_ENV = {
     "alpha": "alpha-local",
     "beta": "beta-local",
     "gamma": "gamma-local",
+    "prod": "prod-sim",
 }
 MEDIA_PREFIXES = (
     "media/avatar/",
@@ -264,10 +269,7 @@ def _resolve_public_bases(
 def _resolve_local_root_ca(target_name: str, explicit_cacert: str) -> Path:
     if explicit_cacert:
         return Path(explicit_cacert)
-    certificate_root = certificate_export_dir(target_name)
-    if target_name == "alpha-local":
-        return certificate_root / "tls" / "ca" / "root.crt"
-    return certificate_root / "root.crt"
+    return resolve_local_target_root_ca(target_name)
 
 
 def _base_url_for_object_key(object_key: str, base_urls: dict[str, str]) -> str:
@@ -276,6 +278,38 @@ def _base_url_for_object_key(object_key: str, base_urls: dict[str, str]) -> str:
     if object_key.startswith("media/avatar/"):
         return base_urls["avatar"]
     return base_urls["image"]
+
+
+def _probe_seeded_media_objects(
+    object_keys: list[str],
+    *,
+    base_urls: dict[str, str],
+    cacert: Path,
+    resolve_local: bool,
+) -> dict[str, tuple[str, str]]:
+    """并发探测独立媒体对象，保留每个对象的完整 HTTP/MIME 验证。"""
+
+    def probe(object_key: str) -> tuple[str, str]:
+        is_video = object_key.startswith("media/video/")
+        return _curl_probe(
+            f"{_base_url_for_object_key(object_key, base_urls)}/{object_key}",
+            cacert=cacert,
+            range_probe=is_video,
+            resolve_local=resolve_local,
+        )
+
+    if not object_keys:
+        return {}
+    max_workers = min(16, len(object_keys))
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            object_key: executor.submit(probe, object_key)
+            for object_key in object_keys
+        }
+        return {
+            object_key: futures[object_key].result()
+            for object_key in object_keys
+        }
 
 
 def _include_app_mock_group_avatars(env_name: str, mode: str) -> bool:
@@ -292,9 +326,13 @@ def main(argv: list[str] | None = None) -> int:
     env_name = str(args.env)
     target_name = _resolve_target_name(env_name, str(args.target or ""))
     base_urls = _resolve_public_bases(env_name, target_name, args)
-    local_root_ca = _resolve_local_root_ca(target_name, str(args.cacert or ""))
-
     issues: list[str] = []
+    local_root_ca: Path | None
+    try:
+        local_root_ca = _resolve_local_root_ca(target_name, str(args.cacert or ""))
+    except LocalTargetTlsError as exc:
+        local_root_ca = None
+        issues.append(str(exc))
     if not BUNDLE_PATH.is_file():
         issues.append(f"media bundle missing: {BUNDLE_PATH}")
     if not FIXTURE_ROOT.is_dir():
@@ -303,7 +341,7 @@ def main(argv: list[str] | None = None) -> int:
         issues.append(f"app chat mock data missing: {APP_CHAT_MOCK_DATA_PATH}")
     if not MEDIA_ROOT.is_dir():
         issues.append(f"shared media root missing: {MEDIA_ROOT}")
-    if not local_root_ca.is_file():
+    if local_root_ca is not None and not local_root_ca.is_file():
         issues.append(f"{target_name} local root CA missing: {local_root_ca}")
     for label, base_url in base_urls.items():
         if not base_url.startswith("https://"):
@@ -313,6 +351,7 @@ def main(argv: list[str] | None = None) -> int:
         for issue in issues:
             print(f"  - {issue}")
         return 1
+    assert local_root_ca is not None
 
     checked = 0
     video_checked = 0
@@ -355,6 +394,7 @@ def main(argv: list[str] | None = None) -> int:
                     APP_PROTOTYPE_MOCK_DATA_PATH.relative_to(ROOT).as_posix()
                 )
 
+    probe_keys: list[str] = []
     for object_key in sorted(object_keys):
         source_file = MEDIA_ROOT / object_key
         if not source_file.is_file():
@@ -363,14 +403,18 @@ def main(argv: list[str] | None = None) -> int:
             issues.append(f"{object_key} source file missing: {source_file}{suffix}")
             continue
         checked += 1
+        probe_keys.append(object_key)
+
+    probe_results = _probe_seeded_media_objects(
+        probe_keys,
+        base_urls=base_urls,
+        cacert=local_root_ca,
+        resolve_local=target_name in DEFAULT_TARGET_BY_ENV.values(),
+    )
+    for object_key in probe_keys:
         is_video = object_key.startswith("media/video/")
+        status, content_type = probe_results[object_key]
         base_url = _base_url_for_object_key(object_key, base_urls)
-        status, content_type = _curl_probe(
-            f"{base_url}/{object_key}",
-            cacert=local_root_ca,
-            range_probe=is_video,
-            resolve_local=target_name in DEFAULT_TARGET_BY_ENV.values(),
-        )
         expected_statuses = {"206"} if is_video else {"200", "206"}
         if is_video:
             video_checked += 1

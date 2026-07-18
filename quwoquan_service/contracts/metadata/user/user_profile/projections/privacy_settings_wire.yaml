@@ -1,4 +1,3 @@
-version: 1
 read_model: PrivacySettingsWire
 
 description: |
@@ -19,19 +18,16 @@ client_projection:
       dart_type: bool
       nullable: true
       source: allowStrangerMessage
-      aliases: [allowStrangerMessage]
       default: "null"
 
     - name: profileVisibility
       dart_type: String
       nullable: true
       source: profileVisibility
-      aliases: [profileVisibility]
       default: "null"
 
     - name: blockedKeywords
       dart_type: List<String>
       nullable: false
       source: blockedKeywords
-      aliases: [blockedKeywords]
       default: "<String>[]"

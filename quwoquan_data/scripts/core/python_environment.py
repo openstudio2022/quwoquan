@@ -43,7 +43,6 @@ DEFAULT_NETWORK_ENDPOINTS = (
     "https://www.wikipedia.org/",
     "https://commons.wikimedia.org/",
 )
-CURSOR_CLOUD_API_ME_URL = "https://api.cursor.com/v1/me"
 _RUNTIME_POLICY = active_runtime_policy()
 DEFAULT_CURSOR_STARTUP_MODEL = _RUNTIME_POLICY.cursor_model
 DEFAULT_CURSOR_STARTUP_RUNTIME = _RUNTIME_POLICY.cursor_runtime.value
@@ -167,9 +166,7 @@ def resolve_data_agent_python(*, include_current: bool = True) -> Path | None:
 def agent_command_needs_bootstrap(argv: list[str]) -> bool:
     """Detect CLI commands that must run inside the data agent interpreter."""
     args = list(argv[1:])
-    if len(args) >= 2 and args[:2] == ["task", "geo-homepages"]:
-        return True
-    if len(args) >= 3 and args[:3] == ["data", "workflow", "run"] and "--managed" in args:
+    if len(args) >= 2 and args[:2] == ["task", "execute"]:
         return True
     return False
 
@@ -245,7 +242,7 @@ def runtime_report() -> dict:
     if resolved is not None and missing_binaries:
         resolved = None
     return {
-        "schemaVersion": "quwoquan_data.python_runtime",
+        "schema": "quwoquan_data.python_runtime",
         "currentPython": str(current),
         "requirements": str(REQUIREMENTS_PATH),
         "agentModules": list(AGENT_RUNTIME_MODULES),

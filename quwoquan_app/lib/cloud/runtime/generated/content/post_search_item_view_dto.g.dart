@@ -1,7 +1,6 @@
 // GENERATED FILE — DO NOT EDIT BY HAND.
 // Source: contracts/metadata/content/post/fields.yaml (entities.PostSearchItemView)
-// plus wire aliases (id/_id, type, summary/body, avatar snapshots, etc.).
-// Regenerate: make codegen-app
+// Single-track wire keys only. Regenerate: make codegen-app
 
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
@@ -54,28 +53,15 @@ class PostSearchItemView {
       );
     }
     return PostSearchItemView(
-      postId: (map['postId'] ?? map['id'] ?? map['_id'] ?? '')
-          .toString()
-          .trim(),
-      contentType: (map['contentType'] ?? map['type'] ?? 'image')
-          .toString()
-          .trim(),
+      postId: (map['postId'] ?? '').toString().trim(),
+      contentType: (map['contentType'] ?? 'image').toString().trim(),
       contentIdentity: map['contentIdentity']?.toString(),
       title: map['title']?.toString(),
-      summary: (map['summary'] ?? map['body'] ?? map['highlightText'])
-          ?.toString(),
-      coverUrl: (map['coverUrl'] ?? map['thumbnailUrl'])?.toString(),
-      authorId: (map['authorId'] ?? map['subAccountId'])?.toString(),
-      authorDisplayName:
-          (map['authorDisplayName'] ??
-                  map['authorDisplayNameSnapshot'] ??
-                  map['displayName'])
-              ?.toString(),
-      authorAvatarUrl:
-          (map['authorAvatarUrl'] ??
-                  map['authorAvatarUrlSnapshot'] ??
-                  map['avatarUrl'])
-              ?.toString(),
+      summary: map['summary']?.toString(),
+      coverUrl: map['coverUrl']?.toString(),
+      authorId: map['authorId']?.toString(),
+      authorDisplayName: map['authorDisplayName']?.toString(),
+      authorAvatarUrl: map['authorAvatarUrl']?.toString(),
       categoryId: map['categoryId']?.toString(),
       subCategory: map['subCategory']?.toString(),
       likeCount: _postSearchWireParseInt(map['likeCount']) ?? 0,

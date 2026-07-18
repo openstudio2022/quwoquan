@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 from pathlib import Path
+from types import SimpleNamespace
 
 from core import cursor_startup_probe as pr
+from core import cursor_startup_cache as cache
 from content.execution.preflight import handler as preflight_handler
 
 
@@ -68,11 +71,25 @@ def test_cursor_startup_probe_suite_classifies_auth_5xx_and_bridge(monkeypatch):
     assert "Cursor auth failures observed" in "\n".join(report["issues"])
 
 
+def test_cursor_startup_probe_suite_realizes_runtime_policy_concurrency(monkeypatch):
+    def _ready_probe(**_kwargs):
+        time.sleep(0.02)
+        return {"ready": True, "status": "finished", "attemptCount": 1}
+
+    monkeypatch.setattr(pr, "cursor_startup_probe", _ready_probe)
+
+    report = pr.cursor_startup_probe_suite(model="composer", attempts=6)
+
+    assert report["successCount"] == 6
+    assert report["effectiveConcurrency"] == 3
+    assert report["unrecoveredFailures"] == 0
+    assert [row["attempt"] for row in report["results"]] == list(range(1, 7))
+
+
 def test_cached_cursor_startup_probe_reuses_recent_ready_result(monkeypatch, tmp_path):
     """preflight 降本：TTL 内复用最近一次成功 startup probe（43s→秒级）。"""
     cache_path = tmp_path / "env" / "cursor_startup_probe_cache.json"
-    monkeypatch.setattr(pr, "_cursor_startup_probe_cache_path", lambda: cache_path)
-    monkeypatch.setenv("QWQ_CURSOR_STARTUP_PROBE_CACHE_TTL_SECONDS", "600")
+    monkeypatch.setattr(cache, "cursor_startup_probe_cache_path", lambda: cache_path)
     monkeypatch.setenv("CURSOR_API_KEY", "key_cachetest_abcdef12")
     calls: list[int] = []
 
@@ -80,26 +97,29 @@ def test_cached_cursor_startup_probe_reuses_recent_ready_result(monkeypatch, tmp
         calls.append(1)
         return {"ready": True, "successCount": 1, "issues": []}
 
-    monkeypatch.setattr(pr, "cursor_startup_probe", _probe)
-    first = pr._cached_cursor_startup_probe(model="composer", runtime="local", timeout_seconds=45)
-    second = pr._cached_cursor_startup_probe(model="composer", runtime="local", timeout_seconds=45)
+    monkeypatch.setattr(cache, "cursor_startup_probe", _probe)
+    first = cache.cached_cursor_startup_probe(model="composer", runtime="local", timeout_seconds=45)
+    second = cache.cached_cursor_startup_probe(model="composer", runtime="local", timeout_seconds=45)
     assert len(calls) == 1, "TTL 内第二次必须命中缓存，不得重发探测"
     assert first.get("cacheHit") is None and second.get("cacheHit") is True
 
     # 换 model → 缓存键不同，必须重新探测。
-    pr._cached_cursor_startup_probe(model="gpt", runtime="local", timeout_seconds=45)
+    cache.cached_cursor_startup_probe(model="gpt", runtime="local", timeout_seconds=45)
     assert len(calls) == 2
 
     # TTL=0 关闭缓存。
-    monkeypatch.setenv("QWQ_CURSOR_STARTUP_PROBE_CACHE_TTL_SECONDS", "0")
-    pr._cached_cursor_startup_probe(model="composer", runtime="local", timeout_seconds=45)
+    monkeypatch.setattr(
+        cache,
+        "active_runtime_policy",
+        lambda: SimpleNamespace(cursor_startup_probe_cache_ttl_seconds=0),
+    )
+    cache.cached_cursor_startup_probe(model="composer", runtime="local", timeout_seconds=45)
     assert len(calls) == 3
 
 
 def test_cached_cursor_startup_probe_never_caches_failure(monkeypatch, tmp_path):
     cache_path = tmp_path / "env" / "cursor_startup_probe_cache.json"
-    monkeypatch.setattr(pr, "_cursor_startup_probe_cache_path", lambda: cache_path)
-    monkeypatch.setenv("QWQ_CURSOR_STARTUP_PROBE_CACHE_TTL_SECONDS", "600")
+    monkeypatch.setattr(cache, "cursor_startup_probe_cache_path", lambda: cache_path)
     monkeypatch.setenv("CURSOR_API_KEY", "key_cachetest_abcdef12")
     calls: list[int] = []
 
@@ -107,9 +127,9 @@ def test_cached_cursor_startup_probe_never_caches_failure(monkeypatch, tmp_path)
         calls.append(1)
         return {"ready": False, "successCount": 0, "issues": ["Cursor startup probe never succeeded"]}
 
-    monkeypatch.setattr(pr, "cursor_startup_probe", _probe)
-    pr._cached_cursor_startup_probe(model="composer", runtime="local", timeout_seconds=45)
-    pr._cached_cursor_startup_probe(model="composer", runtime="local", timeout_seconds=45)
+    monkeypatch.setattr(cache, "cursor_startup_probe", _probe)
+    cache.cached_cursor_startup_probe(model="composer", runtime="local", timeout_seconds=45)
+    cache.cached_cursor_startup_probe(model="composer", runtime="local", timeout_seconds=45)
     assert len(calls) == 2, "失败结果不得缓存，必须重新探测"
     assert not cache_path.exists()
 
@@ -117,7 +137,7 @@ def test_cached_cursor_startup_probe_never_caches_failure(monkeypatch, tmp_path)
 def test_cursor_startup_probe_cache_is_repo_runtime_cache_not_execution_output():
     from core.paths import DATA_LOCAL_ROOT
 
-    path = pr._cursor_startup_probe_cache_path()
+    path = cache.cursor_startup_probe_cache_path()
     assert path == DATA_LOCAL_ROOT / "cache/cursor/cursor_startup_probe_cache.json"
     assert "/tasks/" not in path.as_posix()
 
@@ -173,7 +193,7 @@ def test_cursor_startup_timeout_is_not_counted_as_true_5xx(monkeypatch):
 
 def test_cursor_probe_cli_writes_report(monkeypatch, tmp_path, capsys):
     report = {
-        "schemaVersion": "quwoquan_data.cursor_startup_probe_suite/1",
+        "schema": "quwoquan_data.cursor_startup_probe_suite",
         "attempts": 2,
         "successCount": 2,
         "authFailures": 0,

@@ -134,7 +134,7 @@ func TestBehaviorBatchIntersectionFeedbackWritesCooldownAndFiltersFeed(t *testin
 
 	req := httptest.NewRequest(
 		http.MethodPost,
-		"/v1/content/behaviors",
+		"/content/behaviors",
 		strings.NewReader(`{"events":[{"action":"intersection_feedback","subjectId":"subject_negative_001","feedbackKind":"notInterested","intersectionId":"ix_http_negative_subject","intersectionDimension":"relationship","intersectionClass":"fact","intersectionSourceRef":"sharedFollowees"}]}`),
 	)
 	req.Header.Set("Content-Type", "application/json")

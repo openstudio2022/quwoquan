@@ -1,5 +1,5 @@
 # 旅行图片作品基线 preset；只启用 image lane，不夹带文章或主页配额。
-schemaVersion: quwoquan.content.preset
+schema: quwoquan.content.preset
 presetId: content/travel/image/base
 title: 旅行图片作品内容基线
 defaults:
@@ -14,12 +14,10 @@ defaults:
     research:
       lanes:
       - image
-      maxConcurrency: 4
-      laneConcurrency:
-        image: 4
       allowAiImages: false
     quotas:
       entityHomepagesPerTarget: 0
       entityArticlesPerTarget: 0
       imageWorksPerTarget: 1
+      videoWorksPerTarget: 0
       routeArticles: 0

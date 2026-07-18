@@ -18,24 +18,34 @@ import (
 )
 
 type mediaAssetDocument struct {
-	ID                      string                      `bson:"_id"`
-	Version                 int64                       `bson:"version"`
-	OwnerID                 string                      `bson:"ownerId"`
-	SourceSessionID         string                      `bson:"sourceSessionId"`
-	ObjectKey               string                      `bson:"objectKey"`
-	SHA256                  string                      `bson:"sha256"`
-	MediaType               string                      `bson:"mediaType"`
-	ContentType             string                      `bson:"contentType"`
-	FileSize                int64                       `bson:"fileSize"`
-	AccessPolicy            mediamodel.AccessPolicy     `bson:"accessPolicy"`
-	ProcessingStatus        mediamodel.ProcessingStatus `bson:"processingStatus"`
-	ProcessingFailureReason string                      `bson:"processingFailureReason,omitempty"`
-	CoverStrategy           string                      `bson:"coverStrategy"`
-	ManualCoverAssetID      string                      `bson:"manualCoverAssetId,omitempty"`
-	CoverFrameTimeMs        int64                       `bson:"coverFrameTimeMs"`
-	CreatedAt               time.Time                   `bson:"createdAt"`
-	UpdatedAt               time.Time                   `bson:"updatedAt"`
-	ProcessedAt             *time.Time                  `bson:"processedAt,omitempty"`
+	ID                           string                      `bson:"_id"`
+	Version                      int64                       `bson:"version"`
+	OwnerID                      string                      `bson:"ownerId"`
+	SourceSessionID              string                      `bson:"sourceSessionId"`
+	ObjectKey                    string                      `bson:"objectKey"`
+	SHA256                       string                      `bson:"sha256"`
+	MediaType                    string                      `bson:"mediaType"`
+	ContentType                  string                      `bson:"contentType"`
+	FileSize                     int64                       `bson:"fileSize"`
+	AccessPolicy                 mediamodel.AccessPolicy     `bson:"accessPolicy"`
+	ProcessingStatus             mediamodel.ProcessingStatus `bson:"processingStatus"`
+	ProcessingFailureReason      string                      `bson:"processingFailureReason,omitempty"`
+	ProcessorProfile             string                      `bson:"processorProfile,omitempty"`
+	VerifiedDurationMs           int64                       `bson:"verifiedDurationMs,omitempty"`
+	VideoWidth                   int                         `bson:"videoWidth,omitempty"`
+	VideoHeight                  int                         `bson:"videoHeight,omitempty"`
+	VideoCodec                   string                      `bson:"videoCodec,omitempty"`
+	VideoContainer               string                      `bson:"videoContainer,omitempty"`
+	VideoPublicSliceKey          string                      `bson:"videoPublicSliceKey,omitempty"`
+	CoverPublicSliceKey          string                      `bson:"coverPublicSliceKey,omitempty"`
+	PreviewTrackVersion          int                         `bson:"previewTrackVersion,omitempty"`
+	PreviewTrackManifestSliceKey string                      `bson:"previewTrackManifestSliceKey,omitempty"`
+	CoverStrategy                string                      `bson:"coverStrategy"`
+	ManualCoverAssetID           string                      `bson:"manualCoverAssetId,omitempty"`
+	CoverFrameTimeMs             int64                       `bson:"coverFrameTimeMs"`
+	CreatedAt                    time.Time                   `bson:"createdAt"`
+	UpdatedAt                    time.Time                   `bson:"updatedAt"`
+	ProcessedAt                  *time.Time                  `bson:"processedAt,omitempty"`
 }
 
 type mediaAssetReceiptDocument struct {
@@ -95,6 +105,16 @@ func (s *MongoMediaStore) FindMediaAssetForOwner(
 			{Key: "fileSize", Value: 1},
 			{Key: "accessPolicy", Value: 1},
 			{Key: "processingStatus", Value: 1},
+			{Key: "processorProfile", Value: 1},
+			{Key: "verifiedDurationMs", Value: 1},
+			{Key: "videoWidth", Value: 1},
+			{Key: "videoHeight", Value: 1},
+			{Key: "videoCodec", Value: 1},
+			{Key: "videoContainer", Value: 1},
+			{Key: "videoPublicSliceKey", Value: 1},
+			{Key: "coverPublicSliceKey", Value: 1},
+			{Key: "previewTrackVersion", Value: 1},
+			{Key: "previewTrackManifestSliceKey", Value: 1},
 			{Key: "coverStrategy", Value: 1},
 			{Key: "manualCoverAssetId", Value: 1},
 			{Key: "coverFrameTimeMs", Value: 1},
@@ -175,23 +195,33 @@ func (s *MongoMediaStore) FindPublicMediaAsset(
 
 func mediaAssetSliceFromDocument(document mediaAssetDocument) mediaapp.MediaAssetSlice {
 	return mediaapp.MediaAssetSlice{
-		AssetID:            document.ID,
-		Version:            document.Version,
-		OwnerID:            document.OwnerID,
-		SourceSessionID:    document.SourceSessionID,
-		ObjectKey:          document.ObjectKey,
-		SHA256:             document.SHA256,
-		MediaType:          document.MediaType,
-		ContentType:        document.ContentType,
-		FileSize:           document.FileSize,
-		AccessPolicy:       document.AccessPolicy,
-		ProcessingStatus:   document.ProcessingStatus,
-		CreatedAt:          document.CreatedAt,
-		UpdatedAt:          document.UpdatedAt,
-		ProcessedAt:        cloneMediaTime(document.ProcessedAt),
-		CoverStrategy:      document.CoverStrategy,
-		ManualCoverAssetID: document.ManualCoverAssetID,
-		CoverFrameTimeMs:   document.CoverFrameTimeMs,
+		AssetID:                      document.ID,
+		Version:                      document.Version,
+		OwnerID:                      document.OwnerID,
+		SourceSessionID:              document.SourceSessionID,
+		ObjectKey:                    document.ObjectKey,
+		SHA256:                       document.SHA256,
+		MediaType:                    document.MediaType,
+		ContentType:                  document.ContentType,
+		FileSize:                     document.FileSize,
+		AccessPolicy:                 document.AccessPolicy,
+		ProcessingStatus:             document.ProcessingStatus,
+		ProcessorProfile:             document.ProcessorProfile,
+		VerifiedDurationMs:           document.VerifiedDurationMs,
+		VideoWidth:                   document.VideoWidth,
+		VideoHeight:                  document.VideoHeight,
+		VideoCodec:                   document.VideoCodec,
+		VideoContainer:               document.VideoContainer,
+		VideoPublicSliceKey:          document.VideoPublicSliceKey,
+		CoverPublicSliceKey:          document.CoverPublicSliceKey,
+		PreviewTrackVersion:          document.PreviewTrackVersion,
+		PreviewTrackManifestSliceKey: document.PreviewTrackManifestSliceKey,
+		CreatedAt:                    document.CreatedAt,
+		UpdatedAt:                    document.UpdatedAt,
+		ProcessedAt:                  cloneMediaTime(document.ProcessedAt),
+		CoverStrategy:                document.CoverStrategy,
+		ManualCoverAssetID:           document.ManualCoverAssetID,
+		CoverFrameTimeMs:             document.CoverFrameTimeMs,
 	}
 }
 
@@ -403,24 +433,34 @@ func validateMediaAssetCommit(commit mediaports.MediaAssetCommit) error {
 func mediaAssetDocumentFromModel(asset *mediamodel.MediaAsset) mediaAssetDocument {
 	snapshot := asset.Snapshot()
 	return mediaAssetDocument{
-		ID:                      snapshot.ID,
-		Version:                 snapshot.Version,
-		OwnerID:                 snapshot.OwnerID,
-		SourceSessionID:         snapshot.SourceSessionID,
-		ObjectKey:               snapshot.ObjectKey,
-		SHA256:                  snapshot.SHA256,
-		MediaType:               snapshot.MediaType,
-		ContentType:             snapshot.ContentType,
-		FileSize:                snapshot.FileSize,
-		AccessPolicy:            snapshot.AccessPolicy,
-		ProcessingStatus:        snapshot.ProcessingStatus,
-		ProcessingFailureReason: snapshot.ProcessingFailureReason,
-		CoverStrategy:           snapshot.CoverStrategy,
-		ManualCoverAssetID:      snapshot.ManualCoverAssetID,
-		CoverFrameTimeMs:        snapshot.CoverFrameTimeMs,
-		CreatedAt:               snapshot.CreatedAt,
-		UpdatedAt:               snapshot.UpdatedAt,
-		ProcessedAt:             cloneMediaTime(snapshot.ProcessedAt),
+		ID:                           snapshot.ID,
+		Version:                      snapshot.Version,
+		OwnerID:                      snapshot.OwnerID,
+		SourceSessionID:              snapshot.SourceSessionID,
+		ObjectKey:                    snapshot.ObjectKey,
+		SHA256:                       snapshot.SHA256,
+		MediaType:                    snapshot.MediaType,
+		ContentType:                  snapshot.ContentType,
+		FileSize:                     snapshot.FileSize,
+		AccessPolicy:                 snapshot.AccessPolicy,
+		ProcessingStatus:             snapshot.ProcessingStatus,
+		ProcessingFailureReason:      snapshot.ProcessingFailureReason,
+		ProcessorProfile:             snapshot.ProcessorProfile,
+		VerifiedDurationMs:           snapshot.VerifiedDurationMs,
+		VideoWidth:                   snapshot.VideoWidth,
+		VideoHeight:                  snapshot.VideoHeight,
+		VideoCodec:                   snapshot.VideoCodec,
+		VideoContainer:               snapshot.VideoContainer,
+		VideoPublicSliceKey:          snapshot.VideoPublicSliceKey,
+		CoverPublicSliceKey:          snapshot.CoverPublicSliceKey,
+		PreviewTrackVersion:          snapshot.PreviewTrackVersion,
+		PreviewTrackManifestSliceKey: snapshot.PreviewTrackManifestSliceKey,
+		CoverStrategy:                snapshot.CoverStrategy,
+		ManualCoverAssetID:           snapshot.ManualCoverAssetID,
+		CoverFrameTimeMs:             snapshot.CoverFrameTimeMs,
+		CreatedAt:                    snapshot.CreatedAt,
+		UpdatedAt:                    snapshot.UpdatedAt,
+		ProcessedAt:                  cloneMediaTime(snapshot.ProcessedAt),
 	}
 }
 
@@ -428,24 +468,34 @@ func mediaAssetFromDocument(
 	document mediaAssetDocument,
 ) (*mediamodel.MediaAsset, error) {
 	asset, err := mediamodel.RestoreMediaAsset(mediamodel.MediaAssetSnapshot{
-		ID:                      document.ID,
-		Version:                 document.Version,
-		OwnerID:                 document.OwnerID,
-		SourceSessionID:         document.SourceSessionID,
-		ObjectKey:               document.ObjectKey,
-		SHA256:                  document.SHA256,
-		MediaType:               document.MediaType,
-		ContentType:             document.ContentType,
-		FileSize:                document.FileSize,
-		AccessPolicy:            document.AccessPolicy,
-		ProcessingStatus:        document.ProcessingStatus,
-		ProcessingFailureReason: document.ProcessingFailureReason,
-		CoverStrategy:           document.CoverStrategy,
-		ManualCoverAssetID:      document.ManualCoverAssetID,
-		CoverFrameTimeMs:        document.CoverFrameTimeMs,
-		CreatedAt:               document.CreatedAt,
-		UpdatedAt:               document.UpdatedAt,
-		ProcessedAt:             cloneMediaTime(document.ProcessedAt),
+		ID:                           document.ID,
+		Version:                      document.Version,
+		OwnerID:                      document.OwnerID,
+		SourceSessionID:              document.SourceSessionID,
+		ObjectKey:                    document.ObjectKey,
+		SHA256:                       document.SHA256,
+		MediaType:                    document.MediaType,
+		ContentType:                  document.ContentType,
+		FileSize:                     document.FileSize,
+		AccessPolicy:                 document.AccessPolicy,
+		ProcessingStatus:             document.ProcessingStatus,
+		ProcessingFailureReason:      document.ProcessingFailureReason,
+		ProcessorProfile:             document.ProcessorProfile,
+		VerifiedDurationMs:           document.VerifiedDurationMs,
+		VideoWidth:                   document.VideoWidth,
+		VideoHeight:                  document.VideoHeight,
+		VideoCodec:                   document.VideoCodec,
+		VideoContainer:               document.VideoContainer,
+		VideoPublicSliceKey:          document.VideoPublicSliceKey,
+		CoverPublicSliceKey:          document.CoverPublicSliceKey,
+		PreviewTrackVersion:          document.PreviewTrackVersion,
+		PreviewTrackManifestSliceKey: document.PreviewTrackManifestSliceKey,
+		CoverStrategy:                document.CoverStrategy,
+		ManualCoverAssetID:           document.ManualCoverAssetID,
+		CoverFrameTimeMs:             document.CoverFrameTimeMs,
+		CreatedAt:                    document.CreatedAt,
+		UpdatedAt:                    document.UpdatedAt,
+		ProcessedAt:                  cloneMediaTime(document.ProcessedAt),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("restore media asset: %w", err)

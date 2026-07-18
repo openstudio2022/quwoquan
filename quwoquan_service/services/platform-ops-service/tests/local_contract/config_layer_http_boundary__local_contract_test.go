@@ -26,8 +26,8 @@ func TestConfigLayerHTTPBoundaryIsTypedIdempotentAndStrict(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build config handler: %v", err)
 	}
-	path := "/v1/control-plane/platform/configs/sys.content.mongo.max_pool_size:update"
-	body := []byte(`{"layerId":"service:gamma:gamma-user-a:content-service","expectedVersion":0,"scopeLevel":"service","scopeId":"content-service","environment":"gamma","cluster":"gamma-user-a","service":"content-service","value":{"kind":"int","intValue":120}}`)
+	path := "/control-plane/platform/configs/sys.content.mongo.max_pool_size:update"
+	body := []byte(`{"layerId":"service:gamma:gamma-user-a:content-service","scopeLevel":"service","scopeId":"content-service","environment":"gamma","cluster":"gamma-user-a","service":"content-service","value":{"kind":"int","intValue":120}}`)
 
 	first := performLocalConfigRequest(handler, path, body, "config-idem-1")
 	if first.Code != http.StatusOK {
@@ -41,7 +41,7 @@ func TestConfigLayerHTTPBoundaryIsTypedIdempotentAndStrict(t *testing.T) {
 		t.Fatalf("idempotent replay emitted %d events, want 1", got)
 	}
 
-	wrongKind := []byte(`{"layerId":"service:content-service","expectedVersion":1,"scopeLevel":"service","scopeId":"content-service","environment":"gamma","cluster":"gamma-user-a","service":"content-service","value":{"kind":"string","stringValue":"120"}}`)
+	wrongKind := []byte(`{"layerId":"service:content-service","scopeLevel":"service","scopeId":"content-service","environment":"gamma","cluster":"gamma-user-a","service":"content-service","value":{"kind":"string","stringValue":"120"}}`)
 	wrong := performLocalConfigRequest(handler, path, wrongKind, "config-idem-2")
 	if wrong.Code != http.StatusBadRequest {
 		t.Fatalf("wrong value kind status=%d body=%s", wrong.Code, wrong.Body.String())
@@ -54,7 +54,7 @@ func TestConfigLayerHTTPBoundaryIsTypedIdempotentAndStrict(t *testing.T) {
 	}
 
 	resolved := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, "/v1/control-plane/platform/configs/resolve?env=gamma&cluster=gamma-user-a&service=content-service", nil)
+	request := httptest.NewRequest(http.MethodGet, "/control-plane/platform/configs/resolve?env=gamma&cluster=gamma-user-a&service=content-service", nil)
 	handler.ServeHTTP(resolved, request)
 	if resolved.Code != http.StatusOK {
 		t.Fatalf("resolve status=%d body=%s", resolved.Code, resolved.Body.String())
@@ -71,6 +71,7 @@ func TestConfigLayerHTTPBoundaryIsTypedIdempotentAndStrict(t *testing.T) {
 func performLocalConfigRequest(handler http.Handler, path string, body []byte, idempotencyKey string) *httptest.ResponseRecorder {
 	request := httptest.NewRequest(http.MethodPost, path, bytes.NewReader(body))
 	request.Header.Set("Idempotency-Key", idempotencyKey)
+	request.Header.Set("If-Match", `"0"`)
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
 	return recorder

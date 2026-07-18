@@ -14,7 +14,7 @@ func TestSubAccount_CreateAndList(t *testing.T) {
 	createTestCredential(t, "cred1", "sub_owner_1", "phone", "hash_13800000001")
 
 	// 创建分身
-	rec := doRequest(t, http.MethodPost, "/v1/user/personas",
+	rec := doRequest(t, http.MethodPost, "/user/personas",
 		`{"displayName":"匿名分身","isolationLevel":"strict"}`,
 		authHeaders("sub_owner_1"))
 	if rec.Code != http.StatusCreated {
@@ -27,7 +27,7 @@ func TestSubAccount_CreateAndList(t *testing.T) {
 	}
 
 	// 列出分身
-	rec = doRequest(t, http.MethodGet, "/v1/user/personas", "", authHeaders("sub_owner_1"))
+	rec = doRequest(t, http.MethodGet, "/user/personas", "", authHeaders("sub_owner_1"))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("list personas: expected 200, got %d", rec.Code)
 	}
@@ -45,7 +45,7 @@ func TestSubAccount_ActivateSwitchesExclusively(t *testing.T) {
 	createTestPersonaFull(t, "sub_b", "sub_owner_2", "sa_id_b", "SubB", "open", false, false)
 
 	// 激活 sub_b
-	rec := doRequest(t, http.MethodPost, "/v1/user/personas/sa_id_b/activate", "", authHeaders("sub_owner_2"))
+	rec := doRequest(t, http.MethodPost, "/user/personas/sa_id_b/activate", "", authHeaders("sub_owner_2"))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("activate sub-account: expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -77,7 +77,7 @@ func TestSubAccount_DeleteForbidsLast(t *testing.T) {
 	createTestPersonaFull(t, "only_sub", "sub_owner_3", "sa_only", "OnlySub", "open", true, true)
 
 	// 删除唯一的分身应该被拒绝
-	rec := doRequest(t, http.MethodDelete, "/v1/user/personas/sa_only/delete-empty", "", authHeaders("sub_owner_3"))
+	rec := doRequest(t, http.MethodDelete, "/user/personas/sa_only/delete-empty", "", authHeaders("sub_owner_3"))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 when deleting the last persona, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -94,7 +94,7 @@ func TestSubAccount_StrictIsolationHidesFromContactDiscovery(t *testing.T) {
 
 	// 用户 B 发起通讯录发现，包含 A 的手机号哈希
 	createTestProfile(t, "discover_owner", "discover_user")
-	rec := doRequest(t, http.MethodPost, "/v1/owner/contact-discovery",
+	rec := doRequest(t, http.MethodPost, "/owner/contact-discovery",
 		`{"hashedPhones":["hash_strict_phone"]}`,
 		authHeaders("discover_owner"))
 	if rec.Code != http.StatusAccepted {
@@ -116,7 +116,7 @@ func TestSubAccount_ListDoesNotLeakPrivateFields(t *testing.T) {
 	createTestProfile(t, "leaktest_owner", "leaktest_user")
 	createTestPersonaFull(t, "lk_persona", "leaktest_owner", "sa_lktest", "LeakTest", "open", true, true)
 
-	rec := doRequest(t, http.MethodGet, "/v1/user/personas", "", authHeaders("leaktest_owner"))
+	rec := doRequest(t, http.MethodGet, "/user/personas", "", authHeaders("leaktest_owner"))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("list personas: expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}

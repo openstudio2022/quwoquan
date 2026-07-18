@@ -1,4 +1,3 @@
-version: 1
 read_model: ProfileSocialRelationRowWire
 
 description: |
@@ -20,69 +19,57 @@ client_projection:
       dart_type: String
       nullable: false
       source: subAccountId
-      aliases: [subAccountId, userId]
       default: "''"
-      skip_empty_string_aliases: true
-
     - name: username
       dart_type: String
       nullable: false
       source: username
-      aliases: [username, userHandle, subAccountId]
       default: "''"
 
     - name: userHandle
       dart_type: String
       nullable: false
       source: userHandle
-      aliases: [userHandle, username, subAccountId]
       default: "''"
 
     - name: displayName
       dart_type: String
       nullable: false
       source: displayName
-      aliases: [displayName, nickname]
       default: "''"
 
     - name: avatarUrl
       dart_type: String
       nullable: false
       source: avatarUrl
-      aliases: [avatarUrl]
       default: "''"
 
     - name: avatarVersion
       dart_type: int
       nullable: false
       source: avatarVersion
-      aliases: [avatarVersion]
       default: "0"
 
     - name: profileVisibility
       dart_type: String
       nullable: false
       source: profileVisibility
-      aliases: [profileVisibility]
       default: "'public'"
 
     - name: relationState
       dart_type: String
       nullable: false
       source: relationState
-      aliases: [relationState]
       default: "'not_following'"
 
     - name: followedAt
       dart_type: DateTime
       nullable: true
       source: followedAt
-      aliases: [followedAt]
       default: "null"
 
     - name: relationshipCapability
       dart_type: Map<String, dynamic>
       nullable: true
       source: relationshipCapability
-      aliases: [relationshipCapability]
       default: "null"

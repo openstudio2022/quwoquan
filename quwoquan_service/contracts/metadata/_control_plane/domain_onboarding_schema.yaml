@@ -1,4 +1,3 @@
-version: 1
 schema:
   acceptance_statuses:
     - schema_frozen

@@ -1,0 +1,72 @@
+services:
+  postgres:
+    image: "${BETA_POSTGRES_IMAGE:-docker.io/library/postgres:16-alpine}"
+    environment:
+      POSTGRES_USER: quwoquan
+      POSTGRES_PASSWORD: quwoquan
+      POSTGRES_DB: quwoquan
+    ports:
+      - "${BETA_POSTGRES_PORT:?BETA_POSTGRES_PORT is required}:5432"
+    volumes:
+      - beta-local-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quwoquan"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mongodb:
+    image: "${BETA_MONGO_IMAGE:-docker.io/library/mongo:7-jammy}"
+    command:
+      [
+        "--replSet",
+        "rs0",
+        "--bind_ip_all",
+        "--wiredTigerCacheSizeGB",
+        "${BETA_MONGO_CACHE_SIZE_GB:-0.25}",
+      ]
+    ports:
+      - "${BETA_MONGO_PORT:?BETA_MONGO_PORT is required}:27017"
+    volumes:
+      - beta-local-mongo:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ ping: 1 }).ok"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  mongo-init:
+    image: "${BETA_MONGO_IMAGE:-docker.io/library/mongo:7-jammy}"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    entrypoint:
+      - bash
+      - -lc
+      - |
+        mongosh --host mongodb:27017 --quiet --eval '
+          try {
+            rs.status().ok
+          } catch (e) {
+            rs.initiate({_id: "rs0", members: [{_id: 0, host: "mongodb:27017"}]})
+          }
+        '
+    restart: "no"
+
+  redis:
+    image: "${BETA_REDIS_IMAGE:-docker.io/library/redis:7.2-alpine}"
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${BETA_REDIS_PORT:?BETA_REDIS_PORT is required}:6379"
+    volumes:
+      - beta-local-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  beta-local-postgres:
+  beta-local-mongo:
+  beta-local-redis:

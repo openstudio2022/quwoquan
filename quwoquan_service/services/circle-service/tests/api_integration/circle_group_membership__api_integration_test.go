@@ -27,7 +27,7 @@ func TestCircleGroupMembershipRealTransactionLifecycleBOLAAndStream(t *testing.T
 		"groupType": "self_built", "name": "同行群", "description": "真实群成员链",
 		"visibility": "private", "joinPolicy": "apply_only", "storageEnabled": true, "noticeEnabled": true,
 	}
-	createdRecorder := executeGroupCommand(t, http.MethodPost, "/v1/circles/circle-group-membership/groups", groupBody, "group-membership-group-create", "", "persona-owner", "CreateCircleGroup")
+	createdRecorder := executeGroupCommand(t, http.MethodPost, "/circles/circle-group-membership/groups", groupBody, "group-membership-group-create", "", "persona-owner", "CreateCircleGroup")
 	if createdRecorder.Code != http.StatusCreated {
 		t.Fatalf("create group failed: status=%d body=%s", createdRecorder.Code, createdRecorder.Body.String())
 	}
@@ -46,7 +46,7 @@ func TestCircleGroupMembershipRealTransactionLifecycleBOLAAndStream(t *testing.T
 		t.Fatalf("owner membership projection count=%d err=%v", count, err)
 	}
 
-	applyPath := "/v1/circles/circle-group-membership/groups/" + groupID + "/memberships"
+	applyPath := "/circles/circle-group-membership/groups/" + groupID + "/memberships"
 	first := executeGroupMembershipCommand(t, http.MethodPost, applyPath, nil, "group-member-apply", "", "persona-member", "ApplyJoinCircleGroup")
 	if first.Code != http.StatusCreated {
 		t.Fatalf("apply group membership failed: status=%d body=%s", first.Code, first.Body.String())
@@ -75,17 +75,17 @@ func TestCircleGroupMembershipRealTransactionLifecycleBOLAAndStream(t *testing.T
 		t.Fatalf("Reader leaked decision actor: %#v", selfBody)
 	}
 
-	selfApprove := executeGroupMembershipCommand(t, http.MethodPost, applyPath+"/persona-member:approve", nil, "self-approve", "1", "persona-member", "ApproveCircleGroupMember")
+	selfApprove := executeGroupMembershipCommand(t, http.MethodPost, applyPath+"/persona-member:approve", nil, "self-approve", "", "persona-member", "ApproveCircleGroupMember")
 	if selfApprove.Code != http.StatusForbidden || decodeBody(t, selfApprove)["code"] != "CIRCLE.USER.permission_denied" {
 		t.Fatalf("self approval must fail closed: status=%d body=%s", selfApprove.Code, selfApprove.Body.String())
 	}
 
-	approve := executeGroupMembershipCommand(t, http.MethodPost, applyPath+"/persona-member:approve", nil, "owner-approve", "1", "persona-owner", "ApproveCircleGroupMember")
+	approve := executeGroupMembershipCommand(t, http.MethodPost, applyPath+"/persona-member:approve", nil, "owner-approve", "", "persona-owner", "ApproveCircleGroupMember")
 	approveBody := decodeBody(t, approve)
 	if approve.Code != http.StatusOK || approveBody["state"] != "active" || approveBody["version"] != float64(2) {
 		t.Fatalf("approve drift: status=%d body=%s", approve.Code, approve.Body.String())
 	}
-	role := executeGroupMembershipCommand(t, http.MethodPatch, applyPath+"/persona-member/role", map[string]any{"role": "manager"}, "owner-role", "2", "persona-owner", "UpdateCircleGroupMemberRole")
+	role := executeGroupMembershipCommand(t, http.MethodPatch, applyPath+"/persona-member/role", map[string]any{"role": "manager"}, "owner-role", "", "persona-owner", "UpdateCircleGroupMemberRole")
 	roleBody := decodeBody(t, role)
 	if role.Code != http.StatusOK || roleBody["role"] != "manager" || roleBody["version"] != float64(3) {
 		t.Fatalf("role update drift: status=%d body=%s", role.Code, role.Body.String())
@@ -100,12 +100,12 @@ func TestCircleGroupMembershipRealTransactionLifecycleBOLAAndStream(t *testing.T
 		t.Fatalf("group roster BOLA drift: status=%d body=%s", denied.Code, denied.Body.String())
 	}
 
-	leave := executeGroupMembershipCommand(t, http.MethodDelete, applyPath+"/self", nil, "member-leave", "3", "persona-member", "LeaveCircleGroup")
+	leave := executeGroupMembershipCommand(t, http.MethodDelete, applyPath+"/self", nil, "member-leave", "", "persona-member", "LeaveCircleGroup")
 	leaveBody := decodeBody(t, leave)
 	if leave.Code != http.StatusOK || leaveBody["state"] != "left" || leaveBody["version"] != float64(4) {
 		t.Fatalf("leave drift: status=%d body=%s", leave.Code, leave.Body.String())
 	}
-	conflict := executeGroupMembershipCommand(t, http.MethodDelete, applyPath+"/self", nil, "group-member-apply", "4", "persona-member", "LeaveCircleGroup")
+	conflict := executeGroupMembershipCommand(t, http.MethodDelete, applyPath+"/self", nil, "group-member-apply", "", "persona-member", "LeaveCircleGroup")
 	if conflict.Code != http.StatusConflict || decodeBody(t, conflict)["code"] != "CIRCLE.USER.group_membership_idempotency_conflict" {
 		t.Fatalf("idempotency conflict drift: status=%d body=%s", conflict.Code, conflict.Body.String())
 	}
@@ -135,7 +135,7 @@ func executeGroupMembershipCommand(t *testing.T, method, path string, body any, 
 		Actor: operation.ActorContext{AccountID: "account-" + personaID, PersonaID: personaID},
 	}))
 	recorder := httptest.NewRecorder()
-	template := "/v1/circles/{circleId}/groups/{groupId}/memberships"
+	template := "/circles/{circleId}/groups/{groupId}/memberships"
 	switch operationName {
 	case "LeaveCircleGroup":
 		template += "/self"
@@ -158,7 +158,7 @@ func executeGroupMembershipQuery(t *testing.T, path, personaID, operationName st
 	request = request.WithContext(rtauth.WithPrincipal(request.Context(), rtauth.Principal{
 		Actor: operation.ActorContext{AccountID: "account-" + personaID, PersonaID: personaID},
 	}))
-	template := "/v1/circles/{circleId}/groups/{groupId}/memberships"
+	template := "/circles/{circleId}/groups/{groupId}/memberships"
 	if operationName == "GetMyCircleGroupMembership" {
 		template += "/self"
 	}

@@ -8,11 +8,9 @@ class ContentRequestPageIds {
     'AbortMediaUpload': 'content.media.abort',
     'BeginReportReview': 'content.begin.report.review',
     'BindMediaAssetsToComment': 'content.bind.media.assets.to.comment',
-    'BindMediaAssetsToPost': 'content.bind.media.assets.to.post',
     'CompleteMediaUpload': 'content.media.complete',
     'CreateComment': 'content.comment.create',
     'CreateOutboundShare': 'content.outbound_share.create',
-    'CreatePost': 'content.post.create',
     'CreateReport': 'content.report.create',
     'DecidePostModeration': 'content.decide.post.moderation',
     'DeleteComment': 'content.comment.delete',
@@ -50,7 +48,6 @@ class ContentRequestPageIds {
     'OpenPostModerationCase': 'content.open.post.moderation.case',
     'PinComment': 'content.pin.comment',
     'PromotePostToWork': 'content.post.promote',
-    'PublishPost': 'content.post.publish',
     'ReactToComment': 'content.react.to.comment',
     'RecordMediaProcessingResult': 'content.record.media.processing.result',
     'ReportBehaviors': 'content.behaviors.report',
@@ -60,11 +57,11 @@ class ContentRequestPageIds {
     'SearchPosts': 'content.search',
     'SelectAutoVideoCover': 'content.media.cover.auto',
     'SelectManualVideoCover': 'content.media.cover.manual',
+    'SubmitPostPublication': 'content.post.publish',
     'SupersedePostModerationCase': 'content.supersede.post.moderation.case',
     'UnlikePost': 'content.post.unlike',
     'UnpinComment': 'content.unpin.comment',
     'UpdateMediaAssetAccessPolicy': 'content.update.media.asset.access.policy',
-    'UpdatePost': 'content.post.update',
     'UpdatePostSettings': 'content.post.settings',
     'UpdateProfileInteractionState': 'content.update.profile.interaction.state',
   };
@@ -72,11 +69,9 @@ class ContentRequestPageIds {
   static const String abortMediaUpload = 'content.media.abort';
   static const String beginReportReview = 'content.begin.report.review';
   static const String bindMediaAssetsToComment = 'content.bind.media.assets.to.comment';
-  static const String bindMediaAssetsToPost = 'content.bind.media.assets.to.post';
   static const String completeMediaUpload = 'content.media.complete';
   static const String createComment = 'content.comment.create';
   static const String createOutboundShare = 'content.outbound_share.create';
-  static const String createPost = 'content.post.create';
   static const String createReport = 'content.report.create';
   static const String decidePostModeration = 'content.decide.post.moderation';
   static const String deleteComment = 'content.comment.delete';
@@ -114,7 +109,6 @@ class ContentRequestPageIds {
   static const String openPostModerationCase = 'content.open.post.moderation.case';
   static const String pinComment = 'content.pin.comment';
   static const String promotePostToWork = 'content.post.promote';
-  static const String publishPost = 'content.post.publish';
   static const String reactToComment = 'content.react.to.comment';
   static const String recordMediaProcessingResult = 'content.record.media.processing.result';
   static const String reportBehaviors = 'content.behaviors.report';
@@ -124,11 +118,11 @@ class ContentRequestPageIds {
   static const String searchPosts = 'content.search';
   static const String selectAutoVideoCover = 'content.media.cover.auto';
   static const String selectManualVideoCover = 'content.media.cover.manual';
+  static const String submitPostPublication = 'content.post.publish';
   static const String supersedePostModerationCase = 'content.supersede.post.moderation.case';
   static const String unlikePost = 'content.post.unlike';
   static const String unpinComment = 'content.unpin.comment';
   static const String updateMediaAssetAccessPolicy = 'content.update.media.asset.access.policy';
-  static const String updatePost = 'content.post.update';
   static const String updatePostSettings = 'content.post.settings';
   static const String updateProfileInteractionState = 'content.update.profile.interaction.state';
 }

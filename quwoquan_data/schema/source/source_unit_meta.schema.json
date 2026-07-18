@@ -3,7 +3,7 @@
   "title": "1.download source unit meta",
   "type": "object",
   "required": [
-    "schemaVersion",
+    "schema",
     "stage",
     "executionId",
     "executionBinding",
@@ -21,62 +21,132 @@
     "rightsMode"
   ],
   "properties": {
-    "schemaVersion": { "const": "quwoquan_data.source_unit" },
-    "stage": { "const": "1.download" },
-    "executionId": { "type": "string", "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(canary|m1|m2|m3)-[0-9]{3,}$" },
-    "executionBinding": { "enum": ["frozen", "standalone"] },
-    "sourceUnitId": { "type": "string", "minLength": 1 },
-    "entityName": { "type": "string", "minLength": 1 },
-    "title": { "type": "string", "minLength": 1 },
+    "stage": {
+      "const": "1.download"
+    },
+    "executionId": {
+      "type": "string",
+      "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(canary|m1|m2|m3)-[0-9]{3,}$"
+    },
+    "executionBinding": {
+      "enum": [
+        "frozen",
+        "standalone"
+      ]
+    },
+    "sourceUnitId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "entityName": {
+      "type": "string",
+      "minLength": 1
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
     "sourceKind": {
-      "enum": ["wikipedia", "baidu_baike", "sogou_baike", "toutiao_baike"]
+      "enum": [
+        "wikipedia",
+        "baidu_baike",
+        "toutiao_baike"
+      ]
     },
     "extractor": {
-      "enum": ["wikipedia_api", "baidu_baike_html", "sogou_baike_html", "toutiao_baike_html"]
+      "enum": [
+        "wikipedia_api",
+        "baidu_baike_openapi",
+        "toutiao_baike_html"
+      ]
     },
-    "canonicalUrl": { "type": "string", "pattern": "^https://" },
-    "finalUrl": { "type": "string", "pattern": "^https://" },
-    "requestedTitle": { "type": "string", "minLength": 1 },
-    "resolvedTitle": { "type": "string", "minLength": 1 },
+    "canonicalUrl": {
+      "type": "string",
+      "pattern": "^https://"
+    },
+    "finalUrl": {
+      "type": "string",
+      "pattern": "^https://"
+    },
+    "requestedTitle": {
+      "type": "string",
+      "minLength": 1
+    },
+    "resolvedTitle": {
+      "type": "string",
+      "minLength": 1
+    },
     "redirectChain": {
       "type": "array",
-      "items": { "type": "string", "minLength": 1 }
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
     },
-    "fetchedAt": { "type": "string", "minLength": 1 },
-    "rawSha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
-    "cleanSha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
-    "policyRevision": { "const": "encyclopedia-primary-v2" },
+    "fetchedAt": {
+      "type": "string",
+      "minLength": 1
+    },
+    "rawSha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "cleanSha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "policyRevision": {
+      "const": "encyclopedia-primary"
+    },
     "rightsMode": {
-      "enum": ["licensed_adaptation", "factual_reference_only", "blocked"]
+      "enum": [
+        "licensed_adaptation",
+        "factual_reference_only",
+        "blocked"
+      ]
+    },
+    "schema": {
+      "const": "quwoquan_data.source_unit"
     }
   },
   "oneOf": [
     {
       "properties": {
-        "sourceKind": { "const": "wikipedia" },
-        "extractor": { "const": "wikipedia_api" },
-        "canonicalUrl": { "pattern": "^https://(zh|en)\\.wikipedia\\.org/" }
+        "sourceKind": {
+          "const": "wikipedia"
+        },
+        "extractor": {
+          "const": "wikipedia_api"
+        },
+        "canonicalUrl": {
+          "pattern": "^https://(zh|en)\\.wikipedia\\.org/"
+        }
       }
     },
     {
       "properties": {
-        "sourceKind": { "const": "baidu_baike" },
-        "extractor": { "const": "baidu_baike_html" },
-        "canonicalUrl": { "pattern": "^https://baike\\.baidu\\.com/" }
+        "sourceKind": {
+          "const": "baidu_baike"
+        },
+        "extractor": {
+          "const": "baidu_baike_openapi"
+        },
+        "canonicalUrl": {
+          "pattern": "^https://baike\\.baidu\\.com/item/"
+        }
       }
     },
     {
       "properties": {
-        "sourceKind": { "const": "sogou_baike" },
-        "extractor": { "const": "sogou_baike_html" },
-        "canonicalUrl": { "pattern": "^https://baike\\.sogou\\.com/" }
-      }
-    },
-    {
-      "properties": {
-        "sourceKind": { "const": "toutiao_baike" },
-        "extractor": { "const": "toutiao_baike_html" },
-        "canonicalUrl": { "pattern": "^https://www\\.baike\\.com/" }
+        "sourceKind": {
+          "const": "toutiao_baike"
+        },
+        "extractor": {
+          "const": "toutiao_baike_html"
+        },
+        "canonicalUrl": {
+          "pattern": "^https://www\\.baike\\.com/"
+        }
       }
     }
   ]

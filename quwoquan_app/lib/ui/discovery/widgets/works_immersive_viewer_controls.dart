@@ -76,12 +76,12 @@ class _WorksPageIndicator extends StatelessWidget {
 class _WorksVideoControlRow extends StatelessWidget {
   const _WorksVideoControlRow({
     super.key,
-    required this.controller,
+    required this.session,
     required this.episodeCurrent,
     required this.episodeTotal,
   });
 
-  final VideoPlayerController? controller;
+  final VideoPlaybackSession? session;
   final int episodeCurrent;
   final int episodeTotal;
 
@@ -94,23 +94,21 @@ class _WorksVideoControlRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final activeController = controller;
-    if (activeController == null || !activeController.value.isInitialized) {
+    final activeSession = session;
+    if (activeSession == null) {
       return episodeTotal > 1
           ? Align(alignment: Alignment.centerLeft, child: _episodeBadge())
           : const SizedBox.shrink();
     }
-    return ValueListenableBuilder<VideoPlayerValue>(
-      valueListenable: activeController,
-      builder: (context, value, _) {
-        final position = value.position;
-        final duration = value.duration;
-        final progress = duration.inMilliseconds <= 0
-            ? 0.0
-            : (position.inMilliseconds / duration.inMilliseconds).clamp(
-                0.0,
-                1.0,
-              );
+    return AnimatedBuilder(
+      animation: activeSession,
+      builder: (context, _) {
+        final snapshot = activeSession.snapshot;
+        if (!snapshot.isInitialized) {
+          return episodeTotal > 1
+              ? Align(alignment: Alignment.centerLeft, child: _episodeBadge())
+              : const SizedBox.shrink();
+        }
         return Column(
           key: const ValueKey<String>('works-video-control-row'),
           mainAxisSize: MainAxisSize.min,
@@ -121,15 +119,9 @@ class _WorksVideoControlRow extends StatelessWidget {
                 GestureDetector(
                   key: const ValueKey<String>('works-video-play-toggle'),
                   behavior: HitTestBehavior.opaque,
-                  onTap: () {
-                    if (value.isPlaying) {
-                      activeController.pause();
-                    } else {
-                      activeController.play();
-                    }
-                  },
+                  onTap: () => unawaited(activeSession.toggle()),
                   child: Icon(
-                    value.isPlaying
+                    snapshot.isPlaying
                         ? CupertinoIcons.pause_fill
                         : CupertinoIcons.play_fill,
                     size: AppSpacing.iconMedium,
@@ -137,31 +129,23 @@ class _WorksVideoControlRow extends StatelessWidget {
                   ),
                 ),
                 SizedBox(width: AppSpacing.intraGroupSm),
-                Expanded(
-                  child: _WorksVideoTimeline(
-                    progress: progress,
-                    onSeekFraction: (fraction) {
-                      if (duration.inMilliseconds <= 0) return;
-                      activeController.seekTo(
-                        Duration(
-                          milliseconds: (duration.inMilliseconds * fraction)
-                              .round(),
-                        ),
-                      );
-                    },
+                Expanded(child: _WorksVideoTimeline(session: activeSession)),
+                if (snapshot.controlsVisibility ==
+                    VideoPlaybackControlsVisibility.transient) ...[
+                  SizedBox(width: AppSpacing.intraGroupSm),
+                  Text(
+                    _formatDuration(snapshot.duration),
+                    key: const ValueKey<String>(
+                      'works-video-transient-duration',
+                    ),
+                    style: TextStyle(
+                      color: AppColors.white.withValues(alpha: 0.78),
+                      fontSize: AppTypography.xxs,
+                      fontWeight: AppTypography.medium,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
                   ),
-                ),
-                SizedBox(width: AppSpacing.intraGroupSm),
-                Text(
-                  '${_formatDuration(position)} / ${_formatDuration(duration)}',
-                  key: const ValueKey<String>('works-video-time-label'),
-                  style: TextStyle(
-                    color: AppColors.white.withValues(alpha: 0.78),
-                    fontSize: AppTypography.xxs,
-                    fontWeight: AppTypography.medium,
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  ),
-                ),
+                ],
               ],
             ),
             if (episodeTotal > 1) ...[
@@ -209,59 +193,146 @@ class _WorksVideoControlRow extends StatelessWidget {
   }
 }
 
-class _WorksVideoTimeline extends StatelessWidget {
-  const _WorksVideoTimeline({
-    required this.progress,
-    required this.onSeekFraction,
-  });
+class _WorksVideoTimeline extends StatefulWidget {
+  const _WorksVideoTimeline({required this.session});
 
-  final double progress;
-  final ValueChanged<double> onSeekFraction;
+  final VideoPlaybackSession session;
+
+  @override
+  State<_WorksVideoTimeline> createState() => _WorksVideoTimelineState();
+}
+
+class _WorksVideoTimelineState extends State<_WorksVideoTimeline> {
+  bool _scrubbing = false;
+
+  void _startScrub(double dx, double width) {
+    if (width <= 0 || _scrubbing) {
+      return;
+    }
+    _scrubbing = true;
+    unawaited(widget.session.beginScrub());
+    _updateTarget(dx, width);
+  }
+
+  void _updateTarget(double dx, double width) {
+    final duration = widget.session.snapshot.duration;
+    if (width <= 0 || duration <= Duration.zero) {
+      return;
+    }
+    final fraction = (dx / width).clamp(0.0, 1.0);
+    widget.session.updateScrubTarget(
+      Duration(milliseconds: (duration.inMilliseconds * fraction).round()),
+    );
+  }
+
+  void _finishScrub({required bool commit}) {
+    if (!_scrubbing) {
+      return;
+    }
+    _scrubbing = false;
+    unawaited(widget.session.endScrub(commit: commit));
+  }
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
-        void seekAt(double dx) {
-          if (width <= 0) return;
-          onSeekFraction((dx / width).clamp(0.0, 1.0));
-        }
-
+        final snapshot = widget.session.snapshot;
+        final displayPosition = snapshot.effectivePosition;
+        final progress = snapshot.duration <= Duration.zero
+            ? 0.0
+            : (displayPosition.inMilliseconds /
+                      snapshot.duration.inMilliseconds)
+                  .clamp(0.0, 1.0);
+        final expanded = snapshot.isScrubbing || !snapshot.isPlaying;
+        final trackHeight = expanded
+            ? AppSpacing.xs
+            : AppSpacing.xs / AppSpacing.two;
+        final handleSize = expanded
+            ? AppSpacing.sm
+            : AppSpacing.xs + AppSpacing.hairline;
         return GestureDetector(
           key: const ValueKey<String>('works-video-timeline'),
           behavior: HitTestBehavior.opaque,
-          onTapDown: (details) => seekAt(details.localPosition.dx),
-          onHorizontalDragUpdate: (details) => seekAt(details.localPosition.dx),
-          child: SizedBox(
-            height: AppSpacing.minInteractiveSize / 2,
-            child: Center(
-              child: Stack(
-                children: [
-                  Container(
-                    height: AppSpacing.xs / 2,
-                    decoration: BoxDecoration(
-                      color: AppColors.white.withValues(alpha: 0.24),
-                      borderRadius: BorderRadius.circular(
-                        AppSpacing.circularBorderRadius,
-                      ),
+          onTapDown: (details) => _startScrub(details.localPosition.dx, width),
+          onTapUp: (_) => _finishScrub(commit: true),
+          onTapCancel: () => _finishScrub(commit: false),
+          onHorizontalDragStart: (details) =>
+              _startScrub(details.localPosition.dx, width),
+          onHorizontalDragUpdate: (details) =>
+              _updateTarget(details.localPosition.dx, width),
+          onHorizontalDragEnd: (_) => _finishScrub(commit: true),
+          onHorizontalDragCancel: () => _finishScrub(commit: false),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (snapshot.isScrubbing)
+                Padding(
+                  padding: EdgeInsets.only(bottom: AppSpacing.intraGroupXs),
+                  child: Text(
+                    '${_WorksVideoControlRow._formatDuration(displayPosition)} / '
+                    '${_WorksVideoControlRow._formatDuration(snapshot.duration)}',
+                    key: const ValueKey<String>('works-video-scrub-time-label'),
+                    style: TextStyle(
+                      color: AppColors.white.withValues(alpha: 0.96),
+                      fontSize: AppTypography.xxs,
+                      fontWeight: AppTypography.semiBold,
+                      fontFeatures: const [FontFeature.tabularFigures()],
                     ),
                   ),
-                  FractionallySizedBox(
-                    widthFactor: progress.clamp(0.0, 1.0),
-                    child: Container(
-                      height: AppSpacing.xs / 2,
-                      decoration: BoxDecoration(
-                        color: AppColors.white.withValues(alpha: 0.92),
-                        borderRadius: BorderRadius.circular(
-                          AppSpacing.circularBorderRadius,
+                ),
+              SizedBox(
+                height: AppSpacing.minInteractiveSize / AppSpacing.two,
+                child: Center(
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Container(
+                        height: trackHeight,
+                        decoration: BoxDecoration(
+                          color: AppColors.white.withValues(
+                            alpha: expanded ? 0.44 : 0.24,
+                          ),
+                          borderRadius: BorderRadius.circular(
+                            AppSpacing.circularBorderRadius,
+                          ),
                         ),
                       ),
-                    ),
+                      FractionallySizedBox(
+                        widthFactor: progress,
+                        child: Container(
+                          height: trackHeight,
+                          decoration: BoxDecoration(
+                            color: AppColors.white.withValues(
+                              alpha: expanded ? 1 : 0.92,
+                            ),
+                            borderRadius: BorderRadius.circular(
+                              AppSpacing.circularBorderRadius,
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        left:
+                            (width * progress) - (handleSize / AppSpacing.two),
+                        top: (trackHeight - handleSize) / AppSpacing.two,
+                        child: Container(
+                          width: handleSize,
+                          height: handleSize,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: AppColors.white.withValues(
+                              alpha: expanded ? 1 : 0.88,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
+            ],
           ),
         );
       },

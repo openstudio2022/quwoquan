@@ -102,7 +102,7 @@ def post_search(query: str = "成都", limit: int = 5) -> dict:
         ensure_ascii=False,
     ).encode("utf-8")
     req = urllib.request.Request(
-        SEARCH_BASE + "/v1/search",
+        SEARCH_BASE + "/search",
         data=body,
         method="POST",
         headers={

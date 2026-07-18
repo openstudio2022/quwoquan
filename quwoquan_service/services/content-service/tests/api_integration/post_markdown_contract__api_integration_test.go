@@ -13,7 +13,7 @@ import (
 	"quwoquan_service/services/content-service/internal/application/identity"
 )
 
-func TestCreateMarkdownArticleContract(t *testing.T) {
+func TestSubmitMarkdownArticleContract(t *testing.T) {
 	markdown := `---
 title: 西湖半日城市漫游
 summary: 从湖滨到龙井路
@@ -28,9 +28,9 @@ coverImage: asset://cover
 ![封面](asset://cover)
 `
 	payload := map[string]any{
-		"contentType":            "article",
-		"articleMarkdown":        markdown,
-		"articleMarkdownVersion": "qwq-rich-md/1",
+		"contentType":     "article",
+		"articleMarkdown": markdown,
+		"markdownDialect": "qwq-rich-md",
 		"articleAssetManifest": map[string]any{
 			"assets": []map[string]any{
 				{"assetId": "cover", "scope": "draft", "objectKey": "media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg", "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
@@ -43,7 +43,7 @@ coverImage: asset://cover
 	if err != nil {
 		t.Fatalf("marshal payload: %v", err)
 	}
-	created := createDraftPostWithAuthor(t, identity.AnonymousFallbackSubAccountID, string(raw))
+	created := submitPublishedPostWithAuthor(t, identity.AnonymousFallbackSubAccountID, string(raw))
 
 	if created["articleMarkdown"] == "" {
 		t.Fatalf("expected articleMarkdown in response: %+v", created)
@@ -61,17 +61,18 @@ coverImage: asset://cover
 	}
 }
 
-func TestCreateMarkdownArticleRejectsMissingManifestAsset(t *testing.T) {
+func TestSubmitMarkdownArticleRejectsMissingManifestAsset(t *testing.T) {
 	payload := `{
 		"contentType": "article",
 		"articleMarkdown": "# 标题\n\n![封面](asset://cover)",
 		"articleAssetManifest": {"assets": []},
 		"visibility": "public"
 	}`
-	req := httptest.NewRequest(http.MethodPost, "/v1/content/posts", strings.NewReader(payload))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Client-User-Id", identity.AnonymousFallbackSubAccountID)
-	req.Header.Set("X-Client-Sub-Account-Id", identity.AnonymousFallbackSubAccountID)
+	req := newPostPublicationRequestForTest(
+		t,
+		identity.AnonymousFallbackSubAccountID,
+		payload,
+	)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadRequest {
@@ -79,19 +80,18 @@ func TestCreateMarkdownArticleRejectsMissingManifestAsset(t *testing.T) {
 	}
 }
 
-func TestCreateArticleRejectsArticleDocumentOnlyContract(t *testing.T) {
+func TestSubmitArticleRejectsArticleDocumentOnlyContract(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	req := httptest.NewRequest(
-		http.MethodPost,
-		"/v1/content/posts",
-		strings.NewReader(`{
+	req := newPostPublicationRequestForTest(
+		t,
+		identity.AnonymousFallbackSubAccountID,
+		`{
 			"contentType":"article",
 			"title":"旧长文不再作为写入真相源",
 			"articleDocument":{"title":"旧长文不再作为写入真相源","body":"旧格式正文"}
-		}`),
+		}`,
 	)
-	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadRequest {
@@ -102,10 +102,10 @@ func TestCreateArticleRejectsArticleDocumentOnlyContract(t *testing.T) {
 	}
 }
 
-func TestBindMediaAssetsToPostContract(t *testing.T) {
+func TestSubmitPostPublicationBindsReadyOwnedMedia(t *testing.T) {
 	initReq := httptest.NewRequest(
 		http.MethodPost,
-		"/v1/content/media/uploads:init",
+		"/content/media/uploads:init",
 		strings.NewReader(`{"mediaType":"image","contentType":"image/jpeg","fileSize":128,"expectedSha256":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`),
 	)
 	initReq.Header.Set("Content-Type", "application/json")
@@ -122,7 +122,7 @@ func TestBindMediaAssetsToPostContract(t *testing.T) {
 	}
 	sessionID := asTestString(initResp["sessionId"])
 
-	completeReq := httptest.NewRequest(http.MethodPost, "/v1/content/media/uploads/"+sessionID+":complete", strings.NewReader(`{"accessPolicy":"owner_only"}`))
+	completeReq := httptest.NewRequest(http.MethodPost, "/content/media/uploads/"+sessionID+":complete", strings.NewReader(`{"accessPolicy":"owner_only"}`))
 	completeReq.Header.Set("Content-Type", "application/json")
 	completeReq.Header.Set("Idempotency-Key", "media-bind-complete")
 	completeRec := httptest.NewRecorder()
@@ -136,26 +136,50 @@ func TestBindMediaAssetsToPostContract(t *testing.T) {
 	}
 	mediaID := asTestString(completeResp["assetId"])
 
-	post := createDraftPost(t, `{"contentType":"micro","body":"绑定素材测试","visibility":"public"}`)
-	postID := asTestString(post["_id"])
-	bindReq := httptest.NewRequest(
+	publishIntentID := "media-publication-intent"
+	publishReq := httptest.NewRequest(
 		http.MethodPost,
-		"/v1/content/posts/"+postID+"/media:bind",
-		strings.NewReader(`{"assetIds":["`+mediaID+`"]}`),
+		"/content/posts:publish",
+		strings.NewReader(`{"publishIntentId":"`+publishIntentID+`","localDraftId":"media-publication-draft","contentType":"image","body":"原子发布素材测试","visibility":"public","mediaAssetIds":["`+mediaID+`"],"mediaItems":[{"kind":"image","mediaId":"`+mediaID+`"}]}`),
 	)
-	bindReq.Header.Set("Content-Type", "application/json")
-	bindReq.Header.Set("Idempotency-Key", "media-bind-post")
-	bindRec := httptest.NewRecorder()
-	testHandler.ServeHTTP(bindRec, bindReq)
-	if bindRec.Code != http.StatusOK {
-		t.Fatalf("bind failed: %d %s", bindRec.Code, bindRec.Body.String())
+	publishReq.Header.Set("Content-Type", "application/json")
+	publishReq.Header.Set("X-Client-User-Id", identity.AnonymousFallbackSubAccountID)
+	publishReq.Header.Set("Idempotency-Key", publishIntentID)
+	publishRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(publishRec, publishReq)
+	if publishRec.Code != http.StatusAccepted {
+		t.Fatalf("atomic publication failed: %d %s", publishRec.Code, publishRec.Body.String())
 	}
-	var bindResp map[string]any
-	if err := json.Unmarshal(bindRec.Body.Bytes(), &bindResp); err != nil {
-		t.Fatalf("decode bind response: %v", err)
+	var publishResp map[string]any
+	if err := json.Unmarshal(publishRec.Body.Bytes(), &publishResp); err != nil {
+		t.Fatalf("decode publication response: %v", err)
 	}
-	if got := int(bindResp["boundCount"].(float64)); got != 1 {
-		t.Fatalf("expected boundCount=1, got %d", got)
+	postID := asTestString(publishResp["postId"])
+	if postID == "" {
+		t.Fatalf("publication receipt missing postId: %#v", publishResp)
+	}
+	readReq := httptest.NewRequest(http.MethodGet, "/content/posts/"+postID, nil)
+	readRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(readRec, readReq)
+	if readRec.Code != http.StatusOK {
+		t.Fatalf("get bound post failed: %d %s", readRec.Code, readRec.Body.String())
+	}
+	var readResp map[string]any
+	if err := json.Unmarshal(readRec.Body.Bytes(), &readResp); err != nil {
+		t.Fatalf("decode bound post: %v", err)
+	}
+	mediaURLs, ok := readResp["mediaUrls"].([]any)
+	if !ok || len(mediaURLs) != 1 {
+		t.Fatalf("bound post must expose one projected media slice, got %#v", readResp["mediaUrls"])
+	}
+	publicSliceKey := asTestString(mediaURLs[0])
+	if !strings.HasPrefix(publicSliceKey, "media/image/s/asset/") ||
+		strings.Contains(publicSliceKey, "objects/") ||
+		strings.Contains(publicSliceKey, "cdn.test") {
+		t.Fatalf("bound post leaked non-public media identity: %q", publicSliceKey)
+	}
+	if coverURL := asTestString(readResp["coverUrl"]); coverURL != publicSliceKey {
+		t.Fatalf("bound image cover must be the same public slice: %q vs %q", coverURL, publicSliceKey)
 	}
 }
 
@@ -165,7 +189,7 @@ func TestRequestOriginalImageAccessContract(t *testing.T) {
 
 	initReq := httptest.NewRequest(
 		http.MethodPost,
-		"/v1/content/media/uploads:init",
+		"/content/media/uploads:init",
 		strings.NewReader(`{"mediaType":"image","contentType":"image/jpeg","fileSize":256,"expectedSha256":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}`),
 	)
 	initReq.Header.Set("Content-Type", "application/json")
@@ -185,7 +209,7 @@ func TestRequestOriginalImageAccessContract(t *testing.T) {
 		t.Fatalf("missing media session: %#v", initResp)
 	}
 
-	completeReq := httptest.NewRequest(http.MethodPost, "/v1/content/media/uploads/"+sessionID+":complete", strings.NewReader(`{"accessPolicy":"owner_only"}`))
+	completeReq := httptest.NewRequest(http.MethodPost, "/content/media/uploads/"+sessionID+":complete", strings.NewReader(`{"accessPolicy":"owner_only"}`))
 	completeReq.Header.Set("Content-Type", "application/json")
 	completeReq.Header.Set("Idempotency-Key", "media-original-complete")
 	completeRec := httptest.NewRecorder()
@@ -202,7 +226,7 @@ func TestRequestOriginalImageAccessContract(t *testing.T) {
 		t.Fatalf("missing completed media asset: %#v", completeResp)
 	}
 
-	accessReq := httptest.NewRequest(http.MethodPost, "/v1/content/media/"+mediaID+"/original:access", strings.NewReader(`{"purpose":"view","sessionId":"sess_original_001"}`))
+	accessReq := httptest.NewRequest(http.MethodPost, "/content/media/"+mediaID+"/original:access", strings.NewReader(`{"purpose":"view","sessionId":"sess_original_001"}`))
 	accessReq.Header.Set("Content-Type", "application/json")
 	accessReq.Header.Set("X-Client-User-Id", identity.AnonymousFallbackSubAccountID)
 	accessReq.Header.Set("Idempotency-Key", "media-original-access")
@@ -224,7 +248,7 @@ func TestRequestOriginalImageAccessContract(t *testing.T) {
 	if asTestString(accessResp["auditId"]) == "" {
 		t.Fatalf("original access must return an audit correlation id: %#v", accessResp)
 	}
-	replayReq := httptest.NewRequest(http.MethodPost, "/v1/content/media/"+mediaID+"/original:access", strings.NewReader(`{"purpose":"view"}`))
+	replayReq := httptest.NewRequest(http.MethodPost, "/content/media/"+mediaID+"/original:access", strings.NewReader(`{"purpose":"view"}`))
 	replayReq.Header.Set("Content-Type", "application/json")
 	replayReq.Header.Set("X-Client-User-Id", identity.AnonymousFallbackSubAccountID)
 	replayReq.Header.Set("Idempotency-Key", "media-original-access")

@@ -1,4 +1,4 @@
-"""Workflow service extracted from the retired monolithic runner."""
+"""Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
 from content.execution.coverage import coverage_entity_type, coverage_entity_type_for_entity
 from content.execution.support import Any, ExecutionContext, Mapping, _active_spec, read_json, store, write_json
@@ -233,12 +233,12 @@ def _run_download_auto_research(
     scope: str = "primary",
 ) -> dict[str, Any]:
     from content.execution.recovery.download_unresolved import _auto_research_plan_path
-    from content.execution.pipeline.pipeline_control import _download_auto_research_progress_callback
+    from content.execution.controller.control import _download_auto_research_progress_callback
     from content.source.research.auto_plan_public import write_auto_research_plans
     ids = [str(entity_id).strip() for entity_id in entity_ids if str(entity_id or "").strip()]
     if not ids:
         return {
-            "schemaVersion": "quwoquan.content.source.auto_research_plan",
+            "schema": "quwoquan.content.source.auto_research_plan",
             "executionId": ctx.execution_id,
             "updated": [],
             "issues": [],
@@ -283,7 +283,7 @@ def _run_download_auto_research(
         aggregate_wave_index = existing_wave_count + wave_index
         wave_scope = scope if aggregate_wave_index == 1 else f"{scope}_wave_{aggregate_wave_index}"
         print(
-            f"[geo-homepages] download_plan auto_research wave {wave_index}/{wave_count}: "
+            f"[task execute] download_plan auto_research wave {wave_index}/{wave_count}: "
             f"{len(wave_ids)} entities",
             flush=True,
         )
@@ -337,17 +337,9 @@ def _run_download_auto_research(
             break
     return latest
 
-def _download_auto_research_lanes(ctx: ExecutionContext) -> set[str] | None:
-    """Restrict source discovery lanes to lanes enabled by content quotas."""
-    quotas = ((_active_spec(ctx).get("content") or {}).get("quotas") or {})
-    lanes: set[str] = set()
-    if int(quotas.get("entityHomepagesPerTarget") or 0) > 0:
-        lanes.add("homepage")
-    if int(quotas.get("entityArticlesPerTarget") or 0) > 0 or int(quotas.get("routeArticles") or 0) > 0:
-        lanes.add("article")
-    if int(quotas.get("imageWorksPerTarget") or 0) > 0:
-        lanes.add("image")
-    return lanes or None
+def _download_auto_research_lanes(ctx: ExecutionContext) -> frozenset[str]:
+    """Return the research lanes admitted by the immutable execution spec."""
+    return frozenset(lane.value for lane in ctx.spec.content.research.lanes)
 
 def _auto_research_wave_size(ctx: ExecutionContext, *, entity_count: int, worker_count: int) -> int:
     del ctx, worker_count

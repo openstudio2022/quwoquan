@@ -1,5 +1,4 @@
 templateId: 线路_深度探险
-version: 1
 subject: { kind: topic, type: 旅行/线路, minEntityRefs: 2, subjectTagRef: Topic/旅行/出行方式/徒步穿越 }
 vertical: travel
 category: travel

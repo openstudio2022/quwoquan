@@ -55,27 +55,31 @@ type ListFeedRequest struct {
 }
 
 type FeedItemView struct {
-	ID               string   `json:"id"`
-	PostID           string   `json:"postId"`
-	WireID           string   `json:"_id"`
-	Type             string   `json:"type"`
-	ContentType      string   `json:"contentType"`
-	AuthorID         string   `json:"authorId"`
-	Title            string   `json:"title,omitempty"`
-	Body             string   `json:"body,omitempty"`
-	Images           []string `json:"images,omitempty"`
-	VideoURL         string   `json:"videoUrl,omitempty"`
-	CoverURL         string   `json:"coverUrl,omitempty"`
-	ThumbnailURL     string   `json:"thumbnailUrl,omitempty"`
-	CoverStrategy    string   `json:"coverStrategy,omitempty"`
-	CoverFrameTimeMs int64    `json:"coverFrameTimeMs,omitempty"`
-	DurationMs       int64    `json:"durationMs,omitempty"`
-	Width            int64    `json:"width,omitempty"`
-	Height           int64    `json:"height,omitempty"`
-	LikeCount        int64    `json:"likesCount"`
-	CommentCount     int64    `json:"commentsCount"`
-	ShareCount       int64    `json:"shares"`
-	CreatedAt        string   `json:"createdAt"`
+	PostID             string   `json:"postId"`
+	ContentType        string   `json:"contentType"`
+	ContentIdentity    string   `json:"contentIdentity"`
+	AssistantUsePolicy string   `json:"assistantUsePolicy,omitempty"`
+	AuthorID           string   `json:"authorId"`
+	AuthorDisplayName  string   `json:"authorDisplayName,omitempty"`
+	AuthorAvatarURL    string   `json:"authorAvatarUrl,omitempty"`
+	Title              string   `json:"title,omitempty"`
+	Body               string   `json:"body,omitempty"`
+	Summary            string   `json:"summary,omitempty"`
+	MediaURLs          []string `json:"mediaUrls,omitempty"`
+	VideoURL           string   `json:"videoUrl,omitempty"`
+	CoverURL           string   `json:"coverUrl,omitempty"`
+	ThumbnailURL       string   `json:"thumbnailUrl,omitempty"`
+	CoverStrategy      string   `json:"coverStrategy,omitempty"`
+	CoverFrameTimeMs   int64    `json:"coverFrameTimeMs,omitempty"`
+	DurationMs         int64    `json:"durationMs,omitempty"`
+	Width              int64    `json:"width,omitempty"`
+	Height             int64    `json:"height,omitempty"`
+	TagRefs            []string `json:"tagRefs,omitempty"`
+	Visibility         string   `json:"visibility,omitempty"`
+	LikeCount          int64    `json:"likeCount"`
+	CommentCount       int64    `json:"commentCount"`
+	ShareCount         int64    `json:"shareCount"`
+	CreatedAt          string   `json:"createdAt"`
 	// UpdatedAt 最后实质更新时间；与 createdAt 相等或更早时端只显示创作时间。零值省略。
 	UpdatedAt string `json:"updatedAt,omitempty"`
 	// PublishedAt 首次公开时间；零值（未发布/未知）时省略。
@@ -186,34 +190,38 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 		}
 		qualityScore, recallPath, contentVertical, supplySource := feedItemAttribution(post, recItem)
 		views = append(views, FeedItemView{
-			ID:               postID,
-			PostID:           postID,
-			WireID:           postID,
-			Type:             viewType,
-			ContentType:      string(post.ContentType),
-			AuthorID:         authorID,
-			Title:            post.Title,
-			Body:             post.Body,
-			Images:           append([]string(nil), post.MediaURLs...),
-			VideoURL:         post.VideoURL,
-			CoverURL:         post.CoverURL,
-			ThumbnailURL:     thumbnailURL,
-			CoverStrategy:    post.CoverStrategy,
-			CoverFrameTimeMs: post.CoverFrameTimeMS,
-			DurationMs:       post.DurationMS,
-			Width:            post.Width,
-			Height:           post.Height,
-			LikeCount:        post.LikeCount,
-			CommentCount:     post.CommentCount,
-			ShareCount:       post.ShareCount,
-			CreatedAt:        post.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
-			UpdatedAt:        feedTimeOrEmpty(post.UpdatedAt),
-			PublishedAt:      feedTimeOrEmpty(post.PublishedAt),
-			QualityScore:     qualityScore,
-			RecallPath:       recallPath,
-			ContentVertical:  contentVertical,
-			SupplySource:     supplySource,
-			SourceTaskID:     post.SourceTaskID,
+			PostID:             postID,
+			ContentType:        string(post.ContentType),
+			ContentIdentity:    postIdentity,
+			AssistantUsePolicy: post.AssistantUsePolicy,
+			AuthorID:           authorID,
+			AuthorDisplayName:  post.AuthorDisplayName,
+			AuthorAvatarURL:    post.AuthorAvatarURL,
+			Title:              post.Title,
+			Body:               post.Body,
+			Summary:            post.Summary,
+			MediaURLs:          append([]string(nil), post.MediaURLs...),
+			VideoURL:           post.VideoURL,
+			CoverURL:           post.CoverURL,
+			ThumbnailURL:       thumbnailURL,
+			CoverStrategy:      post.CoverStrategy,
+			CoverFrameTimeMs:   post.CoverFrameTimeMS,
+			DurationMs:         post.DurationMS,
+			Width:              post.Width,
+			Height:             post.Height,
+			TagRefs:            append([]string(nil), post.TagRefs...),
+			Visibility:         string(post.Visibility),
+			LikeCount:          post.LikeCount,
+			CommentCount:       post.CommentCount,
+			ShareCount:         post.ShareCount,
+			CreatedAt:          post.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
+			UpdatedAt:          feedTimeOrEmpty(post.UpdatedAt),
+			PublishedAt:        feedTimeOrEmpty(post.PublishedAt),
+			QualityScore:       qualityScore,
+			RecallPath:         recallPath,
+			ContentVertical:    contentVertical,
+			SupplySource:       supplySource,
+			SourceTaskID:       post.SourceTaskID,
 		})
 		return true
 	}

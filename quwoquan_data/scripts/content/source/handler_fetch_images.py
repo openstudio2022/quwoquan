@@ -1,12 +1,12 @@
 """Entity image preparation for the source download stage."""
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from core.image_rules import pixel_size_issue, relevance_issue
+from core.media_processing_policy import MEDIA_PROCESSING_POLICY
 from core.image_safety import dedupe_image_payloads
 from core.image_variants import image_dimensions
 from content.source.gate import download_requirements
@@ -25,12 +25,14 @@ from governance.coverage.license import normalize_rights_payload, validate_image
 class PreparedEntityImages:
     image_manifest: list[dict[str, Any]]
     rights_issues: list[str]
+    video_rights_issues: list[str]
     quality_issues: list[str]
     rejected_by_category: dict[str, int]
     pending_images: list[dict[str, Any]]
     required_image_work_images: int
     planned_homepage_source_images: int
     required_homepage_media: int
+    required_video_frames: int
     required_images: int
 
 
@@ -44,12 +46,13 @@ def prepare_entity_images(
     object_dir: Path,
     sources: list[dict[str, Any]],
     image_specs: list[dict[str, Any]],
-    homepage_media_spec_count: int,
     image_lane_selected: bool,
     homepage_media_selected: bool,
+    video_lane_selected: bool,
 ) -> PreparedEntityImages:
     image_manifest: list[dict] = []
     image_rights_issues: list[str] = []
+    video_rights_issues: list[str] = []
     image_quality_issues: list[str] = []
     rejected_by_category = {
         "fetch_or_non_image": 0,
@@ -60,47 +63,48 @@ def prepare_entity_images(
         "other": 0,
     }
     pending_images: list[dict] = []
-    required_image_work_images = (
-        download_requirements(execution_id)["minImages"] if image_lane_selected else 0
-    )
+    requirements = download_requirements(execution_id)
+    required_image_work_images = requirements.min_images if image_lane_selected else 0
     planned_homepage_source_images = sum(
         len(source.get("imageUrls") or [])
         for source in sources
         if str(source.get("researchLane") or "") == "homepage"
         and isinstance(source.get("imageUrls"), list)
     )
-    required_homepage_media = 1 if homepage_media_selected else 0
-    required_images = required_image_work_images + required_homepage_media
-    image_fetch_target = max(
-        required_image_work_images,
-        int(
-            os.environ.get(
-                "QWQ_DOWNLOAD_IMAGE_FETCH_TARGET_PER_ENTITY",
-                str(required_image_work_images + 2),
-            )
-        ),
+    required_homepage_media = (
+        requirements.min_homepage_media if homepage_media_selected else 0
     )
-    image_candidate_limit = max(
-        image_fetch_target,
-        int(os.environ.get("QWQ_DOWNLOAD_IMAGE_CANDIDATE_LIMIT_PER_ENTITY", str(image_fetch_target + 4))),
+    required_video_frames = requirements.min_video_frames if video_lane_selected else 0
+    required_images = (
+        required_image_work_images
+        + required_homepage_media
+        + required_video_frames
+    )
+    image_fetch_target = (
+        required_image_work_images
+        + MEDIA_PROCESSING_POLICY.image_fetch_target_surplus
+    )
+    image_candidate_limit = (
+        image_fetch_target + MEDIA_PROCESSING_POLICY.image_candidate_surplus
     )
     pending_image_work_count = 0
     image_work_candidate_index = 0
     for idx_img, spec in enumerate(image_specs, start=1):
-        is_page_owned_homepage_media = idx_img <= homepage_media_spec_count
-        if not is_page_owned_homepage_media:
+        lane = str(spec.get("researchLane") or "").strip()
+        is_page_owned_homepage_media = lane == "homepage"
+        if lane == "image":
             image_work_candidate_index += 1
-        if not is_page_owned_homepage_media and pending_image_work_count >= image_fetch_target:
-            break
+        if lane == "image" and pending_image_work_count >= image_fetch_target:
+            continue
         if (
-            not is_page_owned_homepage_media
+            lane == "image"
             and image_work_candidate_index > image_candidate_limit
         ):
             image_quality_issues.append(
                 f"imageFetch: {entity_id} stopped after {image_candidate_limit} image candidate(s)"
             )
             rejected_by_category["other"] += 1
-            break
+            continue
         _write_download_progress(
             execution_id,
             status="running",
@@ -110,20 +114,23 @@ def prepare_entity_images(
             sources=0,
             images=len(pending_images),
             message="image candidate check",
-            lane="image",
+            lane=lane,
             imageCandidateIndex=idx_img,
             imageCandidateCount=len(image_specs),
             imageFetchTarget=(
                 "complete_source_page" if is_page_owned_homepage_media else image_fetch_target
             ),
             imageSpecScope=(
-                "homepage_source_page" if is_page_owned_homepage_media else "image_work"
+                "homepage_source_page"
+                if is_page_owned_homepage_media
+                else ("video_frame" if lane == "video" else "image_work")
             ),
         )
         asset_label = f"{entity_id}#{idx_img}"
         issues = validate_image_rights(spec, vertical=vertical)
         if issues:
-            image_rights_issues.extend([f"{idx_img}: {issue}" for issue in issues])
+            target = video_rights_issues if lane == "video" else image_rights_issues
+            target.extend([f"{idx_img}: {issue}" for issue in issues])
             rejected_by_category["rights"] += 1
             continue
         payload = _cached_image_lane_payload(object_dir, spec)
@@ -198,7 +205,7 @@ def prepare_entity_images(
                 "sha256": payload.get("sha256"),
             }
         )
-        if not is_page_owned_homepage_media:
+        if lane == "image":
             pending_image_work_count += 1
         image_manifest.append({**payload, "url": spec["url"], **rights})
     # 感知哈希去重（落盘前）：剔除同实体近重复图，避免画报/详情页重复观感。
@@ -215,11 +222,13 @@ def prepare_entity_images(
     return PreparedEntityImages(
         image_manifest=image_manifest,
         rights_issues=image_rights_issues,
+        video_rights_issues=video_rights_issues,
         quality_issues=image_quality_issues,
         rejected_by_category=rejected_by_category,
         pending_images=pending_images,
         required_image_work_images=required_image_work_images,
         planned_homepage_source_images=planned_homepage_source_images,
         required_homepage_media=required_homepage_media,
+        required_video_frames=required_video_frames,
         required_images=required_images,
     )

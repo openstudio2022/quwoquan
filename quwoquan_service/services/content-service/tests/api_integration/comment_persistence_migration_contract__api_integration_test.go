@@ -44,19 +44,9 @@ func TestCommentAggregateMongoTransactionAndCAS(t *testing.T) {
 	if _, err := testCommentService.CreateComment(ctx, conflicting); err == nil {
 		t.Fatal("reusing a Comment idempotency key with a different digest must fail")
 	}
-	staleContext := commandmeta.WithIdempotencyKey(context.Background(), "comment-mongo-stale-delete")
-	if _, err := testCommentService.DeleteComment(staleContext, commentapp.DeleteCommentCommand{
-		PostID: postID, CommentID: created.ID, ActorID: command.ActorID,
-		ExpectedVersion: created.Version + 1,
-	}); err == nil {
-		t.Fatal("stale Comment version must fail before transaction commit")
-	}
-	assertMongoDocumentCount(t, "comment_outbox", bson.M{"aggregateId": created.ID}, 1)
-
 	deleteContext := commandmeta.WithIdempotencyKey(context.Background(), "comment-mongo-delete")
 	deleted, err := testCommentService.DeleteComment(deleteContext, commentapp.DeleteCommentCommand{
 		PostID: postID, CommentID: created.ID, ActorID: command.ActorID,
-		ExpectedVersion: created.Version,
 	})
 	if err != nil {
 		t.Fatalf("delete Comment aggregate: %v", err)
@@ -150,7 +140,6 @@ func TestCommentCountReconciliation_HighConcurrency(t *testing.T) {
 			)
 			_, errorsByIndex[index] = testCommentService.DeleteComment(ctx, commentapp.DeleteCommentCommand{
 				PostID: postID, CommentID: result.ID, ActorID: "concurrent-comment-author",
-				ExpectedVersion: result.Version,
 			})
 		}(index, result)
 	}

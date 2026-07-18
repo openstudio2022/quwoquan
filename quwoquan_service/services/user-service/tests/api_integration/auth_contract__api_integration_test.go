@@ -17,9 +17,9 @@ func TestAuth_SocialLogin_WechatAlipayQqExchangeStableServerIdentity(t *testing.
 		field string
 		code  string
 	}{
-		{name: "wechat", path: "/v1/auth/login/wechat", field: "wechatCode", code: "wechat-code"},
-		{name: "alipay", path: "/v1/auth/login/alipay", field: "alipayAuthCode", code: "alipay-code"},
-		{name: "qq", path: "/v1/auth/login/qq", field: "qqAuthCode", code: qqAuthorizationTicket("qq-access-token", "qq-open-id")},
+		{name: "wechat", path: "/auth/login/wechat", field: "wechatCode", code: "wechat-code"},
+		{name: "alipay", path: "/auth/login/alipay", field: "alipayAuthCode", code: "alipay-code"},
+		{name: "qq", path: "/auth/login/qq", field: "qqAuthCode", code: qqAuthorizationTicket("qq-access-token", "qq-open-id")},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -65,7 +65,7 @@ func TestAuth_AnonymousLogin_ReusesOwnerAndCreatesSingleDeviceBinding(t *testing
 	first := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/auth/login/anonymous",
+		"/auth/login/anonymous",
 		`{"installId":"install-ios-1","deviceFingerprintHash":"fp_same_device","platform":"ios","appVersion":"1.0.0"}`,
 		nil,
 	)
@@ -119,7 +119,7 @@ func TestAuth_AnonymousLogin_ReusesOwnerAndCreatesSingleDeviceBinding(t *testing
 	second := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/auth/login/anonymous",
+		"/auth/login/anonymous",
 		`{"installId":"install-ios-2","deviceFingerprintHash":"fp_same_device","platform":"ios","appVersion":"1.0.1"}`,
 		nil,
 	)
@@ -188,7 +188,7 @@ func TestAuth_AnonymousLogin_BackfillsDeviceBindingFromExistingCredential(t *tes
 	rec := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/auth/login/anonymous",
+		"/auth/login/anonymous",
 		`{"installId":"install-anonymous-1","deviceFingerprintHash":"fp_anonymous_device","platform":"android","appVersion":"2.0.0"}`,
 		nil,
 	)
@@ -230,7 +230,7 @@ func TestAuth_RefreshToken_RotatesAndLogoutRevokes(t *testing.T) {
 	login := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/auth/login/phone",
+		"/auth/login/phone",
 		`{"phone":"+8618013813909","otpCode":"`+otpCode+`","deviceId":"ios-1","platform":"ios","appVersion":"1.0.0","agreementVersion":"2026-06","privacyVersion":"2026-06"}`,
 		nil,
 	)
@@ -274,7 +274,7 @@ func TestAuth_RefreshToken_RotatesAndLogoutRevokes(t *testing.T) {
 	refresh := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/auth/token/refresh",
+		"/auth/token/refresh",
 		`{"refreshToken":"`+refreshToken+`"}`,
 		nil,
 	)
@@ -307,7 +307,7 @@ func TestAuth_RefreshToken_RotatesAndLogoutRevokes(t *testing.T) {
 	refreshAfterAvatarDelete := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/auth/token/refresh",
+		"/auth/token/refresh",
 		`{"refreshToken":"`+rotatedToken+`"}`,
 		nil,
 	)
@@ -324,7 +324,7 @@ func TestAuth_RefreshToken_RotatesAndLogoutRevokes(t *testing.T) {
 	logout := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/auth/logout",
+		"/auth/logout",
 		`{"refreshToken":"`+rotatedAfterDelete+`","deviceId":"ios-1"}`,
 		authHeaders(ownerID),
 	)
@@ -335,7 +335,7 @@ func TestAuth_RefreshToken_RotatesAndLogoutRevokes(t *testing.T) {
 	reuse := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/auth/token/refresh",
+		"/auth/token/refresh",
 		`{"refreshToken":"`+rotatedAfterDelete+`"}`,
 		nil,
 	)
@@ -350,7 +350,7 @@ func TestAuth_OneTapLogin_UsesServerResolvedPhone(t *testing.T) {
 	hint := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/auth/login/one-tap/hint",
+		"/auth/login/one-tap/hint",
 		`{"vendor":"test","carrierToken":"carrier_token_new","deviceId":"ios-1","platform":"ios","appVersion":"1.0.0"}`,
 		nil,
 	)
@@ -368,7 +368,7 @@ func TestAuth_OneTapLogin_UsesServerResolvedPhone(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/auth/login/one-tap",
+		"/auth/login/one-tap",
 		`{"vendor":"test","carrierToken":"carrier_token_new","deviceId":"ios-1","platform":"ios","appVersion":"1.0.0","agreementVersion":"2026-05","privacyVersion":"2026-05"}`,
 		nil,
 	)
@@ -428,7 +428,7 @@ func TestAuth_OneTapLogin_UsesServerResolvedPhone(t *testing.T) {
 	hintAfterLogin := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/auth/login/one-tap/hint",
+		"/auth/login/one-tap/hint",
 		`{"vendor":"test","carrierToken":"carrier_token_new","deviceId":"ios-1","platform":"ios","appVersion":"1.0.0"}`,
 		nil,
 	)
@@ -456,7 +456,7 @@ func TestAuth_FirstLogin_UsesCloudDefaultNicknamePattern(t *testing.T) {
 	login := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/auth/login/phone",
+		"/auth/login/phone",
 		`{"phone":"`+phone+`","otpCode":"`+otpCode+`","deviceId":"ios-default-nickname","platform":"ios","appVersion":"1.0.0","agreementVersion":"2026-06","privacyVersion":"2026-06"}`,
 		nil,
 	)
@@ -499,7 +499,7 @@ func TestAuth_RetiredGenericLoginRoute_Removed(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/auth/login",
+		"/auth/login",
 		`{"credentialType":"phone","credentialKey":"+8618013813909"}`,
 		nil,
 	)
@@ -517,7 +517,7 @@ func TestAuth_PhoneLogin_RequiresValidOtp(t *testing.T) {
 	noCode := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/auth/login/phone",
+		"/auth/login/phone",
 		`{"phone":"`+phone+`","otpCode":"123456","deviceId":"ios-1","platform":"ios","appVersion":"1.0.0","agreementVersion":"2026-06","privacyVersion":"2026-06"}`,
 		nil,
 	)
@@ -530,7 +530,7 @@ func TestAuth_PhoneLogin_RequiresValidOtp(t *testing.T) {
 	missingConsent := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/auth/login/phone",
+		"/auth/login/phone",
 		`{"phone":"`+phone+`","otpCode":"`+code+`","deviceId":"ios-1","platform":"ios","appVersion":"1.0.0"}`,
 		nil,
 	)
@@ -549,7 +549,7 @@ func TestAuth_PhoneLogin_RequiresValidOtp(t *testing.T) {
 	mismatch := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/auth/login/phone",
+		"/auth/login/phone",
 		`{"phone":"`+phone+`","otpCode":"`+wrong+`","deviceId":"ios-1","platform":"ios","appVersion":"1.0.0","agreementVersion":"2026-06","privacyVersion":"2026-06"}`,
 		nil,
 	)
@@ -561,7 +561,7 @@ func TestAuth_PhoneLogin_RequiresValidOtp(t *testing.T) {
 	login := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/auth/login/phone",
+		"/auth/login/phone",
 		`{"phone":"`+phone+`","otpCode":"`+code+`","deviceId":"ios-1","platform":"ios","appVersion":"1.0.0","agreementVersion":"2026-06","privacyVersion":"2026-06"}`,
 		nil,
 	)
@@ -600,7 +600,7 @@ func TestAuth_PhoneLogin_RequiresValidOtp(t *testing.T) {
 	reuse := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/auth/login/phone",
+		"/auth/login/phone",
 		`{"phone":"`+phone+`","otpCode":"`+code+`","deviceId":"ios-1","platform":"ios","appVersion":"1.0.0","agreementVersion":"2026-06","privacyVersion":"2026-06"}`,
 		nil,
 	)
@@ -617,7 +617,7 @@ func TestAuth_AccessToken_IsJWTAndDrivesIdentity(t *testing.T) {
 	login := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/auth/login/phone",
+		"/auth/login/phone",
 		`{"phone":"`+phone+`","otpCode":"`+otpCode+`","deviceId":"ios-1","platform":"ios","appVersion":"1.0.0","agreementVersion":"2026-06","privacyVersion":"2026-06"}`,
 		nil,
 	)
@@ -644,19 +644,19 @@ func TestAuth_AccessToken_IsJWTAndDrivesIdentity(t *testing.T) {
 	me := doRequest(
 		t,
 		http.MethodGet,
-		"/v1/me",
+		"/me",
 		"",
 		map[string]string{"Authorization": "Bearer " + accessToken},
 	)
 	if me.Code != http.StatusOK {
-		t.Fatalf("GET /v1/me with bearer only: expected 200, got %d: %s", me.Code, me.Body.String())
+		t.Fatalf("GET /me with bearer only: expected 200, got %d: %s", me.Code, me.Body.String())
 	}
 
 	// 伪造 X-Client-User-Id 必须被 token principal 覆盖（防越权）。
 	spoof := doRequest(
 		t,
 		http.MethodGet,
-		"/v1/me",
+		"/me",
 		"",
 		map[string]string{
 			"Authorization":    "Bearer " + accessToken,
@@ -664,7 +664,7 @@ func TestAuth_AccessToken_IsJWTAndDrivesIdentity(t *testing.T) {
 		},
 	)
 	if spoof.Code != http.StatusOK {
-		t.Fatalf("GET /v1/me with spoofed header: expected 200, got %d: %s", spoof.Code, spoof.Body.String())
+		t.Fatalf("GET /me with spoofed header: expected 200, got %d: %s", spoof.Code, spoof.Body.String())
 	}
 }
 
@@ -672,7 +672,7 @@ func TestAuth_SendOtp_ThrottlesResend(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	const phone = "+8618013813921"
-	first := doRequest(t, http.MethodPost, "/v1/auth/otp/send", `{"phone":"`+phone+`","deviceId":"ios-test","platform":"ios","appVersion":"1.0.0","sourceOperation":"test"}`, nil)
+	first := doRequest(t, http.MethodPost, "/auth/otp/send", `{"phone":"`+phone+`","deviceId":"ios-test","platform":"ios","appVersion":"1.0.0","sourceOperation":"test"}`, nil)
 	if first.Code != http.StatusOK {
 		t.Fatalf("first send otp: expected 200, got %d: %s", first.Code, first.Body.String())
 	}
@@ -687,7 +687,7 @@ func TestAuth_SendOtp_ThrottlesResend(t *testing.T) {
 		t.Fatalf("expected deliveryStatus in send otp response, got %#v", firstBody)
 	}
 	// 冷却窗口内立即重发应被限频拒绝。
-	second := doRequest(t, http.MethodPost, "/v1/auth/otp/send", `{"phone":"`+phone+`","deviceId":"ios-test","platform":"ios","appVersion":"1.0.0","sourceOperation":"test"}`, nil)
+	second := doRequest(t, http.MethodPost, "/auth/otp/send", `{"phone":"`+phone+`","deviceId":"ios-test","platform":"ios","appVersion":"1.0.0","sourceOperation":"test"}`, nil)
 	if second.Code == http.StatusOK {
 		t.Fatalf("immediate resend: expected throttled failure, got 200: %s", second.Body.String())
 	}

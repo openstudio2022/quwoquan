@@ -52,7 +52,7 @@
 ## 事实 vs 概率（两通道）
 
 - 事实交集 = `ObjectIntersection`（带 `evidenceItems`、`confidenceLabel`、`computedAt`/`expiresAt`）：可直接计算/查询，请求期不打分。
-- 概率交集 = `RecommendationAffinity`（`score`/`modelReasonBucket`/`experimentBucket`）：走 `/v1/score`，端侧明确标注"推荐"，文案不伪装事实。
+- 概率交集 = `RecommendationAffinity`（`score`/`modelReasonBucket`/`experimentBucket`）：走 `/score`，端侧明确标注"推荐"，文案不伪装事实。
 - 合并排序：事实优先（`strength` + 新鲜度），概率其次（`score`）；统一经过推荐窗口/冷却过滤。
 
 ## 入口 × 维度 × 展示 × 性能 × 验收 矩阵

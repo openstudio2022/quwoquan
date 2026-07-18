@@ -163,7 +163,7 @@ func renderOperation(
 			Reader:         operation.Reader,
 			Slice:          operation.Slice,
 		},
-		Parameters: pathParameters(operation.PathTemplate),
+		Parameters: operationParameters(operation),
 		Responses: map[string]openAPIResponse{
 			"default": errorResponse(),
 		},
@@ -304,9 +304,7 @@ func jsonContent(schema openAPISchema) map[string]openAPIMediaType {
 
 func operationSecurity(operation ast.Operation) []map[string][]string {
 	// AuthMode is the normalized ContractGraph truth produced by the metadata
-	// loader. Reading the parallel pre-normalization security map here caused routes declared with
-	// `auth: required` to fall through to actor inference and, for
-	// persona_or_device actors, incorrectly advertise anonymous access.
+	// loader. OpenAPI 只消费该 canonical 字段，避免从原始 security map 再次派生。
 	authMode := strings.TrimSpace(operation.AuthMode)
 	switch authMode {
 	case "required":
@@ -356,13 +354,58 @@ func pathParameters(pathTemplate string) []openAPIParameter {
 	return parameters
 }
 
+func operationParameters(operation ast.Operation) []openAPIParameter {
+	parameters := pathParameters(operation.PathTemplate)
+	if operation.Reliability.Idempotency == "required" ||
+		operation.Reliability.Idempotency == "optional" {
+		parameters = append(parameters, openAPIParameter{
+			Name:        "Idempotency-Key",
+			In:          "header",
+			Required:    operation.Reliability.Idempotency == "required",
+			Description: "Stable business replay identity; distinct from X-Request-Id.",
+			Schema:      openAPISchema{Type: "string"},
+		})
+	}
+	if operation.Concurrency.VersionPrecondition == ast.VersionPreconditionIfMatch {
+		parameters = append(parameters, openAPIParameter{
+			Name:        "If-Match",
+			In:          "header",
+			Required:    true,
+			Description: "Quoted positive aggregate version for a snapshot overwrite.",
+			Schema:      openAPISchema{Type: "string"},
+		})
+	}
+	return parameters
+}
+
 func isVersionedTransport(pathTemplate string) bool {
-	for _, prefix := range []string{"/v1/", "/internal/v1/", "/callbacks/v1/"} {
-		if strings.HasPrefix(pathTemplate, prefix) {
-			return true
+	// Historical name: eligible current HTTP transport path (unversioned only).
+	switch pathTemplate {
+	case "/health", "/healthz", "/metrics", "/livez", "/startupz":
+		return false
+	}
+	if pathTemplate == "" || !strings.HasPrefix(pathTemplate, "/") {
+		return false
+	}
+	for _, segment := range strings.Split(strings.Trim(pathTemplate, "/"), "/") {
+		if len(segment) >= 2 && segment[0] == 'v' {
+			digitsOnly := true
+			for i := 1; i < len(segment); i++ {
+				if segment[i] < '0' || segment[i] > '9' {
+					digitsOnly = false
+					break
+				}
+			}
+			if digitsOnly {
+				return false
+			}
 		}
 	}
-	return false
+	if strings.HasPrefix(pathTemplate, "/internal/") || strings.HasPrefix(pathTemplate, "/callbacks/") {
+		return true
+	}
+	second := pathTemplate[1]
+	return (second >= 'a' && second <= 'z') || (second >= 'A' && second <= 'Z')
 }
 
 func methodMayCarryBody(method string) bool {

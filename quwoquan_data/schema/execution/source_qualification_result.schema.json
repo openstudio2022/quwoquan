@@ -3,11 +3,10 @@
   "description": "Execution-owned source qualification outcome. Every target is confirmed or blocked from object-local source evidence.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["contractVersion", "executionId", "policyRevision", "verifiedAt", "passed", "targets", "issues"],
+  "required": ["executionId", "policyRevision", "verifiedAt", "passed", "targets", "issues"],
   "properties": {
-    "contractVersion": {"const": "execution-source-qualification-v1"},
     "executionId": {"type": "string", "minLength": 1},
-    "policyRevision": {"const": "encyclopedia-primary-v2"},
+    "policyRevision": {"const": "encyclopedia-primary"},
     "verifiedAt": {"type": "string", "minLength": 1},
     "passed": {"type": "boolean"},
     "targets": {

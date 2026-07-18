@@ -201,11 +201,11 @@ object_types:
     view_model: ModerationCase
     routes:
       - method: GET
-        path: /v1/control-plane/content/moderation/cases/{caseId}
+        path: /control-plane/content/moderation/cases/{caseId}
         operation: GetModerationCase
         scopes: [ops.case.read]
       - method: POST
-        path: /v1/control-plane/content/moderation/cases/{caseId}:applyAction
+        path: /control-plane/content/moderation/cases/{caseId}:applyAction
         operation: ApplyEnforcementAction
         scopes: [ops.case.write]
         danger_level: high

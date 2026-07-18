@@ -1,4 +1,3 @@
-version: 1
 read_model: PersonaManagementQuotaWire
 
 description: |
@@ -19,12 +18,10 @@ client_projection:
       dart_type: int
       nullable: false
       source: maxSubAccounts
-      aliases: [maxSubAccounts, maxPersonas, quotaLimit]
       default: "5"
 
     - name: usedSubAccounts
       dart_type: int
       nullable: false
       source: usedSubAccounts
-      aliases: [usedSubAccounts, usedPersonas, totalCount]
       default: "0"

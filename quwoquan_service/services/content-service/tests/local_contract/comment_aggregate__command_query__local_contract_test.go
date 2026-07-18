@@ -24,10 +24,9 @@ func TestCommentAggregateRejectsNonOwnerDeleteAndPin(t *testing.T) {
 	_, err := service.DeleteComment(
 		commandmeta.WithIdempotencyKey(context.Background(), "comment-owner-delete-denied"),
 		commentapp.DeleteCommentCommand{
-			PostID:          "post-comment-owner",
-			CommentID:       created.ID,
-			ActorID:         "persona-intruder",
-			ExpectedVersion: created.Version,
+			PostID:    "post-comment-owner",
+			CommentID: created.ID,
+			ActorID:   "persona-intruder",
 		},
 	)
 	if err == nil {
@@ -41,10 +40,9 @@ func TestCommentAggregateRejectsNonOwnerDeleteAndPin(t *testing.T) {
 	_, err = service.PinComment(
 		commandmeta.WithIdempotencyKey(context.Background(), "comment-owner-pin-denied"),
 		commentapp.ChangeCommentPinCommand{
-			PostID:          "post-comment-owner",
-			CommentID:       created.ID,
-			ActorID:         "persona-intruder",
-			ExpectedVersion: created.Version,
+			PostID:    "post-comment-owner",
+			CommentID: created.ID,
+			ActorID:   "persona-intruder",
 		},
 	)
 	if err == nil {
@@ -107,6 +105,64 @@ func TestCommentAggregateIdempotencyDoesNotDuplicateFact(t *testing.T) {
 	}
 	if count != 1 || len(store.OutboxEvents()) != 1 {
 		t.Fatalf("digest conflict must not mutate comment or outbox: count=%d facts=%d", count, len(store.OutboxEvents()))
+	}
+}
+
+func TestCommentNoopIntentPersistsReceiptBeforeLaterStateChange(t *testing.T) {
+	service, store := newCommentAggregateService()
+	created := createComment(
+		t,
+		service,
+		"comment-noop-create",
+		commentapp.CreateCommentCommand{
+			PostID:  "post-comment-owner",
+			ActorID: "persona-comment-author",
+			Content: "幂等 no-op 评论",
+		},
+	)
+	pin := commentapp.ChangeCommentPinCommand{
+		PostID:    "post-comment-owner",
+		CommentID: created.ID,
+		ActorID:   "persona-post-owner",
+	}
+	if _, err := service.PinComment(
+		commandmeta.WithIdempotencyKey(context.Background(), "comment-pin-first"),
+		pin,
+	); err != nil {
+		t.Fatalf("pin comment: %v", err)
+	}
+	noopContext := commandmeta.WithIdempotencyKey(
+		context.Background(),
+		"comment-pin-noop",
+	)
+	noop, err := service.PinComment(noopContext, pin)
+	if err != nil {
+		t.Fatalf("record pin no-op: %v", err)
+	}
+	if noop.Replayed || noop.Version != created.Version+1 {
+		t.Fatalf("first no-op must persist its current result: %+v", noop)
+	}
+	if _, err := service.UnpinComment(
+		commandmeta.WithIdempotencyKey(context.Background(), "comment-unpin"),
+		pin,
+	); err != nil {
+		t.Fatalf("unpin comment: %v", err)
+	}
+	replayed, err := service.PinComment(noopContext, pin)
+	if err != nil {
+		t.Fatalf("replay pin no-op: %v", err)
+	}
+	if !replayed.Replayed || replayed.Version != noop.Version {
+		t.Fatalf("no-op retry must replay its original result: %+v", replayed)
+	}
+	aggregate, found, err := store.Load(context.Background(), created.ID)
+	if err != nil || !found || aggregate.Snapshot().IsPinned {
+		t.Fatalf(
+			"no-op replay must not overwrite the later unpin: found=%v snapshot=%+v err=%v",
+			found,
+			aggregate.Snapshot(),
+			err,
+		)
 	}
 }
 
@@ -227,7 +283,7 @@ func TestCommentAggregateExpiresReceiptWithoutRemovingCommittedFact(t *testing.T
 	}
 }
 
-func TestCommentAggregateRejectsStaleVersion(t *testing.T) {
+func TestCommentAggregateAppliesIntentAgainstLatestVersion(t *testing.T) {
 	service, store := newCommentAggregateService()
 	created := createComment(t, service, "comment-version-create", commentapp.CreateCommentCommand{
 		PostID:  "post-comment-owner",
@@ -237,10 +293,9 @@ func TestCommentAggregateRejectsStaleVersion(t *testing.T) {
 	pinned, err := service.PinComment(
 		commandmeta.WithIdempotencyKey(context.Background(), "comment-version-pin"),
 		commentapp.ChangeCommentPinCommand{
-			PostID:          "post-comment-owner",
-			CommentID:       created.ID,
-			ActorID:         "persona-post-owner",
-			ExpectedVersion: created.Version,
+			PostID:    "post-comment-owner",
+			CommentID: created.ID,
+			ActorID:   "persona-post-owner",
 		},
 	)
 	if err != nil {
@@ -249,23 +304,23 @@ func TestCommentAggregateRejectsStaleVersion(t *testing.T) {
 	if pinned.Version != created.Version+1 {
 		t.Fatalf("pin must advance version: %+v", pinned)
 	}
-	_, err = service.DeleteComment(
-		commandmeta.WithIdempotencyKey(context.Background(), "comment-version-stale-delete"),
+	deleted, err := service.DeleteComment(
+		commandmeta.WithIdempotencyKey(context.Background(), "comment-version-delete"),
 		commentapp.DeleteCommentCommand{
-			PostID:          "post-comment-owner",
-			CommentID:       created.ID,
-			ActorID:         "persona-comment-author",
-			ExpectedVersion: created.Version,
+			PostID:    "post-comment-owner",
+			CommentID: created.ID,
+			ActorID:   "persona-comment-author",
 		},
 	)
-	if err == nil {
-		t.Fatal("stale version delete must be rejected")
+	if err != nil {
+		t.Fatalf("delete latest Comment intent: %v", err)
 	}
 	aggregate, found, loadErr := store.Load(context.Background(), created.ID)
 	if loadErr != nil || !found ||
-		aggregate.Version() != pinned.Version ||
-		aggregate.Status() != commentmodel.StatusActive {
-		t.Fatalf("stale mutation must preserve latest aggregate: found=%v version=%d status=%s err=%v", found, aggregate.Version(), aggregate.Status(), loadErr)
+		aggregate.Version() != pinned.Version+1 ||
+		aggregate.Status() != commentmodel.StatusDeleted ||
+		deleted.Version != aggregate.Version() {
+		t.Fatalf("server-owned CAS must commit the latest intent: found=%v version=%d status=%s result=%+v err=%v", found, aggregate.Version(), aggregate.Status(), deleted, loadErr)
 	}
 }
 
@@ -279,10 +334,9 @@ func TestCommentAggregateEmitsCanonicalPostProjectionFacts(t *testing.T) {
 	deleted, err := service.DeleteComment(
 		commandmeta.WithIdempotencyKey(context.Background(), "comment-fact-delete"),
 		commentapp.DeleteCommentCommand{
-			PostID:          "post-comment-owner",
-			CommentID:       created.ID,
-			ActorID:         "persona-comment-author",
-			ExpectedVersion: created.Version,
+			PostID:    "post-comment-owner",
+			CommentID: created.ID,
+			ActorID:   "persona-comment-author",
 		},
 	)
 	if err != nil {
@@ -359,10 +413,9 @@ func TestCommentReadersReturnDetachedTypedSlicesAndFactsMatchCommit(t *testing.T
 	pinned, err := service.PinComment(
 		commandmeta.WithIdempotencyKey(context.Background(), "comment-reader-pin"),
 		commentapp.ChangeCommentPinCommand{
-			PostID:          "post-comment-owner",
-			CommentID:       created.ID,
-			ActorID:         "persona-post-owner",
-			ExpectedVersion: created.Version,
+			PostID:    "post-comment-owner",
+			CommentID: created.ID,
+			ActorID:   "persona-post-owner",
 		},
 	)
 	if err != nil {

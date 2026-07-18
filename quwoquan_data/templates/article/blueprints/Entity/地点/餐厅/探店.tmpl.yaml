@@ -1,5 +1,4 @@
 templateId: 餐厅_探店
-version: 1
 subject: { kind: entity, type: 地点/餐厅 }
 vertical: travel
 category: food

@@ -132,6 +132,13 @@
               "idempotency": { "enum": ["none", "optional", "required"] }
             }
           },
+          "concurrency": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "versionPrecondition": { "enum": ["if_match"] }
+            }
+          },
           "errorCodes": {
             "type": "array",
             "minItems": 1,

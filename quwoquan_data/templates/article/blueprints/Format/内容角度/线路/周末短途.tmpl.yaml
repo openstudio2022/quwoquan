@@ -1,5 +1,4 @@
 templateId: 线路_周末短途
-version: 1
 subject: { kind: topic, type: 旅行/线路, minEntityRefs: 1, subjectTagRef: Topic/旅行/旅行时长/周末短途 }
 vertical: travel
 category: travel

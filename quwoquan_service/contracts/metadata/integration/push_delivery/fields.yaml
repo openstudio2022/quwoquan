@@ -1,4 +1,3 @@
-version: 1
 aggregate: PushDelivery
 
 enums:
@@ -12,6 +11,7 @@ entities:
     description: notification-service 提交的外部推送请求。
     fields:
       - name: requestId
+        source: requestId
         type: string
         constraints: [PK]
         classification: PUBLIC
@@ -19,6 +19,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: notificationId
+        source: notificationId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -26,6 +27,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: recipientId
+        source: recipientId
         type: string
         constraints: [NOT_NULL]
         classification: PRIVATE
@@ -33,6 +35,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: deviceTokenRef
+        source: deviceTokenRef
         type: string
         constraints: [NOT_NULL]
         classification: SECRET
@@ -40,6 +43,7 @@ entities:
         api_exposure: none
         ops_exposure: none
       - name: providerHint
+        source: providerHint
         type: enum
         enum_ref: PushProvider
         constraints: [NULLABLE]
@@ -48,6 +52,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: title
+        source: title
         type: string
         constraints: [NOT_NULL]
         classification: PRIVATE
@@ -55,6 +60,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: body
+        source: body
         type: string
         constraints: [NOT_NULL]
         classification: PRIVATE
@@ -62,6 +68,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: deeplink
+        source: deeplink
         type: string
         constraints: [NULLABLE]
         classification: PRIVATE
@@ -69,6 +76,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: expiresAt
+        source: expiresAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -80,6 +88,7 @@ entities:
     description: 推送请求已进入可靠队列。
     fields:
       - name: requestId
+        source: requestId
         type: string
         constraints: [PK]
         classification: PUBLIC
@@ -87,6 +96,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: status
+        source: status
         type: enum
         enum_ref: PushDeliveryStatus
         constraints: [NOT_NULL]
@@ -99,6 +109,7 @@ entities:
     description: 外部推送供应商回执。
     fields:
       - name: requestId
+        source: requestId
         type: string
         constraints: [PK]
         classification: PUBLIC
@@ -106,6 +117,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: provider
+        source: provider
         type: enum
         enum_ref: PushProvider
         constraints: [NOT_NULL]
@@ -114,6 +126,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: providerMessageId
+        source: providerMessageId
         type: string
         constraints: [NULLABLE]
         classification: PRIVATE
@@ -121,6 +134,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: status
+        source: status
         type: enum
         enum_ref: PushDeliveryStatus
         constraints: [NOT_NULL]
@@ -129,6 +143,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: signature
+        source: signature
         type: string
         constraints: [NOT_NULL]
         classification: SECRET
@@ -140,6 +155,7 @@ entities:
     description: 推送回执已验签并幂等接收。
     fields:
       - name: requestId
+        source: requestId
         type: string
         constraints: [PK]
         classification: PUBLIC
@@ -147,6 +163,7 @@ entities:
         api_exposure: read
         ops_exposure: read
       - name: accepted
+        source: accepted
         type: bool
         constraints: [NOT_NULL]
         classification: PUBLIC

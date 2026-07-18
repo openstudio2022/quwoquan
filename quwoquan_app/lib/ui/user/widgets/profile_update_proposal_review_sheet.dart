@@ -28,23 +28,16 @@ final class _ProfileUpdateProposalReviewSheetState
     });
     try {
       final writer = ref.read(profileEditProposalCommandWriterProvider);
-      var version = widget.proposal.version;
       if (widget.proposal.status == ProfileUpdateProposalStatus.pending) {
-        final confirmed = await writer.confirm(
-          ConfirmProfileUpdateProposalCommand(
-            proposalId: widget.proposal.id,
-            expectedProposalVersion: version,
-          ),
+        await writer.confirm(
+          ConfirmProfileUpdateProposalCommand(proposalId: widget.proposal.id),
         );
-        version = confirmed.version;
       }
       if (widget.proposal.status == ProfileUpdateProposalStatus.pending ||
-          widget.proposal.status == ProfileUpdateProposalStatus.confirmed) {
+          widget.proposal.status == ProfileUpdateProposalStatus.confirmed ||
+          widget.proposal.status == ProfileUpdateProposalStatus.applying) {
         await writer.apply(
-          ApplyProfileUpdateProposalCommand(
-            proposalId: widget.proposal.id,
-            expectedProposalVersion: version,
-          ),
+          ApplyProfileUpdateProposalCommand(proposalId: widget.proposal.id),
         );
       }
       if (!mounted) return;
@@ -75,10 +68,7 @@ final class _ProfileUpdateProposalReviewSheetState
       await ref
           .read(profileEditProposalCommandWriterProvider)
           .reject(
-            RejectProfileUpdateProposalCommand(
-              proposalId: widget.proposal.id,
-              expectedProposalVersion: widget.proposal.version,
-            ),
+            RejectProfileUpdateProposalCommand(proposalId: widget.proposal.id),
           );
       if (!mounted) return;
       AppToast.show(context, UITextConstants.editProfileProposalRejected);
@@ -101,7 +91,11 @@ final class _ProfileUpdateProposalReviewSheetState
   @override
   Widget build(BuildContext context) {
     final changes = _changeRows(widget.proposal.changes);
-    final actionable =
+    final canApprove =
+        widget.proposal.status == ProfileUpdateProposalStatus.pending ||
+        widget.proposal.status == ProfileUpdateProposalStatus.confirmed ||
+        widget.proposal.status == ProfileUpdateProposalStatus.applying;
+    final canReject =
         widget.proposal.status == ProfileUpdateProposalStatus.pending ||
         widget.proposal.status == ProfileUpdateProposalStatus.confirmed;
     return AppBottomModalSurface(
@@ -148,30 +142,39 @@ final class _ProfileUpdateProposalReviewSheetState
             ProfileIosGroupedSection(showDividers: true, children: changes),
             if (_errorMessage != null) ...<Widget>[
               SizedBox(height: AppSpacing.containerSm),
-              Text(
-                _errorMessage!,
+              AppFormErrorCard(
                 key: const ValueKey<String>('profile-proposal-error'),
-                style: TextStyle(
-                  fontSize: AppTypography.iosFootnote,
-                  color: AppColors.iosDestructive(context),
+                density: AppFormErrorCardDensity.compact,
+                semantic: UiErrorSemantic(
+                  category: UiErrorCategory.submit,
+                  scope: UiErrorScope.dialog,
+                  title: '',
+                  message: _errorMessage!,
+                  presentation: UiErrorPresentation.formInlineCard,
                 ),
               ),
             ],
-            if (actionable) ...<Widget>[
+            if (canApprove) ...<Widget>[
               SizedBox(height: AppSpacing.interGroupMd),
               ProfileIosActionButton(
                 key: const ValueKey<String>('profile-proposal-approve'),
-                label: UITextConstants.editProfileProposalApprove,
+                label:
+                    widget.proposal.status ==
+                        ProfileUpdateProposalStatus.applying
+                    ? UITextConstants.editProfileProposalResumeApply
+                    : UITextConstants.editProfileProposalApprove,
                 style: ProfileIosActionStyle.filled,
                 onPressed: _busy ? null : _approve,
               ),
-              SizedBox(height: AppSpacing.containerSm),
-              ProfileIosActionButton(
-                key: const ValueKey<String>('profile-proposal-reject'),
-                label: UITextConstants.editProfileProposalReject,
-                style: ProfileIosActionStyle.outlined,
-                onPressed: _busy ? null : _reject,
-              ),
+              if (canReject) ...<Widget>[
+                SizedBox(height: AppSpacing.containerSm),
+                ProfileIosActionButton(
+                  key: const ValueKey<String>('profile-proposal-reject'),
+                  label: UITextConstants.editProfileProposalReject,
+                  style: ProfileIosActionStyle.outlined,
+                  onPressed: _busy ? null : _reject,
+                ),
+              ],
             ],
           ],
         ),

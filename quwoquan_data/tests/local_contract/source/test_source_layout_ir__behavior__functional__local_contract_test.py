@@ -27,12 +27,12 @@ from core.source_layout import (  # noqa: E402
     SOURCE_LAYOUT_FILE,
     cover_candidates,
     layout_figures,
+    merge_rendered_text_layout,
     read_source_layout,
+    render_source_markdown,
 )
-from core.io import read_json, write_json  # noqa: E402
 from core.wiki_wikitext import parse_wikitext_layout, parse_wikitext_placements  # noqa: E402
 from content.source.baike_layout import parse_baike_layout, render_layout_markdown  # noqa: E402
-from content.source.wikipedia_wikitext import enrich_source_unit_meta  # noqa: E402
 
 
 # 黄龙式样本：infobox（含地图）+ 正文 + 景点表（行图）+ 图库宫格 + 无图注图。
@@ -136,49 +136,58 @@ def test_wikitext_gallery_degrades_to_consecutive_figures_with_original_captions
     assert [f["caption"] for f in gallery_figures] == ["争艳池", "", "石塔镇海"]
 
 
-def test_wikitext_enrichment_refreshes_layout_and_bound_clean_source(tmp_path: Path) -> None:
-    """延迟 wikitext 成功后，IR、source.md 和 source.clean.md 必须同源刷新。"""
-    unit = tmp_path / "sources" / "黄龙__wikipedia__12345678"
-    unit.mkdir(parents=True)
-    (unit / "source.md").write_text(
-        "---\nurl: https://zh.wikipedia.org/wiki/黄龙风景名胜区\n---\n\n旧正文。\n",
-        encoding="utf-8",
-    )
-    write_json(
-        unit / "meta.json",
-        {"title": "黄龙风景名胜区", "resolvedTitle": "黄龙风景名胜区"},
-    )
-    write_json(
-        unit / "assets" / "index.json",
-        {
-            "assets": [
-                {
-                    "fileName": "001_home_wikipedia.jpg",
-                    "url": "https://upload.wikimedia.org/Huanglong_Wucai_Pond.jpg",
-                    "sourceUrl": "https://upload.wikimedia.org/Huanglong_Wucai_Pond.jpg",
-                    "caption": "",
-                    "inlinePlaceholderId": "source-inline-001",
-                    "sourceAssetId": "001_001",
-                }
-            ]
-        },
-    )
+def test_rendered_mediawiki_prose_replaces_template_loss_without_losing_figures() -> None:
+    wikitext = """'''海螺沟'''位于四川省。\n\n== 冰川 ==\n面积占比{{unicode|10.4%}}，纵坡为{{unicode|540‰}}。\n[[File:Hailuogou.jpg|thumb|海螺沟冰川]]\n\n== 温泉 ==\n水温在{{unicode|50℃}}至{{unicode|90℃}}之间。\n"""
+    rendered = """海螺沟位于四川省。\n\n== 冰川 ==\n面积占比10.4%，纵坡为540‰。\n\n== 温泉 ==\n水温在50℃至90℃之间。\n"""
 
-    enrich_source_unit_meta(
-        unit,
-        "https://zh.wikipedia.org/wiki/黄龙风景名胜区",
-        fetcher=lambda _url: _HUANGLONG_WIKITEXT,
-    )
+    parsed = parse_wikitext_layout(wikitext, title="海螺沟")
+    merged = merge_rendered_text_layout(parsed, rendered)
+    text = render_source_markdown(merged)
 
-    layout = read_source_layout(unit)
-    assert layout is not None
-    assert len(layout_figures(layout)) == 6
-    meta = read_json(unit / "meta.json")
-    assert len(meta["imagePlacements"]) == 6
-    source_text = (unit / "source.md").read_text(encoding="utf-8")
-    clean_text = (unit / "source.clean.md").read_text(encoding="utf-8")
-    assert "asset://001_001" in source_text
-    assert "asset://001_001" in clean_text
+    for value in ("10.4%", "540‰", "50℃", "90℃"):
+        assert value in text
+    assert "![海螺沟冰川](asset://source-inline-001)" in text
+    assert "占比，" not in text
+
+
+def test_mediawiki_fidelity_ignores_only_intentionally_dropped_tail_sections() -> None:
+    from content.post.article.evidence_text import clean_source_markdown
+    from core.source_fidelity import assess_source_content_fidelity
+
+    rendered = """金沙湖是位于杭州下沙的一个大型人工湖。
+
+== 简介 ==
+金沙湖位于下沙新城中心区。
+
+== 交通 ==
+杭州地铁1号线可达。
+
+== 参考资料 ==
+参考条目一
+
+== 外部链接 ==
+金沙湖专题（页面存档备份）
+"""
+    candidate = """金沙湖是位于杭州下沙的一个大型人工湖。
+
+## 简介
+
+金沙湖位于下沙新城中心区。
+
+## 交通
+
+杭州地铁1号线可达。
+"""
+
+    publishable_rendered = clean_source_markdown(
+        rendered,
+        raw_format="mediawiki_api_json",
+    )
+    fidelity = assess_source_content_fidelity(publishable_rendered, candidate)
+
+    assert fidelity.complete
+    assert "参考条目一" not in publishable_rendered
+    assert "金沙湖专题" not in publishable_rendered
 
 
 def test_wikitext_infobox_yields_cover_candidate_and_blocks_locator_map() -> None:
@@ -230,8 +239,8 @@ _BAIKE_HTML = """<!DOCTYPE html>
 def test_baike_html_parses_sections_facts_and_records_image_evidence() -> None:
     layout = parse_baike_layout(
         _BAIKE_HTML.encode("utf-8"),
-        source_kind="home_baidu_baike",
-        extractor="baidu_baike_html",
+        source_kind="home_toutiao_baike",
+        extractor="toutiao_baike_html",
     )
     assert layout["parseStatus"] == "ok"
     assert layout["title"] == "西岭雪山"
@@ -257,23 +266,12 @@ def test_baike_html_parses_sections_facts_and_records_image_evidence() -> None:
 def test_baike_html_parse_failure_is_structured_reject_not_plaintext_fallback() -> None:
     layout = parse_baike_layout(
         b"<html><body><script>window.location.href='/verify'</script></body></html>",
-        source_kind="home_baidu_baike",
-        extractor="baidu_baike_html",
+        source_kind="home_toutiao_baike",
+        extractor="toutiao_baike_html",
     )
     assert layout["parseStatus"] == "rejected"
     assert layout["rejectReason"] == "baike_structure_not_found"
     assert layout["blocks"] == []
-    # fetch 层的正文产物必须为空（不允许把验证码壳当正文）。
-    import content.source.fetch_text as fetch_mod
-
-    text = fetch_mod._baike_html_plaintext(
-        "https://baike.baidu.com/item/x",
-        extractor="baidu_baike_html",
-        html_bytes=b"<html><body><script>x</script></body></html>",
-    )
-    assert text == ""
-
-
 def test_write_source_unit_persists_layout_and_manifest_summary(monkeypatch) -> None:
     from core.paths import execution_entity_object_dir, execution_source_unit_dir, ensure_execution_command_layout, ensure_execution_layout
     from content.source.source_unit import write_source_unit
@@ -303,7 +301,7 @@ def test_write_source_unit_persists_layout_and_manifest_summary(monkeypatch) -> 
     unit = execution_source_unit_dir(execution_id, manifest["sourceUnitId"])
     persisted = read_source_layout(unit)
     assert persisted is not None
-    assert persisted["schemaVersion"] == "quwoquan_data.source_layout/1"
+    assert persisted["schema"] == "quwoquan_data.source_layout"
     assert [b["type"] for b in persisted["blocks"]] == [b["type"] for b in layout["blocks"]]
 
 
@@ -347,7 +345,7 @@ def test_bind_prunes_unbound_placeholder_blocks_without_caption_line() -> None:
 
 def test_download_source_unit_images_keeps_complete_source_page(monkeypatch) -> None:
     """页面自有图片无数量 cap：散图与 gallery 成员全部进入下载处置。"""
-    import content.source.handler_images as hi
+    import content.source.image_download as hi
 
     jpeg = b"\xff\xd8\xff\xe0" + b"0" * 128 + b"\xff\xd9"
     monkeypatch.setattr(hi, "validate_image_rights", lambda spec, vertical: [])

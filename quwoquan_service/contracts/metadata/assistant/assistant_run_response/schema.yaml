@@ -2,7 +2,6 @@ dart_class: AssistantRunResponseWire
 library_path: assistant/generated/contracts/assistant_run_response.g.dart
 output_path: assistant/generated/contracts/assistant_run_response.g.dart
 contract: assistant_run_response
-version: assistant_run_response.m5
 kind: shared_wire_contract
 imports:
   - package:quwoquan_app/assistant/generated/contracts/assistant_journey.g.dart

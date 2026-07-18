@@ -15,14 +15,15 @@ import (
 func TestReactWithCounterStrategy(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	created := createPost(t, `{"contentType":"image","title":"Like counter test","mediaUrls":["https://example.com/img.jpg"]}`)
-	postID, _ := created["_id"].(string)
+	created := submitPublishedPost(t, `{"contentType":"image","title":"Like counter test"}`)
+	postID, _ := created["postId"].(string)
 	if postID == "" {
 		t.Fatal("no _id in created post")
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/content/posts/"+postID+"/like", nil)
+	req := httptest.NewRequest(http.MethodPost, "/content/posts/"+postID+"/like", nil)
 	req.Header.Set("X-Client-User-Id", "user_react_001")
+	ensureIdempotencyHeader(req, "reaction-like")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 
@@ -56,15 +57,16 @@ func TestReactWithCounterStrategy(t *testing.T) {
 func TestReactIdempotent(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	created := createPost(t, `{"contentType":"image","title":"Idempotent like test","mediaUrls":["https://example.com/img.jpg"]}`)
-	postID, _ := created["_id"].(string)
+	created := submitPublishedPost(t, `{"contentType":"image","title":"Idempotent like test"}`)
+	postID, _ := created["postId"].(string)
 	if postID == "" {
 		t.Fatal("no _id in created post")
 	}
 
 	// First like
-	req1 := httptest.NewRequest(http.MethodPost, "/v1/content/posts/"+postID+"/like", nil)
+	req1 := httptest.NewRequest(http.MethodPost, "/content/posts/"+postID+"/like", nil)
 	req1.Header.Set("X-Client-User-Id", "user_react_002")
+	ensureIdempotencyHeader(req1, "reaction-like-first")
 	rec1 := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec1, req1)
 
@@ -73,8 +75,9 @@ func TestReactIdempotent(t *testing.T) {
 	}
 
 	// Second like (same user) — idempotent
-	req2 := httptest.NewRequest(http.MethodPost, "/v1/content/posts/"+postID+"/like", nil)
+	req2 := httptest.NewRequest(http.MethodPost, "/content/posts/"+postID+"/like", nil)
 	req2.Header.Set("X-Client-User-Id", "user_react_002")
+	ensureIdempotencyHeader(req2, "reaction-like-repeat")
 	rec2 := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec2, req2)
 
@@ -106,21 +109,23 @@ func TestReactIdempotent(t *testing.T) {
 func TestUnlikeDecrementsCounter(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	created := createPost(t, `{"contentType":"image","title":"Unlike decrement test","mediaUrls":["https://example.com/img.jpg"]}`)
-	postID, _ := created["_id"].(string)
+	created := submitPublishedPost(t, `{"contentType":"image","title":"Unlike decrement test"}`)
+	postID, _ := created["postId"].(string)
 	if postID == "" {
 		t.Fatal("no _id in created post")
 	}
 
 	// Like first
-	likeReq := httptest.NewRequest(http.MethodPost, "/v1/content/posts/"+postID+"/like", nil)
+	likeReq := httptest.NewRequest(http.MethodPost, "/content/posts/"+postID+"/like", nil)
 	likeReq.Header.Set("X-Client-User-Id", "user_react_003")
+	ensureIdempotencyHeader(likeReq, "reaction-like-before-unlike")
 	likeRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(likeRec, likeReq)
 
 	// Then unlike
-	req := httptest.NewRequest(http.MethodDelete, "/v1/content/posts/"+postID+"/like", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/content/posts/"+postID+"/like", nil)
 	req.Header.Set("X-Client-User-Id", "user_react_003")
+	ensureIdempotencyHeader(req, "reaction-unlike")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 
@@ -141,8 +146,9 @@ func TestUnlikeDecrementsCounter(t *testing.T) {
 
 func TestContentReactionRejectsMissingPostWithoutDurableSideEffects(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
-	req := httptest.NewRequest(http.MethodPost, "/v1/content/posts/missing-reaction-target/like", nil)
+	req := httptest.NewRequest(http.MethodPost, "/content/posts/missing-reaction-target/like", nil)
 	req.Header.Set("X-Client-User-Id", "reaction-missing-target")
+	ensureIdempotencyHeader(req, "reaction-missing-target")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusNotFound {
@@ -162,18 +168,19 @@ func TestContentReactionRejectsMissingPostWithoutDurableSideEffects(t *testing.T
 
 func TestPostDeletionTransitionsActiveReactionsThroughAggregateOutbox(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
-	created := createPostWithAuthor(
+	created := submitPublishedPostWithAuthor(
 		t,
 		"reaction_delete_owner",
-		`{"contentType":"image","title":"Reaction delete lifecycle","mediaUrls":["https://example.com/delete.jpg"]}`,
+		`{"contentType":"image","title":"Reaction delete lifecycle"}`,
 	)
-	postID, _ := created["_id"].(string)
+	postID, _ := created["postId"].(string)
 	if postID == "" {
 		t.Fatal("no _id in created post")
 	}
 
-	likeReq := httptest.NewRequest(http.MethodPost, "/v1/content/posts/"+postID+"/like", nil)
+	likeReq := httptest.NewRequest(http.MethodPost, "/content/posts/"+postID+"/like", nil)
 	likeReq.Header.Set("X-Client-User-Id", "reaction_delete_actor")
+	ensureIdempotencyHeader(likeReq, "reaction-before-delete")
 	likeRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(likeRec, likeReq)
 	if likeRec.Code != http.StatusOK {
@@ -182,8 +189,9 @@ func TestPostDeletionTransitionsActiveReactionsThroughAggregateOutbox(t *testing
 	drainReactionOutbox(t)
 	assertReactionLikeCountProjections(t, postID, "reaction_delete_actor", 1)
 
-	deleteReq := httptest.NewRequest(http.MethodDelete, "/v1/content/posts/"+postID, nil)
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/content/posts/"+postID, nil)
 	deleteReq.Header.Set("X-Client-User-Id", "reaction_delete_owner")
+	ensureIdempotencyHeader(deleteReq, "post-delete-with-reaction")
 	deleteRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(deleteRec, deleteReq)
 	if deleteRec.Code != http.StatusOK {

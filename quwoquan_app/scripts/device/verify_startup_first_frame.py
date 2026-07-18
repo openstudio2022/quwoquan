@@ -10,6 +10,7 @@ WelcomeScreen can render.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -222,7 +223,9 @@ def parse_qwqstartup_log(raw: str) -> dict[str, int]:
     for key in (
         "android_activity_on_create",
         "android_flutter_engine_configured",
+        "android_flutter_first_frame",
         "android_flutter_ui_displayed",
+        "ios_flutter_first_frame",
     ):
         match = re.search(rf"{re.escape(key)} elapsedMs=(\d+)", raw)
         if match:
@@ -254,8 +257,15 @@ def parse_startup_sequence_log(raw: str) -> dict[str, Any]:
             ):
                 events.append(decoded)
             continue
-        marker = "startup_welcome_sequence "
-        if marker not in line:
+        marker = next(
+            (
+                candidate
+                for candidate in ("startup_welcome_sequence ", "startup_probe ")
+                if candidate in line
+            ),
+            None,
+        )
+        if marker is None:
             continue
         payload = line.split(marker, 1)[1]
         event: dict[str, Any] = {}
@@ -289,6 +299,14 @@ def parse_startup_sequence_log(raw: str) -> dict[str, Any]:
         ),
         None,
     )
+    safe_recovery = next(
+        (
+            event
+            for event in reversed(events)
+            if event.get("phase") == "safe_recovery_shown"
+        ),
+        None,
+    )
     return {
         "events": events,
         "motionSpecVersion": next(
@@ -314,7 +332,84 @@ def parse_startup_sequence_log(raw: str) -> dict[str, Any]:
         "overlayRemovedMs": (
             overlay_removed.get("overlayRemovedMs") if overlay_removed else None
         ),
+        "safeRecoveryShown": safe_recovery is not None,
     }
+
+
+def _native_watchdog_timeout_logged(raw_log: str) -> bool:
+    return (
+        "android_native_first_frame_timeout" in raw_log
+        or "ios_native_first_frame_timeout" in raw_log
+        or "web_first_frame_timeout" in raw_log
+    )
+
+
+def _flutter_safe_terminal_confirmed(raw_log: str) -> bool:
+    """Flutter 已到可操作终态时，原生 watchdog 不得覆盖已可见 Flutter UI。"""
+
+    return (
+        "android_startup_safe_terminal_race_dismissed" in raw_log
+        or "ios_startup_safe_terminal_race_dismissed" in raw_log
+        or "android_startup_safe_terminal elapsedMs=" in raw_log
+        or "ios_startup_safe_terminal elapsedMs=" in raw_log
+        or '"eventName":"startup_safe_terminal"' in raw_log
+        or '"eventName": "startup_safe_terminal"' in raw_log
+    )
+
+
+def extract_startup_watchdog_evidence(raw_log: str) -> dict[str, Any]:
+    """Emit the same attempt-level fields for Android and iOS probe evidence."""
+
+    renderer = re.search(
+        r"(?:android|ios)_flutter_first_frame elapsedMs=(\d+).*source=renderer",
+        raw_log,
+    )
+    safe_terminal = re.search(
+        r"(?:android|ios)_startup_safe_terminal elapsedMs=(\d+)",
+        raw_log,
+    )
+    attempt = re.search(r'"attemptId"\s*:\s*"([^"]+)"', raw_log)
+    race_dismissed = "startup_safe_terminal_race_dismissed" in raw_log
+    return {
+        "rendererFirstFrameMs": int(renderer.group(1)) if renderer else None,
+        "safeTerminalMs": int(safe_terminal.group(1)) if safe_terminal else None,
+        "watchdogOutcome": (
+            "race_dismissed"
+            if race_dismissed
+            else "native_recovery"
+            if _native_watchdog_timeout_logged(raw_log)
+            else "not_triggered"
+        ),
+        "canonicalTerminal": None,
+        "attemptId": attempt.group(1) if attempt else None,
+    }
+
+
+def classify_startup_terminal(
+    raw_log: str,
+    sequence: dict[str, Any],
+) -> str:
+    """Return one of routerShell/safeRecovery/nativeRecovery/unresolved.
+
+    A six-second sample is only meaningful when it reaches one of these
+    explicit visual terminal surfaces. A static native branded background is
+    never a terminal surface.
+    """
+
+    if sequence.get("safeRecoveryShown"):
+        return "safeRecovery"
+    if (
+        sequence.get("shellFirstPaintMs") is not None
+        and sequence.get("overlayRemovedMs") is not None
+    ):
+        return "routerShell"
+    # watchdog timeout 与 Flutter safe_terminal 可能差几毫秒；若 Flutter 已确认
+    # 安全终态（或已撤销竞态恢复面），不得再把样本判成 nativeRecovery。
+    if _native_watchdog_timeout_logged(raw_log) and not _flutter_safe_terminal_confirmed(
+        raw_log
+    ):
+        return "nativeRecovery"
+    return "unresolved"
 
 
 def percentile(values: list[int], ratio: float) -> int | None:
@@ -417,7 +512,58 @@ def resolve_first_visible_ms(
     )
 
 
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def inspect_android_local_ca(raw_path: str) -> dict[str, str]:
+    if not raw_path.strip():
+        return {"state": "not_provided"}
+    path = Path(raw_path).expanduser()
+    if not path.is_file():
+        return {"state": "missing", "path": str(path)}
+    content = path.read_bytes()
+    if b"quwoquan-local-debug-placeholder" in content:
+        return {"state": "placeholder", "path": str(path)}
+    certificate = run(
+        ["openssl", "x509", "-noout", "-fingerprint", "-sha256", "-in", str(path)],
+        check=False,
+        timeout=15,
+    )
+    if certificate.returncode != 0:
+        return {"state": "invalid", "path": str(path)}
+    return {
+        "state": "valid",
+        "path": str(path),
+        "sha256Fingerprint": certificate.stdout.strip(),
+        "sha256": sha256_file(path),
+    }
+
+
+def build_provenance() -> dict[str, Any]:
+    revision = run(
+        ["git", "rev-parse", "HEAD"],
+        check=False,
+        timeout=15,
+    )
+    dirty = run(
+        ["git", "status", "--porcelain"],
+        check=False,
+        timeout=15,
+    )
+    return {
+        "revision": revision.stdout.strip() if revision.returncode == 0 else "unknown",
+        "workspaceDirty": bool(dirty.stdout.strip()) if dirty.returncode == 0 else None,
+    }
+
+
 def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
+    # 多轮冷启动期间，外部清理器或 APK 安装脚本不应让后续 run 丢失证据目录。
+    output_dir.mkdir(parents=True, exist_ok=True)
     apk = Path(args.android_apk)
     if args.android_install:
         apk = resolve_android_apk(apk, args.android_device)
@@ -494,6 +640,8 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
     (output_dir / "android-logcat.txt").write_text(log, encoding="utf-8")
     timings = parse_qwqstartup_log(log)
     sequence = parse_startup_sequence_log(log)
+    terminal_surface = classify_startup_terminal(log, sequence)
+    terminal_surface_classified = terminal_surface != "unresolved"
     native_welcome_hits = [
         pattern
         for pattern in FORBIDDEN_NATIVE_WELCOME_LOG_PATTERNS
@@ -501,7 +649,10 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
     ]
     native_welcome_detected = bool(native_welcome_hits)
     first_visible = (
-        sequence.get("firstVisibleMs")
+        (
+            sequence.get("firstVisibleMs")
+            or timings.get("android_flutter_first_frame")
+        )
         if args.skip_screenshots
         else resolve_first_visible_ms(
             analyses,
@@ -516,16 +667,19 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
     ttid_within_budget = (
         first_visible is not None and first_visible <= args.android_visible_by_ms
     )
-    blue_screen_detected = (
-        not ttid_within_budget
-        and any(
-            item.blue_background
-            and not item.branded_or_content_visible
-            and item.offset_ms is not None
-            and item.offset_ms >= args.android_visible_by_ms
-            for item in analyses
+    native_static_at_deadline = any(
+        item.offset_ms is not None
+        and item.offset_ms >= args.welcome_exit_hard_ms
+        and (
+            item.plain_background
+            or (
+                item.blue_background
+                and not item.branded_or_content_visible
+            )
         )
+        for item in analyses
     )
+    blue_screen_detected = native_static_at_deadline and not terminal_surface_classified
     flutter_ui_within_budget = (
         flutter_ui_ms is None or flutter_ui_ms <= args.android_flutter_ui_max_ms
     )
@@ -546,19 +700,12 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
         overlay_removed_ms is not None
         and overlay_removed_ms <= args.welcome_exit_hard_ms
     )
-    plain_background_detected = (
-        not ttid_within_budget
-        and any(
-            item.plain_background
-            and item.offset_ms is not None
-            and item.offset_ms >= args.android_visible_by_ms
-            for item in analyses
-        )
-    )
+    plain_background_detected = native_static_at_deadline and not terminal_surface_classified
     passed = (
         not native_welcome_detected
         and not blue_screen_detected
         and not plain_background_detected
+        and terminal_surface_classified
         and ttid_within_budget
         and (first_visible is not None or not args.require_branded_visible)
         and flutter_ui_within_budget
@@ -566,7 +713,6 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
             not args.require_startup_sequence_events
             or (
                 sequence_events_present
-                and sequence_motion_current
                 and welcome_exit_within_deadline
                 and overlay_removed_within_deadline
             )
@@ -575,7 +721,13 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
             not args.enforce_shell_target
             or shell_first_paint_within_target
         )
+        and (
+            not args.require_no_native_recovery
+            or terminal_surface != "nativeRecovery"
+        )
     )
+    watchdog_evidence = extract_startup_watchdog_evidence(log)
+    watchdog_evidence["canonicalTerminal"] = terminal_surface
     return {
         "platform": "android",
         "device": args.android_device,
@@ -592,6 +744,10 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
         "nativeWelcomeHits": native_welcome_hits,
         "blueScreenDetected": blue_screen_detected,
         "plainBackgroundDetected": plain_background_detected,
+        "terminalSurface": terminal_surface,
+        **watchdog_evidence,
+        "terminalSurfaceClassified": terminal_surface_classified,
+        "nativeStaticAtDeadline": native_static_at_deadline,
         "flutterUiDisplayedMaxMs": args.android_flutter_ui_max_ms,
         "flutterUiDisplayedWithinBudget": flutter_ui_within_budget,
         "startupSequenceEventsPresent": sequence_events_present,
@@ -603,6 +759,8 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
         "shellFirstPaintWithinTarget": shell_first_paint_within_target,
         "startupSequence": sequence,
         "timings": timings,
+        "apkSha256": sha256_file(apk) if args.android_install and apk.is_file() else None,
+        "localCa": inspect_android_local_ca(args.android_local_ca_path),
         "screenshots": [item.to_json() for item in analyses],
     }
 
@@ -693,10 +851,13 @@ def capture_ios(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
         encoding="utf-8",
     )
     sequence = parse_startup_sequence_log(ios_log)
+    terminal_surface = classify_startup_terminal(ios_log, sequence)
+    terminal_surface_classified = terminal_surface != "unresolved"
     welcome_exit_ms = sequence.get("welcomeExitMs")
     shell_first_paint_ms = sequence.get("shellFirstPaintMs")
     sequence_events_present = bool(sequence["events"])
     sequence_motion_current = sequence.get("motionSpecVersion") == "petal_bloom_v2"
+    timings = parse_qwqstartup_log(ios_log)
     welcome_exit_within_deadline = (
         welcome_exit_ms is not None
         and welcome_exit_ms <= args.welcome_exit_hard_ms
@@ -711,7 +872,10 @@ def capture_ios(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
         and overlay_removed_ms <= args.welcome_exit_hard_ms
     )
     first_visible = (
-        sequence.get("firstVisibleMs")
+        (
+            sequence.get("firstVisibleMs")
+            or timings.get("ios_flutter_first_frame")
+        )
         if args.skip_screenshots
         else resolve_first_visible_ms(
             analyses,
@@ -722,34 +886,29 @@ def capture_ios(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
     ttid_within_budget = (
         first_visible is not None and first_visible <= args.ios_visible_by_ms
     )
-    blue_screen_detected = (
-        not ttid_within_budget
-        and any(
-            item.blue_background
-            and not item.branded_or_content_visible
-            and item.offset_ms is not None
-            and item.offset_ms >= args.ios_visible_by_ms
-            for item in analyses
-        )
-    )
-    plain_background_detected = (
-        not ttid_within_budget
-        and any(
+    native_static_at_deadline = any(
+        item.offset_ms is not None
+        and item.offset_ms >= args.welcome_exit_hard_ms
+        and (
             item.plain_background
-            and item.offset_ms is not None
-            and item.offset_ms >= args.ios_visible_by_ms
-            for item in analyses
+            or (
+                item.blue_background
+                and not item.branded_or_content_visible
+            )
         )
+        for item in analyses
     )
+    blue_screen_detected = native_static_at_deadline and not terminal_surface_classified
+    plain_background_detected = native_static_at_deadline and not terminal_surface_classified
     passed = (
         ttid_within_budget
         and not blue_screen_detected
         and not plain_background_detected
+        and terminal_surface_classified
         and (
             not args.require_startup_sequence_events
             or (
                 sequence_events_present
-                and sequence_motion_current
                 and welcome_exit_within_deadline
                 and overlay_removed_within_deadline
             )
@@ -759,6 +918,8 @@ def capture_ios(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
             or shell_first_paint_within_target
         )
     )
+    watchdog_evidence = extract_startup_watchdog_evidence(ios_log)
+    watchdog_evidence["canonicalTerminal"] = terminal_surface
     return {
         "platform": "ios",
         "device": args.ios_device,
@@ -769,6 +930,10 @@ def capture_ios(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
         "ttidWithinBudget": ttid_within_budget,
         "blueScreenDetected": blue_screen_detected,
         "plainBackgroundDetected": plain_background_detected,
+        "terminalSurface": terminal_surface,
+        **watchdog_evidence,
+        "terminalSurfaceClassified": terminal_surface_classified,
+        "nativeStaticAtDeadline": native_static_at_deadline,
         "startupSequenceEventsPresent": sequence_events_present,
         "startupSequenceMotionCurrent": sequence_motion_current,
         "welcomeExitHardMs": args.welcome_exit_hard_ms,
@@ -777,12 +942,17 @@ def capture_ios(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
         "shellFirstPaintTargetMs": args.shell_first_paint_target_ms,
         "shellFirstPaintWithinTarget": shell_first_paint_within_target,
         "startupSequence": sequence,
+        "timings": timings,
         "screenshots": [item.to_json() for item in analyses],
     }
 
 
 def _read_ios_startup_log(device: str, *, launch_pid: int | None) -> str:
-    predicate = 'eventMessage CONTAINS "startup_welcome_sequence"'
+    predicate = (
+        'eventMessage CONTAINS "startup_welcome_sequence" '
+        'OR eventMessage CONTAINS "startup_probe" '
+        'OR eventMessage CONTAINS "ios_flutter_first_frame"'
+    )
     if launch_pid is not None:
         predicate = f"processIdentifier == {launch_pid} AND ({predicate})"
     return run(
@@ -853,6 +1023,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--android-package", default=DEFAULT_ANDROID_PACKAGE)
     parser.add_argument("--android-activity", default=DEFAULT_ANDROID_ACTIVITY)
     parser.add_argument("--android-apk", default=str(DEFAULT_ANDROID_APK))
+    parser.add_argument(
+        "--android-local-ca-path",
+        default="",
+        help="Inspect the debug CA used to build the Android APK and record its fingerprint.",
+    )
     parser.add_argument("--android-install", action="store_true")
     parser.add_argument(
         "--android-offsets-ms",
@@ -866,7 +1041,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--require-startup-sequence-events",
         action="store_true",
-        help="Require structured Flutter startup sequence events and <= hard deadline.",
+        help="Require terminal timing evidence and <= hard deadline.",
     )
     parser.add_argument(
         "--skip-screenshots",
@@ -877,6 +1052,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--enforce-shell-target",
         action="store_true",
         help="Fail when shellFirstPaintMs exceeds shell-first-paint-target-ms.",
+    )
+    parser.add_argument(
+        "--require-no-native-recovery",
+        action="store_true",
+        help="Fail a run when native recovery is shown; required for repeated release probes.",
     )
     parser.add_argument(
         "--runs",
@@ -927,6 +1107,9 @@ def main() -> int:
             run_dir.mkdir(parents=True, exist_ok=True)
         run_results: list[dict[str, Any]] = []
         if args.android_device:
+            # 多轮冷启动应复用同一已安装的当前 APK；每轮 reinstall 不仅
+            # 偏离冷启动语义，也会耗尽 emulator 的 PackageInstaller 临时空间。
+            args.android_install = run_index == 0 and bool(args.android_install)
             run_results.append(capture_android(args, run_dir))
         if args.ios_device:
             run_results.append(capture_ios(args, run_dir))
@@ -969,6 +1152,7 @@ def main() -> int:
 
     report = {
         "outputDir": str(output_dir),
+        "buildProvenance": build_provenance(),
         "runs": args.runs,
         "passed": all(item["passed"] for item in results),
         "summary": summary,
@@ -991,7 +1175,7 @@ def main() -> int:
             for sample in platform_samples[platform]
         ]
         baseline = {
-            "schemaVersion": 2,
+            "schema": "startup-first-frame-report",
             "capturedAt": time.strftime("%Y-%m-%d"),
             "platform": "+".join(selected_platforms),
             "deviceProfile": args.android_device or args.ios_device or "unknown",

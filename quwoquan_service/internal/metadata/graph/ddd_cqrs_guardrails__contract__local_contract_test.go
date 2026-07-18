@@ -119,7 +119,6 @@ func TestCanonicalGraphRejectsSeparateAggregateAlias(t *testing.T) {
 	metadataDir := t.TempDir()
 	writeSchemas(t, metadataDir)
 	writeFile(t, filepath.Join(metadataDir, "content/report/entity.yaml"), `
-version: 1
 domain: content
 entity: Report
 object_kind: separate_aggregate
@@ -142,14 +141,13 @@ func TestBlockedOperationStillRunsDDDStructuralValidation(t *testing.T) {
 		commercialAggregate("content", "Post"),
 	)
 	writeFile(t, filepath.Join(metadataDir, "content/post/service.yaml"), `
-version: 1
 service:
   name: content-service
   domain: content
   owner: test-team
 api_routes:
   - method: POST
-    path: /v1/content/reports
+    path: /content/reports
     operation: CreateReport
     actor: persona
     commercial:
@@ -166,7 +164,6 @@ api_routes:
       invariant_target: Report
 `)
 	writeFile(t, filepath.Join(metadataDir, "content/report/entity.yaml"), `
-version: 1
 domain: content
 entity: Report
 object_kind: aggregate_root
@@ -194,7 +191,6 @@ func TestBusinessObjectMapRejectsKindStorageAndRoleDrift(t *testing.T) {
 		commercialAggregate("content", "Post"),
 	)
 	writeFile(t, filepath.Join(metadataDir, "content/post/fields.yaml"), `
-version: 1
 aggregate: Post
 entities:
   Post:
@@ -271,14 +267,13 @@ func TestQueryBindingRejectsWeakReaderAndSliceNames(t *testing.T) {
 		commercialAggregate("content", "Post"),
 	)
 	writeFile(t, filepath.Join(metadataDir, "content/post/service.yaml"), `
-version: 1
 service:
   name: content-service
   domain: content
   owner: test-team
 api_routes:
   - method: GET
-    path: /v1/content/posts/{postId}
+    path: /content/posts/{postId}
     operation: GetPost
     actor: persona_or_device
     commercial:
@@ -314,7 +309,6 @@ func TestSessionOperationRequiresSamePacketRuntimeSessionOwner(t *testing.T) {
 	metadataDir := t.TempDir()
 	writeSchemas(t, metadataDir)
 	writeFile(t, filepath.Join(metadataDir, "realtime/connection/entity.yaml"), `
-version: 1
 domain: realtime
 entity: Connection
 object_kind: runtime_session
@@ -322,7 +316,6 @@ description: transient realtime connection
 storage_backend: redis
 `)
 	writeFile(t, filepath.Join(metadataDir, "realtime/connection/service.yaml"), `
-version: 1
 service:
   name: realtime-gateway
   domain: realtime
@@ -334,7 +327,7 @@ service:
     target_story: app-cloud-business-object-commercial-closure
 api_routes:
   - method: GET
-    path: /v1/realtime/ws
+    path: /realtime/ws
     operation: WebSocketUpgrade
     actor: account
     application:
@@ -371,7 +364,6 @@ func TestSessionOperationRejectsAggregateOwnerKind(t *testing.T) {
 		commercialAggregate("realtime", "Connection"),
 	)
 	writeFile(t, filepath.Join(metadataDir, "realtime/connection/service.yaml"), `
-version: 1
 service:
   name: realtime-gateway
   domain: realtime
@@ -383,7 +375,7 @@ service:
     target_story: app-cloud-business-object-commercial-closure
 api_routes:
   - method: GET
-    path: /v1/realtime/ws
+    path: /realtime/ws
     operation: WebSocketUpgrade
     actor: account
     application:

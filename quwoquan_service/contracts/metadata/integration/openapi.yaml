@@ -4,7 +4,7 @@ info:
     title: quwoquan integration API
     version: v1
 paths:
-    /v1/integration/location/nearby:
+    /integration/location/nearby:
         get:
             operationId: GetNearbyLocations
             x-contract-operation-id: integration.location.GetNearbyLocations
@@ -32,7 +32,7 @@ paths:
             security:
                 - bearerAuth: []
                 - {}
-    /v1/integration/location/search:
+    /integration/location/search:
         get:
             operationId: SearchLocations
             x-contract-operation-id: integration.location.SearchLocations
@@ -60,7 +60,7 @@ paths:
             security:
                 - bearerAuth: []
                 - {}
-    /v1/integrations/external-requests:
+    /integrations/external-requests:
         post:
             operationId: SubmitExternalInteractionRequest
             x-contract-operation-id: integration.external_interaction.SubmitExternalInteractionRequest
@@ -71,6 +71,13 @@ paths:
                 facet: ExternalInteractionCommandFacade
                 method: submitRequest
                 aggregateOwner: ExternalInteraction
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: true
                 content:
@@ -92,7 +99,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/integrations/external-requests/{requestId}:
+    /integrations/external-requests/{requestId}:
         get:
             operationId: GetExternalInteractionRequest
             x-contract-operation-id: integration.external_interaction.GetExternalInteractionRequest
@@ -123,7 +130,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-    /v1/integrations/external-requests/{requestId}/attempts:
+    /integrations/external-requests/{requestId}/attempts:
         get:
             operationId: ListExternalInteractionAttempts
             x-contract-operation-id: integration.external_interaction.ListExternalInteractionAttempts
@@ -154,7 +161,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-    /v1/integrations/external-requests/dead-letters:
+    /integrations/external-requests/dead-letters:
         get:
             operationId: ListExternalInteractionDeadLetters
             x-contract-operation-id: integration.external_interaction.ListExternalInteractionDeadLetters
@@ -179,7 +186,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-    /v1/integrations/push-deliveries:
+    /integrations/push-deliveries:
         post:
             operationId: SubmitPushDelivery
             x-contract-operation-id: integration.external_interaction.SubmitPushDelivery
@@ -209,7 +216,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-    /v1/integrations/push-deliveries:callback:
+    /integrations/push-deliveries:callback:
         post:
             operationId: PushDeliveryProviderCallback
             x-contract-operation-id: integration.external_interaction.PushDeliveryProviderCallback
@@ -239,7 +246,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-    /v1/integrations/sms-otp:callback:
+    /integrations/sms-otp:callback:
         post:
             operationId: SmsOtpProviderCallback
             x-contract-operation-id: integration.external_interaction.SmsOtpProviderCallback
@@ -269,7 +276,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-    /v1/integrations/sms-otp:send:
+    /integrations/sms-otp:send:
         post:
             operationId: SendSmsOtp
             x-contract-operation-id: integration.external_interaction.SendSmsOtp

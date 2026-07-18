@@ -29,6 +29,9 @@ REPO_ROOT = _find_repo_root()
 MATRIX_VERSION = 1
 PROBE_SCENARIO_PREFIX = "chat.group_avatar.sync_display_e2e"
 MATRIX_SCENARIO = "chat.group_avatar.sync_display_e2e.matrix"
+PROBE_REPORT_SCHEMA = "chat-avatar-e2e-probe-report"
+MATRIX_REPORT_SCHEMA = "chat-avatar-device-matrix-report"
+AGGREGATE_REPORT_SCHEMA = "chat-avatar-local-gamma-e2e-report"
 
 SLOT_SPECS: dict[str, dict[str, str]] = {
     "e1_beta": {"probe_env": "beta", "matrix_env": "beta", "label": "E1 beta"},
@@ -123,8 +126,8 @@ def check_probe_report(
     label: str,
     errors: list[str],
 ) -> None:
-    if data.get("schemaVersion") != 1:
-        errors.append(f"{label}: schemaVersion 须为 1")
+    if data.get("schema") != PROBE_REPORT_SCHEMA:
+        errors.append(f"{label}: schema 须为 {PROBE_REPORT_SCHEMA}")
     scen = str(data.get("scenario") or "")
     if not scenario_ok_probe(scen):
         errors.append(f"{label}: scenario 须为 chat.group_avatar.sync_display_e2e*，实为 {scen!r}")
@@ -145,8 +148,8 @@ def check_matrix_report(
     label: str,
     errors: list[str],
 ) -> None:
-    if data.get("schemaVersion") != 1:
-        errors.append(f"{label}: schemaVersion 须为 1")
+    if data.get("schema") != MATRIX_REPORT_SCHEMA:
+        errors.append(f"{label}: schema 须为 {MATRIX_REPORT_SCHEMA}")
     scen = str(data.get("scenario") or "")
     if scen != MATRIX_SCENARIO:
         errors.append(f"{label}: scenario 须为 {MATRIX_SCENARIO!r}，实为 {scen!r}")
@@ -181,8 +184,10 @@ def check_slot(slot_key: str, entry: Any, root: Path, errors: list[str]) -> None
         agg = load_json(agg_path, label=f"{label} aggregate", errors=errors)
         if agg is None:
             return
-        if agg.get("schemaVersion") != 1:
-            errors.append(f"{label}: aggregate schemaVersion 须为 1")
+        if agg.get("schema") != AGGREGATE_REPORT_SCHEMA:
+            errors.append(
+                f"{label}: aggregate schema 须为 {AGGREGATE_REPORT_SCHEMA}",
+            )
         scen = str(agg.get("scenario") or "")
         if not scen.startswith("chat.group_avatar.sync_display_e2e.local_gamma"):
             errors.append(

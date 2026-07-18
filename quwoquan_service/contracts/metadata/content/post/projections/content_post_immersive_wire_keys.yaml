@@ -1,5 +1,4 @@
 # 沉浸浏览 / MediaViewer raw 并行路径仍消费的 wire 扩展键（与 ArticleDetailWireKeys 互补）。
-version: 1
 dart_class: ContentPostImmersiveWireKeys
 description: "沉浸器与详情并行 raw Map 扩展键名 SSOT"
 keys:

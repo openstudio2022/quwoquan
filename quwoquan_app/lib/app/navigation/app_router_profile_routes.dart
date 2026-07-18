@@ -43,7 +43,7 @@ GoRoute _userProfileRoute(Ref ref) => GoRoute(
     } else if (state.extra is Map) {
       final m = state.extra! as Map;
       extra = UserProfileRouteExtra(
-        subAccountId: (m['subAccountId'] ?? m['profileSubjectId'])?.toString(),
+        subAccountId: m['subAccountId']?.toString(),
         avatar: m['avatar']?.toString(),
         displayName: m['displayName']?.toString(),
         backgroundImage: m['backgroundImage']?.toString(),

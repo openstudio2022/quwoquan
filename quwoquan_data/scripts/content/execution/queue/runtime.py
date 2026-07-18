@@ -8,6 +8,7 @@ from typing import Any, Iterable, Mapping
 from core import ops_governance as og
 from governance.creators.assignment import CREATOR_ASSIGNMENT_FIELDS, creator_from_payload
 from core.io import read_json, write_json
+from core.data_issue import issue_messages
 from content.execution import production_contracts as pc
 from content.execution import store
 from content.execution.queue.core import (
@@ -35,6 +36,7 @@ from content.execution.queue.core import (
     stable_job_id,
 )
 from content.execution.queue.jobs import enqueue_ref_job
+from content.execution.queue.management import queue_summary
 
 
 def _clock_now() -> float:
@@ -152,15 +154,18 @@ def _author_completion_issues(job: Mapping[str, Any]) -> list[str]:
         return []
     meta = job.get("meta") if isinstance(job.get("meta"), Mapping) else {}
     content_dir = str(meta.get("contentObjectDir") or "").strip().strip("/")
-    if not content_dir or not content_dir.startswith("posts/article/"):
+    if not content_dir or not content_dir.startswith(("posts/article/", "posts/video/")):
         return []
+    is_video = content_dir.startswith("posts/video/")
     try:
-        from content.post.draft_io import is_placeholder
+        from content.post.article.draft_io import is_placeholder
     except Exception as exc:  # noqa: BLE001
         return [f"author completion validator unavailable: {exc}"]
     execution_id = str(job.get("executionId") or "")
     root = store.execution_root(execution_id)
-    draft_path = root / content_dir / "4.draft" / "draft.article.md"
+    draft_path = root / content_dir / "4.draft" / (
+        "video_script.json" if is_video else "draft.article.md"
+    )
     meta_path = root / content_dir / "4.draft" / "draft_meta.json"
     issues: list[str] = []
     article_ok = False
@@ -172,7 +177,18 @@ def _author_completion_issues(job: Mapping[str, Any]) -> list[str]:
         except OSError as exc:
             issues.append(f"author output unreadable: {exc}")
         else:
-            if is_placeholder(article):
+            if is_video:
+                from content.post.video.authoring import video_author_issues
+
+                issues.extend(
+                    issue_messages(video_author_issues(
+                        execution_id,
+                        str(job.get("ref") or ""),
+                        require_agent_run=False,
+                    ))
+                )
+                article_ok = not issues
+            elif is_placeholder(article):
                 issues.append("author output remains placeholder")
             else:
                 article_ok = True
@@ -559,182 +575,3 @@ def reap_jobs(execution_id: str) -> dict[str, Any]:
             write_json(_job_path(execution_id, job["jobId"]), job)
             reclaimed.append(str(job.get("ref")))
     return {"timedOut": sorted(timed_out), "reclaimed": sorted(reclaimed)}
-
-
-def dead_jobs(execution_id: str) -> list[dict[str, Any]]:
-    """列出 dead job（转人工修复队列），含最后错误与尝试数。"""
-    out: list[dict[str, Any]] = []
-    for job in _load_jobs(execution_id):
-        if job.get("state") != STATE_DEAD:
-            continue
-        out.append(
-            {
-                "jobId": job.get("jobId"),
-                "ref": job.get("ref"),
-                "stage": job.get("stage"),
-                "attempt": job.get("attempt"),
-                "lastError": job.get("lastError"),
-            }
-        )
-    return out
-
-
-def block_job(execution_id: str, job_id: str, *, reason: str) -> dict[str, Any]:
-    path = _job_path(execution_id, job_id)
-    job = read_json(path)
-    job["state"] = STATE_BLOCKED
-    job["lease"] = None
-    job["lastError"] = reason
-    job["updatedAt"] = store.now_iso()
-    write_json(path, job)
-    return job
-
-
-def requeue_refs(
-    execution_id: str,
-    refs: Iterable[str],
-    stage: str,
-    *,
-    reason: str = "reducer_fail",
-) -> list[str]:
-    """把指定 ref 重新入队为 queued（同批重跑，不新建 repair batch）。
-
-    适用于：
-    - reducer 跨篇门失败后，只回退受影响 ref；
-    - 人工/Agent 已修复对象产物后，把 dead/failed ref 拉回当前批次继续跑。
-    """
-    touched: list[str] = []
-    for ref in refs:
-        job_id = stable_job_id(execution_id, ref, stage)
-        path = _job_path(execution_id, job_id)
-        if not path.is_file():
-            continue
-        job = read_json(path)
-        job["state"] = STATE_QUEUED
-        job["lease"] = None
-        job["leaseExpiresEpoch"] = 0
-        job["deadlineEpoch"] = 0
-        job["notBeforeEpoch"] = 0
-        job["sameRunRetryable"] = True
-        job["startupFailureCount"] = 0
-        job["lastError"] = None
-        job["failureFingerprints"] = []
-        job.pop("stuckDetected", None)
-        job["timings"].append({"event": "requeued", "at": store.now_iso(), "reason": reason})
-        job["updatedAt"] = store.now_iso()
-        write_json(path, job)
-        touched.append(ref)
-    return touched
-
-def purge_jobs(
-    execution_id: str,
-    *,
-    stage: str | None = None,
-    refs: Iterable[str] | None = None,
-) -> dict[str, Any]:
-    """硬清理匹配 job（reset_state / 上游回退后丢弃过期 stage 队列）。
-
-    object_queue 是 workflow 下游派生物，不是发布契约真相源；当 workflow 明确回到
-    download/content_plan/compose 之前时，旧 author job 已经失效，必须整体丢弃。
-    """
-    ref_filter = {str(ref) for ref in refs} if refs is not None else None
-    removed: list[str] = []
-    for job in _load_jobs(execution_id):
-        if stage and job.get("stage") != stage:
-            continue
-        ref = str(job.get("ref") or "")
-        if ref_filter is not None and ref not in ref_filter:
-            continue
-        path = _job_path(execution_id, str(job.get("jobId") or ""))
-        try:
-            path.unlink()
-        except FileNotFoundError:
-            continue
-        removed.append(ref)
-    return {"removed": sorted(removed), "summary": queue_summary(execution_id)}
-
-
-def queue_summary(execution_id: str) -> dict[str, Any]:
-    jobs = _load_jobs(execution_id)
-    by_state: dict[str, list[str]] = {}
-    by_backend: dict[str, int] = {}
-    for job in jobs:
-        by_state.setdefault(str(job.get("state")), []).append(str(job.get("ref")))
-        backend = str(job.get("queueBackend") or QUEUE_BACKEND_LOCAL)
-        by_backend[backend] = by_backend.get(backend, 0) + 1
-    return {
-        "total": len(jobs),
-        "byState": {k: sorted(v) for k, v in sorted(by_state.items())},
-        "byBackend": dict(sorted(by_backend.items())),
-    }
-
-
-def queue_runtime_snapshot(
-    execution_id: str,
-    *,
-    stage: str | None = None,
-    refs: Iterable[str] | None = None,
-    now: float | None = None,
-) -> dict[str, Any]:
-    """调度期快照：给 runner 判断“当前真无活”还是“只是退避/互斥空窗”。
-
-    refs=None 表示不过滤；refs 非空时只统计 assignment 负责的 ref 范围。
-    sameRunRetryable=False 的 failed job（例如 startup 失败）保留给下一次 run，不要求当前进程继续等待。
-    """
-    current = _clock_now() if now is None else float(now)
-    ref_filter = {str(ref) for ref in refs} if refs is not None else None
-    by_state: dict[str, int] = {}
-    waitable_live = 0
-    leaseable_now = 0
-    failed_backoff_same_run = 0
-    next_retry_epoch: float | None = None
-    next_lease_expiry_epoch: float | None = None
-    next_deadline_epoch: float | None = None
-    for job in _load_jobs(execution_id):
-        if stage and job.get("stage") != stage:
-            continue
-        ref = str(job.get("ref") or "")
-        if ref_filter is not None and ref not in ref_filter:
-            continue
-        state = str(job.get("state") or "")
-        by_state[state] = by_state.get(state, 0) + 1
-        if state == STATE_QUEUED:
-            waitable_live += 1
-            leaseable_now += 1
-            continue
-        if state == STATE_LEASED:
-            waitable_live += 1
-            lease_exp = float(job.get("leaseExpiresEpoch") or 0)
-            if lease_exp and lease_exp <= current:
-                leaseable_now += 1
-            elif lease_exp:
-                next_lease_expiry_epoch = (
-                    lease_exp if next_lease_expiry_epoch is None else min(next_lease_expiry_epoch, lease_exp)
-                )
-            deadline = float(job.get("deadlineEpoch") or 0)
-            if deadline:
-                next_deadline_epoch = deadline if next_deadline_epoch is None else min(next_deadline_epoch, deadline)
-            continue
-        if state != STATE_FAILED:
-            continue
-        if not bool(job.get("sameRunRetryable", True)):
-            continue
-        waitable_live += 1
-        not_before = float(job.get("notBeforeEpoch") or 0)
-        if not_before <= current:
-            leaseable_now += 1
-        else:
-            failed_backoff_same_run += 1
-            next_retry_epoch = not_before if next_retry_epoch is None else min(next_retry_epoch, not_before)
-    return {
-        "total": sum(by_state.values()),
-        "byState": dict(sorted(by_state.items())),
-        "waitableLive": waitable_live,
-        "leaseableNow": leaseable_now,
-        "failedBackoffSameRun": failed_backoff_same_run,
-        "nextRetryEpoch": next_retry_epoch,
-        "nextLeaseExpiryEpoch": next_lease_expiry_epoch,
-        "nextDeadlineEpoch": next_deadline_epoch,
-    }
-
-__all__ = [name for name in globals() if not name.startswith("__")]

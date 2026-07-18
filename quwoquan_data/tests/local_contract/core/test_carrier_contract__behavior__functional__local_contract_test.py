@@ -20,16 +20,14 @@ from core.carrier_contract import (
     LANE_TO_CANONICAL_CONTENT_MIX,
     research_plan_files,
     scaled_lanes,
-    smoke_only_lanes,
 )
 
 
-def test_four_carriers_frozen_and_video_smoke_only():
-    """四载体齐备；video 只 smoke 不放量；homepage/article/image 可放量。"""
+def test_four_carriers_are_formal_scaled_lanes():
+    """四载体都使用正式 execution/review/release 链路。"""
     assert set(CARRIER_LANES) == {"homepage", "article", "image", "video"}
-    assert set(scaled_lanes()) == {"homepage", "article", "image"}
-    assert smoke_only_lanes() == ("video",)
-    assert not CARRIER_LANES["video"].agent_authored, "video 不得进入 post_author"
+    assert set(scaled_lanes()) == {"homepage", "article", "image", "video"}
+    assert CARRIER_LANES["video"].agent_authored
 
 
 def test_common_layer_stages_cover_end_to_end():
@@ -46,11 +44,18 @@ def test_common_layer_stages_cover_end_to_end():
 
 
 def test_carrier_final_artifacts_match_layout_spec():
-    """载体成品产物与 pipeline_directory_layout_spec 口径一致。"""
+    """载体成品产物与 geo-content-trinity/execution 口径一致。"""
     assert CARRIER_LANES["homepage"].final_artifacts == ("page.md", "_entity.json", "manifest.json")
     assert "draft.article.md" in CARRIER_LANES["article"].draft_artifacts
     assert "writing_pack" in CARRIER_LANES["article"].draft_artifacts
     assert CARRIER_LANES["image"].draft_artifacts == (), "image 无 agent 写作段"
+    assert CARRIER_LANES["video"].final_artifacts == (
+        "manifest.json",
+        "provenance.json",
+        "assets/video.mp4",
+        "assets/poster.webp",
+        "subtitles.vtt",
+    )
 
 
 def test_download_prepare_consumes_contract_not_second_registry():
@@ -62,8 +67,8 @@ def test_download_prepare_consumes_contract_not_second_registry():
         "homepage": "homepage_source_plan.json",
         "article": "article_source_plan.json",
         "image": "image_source_plan.json",
+        "video": "video_source_plan.json",
     }
-    assert "video" not in RESEARCH_PLAN_FILES, "video 无独立下载计划（schema+smoke only）"
 
 
 def test_batch_content_type_axis_matches_carrier_lanes():
@@ -93,7 +98,7 @@ def test_content_mix_naming_maps_onto_lanes_single_source():
 
 
 def test_video_schema_frozen_in_post_manifest():
-    """video schema 冻结 smoke：post_manifest.schema.json 含 video enum 与 videoBindings。"""
+    """video schema includes the formal media and binding contract."""
     schema_path = DATA_ROOT / "schema" / "content" / "post_manifest.schema.json"
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
     assert "video" in schema["properties"]["contentType"]["enum"]
@@ -104,7 +109,7 @@ def test_video_schema_frozen_in_post_manifest():
 
 
 def test_video_schema_conditional_branch_frozen():
-    """video 条件分支冻结：assets 必含 kind=video 资产且带 thumbnail/cover 之一。"""
+    """Video assets require delivery, poster, subtitles, checksum and rights evidence."""
     schema_path = DATA_ROOT / "schema" / "content" / "post_manifest.schema.json"
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
     video_branch = next(
@@ -115,5 +120,24 @@ def test_video_schema_conditional_branch_frozen():
     assert "assets" in video_branch["required"]
     contains = video_branch["properties"]["assets"]["contains"]
     assert contains["properties"]["kind"]["const"] == "video"
-    alt_keys = {tuple(alt["required"]) for alt in contains["anyOf"]}
-    assert alt_keys == {("thumbnailUrl",), ("coverUrl",)}
+    required = set(contains["required"])
+    assert {
+        "sha256",
+        "posterFileName",
+        "subtitlesFileName",
+        "posterSha256",
+        "subtitlesSha256",
+        "provenanceRef",
+        "sourceAssetRefs",
+        "rightsRefs",
+    } <= required
+    alternatives = [
+        {tuple(item["required"]) for item in branch["anyOf"]}
+        for branch in contains["allOf"]
+    ]
+    assert {("cdnUrl",), ("objectKey",)} in alternatives
+    assert {
+        ("posterFileName",),
+        ("thumbnailUrl",),
+        ("coverUrl",),
+    } in alternatives

@@ -1,4 +1,3 @@
-version: 1
 aggregate: AssistantScorecardFact
 backend: mongodb
 collections:

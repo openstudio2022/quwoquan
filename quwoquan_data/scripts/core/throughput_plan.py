@@ -97,7 +97,7 @@ class ThroughputPlan:
     def to_report(self) -> dict[str, Any]:
         cfg = self.config
         return {
-            "schemaVersion": "quwoquan_data.throughput_plan/1",
+            "schema": "quwoquan_data.throughput_plan",
             "input": {
                 "dailyTarget": cfg.daily_target,
                 "channels": cfg.channels,

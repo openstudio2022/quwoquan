@@ -16,9 +16,9 @@ import 'package:quwoquan_app/core/services/app_permission_coordinator.dart';
 import 'package:quwoquan_app/core/services/media_picker_service.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/services/create_page_remote_helpers.dart';
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../support/recording_content_media_facet.dart';
+import '../../../../support/recording_content_post_publication_writer.dart';
 
 void main() {
   group('video creation publish roundtrip', () {
@@ -130,8 +130,9 @@ void main() {
       );
     });
 
-    test('录制视频继续走发布 payload：远端视频与自动首帧封面无本地路径泄漏', () async {
+    test('录制视频继续走发布 payload：仅绑定 MediaAsset ID 且无本地路径泄漏', () async {
       final media = RecordingContentMediaFacet();
+      final publication = RecordingContentPostPublicationWriter();
       final fileStorage = _RoundtripFileStorageGateway(<String, List<int>>{
         '/tmp/recorded.mp4': <int>[1, 2, 3, 4],
       });
@@ -150,7 +151,7 @@ void main() {
             body: '刚录制的视频，直接发布。',
           );
 
-      final prepared = await buildCreatePostPayloadWithRemoteImageMedia(
+      final prepared = await buildPostPublicationPayloadWithRemoteMedia(
         media: media,
         fileStorageGateway: fileStorage,
         state: state,
@@ -164,34 +165,32 @@ void main() {
               uploads.add(contentType);
             },
       );
-      await media.bindPostMediaAssets(
-        BindContentPostMediaAssetsCommand(
-          postId: 'post_video_roundtrip',
-          assetIds: prepared.mediaAssetIds,
-        ),
+      final command = submitContentPostPublicationCommandFromPreparedPayload(
+        prepared.payload,
+        localDraftId: 'draft-video-roundtrip',
+        mediaAssetIds: prepared.mediaAssetIds,
       );
+      await publication.submitPostPublication(command);
 
       expect(prepared.payload['contentType'], 'video');
       expect(uploads, <String>['video/mp4']);
       expect(media.selectedAutoCoverMediaIds, <String>['video_asset_1']);
-      expect(
-        prepared.payload['videoUrl'],
-        'https://cdn.quwoquan.test/video_asset_1.mp4',
-      );
+      expect(prepared.payload, isNot(contains('videoUrl')));
+      expect(prepared.payload, isNot(contains('thumbnailUrl')));
+      expect(prepared.payload, isNot(contains('coverUrl')));
       expect(prepared.payload['coverStrategy'], 'first_frame');
-      expect(
-        prepared.payload['thumbnailUrl'],
-        'https://cdn.quwoquan.test/video_asset_1_cover.jpg',
-      );
-      expect(
-        prepared.payload['coverUrl'],
-        'https://cdn.quwoquan.test/video_asset_1_cover.jpg',
-      );
       expect(prepared.payload['durationMs'], 1600);
       expect(prepared.payload['width'], 1080);
       expect(prepared.payload['height'], 1920);
       expect(prepared.payload.values.toString(), isNot(contains('/tmp/')));
-      expect(media.boundAssetIds, prepared.mediaAssetIds);
+      expect(
+        prepared.payload.values.toString(),
+        isNot(contains('cdn.quwoquan.test')),
+      );
+      expect(
+        publication.submitCommands.single.mediaAssetIds,
+        prepared.mediaAssetIds,
+      );
     });
   });
 }

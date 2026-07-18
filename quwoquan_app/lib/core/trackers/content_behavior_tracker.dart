@@ -9,17 +9,17 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 /// 批量行为缓冲 + 自动 flush Tracker。
 ///
 /// 负责将散落的行为事件（impression/dwell/click/dislike/share 等）
-/// 按批次合并后统一上报给 BehaviorRepository。
+/// 按批次合并后统一上报给 BehaviorReporter。
 /// like/comment/report 使用专属路由，不经过此 Tracker。
 class ContentBehaviorTracker {
   factory ContentBehaviorTracker({
-    required BehaviorRepository repository,
+    required BehaviorReporter reporter,
     Duration flushInterval = const Duration(seconds: 5),
     int maxBatchSize = 20,
     bool enablePeriodicFlush = true,
   }) {
     return ContentBehaviorTracker._(
-      repository,
+      reporter,
       flushInterval,
       maxBatchSize,
       enablePeriodicFlush,
@@ -27,7 +27,7 @@ class ContentBehaviorTracker {
   }
 
   ContentBehaviorTracker._(
-    this._repository,
+    this._reporter,
     this._flushInterval,
     this._maxBatchSize,
     bool enablePeriodicFlush,
@@ -37,7 +37,7 @@ class ContentBehaviorTracker {
     }
   }
 
-  final BehaviorRepository _repository;
+  final BehaviorReporter _reporter;
   final Duration _flushInterval;
   final int _maxBatchSize;
 
@@ -951,7 +951,7 @@ class ContentBehaviorTracker {
     _buffer.clear();
     _bufferDedupKeys.clear();
     try {
-      await _repository.reportEvents(events: toSend);
+      await _reporter.reportEvents(events: toSend);
     } catch (error, stackTrace) {
       // 任务 B · 失败路径结构化归因：批量上报失败时记录并有界回灌，
       // 避免周期 flush 抛出未捕获异步异常，也避免行为事件被静默丢弃。
@@ -979,8 +979,8 @@ class ContentBehaviorTracker {
 ///
 /// 生命周期与 ProviderContainer 绑定；销毁时自动 flush。
 final contentBehaviorTrackerProvider = Provider<ContentBehaviorTracker>((ref) {
-  final repo = ref.watch(behaviorRepositoryProvider);
-  final tracker = ContentBehaviorTracker(repository: repo);
+  final reporter = ref.watch(behaviorReporterProvider);
+  final tracker = ContentBehaviorTracker(reporter: reporter);
   ref.onDispose(() => tracker.dispose());
   return tracker;
 });

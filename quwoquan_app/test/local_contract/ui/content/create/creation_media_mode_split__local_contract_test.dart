@@ -22,7 +22,7 @@ void main() {
             mediaKind: CreateMediaKind.images,
             imagePaths: <String>['/tmp/a.jpg', '/tmp/b.jpg'],
           );
-      final payload = buildCreatePostPayloadMap(state);
+      final payload = buildPostPublicationPayloadMap(state);
 
       expect(categories, isEmpty);
       expect(
@@ -50,7 +50,7 @@ void main() {
             videoPath: '/tmp/video.mp4',
             videoThumbnail: '/tmp/cover.jpg',
           );
-      final payload = buildCreatePostPayloadMap(state);
+      final payload = buildPostPublicationPayloadMap(state);
 
       expect(categories, isEmpty);
       expect(actions, hasLength(1));

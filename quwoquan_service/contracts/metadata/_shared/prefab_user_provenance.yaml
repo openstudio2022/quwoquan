@@ -1,24 +1,10 @@
-schemaVersion: prefab_user_provenance/2
-description: 预制用户现行真相源。共享场景 fixture 与创作者规模 fixture 按测试用途正交，禁止合并、回退或别名解析。
+schema: prefab_user_provenance
+description: 预制用户现行真相源。共享场景 fixture 是端云测试身份的唯一来源。
 fixtureSets:
   shared_scenarios:
     source: seed-box.shared_pool
     fixturePath: _shared/test_fixtures/user_pool.json
     purpose: 跨服务场景、端云集成与用户旅程的确定性身份集合
-  creator_scale:
-    source: creator_pool.seed/2
-    fixturePath: _shared/test_fixtures/user_pool.creator_pool.travel_photo_1k_v1.json
-    manifestPath: _shared/test_fixtures/user_pool.manifest.travel_photo_1k_v1.json
-    purpose: 旅行摄影创作者规模、内容绑定与发布验证
 currentUser:
   userId: fixture_user_current
-  subAccountId: fixture_sub_current
-batchPolicy:
-  canonicalBatchId: travel_photo_1k_v1
-  travel_photo_1k_v1:
-    role: commercial_truth_source
-    seedTruth: true
-    seedFixture: creator_travel_photo_1k_v1.seed.json
-    userPoolFixture: user_pool.creator_pool.travel_photo_1k_v1.json
-    manifestFixture: user_pool.manifest.travel_photo_1k_v1.json
-    note: canonical 商用千级旅行摄影创作者试跑池；active seed/overlay/slice/manifest/scenario 单一真相源
+  subAccountId: fixture_persona_daily

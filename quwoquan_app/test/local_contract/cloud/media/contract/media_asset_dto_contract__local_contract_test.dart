@@ -47,7 +47,7 @@ void main() {
     });
   });
 
-  group('MediaAssetDto — 兼容性契约', () {
+  group('MediaAssetDto — 单轨契约', () {
     test('可选字段缺失正确解析', () {
       final dto = MediaAssetDto.fromMap({
         'assetId': 'ma_003',

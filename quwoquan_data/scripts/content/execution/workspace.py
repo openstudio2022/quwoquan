@@ -12,6 +12,7 @@ from typing import Any, Iterable
 from core import paths as core_paths
 from core.paths import WORKSPACE_ROOT_BY_COMMAND, normalize_execution_workspace_command
 from core.io import read_json, write_json
+from core.source_digest import SourceDigest, SourceDigestError, current_source_digest
 
 from .identity import SelectionPolicy, parse_execution_id, validate_execution_id
 
@@ -61,11 +62,11 @@ class ExecutionWorkspace:
         return self.shared_dir / "workspace" / WORKSPACE_ROOT_BY_COMMAND[normalized]
 
     @property
-    def workflow_state_path(self) -> Path:
-        return self.shared_dir / "workflow_state.json"
+    def execution_state_path(self) -> Path:
+        return self.shared_dir / "execution_state.json"
 
-    def workflow_packet_path(self, stage: str) -> Path:
-        return self.shared_dir / "workflow_packets" / f"{stage}.json"
+    def command_packet_path(self, stage: str) -> Path:
+        return self.shared_dir / "command_packets" / f"{stage}.json"
 
 
 def execution_command_root(execution_id: str, command: str) -> Path:
@@ -128,12 +129,12 @@ def execution_notes_path(execution_id: str) -> Path:
     return execution_root(execution_id) / "0.plan" / "operator_notes.md"
 
 
-def execution_workflow_state_path(execution_id: str) -> Path:
-    return ExecutionWorkspace(execution_id).workflow_state_path
+def execution_state_path(execution_id: str) -> Path:
+    return ExecutionWorkspace(execution_id).execution_state_path
 
 
-def execution_workflow_packet_path(execution_id: str, stage: str) -> Path:
-    return ExecutionWorkspace(execution_id).workflow_packet_path(stage)
+def execution_command_packet_path(execution_id: str, stage: str) -> Path:
+    return ExecutionWorkspace(execution_id).command_packet_path(stage)
 
 
 def iter_execution_specs() -> list[Path]:
@@ -183,7 +184,6 @@ def write_frozen_target_set(
     if not normalized:
         raise ValueError("frozen target set must not be empty")
     payload = {
-        "contractVersion": "content-target-set-v1",
         "executionId": validate_execution_id(execution_id),
         "selectionPolicy": SelectionPolicy.FROZEN.value,
         "sourceRef": str(source_ref).strip(),
@@ -270,7 +270,6 @@ def create_execution_manifest(
             raise ValueError("retryOf sequence must be lower than the new execution sequence")
 
     candidate = {
-        "contractVersion": "content-execution-v2",
         "executionId": identity.execution_id,
         "vertical": identity.vertical,
         "contentType": identity.content_type,
@@ -279,6 +278,7 @@ def create_execution_manifest(
         "milestone": identity.milestone,
         "sequence": identity.sequence,
         "recipe": {"ref": recipe_ref, "sha256": _file_sha256(recipe_file)},
+        "sourceDigest": current_source_digest().to_document(),
         "resolvedParams": resolved_params,
         "selectionPolicy": selection_policy.value,
         "targetSetRef": target_set_ref,
@@ -290,7 +290,6 @@ def create_execution_manifest(
     if manifest_path.is_file():
         existing = load_execution_manifest(identity.execution_id)
         immutable_keys = (
-            "contractVersion",
             "executionId",
             "vertical",
             "contentType",
@@ -299,6 +298,7 @@ def create_execution_manifest(
             "milestone",
             "sequence",
             "recipe",
+            "sourceDigest",
             "resolvedParams",
             "selectionPolicy",
             "targetSetRef",
@@ -333,9 +333,29 @@ def load_execution_manifest(execution_id: str) -> dict[str, Any]:
     from core.schema import assert_valid
 
     assert_valid(manifest, "execution", "content_execution_manifest", label=f"execution_manifest:{execution_id}")
+    try:
+        source_digest = SourceDigest.from_document(manifest.get("sourceDigest"))
+    except SourceDigestError as exc:
+        raise ValueError(f"execution manifest sourceDigest invalid: {exc}") from exc
+    if source_digest != current_source_digest():
+        raise ValueError(
+            "execution manifest sourceDigest drift; create a new sequence with retryOf"
+        )
     if manifest.get("targetSetSha256") != frozen_target_set_sha256(execution_id):
         raise ValueError(f"execution manifest target set digest mismatch: {manifest_path}")
     return manifest
+
+
+def execution_manifest_recipe_ref(execution_id: str) -> str:
+    """Return the sole recipe reference from the immutable manifest."""
+    manifest = load_execution_manifest(execution_id)
+    recipe = manifest.get("recipe")
+    if not isinstance(recipe, dict):
+        raise ValueError("execution manifest recipe must be an object")
+    recipe_ref = str(recipe.get("ref") or "").strip()
+    if not recipe_ref:
+        raise ValueError("execution manifest recipe.ref is required")
+    return recipe_ref
 
 
 def _canonical_object_refs(refs: Iterable[str], *, kind: str) -> list[str]:
@@ -363,16 +383,17 @@ def write_publish_ref(
 ) -> Path:
     """Record this execution's canonical object closure, never a release alias."""
     target = execution_root(execution_id) / "publish_ref.json"
-    write_json(
-        target,
-        {
-            "schemaVersion": "quwoquan_data.execution_publish_ref/1",
-            "executionId": validate_execution_id(execution_id),
-            "canonicalPublishRoot": "quwoquan_data/publish",
-            "publishedRefs": {
-                "entities": _canonical_object_refs(entity_refs, kind="entities"),
-                "posts": _canonical_object_refs(post_refs, kind="posts"),
-            },
+    payload = {
+        "schema": "quwoquan_data.execution_publish_ref",
+        "executionId": validate_execution_id(execution_id),
+        "canonicalPublishRoot": "quwoquan_data/publish",
+        "publishedRefs": {
+            "entities": _canonical_object_refs(entity_refs, kind="entities"),
+            "posts": _canonical_object_refs(post_refs, kind="posts"),
         },
-    )
+    }
+    from core.schema import assert_valid
+
+    assert_valid(payload, "execution", "publish_ref", label=f"publish_ref:{execution_id}")
+    write_json(target, payload)
     return target

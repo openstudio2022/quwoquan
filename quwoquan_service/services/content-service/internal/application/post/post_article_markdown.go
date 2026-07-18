@@ -17,8 +17,8 @@ func (s *PostService) syncArticleMarkdownSnapshot(post *postmodel.Post) {
 	if markdown == "" {
 		return
 	}
-	if strings.TrimSpace(post.ArticleMarkdownVersion) == "" {
-		post.ArticleMarkdownVersion = "qwq-rich-md/1"
+	if strings.TrimSpace(post.MarkdownDialect) == "" {
+		post.MarkdownDialect = "qwq-rich-md"
 	}
 	post.ArticleMarkdownDigest = markdownDigest(markdown)
 	frontMatter, body := splitArticleMarkdownFrontMatter(markdown)

@@ -292,8 +292,10 @@ def main() -> int:
         return 2
 
     errors: list[str] = []
-    if contract.get("version") != 1:
-        errors.append("page_object_contract.yaml: version 必须为 1")
+    if contract.get("schema") != "app_page_object_contract":
+        errors.append(
+            "page_object_contract.yaml: schema 必须为 app_page_object_contract"
+        )
     if contract.get("contract_id") != "app_page_object_contract":
         errors.append(
             "page_object_contract.yaml: contract_id 必须为 app_page_object_contract"

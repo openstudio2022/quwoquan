@@ -11,8 +11,12 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/testing/patrol_test_support.dart';
 
 const _otherUserId = 'fixture_user_friend';
-// local gamma mirror 稳定落地的远端视频种子；避免继续依赖早期 mock `v1`。
-const _videoWorkId = 'fixture_video_001';
+// 仅 Patrol/UAT 读取由环境 runner 注入的播放 canary；产品代码不感知环境。
+const _videoWorkId = String.fromEnvironment('VIDEO_PLAYBACK_CANARY_WORK_ID');
+const _requireAvatarMediaCanary = bool.fromEnvironment(
+  'MEDIA_AVATAR_CANARY_REQUIRED',
+  defaultValue: true,
+);
 
 const _feedCardProbeKeys = <ValueKey<String>>[
   ValueKey<String>('home-feed-card-0'),
@@ -36,6 +40,12 @@ void main() {
     config: PatrolTesterConfig(visibleTimeout: const Duration(seconds: 12)),
     ($) async {
       await launchPatrolAppOnce($);
+      expect(
+        _videoWorkId.trim(),
+        isNotEmpty,
+        reason:
+            'environment Patrol requires an injected video playback canary work id',
+      );
 
       await _expectHomeFeed($);
       await _goTo($, AppRoutePaths.profile);
@@ -71,6 +81,17 @@ Future<void> _expectProfileShell(
 }) async {
   final visible = await _waitForAnyKey($, _profileProbeKeys);
   expect(visible, isTrue, reason: '$label shell should render');
+  if (_requireAvatarMediaCanary) {
+    final avatarImageVisible = await _waitForAnyKey($, const <ValueKey<String>>[
+      ValueKey<String>('profile-header-avatar-image'),
+    ]);
+    expect(
+      avatarImageVisible,
+      isTrue,
+      reason:
+          '$label must bind the environment avatar canary to the trusted image pipeline',
+    );
+  }
 }
 
 Future<void> _expectFootprintListShell(PatrolIntegrationTester $) async {
@@ -83,12 +104,25 @@ Future<void> _expectFootprintListShell(PatrolIntegrationTester $) async {
 }
 
 Future<void> _expectVideoFlow(PatrolIntegrationTester $) async {
-  final visible = await _waitForAnyKey(
+  final stageVisible = await _waitForAnyKey(
     $,
     _videoProbeKeys,
     timeout: const Duration(seconds: 60),
   );
-  expect(visible, isTrue, reason: 'video flow should render first video stage');
+  expect(
+    stageVisible,
+    isTrue,
+    reason: 'video flow should render the configured video canary stage',
+  );
+  final ready = await _waitForAnyKey($, const <ValueKey<String>>[
+    ValueKey<String>('video-player-ready'),
+  ], timeout: const Duration(seconds: 60));
+  expect(ready, isTrue, reason: 'native video player must reach ready state');
+  expect(
+    find.byKey(const ValueKey<String>('video-player-error')).evaluate(),
+    isEmpty,
+    reason: 'configured video canary must not enter the error state',
+  );
 }
 
 Future<void> _goTo(PatrolIntegrationTester $, String location) async {

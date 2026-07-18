@@ -1,7 +1,0 @@
-version: 1
-read_model: RejectProfileUpdateProposalRequest
-description: 拒绝提案的 optimistic concurrency request。
-source_entities: [ProfileUpdateProposal]
-consumers: [app]
-fields:
-  - { name: expectedProposalVersion, type: int }

@@ -78,10 +78,18 @@ def handle_verify(args: argparse.Namespace) -> None:
         from verify.verify_script_architecture import main as script_architecture_main
 
         raise SystemExit(script_architecture_main())
+    if cmd == "python-symbols":
+        from verify.verify_python_symbols import main as python_symbols_main
+
+        raise SystemExit(python_symbols_main())
     if cmd == "control-literals":
         from verify.verify_control_literals import main as control_literals_main
 
         raise SystemExit(control_literals_main())
+    if cmd == "source-digest":
+        from verify.verify_source_digest import main as source_digest_main
+
+        raise SystemExit(source_digest_main([]))
     if cmd == "execution-identity-purity":
         from verify.verify_execution_identity_purity import main as identity_purity_main
 
@@ -89,7 +97,9 @@ def handle_verify(args: argparse.Namespace) -> None:
     if cmd == "release-lifecycle":
         from verify.verify_release_lifecycle import main as release_lifecycle_main
 
-        raise SystemExit(release_lifecycle_main(["--release", str(args.release)]))
+        raise SystemExit(
+            release_lifecycle_main(["--release", str(args.lifecycle_release)])
+        )
     if cmd == "cursor-credential-contract":
         from verify.verify_cursor_credential_contract import main as credential_contract_main
 
@@ -97,7 +107,9 @@ def handle_verify(args: argparse.Namespace) -> None:
     if cmd == "two-province-coverage-release":
         from verify.verify_two_province_coverage_release import main as province_release_main
 
-        raise SystemExit(province_release_main(["--release", str(args.release)]))
+        raise SystemExit(
+            province_release_main(["--release", str(args.two_province_release)])
+        )
     if cmd == "homepage-media-completeness":
         from verify.verify_homepage_media_completeness import main as homepage_media_main
 
@@ -114,6 +126,10 @@ def handle_verify(args: argparse.Namespace) -> None:
         from verify.verify_coverage_static_identity import main as coverage_static_identity_main
 
         raise SystemExit(coverage_static_identity_main())
+    if cmd == "media-release-contract":
+        from verify.verify_media_release_contract import main as media_release_contract_main
+
+        raise SystemExit(media_release_contract_main())
     if cmd == "stage-artifacts":
         from verify.stage_artifacts import verify_stage_artifacts
 
@@ -193,23 +209,29 @@ def handle_all() -> None:
     from verify import verify_publish_closure
     from verify import verify_publish_purity
     from verify import verify_script_architecture
+    from verify import verify_python_symbols
     from verify import verify_control_literals
+    from verify import verify_source_digest
     from verify import verify_single_contract_source
     from verify import verify_works_classification
     from verify import verify_coverage_static_identity
+    from verify import verify_media_release_contract
 
     gates = (
         ("active-runtime-preflight", verify_no_active_data_runtime.main),
         ("cli-first", verify_cli_first.main),
         ("data-layout", verify_data_layout.main),
         ("script-architecture", verify_script_architecture.main),
+        ("python-symbols", verify_python_symbols.main),
         ("control-literals", verify_control_literals.main),
+        ("source-digest", lambda: verify_source_digest.main([])),
         ("execution-identity-purity", verify_execution_identity_purity.main),
         ("content-execution-layout", verify_content_execution_layout.main),
         ("data-input-ownership", verify_data_input_ownership.main),
         ("cursor-credential-contract", verify_cursor_credential_contract.main),
         ("output-root-isolation", verify_output_root_isolation.main),
         ("coverage-static-identity", verify_coverage_static_identity.main),
+        ("media-release-contract", verify_media_release_contract.main),
         ("publish-purity", verify_publish_purity.main),
         ("publish-closure", verify_publish_closure.main),
         ("single-contract-source", verify_single_contract_source.main),
@@ -387,18 +409,21 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     sub.add_parser("publish-purity", help="校验 publish 只含 approved 最终对象")
     sub.add_parser("publish-closure", help="校验 canonical publish 无孤立 creator/media 或悬空引用")
     sub.add_parser("script-architecture", help="校验脚本目录职责、模块尺寸与 core 依赖方向")
+    sub.add_parser("python-symbols", help="校验 Data Python 运行时符号均有明确所有者")
     sub.add_parser("control-literals", help="校验双省链路控制字面量只有一个真相源")
+    sub.add_parser("source-digest", help="校验 execution/release 只记录仓内输入的不可变摘要")
     sub.add_parser("execution-identity-purity", help="校验 active code 已删除旧运行身份与旧路径")
     release_lifecycle = sub.add_parser("release-lifecycle", help="校验 immutable release 的闭环证据")
-    release_lifecycle.add_argument("--release", required=True)
+    release_lifecycle.add_argument("--release", dest="lifecycle_release", required=True)
     sub.add_parser("cursor-credential-contract", help="校验只使用仓外受限 key file 且无旧 alias/secret")
     ptp = sub.add_parser("two-province-coverage-release", help="校验浙川实体主页全覆盖 release 闭环")
-    ptp.add_argument("--release", required=True)
+    ptp.add_argument("--release", dest="two_province_release", required=True)
     phm = sub.add_parser("homepage-media-completeness", help="校验实体主页图片枚举、下载与角色闭环")
     phm.add_argument("--execution", required=True)
-    sub.add_parser("active-runtime-preflight", help="校验 data execution 工作区已静默，无活跃 geo-homepages/workflow 进程")
+    sub.add_parser("active-runtime-preflight", help="校验 data execution 工作区已静默，无活跃 execute/workflow 进程")
     sub.add_parser("data-layout", help="校验数据工程源码目录归一化与退休路径")
     sub.add_parser("coverage-static-identity", help="全国地点静态覆盖身份门：目录/schema/类型/行政区/coverageKey 全局唯一")
+    sub.add_parser("media-release-contract", help="校验 release-bound CAS、视频 poster 与环境 URL 投影合同")
     psa = sub.add_parser(
         "stage-artifacts",
         help="校验四 lane 五阶段、immutable execution identity 与 runtime/runs/release/env/publish 边界",

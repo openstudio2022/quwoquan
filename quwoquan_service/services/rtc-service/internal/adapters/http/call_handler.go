@@ -25,7 +25,7 @@ func (h *CallHandler) Routes() http.Handler {
 	mux.HandleFunc("GET /livez", h.handleHealthz)
 	mux.HandleFunc("GET /startupz", h.handleHealthz)
 	if h.signalHandler != nil {
-		mux.Handle("/v1/rtc/signal", h.signalHandler)
+		mux.Handle("/rtc/signal", h.signalHandler)
 	}
 
 	for _, r := range generatedRouteTable {

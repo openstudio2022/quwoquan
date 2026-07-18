@@ -1,4 +1,3 @@
-version: 1
 aggregate: RecModel
 layer: e2e
 
@@ -16,11 +15,12 @@ execution:
 
 scenarios:
   - name: recommendation_policy_activation_updates_projection
+    source: recommendation_policy_activation_updates_projection
     description: 推荐策略激活后，模型投影与 guardrail 摘要同步刷新
     test_type: api_contract
     actors:
       portal: quwoquan_ops/portal/src/domains/product/RecommendationPage.tsx
-      control_plane: product-ops-service POST /v1/control-plane/product/recommendation/policies/{policyId}:activate
+      control_plane: product-ops-service POST /control-plane/product/recommendation/policies/{policyId}:activate
       service: recommendation-service projections/model_registry
     steps:
       - operator activates a recommendation policy in product control plane

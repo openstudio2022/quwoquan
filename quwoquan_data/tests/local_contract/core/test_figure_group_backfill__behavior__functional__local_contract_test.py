@@ -128,7 +128,7 @@ def test_prune_drops_entire_group_when_all_unbound():
 def test_clean_source_markdown_preserves_figure_fences():
     """净化（去噪声）不得打散图文混排围栏：:::figure/:::figuregroup 起止行与 asset 引用必须保结构保留，
     否则 source.clean.md（AI 优先消费的底稿）里的图文块被破坏 -> 图文混排丢失。"""
-    from content.post.evidence_text import clean_source_markdown
+    from content.post.article.evidence_text import clean_source_markdown
 
     raw = (
         "## 五花海\n"

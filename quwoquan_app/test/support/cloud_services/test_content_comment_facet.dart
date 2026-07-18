@@ -169,7 +169,7 @@ class TestContentCommentFacet implements ContentCommentFacet {
     _throwIfConfigured();
     deleteCalls++;
     lastDeleteCommand = command;
-    final current = _requireVersion(command.commentId, command.version);
+    final current = _required(command.commentId);
     final deleted = current.copyWith(
       version: current.version + 1,
       status: ContentCommentStatus.deleted,
@@ -199,7 +199,7 @@ class TestContentCommentFacet implements ContentCommentFacet {
     BindContentCommentAttachmentsCommand command,
   ) async {
     _throwIfConfigured();
-    final current = _requireVersion(command.commentId, command.version);
+    final current = _required(command.commentId);
     final updated = current.copyWith(
       version: current.version + 1,
       attachmentMediaIds: command.attachmentMediaIds,
@@ -270,7 +270,7 @@ class TestContentCommentFacet implements ContentCommentFacet {
     _throwIfConfigured();
     pinCalls++;
     lastPinCommand = command;
-    final current = _requireVersion(command.commentId, command.version);
+    final current = _required(command.commentId);
     final updated = current.copyWith(
       version: current.version + 1,
       isPinned: pinned,
@@ -315,12 +315,9 @@ class TestContentCommentFacet implements ContentCommentFacet {
     return null;
   }
 
-  ContentCommentListItem _requireVersion(String id, int version) {
+  ContentCommentListItem _required(String id) {
     final current = _find(id);
     if (current == null) throw StateError('comment not found');
-    if (current.version != version) {
-      throw StateError('comment version conflict');
-    }
     return current;
   }
 

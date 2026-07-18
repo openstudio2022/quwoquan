@@ -1,4 +1,3 @@
-version: 1
 aggregate: Location
 layer: e2e
 
@@ -16,12 +15,13 @@ execution:
 
 scenarios:
   - name: location_search_provider_failover
+    source: location_search_provider_failover
     description: 主 provider 超时后切换备用 provider，端侧仍拿到位置候选
     test_type: api_contract
     actors:
       app: lib/ui/content/entry/pages/publish_location_selector_page.dart
-      gateway: /v1/integration/location/search
-      service: integration-service GET /v1/integration/location/search
+      gateway: /integration/location/search
+      service: integration-service GET /integration/location/search
       upstream: geo provider primary -> backup
     steps:
       - user enters keyword for publishing location

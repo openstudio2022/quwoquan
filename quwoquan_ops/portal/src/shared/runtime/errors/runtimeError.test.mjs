@@ -15,7 +15,7 @@ test("coerceRuntimeError preserves RuntimeError instances", () => {
     fallbackRuntimeErrorResponse({
       code: "OPS.CONTRACT.invalid_response",
       statusCode: 502,
-      requestPath: "/v1/control-plane/platform/audits",
+      requestPath: "/control-plane/platform/audits",
       requestId: "req-1",
       traceId: "trace-1",
       cause: new Error("bad json"),

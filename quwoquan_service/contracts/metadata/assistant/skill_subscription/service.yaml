@@ -8,7 +8,8 @@ api_routes:
     slice: SkillSubscriptionListView
   method: GET
   operation: ListSkillSubscriptions
-  path: /v1/assistant/skill-subscriptions
+  path: /assistant/skill-subscriptions
+
   query_params:
   - limit
   - status
@@ -29,7 +30,8 @@ api_routes:
     method: createSubscription
   method: POST
   operation: CreateSkillSubscription
-  path: /v1/assistant/skill-subscriptions
+  path: /assistant/skill-subscriptions
+
   request_fields:
   - skillId
   - domainId
@@ -54,7 +56,8 @@ api_routes:
     slice: SkillSubscription
   method: GET
   operation: GetSkillSubscription
-  path: /v1/assistant/skill-subscriptions/{subscriptionId}
+  path: /assistant/skill-subscriptions/{subscriptionId}
+
   response_entity: SkillSubscription
   security:
     anonymous_policy: deny
@@ -72,10 +75,10 @@ api_routes:
     method: updateSubscriptionStatus
   method: PATCH
   operation: UpdateSkillSubscriptionStatus
-  path: /v1/assistant/skill-subscriptions/{subscriptionId}/status
+  path: /assistant/skill-subscriptions/{subscriptionId}/status
+
   request_fields:
   - status
-  - expectedVersion
   - idempotencyKey
   response_entity: SkillSubscription
   security:
@@ -94,7 +97,8 @@ api_routes:
     method: acquireDueLeases
   method: POST
   operation: TickSkillSubscriptionCron
-  path: /internal/v1/assistant/skill-subscriptions:tick
+  path: /internal/assistant/skill-subscriptions:tick
+
   request_fields:
   - now
   - leaseOwner
@@ -116,4 +120,3 @@ service:
   domain: assistant
   name: assistant-service
   owner: assistant-team
-version: 1

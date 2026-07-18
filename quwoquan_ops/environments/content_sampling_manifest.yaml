@@ -9,7 +9,7 @@
 # 回填策略（默认）：alpha/beta/gamma 按比例 10% 采集，且总量不超过上限 1000；
 # 池较小（< ~10k）时上限不约束，按 10% 比例回填；池超过上限时按 rank 截断到 1000。
 # 各环境缺省继承 defaults，可按需在 environments.<env> 覆盖单键。prod 显式全量。
-schemaVersion: quwoquan.content_sampling_manifest
+schema: quwoquan.content_sampling_manifest
 salt: "qwq-content-2026"
 defaults:
   sampleRatio: 0.10        # 默认按 10% 比例回填

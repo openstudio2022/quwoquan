@@ -11,6 +11,9 @@ class FeedPerformanceMetricNames {
   static const String videoAutoplayStartupMs =
       'home_feed_video_autoplay_startup_ms';
   static const String videoAutoplayFailed = 'home_feed_video_autoplay_failed';
+  static const String videoPlaybackStartupMs =
+      'home_feed_video_playback_startup_ms';
+  static const String videoPlaybackFailed = 'home_feed_video_playback_failed';
   static const String feedLoadFailed = 'home_feed_load_failed';
   static const String frameJankRatio = 'home_feed_frame_jank_ratio';
   static const String imageCacheBytes = 'home_feed_image_cache_bytes';
@@ -117,21 +120,25 @@ class FeedPerformanceObservability {
     );
   }
 
-  /// 视频自动播放启动成功：上报启动耗时与命中候选源序号。
+  /// 视频播放启动成功：自动播放与手动播放使用不同事件，避免指标混淆。
   void recordVideoPlaybackStarted({
     required String contentId,
     required int startupMs,
     required int candidateIndex,
+    required bool autoPlay,
   }) {
     unawaited(
       _analytics.trackEvent(
         AnalyticsEvent(
           eventType: 'feed_metric',
-          eventName: FeedPerformanceMetricNames.videoAutoplayStartupMs,
+          eventName: autoPlay
+              ? FeedPerformanceMetricNames.videoAutoplayStartupMs
+              : FeedPerformanceMetricNames.videoPlaybackStartupMs,
           properties: <String, dynamic>{
             'contentId': contentId,
             'durationMs': startupMs,
             'candidateIndex': candidateIndex,
+            'autoPlay': autoPlay,
             'result': 'ok',
           },
         ),
@@ -139,19 +146,29 @@ class FeedPerformanceObservability {
     );
   }
 
-  /// 视频自动播放失败（候选源全部失败）：上报失败归因供异常面板度量。
+  /// 视频播放失败：自动播放与手动播放使用不同事件，并只记录脱敏分类。
   void recordVideoPlaybackFailed({
     required String contentId,
     required int candidatesTried,
+    required String failureKind,
+    required String userScene,
+    required bool retryable,
+    required bool autoPlay,
   }) {
     unawaited(
       _analytics.trackEvent(
         AnalyticsEvent(
           eventType: 'feed_metric',
-          eventName: FeedPerformanceMetricNames.videoAutoplayFailed,
+          eventName: autoPlay
+              ? FeedPerformanceMetricNames.videoAutoplayFailed
+              : FeedPerformanceMetricNames.videoPlaybackFailed,
           properties: <String, dynamic>{
             'contentId': contentId,
             'candidatesTried': candidatesTried,
+            'mediaFailureKind': failureKind,
+            'userScene': userScene,
+            'retryable': retryable,
+            'autoPlay': autoPlay,
             'result': 'failed',
           },
         ),

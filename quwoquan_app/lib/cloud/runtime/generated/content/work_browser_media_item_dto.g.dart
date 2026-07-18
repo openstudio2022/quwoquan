@@ -6,6 +6,10 @@ class WorkBrowserMediaItemDto {
   final String url;
   final String? coverUrl;
   final int? durationMs;
+  final String? mediaAssetId;
+  final int? mediaAssetVersion;
+  final String? previewTrackManifestUrl;
+  final int? previewTrackVersion;
   final int? width;
   final int? height;
   final String? title;
@@ -15,6 +19,10 @@ class WorkBrowserMediaItemDto {
     this.url = '',
     this.coverUrl,
     this.durationMs,
+    this.mediaAssetId,
+    this.mediaAssetVersion,
+    this.previewTrackManifestUrl,
+    this.previewTrackVersion,
     this.width,
     this.height,
     this.title,
@@ -22,10 +30,14 @@ class WorkBrowserMediaItemDto {
 
   factory WorkBrowserMediaItemDto.fromMap(Map<String, dynamic> m) {
     return WorkBrowserMediaItemDto(
-      kind: m['kind']?.toString() ?? m['type']?.toString() ?? '',
-      url: m['url']?.toString() ?? m['videoUrl']?.toString() ?? m['imageUrl']?.toString() ?? '',
-      coverUrl: m['coverUrl']?.toString() ?? m['thumbnailUrl']?.toString() ?? null,
-      durationMs: (m['durationMs'] as num?)?.toInt() ?? (m['duration_ms'] as num?)?.toInt() ?? null,
+      kind: m['kind']?.toString() ?? '',
+      url: m['url']?.toString() ?? '',
+      coverUrl: m['coverUrl']?.toString() ?? null,
+      durationMs: (m['durationMs'] as num?)?.toInt() ?? null,
+      mediaAssetId: m['mediaAssetId']?.toString() ?? null,
+      mediaAssetVersion: (m['mediaAssetVersion'] as num?)?.toInt() ?? null,
+      previewTrackManifestUrl: m['previewTrackManifestUrl']?.toString() ?? null,
+      previewTrackVersion: (m['previewTrackVersion'] as num?)?.toInt() ?? null,
       width: (m['width'] as num?)?.toInt() ?? null,
       height: (m['height'] as num?)?.toInt() ?? null,
       title: m['title']?.toString() ?? null,
@@ -38,6 +50,10 @@ class WorkBrowserMediaItemDto {
       'url': url,
       'coverUrl': coverUrl,
       'durationMs': durationMs,
+      'mediaAssetId': mediaAssetId,
+      'mediaAssetVersion': mediaAssetVersion,
+      'previewTrackManifestUrl': previewTrackManifestUrl,
+      'previewTrackVersion': previewTrackVersion,
       'width': width,
       'height': height,
       'title': title,
@@ -49,6 +65,10 @@ class WorkBrowserMediaItemDto {
     String? url,
     String? coverUrl,
     int? durationMs,
+    String? mediaAssetId,
+    int? mediaAssetVersion,
+    String? previewTrackManifestUrl,
+    int? previewTrackVersion,
     int? width,
     int? height,
     String? title,
@@ -58,6 +78,10 @@ class WorkBrowserMediaItemDto {
       url: url ?? this.url,
       coverUrl: coverUrl ?? this.coverUrl,
       durationMs: durationMs ?? this.durationMs,
+      mediaAssetId: mediaAssetId ?? this.mediaAssetId,
+      mediaAssetVersion: mediaAssetVersion ?? this.mediaAssetVersion,
+      previewTrackManifestUrl: previewTrackManifestUrl ?? this.previewTrackManifestUrl,
+      previewTrackVersion: previewTrackVersion ?? this.previewTrackVersion,
       width: width ?? this.width,
       height: height ?? this.height,
       title: title ?? this.title,

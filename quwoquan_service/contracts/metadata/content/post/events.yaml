@@ -1,23 +1,13 @@
-version: 1
 aggregate: Post
 
 events:
-  - name: PostCreated
-    description: 内容发布
-    producer: content-service
-    consumers: [recommendation-engine, notification-service, assistant-service]
-    channel: transactional_outbox
-    payload_entity: Post
-    payload_fields: [_id, authorId, creatorProfileId, creatorArchetype, creatorProfileVersion, creatorDisclosure, experienceClaimMode, contentType, contentIdentity, title, semanticMentions, tagRefs, entityRefs, location, primaryHomepageId, createdAt, sourceTaskId]
-    recommend_impact: content_index_refresh
-
   - name: PostPublished
-    description: 内容通过审核后发布
+    description: 一次性 PublishIntent 被接受并完成发布
     producer: content-service
     consumers: [feed-projection, search-service, recommendation-engine, entity-service, circle-service, notification-service]
     channel: transactional_outbox
     payload_entity: Post
-    payload_fields: [_id, authorId, creatorProfileId, creatorArchetype, creatorProfileVersion, creatorDisclosure, experienceClaimMode, contentType, contentIdentity, status, primaryHomepageId, publishedAt, lastActiveAt, sourceTaskId]
+    payload_fields: [_id, publishIntentId, localDraftId, authorId, creatorProfileId, creatorArchetype, creatorProfileVersion, creatorDisclosure, experienceClaimMode, contentType, contentIdentity, status, primaryHomepageId, publishedAt, lastActiveAt, sourceTaskId]
 
   - name: PostUpdated
     description: 内容更新

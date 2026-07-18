@@ -1,4 +1,3 @@
-version: 1
 
 service:
   name: content-service
@@ -13,7 +12,8 @@ service:
 
 api_routes:
   - method: POST
-    path: /v1/content/media/{mediaId}/original:access
+    path: /content/media/{mediaId}/original:access
+
     operation: RequestOriginalImageAccess
     actor: persona
     application:

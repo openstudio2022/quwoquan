@@ -1,5 +1,4 @@
 {
-  "schemaVersion": "content-recommendation-moment-channel-seed.v1",
   "environment": "gamma",
   "description": "gamma-local 首页推荐频道（recommend，feed_query={category:micro, identity:moment}）多形态 moment 种子（env-seed-first 单一真相源）。content-service 推荐频道走 identity=moment 的 repository 分页（ListPublished 按 createdAt DESC 扫描 quwoquan_content.posts，绕过推荐引擎），feed 命中条件为 contentIdentity=moment + status=published + visibility=public，且不被该 viewer 的 rec:hidden_authors / rec:negative / rec:hidden_types 抑制。现网 alpha_moment_* 内容作者=alpha_moment_author 已被 T3 负反馈测试加入 hidden_authors（预期生效，非缺陷），故推荐频道仅回 1 条 fixture_moment_001。本 fixture 用全新非抑制作者（既有真实作者，不创建账号）+ 全新 post id（t4hrec_moment_*）+ 既有真实 archived-* 媒体 object key（origin 可解析）注入一批多形态 moment（单图/多图轮播/九宫格 micro + 横/竖屏 video）；应用器运行时把首卡 createdAt 锚到当前 UTC 分钟并按 createdAtStepSeconds 递减，使推荐频道首刷多形态非空、连续下拉≥2 页曝光不重复。应用器：quwoquan_service/services/seed-box/scripts/apply_content_moment_channel_seed.py（幂等可重跑）。首卡（createdAt 最新，t4hrec_moment_01）刻意为图文 moment（单图）、视频卡从第 3 张起：既有负反馈 T4 用例点击 home-feed-more-0 移除首卡，若首卡为正在 autoplay 的焦点视频卡，视频播放器释放会与降级提示 AppToast overlay 渲染在 Patrol pump 循环下时序竞争、偶发超时（负反馈功能代码卡型无关且正确，见 home_multi_form_feed.dart _dismissFeedPost，非产品缺陷）。",
   "targetStore": "content-service:quwoquan_content",
@@ -50,7 +49,7 @@
       "photo2_cover": "media/image/s/archived-image/post/fixture_photo_002/v1/cover.png"
     },
     "videos": {
-      "sample": "media/video/s/archived-video/beta-sample.mp4"
+      "sample": "media/video/s/video-primary-0001/post/video-content-0001/source.mp4"
     }
   },
   "intersectionInterestTags": [
@@ -79,32 +78,303 @@
     "photo_3",
     "citywalk_cover"
   ],
-  "videoPortraitDimensions": { "width": 1080, "height": 1920 },
-  "videoLandscapeDimensions": { "width": 1920, "height": 1080 },
+  "videoPortraitDimensions": {
+    "width": 1080,
+    "height": 1920
+  },
+  "videoLandscapeDimensions": {
+    "width": 1920,
+    "height": 1080
+  },
   "posts": [
-    { "id": "t4hrec_moment_01", "author": "fixture_user_travel", "form": "moment_single", "title": "湖面倒影单图", "body": "单张横图满宽，圆角收敛后更像内容预览。", "locationName": "然乌湖", "likeCount": 173, "commentCount": 9, "shareCount": 4, "intersection": false },
-    { "id": "t4hrec_moment_02", "author": "fixture_user_outdoor_01", "form": "moment_grid", "title": "露营装备九宫格", "body": "一次重装露营的全部家当，九宫格平铺更直观。", "locationName": "贡嘎环线", "likeCount": 286, "commentCount": 19, "shareCount": 12, "intersection": true },
-    { "id": "t4hrec_moment_03", "author": "fixture_user_photo", "form": "video_portrait", "title": "雪山垭口的清晨", "body": "竖屏记录雪山垭口日出，焦点自动播放，离开暂停。", "locationName": "四姑娘山", "likeCount": 412, "commentCount": 33, "shareCount": 21, "intersection": true },
-    { "id": "t4hrec_moment_04", "author": "fixture_user_current", "form": "video_landscape", "title": "城市天台延时", "body": "横屏延时视频，黄昏到入夜的城市光线。", "locationName": "上海", "likeCount": 521, "commentCount": 47, "shareCount": 38, "intersection": false },
-    { "id": "t4hrec_moment_05", "author": "fixture_user_travel", "form": "moment_multi", "title": "徒步沿途多图", "body": "徒步沿途随手多图，横滑浏览，点状指示器最多六个。", "locationName": "雨崩", "likeCount": 244, "commentCount": 16, "shareCount": 11, "intersection": true },
-    { "id": "t4hrec_moment_06", "author": "fixture_user_outdoor_01", "form": "moment_single", "title": "营地的一盏灯", "body": "夜里营地的一盏灯，单图也能讲完一个瞬间。", "locationName": "洛克线", "likeCount": 132, "commentCount": 7, "shareCount": 3, "intersection": true },
-    { "id": "t4hrec_moment_07", "author": "fixture_user_photo", "form": "moment_grid", "title": "光影练习九宫格", "body": "一组光影练习，九宫格末格聚合剩余，点击进沉浸浏览。", "locationName": "工作室", "likeCount": 318, "commentCount": 22, "shareCount": 15, "intersection": false },
-    { "id": "t4hrec_moment_08", "author": "fixture_user_current", "form": "video_portrait", "title": "周末早餐竖屏", "body": "竖屏记录周末早餐准备，咖啡与手账。", "locationName": "家附近", "likeCount": 199, "commentCount": 13, "shareCount": 6, "intersection": false },
-    { "id": "t4hrec_moment_09", "author": "fixture_user_travel", "form": "moment_multi", "title": "高原星空多图", "body": "高原星空连拍，横滑切换不同方位。", "locationName": "纳木错", "likeCount": 377, "commentCount": 29, "shareCount": 24, "intersection": true },
-    { "id": "t4hrec_moment_10", "author": "fixture_user_outdoor_01", "form": "moment_single", "title": "登顶打卡单图", "body": "登顶那一刻的单图，简单直接。", "locationName": "哈巴雪山", "likeCount": 205, "commentCount": 14, "shareCount": 9, "intersection": true },
-    { "id": "t4hrec_moment_11", "author": "fixture_user_photo", "form": "moment_grid", "title": "城市扫街九宫格", "body": "城市扫街的一组瞬间，九宫格平铺。", "locationName": "广州", "likeCount": 261, "commentCount": 18, "shareCount": 10, "intersection": false },
-    { "id": "t4hrec_moment_12", "author": "fixture_user_current", "form": "video_landscape", "title": "海边横屏漫游", "body": "横屏海边漫游片段，离开焦点自动暂停。", "locationName": "东山岛", "likeCount": 433, "commentCount": 31, "shareCount": 27, "intersection": false },
-    { "id": "t4hrec_moment_13", "author": "fixture_user_travel", "form": "moment_single", "title": "垭口经幡单图", "body": "垭口经幡随风的单图记录。", "locationName": "米拉山", "likeCount": 156, "commentCount": 8, "shareCount": 5, "intersection": true },
-    { "id": "t4hrec_moment_14", "author": "fixture_user_outdoor_01", "form": "moment_multi", "title": "装备评测多图", "body": "几件露营装备的多图评测，横滑对比细节。", "locationName": "测试场", "likeCount": 298, "commentCount": 21, "shareCount": 17, "intersection": true },
-    { "id": "t4hrec_moment_15", "author": "fixture_user_photo", "form": "video_portrait", "title": "竖屏人像花絮", "body": "竖屏人像拍摄花絮，焦点自动播放。", "locationName": "外景地", "likeCount": 224, "commentCount": 15, "shareCount": 8, "intersection": false },
-    { "id": "t4hrec_moment_16", "author": "fixture_user_current", "form": "moment_grid", "title": "日常碎片九宫格", "body": "一周的日常碎片，九宫格收口。", "locationName": "城里", "likeCount": 187, "commentCount": 11, "shareCount": 6, "intersection": false },
-    { "id": "t4hrec_moment_17", "author": "fixture_user_travel", "form": "moment_single", "title": "云海之上单图", "body": "云海之上的单图，留白即语言。", "locationName": "牛背山", "likeCount": 268, "commentCount": 17, "shareCount": 13, "intersection": true },
-    { "id": "t4hrec_moment_18", "author": "fixture_user_outdoor_01", "form": "moment_multi", "title": "溯溪沿途多图", "body": "溯溪沿途多图，水流与石头的纹理。", "locationName": "雪宝顶", "likeCount": 213, "commentCount": 12, "shareCount": 7, "intersection": true },
-    { "id": "t4hrec_moment_19", "author": "fixture_user_photo", "form": "video_landscape", "title": "横屏街景延时", "body": "横屏街景延时，人流与车灯的轨迹。", "locationName": "成都", "likeCount": 356, "commentCount": 26, "shareCount": 19, "intersection": false },
-    { "id": "t4hrec_moment_20", "author": "fixture_user_current", "form": "moment_grid", "title": "手账拼贴九宫格", "body": "手账拼贴九宫格，记录这一季。", "locationName": "书房", "likeCount": 178, "commentCount": 10, "shareCount": 5, "intersection": false },
-    { "id": "t4hrec_moment_21", "author": "fixture_user_travel", "form": "moment_single", "title": "草甸帐篷单图", "body": "草甸上的一顶帐篷，单图也很完整。", "locationName": "武功山", "likeCount": 241, "commentCount": 16, "shareCount": 12, "intersection": true },
-    { "id": "t4hrec_moment_22", "author": "fixture_user_outdoor_01", "form": "video_portrait", "title": "竖屏开箱实录", "body": "竖屏装备开箱实录，焦点播放。", "locationName": "仓库", "likeCount": 192, "commentCount": 13, "shareCount": 9, "intersection": true },
-    { "id": "t4hrec_moment_23", "author": "fixture_user_photo", "form": "moment_multi", "title": "胶片质感多图", "body": "一组胶片质感多图，横滑慢慢看。", "locationName": "暗房", "likeCount": 279, "commentCount": 20, "shareCount": 14, "intersection": false },
-    { "id": "t4hrec_moment_24", "author": "fixture_user_current", "form": "moment_grid", "title": "城市夜景九宫格", "body": "城市夜景九宫格，末格聚合更多。", "locationName": "江边", "likeCount": 203, "commentCount": 12, "shareCount": 8, "intersection": false }
-  ]
+    {
+      "id": "t4hrec_moment_01",
+      "author": "fixture_user_travel",
+      "form": "moment_single",
+      "title": "湖面倒影单图",
+      "body": "单张横图满宽，圆角收敛后更像内容预览。",
+      "locationName": "然乌湖",
+      "likeCount": 173,
+      "commentCount": 9,
+      "shareCount": 4,
+      "intersection": false
+    },
+    {
+      "id": "t4hrec_moment_02",
+      "author": "fixture_user_outdoor_01",
+      "form": "moment_grid",
+      "title": "露营装备九宫格",
+      "body": "一次重装露营的全部家当，九宫格平铺更直观。",
+      "locationName": "贡嘎环线",
+      "likeCount": 286,
+      "commentCount": 19,
+      "shareCount": 12,
+      "intersection": true
+    },
+    {
+      "id": "t4hrec_moment_03",
+      "author": "fixture_user_photo",
+      "form": "video_portrait",
+      "title": "雪山垭口的清晨",
+      "body": "竖屏记录雪山垭口日出，焦点自动播放，离开暂停。",
+      "locationName": "四姑娘山",
+      "likeCount": 412,
+      "commentCount": 33,
+      "shareCount": 21,
+      "intersection": true
+    },
+    {
+      "id": "t4hrec_moment_04",
+      "author": "fixture_user_current",
+      "form": "video_landscape",
+      "title": "城市天台延时",
+      "body": "横屏延时视频，黄昏到入夜的城市光线。",
+      "locationName": "上海",
+      "likeCount": 521,
+      "commentCount": 47,
+      "shareCount": 38,
+      "intersection": false
+    },
+    {
+      "id": "t4hrec_moment_05",
+      "author": "fixture_user_travel",
+      "form": "moment_multi",
+      "title": "徒步沿途多图",
+      "body": "徒步沿途随手多图，横滑浏览，点状指示器最多六个。",
+      "locationName": "雨崩",
+      "likeCount": 244,
+      "commentCount": 16,
+      "shareCount": 11,
+      "intersection": true
+    },
+    {
+      "id": "t4hrec_moment_06",
+      "author": "fixture_user_outdoor_01",
+      "form": "moment_single",
+      "title": "营地的一盏灯",
+      "body": "夜里营地的一盏灯，单图也能讲完一个瞬间。",
+      "locationName": "洛克线",
+      "likeCount": 132,
+      "commentCount": 7,
+      "shareCount": 3,
+      "intersection": true
+    },
+    {
+      "id": "t4hrec_moment_07",
+      "author": "fixture_user_photo",
+      "form": "moment_grid",
+      "title": "光影练习九宫格",
+      "body": "一组光影练习，九宫格末格聚合剩余，点击进沉浸浏览。",
+      "locationName": "工作室",
+      "likeCount": 318,
+      "commentCount": 22,
+      "shareCount": 15,
+      "intersection": false
+    },
+    {
+      "id": "t4hrec_moment_08",
+      "author": "fixture_user_current",
+      "form": "video_portrait",
+      "title": "周末早餐竖屏",
+      "body": "竖屏记录周末早餐准备，咖啡与手账。",
+      "locationName": "家附近",
+      "likeCount": 199,
+      "commentCount": 13,
+      "shareCount": 6,
+      "intersection": false
+    },
+    {
+      "id": "t4hrec_moment_09",
+      "author": "fixture_user_travel",
+      "form": "moment_multi",
+      "title": "高原星空多图",
+      "body": "高原星空连拍，横滑切换不同方位。",
+      "locationName": "纳木错",
+      "likeCount": 377,
+      "commentCount": 29,
+      "shareCount": 24,
+      "intersection": true
+    },
+    {
+      "id": "t4hrec_moment_10",
+      "author": "fixture_user_outdoor_01",
+      "form": "moment_single",
+      "title": "登顶打卡单图",
+      "body": "登顶那一刻的单图，简单直接。",
+      "locationName": "哈巴雪山",
+      "likeCount": 205,
+      "commentCount": 14,
+      "shareCount": 9,
+      "intersection": true
+    },
+    {
+      "id": "t4hrec_moment_11",
+      "author": "fixture_user_photo",
+      "form": "moment_grid",
+      "title": "城市扫街九宫格",
+      "body": "城市扫街的一组瞬间，九宫格平铺。",
+      "locationName": "广州",
+      "likeCount": 261,
+      "commentCount": 18,
+      "shareCount": 10,
+      "intersection": false
+    },
+    {
+      "id": "t4hrec_moment_12",
+      "author": "fixture_user_current",
+      "form": "video_landscape",
+      "title": "海边横屏漫游",
+      "body": "横屏海边漫游片段，离开焦点自动暂停。",
+      "locationName": "东山岛",
+      "likeCount": 433,
+      "commentCount": 31,
+      "shareCount": 27,
+      "intersection": false
+    },
+    {
+      "id": "t4hrec_moment_13",
+      "author": "fixture_user_travel",
+      "form": "moment_single",
+      "title": "垭口经幡单图",
+      "body": "垭口经幡随风的单图记录。",
+      "locationName": "米拉山",
+      "likeCount": 156,
+      "commentCount": 8,
+      "shareCount": 5,
+      "intersection": true
+    },
+    {
+      "id": "t4hrec_moment_14",
+      "author": "fixture_user_outdoor_01",
+      "form": "moment_multi",
+      "title": "装备评测多图",
+      "body": "几件露营装备的多图评测，横滑对比细节。",
+      "locationName": "测试场",
+      "likeCount": 298,
+      "commentCount": 21,
+      "shareCount": 17,
+      "intersection": true
+    },
+    {
+      "id": "t4hrec_moment_15",
+      "author": "fixture_user_photo",
+      "form": "video_portrait",
+      "title": "竖屏人像花絮",
+      "body": "竖屏人像拍摄花絮，焦点自动播放。",
+      "locationName": "外景地",
+      "likeCount": 224,
+      "commentCount": 15,
+      "shareCount": 8,
+      "intersection": false
+    },
+    {
+      "id": "t4hrec_moment_16",
+      "author": "fixture_user_current",
+      "form": "moment_grid",
+      "title": "日常碎片九宫格",
+      "body": "一周的日常碎片，九宫格收口。",
+      "locationName": "城里",
+      "likeCount": 187,
+      "commentCount": 11,
+      "shareCount": 6,
+      "intersection": false
+    },
+    {
+      "id": "t4hrec_moment_17",
+      "author": "fixture_user_travel",
+      "form": "moment_single",
+      "title": "云海之上单图",
+      "body": "云海之上的单图，留白即语言。",
+      "locationName": "牛背山",
+      "likeCount": 268,
+      "commentCount": 17,
+      "shareCount": 13,
+      "intersection": true
+    },
+    {
+      "id": "t4hrec_moment_18",
+      "author": "fixture_user_outdoor_01",
+      "form": "moment_multi",
+      "title": "溯溪沿途多图",
+      "body": "溯溪沿途多图，水流与石头的纹理。",
+      "locationName": "雪宝顶",
+      "likeCount": 213,
+      "commentCount": 12,
+      "shareCount": 7,
+      "intersection": true
+    },
+    {
+      "id": "t4hrec_moment_19",
+      "author": "fixture_user_photo",
+      "form": "video_landscape",
+      "title": "横屏街景延时",
+      "body": "横屏街景延时，人流与车灯的轨迹。",
+      "locationName": "成都",
+      "likeCount": 356,
+      "commentCount": 26,
+      "shareCount": 19,
+      "intersection": false
+    },
+    {
+      "id": "t4hrec_moment_20",
+      "author": "fixture_user_current",
+      "form": "moment_grid",
+      "title": "手账拼贴九宫格",
+      "body": "手账拼贴九宫格，记录这一季。",
+      "locationName": "书房",
+      "likeCount": 178,
+      "commentCount": 10,
+      "shareCount": 5,
+      "intersection": false
+    },
+    {
+      "id": "t4hrec_moment_21",
+      "author": "fixture_user_travel",
+      "form": "moment_single",
+      "title": "草甸帐篷单图",
+      "body": "草甸上的一顶帐篷，单图也很完整。",
+      "locationName": "武功山",
+      "likeCount": 241,
+      "commentCount": 16,
+      "shareCount": 12,
+      "intersection": true
+    },
+    {
+      "id": "t4hrec_moment_22",
+      "author": "fixture_user_outdoor_01",
+      "form": "video_portrait",
+      "title": "竖屏开箱实录",
+      "body": "竖屏装备开箱实录，焦点播放。",
+      "locationName": "仓库",
+      "likeCount": 192,
+      "commentCount": 13,
+      "shareCount": 9,
+      "intersection": true
+    },
+    {
+      "id": "t4hrec_moment_23",
+      "author": "fixture_user_photo",
+      "form": "moment_multi",
+      "title": "胶片质感多图",
+      "body": "一组胶片质感多图，横滑慢慢看。",
+      "locationName": "暗房",
+      "likeCount": 279,
+      "commentCount": 20,
+      "shareCount": 14,
+      "intersection": false
+    },
+    {
+      "id": "t4hrec_moment_24",
+      "author": "fixture_user_current",
+      "form": "moment_grid",
+      "title": "城市夜景九宫格",
+      "body": "城市夜景九宫格，末格聚合更多。",
+      "locationName": "江边",
+      "likeCount": 203,
+      "commentCount": 12,
+      "shareCount": 8,
+      "intersection": false
+    }
+  ],
+  "schema": "content-recommendation-moment-channel-seed"
 }

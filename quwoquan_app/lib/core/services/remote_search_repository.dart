@@ -9,8 +9,9 @@ import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/core/models/search_hit_payload.dart';
 import 'package:quwoquan_app/core/services/retrieve_request.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-/// 结果模式接云：消费 `search-service` 的 `POST /v1/search` 统一检索结果（R-S06）。
+/// 结果模式接云：消费 `search-service` 的 `POST /search` 统一检索结果（R-S06）。
 ///
 /// 设计要点（端云一致性 + 单一真相源）：
 /// - 请求体走 codegen 真相源：path = [SearchApiMetadata.searchQueryPath]，
@@ -40,7 +41,11 @@ class RemoteSearchRepository implements SearchRepository {
   final String _baseUrl;
 
   @override
-  Future<SearchResponse> search(SearchRequest request) async {
+  Future<SearchResponse> search(
+    SearchRequest request, {
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  }) async {
     final normalized = request.normalized();
     if (normalized.query.isEmpty) {
       return SearchResponse(
@@ -51,11 +56,15 @@ class RemoteSearchRepository implements SearchRepository {
 
     // suggest 模式：保留本地命名空间组合（chat/contact/circle 本地检索不破坏）。
     if (normalized.mode == SearchMode.suggest) {
-      return _localFanout.search(normalized);
+      return _localFanout.search(
+        normalized,
+        cancellation: cancellation,
+        deadlineAt: deadlineAt,
+      );
     }
 
     // 结果模式：当调用方显式只点名了非云侧可检索对象（如 integration.location_poi /
-    // tag / web.document）时，不向 /v1/search 发起广撒网检索，直接 fail-closed 返回空，
+    // tag / web.document）时，不向 /search 发起广撒网检索，直接 fail-closed 返回空，
     // 避免误触云侧 DefaultResultTargets 全量扇出。
     if (normalized.objectTypes.isNotEmpty &&
         !normalized.objectTypes.any(_isCloudRetrievable)) {
@@ -83,17 +92,29 @@ class RemoteSearchRepository implements SearchRepository {
       SearchToolFieldNames.limit: normalized.limit,
     };
 
-    final decoded = await _httpClient.postJsonObject(
-      uri,
-      headers: CloudRequestHeaders.forPage(SearchRequestPageIds.searchQuery),
-      body: body,
-      context: SearchApiMetadata.searchQueryOperation,
+    final headers = CloudRequestHeaders.forPage(
+      SearchRequestPageIds.searchQuery,
     );
+    final decoded = cancellation == null
+        ? await _httpClient.postJsonObject(
+            uri,
+            headers: headers,
+            body: body,
+            context: SearchApiMetadata.searchQueryOperation,
+          )
+        : await _httpClient.postJsonObjectAbortable(
+            uri,
+            gatewayOrigin: Uri.parse(_baseUrl),
+            headers: headers,
+            body: body,
+            context: SearchApiMetadata.searchQueryOperation,
+            cancellation: cancellation,
+          );
 
     return _responseFromCloud(normalized, decoded);
   }
 
-  /// 云侧 `/v1/search` 仅认 [RetrieveTarget] 的 wire 值。复用 [RetrieveRequest] 的
+  /// 云侧 `/search` 仅认 [RetrieveTarget] 的 wire 值。复用 [RetrieveRequest] 的
   /// 单一真相源映射后剔除 `chat`（本地命名空间，不外发），保证结果模式只取云侧对象。
   List<RetrieveTarget> _cloudTargets(SearchRequest request) {
     return RetrieveRequest.fromSearchRequest(request).targets
@@ -265,7 +286,7 @@ class RemoteSearchRepository implements SearchRepository {
       if (item is! Map) {
         continue;
       }
-      final label = (item['Label'] ?? item['label'] ?? '').toString().trim();
+      final label = (item['label'] ?? '').toString().trim();
       if (label.isNotEmpty) {
         labels.add(label);
       }
@@ -309,10 +330,8 @@ class RemoteSearchRepository implements SearchRepository {
       if (item is! Map) {
         continue;
       }
-      final code = (item['code'] ?? item['Code'] ?? '').toString().trim();
-      final message = (item['message'] ?? item['Message'] ?? '')
-          .toString()
-          .trim();
+      final code = (item['code'] ?? '').toString().trim();
+      final message = (item['message'] ?? '').toString().trim();
       if (code.isEmpty && message.isEmpty) {
         continue;
       }

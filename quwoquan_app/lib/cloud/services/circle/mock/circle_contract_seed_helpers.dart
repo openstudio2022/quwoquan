@@ -100,7 +100,7 @@ class CircleContractSeedHelpers {
     }
     final selected = <Map<String, dynamic>>[];
     for (final row in contentPostRows()) {
-      final postId = (row['postId'] ?? row['id'] ?? '').toString().trim();
+      final postId = (row['postId'] ?? '').toString().trim();
       if (wanted.contains(postId)) {
         selected.add(Map<String, dynamic>.from(row));
       }
@@ -151,15 +151,10 @@ class CircleContractSeedHelpers {
     String? fallbackUpdatedAt,
   }) {
     final now = DateTime.now().toIso8601String();
-    final coverUrl = (data['coverUrl'] ?? data['cover'] ?? '')
-        .toString()
-        .trim();
-    final avatarUrl = (data['avatarUrl'] ?? data['avatar'] ?? coverUrl)
-        .toString()
-        .trim();
-    final description = (data['description'] ?? data['desc'] ?? '')
-        .toString()
-        .trim();
+    final coverUrl = (data['coverUrl'] ?? '').toString().trim();
+    final rawAvatar = (data['avatarUrl'] ?? '').toString().trim();
+    final avatarUrl = rawAvatar.isNotEmpty ? rawAvatar : coverUrl;
+    final description = (data['description'] ?? '').toString().trim();
     final rawTags =
         (data['tags'] as List?)?.cast<Object?>() ?? const <Object?>[];
     final rawThemeTags =

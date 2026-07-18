@@ -37,8 +37,8 @@ final class AlphaCircleMembershipFacet
     LeaveCircleMembershipCommand command,
   ) async {
     final current = _memberships[command.circleId];
-    if (current == null || current.version != command.expectedVersion) {
-      throw StateError('alpha CircleMembership version conflict');
+    if (current == null) {
+      throw StateError('alpha CircleMembership not found');
     }
     final left = CircleMembershipSlice(
       membershipId: current.membershipId,
@@ -63,10 +63,8 @@ final class AlphaCircleMembershipFacet
     UpdateCircleMembershipRoleCommand command,
   ) async {
     final current = _memberships[command.circleId];
-    if (current == null ||
-        current.personaId != command.personaId ||
-        current.version != command.expectedVersion) {
-      throw StateError('alpha CircleMembership version conflict');
+    if (current == null || current.personaId != command.personaId) {
+      throw StateError('alpha CircleMembership not found');
     }
     final updated = CircleMembershipSlice(
       membershipId: current.membershipId,

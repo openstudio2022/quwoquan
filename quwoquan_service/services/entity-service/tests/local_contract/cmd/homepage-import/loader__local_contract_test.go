@@ -20,7 +20,7 @@ func writeFile(t *testing.T, path string, content string) {
 	}
 }
 
-const sourceFieldsJSON = `"primarySource":{"sourceKind":"wikipedia","sourceUrl":"https://zh.wikipedia.org/wiki/%E4%B9%9D%E5%AF%A8%E6%B2%9F","title":"九寨沟","fetchedAt":"2026-07-11T00:00:00Z","snapshotHash":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","policyRevision":"encyclopedia-primary-v2","sourceUseMode":"licensed_adaptation"},"sourceUrls":["https://zh.wikipedia.org/wiki/%E4%B9%9D%E5%AF%A8%E6%B2%9F"]`
+const sourceFieldsJSON = `"primarySource":{"sourceKind":"wikipedia","sourceUrl":"https://zh.wikipedia.org/wiki/%E4%B9%9D%E5%AF%A8%E6%B2%9F","title":"九寨沟","fetchedAt":"2026-07-11T00:00:00Z","snapshotHash":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","policyRevision":"encyclopedia-primary","sourceUseMode":"licensed_adaptation"},"sourceUrls":["https://zh.wikipedia.org/wiki/%E4%B9%9D%E5%AF%A8%E6%B2%9F"]`
 
 func seedPublishEntity(t *testing.T, root string, ref string, withObjectKey bool) {
 	t.Helper()
@@ -109,7 +109,7 @@ func TestLoadHomepageProjectionsRejectsUnsafePublicSourceURL(t *testing.T) {
 	dir := filepath.Join(root, "entities", "地点", "景区", "危险来源")
 	writeFile(t, filepath.Join(dir, "_entity.json"),
 		`{"label":"危险来源","domain":"地点","type":"景区","primarySource":`+
-			`{"sourceKind":"wikipedia","sourceUrl":"http://127.0.0.1/source","policyRevision":"encyclopedia-primary-v2"},`+
+			`{"sourceKind":"wikipedia","sourceUrl":"http://127.0.0.1/source","policyRevision":"encyclopedia-primary"},`+
 			`"sourceUrls":["http://127.0.0.1/source"]}`)
 	writeFile(t, filepath.Join(dir, "page.md"), "# 危险来源\n")
 	inputs, issues, err := homepageimport.LoadHomepageProjections(root, nil, "http://media.local:9080")

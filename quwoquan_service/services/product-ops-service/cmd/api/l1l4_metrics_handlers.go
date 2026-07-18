@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -189,8 +188,8 @@ func (s *productService) buildL1L4MetricsResponse(ctx context.Context, scope l1l
 func deriveL1L4MetricState(snapshot metricSnapshot, telemetrySnapshot application.EventTelemetrySnapshot) (l1l4DerivedMetricState, bool) {
 	switch snapshot.Metric {
 	case "five_tab_journey_completion_rate":
-		openCount := countEventNames(telemetrySnapshot.Summary, "page_open")
-		returnCount := countEventNames(telemetrySnapshot.Summary, "page_return")
+		openCount := countEventTypes(telemetrySnapshot.Summary, "page_open")
+		returnCount := countEventTypes(telemetrySnapshot.Summary, "page_return")
 		if openCount == 0 {
 			return l1l4DerivedMetricState{}, false
 		}
@@ -231,44 +230,9 @@ func deriveL1L4MetricState(snapshot metricSnapshot, telemetrySnapshot applicatio
 			ObservedAt: latestEventTime(telemetrySnapshot.Drilldown.Items),
 		}, true
 	case "core_business_ctr":
-		impressions := countDimensionValue(telemetrySnapshot.Summary, "eventName", "surface.view")
-		clicks := countDimensionValue(telemetrySnapshot.Summary, "eventName", "click")
-		if impressions == 0 || clicks == 0 {
-			return l1l4DerivedMetricState{}, false
-		}
-		value := float64(clicks) / float64(impressions) * 100
-		state := "quiet"
-		severity := "info"
-		if value < 3 {
-			state = "warning"
-			severity = "warning"
-		}
-		return l1l4DerivedMetricState{
-			Metric: snapshot.Metric,
-			Value:  value,
-			Unit:   "%",
-			Status: mapMetricStatus(state),
-			Trend:  "live",
-			Source: "telemetry",
-			Alert: &l1l4MetricAlertState{
-				ID:           "L2CoreBusinessCtrLow",
-				Level:        snapshot.Level,
-				Metric:       snapshot.Metric,
-				State:        state,
-				Severity:     severity,
-				Summary:      "L2 业务 CTR 由曝光/点击事件实时计算",
-				Value:        value,
-				Threshold:    3,
-				Source:       "telemetry",
-				Owner:        "product-ops",
-				RunbookID:    "cfg-rollback-drill",
-				RunbookRoute: "/platform/runbook",
-				RepairEntry:  "/product/dashboard",
-				AlertID:      "L2CoreBusinessCtrLow",
-				AuditRoute:   "/audit",
-			},
-			ObservedAt: latestEventTime(telemetrySnapshot.Drilldown.Items),
-		}, true
+		// 推荐曝光/点击只允许来自 content-service 的 BehaviorSignal 与
+		// recommendation Prometheus 指标，不能再伪装成 Ops event。
+		return l1l4DerivedMetricState{}, false
 	case "http_request_p95_ms":
 		samples := collectLatencySamples(telemetrySnapshot.Drilldown.Items)
 		if len(samples) == 0 {
@@ -354,8 +318,8 @@ func deriveL1L4MetricState(snapshot metricSnapshot, telemetrySnapshot applicatio
 	}
 }
 
-func countEventNames(summary application.EventSummary, eventName string) int {
-	return countDimensionValue(summary, "eventName", eventName)
+func countEventTypes(summary application.EventSummary, eventType string) int {
+	return countDimensionValue(summary, "eventType", eventType)
 }
 
 func countDimensionValue(summary application.EventSummary, dimension, value string) int {
@@ -389,52 +353,11 @@ func countDimensionValues(summary application.EventSummary, dimension string) in
 func collectLatencySamples(items []application.EventDrilldownItem) []float64 {
 	samples := make([]float64, 0, len(items))
 	for _, item := range items {
-		if value, ok := numericMetricValue(item.Metrics, "latencyMs"); ok {
-			samples = append(samples, value)
-			continue
-		}
-		if value, ok := numericMetricValue(item.Metrics, "durationMs"); ok {
-			samples = append(samples, value)
-			continue
-		}
-		if value, ok := numericMetricValue(item.Payload, "durationMs"); ok {
-			samples = append(samples, value)
+		if item.DurationMS != nil {
+			samples = append(samples, float64(*item.DurationMS))
 		}
 	}
 	return samples
-}
-
-func numericMetricValue(metrics map[string]any, key string) (float64, bool) {
-	if len(metrics) == 0 {
-		return 0, false
-	}
-	raw, ok := metrics[key]
-	if !ok {
-		return 0, false
-	}
-	switch value := raw.(type) {
-	case float64:
-		return value, true
-	case float32:
-		return float64(value), true
-	case int:
-		return float64(value), true
-	case int32:
-		return float64(value), true
-	case int64:
-		return float64(value), true
-	case uint:
-		return float64(value), true
-	case uint32:
-		return float64(value), true
-	case uint64:
-		return float64(value), true
-	case string:
-		if parsed, err := strconv.ParseFloat(strings.TrimSpace(value), 64); err == nil {
-			return parsed, true
-		}
-	}
-	return 0, false
 }
 
 func latestEventTime(items []application.EventDrilldownItem) time.Time {

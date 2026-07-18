@@ -2,7 +2,6 @@ dart_class: AssistantProcessTimelineWire
 library_path: assistant/generated/contracts/assistant_process_timeline.g.dart
 output_path: assistant/generated/contracts/assistant_process_timeline.g.dart
 contract: assistant_process_timeline
-version: assistant_process_timeline.m5
 kind: shared_wire_contract
 fields:
   - { name: frames, type: list<object>, ref: frame, default: [] }

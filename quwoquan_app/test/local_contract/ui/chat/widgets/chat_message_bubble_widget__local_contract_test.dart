@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -156,7 +157,10 @@ void main() {
       expect(find.text('城市漫步'), findsAtLeastNWidgets(1));
       expect(find.text('周末路线'), findsAtLeastNWidgets(1));
       expect(find.byType(AppCachedNetworkImage), findsAtLeastNWidgets(1));
-      expect(find.byIcon(Icons.chevron_right_rounded), findsAtLeastNWidgets(1));
+      expect(
+        find.byIcon(CupertinoIcons.chevron_forward),
+        findsAtLeastNWidgets(1),
+      );
     });
 
     testWidgets('图片消息展示图片预览', (tester) async {

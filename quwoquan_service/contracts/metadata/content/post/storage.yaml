@@ -1,4 +1,3 @@
-version: 1
 aggregate: Post
 backend: mongodb
 
@@ -20,9 +19,12 @@ collections:
       - { name: idx_posts_source, keys: { sourceType: 1, sourcePostId: 1 }, sparse: true }
       - { name: idx_posts_article_markdown_digest, keys: { articleMarkdownDigest: 1 }, sparse: true }
       - { name: idx_posts_canonical_entity, keys: { canonicalEntityId: 1, publishedAt: -1 }, sparse: true }
+      - { name: idx_posts_publish_intent, keys: { authorId: 1, publishIntentId: 1 }, unique: true, partial_filter: { publishIntentId: { type: string } } }
+      - { name: idx_posts_local_draft, keys: { authorId: 1, localDraftId: 1 }, unique: true, partial_filter: { localDraftId: { type: string } } }
       - { name: idx_posts_version, keys: { _id: 1, version: 1 }, unique: true }
     search_indexes:
       - name: search_posts_text
+        source: search_posts_text
         type: text
         fields: [title, body, locationName, tagRefs, entityRefs, articleMarkdown]
         weights: { title: 10, tagRefs: 5, entityRefs: 5, locationName: 3, body: 1, articleMarkdown: 1 }

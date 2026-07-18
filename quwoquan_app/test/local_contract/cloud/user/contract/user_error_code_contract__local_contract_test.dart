@@ -131,7 +131,7 @@ void main() {
     });
   });
 
-  group('UserErrorCode — 兼容性契约', () {
+  group('UserErrorCode — 单轨契约', () {
     test('fromCode 对未知 code 返回 null', () {
       expect(UserErrorCode.fromCode('NONEXISTENT.CODE'), isNull);
       expect(UserErrorCode.fromCode(''), isNull);

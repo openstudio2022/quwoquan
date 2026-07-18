@@ -87,6 +87,30 @@ final class ContentPostIntersectionReason {
   final double strength;
 }
 
+/// 单篇内容详情中的统一媒体序列项。
+///
+/// 它保留服务端公开投影的媒体事实，供 Work Browser 读取；媒体 authority
+/// 仍由 App runtime 注入，不能在这里拼接 URL。
+final class ContentPostMediaItem {
+  const ContentPostMediaItem({
+    required this.kind,
+    required this.url,
+    this.coverUrl,
+    this.durationMs,
+    this.width,
+    this.height,
+    this.title,
+  });
+
+  final String kind;
+  final String url;
+  final String? coverUrl;
+  final int? durationMs;
+  final int? width;
+  final int? height;
+  final String? title;
+}
+
 /// 保留详情扩展中的动态 JSON 结构，但不把 `Map<String, dynamic>` 暴露给合同调用方。
 sealed class ContentPostStructuredValue {
   const ContentPostStructuredValue();
@@ -148,12 +172,13 @@ final class ContentPostEntityMention {
 final class ContentPostDetailSlice {
   ContentPostDetailSlice({
     required this.post,
+    Iterable<ContentPostMediaItem> mediaItems = const <ContentPostMediaItem>[],
     this.isOfficial,
     this.badge,
     this.articleTemplate,
     this.articleFontPreset,
     this.articleMarkdown,
-    this.articleMarkdownVersion,
+    this.markdownDialect,
     this.articleMarkdownDigest,
     this.articleAssetManifest,
     this.articleRenderProfile,
@@ -165,18 +190,20 @@ final class ContentPostDetailSlice {
     this.coverUrl,
     Iterable<String>? tagRefs,
     this.visibility,
-  }) : entityMentions = List<ContentPostEntityMention>.unmodifiable(
+  }) : mediaItems = List<ContentPostMediaItem>.unmodifiable(mediaItems),
+       entityMentions = List<ContentPostEntityMention>.unmodifiable(
          entityMentions,
        ),
        tagRefs = tagRefs == null ? null : List<String>.unmodifiable(tagRefs);
 
   final ContentPostProjection post;
+  final List<ContentPostMediaItem> mediaItems;
   final bool? isOfficial;
   final String? badge;
   final String? articleTemplate;
   final String? articleFontPreset;
   final String? articleMarkdown;
-  final String? articleMarkdownVersion;
+  final String? markdownDialect;
   final String? articleMarkdownDigest;
   final ContentPostStructuredObject? articleAssetManifest;
   final ContentPostStructuredObject? articleRenderProfile;

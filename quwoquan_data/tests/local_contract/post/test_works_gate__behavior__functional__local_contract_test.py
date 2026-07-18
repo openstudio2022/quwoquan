@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import content.post.works_gate as works_gate
+import content.post.image.works_gate as works_gate
 from core.data_issue import DataIssueCode, DataIssueStage, DataRecoveryAction
 from core.io import read_json
 

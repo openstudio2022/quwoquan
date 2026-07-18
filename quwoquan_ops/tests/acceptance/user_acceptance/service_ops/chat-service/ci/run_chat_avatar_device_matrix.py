@@ -379,7 +379,7 @@ def main() -> int:
     out = report_path(args.report)
     requested_envs = envs(args.env)
     report: dict[str, Any] = {
-        "schemaVersion": 1,
+        "schema": "chat-avatar-device-matrix-report",
         "suiteId": "chat_avatar_sync",
         "scenario": "chat.group_avatar.sync_display_e2e.matrix",
         "status": "running",

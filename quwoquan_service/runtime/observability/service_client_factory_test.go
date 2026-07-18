@@ -20,7 +20,7 @@ func (f fixedResponseRoundTripper) RoundTrip(req *http.Request) (*http.Response,
 }
 
 func TestFallbackEndpointName(t *testing.T) {
-	got := fallbackEndpointName("chat-service", http.MethodGet, "/v1/chat/conversations/{conversationId}/messages")
+	got := fallbackEndpointName("chat-service", http.MethodGet, "/chat/conversations/{conversationId}/messages")
 	expect := "chat.get.v1_chat_conversations_id_messages"
 	if got != expect {
 		t.Fatalf("fallback endpoint mismatch, got=%s expect=%s", got, expect)
@@ -36,7 +36,7 @@ func TestNewOrchestratorClient_UsesMappedEndpoint(t *testing.T) {
 
 	client := NewOrchestratorClient(fixedResponseRoundTripper{}, ioLogger, processLogger, exceptionLogger)
 
-	req, _ := http.NewRequest(http.MethodGet, "http://example/v1/content/feed", nil)
+	req, _ := http.NewRequest(http.MethodGet, "http://example/content/feed", nil)
 	req = req.WithContext(WithCorrelationMeta(context.Background(), CorrelationMeta{
 		TraceID:   "SVC.sess.content.feed.list.t1.r1",
 		RequestID: "SVC.content.feed.list.t1.r1",

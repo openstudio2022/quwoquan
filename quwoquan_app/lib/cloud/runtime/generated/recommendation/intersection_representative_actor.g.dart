@@ -33,7 +33,7 @@ class IntersectionRepresentativeActor {
       privacyState: m['privacyState']?.toString() ?? 'visible',
       target: m['target'] == null ? null : IntersectionTarget.fromMap(_parseStringKeyMap(m['target'])!),
       evidenceRank: (m['evidenceRank'] as num?)?.toInt() ?? 0,
-      snapshotVersion: m['snapshotVersion']?.toString() ?? m['representativeActorVersion']?.toString() ?? '',
+      snapshotVersion: m['snapshotVersion']?.toString() ?? '',
     );
   }
 

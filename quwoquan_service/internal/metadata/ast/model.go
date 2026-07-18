@@ -134,6 +134,7 @@ type Operation struct {
 	OwnershipPolicy  string            `json:"ownershipPolicy,omitempty"`
 	Commercial       CommercialBinding `json:"commercial"`
 	Reliability      ReliabilityPolicy `json:"reliability"`
+	Concurrency      ConcurrencyPolicy `json:"concurrency,omitempty"`
 	ErrorCodes       []string          `json:"errorCodes,omitempty"`
 	Privacy          PrivacyPolicy     `json:"privacy"`
 	Telemetry        TelemetryPolicy   `json:"telemetry"`
@@ -156,6 +157,19 @@ type ReliabilityPolicy struct {
 	MaxAttempts         int    `json:"maxAttempts,omitempty"`
 	Idempotency         string `json:"idempotency,omitempty"`
 }
+
+// ConcurrencyPolicy only describes a caller-supplied resource precondition.
+// AggregateStore expected versions remain internal service-side CAS details.
+type ConcurrencyPolicy struct {
+	VersionPrecondition VersionPrecondition `json:"versionPrecondition,omitempty"`
+}
+
+type VersionPrecondition string
+
+const (
+	VersionPreconditionNone    VersionPrecondition = ""
+	VersionPreconditionIfMatch VersionPrecondition = "if_match"
+)
 
 type PrivacyPolicy struct {
 	RequestClassification  string `json:"requestClassification,omitempty"`

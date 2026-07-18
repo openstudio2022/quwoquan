@@ -5,6 +5,7 @@ import 'package:quwoquan_app/core/auth/one_tap_login_channel.dart';
 import 'package:quwoquan_app/core/di/cloud_http_client_provider.dart';
 import 'package:quwoquan_app/core/di/ops_event_dependencies.dart';
 import 'package:quwoquan_app/core/trackers/journey_event_tracker.dart';
+import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
 
 /// 登录能力的 production 组合入口，仅允许 Remote。
 /// Alpha contract fixture 由独立 runner 显式 override，不能通过环境或数据源开关触发。
@@ -35,9 +36,9 @@ final socialAuthorizationRepositoryProvider =
 /// 登录页专用的轻量漏斗组合入口。
 ///
 /// 不依赖全应用 Provider 聚合图；事件 schema、脱敏与上报实现仍复用统一
-/// [JourneyEventTracker] / [OpsEventRepository]。
+/// [JourneyEventTracker] / [AppTelemetryRecorder]。
 final loginJourneyEventTrackerProvider = Provider<JourneyEventTracker>((ref) {
   return JourneyEventTracker(
-    eventRepository: ref.watch(opsEventRepositoryProvider),
+    telemetryReporter: ref.watch(appTelemetryReporterProvider),
   );
 });

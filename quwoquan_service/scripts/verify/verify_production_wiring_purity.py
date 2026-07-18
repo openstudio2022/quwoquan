@@ -35,7 +35,7 @@ FORBIDDEN_CONFIG_TOKENS = (
     "prod-gray",
 )
 FORBIDDEN_CHAT_RETIRED_PATTERNS = (
-    re.compile(r"/v1/chat/media/uploads"),
+    re.compile(r"/chat/media/uploads"),
     re.compile(r"\bChatMediaUpload[A-Za-z0-9_]*\b"),
     re.compile(r"\bchat_media_(?:upload_sessions|assets)\b"),
     re.compile(r'''["']conversation_members["']'''),

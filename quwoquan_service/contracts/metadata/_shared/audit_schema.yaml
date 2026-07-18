@@ -1,4 +1,3 @@
-version: 1
 
 audit_events:
   - event_id: config.release.started

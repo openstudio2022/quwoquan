@@ -19,20 +19,20 @@ func TestCircleFileRealMongoTransactionReplayReaderBOLAAndStream(t *testing.T) {
 	t.Cleanup(func() { cleanCollections(t) })
 	seedFilePolicy(t, "circle-file", "persona-owner", 8*1024)
 
-	forged := groupRequest(t, http.MethodPost, "/v1/circles/circle-file/files", map[string]any{
+	forged := groupRequest(t, http.MethodPost, "/circles/circle-file/files", map[string]any{
 		"name": "伪造目录", "fileType": "folder",
 	})
 	forged.Header.Set("Idempotency-Key", "file-forged")
 	forged.Header.Set("X-Client-Persona-Id", "persona-owner")
 	forgedRecorder := httptest.NewRecorder()
-	fileGuard(http.MethodPost, "/v1/circles/{circleId}/files", "CreateCircleFile").ServeHTTP(forgedRecorder, forged)
+	fileGuard(http.MethodPost, "/circles/{circleId}/files", "CreateCircleFile").ServeHTTP(forgedRecorder, forged)
 	if forgedRecorder.Code != http.StatusUnauthorized {
 		t.Fatalf("forged CircleFile actor must fail closed: status=%d body=%s", forgedRecorder.Code, forgedRecorder.Body.String())
 	}
 
 	folderBody := map[string]any{"name": "旅行资料", "fileType": "folder"}
 	folderCreated := executeFileCommand(
-		t, http.MethodPost, "/v1/circles/circle-file/files", folderBody,
+		t, http.MethodPost, "/circles/circle-file/files", folderBody,
 		"file-folder-create", "", "persona-owner", "CreateCircleFile",
 	)
 	if folderCreated.Code != http.StatusCreated {
@@ -45,14 +45,14 @@ func TestCircleFileRealMongoTransactionReplayReaderBOLAAndStream(t *testing.T) {
 	}
 
 	replay := executeFileCommand(
-		t, http.MethodPost, "/v1/circles/circle-file/files", folderBody,
+		t, http.MethodPost, "/circles/circle-file/files", folderBody,
 		"file-folder-create", "", "persona-owner", "CreateCircleFile",
 	)
 	if replay.Code != http.StatusCreated || decodeBody(t, replay)["idempotentReplay"] != true {
 		t.Fatalf("CircleFile replay drift: status=%d body=%s", replay.Code, replay.Body.String())
 	}
 	conflict := executeFileCommand(
-		t, http.MethodPost, "/v1/circles/circle-file/files",
+		t, http.MethodPost, "/circles/circle-file/files",
 		map[string]any{"name": "另一个目录", "fileType": "folder"},
 		"file-folder-create", "", "persona-owner", "CreateCircleFile",
 	)
@@ -61,7 +61,7 @@ func TestCircleFileRealMongoTransactionReplayReaderBOLAAndStream(t *testing.T) {
 	}
 
 	fileCreated := executeFileCommand(
-		t, http.MethodPost, "/v1/circles/circle-file/files",
+		t, http.MethodPost, "/circles/circle-file/files",
 		map[string]any{
 			"parentFolderId": folderID, "name": "路线.pdf", "fileType": "file",
 			"assetId": "asset-route-ready",
@@ -77,7 +77,7 @@ func TestCircleFileRealMongoTransactionReplayReaderBOLAAndStream(t *testing.T) {
 		t.Fatalf("CircleFile receipt drift: %#v", fileReceipt)
 	}
 
-	get := executeFileQuery(t, "/v1/circles/circle-file/files/"+fileID, "persona-owner", "GetCircleFile")
+	get := executeFileQuery(t, "/circles/circle-file/files/"+fileID, "persona-owner", "GetCircleFile")
 	if get.Code != http.StatusOK {
 		t.Fatalf("get CircleFile failed: status=%d body=%s", get.Code, get.Body.String())
 	}
@@ -89,17 +89,17 @@ func TestCircleFileRealMongoTransactionReplayReaderBOLAAndStream(t *testing.T) {
 		t.Fatalf("CircleFile leaked Media object storage key: %#v", file)
 	}
 
-	list := executeFileQuery(t, "/v1/circles/circle-file/files?parentFolderId="+folderID+"&limit=10", "persona-owner", "ListCircleFiles")
+	list := executeFileQuery(t, "/circles/circle-file/files?parentFolderId="+folderID+"&limit=10", "persona-owner", "ListCircleFiles")
 	if list.Code != http.StatusOK || len(decodeBody(t, list)["items"].([]any)) != 1 {
 		t.Fatalf("list CircleFile failed: status=%d body=%s", list.Code, list.Body.String())
 	}
-	denied := executeFileQuery(t, "/v1/circles/circle-file/files?limit=10", "persona-outsider", "ListCircleFiles")
+	denied := executeFileQuery(t, "/circles/circle-file/files?limit=10", "persona-outsider", "ListCircleFiles")
 	if denied.Code != http.StatusForbidden || decodeBody(t, denied)["code"] != "CIRCLE.USER.not_member" {
 		t.Fatalf("CircleFile BOLA must fail closed: status=%d body=%s", denied.Code, denied.Body.String())
 	}
 
 	updated := executeFileCommand(
-		t, http.MethodPatch, "/v1/circles/circle-file/files/"+fileID,
+		t, http.MethodPatch, "/circles/circle-file/files/"+fileID,
 		map[string]any{"name": "路线-v2.pdf"}, "file-update", `"1"`,
 		"persona-owner", "UpdateCircleFile",
 	)
@@ -107,7 +107,7 @@ func TestCircleFileRealMongoTransactionReplayReaderBOLAAndStream(t *testing.T) {
 		t.Fatalf("update CircleFile failed: status=%d body=%s", updated.Code, updated.Body.String())
 	}
 	stale := executeFileCommand(
-		t, http.MethodPatch, "/v1/circles/circle-file/files/"+fileID,
+		t, http.MethodPatch, "/circles/circle-file/files/"+fileID,
 		map[string]any{"name": "stale.pdf"}, "file-update-stale", `"1"`,
 		"persona-owner", "UpdateCircleFile",
 	)
@@ -116,8 +116,8 @@ func TestCircleFileRealMongoTransactionReplayReaderBOLAAndStream(t *testing.T) {
 	}
 
 	deleted := executeFileCommand(
-		t, http.MethodDelete, "/v1/circles/circle-file/files/"+fileID,
-		nil, "file-delete", `"2"`, "persona-owner", "DeleteCircleFile",
+		t, http.MethodDelete, "/circles/circle-file/files/"+fileID,
+		nil, "file-delete", "", "persona-owner", "DeleteCircleFile",
 	)
 	if deleted.Code != http.StatusOK {
 		t.Fatalf("delete CircleFile failed: status=%d body=%s", deleted.Code, deleted.Body.String())
@@ -126,7 +126,7 @@ func TestCircleFileRealMongoTransactionReplayReaderBOLAAndStream(t *testing.T) {
 	if deletedBody["version"] != float64(3) || deletedBody["status"] != "deleted" {
 		t.Fatalf("CircleFile delete receipt drift: %#v", deletedBody)
 	}
-	missing := executeFileQuery(t, "/v1/circles/circle-file/files/"+fileID, "persona-owner", "GetCircleFile")
+	missing := executeFileQuery(t, "/circles/circle-file/files/"+fileID, "persona-owner", "GetCircleFile")
 	if missing.Code != http.StatusNotFound || decodeBody(t, missing)["code"] != "CIRCLE.USER.file_not_found" {
 		t.Fatalf("deleted CircleFile must be absent from Reader: status=%d body=%s", missing.Code, missing.Body.String())
 	}
@@ -160,7 +160,7 @@ func TestCircleFileQuotaUsesAuthoritativeMediaAssetSize(t *testing.T) {
 	seedFilePolicy(t, "circle-file-quota", "persona-owner", 1500)
 
 	first := executeFileCommand(
-		t, http.MethodPost, "/v1/circles/circle-file-quota/files",
+		t, http.MethodPost, "/circles/circle-file-quota/files",
 		map[string]any{"name": "first.pdf", "fileType": "file", "assetId": "asset-first"},
 		"quota-first", "", "persona-owner", "CreateCircleFile",
 	)
@@ -168,7 +168,7 @@ func TestCircleFileQuotaUsesAuthoritativeMediaAssetSize(t *testing.T) {
 		t.Fatalf("first quota file failed: status=%d body=%s", first.Code, first.Body.String())
 	}
 	second := executeFileCommand(
-		t, http.MethodPost, "/v1/circles/circle-file-quota/files",
+		t, http.MethodPost, "/circles/circle-file-quota/files",
 		map[string]any{"name": "second.pdf", "fileType": "file", "assetId": "asset-second"},
 		"quota-second", "", "persona-owner", "CreateCircleFile",
 	)
@@ -216,7 +216,7 @@ func executeFileCommand(
 		Actor: operation.ActorContext{AccountID: "account-" + personaID, PersonaID: personaID},
 	}))
 	recorder := httptest.NewRecorder()
-	template := "/v1/circles/{circleId}/files"
+	template := "/circles/{circleId}/files"
 	if operationName == "UpdateCircleFile" || operationName == "DeleteCircleFile" {
 		template += "/{fileId}"
 	}
@@ -231,9 +231,9 @@ func executeFileQuery(t *testing.T, path, personaID, operationName string) *http
 		Actor: operation.ActorContext{AccountID: "account-" + personaID, PersonaID: personaID},
 	}))
 	recorder := httptest.NewRecorder()
-	template := "/v1/circles/{circleId}/files/{fileId}"
+	template := "/circles/{circleId}/files/{fileId}"
 	if operationName == "ListCircleFiles" {
-		template = "/v1/circles/{circleId}/files"
+		template = "/circles/{circleId}/files"
 	}
 	fileGuard(http.MethodGet, template, operationName).ServeHTTP(recorder, request)
 	return recorder
@@ -244,6 +244,10 @@ func fileGuard(method, pathTemplate, operationName string) http.Handler {
 		method,
 		"CircleFile",
 	)
+	versionPrecondition := ""
+	if operationName == "UpdateCircleFile" {
+		versionPrecondition = "if_match"
+	}
 	return rtauth.RequireGeneratedOperationAuthorizationForRoute(
 		[]rtauth.OperationSecurityDescriptor{{
 			CanonicalOperationID: "circle.circle_file." + operationName,
@@ -253,6 +257,7 @@ func fileGuard(method, pathTemplate, operationName string) http.Handler {
 			OperationKind:        operationKind,
 			MutationTarget:       mutationTarget,
 			InvariantTarget:      invariantTarget,
+			VersionPrecondition:  versionPrecondition,
 			AuthMode:             "required",
 			ActorRequirement:     "persona",
 			Principal:            "persona",

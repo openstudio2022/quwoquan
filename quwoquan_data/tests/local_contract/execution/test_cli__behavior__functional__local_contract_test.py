@@ -30,7 +30,7 @@ def test_task_help():
         text=True,
     )
     assert result.returncode == 0
-    assert "geo-homepages" in result.stdout
+    assert "execute" in result.stdout
 
 
 @pytest.mark.parametrize("retired_command", ["explore", "produce"])

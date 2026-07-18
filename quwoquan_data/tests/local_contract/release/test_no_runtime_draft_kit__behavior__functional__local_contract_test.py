@@ -35,7 +35,7 @@ def test_detects_write_agent_draft_call_in_regular_script():
     _with_file(
         tmp,
         "quwoquan_data/scripts/verify/bad_writer.py",
-        "from content.post.draft_io import write_agent_draft\n\n"
+        "from content.post.article.draft_io import write_agent_draft\n\n"
         "def run():\n"
         "    write_agent_draft('task', 'batch', 'ref', '# body', model='x', cited_source_paths=[], covered_facts=[])\n",
     )
@@ -74,13 +74,13 @@ def test_allows_definition_module_and_tests():
     tmp = Path(tempfile.mkdtemp(prefix="runtime_draft_gate_ok_"))
     _with_file(
         tmp,
-        "quwoquan_data/scripts/core/draft_io.py",
+        "quwoquan_data/scripts/content/post/article/draft_io.py",
         "def write_agent_draft(*args, **kwargs):\n    return None\n",
     )
     _with_file(
         tmp,
         "quwoquan_data/tests/produce/test_ok.py",
-        "from content.post.draft_io import write_agent_draft\nwrite_agent_draft('a', 'b', 'c', '# x', model='m', cited_source_paths=[], covered_facts=[])\n",
+        "from content.post.article.draft_io import write_agent_draft\nwrite_agent_draft('a', 'b', 'c', '# x', model='m', cited_source_paths=[], covered_facts=[])\n",
     )
     issues = scan(tmp)
     assert issues == [], issues

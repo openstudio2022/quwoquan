@@ -5,6 +5,8 @@ import 'package:quwoquan_app/cloud/services/chat/mock/chat_repository_mock.dart'
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
 
+import '../../../../support/fixtures/chat/chat_inbox_fixture_builder.dart';
+
 class _SwitchableInboxRepository extends MockChatRepository {
   _SwitchableInboxRepository({required super.seedConversations});
 
@@ -25,9 +27,7 @@ class _SwitchableInboxRepository extends MockChatRepository {
 Map<String, dynamic> _conversation(String id, String title) {
   final now = DateTime.utc(2026, 1, 1).toIso8601String();
   return <String, dynamic>{
-    '_id': id,
     'id': id,
-    'conversationId': id,
     'type': 'group',
     'title': title,
     'avatarUrl': '',
@@ -107,7 +107,7 @@ class _UnreadMentionChatRepository extends MockChatRepository {
   @override
   Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
     return <ChatInboxDto>[
-      ChatInboxDto(
+      chatInboxFixture(
         id: 'conv_unread_mention_test',
         type: 'group',
         title: '未读提及测试会话',

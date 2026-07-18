@@ -39,6 +39,7 @@ import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/cloud/runtime/prefab_user_resolver.dart';
 import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
+import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
 import 'package:quwoquan_app/cloud/services/user/mock/user_profile_mock_data.dart';
 import 'package:quwoquan_app/core/auth/mock_session_identity.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
@@ -824,7 +825,7 @@ class MockUserProfileRepository extends UserProfileRepository {
     final isolation = request.isolationLevel;
     final isPrivate = isolation == 'strict';
     return _personaDtoFromWire(<String, dynamic>{
-      'id': 'new_persona_1',
+      'subAccountId': 'new_persona_1',
       ...wire,
       'isActive': false,
       'isPrimary': false,
@@ -872,8 +873,8 @@ class MockUserProfileRepository extends UserProfileRepository {
     return posts
         .whereType<Map>()
         .map((item) => item.cast<String, dynamic>())
-        .where((item) => ids.contains(item['id'] ?? item['postId']))
-        .map(postBaseDtoFromMap)
+        .where((item) => ids.contains(item['postId']))
+        .map(contentPostDtoFromReadModelMap)
         .toList(growable: false);
   }
 

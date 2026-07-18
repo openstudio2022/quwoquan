@@ -22,7 +22,7 @@ const (
 
 // CirclePostPlacement domain model.
 type CirclePostPlacement struct {
-	ID             string                   `json:"_id" bson:"_id"`
+	ID             string                   `json:"id" bson:"_id"`
 	Version        int64                    `json:"version" bson:"version"`
 	PostID         string                   `json:"postId" bson:"postId"`
 	OwnerPersonaID string                   `json:"ownerPersonaId" bson:"ownerPersonaId"`

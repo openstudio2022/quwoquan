@@ -4,343 +4,7 @@ info:
     title: quwoquan content API
     version: v1
 paths:
-    /internal/v1/content/media/{mediaId}:
-        get:
-            operationId: GetOwnedMediaAsset
-            x-contract-operation-id: content.media_asset.GetOwnedMediaAsset
-            x-object-id: content.media_asset
-            x-actor: persona
-            x-application:
-                kind: query
-                facet: MediaAssetQueryFacet
-                method: getMediaAsset
-                reader: MediaAssetOwnerReader
-                slice: MediaAssetSlice
-            parameters:
-                - name: mediaId
-                  in: path
-                  required: true
-                  schema:
-                    type: string
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/GetOwnedMediaAssetResponse'
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-    /internal/v1/content/media/{mediaId}:access-policy:
-        patch:
-            operationId: UpdateMediaAssetAccessPolicy
-            x-contract-operation-id: content.media_asset.UpdateMediaAssetAccessPolicy
-            x-object-id: content.media_asset
-            x-actor: persona
-            x-application:
-                kind: command
-                facet: MediaAssetCommandFacet
-                method: updateMediaAssetAccessPolicy
-                aggregateOwner: MediaAsset
-            parameters:
-                - name: mediaId
-                  in: path
-                  required: true
-                  schema:
-                    type: string
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/UpdateMediaAssetAccessPolicyRequest'
-            responses:
-                "204":
-                    description: No Content
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-    /internal/v1/content/media/{mediaId}:delivery-reference:
-        get:
-            operationId: GetMediaAssetDeliveryReference
-            x-contract-operation-id: content.media_asset.GetMediaAssetDeliveryReference
-            x-object-id: content.media_asset
-            x-actor: account
-            x-application:
-                kind: query
-                facet: MediaAssetQueryFacet
-                method: getMediaAssetDeliveryReference
-                reader: MediaAssetOwnerReader
-                slice: MediaAssetDeliveryReferenceSlice
-            parameters:
-                - name: mediaId
-                  in: path
-                  required: true
-                  schema:
-                    type: string
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/GetMediaAssetDeliveryReferenceResponse'
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-    /internal/v1/content/media/{mediaId}:processing-result:
-        post:
-            operationId: RecordMediaProcessingResult
-            x-contract-operation-id: content.media_asset.RecordMediaProcessingResult
-            x-object-id: content.media_asset
-            x-actor: account
-            x-application:
-                kind: command
-                facet: MediaAssetCommandFacet
-                method: recordMediaProcessingResult
-                aggregateOwner: MediaAsset
-            parameters:
-                - name: mediaId
-                  in: path
-                  required: true
-                  schema:
-                    type: string
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/RecordMediaProcessingResultRequest'
-            responses:
-                "204":
-                    description: No Content
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-    /internal/v1/content/media/{mediaId}:reference:
-        get:
-            operationId: GetMediaAssetReference
-            x-contract-operation-id: content.media_asset.GetMediaAssetReference
-            x-object-id: content.media_asset
-            x-actor: account
-            x-application:
-                kind: query
-                facet: MediaAssetQueryFacet
-                method: getMediaAssetReference
-                reader: MediaAssetOwnerReader
-                slice: MediaAssetReferenceSlice
-            parameters:
-                - name: mediaId
-                  in: path
-                  required: true
-                  schema:
-                    type: string
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/GetMediaAssetReferenceResponse'
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-    /internal/v1/content/posts/{postId}/publication-eligibility:
-        get:
-            operationId: GetPostPublicationEligibility
-            x-contract-operation-id: content.post_moderation_case.GetPostPublicationEligibility
-            x-object-id: content.post_moderation_case
-            x-actor: account
-            x-application:
-                kind: query
-                facet: PublicationEligibilityQueryFacet
-                method: getPostPublicationEligibility
-                reader: PublicationEligibilityReader
-                slice: PublicationEligibilitySlice
-            parameters:
-                - name: postId
-                  in: path
-                  required: true
-                  schema:
-                    type: string
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/GetPostPublicationEligibilityResponse'
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-    /internal/v1/content/posts/{postId}:moderate:
-        post:
-            operationId: DecidePostModeration
-            x-contract-operation-id: content.post_moderation_case.DecidePostModeration
-            x-object-id: content.post_moderation_case
-            x-actor: account
-            x-application:
-                kind: command
-                facet: PostModerationCaseCommandFacet
-                method: decidePostModeration
-                aggregateOwner: PostModerationCase
-            parameters:
-                - name: postId
-                  in: path
-                  required: true
-                  schema:
-                    type: string
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/DecidePostModerationRequest'
-            responses:
-                "204":
-                    description: No Content
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-    /internal/v1/content/posts/{postId}:open-moderation-case:
-        post:
-            operationId: OpenPostModerationCase
-            x-contract-operation-id: content.post_moderation_case.OpenPostModerationCase
-            x-object-id: content.post_moderation_case
-            x-actor: account
-            x-application:
-                kind: command
-                facet: PostModerationCaseCommandFacet
-                method: openPostModerationCase
-                aggregateOwner: PostModerationCase
-            parameters:
-                - name: postId
-                  in: path
-                  required: true
-                  schema:
-                    type: string
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/OpenPostModerationCaseRequest'
-            responses:
-                "204":
-                    description: No Content
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-    /internal/v1/content/posts/{postId}:review-moderation:
-        post:
-            operationId: ReviewPostModerationCase
-            x-contract-operation-id: content.post_moderation_case.ReviewPostModerationCase
-            x-object-id: content.post_moderation_case
-            x-actor: account
-            x-application:
-                kind: command
-                facet: PostModerationCaseCommandFacet
-                method: reviewPostModerationCase
-                aggregateOwner: PostModerationCase
-            parameters:
-                - name: postId
-                  in: path
-                  required: true
-                  schema:
-                    type: string
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/ReviewPostModerationCaseRequest'
-            responses:
-                "204":
-                    description: No Content
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-    /internal/v1/content/posts/{postId}:supersede-moderation:
-        post:
-            operationId: SupersedePostModerationCase
-            x-contract-operation-id: content.post_moderation_case.SupersedePostModerationCase
-            x-object-id: content.post_moderation_case
-            x-actor: account
-            x-application:
-                kind: command
-                facet: PostModerationCaseCommandFacet
-                method: supersedePostModerationCase
-                aggregateOwner: PostModerationCase
-            parameters:
-                - name: postId
-                  in: path
-                  required: true
-                  schema:
-                    type: string
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/SupersedePostModerationCaseRequest'
-            responses:
-                "204":
-                    description: No Content
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-    /v1/config/app:
+    /config/app:
         get:
             operationId: GetAppConfig
             x-contract-operation-id: content.post.GetAppConfig
@@ -365,7 +29,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-    /v1/content/articles/summary:generate:
+    /content/articles/summary:generate:
         post:
             operationId: GenerateArticleSummary
             x-contract-operation-id: content.post.GenerateArticleSummary
@@ -393,7 +57,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/content/behaviors:
+    /content/behaviors:
         post:
             operationId: ReportBehaviors
             x-contract-operation-id: content.post.ReportBehaviors
@@ -404,6 +68,13 @@ paths:
                 facet: ContentBehaviorCommandFacet
                 method: reportBehaviors
                 aggregateOwner: Post
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:
@@ -421,7 +92,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/content/comments/{commentId}/media:bind:
+    /content/comments/{commentId}/media:bind:
         post:
             operationId: BindMediaAssetsToComment
             x-contract-operation-id: content.comment.BindMediaAssetsToComment
@@ -436,6 +107,12 @@ paths:
                 - name: commentId
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
             requestBody:
@@ -455,7 +132,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/content/comments/{commentId}/reaction:
+    /content/comments/{commentId}/reaction:
         post:
             operationId: ReactToComment
             x-contract-operation-id: content.content_reaction.ReactToComment
@@ -470,6 +147,12 @@ paths:
                 - name: commentId
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
             requestBody:
@@ -489,7 +172,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/content/feed:
+    /content/feed:
         get:
             operationId: GetFeed
             x-contract-operation-id: content.post.GetFeed
@@ -517,7 +200,7 @@ paths:
             security:
                 - bearerAuth: []
                 - {}
-    /v1/content/footprint:
+    /content/footprint:
         get:
             operationId: GetMyFootprint
             x-contract-operation-id: content.post.GetMyFootprint
@@ -544,7 +227,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/content/helper-read/{contentId}:
+    /content/helper-read/{contentId}:
         get:
             operationId: GetHelperRead
             x-contract-operation-id: content.post.GetHelperRead
@@ -575,7 +258,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-    /v1/content/intersections:
+    /content/intersections:
         get:
             operationId: ListMyIntersections
             x-contract-operation-id: content.post.ListMyIntersections
@@ -602,7 +285,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/content/intersections/object:
+    /content/intersections/object:
         get:
             operationId: GetObjectIntersections
             x-contract-operation-id: content.post.GetObjectIntersections
@@ -629,7 +312,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/content/intersections/summary:
+    /content/intersections/summary:
         get:
             operationId: GetMyIntersectionSummary
             x-contract-operation-id: content.post.GetMyIntersectionSummary
@@ -656,7 +339,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/content/media/{mediaId}:
+    /content/media/{mediaId}:
         get:
             operationId: GetMediaAsset
             x-contract-operation-id: content.media_asset.GetMediaAsset
@@ -690,7 +373,7 @@ paths:
             security:
                 - bearerAuth: []
                 - {}
-    /v1/content/media/{mediaId}/cover:auto:
+    /content/media/{mediaId}/cover:auto:
         post:
             operationId: SelectAutoVideoCover
             x-contract-operation-id: content.media_asset.SelectAutoVideoCover
@@ -705,6 +388,12 @@ paths:
                 - name: mediaId
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
             requestBody:
@@ -724,7 +413,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/content/media/{mediaId}/cover:manual:
+    /content/media/{mediaId}/cover:manual:
         post:
             operationId: SelectManualVideoCover
             x-contract-operation-id: content.media_asset.SelectManualVideoCover
@@ -739,6 +428,12 @@ paths:
                 - name: mediaId
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
             requestBody:
@@ -758,7 +453,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/content/media/{mediaId}/original:access:
+    /content/media/{mediaId}/original:access:
         post:
             operationId: RequestOriginalImageAccess
             x-contract-operation-id: content.media_original_access_fact.RequestOriginalImageAccess
@@ -773,6 +468,12 @@ paths:
                 - name: mediaId
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
             requestBody:
@@ -792,7 +493,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/content/media/uploads/{sessionId}:
+    /content/media/uploads/{sessionId}:
         get:
             operationId: GetMediaUploadSession
             x-contract-operation-id: content.media_upload_session.GetMediaUploadSession
@@ -825,7 +526,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/content/media/uploads/{sessionId}:abort:
+    /content/media/uploads/{sessionId}:abort:
         post:
             operationId: AbortMediaUpload
             x-contract-operation-id: content.media_upload_session.AbortMediaUpload
@@ -840,6 +541,12 @@ paths:
                 - name: sessionId
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
             requestBody:
@@ -859,7 +566,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/content/media/uploads/{sessionId}:complete:
+    /content/media/uploads/{sessionId}:complete:
         post:
             operationId: CompleteMediaUpload
             x-contract-operation-id: content.media_upload_session.CompleteMediaUpload
@@ -874,6 +581,12 @@ paths:
                 - name: sessionId
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
             requestBody:
@@ -893,7 +606,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/content/media/uploads:init:
+    /content/media/uploads:init:
         post:
             operationId: InitMediaUpload
             x-contract-operation-id: content.media_upload_session.InitMediaUpload
@@ -904,6 +617,13 @@ paths:
                 facet: MediaUploadSessionCommandFacet
                 method: initMediaUpload
                 aggregateOwner: MediaUploadSession
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:
@@ -921,35 +641,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/content/posts:
-        post:
-            operationId: CreatePost
-            x-contract-operation-id: content.post.CreatePost
-            x-object-id: content.post
-            x-actor: persona
-            x-application:
-                kind: command
-                facet: PostLifecycleCommandFacet
-                method: createPost
-                aggregateOwner: Post
-            requestBody:
-                required: true
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/Post'
-            responses:
-                "204":
-                    description: No Content
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-    /v1/content/posts/{postId}:
+    /content/posts/{postId}:
         get:
             operationId: GetPost
             x-contract-operation-id: content.post.GetPost
@@ -983,39 +675,6 @@ paths:
             security:
                 - bearerAuth: []
                 - {}
-        patch:
-            operationId: UpdatePost
-            x-contract-operation-id: content.post.UpdatePost
-            x-object-id: content.post
-            x-actor: persona
-            x-application:
-                kind: command
-                facet: PostLifecycleCommandFacet
-                method: updatePost
-                aggregateOwner: Post
-            parameters:
-                - name: postId
-                  in: path
-                  required: true
-                  schema:
-                    type: string
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/UpdatePostRequest'
-            responses:
-                "204":
-                    description: No Content
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
         delete:
             operationId: DeletePost
             x-contract-operation-id: content.post.DeletePost
@@ -1032,6 +691,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             responses:
                 "204":
                     description: No Content
@@ -1043,7 +708,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/content/posts/{postId}/comments:
+    /content/posts/{postId}/comments:
         get:
             operationId: ListComments
             x-contract-operation-id: content.comment.ListComments
@@ -1093,6 +758,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: true
                 content:
@@ -1110,7 +781,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/content/posts/{postId}/comments/{commentId}:
+    /content/posts/{postId}/comments/{commentId}:
         delete:
             operationId: DeleteComment
             x-contract-operation-id: content.comment.DeleteComment
@@ -1132,6 +803,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             responses:
                 "204":
                     description: No Content
@@ -1143,7 +820,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/content/posts/{postId}/comments/{commentId}/pin:
+    /content/posts/{postId}/comments/{commentId}/pin:
         post:
             operationId: PinComment
             x-contract-operation-id: content.comment.PinComment
@@ -1163,6 +840,12 @@ paths:
                 - name: commentId
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
             requestBody:
@@ -1203,6 +886,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             responses:
                 "204":
                     description: No Content
@@ -1214,7 +903,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/content/posts/{postId}/comments/{commentId}/replies:
+    /content/posts/{postId}/comments/{commentId}/replies:
         get:
             operationId: ListCommentReplies
             x-contract-operation-id: content.comment.ListCommentReplies
@@ -1253,7 +942,7 @@ paths:
             security:
                 - bearerAuth: []
                 - {}
-    /v1/content/posts/{postId}/counters:
+    /content/posts/{postId}/counters:
         get:
             operationId: GetCounters
             x-contract-operation-id: content.post.GetCounters
@@ -1284,7 +973,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-    /v1/content/posts/{postId}/like:
+    /content/posts/{postId}/like:
         post:
             operationId: LikePost
             x-contract-operation-id: content.content_reaction.LikePost
@@ -1299,6 +988,12 @@ paths:
                 - name: postId
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
             requestBody:
@@ -1335,6 +1030,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             responses:
                 "204":
                     description: No Content
@@ -1347,41 +1048,7 @@ paths:
             security:
                 - bearerAuth: []
                 - {}
-    /v1/content/posts/{postId}/media:bind:
-        post:
-            operationId: BindMediaAssetsToPost
-            x-contract-operation-id: content.post.BindMediaAssetsToPost
-            x-object-id: content.post
-            x-actor: persona
-            x-application:
-                kind: command
-                facet: MediaBindingCommandFacet
-                method: bindMediaAssetsToPost
-                aggregateOwner: Post
-            parameters:
-                - name: postId
-                  in: path
-                  required: true
-                  schema:
-                    type: string
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/BindMediaAssetsToPostRequest'
-            responses:
-                "204":
-                    description: No Content
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-    /v1/content/posts/{postId}/outbound-shares:
+    /content/posts/{postId}/outbound-shares:
         post:
             operationId: CreateOutboundShare
             x-contract-operation-id: content.outbound_share_fact.CreateOutboundShare
@@ -1396,6 +1063,12 @@ paths:
                 - name: postId
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
             requestBody:
@@ -1416,41 +1089,7 @@ paths:
             security:
                 - bearerAuth: []
                 - {}
-    /v1/content/posts/{postId}/publish:
-        post:
-            operationId: PublishPost
-            x-contract-operation-id: content.post.PublishPost
-            x-object-id: content.post
-            x-actor: persona
-            x-application:
-                kind: command
-                facet: PostLifecycleCommandFacet
-                method: publishPost
-                aggregateOwner: Post
-            parameters:
-                - name: postId
-                  in: path
-                  required: true
-                  schema:
-                    type: string
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/PublishPostRequest'
-            responses:
-                "204":
-                    description: No Content
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-    /v1/content/posts/{postId}/reactions:
+    /content/posts/{postId}/reactions:
         get:
             operationId: GetContentReactionState
             x-contract-operation-id: content.content_reaction.GetContentReactionState
@@ -1484,7 +1123,7 @@ paths:
             security:
                 - bearerAuth: []
                 - {}
-    /v1/content/posts/{postId}/settings:
+    /content/posts/{postId}/settings:
         patch:
             operationId: UpdatePostSettings
             x-contract-operation-id: content.post.UpdatePostSettings
@@ -1499,6 +1138,12 @@ paths:
                 - name: postId
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
             requestBody:
@@ -1518,7 +1163,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/content/posts/{postId}:promoteToWork:
+    /content/posts/{postId}:promoteToWork:
         post:
             operationId: PromotePostToWork
             x-contract-operation-id: content.post.PromotePostToWork
@@ -1533,6 +1178,12 @@ paths:
                 - name: postId
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
             requestBody:
@@ -1552,7 +1203,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/content/posts/search:
+    /content/posts/search:
         get:
             operationId: SearchPosts
             x-contract-operation-id: content.post.SearchPosts
@@ -1579,7 +1230,42 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/content/reports:
+    /content/posts:publish:
+        post:
+            operationId: SubmitPostPublication
+            x-contract-operation-id: content.post.SubmitPostPublication
+            x-object-id: content.post
+            x-actor: persona
+            x-application:
+                kind: command
+                facet: PostPublicationCommandFacet
+                method: submitPostPublication
+                aggregateOwner: Post
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/Post'
+            responses:
+                "204":
+                    description: No Content
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /content/reports:
         get:
             operationId: ListReports
             x-contract-operation-id: content.report.ListReports
@@ -1616,6 +1302,13 @@ paths:
                 facet: ReportCommandFacet
                 method: createReport
                 aggregateOwner: Report
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:
@@ -1633,7 +1326,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/content/reports/{reportId}:
+    /content/reports/{reportId}:
         get:
             operationId: GetReport
             x-contract-operation-id: content.report.GetReport
@@ -1682,6 +1375,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: true
                 content:
@@ -1703,7 +1402,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/content/reports/{reportId}/review:
+    /content/reports/{reportId}/review:
         post:
             operationId: BeginReportReview
             x-contract-operation-id: content.report.BeginReportReview
@@ -1718,6 +1417,12 @@ paths:
                 - name: reportId
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
             requestBody:
@@ -1741,7 +1446,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/content/sub-accounts/{subAccountId}/author-impact:
+    /content/sub-accounts/{subAccountId}/author-impact:
         get:
             operationId: GetAuthorImpact
             x-contract-operation-id: content.post.GetAuthorImpact
@@ -1774,7 +1479,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/content/sub-accounts/{subAccountId}/author-impact/evidence:
+    /content/sub-accounts/{subAccountId}/author-impact/evidence:
         get:
             operationId: ListAuthorImpactEvidence
             x-contract-operation-id: content.post.ListAuthorImpactEvidence
@@ -1807,7 +1512,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/content/sub-accounts/{subAccountId}/interactions/{interactionId}/state:
+    /content/sub-accounts/{subAccountId}/interactions/{interactionId}/state:
         patch:
             operationId: UpdateProfileInteractionState
             x-contract-operation-id: content.post.UpdateProfileInteractionState
@@ -1846,7 +1551,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/content/sub-accounts/{subAccountId}/interactions/received:
+    /content/sub-accounts/{subAccountId}/interactions/received:
         get:
             operationId: ListProfileInteractionActivitiesReceived
             x-contract-operation-id: content.post.ListProfileInteractionActivitiesReceived
@@ -1879,7 +1584,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/content/sub-accounts/{subAccountId}/interactions/sent:
+    /content/sub-accounts/{subAccountId}/interactions/sent:
         get:
             operationId: ListProfileInteractionActivitiesSent
             x-contract-operation-id: content.post.ListProfileInteractionActivitiesSent
@@ -1912,7 +1617,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/content/sub-accounts/{subAccountId}/posts:
+    /content/sub-accounts/{subAccountId}/posts:
         get:
             operationId: ListUserPosts
             x-contract-operation-id: content.post.ListUserPosts
@@ -1946,7 +1651,7 @@ paths:
             security:
                 - bearerAuth: []
                 - {}
-    /v1/content/users/me/comments:
+    /content/users/me/comments:
         get:
             operationId: ListCommentsByAuthor
             x-contract-operation-id: content.comment.ListCommentsByAuthor
@@ -1973,7 +1678,7 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /v1/content/users/me/received-comments:
+    /content/users/me/received-comments:
         get:
             operationId: ListCommentsForPostAuthor
             x-contract-operation-id: content.comment.ListCommentsForPostAuthor
@@ -1992,6 +1697,378 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ListCommentsForPostAuthorPage'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/content/media/{mediaId}:
+        get:
+            operationId: GetOwnedMediaAsset
+            x-contract-operation-id: content.media_asset.GetOwnedMediaAsset
+            x-object-id: content.media_asset
+            x-actor: persona
+            x-application:
+                kind: query
+                facet: MediaAssetQueryFacet
+                method: getMediaAsset
+                reader: MediaAssetOwnerReader
+                slice: MediaAssetSlice
+            parameters:
+                - name: mediaId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GetOwnedMediaAssetResponse'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/content/media/{mediaId}:access-policy:
+        patch:
+            operationId: UpdateMediaAssetAccessPolicy
+            x-contract-operation-id: content.media_asset.UpdateMediaAssetAccessPolicy
+            x-object-id: content.media_asset
+            x-actor: persona
+            x-application:
+                kind: command
+                facet: MediaAssetCommandFacet
+                method: updateMediaAssetAccessPolicy
+                aggregateOwner: MediaAsset
+            parameters:
+                - name: mediaId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateMediaAssetAccessPolicyRequest'
+            responses:
+                "204":
+                    description: No Content
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/content/media/{mediaId}:delivery-reference:
+        get:
+            operationId: GetMediaAssetDeliveryReference
+            x-contract-operation-id: content.media_asset.GetMediaAssetDeliveryReference
+            x-object-id: content.media_asset
+            x-actor: account
+            x-application:
+                kind: query
+                facet: MediaAssetQueryFacet
+                method: getMediaAssetDeliveryReference
+                reader: MediaAssetOwnerReader
+                slice: MediaAssetDeliveryReferenceSlice
+            parameters:
+                - name: mediaId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GetMediaAssetDeliveryReferenceResponse'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/content/media/{mediaId}:processing-result:
+        post:
+            operationId: RecordMediaProcessingResult
+            x-contract-operation-id: content.media_asset.RecordMediaProcessingResult
+            x-object-id: content.media_asset
+            x-actor: account
+            x-application:
+                kind: command
+                facet: MediaAssetCommandFacet
+                method: recordMediaProcessingResult
+                aggregateOwner: MediaAsset
+            parameters:
+                - name: mediaId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RecordMediaProcessingResultRequest'
+            responses:
+                "204":
+                    description: No Content
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/content/media/{mediaId}:reference:
+        get:
+            operationId: GetMediaAssetReference
+            x-contract-operation-id: content.media_asset.GetMediaAssetReference
+            x-object-id: content.media_asset
+            x-actor: account
+            x-application:
+                kind: query
+                facet: MediaAssetQueryFacet
+                method: getMediaAssetReference
+                reader: MediaAssetOwnerReader
+                slice: MediaAssetReferenceSlice
+            parameters:
+                - name: mediaId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GetMediaAssetReferenceResponse'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/content/posts/{postId}/publication-eligibility:
+        get:
+            operationId: GetPostPublicationEligibility
+            x-contract-operation-id: content.post_moderation_case.GetPostPublicationEligibility
+            x-object-id: content.post_moderation_case
+            x-actor: account
+            x-application:
+                kind: query
+                facet: PublicationEligibilityQueryFacet
+                method: getPostPublicationEligibility
+                reader: PublicationEligibilityReader
+                slice: PublicationEligibilitySlice
+            parameters:
+                - name: postId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GetPostPublicationEligibilityResponse'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/content/posts/{postId}:moderate:
+        post:
+            operationId: DecidePostModeration
+            x-contract-operation-id: content.post_moderation_case.DecidePostModeration
+            x-object-id: content.post_moderation_case
+            x-actor: account
+            x-application:
+                kind: command
+                facet: PostModerationCaseCommandFacet
+                method: decidePostModeration
+                aggregateOwner: PostModerationCase
+            parameters:
+                - name: postId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/DecidePostModerationRequest'
+            responses:
+                "204":
+                    description: No Content
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/content/posts/{postId}:open-moderation-case:
+        post:
+            operationId: OpenPostModerationCase
+            x-contract-operation-id: content.post_moderation_case.OpenPostModerationCase
+            x-object-id: content.post_moderation_case
+            x-actor: account
+            x-application:
+                kind: command
+                facet: PostModerationCaseCommandFacet
+                method: openPostModerationCase
+                aggregateOwner: PostModerationCase
+            parameters:
+                - name: postId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/OpenPostModerationCaseRequest'
+            responses:
+                "204":
+                    description: No Content
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/content/posts/{postId}:review-moderation:
+        post:
+            operationId: ReviewPostModerationCase
+            x-contract-operation-id: content.post_moderation_case.ReviewPostModerationCase
+            x-object-id: content.post_moderation_case
+            x-actor: account
+            x-application:
+                kind: command
+                facet: PostModerationCaseCommandFacet
+                method: reviewPostModerationCase
+                aggregateOwner: PostModerationCase
+            parameters:
+                - name: postId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ReviewPostModerationCaseRequest'
+            responses:
+                "204":
+                    description: No Content
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/content/posts/{postId}:supersede-moderation:
+        post:
+            operationId: SupersedePostModerationCase
+            x-contract-operation-id: content.post_moderation_case.SupersedePostModerationCase
+            x-object-id: content.post_moderation_case
+            x-actor: account
+            x-application:
+                kind: command
+                facet: PostModerationCaseCommandFacet
+                method: supersedePostModerationCase
+                aggregateOwner: PostModerationCase
+            parameters:
+                - name: postId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SupersedePostModerationCaseRequest'
+            responses:
+                "204":
+                    description: No Content
                 default:
                     description: Runtime failure
                     content:
@@ -2034,11 +2111,6 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: BindMediaAssetsToCommentRequest
-            x-contract-placeholder: true
-        BindMediaAssetsToPostRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: BindMediaAssetsToPostRequest
             x-contract-placeholder: true
         Comment:
             type: object
@@ -2333,11 +2405,6 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: PromotePostToWorkRequest
             x-contract-placeholder: true
-        PublishPostRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: PublishPostRequest
-            x-contract-placeholder: true
         ReactToCommentRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -2425,11 +2492,6 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: UpdateMediaAssetAccessPolicyRequest
-            x-contract-placeholder: true
-        UpdatePostRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: UpdatePostRequest
             x-contract-placeholder: true
         UpdatePostSettingsRequest:
             type: object

@@ -1,8 +1,8 @@
-version: 1
 entity: SkillConsent
 
 fields:
   - name: id
+    source: id
     type: string
     constraints: [PK]
     classification: PUBLIC
@@ -11,6 +11,7 @@ fields:
     ops_exposure: read
 
   - name: userId
+    source: userId
     type: string
     constraints: [NOT_NULL]
     classification: PUBLIC
@@ -19,6 +20,7 @@ fields:
     ops_exposure: read
 
   - name: skillId
+    source: skillId
     type: string
     constraints: [NOT_NULL]
     classification: PUBLIC
@@ -27,6 +29,7 @@ fields:
     ops_exposure: read
 
   - name: grantedScope
+    source: grantedScope
     type: jsonb
     constraints: [NOT_NULL]
     classification: SENSITIVE
@@ -36,6 +39,7 @@ fields:
     description: 授权范围（上下文维度 + tool 权限）
 
   - name: grantedAt
+    source: grantedAt
     type: timestamp
     constraints: [NOT_NULL]
     classification: PUBLIC
@@ -44,6 +48,7 @@ fields:
     ops_exposure: read
 
   - name: revokedAt
+    source: revokedAt
     type: timestamp
     constraints: [NULLABLE]
     classification: PUBLIC

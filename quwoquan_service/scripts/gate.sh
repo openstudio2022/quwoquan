@@ -187,7 +187,7 @@ ruby -ryaml -e '
     fail("io_access_log_baseline missing required field: #{f}") unless required.include?(f)
   end
 
-  %w[schemaVersion signal logKind env sourceType service component instanceId runId releaseId dataReleaseId sessionId timestamp severity message requestId traceId spanId headers logType phase parentTraceId causationId].each do |f|
+  %w[schema signal logKind env sourceType service component instanceId runId releaseId dataReleaseId sessionId timestamp severity message requestId traceId spanId headers logType phase parentTraceId causationId].each do |f|
     fail("io_access_log_baseline missing forbidden field: #{f}") unless forbidden.include?(f)
   end
 
@@ -219,7 +219,7 @@ ruby -ryaml -e '
   %w[ts level err msg].each do |f|
     fail("exception_log_baseline missing required field: #{f}") unless exception_required.include?(f)
   end
-  %w[schemaVersion signal logKind env sourceType service component instanceId runId releaseId dataReleaseId sessionId timestamp severity message requestId traceId spanId headers statusCode logType phase parentTraceId causationId].each do |f|
+  %w[schema signal logKind env sourceType service component instanceId runId releaseId dataReleaseId sessionId timestamp severity message requestId traceId spanId headers statusCode logType phase parentTraceId causationId].each do |f|
     fail("process_trace_log_baseline missing forbidden field: #{f}") unless process_forbidden.include?(f)
     fail("exception_log_baseline missing forbidden field: #{f}") unless exception_forbidden.include?(f)
   end
@@ -669,6 +669,10 @@ echo "[gate] checking DDD/CQRS baseline and commercial failure ratchet"
 go test ./internal/metadata/load ./internal/metadata/graph ./internal/metadata/validate \
   || fail "DDD/CQRS baseline verification failed"
 
+echo "[gate] registry/contract-graph single-track"
+python3 scripts/verify/verify_registry_contract_graph_single_track.py \
+  || fail "registry/contract-graph single-track verification failed"
+
 echo "[gate] compiling canonical ContractGraph"
 go run ./tools/qwq_contract validate --metadata-dir contracts/metadata --profile commercial \
   || fail "ContractGraph validation failed"
@@ -817,7 +821,9 @@ if [ -z "$PYTHON_TEST_RUNNER" ]; then
   fi
   PYTHON_TEST_RUNNER="$REC_MODEL_VENV/bin/python"
 fi
-PYTHONDONTWRITEBYTECODE=1 "$PYTHON_TEST_RUNNER" -m pytest -p no:cacheprovider services/rec-model-service/tests -q \
+PYTHONDONTWRITEBYTECODE=1 "$PYTHON_TEST_RUNNER" -m pytest \
+  -o "cache_dir=$QWQ_OUTPUT_ROOT/env/repo/local/tests/cache/pytest" \
+  services/rec-model-service/tests -q \
   || fail "recommendation-service python tests failed"
 
 echo "[gate] running content-flywheel loop pure-function tests"

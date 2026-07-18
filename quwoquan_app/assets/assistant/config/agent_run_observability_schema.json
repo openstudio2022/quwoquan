@@ -1,5 +1,4 @@
 {
-  "contractVersion": "agent_run_observability_schema_v1",
   "required": [
     "kind",
     "templateId",
@@ -16,5 +15,6 @@
     "kind": "agent_run",
     "templateId": "synthesizer.final_answer",
     "templateVersion": "latest"
-  }
+  },
+  "schema": "agent_run_observability_schema"
 }

@@ -1,4 +1,3 @@
-version: 1
 domain: user
 aggregate_root: Persona
 object_kind: aggregate_root
@@ -13,7 +12,7 @@ business_rules:
   - retired 为终态且跨上下文只保留 tombstone identity
   - profile sync 只应用明确允许继承且未被 override 的字段
   - avatar/background 只保存 MediaAsset identity，delivery URL 不属于权威状态
-  - 每个 command 必须以 expectedVersion 提交 state、receipt 与 outbox
+  - 每个 command 必须以服务端内部 version CAS 原子提交 state、receipt 与 outbox
 lifecycle:
   states: [active, inactive, retired]
   optimistic_concurrency: version

@@ -3,7 +3,6 @@
   "description": "唯一内容执行工作包。每个 executionId 只允许一个可恢复的中间过程根。",
   "type": "object",
   "properties": {
-    "contractVersion": { "const": "content-execution-v2" },
     "executionId": {
       "type": "string",
       "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(canary|m1|m2|m3)-[0-9]{3,}$"
@@ -23,6 +22,20 @@
       "required": ["ref", "sha256"],
       "additionalProperties": false
     },
+    "sourceDigest": {
+      "type": "object",
+      "properties": {
+        "algorithm": { "const": "sha256" },
+        "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "inputs": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1
+        }
+      },
+      "required": ["algorithm", "digest", "inputs"],
+      "additionalProperties": false
+    },
     "resolvedParams": { "type": "object" },
     "selectionPolicy": { "const": "frozen" },
     "targetSetRef": { "const": "0.plan/target_set.json" },
@@ -32,8 +45,8 @@
     "repoRoot": { "type": "string" }
   },
   "required": [
-    "contractVersion", "executionId", "vertical", "contentType", "intent",
-    "scope", "milestone", "sequence", "recipe", "resolvedParams", "selectionPolicy",
+    "executionId", "vertical", "contentType", "intent",
+    "scope", "milestone", "sequence", "recipe", "sourceDigest", "resolvedParams", "selectionPolicy",
     "targetSetRef", "targetSetSha256", "retryOf",
     "createdAt", "repoRoot"
   ],

@@ -9,21 +9,25 @@ from core.io import read_json, write_json
 from core.paths import execution_runtime_state_path, execution_source_catalog_path, normalize_execution_workspace_command
 from core.asset_sequence import allocate_execution_sequence
 from core.source_catalog import load_source_catalog
+from content.execution.contracts import ExecutionRuntimeState
 
-RUNTIME_STATE_SCHEMA = "quwoquan_data.execution_runtime_state/2"
-SOURCE_CATALOG_SCHEMA = "quwoquan_data.execution_source_catalog/1"
+RUNTIME_STATE_SCHEMA = "quwoquan_data.execution_runtime_state"
+SOURCE_CATALOG_SCHEMA = "quwoquan_data.execution_source_catalog"
 
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def load_execution_runtime_state(execution_id: str) -> dict[str, Any]:
+def load_execution_runtime_state(execution_id: str) -> ExecutionRuntimeState | None:
     path = execution_runtime_state_path(execution_id)
     if not path.is_file():
-        return {}
+        return None
     data = read_json(path)
-    return data if isinstance(data, dict) else {}
+    if not isinstance(data, dict):
+        raise ValueError(f"execution runtime state must be an object: {path}")
+    _assert_manifest_contract(data)
+    return ExecutionRuntimeState.from_mapping(data)
 
 
 def _coerce_execution_sequence(value: Any) -> int:
@@ -44,10 +48,10 @@ def write_execution_runtime_state(
     identity = load_execution_manifest(execution_id)
     path = execution_runtime_state_path(execution_id)
     now = _now_iso()
-    manifest = load_execution_runtime_state(execution_id)
-    if not manifest:
+    current = load_execution_runtime_state(execution_id)
+    if current is None:
         manifest = {
-            "schemaVersion": RUNTIME_STATE_SCHEMA,
+            "schema": RUNTIME_STATE_SCHEMA,
             "executionId": execution_id,
             "targetSetSha256": str(identity["targetSetSha256"]),
             "commandChain": [],
@@ -55,6 +59,7 @@ def write_execution_runtime_state(
             "executionSequence": allocate_execution_sequence(),
         }
     else:
+        manifest = current.to_dict()
         seq = _coerce_execution_sequence(manifest.get("executionSequence"))
         if seq > 0:
             manifest["executionSequence"] = seq
@@ -100,7 +105,7 @@ def write_source_catalog(execution_id: str) -> Path:
     write_json(
         path,
         {
-            "schemaVersion": SOURCE_CATALOG_SCHEMA,
+            "schema": SOURCE_CATALOG_SCHEMA,
             "source": "control_plane/_shared/catalogs/source_catalog.yaml",
             "sourceKinds": kinds,
         },

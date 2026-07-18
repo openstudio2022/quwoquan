@@ -13,7 +13,7 @@ var _ = time.Now
 
 // DeletedPostTombstone domain model.
 type DeletedPostTombstone struct {
-	ID        string    `json:"_id" bson:"_id"`
+	ID        string    `json:"id" bson:"_id"`
 	PostId    string    `json:"postId" bson:"postId"`
 	AuthorId  string    `json:"authorId" bson:"authorId"`
 	Reason    string    `json:"reason" bson:"reason"`
@@ -23,8 +23,10 @@ type DeletedPostTombstone struct {
 
 // Post domain model.
 type Post struct {
-	ID                        string         `json:"_id" bson:"_id"`
+	ID                        string         `json:"id" bson:"_id"`
 	Version                   int64          `json:"version" bson:"version"`
+	PublishIntentId           string         `json:"publishIntentId" bson:"publishIntentId"`
+	LocalDraftId              string         `json:"localDraftId" bson:"localDraftId"`
 	AuthorId                  string         `json:"authorId" bson:"authorId"`
 	CreatorProfileId          string         `json:"creatorProfileId" bson:"creatorProfileId"`
 	CreatorArchetype          string         `json:"creatorArchetype" bson:"creatorArchetype"`
@@ -48,7 +50,7 @@ type Post struct {
 	CoverUrl                  string         `json:"coverUrl" bson:"coverUrl"`
 	ThumbnailUrl              string         `json:"thumbnailUrl" bson:"thumbnailUrl"`
 	ArticleMarkdown           string         `json:"articleMarkdown" bson:"articleMarkdown"`
-	ArticleMarkdownVersion    string         `json:"articleMarkdownVersion" bson:"articleMarkdownVersion"`
+	MarkdownDialect           string         `json:"markdownDialect" bson:"markdownDialect"`
 	ArticleMarkdownDigest     string         `json:"articleMarkdownDigest" bson:"articleMarkdownDigest"`
 	ArticleAssetManifest      map[string]any `json:"articleAssetManifest" bson:"articleAssetManifest"`
 	ArticleRenderProfile      map[string]any `json:"articleRenderProfile" bson:"articleRenderProfile"`

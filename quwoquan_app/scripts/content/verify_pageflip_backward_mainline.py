@@ -224,7 +224,7 @@ def _check_no_retired_backward_leaf_renderer() -> list[str]:
         return [
             f"{OLD_BACKWARD_LEAF_RENDERER_PATH.relative_to(ROOT)}: retired "
             "`ArticlePageBackwardLeafRenderer` path must stay deleted; BACK "
-            "mainline must use the single forward-compatible vertices/UV path."
+            "mainline must use the single forward-isomorphic vertices/UV path."
         ]
     return []
 

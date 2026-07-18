@@ -1,4 +1,3 @@
-version: 1
 read_model: PersonaLifecycleGuardWire
 
 description: |
@@ -19,35 +18,29 @@ client_projection:
       dart_type: String
       nullable: false
       source: subAccountId
-      aliases: [subAccountId, id]
       default: "''"
     - name: canDelete
       dart_type: bool
       nullable: false
       source: canDelete
-      aliases: [canDelete]
       default: "false"
     - name: canRetire
       dart_type: bool
       nullable: false
       source: canRetire
-      aliases: [canRetire]
       default: "false"
     - name: requiredAction
       dart_type: String
       nullable: false
       source: requiredAction
-      aliases: [requiredAction, lifecycleAction]
       default: "''"
     - name: reasonCode
       dart_type: String
       nullable: false
       source: reasonCode
-      aliases: [reasonCode, guardReason]
       default: "''"
     - name: message
       dart_type: String
       nullable: false
       source: message
-      aliases: [message, userMessage, reasonMessage]
       default: "''"

@@ -9,15 +9,15 @@ from typing import Mapping
 import yaml
 
 from core.paths import CONTROL_PLANE_SHARED_ROOT
-from core.control_types import RuntimeEnvironment
+from core.control_types import AgentProvider, RuntimeEnvironment
 
 
 DEFAULT_RUNTIME_PROFILE_ID = "cursor_local_calibrated"
-RUNTIME_PROFILE_ENV = "QWQ_RUNTIME_PROFILE"
 
 
 @dataclass(frozen=True, slots=True)
 class ProviderTimeouts:
+    encyclopedia_seconds: int
     mediawiki_seconds: int
     qunar_seconds: int
     openverse_seconds: int
@@ -44,6 +44,7 @@ class CoverageDiscoveryPolicy:
 @dataclass(frozen=True, slots=True)
 class RuntimePolicy:
     profile_id: str
+    cursor_provider: AgentProvider
     cursor_model: str
     cursor_runtime: RuntimeEnvironment
     author_workers: int
@@ -52,9 +53,11 @@ class RuntimePolicy:
     research_wave_size: int
     research_max_waves_per_run: int
     download_concurrency: int
+    cursor_bridge_instances: int
     startup_timeout_seconds: int
     preflight_network_timeout_seconds: int
     agent_timeout_seconds: int
+    default_object_token_budget: int
     auth_retry_limit: int
     auth_retry_delay_seconds: int
     no_progress_round_limit: int
@@ -62,10 +65,11 @@ class RuntimePolicy:
     worker_stagger_seconds: float
     managed_future_grace_seconds: int
     scheduler_stale_seconds: int
+    controller_lease_stale_seconds: int
+    assignment_deadline_seconds: int
     download_fetch_retry_limit: int
     bridge_launch_cooldown_seconds: float
     bridge_ready_delay_seconds: float
-    codex_cli_workers: int
     react_rewind_limit: int
     preflight_startup_attempts: int
     preflight_retry_delay_seconds: float
@@ -101,6 +105,7 @@ class RuntimePolicy:
     queue_backoff_cap_seconds: int
     queue_stuck_threshold: int
     startup_probe_suite_attempts: int
+    cursor_startup_probe_cache_ttl_seconds: int
     cursor_true_5xx_rate_limit: float
     cursor_startup_timeout_rate_limit: float
     coverage_wiki_retry_limit: int
@@ -118,9 +123,9 @@ class RuntimePolicy:
     def process_environment(self) -> dict[str, str]:
         """Translate typed policy to SDK/process variables at the process boundary."""
         return {
-            RUNTIME_PROFILE_ENV: self.profile_id,
             "QWQ_CURSOR_AGENT_MODEL": self.cursor_model,
             "QWQ_MANAGED_LOCAL_CURSOR_MAX_WORKERS": str(self.author_workers),
+            "QWQ_CURSOR_BRIDGE_INSTANCES": str(self.cursor_bridge_instances),
             "QWQ_MANAGED_AGENT_TIMEOUT_SECONDS": str(self.agent_timeout_seconds),
             "QWQ_ORCHESTRATE_AGENT_TIMEOUT_SECONDS": str(self.agent_timeout_seconds),
             "QWQ_FANOUT_COLD_START_MAX_WORKERS": str(self.cold_start_max_workers),
@@ -132,7 +137,6 @@ class RuntimePolicy:
             "QWQ_DOWNLOAD_FETCH_ONLY_RETRY_LIMIT": str(self.download_fetch_retry_limit),
             "QWQ_CURSOR_BRIDGE_LAUNCH_COOLDOWN_SECONDS": str(self.bridge_launch_cooldown_seconds),
             "QWQ_CURSOR_BRIDGE_READY_DELAY_SECONDS": str(self.bridge_ready_delay_seconds),
-            "QWQ_MANAGED_CODEX_CLI_MAX_WORKERS": str(self.codex_cli_workers),
             "QWQ_MANAGED_PREFLIGHT_STARTUP_ATTEMPTS": str(self.preflight_startup_attempts),
             "QWQ_MANAGED_PREFLIGHT_RETRY_DELAY_SECONDS": str(self.preflight_retry_delay_seconds),
             "QWQ_CURSOR_WARM_ATTEMPTS": str(self.cursor_warm_attempts),
@@ -208,6 +212,9 @@ def load_runtime_policy(profile_id: str) -> RuntimePolicy:
         raise ValueError("runtime policy contains unknown or missing policy sections")
     return RuntimePolicy(
         profile_id=profile_id,
+        cursor_provider=AgentProvider(
+            _non_empty_string(cursor.get("provider"), label="cursor.provider")
+        ),
         cursor_model=_non_empty_string(cursor.get("model"), label="cursor.model"),
         cursor_runtime=RuntimeEnvironment(
             _non_empty_string(cursor.get("runtime"), label="cursor.runtime")
@@ -221,12 +228,20 @@ def load_runtime_policy(profile_id: str) -> RuntimePolicy:
             label="budgets.researchMaxWavesPerRun",
         ),
         download_concurrency=_positive_int(workers.get("download"), label="workers.download"),
+        cursor_bridge_instances=_positive_int(
+            workers.get("cursorBridgeInstances"),
+            label="workers.cursorBridgeInstances",
+        ),
         startup_timeout_seconds=_positive_int(budgets.get("startupTimeoutSeconds"), label="budgets.startupTimeoutSeconds"),
         preflight_network_timeout_seconds=_positive_int(
             budgets.get("preflightNetworkTimeoutSeconds"),
             label="budgets.preflightNetworkTimeoutSeconds",
         ),
         agent_timeout_seconds=_positive_int(budgets.get("agentTimeoutSeconds"), label="budgets.agentTimeoutSeconds"),
+        default_object_token_budget=_positive_int(
+            budgets.get("defaultObjectTokenBudget"),
+            label="budgets.defaultObjectTokenBudget",
+        ),
         auth_retry_limit=_positive_int(budgets.get("authRetryLimit"), label="budgets.authRetryLimit"),
         auth_retry_delay_seconds=_positive_int(budgets.get("authRetryDelaySeconds"), label="budgets.authRetryDelaySeconds"),
         no_progress_round_limit=_positive_int(budgets.get("noProgressRoundLimit"), label="budgets.noProgressRoundLimit"),
@@ -234,10 +249,17 @@ def load_runtime_policy(profile_id: str) -> RuntimePolicy:
         worker_stagger_seconds=_positive_float(budgets.get("workerStaggerSeconds"), label="budgets.workerStaggerSeconds"),
         managed_future_grace_seconds=_positive_int(budgets.get("managedFutureGraceSeconds"), label="budgets.managedFutureGraceSeconds"),
         scheduler_stale_seconds=_positive_int(budgets.get("schedulerStaleSeconds"), label="budgets.schedulerStaleSeconds"),
+        controller_lease_stale_seconds=_positive_int(
+            budgets.get("controllerLeaseStaleSeconds"),
+            label="budgets.controllerLeaseStaleSeconds",
+        ),
+        assignment_deadline_seconds=_positive_int(
+            budgets.get("assignmentDeadlineSeconds"),
+            label="budgets.assignmentDeadlineSeconds",
+        ),
         download_fetch_retry_limit=_non_negative_int(budgets.get("downloadFetchRetryLimit"), label="budgets.downloadFetchRetryLimit"),
         bridge_launch_cooldown_seconds=_non_negative_float(budgets.get("bridgeLaunchCooldownSeconds"), label="budgets.bridgeLaunchCooldownSeconds"),
         bridge_ready_delay_seconds=_non_negative_float(budgets.get("bridgeReadyDelaySeconds"), label="budgets.bridgeReadyDelaySeconds"),
-        codex_cli_workers=_positive_int(workers.get("codexCli"), label="workers.codexCli"),
         react_rewind_limit=_positive_int(budgets.get("reactRewindLimit"), label="budgets.reactRewindLimit"),
         preflight_startup_attempts=_positive_int(budgets.get("preflightStartupAttempts"), label="budgets.preflightStartupAttempts"),
         preflight_retry_delay_seconds=_positive_float(budgets.get("preflightRetryDelaySeconds"), label="budgets.preflightRetryDelaySeconds"),
@@ -273,6 +295,10 @@ def load_runtime_policy(profile_id: str) -> RuntimePolicy:
         queue_backoff_cap_seconds=_positive_int(budgets.get("queueBackoffCapSeconds"), label="budgets.queueBackoffCapSeconds"),
         queue_stuck_threshold=_positive_int(budgets.get("queueStuckThreshold"), label="budgets.queueStuckThreshold"),
         startup_probe_suite_attempts=_positive_int(budgets.get("startupProbeSuiteAttempts"), label="budgets.startupProbeSuiteAttempts"),
+        cursor_startup_probe_cache_ttl_seconds=_non_negative_int(
+            budgets.get("cursorStartupProbeCacheTtlSeconds"),
+            label="budgets.cursorStartupProbeCacheTtlSeconds",
+        ),
         cursor_true_5xx_rate_limit=_positive_float(budgets.get("cursorTrue5xxRateLimit"), label="budgets.cursorTrue5xxRateLimit"),
         cursor_startup_timeout_rate_limit=_positive_float(budgets.get("cursorStartupTimeoutRateLimit"), label="budgets.cursorStartupTimeoutRateLimit"),
         coverage_wiki_retry_limit=_positive_int(budgets.get("coverageWikiRetryLimit"), label="budgets.coverageWikiRetryLimit"),
@@ -285,6 +311,10 @@ def load_runtime_policy(profile_id: str) -> RuntimePolicy:
         curl_retries=_positive_int(network.get("curlRetries"), label="network.curlRetries"),
         curl_retry_delay_seconds=_positive_int(network.get("curlRetryDelaySeconds"), label="network.curlRetryDelaySeconds"),
         provider_timeouts=ProviderTimeouts(
+            encyclopedia_seconds=_positive_int(
+                timeouts.get("encyclopedia"),
+                label="providerTimeoutSeconds.encyclopedia",
+            ),
             mediawiki_seconds=_positive_int(timeouts.get("mediawiki"), label="providerTimeoutSeconds.mediawiki"),
             qunar_seconds=_positive_int(timeouts.get("qunar"), label="providerTimeoutSeconds.qunar"),
             openverse_seconds=_positive_int(timeouts.get("openverse"), label="providerTimeoutSeconds.openverse"),
@@ -348,7 +378,7 @@ def load_runtime_policy(profile_id: str) -> RuntimePolicy:
 
 
 def active_runtime_policy() -> RuntimePolicy:
-    return load_runtime_policy(os.environ.get(RUNTIME_PROFILE_ENV, DEFAULT_RUNTIME_PROFILE_ID))
+    return load_runtime_policy(DEFAULT_RUNTIME_PROFILE_ID)
 
 
 def apply_runtime_policy(policy: RuntimePolicy) -> None:
@@ -358,7 +388,6 @@ def apply_runtime_policy(policy: RuntimePolicy) -> None:
 
 __all__ = [
     "DEFAULT_RUNTIME_PROFILE_ID",
-    "RUNTIME_PROFILE_ENV",
     "ProviderTimeouts",
     "CoverageDiscoveryPolicy",
     "RuntimePolicy",

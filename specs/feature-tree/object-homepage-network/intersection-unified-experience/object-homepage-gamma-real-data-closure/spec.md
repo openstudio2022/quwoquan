@@ -29,7 +29,7 @@
 - gamma-local 拓扑闭环：`entity-service`、`circle-service` 进入 compose、gateway route、port profile、package、healthcheck、stackctl 验证证据。
 - 端云契约闭环：实体主页、圈子主页、对象交集、相关圈子、打动摘要（内部契约仍为 impact）、关注/加入状态全部走 metadata/service 契约，不在 App 维护第二套模型。
 - 种子与身份闭环：`app_gamma_seed_manifest.json` 覆盖 viewer、用户关系、实体主页、圈子、记录、讨论、相关圈子与对象交集所需数据；api_integration/user_acceptance 使用同一 viewer 和 token 语义。
-- 真实 API 探针：覆盖 `/v1/homepages/{homepageId}/object-page-bundle`、`/introduction`、`/related-groups`、`/v1/circles`、`/v1/circles/{circleId}`、`/impact`、`/v1/content/intersections/object`；前台模块标题必须稳定映射为「这里打动的人 / 圈子打动的人」。
+- 真实 API 探针：覆盖 `/homepages/{homepageId}/object-page-bundle`、`/introduction`、`/related-groups`、`/circles`、`/circles/{circleId}`、`/impact`、`/content/intersections/object`；前台模块标题必须稳定映射为「这里打动的人 / 圈子打动的人」。
 - App Remote 验收：实体/圈子页面在 remote/gamma 数据模式下消费同一契约，禁止回落到 Dart mock 或 UI 自造主句。
 - 交集事实契约：商用可见理由只消费 `IntersectionReason.primaryText / primarySpans / sampleVisuals / representativeActor / objectVisual / lifecycleState / actionHints / iconKey`；`join(primarySpans.text) == primaryText` 必须可测。
 - 可观测闭环：首页曝光、理由曝光、span 点击、证据展开、关注/加入/私信、Tab 切换、记录点击、错误态和空态都有 `surface/objectType/objectId/reasonId/targetType/targetId/env` 归因。
@@ -39,7 +39,7 @@
 ### Out of Scope
 
 - 不在本 Story 建深排平台、premium pool、商业运营后台、支付或预约链路。
-- 不新增 homepage/circle 专属交集 API；优先复用 `/v1/content/intersections/object`，只有 metadata 契约缺字段时才补契约。
+- 不新增 homepage/circle 专属交集 API；优先复用 `/content/intersections/object`，只有 metadata 契约缺字段时才补契约。
 - 不解决 `R-IX01` 到 `R-IX04` 的全量算法与商业策略能力；这些风险只影响推荐精度，不阻塞真实事实展示闭环。
 - 不宣称 prod-ready；通过 gamma-local api_integration、user_acceptance 和 UAT 证据后，才能进入 prod rollout 规格。
 - 不在本轮执行 article/image 的 `H100/H1000` 放量验证；Pinterest image-only 商业线仅保留共享 runtime/composer 的非干扰回归，不纳入本 Story 的完成定义。
@@ -60,7 +60,7 @@
 
 - 实体主页继续使用 `quwoquan_service/contracts/metadata/entity/homepage/service.yaml`。
 - 圈子主页继续使用 `quwoquan_service/contracts/metadata/social/circle/service.yaml`。
-- 对象交集继续使用 `quwoquan_service/contracts/metadata/content/post/service.yaml` 中的 `/v1/content/intersections/object`。
+- 对象交集继续使用 `quwoquan_service/contracts/metadata/content/post/service.yaml` 中的 `/content/intersections/object`。
 - App 侧继续通过 generated route/path 与 repository 消费契约，不手写第二套 URL、错误码或 DTO。
 
 ### Minimum Extensions
@@ -116,7 +116,7 @@ flowchart LR
 ### P1 manifest and seed contract closure
 
 - 目标：补齐 `app_gamma_seed_manifest.json` 与 `run_local_gamma_t3.py`，让 seed refs 与 verified endpoints 覆盖商用对象主页所需最小数据。
-- 必补 endpoints：`/v1/homepages/{homepageId}/related-groups`、`/v1/homepages/{homepageId}/review-summary`、`/v1/circles/{circleId}/impact`、`/v1/circles/{circleId}/members`、`/v1/circles/{circleId}/feed`、`/v1/content/intersections/object?objectType=homepage|circle&objectId=...`。
+- 必补 endpoints：`/homepages/{homepageId}/related-groups`、`/homepages/{homepageId}/review-summary`、`/circles/{circleId}/impact`、`/circles/{circleId}/members`、`/circles/{circleId}/feed`、`/content/intersections/object?objectType=homepage|circle&objectId=...`。
 - 必补 seed：viewer、relationship、circle membership、related circle、homepage subtype、content anchor、object intersection reason 所需样本必须来自 metadata fixture 或服务 seed 命令。
 - 禁止：为通过探针在脚本里手写第二套业务文档结构；若服务没有 seed 能力，先补 service seed 或 metadata fixture。
 

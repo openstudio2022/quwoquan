@@ -8,16 +8,17 @@ class SearchApiMetadata {
 
   static const String domain = 'search';
   static const List<String> apiPrefixes = <String>[
-    '/v1/search',
+    '/search/feedback',
+    '/search/recent',
   ];
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
-    'ClearRecentSearches': '/v1/search/recent',
-    'DeleteRecentSearch': '/v1/search/recent/{entryId}',
-    'ListRecentSearches': '/v1/search/recent',
-    'ReportSearchFeedback': '/v1/search/feedback',
-    'SearchQuery': '/v1/search',
-    'UpsertRecentSearch': '/v1/search/recent/{entryId}',
+    'ClearRecentSearches': '/search/recent',
+    'DeleteRecentSearch': '/search/recent/{entryId}',
+    'ListRecentSearches': '/search/recent',
+    'ReportSearchFeedback': '/search/feedback',
+    'SearchQuery': '/search',
+    'UpsertRecentSearch': '/search/recent/{entryId}',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
@@ -54,17 +55,17 @@ class SearchApiMetadata {
   static const String searchQueryOperation = 'SearchQuery';
   static const String upsertRecentSearchOperation = 'UpsertRecentSearch';
 
-  static const String clearRecentSearchesPath = '/v1/search/recent';
-  static const String deleteRecentSearchPathTemplate = '/v1/search/recent/{entryId}';
+  static const String clearRecentSearchesPath = '/search/recent';
+  static const String deleteRecentSearchPathTemplate = '/search/recent/{entryId}';
   static String deleteRecentSearchPath({required String entryId}) {
     return _fillPath(deleteRecentSearchPathTemplate, <String, String>{
       'entryId': entryId,
     });
   }
-  static const String listRecentSearchesPath = '/v1/search/recent';
-  static const String reportSearchFeedbackPath = '/v1/search/feedback';
-  static const String searchQueryPath = '/v1/search';
-  static const String upsertRecentSearchPathTemplate = '/v1/search/recent/{entryId}';
+  static const String listRecentSearchesPath = '/search/recent';
+  static const String reportSearchFeedbackPath = '/search/feedback';
+  static const String searchQueryPath = '/search';
+  static const String upsertRecentSearchPathTemplate = '/search/recent/{entryId}';
   static String upsertRecentSearchPath({required String entryId}) {
     return _fillPath(upsertRecentSearchPathTemplate, <String, String>{
       'entryId': entryId,

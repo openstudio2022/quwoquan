@@ -8,6 +8,7 @@ import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// Callback for API latency instrumentation.
 ///
@@ -288,6 +289,34 @@ class CloudHttpClient {
     return _decodeBody(res.body, uri.path);
   }
 
+  /// 供仍在迁入 generated executor 的可见读取使用真实 transport abort。
+  ///
+  /// 新调用链应优先使用 generated operation executor；此入口只为当前已经存在、
+  /// 但尚无 typed client contract 的 canonical operation 提供取消能力。
+  Future<CloudHttpDecodedJson> getJsonAbortable(
+    Uri uri, {
+    required Uri gatewayOrigin,
+    required Map<String, String> headers,
+    required CloudOperationCancellationSignal cancellation,
+    bool requireAuth = false,
+  }) async {
+    try {
+      return await sendOperationJson(
+        method: 'GET',
+        uri: uri,
+        gatewayOrigin: gatewayOrigin,
+        headers: headers,
+        requireAuth: requireAuth,
+        abortTrigger: cancellation.whenCancelled,
+      );
+    } on http.RequestAbortedException catch (_) {
+      throw CloudErrorMapper.fromException(
+        const CloudOperationCancelledException(),
+        requestPath: uri.path,
+      );
+    }
+  }
+
   /// 见 [getJson]：响应体同样经 [jsonDecode]。
   Future<CloudHttpDecodedJson> postJson(
     Uri uri, {
@@ -448,12 +477,12 @@ class CloudHttpClient {
     return CloudResponseDecoder.asObject(decoded, context: context);
   }
 
-  /// 根为 JSON 数组，或根为对象且列表落在 `listKeys` 之一（与 [CloudResponseDecoder.mapListFirstNonEmpty] 一致）。
+  /// 根为 JSON 数组，或根为对象且列表落在单一 canonical `listKey`（默认 `items`）。
   Future<List<CloudJsonMap>> getJsonItemList(
     Uri uri, {
     required Map<String, String> headers,
     required String context,
-    List<String> listKeys = const <String>['items', 'subAccounts', 'personas'],
+    String listKey = 'items',
   }) async {
     final decoded = await getJson(uri, headers: headers);
     if (decoded is List) {
@@ -463,9 +492,9 @@ class CloudHttpClient {
           .toList(growable: false);
     }
     final object = CloudResponseDecoder.asObject(decoded, context: context);
-    return CloudResponseDecoder.mapListFirstNonEmpty(
+    return CloudResponseDecoder.mapList(
       object,
-      listKeys,
+      listKey,
       context: context,
     );
   }
@@ -479,6 +508,34 @@ class CloudHttpClient {
   }) async {
     final decoded = await postJson(uri, headers: headers, body: body);
     return CloudResponseDecoder.asObject(decoded, context: context);
+  }
+
+  Future<CloudJsonMap> postJsonObjectAbortable(
+    Uri uri, {
+    required Uri gatewayOrigin,
+    required Map<String, String> headers,
+    required CloudJsonMap body,
+    required String context,
+    required CloudOperationCancellationSignal cancellation,
+    bool requireAuth = false,
+  }) async {
+    try {
+      final decoded = await sendOperationJson(
+        method: 'POST',
+        uri: uri,
+        gatewayOrigin: gatewayOrigin,
+        headers: headers,
+        requireAuth: requireAuth,
+        abortTrigger: cancellation.whenCancelled,
+        body: body,
+      );
+      return CloudResponseDecoder.asObject(decoded, context: context);
+    } on http.RequestAbortedException catch (_) {
+      throw CloudErrorMapper.fromException(
+        const CloudOperationCancelledException(),
+        requestPath: uri.path,
+      );
+    }
   }
 
   /// [patchJson] 后立即 [CloudResponseDecoder.asObject]。

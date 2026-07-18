@@ -51,10 +51,10 @@ func renderIntegrationLocationMetadataDart(svc *integrationLocationServiceFile) 
 		}
 	}
 	if nearbyPath == "" {
-		nearbyPath = "/v1/integration/location/nearby"
+		nearbyPath = "/integration/location/nearby"
 	}
 	if searchPath == "" {
-		searchPath = "/v1/integration/location/search"
+		searchPath = "/integration/location/search"
 	}
 	b.WriteString("  /// API 路径（来自 api_routes）\n")
 	b.WriteString(fmt.Sprintf("  static const String nearbyPath = '%s';\n", nearbyPath))
@@ -87,10 +87,10 @@ func renderIntegrationLocationMetadataGo(svc *integrationLocationServiceFile, pr
 		}
 	}
 	if nearbyPath == "" {
-		nearbyPath = "/v1/integration/location/nearby"
+		nearbyPath = "/integration/location/nearby"
 	}
 	if searchPath == "" {
-		searchPath = "/v1/integration/location/search"
+		searchPath = "/integration/location/search"
 	}
 	b.WriteString("// API 路径（来自 api_routes）\n")
 	b.WriteString(fmt.Sprintf("const NearbyPath = %q\n", nearbyPath))

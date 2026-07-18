@@ -33,14 +33,14 @@
 
 - 深度排序模型平台轨（MMoE/PLE/ESMM、双塔 ANN、IPS 反事实训练）。
 - 协同过滤离线物化作业与 replay 评估脚本。
-- 同步 `/v1/score` 塞进 feed 读路径。
+- 同步 `/score` 塞进 feed 读路径。
 - Thompson Sampling、内容生命周期复活、Bloom/Cuckoo/Count-Min 等海量阶段曝光基础设施实现。
 - UGC 媒体上传、审核准入等 Phase 1 业务实现。
 
 ## 端云边界
 
-- `GET /v1/content/feed` 是内容 feed 读取入口；`sort=recommend`、cursor、sessionId、feedRequestId 必须保持端云一致。
-- `POST /v1/content/behaviors` 是行为回流入口；新增行为字段与 action 必须 metadata-first；端侧统一上报通道、分级采样、clientEventId 幂等与 feedRequestId 归因见 L3 `feedback-ingestion-sampling`。
+- `GET /content/feed` 是内容 feed 读取入口；`sort=recommend`、cursor、sessionId、feedRequestId 必须保持端云一致。
+- `POST /content/behaviors` 是行为回流入口；新增行为字段与 action 必须 metadata-first；端侧统一上报通道、分级采样、clientEventId 幂等与 feedRequestId 归因见 L3 `feedback-ingestion-sampling`。
 - 推荐排序运行时只通过 `runtime/recommendation` 引擎与 `recommendation/rec_model/policy.yaml`（或其 codegen 产物）消费策略，禁止在 UI、Repository 或 intersection 另起 ranker。
 - 曝光记忆、动态曝光预算、生命周期复活、活跃度自适应和曝光健康指标的唯一业务能力归属为 `discovery-content/exposure-governance`。
 - 页面、route、surface 与 operation 均来自 metadata/codegen；新增流式 feed 页面能力需同步 page-horizontal-quality 与 metadata-driven UI 清单。

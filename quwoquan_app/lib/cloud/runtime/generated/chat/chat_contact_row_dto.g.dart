@@ -26,14 +26,14 @@ class ChatContactRowDto {
 
   factory ChatContactRowDto.fromMap(Map<String, dynamic> m) {
     return ChatContactRowDto(
-      userId: m['userId']?.toString() ?? m['contactId']?.toString() ?? m['id']?.toString() ?? '',
-      displayName: m['displayName']?.toString() ?? m['name']?.toString() ?? '',
-      avatarUrl: m['avatarUrl']?.toString() ?? m['avatar']?.toString() ?? '',
+      userId: m['userId']?.toString() ?? '',
+      displayName: m['displayName']?.toString() ?? '',
+      avatarUrl: m['avatarUrl']?.toString() ?? '',
       bio: m['bio']?.toString() ?? '',
       metFrom: m['metFrom']?.toString() ?? '',
       lastInteraction: m['lastInteraction']?.toString() ?? '',
       relationState: m['relationState']?.toString() ?? 'not_following',
-      source: m['source']?.toString() ?? m['contactSource']?.toString() ?? '',
+      source: m['source']?.toString() ?? '',
       isStarred: m['isStarred'] as bool? ?? false,
     );
   }

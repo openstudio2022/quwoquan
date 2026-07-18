@@ -2,7 +2,6 @@ dart_class: AssistantToolMetadataWire
 library_path: assistant/generated/contracts/assistant_tool_metadata.g.dart
 output_path: assistant/generated/contracts/assistant_tool_metadata.g.dart
 contract: assistant_tool_metadata
-version: assistant_tool_metadata.m5
 kind: shared_wire_contract
 fields:
   - { name: toolName, type: string, required: true }

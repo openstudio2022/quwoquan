@@ -12,12 +12,12 @@ func TestCreateConversation_WithInitialMembers(t *testing.T) {
 		t,
 		`{"type":"group","title":"初始成员测试","maxGroupSize":500,"initialMemberIds":["user_test_002","user_test_003"]}`,
 	)
-	convID := created["_id"].(string)
+	convID := created["id"].(string)
 	if created["memberCount"] != float64(3) {
 		t.Fatalf("expected memberCount=3, got %v", created["memberCount"])
 	}
 
-	code, result := doGet(t, "/v1/chat/conversations/"+convID+"/members?limit=10", "user_test_001")
+	code, result := doGet(t, "/chat/conversations/"+convID+"/members?limit=10", "user_test_001")
 	if code != 200 {
 		t.Fatalf("expected 200, got %d", code)
 	}
@@ -34,11 +34,11 @@ func TestTransferOwnership(t *testing.T) {
 		t,
 		`{"type":"group","title":"转让测试","maxGroupSize":500,"initialMemberIds":["user_test_002"]}`,
 	)
-	convID := created["_id"].(string)
+	convID := created["id"].(string)
 
 	code, _ := doPatch(
 		t,
-		"/v1/chat/conversations/"+convID+"/owner",
+		"/chat/conversations/"+convID+"/owner",
 		`{"newOwnerId":"user_test_002"}`,
 		"user_test_001",
 	)
@@ -46,7 +46,7 @@ func TestTransferOwnership(t *testing.T) {
 		t.Fatalf("expected 200, got %d", code)
 	}
 
-	_, result := doGet(t, "/v1/chat/conversations/"+convID+"/members?limit=10", "user_test_001")
+	_, result := doGet(t, "/chat/conversations/"+convID+"/members?limit=10", "user_test_001")
 	items := result["items"].([]any)
 	roles := map[string]string{}
 	for _, raw := range items {
@@ -68,11 +68,11 @@ func TestUpdateGroupAdmins(t *testing.T) {
 		t,
 		`{"type":"group","title":"管理员测试","maxGroupSize":500,"initialMemberIds":["user_test_002","user_test_003"]}`,
 	)
-	convID := created["_id"].(string)
+	convID := created["id"].(string)
 
 	code, _ := doPut(
 		t,
-		"/v1/chat/conversations/"+convID+"/admins",
+		"/chat/conversations/"+convID+"/admins",
 		`{"adminIds":["user_test_002"]}`,
 		"user_test_001",
 	)
@@ -80,7 +80,7 @@ func TestUpdateGroupAdmins(t *testing.T) {
 		t.Fatalf("expected 200, got %d", code)
 	}
 
-	_, result := doGet(t, "/v1/chat/conversations/"+convID+"/members?limit=10", "user_test_001")
+	_, result := doGet(t, "/chat/conversations/"+convID+"/members?limit=10", "user_test_001")
 	items := result["items"].([]any)
 	roles := map[string]string{}
 	for _, raw := range items {
@@ -99,18 +99,18 @@ func TestDissolveConversation_RemovesFromList(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	created := createConversation(t, `{"type":"group","title":"解散测试","maxGroupSize":500}`)
-	convID := created["_id"].(string)
+	convID := created["id"].(string)
 
-	code, _ := doDelete(t, "/v1/chat/conversations/"+convID, "user_test_001")
+	code, _ := doDelete(t, "/chat/conversations/"+convID, "user_test_001")
 	if code != 200 {
 		t.Fatalf("expected 200, got %d", code)
 	}
 
-	_, result := doGet(t, "/v1/chat/conversations?limit=20", "user_test_001")
+	_, result := doGet(t, "/chat/conversations?limit=20", "user_test_001")
 	items := result["items"].([]any)
 	for _, raw := range items {
 		conversation := raw.(map[string]any)
-		if conversation["_id"] == convID {
+		if conversation["id"] == convID {
 			t.Fatalf("expected dissolved conversation %s to be absent from list", convID)
 		}
 	}
@@ -123,7 +123,7 @@ func TestDissolveCircleConversation_Forbidden(t *testing.T) {
 		t,
 		`{"type":"group","title":"圈子群","circleId":"circle_001","circleGroupId":"circle_group_default_001","maxGroupSize":500}`,
 	)
-	convID := created["_id"].(string)
+	convID := created["id"].(string)
 	if created["type"] != "group" {
 		t.Fatalf("expected circle-bound conversation to expose type=group, got %v", created["type"])
 	}
@@ -137,7 +137,7 @@ func TestDissolveCircleConversation_Forbidden(t *testing.T) {
 		t.Fatalf("expected bound_to_circle lifecycle, got %v", created["lifecyclePolicy"])
 	}
 
-	code, _ := doDelete(t, "/v1/chat/conversations/"+convID, "user_test_001")
+	code, _ := doDelete(t, "/chat/conversations/"+convID, "user_test_001")
 	if code != 403 {
 		t.Fatalf("expected 403, got %d", code)
 	}
@@ -148,7 +148,7 @@ func TestCreateConversation_RejectsRetiredCircleType(t *testing.T) {
 
 	doPost(
 		t,
-		"/v1/chat/conversations",
+		"/chat/conversations",
 		`{"type":"circle","title":"旧圈子会话","circleId":"circle_retired","maxGroupSize":500}`,
 		"user_test_001",
 		http.StatusBadRequest,

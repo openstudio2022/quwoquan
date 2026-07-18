@@ -88,7 +88,7 @@ func TestEventPublish_MessageSent(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"group","title":"event test"}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 
 	// Wait for the ConversationCreated goroutine to complete before subscribing
 	time.Sleep(200 * time.Millisecond)
@@ -133,7 +133,7 @@ func TestEventPublish_MessageRecalled(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"direct","title":"recall event","initialMemberIds":["user_test_002"]}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 	msg := sendMessage(t, convId, `{"type":"text","content":"will recall","clientMsgId":"evt-recall-1"}`)
 	msgId := msg["messageId"].(string)
 
@@ -149,7 +149,7 @@ func TestEventPublish_MessageRecalled(t *testing.T) {
 	defer sub.Close()
 	time.Sleep(50 * time.Millisecond)
 
-	doPost(t, "/v1/chat/conversations/"+convId+"/messages/"+msgId+"/recall", `{}`, "user_test_001", http.StatusOK)
+	doPost(t, "/chat/conversations/"+convId+"/messages/"+msgId+"/recall", `{}`, "user_test_001", http.StatusOK)
 
 	select {
 	case raw := <-sub.Channel():
@@ -172,7 +172,7 @@ func TestEventPublish_ConversationRosterUpdatedOnAddMembers(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"group","title":"roster event on add"}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 
 	// Create path publishes ConversationRosterUpdated in a goroutine; wait it out.
 	time.Sleep(300 * time.Millisecond)
@@ -187,7 +187,7 @@ func TestEventPublish_ConversationRosterUpdatedOnAddMembers(t *testing.T) {
 	defer sub.Close()
 	time.Sleep(50 * time.Millisecond)
 
-	doPost(t, "/v1/chat/conversations/"+convId+"/members", `{"userIds":["user_new_1"]}`, "user_test_001", http.StatusOK)
+	doPost(t, "/chat/conversations/"+convId+"/members", `{"userIds":["user_new_1"]}`, "user_test_001", http.StatusOK)
 
 	deadline := time.After(3 * time.Second)
 	for {
@@ -221,7 +221,7 @@ func TestEventPublish_ConversationRosterUpdatedDebouncedMerge(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"group","title":"roster debounce"}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 	time.Sleep(300 * time.Millisecond)
 
 	channel := "rt:conversation:" + convId
@@ -234,8 +234,8 @@ func TestEventPublish_ConversationRosterUpdatedDebouncedMerge(t *testing.T) {
 	defer sub.Close()
 	time.Sleep(50 * time.Millisecond)
 
-	doPost(t, "/v1/chat/conversations/"+convId+"/members", `{"userIds":["user_merge_a"]}`, "user_test_001", http.StatusOK)
-	doPost(t, "/v1/chat/conversations/"+convId+"/members", `{"userIds":["user_merge_b"]}`, "user_test_001", http.StatusOK)
+	doPost(t, "/chat/conversations/"+convId+"/members", `{"userIds":["user_merge_a"]}`, "user_test_001", http.StatusOK)
+	doPost(t, "/chat/conversations/"+convId+"/members", `{"userIds":["user_merge_b"]}`, "user_test_001", http.StatusOK)
 
 	rosterCount := 0
 	deadline := time.Now().Add(500 * time.Millisecond)
@@ -265,9 +265,9 @@ func TestEventPublish_ConversationMemberRemoved(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"group","title":"member leave event"}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 
-	doPost(t, "/v1/chat/conversations/"+convId+"/members", `{"userIds":["user_leave_1"]}`, "user_test_001", http.StatusOK)
+	doPost(t, "/chat/conversations/"+convId+"/members", `{"userIds":["user_leave_1"]}`, "user_test_001", http.StatusOK)
 	// Let debounced ConversationRosterUpdated from AddMembers flush before we subscribe for RemoveMember.
 	time.Sleep(300 * time.Millisecond)
 
@@ -281,7 +281,7 @@ func TestEventPublish_ConversationMemberRemoved(t *testing.T) {
 	defer sub.Close()
 	time.Sleep(50 * time.Millisecond)
 
-	doDelete(t, "/v1/chat/conversations/"+convId+"/members/user_leave_1", "user_test_001")
+	doDelete(t, "/chat/conversations/"+convId+"/members/user_leave_1", "user_test_001")
 
 	deadline := time.After(3 * time.Second)
 	for {
@@ -307,7 +307,7 @@ func TestEventPublish_ConversationCreated(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"group","title":"created event"}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 
 	// ConversationCreated is published in a goroutine after HTTP response;
 	// give it a brief moment to fire, then verify via a second operation:
@@ -337,7 +337,7 @@ func TestEventPublish_ConversationUserSettingsChanged(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"direct","title":"settings event","initialMemberIds":["user_test_002"]}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 
 	channel := "rt:conversation:" + convId
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -349,7 +349,7 @@ func TestEventPublish_ConversationUserSettingsChanged(t *testing.T) {
 	defer sub.Close()
 	time.Sleep(50 * time.Millisecond)
 
-	doPatch(t, "/v1/chat/conversations/"+convId+"/settings", `{"muted":true}`, "user_test_001")
+	doPatch(t, "/chat/conversations/"+convId+"/settings", `{"muted":true}`, "user_test_001")
 
 	select {
 	case raw := <-sub.Channel():
@@ -369,7 +369,7 @@ func TestEventPublish_ConversationReadWatermarkAdvanced(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"direct","title":"receipt event","maxGroupSize":2,"initialMemberIds":["user_test_002"]}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 	msg := sendMessage(t, convId, `{"type":"text","content":"read me","clientMsgId":"evt-read-1"}`)
 	msgId := msg["messageId"].(string)
 
@@ -385,7 +385,7 @@ func TestEventPublish_ConversationReadWatermarkAdvanced(t *testing.T) {
 	defer sub.Close()
 	time.Sleep(50 * time.Millisecond)
 
-	doPost(t, "/v1/chat/conversations/"+convId+"/messages/"+msgId+"/read", `{}`, "user_test_002", http.StatusOK)
+	doPost(t, "/chat/conversations/"+convId+"/messages/"+msgId+"/read", `{}`, "user_test_002", http.StatusOK)
 
 	select {
 	case raw := <-sub.Channel():
@@ -408,7 +408,7 @@ func TestEventPublish_AssistantMembershipAdded(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"group","title":"assistant event"}`)
-	convId := conv["_id"].(string)
+	convId := conv["id"].(string)
 
 	channel := "rt:conversation:" + convId
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -420,7 +420,7 @@ func TestEventPublish_AssistantMembershipAdded(t *testing.T) {
 	defer sub.Close()
 	time.Sleep(50 * time.Millisecond)
 
-	doPost(t, "/v1/chat/conversations/"+convId+"/assistant", `{"skillId":"general"}`, "user_test_001", http.StatusOK)
+	doPost(t, "/chat/conversations/"+convId+"/assistant", `{"skillId":"general"}`, "user_test_001", http.StatusOK)
 
 	select {
 	case raw := <-sub.Channel():
@@ -443,8 +443,8 @@ func TestEventPublish_AssistantMentioned(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"group","title":"mention event"}`)
-	convId := conv["_id"].(string)
-	doPost(t, "/v1/chat/conversations/"+convId+"/assistant", `{"skillId":"general"}`, "user_test_001", http.StatusOK)
+	convId := conv["id"].(string)
+	doPost(t, "/chat/conversations/"+convId+"/assistant", `{"skillId":"general"}`, "user_test_001", http.StatusOK)
 
 	channel := "rt:conversation:" + convId
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -503,7 +503,7 @@ func TestEventPublish_AssistantMembershipRemoved(t *testing.T) {
 	defer sub.Close()
 	time.Sleep(50 * time.Millisecond)
 
-	doDelete(t, "/v1/chat/conversations/"+convId+"/assistant", "user_test_001")
+	doDelete(t, "/chat/conversations/"+convId+"/assistant", "user_test_001")
 
 	deadline := time.After(3 * time.Second)
 	for {

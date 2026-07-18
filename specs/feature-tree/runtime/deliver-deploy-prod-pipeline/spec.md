@@ -27,7 +27,7 @@
 
 ### 三层正交边界
 
-- 逻辑边界 = 领域服务（DDD bounded context）：独立路由前缀 `/v1/<domain>/*`、独立 `service.name`、独立指标/日志/配置段/错误码，是第一真相源。
+- 逻辑边界 = 领域服务（DDD bounded context）：独立路由前缀 `/<domain>/*`、独立 `service.name`、独立指标/日志/配置段/错误码，是第一真相源。
 - 部署单元 = Kubernetes Deployment：最小发布与伸缩单元，初期尽量少、规模后按需增多；对外稳定标识是 Service（DNS 名/路由），不是 Deployment。
 - 物理资源 = 单 ACK 集群 + 共享节点池：靠 `requests/limits` + bin-packing + HPA + cluster-autoscaler + namespace `ResourceQuota` 复用资源降本。
 

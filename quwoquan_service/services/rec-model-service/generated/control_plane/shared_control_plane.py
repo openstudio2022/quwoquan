@@ -158,7 +158,6 @@ _SHARED_CONTROL_PLANE_JSON = r'''{
     "ops.*",
     "platform_ops.*",
     "product_ops.*"
-  ],
-  "version": 1
+  ]
 }'''
 SHARED_CONTROL_PLANE = json.loads(_SHARED_CONTROL_PLANE_JSON)

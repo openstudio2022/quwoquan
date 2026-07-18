@@ -52,12 +52,12 @@ func samplePosts() []PostDoc {
 			ExperienceClaimMode: "editorial_synthesis", AuthorQualitySignals: map[string]any{"qualityScore": 0.85, "fatigueScore": 0.2, "riskTier": "low"},
 			GeneratorModel: "agent/x", ArticleMarkdown: "# 甲居藏寨体验\n正文\n", ArticleDigest: "sha256:1111111111111111111111111111111111111111111111111111111111111111",
 			ArticleAssetManifest: &ArticleAssetManifestDoc{
-				SchemaVersion:          1,
-				ArticleMarkdownVersion: "qwq-rich-md/1",
-				ArticleMarkdownDigest:  "sha256:1111111111111111111111111111111111111111111111111111111111111111",
-				DocumentSha256:         "sha256:1111111111111111111111111111111111111111111111111111111111111111",
-				AssetManifestSha256:    "sha256:2222222222222222222222222222222222222222222222222222222222222222",
-				DocumentVersionSha256:  "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+				Schema:                articleAssetManifestSchema,
+				MarkdownDialect:       "qwq-rich-md",
+				ArticleMarkdownDigest: "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+				DocumentSha256:        "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+				AssetManifestSha256:   "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+				DocumentVersionSha256: "sha256:3333333333333333333333333333333333333333333333333333333333333333",
 				Assets: []AssetManifestItem{
 					{AssetID: "cover", ObjectKey: "media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg", CDNURL: "https://img.example.com/media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg", Sha256: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
 				},

@@ -120,7 +120,7 @@ void _validateChatMessageCardDtoWire(Map<String, dynamic> m) {
   if (m.containsKey('message') && m['message'] != null && (m['message'] is! String)) {
     throw FormatException('ChatMessageCardDto.message has an invalid wire value');
   }
-  if (!m.containsKey('attributes') || m['attributes'] == null || (m['attributes'] is! List || (m['attributes'] as List).any((value) => value is! Map || (value as Map).keys.any((key) => key is! String)))) {
+  if (!m.containsKey('attributes') || m['attributes'] == null || (m['attributes'] is! List || (m['attributes'] as List).any((value) => value is! Map || value.keys.any((key) => key is! String)))) {
     throw FormatException('ChatMessageCardDto.attributes has an invalid wire value');
   }
 }

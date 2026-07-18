@@ -15,12 +15,12 @@ func TestPostOutboxPublishesTypedLifecycleToRealRedisStream(t *testing.T) {
 	cleanPosts(t)
 	t.Cleanup(func() { cleanPosts(t) })
 	ctx := context.Background()
-	created := createPostWithAuthor(t, "persona-stream-owner", `{
+	created := submitPublishedPostWithAuthor(t, "persona-stream-owner", `{
 		"contentType":"micro",
 		"contentIdentity":"moment",
 		"body":"durable stream contract"
 	}`)
-	postID, _ := created["_id"].(string)
+	postID, _ := created["postId"].(string)
 	if postID == "" {
 		t.Fatalf("published Post has no id: %#v", created)
 	}
@@ -36,8 +36,8 @@ func TestPostOutboxPublishesTypedLifecycleToRealRedisStream(t *testing.T) {
 	if err != nil {
 		t.Fatalf("drain Post lifecycle stream: %v", err)
 	}
-	if count < 2 {
-		t.Fatalf("expected PostCreated and PostPublished, got %d events", count)
+	if count != 1 {
+		t.Fatalf("expected one atomic PostPublished event, got %d events", count)
 	}
 
 	group := "circle-api-integration-" + strings.ReplaceAll(postID, ":", "-")
@@ -57,7 +57,7 @@ func TestPostOutboxPublishesTypedLifecycleToRealRedisStream(t *testing.T) {
 		}
 		types[message.Values["eventType"]] = true
 		var payload struct {
-			ID       string `json:"_id"`
+			ID       string `json:"postId"`
 			AuthorID string `json:"authorId"`
 		}
 		if err := json.Unmarshal([]byte(message.Values["payload"]), &payload); err != nil {
@@ -70,7 +70,7 @@ func TestPostOutboxPublishesTypedLifecycleToRealRedisStream(t *testing.T) {
 			t.Fatalf("stream lost durable identity: %#v", message.Values)
 		}
 	}
-	if !types["PostCreated"] || !types["PostPublished"] {
+	if len(types) != 1 || !types["PostPublished"] {
 		t.Fatalf("lifecycle event types=%#v", types)
 	}
 }

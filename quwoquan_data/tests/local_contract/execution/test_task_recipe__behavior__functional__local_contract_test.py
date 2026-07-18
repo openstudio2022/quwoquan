@@ -78,62 +78,86 @@ def test_readiness_accepts_recipe_bounded_parallel_execution():
 
 
 def test_preflight_evidence_belongs_to_execution_work_package():
-    argv = recipe._env_ready_argv(
-        recipe.load_recipe(recipe.GEO_HOMEPAGE_RECIPE),
-        EXECUTION_ID,
-    )
+    argv = recipe._env_ready_argv(EXECUTION_ID)
     report_path = Path(argv[argv.index("--report-out") + 1])
     assert argv[:2] == ["task", "preflight"]
     assert "--json" not in argv
     assert report_path == recipe.execution_root(EXECUTION_ID) / "evidence" / "environment_readiness.json"
 
 
-def test_geo_homepages_uses_internal_recipe_with_only_execution_identity():
+def test_execute_uses_rollout_contract_with_only_execution_identity():
     received: dict[str, object] = {}
-    original = recipe._run_geo_homepage_execution
+    original = recipe._run_execution
 
     def _capture(args: argparse.Namespace, invoke=None) -> None:
         received.update(vars(args))
 
-    recipe._run_geo_homepage_execution = _capture
+    recipe._run_execution = _capture
     try:
-        recipe.handle_geo_homepages(
+        recipe.handle_execute(
             argparse.Namespace(
                 execution_id=EXECUTION_ID,
                 retry_of=None,
-                rollout=recipe.GEO_HOMEPAGE_ROLLOUT,
-                region=None,
-                discovery=None,
-                limit=None,
-                mandatory=None,
-                name=None,
-                title=None,
-                intent_label=None,
+                rollout=recipe.HOMEPAGE_ROLLOUT,
                 stage="plan-only",
-                force_execution_write=False,
                 recover_stage=None,
                 recovery_reason=None,
             )
         )
     finally:
-        recipe._run_geo_homepage_execution = original
+        recipe._run_execution = original
     assert received["execution_id"] == EXECUTION_ID
-    assert received["rollout"] == recipe.GEO_HOMEPAGE_ROLLOUT
+    assert received["rollout"] == recipe.HOMEPAGE_ROLLOUT
     assert received["region"] == "中国/浙江省"
     assert received["discovery"] == "quwoquan_data/verticals/travel/coverage/中国/浙江省"
     assert "recipe" not in received and "batch" not in received and "plan" not in received
 
 
-def test_geo_homepages_rejects_an_unpaired_recovery_request(monkeypatch):
+def test_execute_routes_cold_start_identity_to_policy_targets(monkeypatch):
+    from governance.coverage.cold_start_supply import ColdStartExecutionParameters
+
+    execution_id = "20260718--travel-article-cold-start--cn-sichuan--m3-001"
+    received: dict[str, object] = {}
+    monkeypatch.setattr(
+        "governance.coverage.cold_start_supply.cold_start_execution_parameters",
+        lambda **_kwargs: ColdStartExecutionParameters(
+            province="四川省",
+            target_names=("海螺沟", "九寨沟"),
+        ),
+    )
+    monkeypatch.setattr(
+        recipe,
+        "_run_execution",
+        lambda args, invoke=None: received.update(vars(args)),
+    )
+
+    recipe.handle_execute(
+        argparse.Namespace(
+            execution_id=execution_id,
+            retry_of=None,
+            rollout="travel-cold-start-supply",
+            stage="plan-only",
+            recover_stage=None,
+            recovery_reason=None,
+        )
+    )
+
+    assert received["execution_id"] == execution_id
+    assert received["region"] == "中国/四川省"
+    assert received["limit"] == 2
+    assert received["mandatory"] == "海螺沟,九寨沟"
+
+
+def test_execute_rejects_an_unpaired_recovery_request(monkeypatch):
     monkeypatch.setattr(recipe, "load_recipe", lambda _ref: {})
 
     try:
-        recipe._run_geo_homepage_execution(
+        recipe._run_execution(
             argparse.Namespace(
                 execution_id=EXECUTION_ID,
                 retry_of=None,
+                rollout=recipe.HOMEPAGE_ROLLOUT,
                 stage="run",
-                force_execution_write=False,
                 recover_stage="build_homepage",
                 recovery_reason=None,
             )
@@ -143,51 +167,85 @@ def test_geo_homepages_rejects_an_unpaired_recovery_request(monkeypatch):
         assert "recover-stage" in str(exc)
 
 
-def test_checkpoint_recovery_reuses_frozen_execution_selection(monkeypatch, tmp_path):
-    manifest_path = tmp_path / "execution_manifest.json"
-    manifest_path.write_text("{}", encoding="utf-8")
-    frozen = {
+def test_existing_execution_resume_uses_frozen_manifest_inputs(monkeypatch):
+    frozen_params = {
         "region": "中国/浙江省",
         "discovery": "quwoquan_data/verticals/travel/coverage/中国/浙江省",
-        "mandatory": "普陀山,东钱湖",
-        "limit": 2,
+        "name": "浙江省主页m1",
+        "title": "浙江省主页m1",
+        "intentLabel": "浙江省景区主页m1",
+        "category": "景区",
+        "limit": 100,
+        "mandatory": "冻结对象",
+        "entityHomepagesPerTarget": 1,
+        "entityArticlesPerTarget": 0,
+        "imageWorksPerTarget": 0,
+        "videoWorksPerTarget": 0,
     }
-    monkeypatch.setattr(recipe, "execution_manifest_path", lambda _execution_id: manifest_path)
+    monkeypatch.setattr(recipe, "load_recipe", lambda _ref: {"runtimeProfile": "profile"})
+    monkeypatch.setattr(recipe, "_apply_runtime_env", lambda _recipe: None)
+    monkeypatch.setattr(recipe, "execution_manifest_path", lambda _execution_id: Path("manifest.json"))
+    monkeypatch.setattr(Path, "is_file", lambda self: self.name == "manifest.json")
     monkeypatch.setattr(
         recipe,
         "load_execution_manifest",
-        lambda _execution_id: {"resolvedParams": frozen},
-    )
-    resolved = recipe._resolve_execution_recipe(
-        {
-            "selection": {"region": "中国/浙江"},
-            "contract": {"targetObjectCount": 100},
-            "readiness": {"target": 100},
+        lambda _execution_id: {
+            "recipe": {"ref": recipe.HOMEPAGE_RECIPE},
+            "resolvedParams": frozen_params,
+            "retryOf": "20260711--travel-homepage-coverage--cn-zhejiang--canary-900",
         },
-        argparse.Namespace(region="中国/浙江", discovery="other", limit=99),
-        execution_id=EXECUTION_ID,
-        recover_stage="build_homepage",
     )
-    assert resolved["selection"] == frozen
-    assert resolved["contract"]["targetObjectCount"] == 2
-    assert resolved["readiness"]["target"] == 2
 
+    captured: dict[str, object] = {}
 
-def test_checkpoint_recovery_rejects_a_manifest_without_frozen_selection(monkeypatch, tmp_path):
-    manifest_path = tmp_path / "execution_manifest.json"
-    manifest_path.write_text("{}", encoding="utf-8")
-    monkeypatch.setattr(recipe, "execution_manifest_path", lambda _execution_id: manifest_path)
-    monkeypatch.setattr(recipe, "load_execution_manifest", lambda _execution_id: {"resolvedParams": {}})
+    def fake_create_execution_manifest(**kwargs):
+        captured.update(kwargs)
+        raise RuntimeError("stop after manifest validation")
+
+    monkeypatch.setattr(
+        "content.execution.create_execution_manifest",
+        fake_create_execution_manifest,
+    )
+    monkeypatch.setattr(
+        "content.execution.runner.preflight_execution_models",
+        lambda _recipe: {},
+    )
+    monkeypatch.setattr(
+        "content.execution.runner.write_execution_model_readiness",
+        lambda *_args: None,
+    )
+    monkeypatch.setattr(
+        "content.execution.recipe._ensure_execution_spec",
+        lambda *_args, **_kwargs: EXECUTION_ID,
+    )
+    monkeypatch.setattr(
+        "content.release.canonical.rollout_milestone.assert_rollout_start",
+        lambda _execution_id: None,
+    )
+    monkeypatch.setattr(
+        "content.execution.workspace.frozen_target_set_sha256",
+        lambda _execution_id: "digest",
+    )
+
     try:
-        recipe._resolve_execution_recipe(
-            {"selection": {}},
-            argparse.Namespace(),
-            execution_id=EXECUTION_ID,
-            recover_stage="build_homepage",
+        recipe._run_execution(
+            argparse.Namespace(
+                execution_id=EXECUTION_ID,
+                retry_of=None,
+                rollout=recipe.HOMEPAGE_ROLLOUT,
+                stage="run",
+                recover_stage="download_fetch",
+                recovery_reason="transport_repaired",
+            )
         )
-        raise AssertionError("missing frozen selection must fail")
-    except ValueError as exc:
-        assert "resolvedParams" in str(exc)
+        raise AssertionError("test must stop at manifest validation")
+    except RuntimeError as exc:
+        assert str(exc) == "stop after manifest validation"
+
+    assert captured["resolved_params"] == frozen_params
+    assert captured["retry_of"] == (
+        "20260711--travel-homepage-coverage--cn-zhejiang--canary-900"
+    )
 
 
 def test_task_facade_exposes_only_durable_commands():
@@ -199,32 +257,21 @@ def test_task_facade_exposes_only_durable_commands():
     )
     assert result.returncode == 0, result.stderr
     command_rows = [line.strip().split(maxsplit=1)[0] for line in result.stdout.splitlines() if line.startswith("    ")]
-    assert command_rows == ["preflight", "geo-homepages"]
+    assert command_rows == ["preflight", "execute"]
 
 
-def test_governed_rollout_rejects_selection_overrides():
-    try:
-        recipe.handle_geo_homepages(
-            argparse.Namespace(
-                execution_id=EXECUTION_ID,
-                retry_of=None,
-                rollout=recipe.GEO_HOMEPAGE_ROLLOUT,
-                region=None,
-                discovery=None,
-                limit=2,
-                mandatory=None,
-                name=None,
-                title=None,
-                intent_label=None,
-                stage="plan-only",
-                force_execution_write=False,
-                recover_stage=None,
-                recovery_reason=None,
-            )
-        )
-        raise AssertionError("governed rollout must reject a CLI limit")
-    except SystemExit as exc:
-        assert "rejects selection overrides" in str(exc)
+def test_execute_cli_has_no_selection_or_runtime_overrides():
+    result = subprocess.run(
+        [sys.executable, str(SCRIPTS_ROOT / "cli.py"), "task", "execute", "--help"],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    forbidden = ("--limit", "--region", "--discovery", "--max-workers", "--runtime")
+    assert not any(option in result.stdout for option in forbidden)
+    assert "travel-homepage-coverage" in result.stdout
+    assert "travel-cold-start-supply" in result.stdout
 
 
 if __name__ == "__main__":

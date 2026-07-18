@@ -31,6 +31,15 @@ func Run(contractGraph *graph.ContractGraph, profile Profile) []Issue {
 	objectIDs := map[string]string{}
 	objectsByID := map[string]ast.Object{}
 	objectsByDomainName := map[string]ast.Object{}
+	identityByDomainName := map[string]ast.ObjectIdentity{}
+	for _, objectMap := range contractGraph.BusinessObjectMaps {
+		for _, object := range objectMap.Objects {
+			identityByDomainName[domainObjectKey(
+				objectMap.Domain,
+				object.CanonicalObject,
+			)] = object.Identity
+		}
+	}
 	for _, object := range contractGraph.Objects {
 		if previous, exists := objectIDs[object.ID]; exists {
 			issues = append(issues, issue(
@@ -81,7 +90,9 @@ func Run(contractGraph *graph.ContractGraph, profile Profile) []Issue {
 			issues = append(issues, issue(
 				"CONTRACT.TRANSPORT.INVALID_PATH",
 				operation.SourcePath,
-				"operation %q path %q must use /v1, /internal/v1 or /callbacks/v1", operation.ID, operation.PathTemplate,
+				"operation %q path %q must be an unversioned resource path without version segments",
+				operation.ID,
+				operation.PathTemplate,
 			))
 		}
 		transportKey := operation.Method + " " + operation.PathTemplate
@@ -101,6 +112,7 @@ func Run(contractGraph *graph.ContractGraph, profile Profile) []Issue {
 					operation,
 					objectsByID,
 					objectsByDomainName,
+					identityByDomainName,
 				)...,
 			)
 		}
@@ -263,6 +275,7 @@ func validateCommercialOperation(
 	operation ast.Operation,
 	objectsByID map[string]ast.Object,
 	objectsByDomainName map[string]ast.Object,
+	identityByDomainName map[string]ast.ObjectIdentity,
 ) []Issue {
 	var issues []Issue
 	blocked := false
@@ -576,6 +589,47 @@ func validateCommercialOperation(
 			operation.ID,
 		))
 	}
+	switch operation.Concurrency.VersionPrecondition {
+	case ast.VersionPreconditionNone:
+		// The default is server-owned concurrency. Callers must not send a
+		// resource version unless the operation explicitly opts into If-Match.
+	case ast.VersionPreconditionIfMatch:
+		if operation.Kind != ast.OperationKindCommand ||
+			operation.AggregateOwner == "" ||
+			operation.AppendSink != "" {
+			issues = append(issues, issue(
+				"CONTRACT.OPERATION.INVALID_VERSION_PRECONDITION_TARGET",
+				operation.SourcePath,
+				"operation %q may use if_match only for an aggregate-root command",
+				operation.ID,
+			))
+			break
+		}
+		ownerKey := domainObjectKey(
+			operation.Domain,
+			operation.AggregateOwner,
+		)
+		_, ownerExists := objectsByDomainName[ownerKey]
+		identity, identityExists := identityByDomainName[ownerKey]
+		if !ownerExists || !identityExists ||
+			(identity.VersionSource != "field" &&
+				identity.VersionSource != "store_commit") {
+			issues = append(issues, issue(
+				"CONTRACT.OPERATION.INVALID_VERSION_PRECONDITION_SOURCE",
+				operation.SourcePath,
+				"operation %q if_match owner must use field or store_commit version source",
+				operation.ID,
+			))
+		}
+	default:
+		issues = append(issues, issue(
+			"CONTRACT.OPERATION.INVALID_VERSION_PRECONDITION",
+			operation.SourcePath,
+			"operation %q version_precondition %q must be if_match or omitted",
+			operation.ID,
+			operation.Concurrency.VersionPrecondition,
+		))
+	}
 	if operation.ActorRequirement == "" || operation.ActorRequirement == "unspecified" {
 		issues = append(issues, issue(
 			"CONTRACT.OPERATION.MISSING_ACTOR",
@@ -611,6 +665,29 @@ func validateCommercialOperation(
 			"CONTRACT.OPERATION.MISSING_RELIABILITY",
 			operation.SourcePath,
 			"commercial-ready operation %q must declare timeout/cancellation/retry/max_attempts/idempotency",
+			operation.ID,
+		))
+	}
+	unsafeMethod := operation.Method == "POST" ||
+		operation.Method == "PUT" ||
+		operation.Method == "PATCH" ||
+		operation.Method == "DELETE"
+	if operation.Reliability.RetryMode == "none" &&
+		operation.Reliability.MaxAttempts > 1 {
+		issues = append(issues, issue(
+			"CONTRACT.OPERATION.INVALID_RETRY_BUDGET",
+			operation.SourcePath,
+			"operation %q retry_mode none requires max_attempts=1",
+			operation.ID,
+		))
+	}
+	if unsafeMethod &&
+		operation.Reliability.MaxAttempts > 1 &&
+		operation.Reliability.Idempotency == "none" {
+		issues = append(issues, issue(
+			"CONTRACT.OPERATION.UNSAFE_RETRY_WITHOUT_IDEMPOTENCY",
+			operation.SourcePath,
+			"operation %q retries an unsafe method without a stable idempotency key",
 			operation.ID,
 		))
 	}
@@ -699,15 +776,34 @@ func allowedMethod(method string) bool {
 
 func allowedPath(path string) bool {
 	switch path {
-	case "/health", "/healthz", "/metrics":
+	case "/health", "/healthz", "/metrics", "/livez", "/startupz":
 		return true
 	}
-	for _, prefix := range []string{"/v1/", "/internal/v1/", "/callbacks/v1/"} {
-		if strings.HasPrefix(path, prefix) {
-			return true
+	if path == "" || path[0] != '/' {
+		return false
+	}
+	for _, segment := range strings.Split(strings.Trim(path, "/"), "/") {
+		if isAPIVersionSegment(segment) {
+			return false
 		}
 	}
-	return false
+	if strings.HasPrefix(path, "/internal/") || strings.HasPrefix(path, "/callbacks/") {
+		return len(path) > len("/internal/") && path != "/internal/" && path != "/callbacks/"
+	}
+	second := path[1]
+	return (second >= 'a' && second <= 'z') || (second >= 'A' && second <= 'Z')
+}
+
+func isAPIVersionSegment(segment string) bool {
+	if len(segment) < 2 || segment[0] != 'v' {
+		return false
+	}
+	for i := 1; i < len(segment); i++ {
+		if segment[i] < '0' || segment[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func issue(code, sourcePath, format string, args ...any) Issue {

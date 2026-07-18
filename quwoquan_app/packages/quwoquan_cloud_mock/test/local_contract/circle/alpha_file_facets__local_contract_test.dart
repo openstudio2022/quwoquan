@@ -34,11 +34,7 @@ void main() {
       expect(page.items.single.assetId, 'alpha-media-1');
 
       final deleted = await facet.delete(
-        DeleteCircleFileCommand(
-          circleId: 'circle-1',
-          fileId: file.fileId,
-          expectedVersion: file.version,
-        ),
+        DeleteCircleFileCommand(circleId: 'circle-1', fileId: file.fileId),
       );
       expect(deleted.status, CircleFileStatus.deleted);
       expect(

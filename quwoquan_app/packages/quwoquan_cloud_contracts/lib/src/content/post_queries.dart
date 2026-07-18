@@ -202,7 +202,7 @@ ContentPostSearchResultSlice decodeContentPostSearchResultSlice(
   );
   return ContentPostSearchResultSlice(
     items: items.map(_decodeContentPostSearchItem),
-    nextCursor: _optionalText(root['nextCursor'] ?? root['cursor']),
+    nextCursor: _optionalText(root['nextCursor']),
   );
 }
 
@@ -211,7 +211,7 @@ ContentFootprintPage decodeContentFootprintPage(Object? response) {
   final items = _expectList(root['items'], 'Content footprint response.items');
   return ContentFootprintPage(
     items: items.map(_decodeContentFootprintEntry),
-    nextCursor: _optionalText(root['nextCursor'] ?? root['cursor']),
+    nextCursor: _optionalText(root['nextCursor']),
   );
 }
 
@@ -219,35 +219,15 @@ ContentPostSearchItem _decodeContentPostSearchItem(Object? rawItem) {
   final item = _expectObject(rawItem, 'Content post search item');
   final reason = item['intersectionReason'];
   return ContentPostSearchItem(
-    postId: _requiredAliasText(item, const <String>['postId', 'id', '_id']),
-    contentType:
-        _optionalAliasText(item, const <String>['contentType', 'type']) ??
-        'image',
+    postId: _requiredText(item['postId'], 'postId'),
+    contentType: _optionalText(item['contentType']) ?? 'image',
     contentIdentity: _optionalText(item['contentIdentity']),
     title: _optionalText(item['title']),
-    summary: _optionalAliasText(item, const <String>[
-      'summary',
-      'body',
-      'highlightText',
-    ]),
-    coverUrl: _optionalAliasText(item, const <String>[
-      'coverUrl',
-      'thumbnailUrl',
-    ]),
-    authorId: _optionalAliasText(item, const <String>[
-      'authorId',
-      'subAccountId',
-    ]),
-    authorDisplayName: _optionalAliasText(item, const <String>[
-      'authorDisplayName',
-      'authorDisplayNameSnapshot',
-      'displayName',
-    ]),
-    authorAvatarUrl: _optionalAliasText(item, const <String>[
-      'authorAvatarUrl',
-      'authorAvatarUrlSnapshot',
-      'avatarUrl',
-    ]),
+    summary: _optionalText(item['summary']),
+    coverUrl: _optionalText(item['coverUrl']),
+    authorId: _optionalText(item['authorId']),
+    authorDisplayName: _optionalText(item['authorDisplayName']),
+    authorAvatarUrl: _optionalText(item['authorAvatarUrl']),
     categoryId: _optionalText(item['categoryId']),
     subCategory: _optionalText(item['subCategory']),
     likeCount: _optionalInt(item['likeCount']) ?? 0,
@@ -266,13 +246,7 @@ ContentPostSearchIntersectionReason _decodeContentPostSearchIntersectionReason(
 ) {
   final reason = _expectObject(rawReason, 'Content search intersection reason');
   return ContentPostSearchIntersectionReason(
-    kind:
-        _optionalAliasText(reason, const <String>[
-          'kind',
-          'intersectionKind',
-          'sourceRef',
-        ]) ??
-        '',
+    kind: _optionalText(reason['kind']) ?? '',
     primaryText: _optionalText(reason['primaryText']) ?? '',
     secondaryText: _optionalText(reason['secondaryText']) ?? '',
     strength:
@@ -298,56 +272,22 @@ ContentFootprintPostPreview _decodeContentFootprintPostPreview(
 ) {
   final post = _expectObject(rawPost, 'Content footprint item.post');
   return ContentFootprintPostPreview(
-    postId: _requiredAliasText(post, const <String>['postId', 'id', '_id']),
-    contentType:
-        _optionalAliasText(post, const <String>['contentType', 'type']) ??
-        'image',
-    contentIdentity: _optionalAliasText(post, const <String>[
-      'contentIdentity',
-      'identity',
-    ]),
+    postId: _requiredText(post['postId'], 'postId'),
+    contentType: _optionalText(post['contentType']) ?? 'image',
+    contentIdentity: _optionalText(post['contentIdentity']),
     title: _optionalText(post['title']),
-    body: _optionalAliasText(post, const <String>[
-      'body',
-      'description',
-      'content',
-      'caption',
-    ]),
-    authorId: _optionalAliasText(post, const <String>[
-      'authorId',
-      'userId',
-      'author_id',
-    ]),
-    authorDisplayName: _optionalAliasText(post, const <String>[
-      'authorDisplayName',
-      'authorNickname',
-      'nickname',
-      'username',
-      'displayName',
-    ]),
-    authorAvatarUrl: _optionalAliasText(post, const <String>[
-      'authorAvatarUrl',
-      'avatarUrl',
-      'avatar',
-    ]),
+    body: _optionalText(post['body']),
+    authorId: _optionalText(post['authorId']),
+    authorDisplayName: _optionalText(post['authorDisplayName']),
+    authorAvatarUrl: _optionalText(post['authorAvatarUrl']),
     authorBackgroundUrl: _optionalText(post['authorBackgroundUrl']),
-    coverUrl: _optionalAliasText(post, const <String>[
-      'coverUrl',
-      'cover',
-      'thumbnailUrl',
-      'thumbnail',
-    ]),
+    coverUrl: _optionalText(post['coverUrl']),
     imageUrls: _optionalStringList(
-      post['mediaUrls'] ?? post['images'] ?? post['imageUrls'],
+      post['imageUrls'],
       'Content footprint item.post image URLs',
     ),
-    videoUrl: _optionalAliasText(post, const <String>['videoUrl', 'video_url']),
-    thumbnailUrl: _optionalAliasText(post, const <String>[
-      'thumbnailUrl',
-      'thumbnail',
-      'coverUrl',
-      'cover',
-    ]),
+    videoUrl: _optionalText(post['videoUrl']),
+    thumbnailUrl: _optionalText(post['thumbnailUrl']),
     createdAt: _optionalDateTime(post['createdAt'], 'createdAt'),
   );
 }
@@ -366,32 +306,12 @@ List<Object?> _expectList(Object? value, String context) {
   throw FormatException('$context must be a list');
 }
 
-String _requiredAliasText(Map<Object?, Object?> map, List<String> keys) {
-  for (final key in keys) {
-    final text = _optionalText(map[key]);
-    if (text != null) {
-      return text;
-    }
-  }
-  throw FormatException('${keys.first} must be a non-empty string');
-}
-
 String _requiredText(Object? value, String name) {
   final text = _optionalText(value);
   if (text == null) {
     throw FormatException('$name must be a non-empty string');
   }
   return text;
-}
-
-String? _optionalAliasText(Map<Object?, Object?> map, List<String> keys) {
-  for (final key in keys) {
-    final text = _optionalText(map[key]);
-    if (text != null) {
-      return text;
-    }
-  }
-  return null;
 }
 
 String? _optionalText(Object? value) {

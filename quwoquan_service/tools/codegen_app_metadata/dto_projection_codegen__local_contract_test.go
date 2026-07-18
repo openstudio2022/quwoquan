@@ -26,6 +26,55 @@ func TestRenderStandaloneDtoHasExactlyOneTrailingNewline(t *testing.T) {
 	}
 }
 
+func TestRenderStandaloneDtoUsesCanonicalNameAsWireKey(t *testing.T) {
+	projection := clientProjection{
+		DartClass: "CreatedDto",
+		Fields: []projectionFieldDef{
+			{Name: "conversationId", Source: "id", DartType: "String"},
+		},
+	}
+
+	generated := renderStandaloneDtoDart(projection, "fixture.yaml")
+	for _, expected := range []string{
+		"conversationId: m['conversationId']?.toString()",
+		"'conversationId': conversationId",
+		"factory CreatedDto.fromReadModelMap(Map<String, dynamic> source)",
+		"'conversationId': source['id']",
+	} {
+		if !strings.Contains(generated, expected) {
+			t.Fatalf("canonical wire round-trip missing %q:\n%s", expected, generated)
+		}
+	}
+	if strings.Contains(generated, "m['id']") || strings.Contains(generated, "'id': conversationId") {
+		t.Fatalf("read-model source must not become a public wire key:\n%s", generated)
+	}
+}
+
+func TestSpecializedDtoRenderersUseCanonicalNameAsWireKey(t *testing.T) {
+	projection := clientProjection{
+		DartClass: "ProjectedDto",
+		BaseClass: "PostBaseDto",
+		Fields: []projectionFieldDef{
+			{Name: "id", Source: "postId", DartType: "String"},
+		},
+	}
+
+	for name, generated := range map[string]string{
+		"feed": renderFeedItemDtoDart(projection),
+		"post": renderTypedPostDtoDart(projection, "fixture.yaml"),
+	} {
+		if !strings.Contains(generated, "'id': id") {
+			t.Fatalf("%s DTO must emit the field name as wire key:\n%s", name, generated)
+		}
+		if strings.Contains(generated, "m['postId']") || strings.Contains(generated, "'postId': id") {
+			t.Fatalf("%s DTO must not use source as wire key:\n%s", name, generated)
+		}
+		if !strings.Contains(generated, "'id': source['postId']") {
+			t.Fatalf("%s DTO must expose the explicit read-model projection factory:\n%s", name, generated)
+		}
+	}
+}
+
 func TestRenderStandaloneDtoStrictProjectionRejectsUnknownAndInvalidWireValues(t *testing.T) {
 	projection := clientProjection{
 		DartClass: "StrictMessageDto",
@@ -48,6 +97,14 @@ func TestRenderStandaloneDtoStrictProjectionRejectsUnknownAndInvalidWireValues(t
 	} {
 		if !strings.Contains(generated, expected) {
 			t.Fatalf("strict DTO missing %q:\n%s", expected, generated)
+		}
+	}
+	for _, retired := range []string{
+		"DateTime? _parseDateTime",
+		"List<String>? _parseStringList",
+	} {
+		if strings.Contains(generated, retired) {
+			t.Fatalf("strict DTO must not emit unused helper %q:\n%s", retired, generated)
 		}
 	}
 }
@@ -79,9 +136,13 @@ func TestRenderStandaloneDtoStrictNestedProjection(t *testing.T) {
 		"'items': items.map((value) => value.toMap()).toList(growable: false)",
 		"m.containsKey('card') && m['card'] != null && (m['card'] is! Map",
 		"!m.containsKey('items') || m['items'] == null || (m['items'] is! List",
+		"value is! Map || value.keys.any((key) => key is! String)",
 	} {
 		if !strings.Contains(generated, expected) {
 			t.Fatalf("strict nested DTO missing %q:\n%s", expected, generated)
 		}
+	}
+	if strings.Contains(generated, "(value as Map).keys") {
+		t.Fatalf("strict nested DTO must rely on flow promotion instead of an unnecessary cast:\n%s", generated)
 	}
 }

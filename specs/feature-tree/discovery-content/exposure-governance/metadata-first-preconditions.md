@@ -89,7 +89,7 @@
 - `interaction` / `negative` 强信号低延迟上报，`negative` 优先级最高。
 - `training_sample` 仅云侧由以上派生，端侧禁止直接声明正负样本。
 - 行为 wire schema 必须先 metadata-first 声明：`clientEventId`（幂等去重）、`feedRequestId`（曝光必带且点击复用同一 id）、`impressed` 可见性阈值字段、状态枚举（served/visible/impressed/dwell/interaction/negative）。
-- 显式标签反馈需先决定归属：并入 `POST /v1/content/behaviors`，或正式废弃旧 `POST /v1/tag/feedback` 契约。
+- 显式标签反馈需先决定归属：并入 `POST /content/behaviors`，或正式废弃旧 `POST /tag/feedback` 契约。
 - `hide_author` / `hide_content_type` 已完成 H2；后续必须保持强负反馈优先级高于疲劳与动态预算。
 
 ## AB Segmentation

@@ -44,7 +44,7 @@ CHECKS = (
         "app-config",
         "alpha-api.quwoquan-env.test",
         17000,
-        "/v1/config/app",
+        "/config/app",
         None,
         "200",
     ),
@@ -92,7 +92,7 @@ CHECKS = (
         "video-range",
         "alpha-video.quwoquan-env.test",
         17100,
-        "/media/video/s/archived-video/beta-sample.mp4",
+        "/media/video/s/video-primary-0001/post/video-content-0001/source.mp4",
         "bytes=0-1",
         "206",
     ),
@@ -135,7 +135,7 @@ ANDROID_LOOPBACK_CHECKS = (
         "android-emulator-video-range",
         "10.0.2.2",
         17100,
-        "/media/video/s/archived-video/beta-sample.mp4",
+        "/media/video/s/video-primary-0001/post/video-content-0001/source.mp4",
         "bytes=0-1",
         "206",
     ),
@@ -152,7 +152,7 @@ def _collect_app_mock_group_avatar_paths() -> list[str]:
     if "groupAvatarFor('conv_grid_$n')" in text:
         conversation_ids.update(f"conv_grid_{index}" for index in range(1, 17))
     return [
-        f"/media/avatar/s/archived-avatar/conversation/{conversation_id}/v1/mock.png"
+        f"/media/avatar/s/archived-avatar/conversation/{conversation_id}/mock.png"
         for conversation_id in sorted(conversation_ids)
     ]
 

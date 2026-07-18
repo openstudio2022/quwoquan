@@ -21,6 +21,7 @@ for _path in (DATA_ROOT, SCRIPTS_ROOT):
 _TMP = tempfile.mkdtemp(prefix="qwq_object_queue_test_")
 
 from content.execution.queue import runtime as oq  # noqa: E402
+from content.execution.queue import management as oqm  # noqa: E402
 from content.execution import store  # noqa: E402
 from content.execution.queue.core import list_notifications  # noqa: E402
 from content.execution.queue.jobs import enqueue_ref_jobs  # noqa: E402
@@ -92,7 +93,7 @@ def test_enqueue_is_idempotent():
     assert j1["jobId"] == j2["jobId"]
     assert j2["attempt"] == 0
     assert j2["state"] == oq.STATE_QUEUED
-    assert j2["schemaVersion"] == "quwoquan.object_job"
+    assert j2["schema"] == "quwoquan.object_job"
     assert j2["queueBackend"] == "local_file"
 
 
@@ -342,7 +343,7 @@ def test_concurrent_acquire_leases_single_job_once():
         leased = list(pool.map(lease, ["w1", "w2"]))
 
     assert sum(1 for item in leased if item is not None) == 1
-    assert oq.queue_summary(batch)["byState"][oq.STATE_LEASED] == ["only_one"]
+    assert oqm.queue_summary(batch)["byState"][oq.STATE_LEASED] == ["only_one"]
 
 
 def test_same_source_mutex():
@@ -413,7 +414,7 @@ def test_requeue_affected_refs():
     oq.enqueue_ref_job(batch, "rq", "author")
     job = oq.acquire_lease(batch, worker="w1", stage="author")
     oq.complete_job(batch, job["jobId"], job["lease"])
-    touched = oq.requeue_refs(batch, ["rq"], "author")
+    touched = oqm.requeue_refs(batch, ["rq"], "author")
     assert touched == ["rq"]
     payload = read_json(oq._job_path(batch, job["jobId"]))
     assert payload["state"] == oq.STATE_QUEUED
@@ -424,7 +425,7 @@ def test_requeue_resets_dead_job_runtime_flags():
     oq.enqueue_ref_job(batch, "rdead", "author", max_attempts=1)
     job = oq.acquire_lease(batch, worker="w1", stage="author")
     oq.fail_job(batch, job["jobId"], job["lease"], error="dead now", fingerprint="fp-dead")
-    touched = oq.requeue_refs(batch, ["rdead"], "author", reason="manual_repair")
+    touched = oqm.requeue_refs(batch, ["rdead"], "author", reason="manual_repair")
     assert touched == ["rdead"]
     payload = read_json(oq._job_path(batch, job["jobId"]))
     assert payload["state"] == oq.STATE_QUEUED
@@ -450,7 +451,7 @@ def test_requeue_resets_startup_failure_count():
         same_run_retryable=True,
         startup_failure=True,
     )
-    touched = oq.requeue_refs(batch, ["rstartup"], "author", reason="manual_repair")
+    touched = oqm.requeue_refs(batch, ["rstartup"], "author", reason="manual_repair")
     assert touched == ["rstartup"]
     payload = read_json(oq._job_path(batch, job["jobId"]))
     assert payload["state"] == oq.STATE_QUEUED
@@ -477,9 +478,9 @@ def test_purge_jobs_removes_matching_stage_entries():
     oq.enqueue_ref_job(batch, "keep_download", "download")
     oq.enqueue_ref_job(batch, "drop_a", "author")
     oq.enqueue_ref_job(batch, "drop_b", "author")
-    res = oq.purge_jobs(batch, stage="author", refs=["drop_b", "drop_a"])
+    res = oqm.purge_jobs(batch, stage="author", refs=["drop_b", "drop_a"])
     assert res["removed"] == ["drop_a", "drop_b"]
-    summary = oq.queue_summary(batch)
+    summary = oqm.queue_summary(batch)
     assert summary["byState"] == {"queued": ["keep_download"]}
 
 

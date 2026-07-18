@@ -1,4 +1,3 @@
-version: 2
 read_model: ChatContactListRow
 description: |
   ListContacts / SearchContacts 等 API 返回的联系人行（wire），用于发起群聊、选人。
@@ -12,59 +11,50 @@ client_projection:
       dart_type: String
       nullable: false
       source: userId
-      aliases: [userId, contactId, id]
       default: "''"
     - name: displayName
       dart_type: String
       nullable: false
       source: displayName
-      aliases: [displayName, name]
       default: "''"
     - name: avatarUrl
       dart_type: String
       nullable: false
       source: avatarUrl
-      aliases: [avatarUrl, avatar]
       default: "''"
 
     - name: bio
       dart_type: String
       nullable: false
       source: bio
-      aliases: [bio]
       default: "''"
 
     - name: metFrom
       dart_type: String
       nullable: false
       source: metFrom
-      aliases: [metFrom]
       default: "''"
 
     - name: lastInteraction
       dart_type: String
       nullable: false
       source: lastInteraction
-      aliases: [lastInteraction]
       default: "''"
 
     - name: relationState
       dart_type: String
       nullable: false
       source: relationState
-      aliases: [relationState]
       default: "'not_following'"
 
     - name: source
       dart_type: String
       nullable: false
       source: source
-      aliases: [source, contactSource]
       default: "''"
 
     - name: isStarred
       dart_type: bool
       nullable: false
       source: isStarred
-      aliases: [isStarred]
       default: "false"

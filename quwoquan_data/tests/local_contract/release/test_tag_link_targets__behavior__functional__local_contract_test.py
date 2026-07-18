@@ -69,7 +69,7 @@ def _seed_publish() -> None:
     write_json(
         payload_file(RELEASE_ROOT / "tag-link-targets", "desired_state.json"),
         {
-            "schemaVersion": "quwoquan_data.release_desired_state/1",
+            "schema": "quwoquan_data.release_desired_state",
             "releaseId": "tag-link-targets",
             "desiredRefs": {
                 "posts": ["posts/article/攻略/毕棚沟/1"],

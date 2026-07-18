@@ -19,10 +19,11 @@ def _video_leaf(manifest: dict) -> tuple[Path, Path]:
     assets = leaf / "assets"
     assets.mkdir(parents=True, exist_ok=True)
     (assets / "clip.mp4").write_bytes(b"fake-mp4")
+    (assets / "poster.webp").write_bytes(b"fake-webp")
     return root, leaf
 
 
-def test_video_manifest_with_remote_cover_contract_passes():
+def test_video_manifest_with_cas_poster_asset_contract_passes():
     manifest = {
         "contentType": "video",
         "assets": [
@@ -31,12 +32,17 @@ def test_video_manifest_with_remote_cover_contract_passes():
                 "fileName": "clip.mp4",
                 "kind": "video",
                 "objectKey": "media/objects/sha256/aa/clip.mp4",
-                "cdnUrl": "https://video.example.com/media/objects/sha256/aa/clip.mp4",
-                "thumbnailUrl": "https://video.example.com/media/objects/sha256/aa/clip.mp4?variant=thumb&t=0",
-                "coverUrl": "https://video.example.com/media/objects/sha256/aa/clip.mp4?variant=thumb&t=0",
-                "coverStrategy": "first_frame",
+                "posterAssetId": "poster",
+                "coverStrategy": "manual",
                 "coverFrameTimeMs": 0,
-            }
+            },
+            {
+                "assetId": "poster",
+                "fileName": "poster.webp",
+                "kind": "image",
+                "role": "cover",
+                "objectKey": "media/objects/sha256/bb/poster.webp",
+            },
         ],
     }
     root, leaf = _video_leaf(manifest)
@@ -60,7 +66,7 @@ def test_video_manifest_without_cover_is_blocked():
 
     issues = _post_contract_issues(leaf, root, manifest)
 
-    assert any("missing thumbnailUrl or coverUrl" in issue for issue in issues)
+    assert any("posterAssetId must resolve" in issue for issue in issues)
 
 
 def test_video_manifest_without_video_object_ref_is_blocked():
@@ -71,7 +77,14 @@ def test_video_manifest_without_video_object_ref_is_blocked():
                 "assetId": "clip",
                 "fileName": "clip.mp4",
                 "kind": "video",
-                "thumbnailUrl": "https://video.example.com/clip.mp4?variant=thumb&t=0",
+                "posterAssetId": "poster",
+            },
+            {
+                "assetId": "poster",
+                "fileName": "poster.webp",
+                "kind": "image",
+                "role": "cover",
+                "objectKey": "media/objects/sha256/bb/poster.webp",
             }
         ],
     }
@@ -79,4 +92,32 @@ def test_video_manifest_without_video_object_ref_is_blocked():
 
     issues = _post_contract_issues(leaf, root, manifest)
 
-    assert any("missing videoUrl/objectKey/cdnUrl" in issue for issue in issues)
+    assert any("missing CAS objectKey" in issue for issue in issues)
+
+
+def test_video_manifest_with_environment_url_is_blocked():
+    manifest = {
+        "contentType": "video",
+        "assets": [
+            {
+                "assetId": "clip",
+                "fileName": "clip.mp4",
+                "kind": "video",
+                "objectKey": "media/objects/sha256/aa/clip.mp4",
+                "posterAssetId": "poster",
+                "cdnUrl": "https://video.example.com/clip.mp4",
+            },
+            {
+                "assetId": "poster",
+                "fileName": "poster.webp",
+                "kind": "image",
+                "role": "cover",
+                "objectKey": "media/objects/sha256/bb/poster.webp",
+            },
+        ],
+    }
+    root, leaf = _video_leaf(manifest)
+
+    issues = _post_contract_issues(leaf, root, manifest)
+
+    assert any("must not contain environment URL field cdnUrl" in issue for issue in issues)

@@ -32,7 +32,7 @@
 
 ```json
 {
-  "schemaVersion": 1,
+  "schema": "chat-avatar-e2e-probe-report",
   "scenario": "chat.group_avatar.sync_display_e2e",
   "status": "passed",
   "failureCategory": "",
@@ -78,8 +78,8 @@
   },
   "serviceEndpointEvidence": {
     "healthz": "http://127.0.0.1:18080/healthz",
-    "chatConversations": "/v1/chat/conversations",
-    "userSync": "/v1/user/sync",
+    "chatConversations": "/chat/conversations",
+    "userSync": "/user/sync",
     "media": "http://127.0.0.1:18080/media/avatar/..."
   },
   "uiEvidence": {

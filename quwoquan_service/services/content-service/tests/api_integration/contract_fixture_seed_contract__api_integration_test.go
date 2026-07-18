@@ -37,7 +37,7 @@ func TestContractFixtureSeed_ContentAlphaReadsViaHandler(t *testing.T) {
 		t.Fatalf("feed application must consume canonical contract fixtures: %v", err)
 	}
 
-	feedReq := httptest.NewRequest(http.MethodGet, "/v1/content/feed?limit=100", nil)
+	feedReq := httptest.NewRequest(http.MethodGet, "/content/feed?limit=100", nil)
 	feedRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(feedRec, feedReq)
 	if feedRec.Code != http.StatusOK {
@@ -49,7 +49,7 @@ func TestContractFixtureSeed_ContentAlphaReadsViaHandler(t *testing.T) {
 	}
 	assertItemsNotEmpty(t, feed["items"])
 
-	getReq := httptest.NewRequest(http.MethodGet, "/v1/content/posts/fixture_photo_001", nil)
+	getReq := httptest.NewRequest(http.MethodGet, "/content/posts/fixture_photo_001", nil)
 	getRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(getRec, getReq)
 	if getRec.Code != http.StatusOK {
@@ -59,11 +59,14 @@ func TestContractFixtureSeed_ContentAlphaReadsViaHandler(t *testing.T) {
 	if err := json.Unmarshal(getRec.Body.Bytes(), &detail); err != nil {
 		t.Fatalf("decode detail: %v", err)
 	}
-	if detail["_id"] != "fixture_photo_001" && detail["id"] != "fixture_photo_001" {
+	if detail["postId"] != "fixture_photo_001" {
 		t.Fatalf("detail did not return fixture photo: %+v", detail)
 	}
+	if _, legacyID := detail["_id"]; legacyID {
+		t.Fatalf("detail must not expose storage _id: %+v", detail)
+	}
 
-	commentsReq := httptest.NewRequest(http.MethodGet, "/v1/content/posts/fixture_photo_001/comments?limit=10", nil)
+	commentsReq := httptest.NewRequest(http.MethodGet, "/content/posts/fixture_photo_001/comments?limit=10", nil)
 	commentsRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(commentsRec, commentsReq)
 	if commentsRec.Code != http.StatusOK {
@@ -75,7 +78,7 @@ func TestContractFixtureSeed_ContentAlphaReadsViaHandler(t *testing.T) {
 	}
 	assertItemsNotEmpty(t, comments["items"])
 
-	reactionReq := httptest.NewRequest(http.MethodGet, "/v1/content/posts/fixture_photo_001/reactions", nil)
+	reactionReq := httptest.NewRequest(http.MethodGet, "/content/posts/fixture_photo_001/reactions", nil)
 	reactionReq.Header.Set("X-Client-User-Id", "fixture_user_current")
 	reactionRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(reactionRec, reactionReq)
@@ -91,6 +94,62 @@ func TestContractFixtureSeed_ContentAlphaReadsViaHandler(t *testing.T) {
 	}
 	if _, exists := reaction["favorited"]; exists {
 		t.Fatalf("favorited 字段已随收藏概念退场，不应再出现在 reaction state: %+v", reaction)
+	}
+}
+
+func TestContractFixtureSeed_GetPostUsesGeneratedProjectionWire(t *testing.T) {
+	t.Cleanup(func() { cleanPosts(t) })
+	seedContentContractFixture(t, "content_discovery_core")
+	expected := contentFixturePostByID(
+		t,
+		"content_discovery_core",
+		"fixture_video_001",
+	)
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/content/posts/fixture_video_001",
+		nil,
+	)
+	rec := httptest.NewRecorder()
+	testHandler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("get video post expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var detail map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &detail); err != nil {
+		t.Fatalf("decode video post detail: %v", err)
+	}
+	if detail["postId"] != "fixture_video_001" {
+		t.Fatalf("generated client requires postId: %+v", detail)
+	}
+	if _, exists := detail["_id"]; exists {
+		t.Fatalf("client projection must not expose storage _id: %+v", detail)
+	}
+	if detail["contentType"] != expected.ContentType ||
+		detail["videoUrl"] != expected.VideoURL {
+		t.Fatalf("unexpected video projection: %+v", detail)
+	}
+	if detail["authorDisplayName"] == "" || detail["authorAvatarUrl"] == "" {
+		t.Fatalf("client projection must expose author display fields: %+v", detail)
+	}
+	if detail["thumbnailUrl"] != expected.ThumbnailURL ||
+		detail["durationMs"] != float64(expected.DurationMS) ||
+		detail["width"] != float64(expected.Width) ||
+		detail["height"] != float64(expected.Height) {
+		t.Fatalf("client projection must preserve video playback fields: %+v", detail)
+	}
+	mediaItems, ok := detail["mediaItems"].([]any)
+	if !ok || len(mediaItems) != 1 {
+		t.Fatalf("client projection must expose one video media item: %+v", detail)
+	}
+	mediaItem, ok := mediaItems[0].(map[string]any)
+	if !ok ||
+		mediaItem["url"] != detail["videoUrl"] ||
+		mediaItem["coverUrl"] != detail["thumbnailUrl"] ||
+		mediaItem["durationMs"] != detail["durationMs"] {
+		t.Fatalf("client projection media item must match video playback fields: %+v", detail)
 	}
 }
 
@@ -134,7 +193,7 @@ func assertItemsContainID(t *testing.T, raw any, id string) {
 		if !ok {
 			continue
 		}
-		if obj["id"] == id || obj["_id"] == id || obj["postId"] == id {
+		if obj["postId"] == id {
 			return
 		}
 	}
