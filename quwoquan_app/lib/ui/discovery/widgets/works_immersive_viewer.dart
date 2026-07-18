@@ -86,139 +86,10 @@ import 'package:quwoquan_app/ui/discovery/services/media_viewer_interaction_brid
 import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 import 'package:quwoquan_app/ui/discovery/models/home_feed_video_autoplay_policy.dart';
+import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer_paging.dart';
 part 'works_immersive_viewer_controls.dart';
 part 'works_immersive_viewer_canvas.dart';
 part 'works_immersive_viewer_engagement_actions.dart';
-
-const double _worksImmersiveVerticalCommitFraction = 0.20;
-double _worksContentIntersectionLineHeight(BuildContext context) {
-  return AppTypography.xxs * AppSpacing.textLineHeightFootnote;
-}
-
-double _worksContentIntersectionBottomClearance(BuildContext context) {
-  return ImmersiveEngagementBar.overlayClearance(
-    context,
-    gap: AppSpacing.intraGroupXs,
-  );
-}
-
-double _worksContentOverlayBottomClearance(
-  BuildContext context, {
-  required bool includeIntersection,
-  required double gap,
-}) {
-  if (!includeIntersection) {
-    return ImmersiveEngagementBar.overlayClearance(context, gap: gap);
-  }
-  return ImmersiveEngagementBar.reservedHeight(context) +
-      AppSpacing.intraGroupXs +
-      _worksContentIntersectionLineHeight(context) +
-      gap;
-}
-
-class _WorksImmersiveVerticalPagePhysics extends PageScrollPhysics {
-  const _WorksImmersiveVerticalPagePhysics({
-    required this.currentPage,
-    this.holdVerticalScroll,
-    super.parent,
-  });
-  final int Function() currentPage;
-  final bool Function()? holdVerticalScroll;
-
-  @override
-  _WorksImmersiveVerticalPagePhysics applyTo(ScrollPhysics? ancestor) {
-    return _WorksImmersiveVerticalPagePhysics(
-      currentPage: currentPage,
-      holdVerticalScroll: holdVerticalScroll,
-      parent: buildParent(ancestor),
-    );
-  }
-
-  @override
-  bool shouldAcceptUserOffset(ScrollMetrics position) {
-    if (holdVerticalScroll?.call() ?? false) {
-      return false;
-    }
-    return super.shouldAcceptUserOffset(position);
-  }
-
-  @override
-  double applyPhysicsToUserOffset(ScrollMetrics position, double offset) {
-    if (holdVerticalScroll?.call() ?? false) {
-      return 0;
-    }
-    return super.applyPhysicsToUserOffset(position, offset);
-  }
-
-  @override
-  Simulation? createBallisticSimulation(
-    ScrollMetrics position,
-    double velocity,
-  ) {
-    if ((velocity <= 0.0 && position.pixels <= position.minScrollExtent) ||
-        (velocity >= 0.0 && position.pixels >= position.maxScrollExtent)) {
-      return super.createBallisticSimulation(position, velocity);
-    }
-    final tolerance = toleranceFor(position);
-    final target = _targetPixels(position, tolerance, velocity);
-    if ((target - position.pixels).abs() < tolerance.distance) {
-      return null;
-    }
-    return ScrollSpringSimulation(
-      spring,
-      position.pixels,
-      target,
-      velocity,
-      tolerance: tolerance,
-    );
-  }
-
-  double _targetPixels(
-    ScrollMetrics position,
-    Tolerance tolerance,
-    double velocity,
-  ) {
-    final anchorPage = currentPage().toDouble();
-    final currentScrollPage = _pageForPixels(position, position.pixels);
-    var targetPage = anchorPage;
-    final deltaFromAnchor = currentScrollPage - anchorPage;
-    if (deltaFromAnchor >= _worksImmersiveVerticalCommitFraction) {
-      targetPage = anchorPage + 1;
-    } else if (deltaFromAnchor <= -_worksImmersiveVerticalCommitFraction) {
-      targetPage = anchorPage - 1;
-    } else if (velocity < -tolerance.velocity) {
-      targetPage = anchorPage + 1;
-    } else if (velocity > tolerance.velocity) {
-      targetPage = anchorPage - 1;
-    }
-
-    final minPage = _pageForPixels(position, position.minScrollExtent);
-    final maxPage = _pageForPixels(position, position.maxScrollExtent);
-    final clampedPage = targetPage.clamp(minPage, maxPage).toDouble();
-    return _pixelsForPage(
-      position,
-      clampedPage,
-    ).clamp(position.minScrollExtent, position.maxScrollExtent).toDouble();
-  }
-
-  double _pageForPixels(ScrollMetrics position, double pixels) {
-    if (position is PageMetrics && position.page != null) {
-      final extent = _pageExtent(position);
-      return extent <= 0 ? 0 : pixels / extent;
-    }
-    final viewport = position.viewportDimension;
-    return viewport <= 0 ? 0 : pixels / viewport;
-  }
-
-  double _pixelsForPage(ScrollMetrics position, double page) {
-    return page * _pageExtent(position);
-  }
-
-  double _pageExtent(ScrollMetrics position) {
-    final fraction = position is PageMetrics ? position.viewportFraction : 1.0;
-    return max(1.0, position.viewportDimension * fraction);
-  }
-}
 
 class WorksImmersiveViewer extends ConsumerStatefulWidget {
   const WorksImmersiveViewer({
@@ -2355,7 +2226,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                   child: PageView.builder(
                     controller: _pageController,
                     scrollDirection: Axis.vertical,
-                    physics: _WorksImmersiveVerticalPagePhysics(
+                    physics: WorksImmersiveVerticalPagePhysics(
                       currentPage: () => _currentPage,
                       holdVerticalScroll: () =>
                           _gestureIntentController.shouldHoldVerticalScroll,
@@ -2493,7 +2364,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                   left: 0,
                   right: 0,
                   bottom:
-                      _worksContentOverlayBottomClearance(
+                      WorksImmersiveContentLayout.overlayBottomClearance(
                         context,
                         includeIntersection: showContentIntersection,
                         gap: AppSpacing.containerSm,
@@ -2514,7 +2385,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                 Positioned(
                   left: 0,
                   right: 0,
-                  bottom: _worksContentOverlayBottomClearance(
+                  bottom: WorksImmersiveContentLayout.overlayBottomClearance(
                     context,
                     includeIntersection: showContentIntersection,
                     gap: AppSpacing.intraGroupSm,
@@ -2534,7 +2405,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                 Positioned(
                   left: 0,
                   right: 0,
-                  bottom: _worksContentOverlayBottomClearance(
+                  bottom: WorksImmersiveContentLayout.overlayBottomClearance(
                     context,
                     includeIntersection: showContentIntersection,
                     gap: AppSpacing.intraGroupSm,
@@ -2587,7 +2458,10 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                 Positioned(
                   left: 0,
                   right: 0,
-                  bottom: _worksContentIntersectionBottomClearance(context),
+                  bottom:
+                      WorksImmersiveContentLayout.intersectionBottomClearance(
+                        context,
+                      ),
                   child: ImmersiveViewerLayout.alignToRail(
                     context: context,
                     layoutSpec: currentEngagementLayoutSpec,

@@ -430,6 +430,15 @@ void main() {
         deferredRegistry,
         isNot(contains('com.github.dart_lang.jni.JniPlugin')),
       );
+      expect(activity, contains('initializeDartJniClassLoader();'));
+      expect(
+        activity.indexOf('initializeDartJniClassLoader();'),
+        lessThan(activity.indexOf('super.onCreate(savedInstanceState);')),
+      );
+      expect(
+        activity,
+        contains('android_dart_jni_class_loader_initialized'),
+      );
       expect(patch, contains('FlutterWebRTCPlugin'));
       expect(patch, contains('CameraAndroidCameraxPlugin'));
       expect(gradle, contains('afterEvaluate {'));

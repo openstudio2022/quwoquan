@@ -400,7 +400,7 @@ class _WorksArticleCanvas extends StatelessWidget {
             left: 0,
             right: 0,
             top: 0,
-            bottom: _worksContentOverlayBottomClearance(
+            bottom: WorksImmersiveContentLayout.overlayBottomClearance(
               context,
               includeIntersection: reserveContentIntersection,
               gap: AppSpacing.containerMd,
@@ -534,7 +534,7 @@ class _WorksTextCanvas extends StatelessWidget {
           child: Padding(
             padding: EdgeInsets.only(
               top: AppSpacing.containerLg,
-              bottom: _worksContentOverlayBottomClearance(
+              bottom: WorksImmersiveContentLayout.overlayBottomClearance(
                 context,
                 includeIntersection: reserveContentIntersection,
                 gap: AppSpacing.containerMd,

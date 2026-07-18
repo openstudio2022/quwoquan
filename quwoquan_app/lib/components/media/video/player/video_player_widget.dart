@@ -12,13 +12,13 @@ import 'package:quwoquan_app/core/media/media_candidate_failure.dart';
 import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/core/media/media_load_failure_cache.dart';
 import 'package:quwoquan_app/core/media/media_playback_failure.dart';
-import 'package:quwoquan_app/core/platform/video_player_controller_factory.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
 import 'package:quwoquan_app/components/media/video/player/video_playback_failure_overlay.dart';
 import 'package:quwoquan_app/components/media/video/player/video_playback_session.dart';
+import 'package:quwoquan_app/components/media/video/player/video_player_support.dart';
 
 /// Surface-specific playback chrome. It intentionally excludes command handling:
 /// commands always go through [VideoPlaybackSession].
@@ -273,7 +273,7 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
     try {
       for (var index = 0; index < candidates.length; index++) {
         final candidate = candidates[index];
-        List<_PlayableVideoSource> sources;
+        List<PlayableVideoSource> sources;
         try {
           sources = await _playableSourcesForCandidate(candidate);
         } catch (error, stackTrace) {
@@ -687,26 +687,26 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
     await _initializeVideoWithHeldSlot(generation);
   }
 
-  Future<List<_PlayableVideoSource>> _playableSourcesForCandidate(
+  Future<List<PlayableVideoSource>> _playableSourcesForCandidate(
     String candidate,
   ) async {
     final normalized = candidate.trim();
     if (normalized.isEmpty) {
-      return const <_PlayableVideoSource>[];
+      return const <PlayableVideoSource>[];
     }
-    final sources = <_PlayableVideoSource>[];
+    final sources = <PlayableVideoSource>[];
     final seen = <String>{};
     final cachedPath = await ref
         .read(mediaDownloadCacheProvider)
         .getCachedFilePath(normalized);
     if (cachedPath != null && seen.add('cache:$cachedPath')) {
-      sources.add(_PlayableVideoSource.cachedFile(cachedPath));
+      sources.add(PlayableVideoSource.cachedFile(cachedPath));
     }
     final networkUri = Uri.tryParse(normalized);
     if (_isNetworkVideoUri(networkUri) &&
         await _canUseNetworkVideoUri(networkUri!) &&
         seen.add(networkUri.toString())) {
-      sources.add(_PlayableVideoSource.network(networkUri));
+      sources.add(PlayableVideoSource.network(networkUri));
     }
     return sources;
   }
@@ -859,7 +859,7 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
             fit: StackFit.expand,
             children: [
               player,
-              _InlineFeedPlaybackOverlay(session: _playbackSession),
+              InlineFeedPlaybackOverlay(session: _playbackSession),
             ],
           )
         : player;
@@ -870,156 +870,5 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
         child: _buildCenteredVideoFrame(surface),
       ),
     );
-  }
-}
-
-class _InlineFeedPlaybackOverlay extends StatelessWidget {
-  const _InlineFeedPlaybackOverlay({required this.session});
-
-  final VideoPlaybackSession session;
-
-  static String _formatDuration(Duration duration) {
-    final totalSeconds = duration.inSeconds.clamp(0, 359999);
-    final minutes = totalSeconds ~/ 60;
-    final seconds = totalSeconds % 60;
-    return '$minutes:${seconds.toString().padLeft(2, '0')}';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: AnimatedBuilder(
-        animation: session,
-        builder: (context, _) {
-          final snapshot = session.snapshot;
-          if (!snapshot.isInitialized || snapshot.duration <= Duration.zero) {
-            return const SizedBox.shrink();
-          }
-          final expanded = snapshot.isScrubbing || !snapshot.isPlaying;
-          final trackHeight = expanded
-              ? AppSpacing.xs
-              : AppSpacing.xs / AppSpacing.two;
-          return Stack(
-            fit: StackFit.expand,
-            children: [
-              Positioned(
-                top: AppSpacing.intraGroupSm,
-                right: AppSpacing.intraGroupSm,
-                child: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 180),
-                  opacity:
-                      snapshot.controlsVisibility ==
-                          VideoPlaybackControlsVisibility.hidden
-                      ? 0
-                      : 1,
-                  child: Text(
-                    _formatDuration(snapshot.duration),
-                    key: const ValueKey<String>(
-                      'home-video-transient-duration',
-                    ),
-                    style: TextStyle(
-                      color: AppColors.white.withValues(alpha: 0.96),
-                      fontSize: AppTypography.xxs,
-                      fontWeight: AppTypography.semiBold,
-                      shadows: <Shadow>[
-                        Shadow(
-                          color: AppColors.black.withValues(alpha: 0.38),
-                          blurRadius: AppSpacing.xs,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              Positioned(
-                left: AppSpacing.intraGroupSm,
-                right: AppSpacing.intraGroupSm,
-                bottom: AppSpacing.intraGroupSm,
-                child: _InlinePlaybackTrack(
-                  progress: snapshot.progress,
-                  height: trackHeight,
-                  expanded: expanded,
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _InlinePlaybackTrack extends StatelessWidget {
-  const _InlinePlaybackTrack({
-    required this.progress,
-    required this.height,
-    required this.expanded,
-  });
-
-  final double progress;
-  final double height;
-  final bool expanded;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
-      child: SizedBox(
-        height: height,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: AppColors.white.withValues(alpha: expanded ? 0.46 : 0.30),
-          ),
-          child: FractionallySizedBox(
-            alignment: Alignment.centerLeft,
-            widthFactor: progress.clamp(0.0, 1.0),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: AppColors.white.withValues(alpha: expanded ? 1 : 0.86),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PlayableVideoSource {
-  const _PlayableVideoSource._({
-    required this.label,
-    required this.createController,
-  });
-
-  factory _PlayableVideoSource.cachedFile(String path) {
-    return _PlayableVideoSource._(
-      label: 'cache',
-      createController: () =>
-          AppVideoPlayerControllerFactory.localFilePath(path),
-    );
-  }
-
-  factory _PlayableVideoSource.network(Uri uri) {
-    return _PlayableVideoSource._(
-      label: 'network',
-      createController: () => AppVideoPlayerControllerFactory.networkUri(uri),
-    );
-  }
-
-  final String label;
-  final VideoPlayerController Function() createController;
-}
-
-/// 视频播放器控制器管理（按 url 释放单个控制器）。
-class VideoPlayerManager {
-  static final Map<String, VideoPlayerController> _controllers = {};
-  static final Map<String, ChewieController> _chewieControllers = {};
-
-  /// 释放控制器
-  static void disposeController(String videoUrl) {
-    _chewieControllers[videoUrl]?.dispose();
-    _controllers[videoUrl]?.dispose();
-    _chewieControllers.remove(videoUrl);
-    _controllers.remove(videoUrl);
   }
 }

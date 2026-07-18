@@ -6,6 +6,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/components/media/video/player/video_player_support.dart';
 import 'package:quwoquan_app/components/media/video/player/video_player_widget.dart';
 
 /// 视频媒体查看器

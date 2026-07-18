@@ -23,8 +23,8 @@ if [[ "$has_service" == true && "$has_app" == true ]]; then
   make gate
 elif [[ "$has_service" == true ]]; then
   echo "[pre-commit] running gate (service)"
-  bash scripts/gate_repo.sh --scope service
+  bash quwoquan_ops/gate/gate_repo.sh --scope service
 elif [[ "$has_app" == true ]]; then
   echo "[pre-commit] running gate (app)"
-  bash scripts/gate_repo.sh --scope app
+  bash quwoquan_ops/gate/gate_repo.sh --scope app
 fi

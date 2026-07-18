@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:quwoquan_app/app/startup/startup_native_journal_adapter.dart';
+import 'package:quwoquan_app/app/startup/startup_telemetry_support.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// 启动遥测仅用于一次启动的可靠性诊断，禁止承载账号、内容、异常文本或堆栈。
@@ -246,10 +247,10 @@ final class StartupJournal {
 
   Future<String> proof() async {
     final existing = (await _store.readProof())?.trim() ?? '';
-    if (_isValidProof(existing)) {
+    if (StartupTelemetrySupport.isValidProof(existing)) {
       return existing;
     }
-    final next = _randomUrlSafeToken(32);
+    final next = StartupTelemetrySupport.randomUrlSafeToken(32);
     await _store.writeProof(next);
     return next;
   }
@@ -429,12 +430,12 @@ final class StartupTelemetryReporter {
     try {
       proof = await _journal.proof();
     } catch (_) {
-      proof = _randomUrlSafeToken(32);
+      proof = StartupTelemetrySupport.randomUrlSafeToken(32);
     }
     _attempt = StartupAttempt(
-      id: _isValidAttemptId(nativeAttemptId)
+      id: StartupTelemetrySupport.isValidAttemptId(nativeAttemptId)
           ? nativeAttemptId
-          : _randomUrlSafeToken(24),
+          : StartupTelemetrySupport.randomUrlSafeToken(24),
       proof: proof,
       startedAt: DateTime.now().toUtc(),
     );
@@ -483,46 +484,46 @@ final class StartupTelemetryReporter {
             phase: phase,
             phaseDurationMs: duration,
             elapsedMs: normalizedElapsed,
-            outcome: _sanitizeStartupEnum(
+            outcome: StartupTelemetrySupport.sanitizeEnum(
               outcome,
-              _startupTelemetryOutcomes,
+              StartupTelemetrySupport.outcomes,
               fallback: 'unknown',
             ),
             occurredAt: DateTime.now().toUtc(),
-            platform: _sanitizeStartupEnum(
+            platform: StartupTelemetrySupport.sanitizeEnum(
               _platform,
-              _startupTelemetryPlatforms,
+              StartupTelemetrySupport.platforms,
               fallback: 'unknown',
             ),
-            runtimeEnv: _sanitizeStartupEnum(
+            runtimeEnv: StartupTelemetrySupport.sanitizeEnum(
               _runtimeEnv,
-              _startupTelemetryRuntimeEnvs,
+              StartupTelemetrySupport.runtimeEnvs,
               fallback: 'unknown',
             ),
-            appVersion: _sanitizeStartupAppVersion(_appVersion),
-            networkClass: _sanitizeStartupEnum(
+            appVersion: StartupTelemetrySupport.sanitizeAppVersion(_appVersion),
+            networkClass: StartupTelemetrySupport.sanitizeEnum(
               networkClass,
-              _startupTelemetryNetworkClasses,
+              StartupTelemetrySupport.networkClasses,
               fallback: '',
             ),
-            recoverySurface: _sanitizeStartupEnum(
+            recoverySurface: StartupTelemetrySupport.sanitizeEnum(
               recoverySurface,
-              _startupTelemetryRecoverySurfaces,
+              StartupTelemetrySupport.recoverySurfaces,
               fallback: '',
             ),
-            failureCode: _sanitizeStartupEnum(
+            failureCode: StartupTelemetrySupport.sanitizeEnum(
               failureCode,
-              _startupTelemetryFailureCodes,
+              StartupTelemetrySupport.failureCodes,
               fallback: '',
             ),
-            failureSource: _sanitizeStartupEnum(
+            failureSource: StartupTelemetrySupport.sanitizeEnum(
               failureSource,
-              _startupTelemetryFailureSources,
+              StartupTelemetrySupport.failureSources,
               fallback: '',
             ),
-            deadlineOrigin: _sanitizeStartupEnum(
+            deadlineOrigin: StartupTelemetrySupport.sanitizeEnum(
               deadlineOrigin,
-              _startupTelemetryDeadlineOrigins,
+              StartupTelemetrySupport.deadlineOrigins,
               fallback: '',
             ),
           );
@@ -623,17 +624,17 @@ final class StartupTelemetryReporter {
       elapsedMs: _lastElapsedMs,
       outcome: 'journal_drop',
       occurredAt: DateTime.now().toUtc(),
-      platform: _sanitizeStartupEnum(
+      platform: StartupTelemetrySupport.sanitizeEnum(
         _platform,
-        _startupTelemetryPlatforms,
+        StartupTelemetrySupport.platforms,
         fallback: 'unknown',
       ),
-      runtimeEnv: _sanitizeStartupEnum(
+      runtimeEnv: StartupTelemetrySupport.sanitizeEnum(
         _runtimeEnv,
-        _startupTelemetryRuntimeEnvs,
+        StartupTelemetrySupport.runtimeEnvs,
         fallback: 'unknown',
       ),
-      appVersion: _sanitizeStartupAppVersion(_appVersion),
+      appVersion: StartupTelemetrySupport.sanitizeAppVersion(_appVersion),
       networkClass: '',
       recoverySurface: '',
       failureCode: '',
@@ -846,16 +847,6 @@ final class StartupTelemetryRuntime {
   }
 }
 
-int _asInt(Object? value) {
-  if (value is int) {
-    return value;
-  }
-  if (value is num) {
-    return value.round();
-  }
-  return int.tryParse(value?.toString() ?? '') ?? 0;
-}
-
 StartupTelemetryEvent? _parseStoredStartupTelemetryEvent(
   Map<String, Object?> json,
 ) {
@@ -868,15 +859,17 @@ StartupTelemetryEvent? _parseStoredStartupTelemetryEvent(
   }
   final eventId = json['eventId']?.toString().trim() ?? '';
   final attemptId = json['attemptId']?.toString().trim() ?? '';
-  final sequence = _asInt(json['sequence']);
-  final phaseDurationMs = _asInt(json['phaseDurationMs']);
-  final elapsedMs = _asInt(json['elapsedMs']);
+  final sequence = StartupTelemetrySupport.asInt(json['sequence']);
+  final phaseDurationMs = StartupTelemetrySupport.asInt(
+    json['phaseDurationMs'],
+  );
+  final elapsedMs = StartupTelemetrySupport.asInt(json['elapsedMs']);
   final occurredAt = DateTime.tryParse(
     json['occurredAt']?.toString() ?? '',
   )?.toUtc();
   if (phase == null ||
-      !_isValidAttemptId(eventId) ||
-      !_isValidAttemptId(attemptId) ||
+      !StartupTelemetrySupport.isValidAttemptId(eventId) ||
+      !StartupTelemetrySupport.isValidAttemptId(attemptId) ||
       sequence < 0 ||
       sequence > 10000 ||
       eventId != '${attemptId}_$sequence' ||
@@ -894,166 +887,49 @@ StartupTelemetryEvent? _parseStoredStartupTelemetryEvent(
     phase: phase,
     phaseDurationMs: phaseDurationMs,
     elapsedMs: elapsedMs,
-    outcome: _sanitizeStartupEnum(
+    outcome: StartupTelemetrySupport.sanitizeEnum(
       json['outcome']?.toString() ?? '',
-      _startupTelemetryOutcomes,
+      StartupTelemetrySupport.outcomes,
       fallback: 'unknown',
     ),
     occurredAt: occurredAt,
-    platform: _sanitizeStartupEnum(
+    platform: StartupTelemetrySupport.sanitizeEnum(
       json['platform']?.toString() ?? '',
-      _startupTelemetryPlatforms,
+      StartupTelemetrySupport.platforms,
       fallback: 'unknown',
     ),
-    runtimeEnv: _sanitizeStartupEnum(
+    runtimeEnv: StartupTelemetrySupport.sanitizeEnum(
       json['runtimeEnv']?.toString() ?? '',
-      _startupTelemetryRuntimeEnvs,
+      StartupTelemetrySupport.runtimeEnvs,
       fallback: 'unknown',
     ),
-    appVersion: _sanitizeStartupAppVersion(
+    appVersion: StartupTelemetrySupport.sanitizeAppVersion(
       json['appVersion']?.toString() ?? '',
     ),
-    networkClass: _sanitizeStartupEnum(
+    networkClass: StartupTelemetrySupport.sanitizeEnum(
       json['networkClass']?.toString() ?? '',
-      _startupTelemetryNetworkClasses,
+      StartupTelemetrySupport.networkClasses,
       fallback: '',
     ),
-    recoverySurface: _sanitizeStartupEnum(
+    recoverySurface: StartupTelemetrySupport.sanitizeEnum(
       json['recoverySurface']?.toString() ?? '',
-      _startupTelemetryRecoverySurfaces,
+      StartupTelemetrySupport.recoverySurfaces,
       fallback: '',
     ),
-    failureCode: _sanitizeStartupEnum(
+    failureCode: StartupTelemetrySupport.sanitizeEnum(
       json['failureCode']?.toString() ?? '',
-      _startupTelemetryFailureCodes,
+      StartupTelemetrySupport.failureCodes,
       fallback: '',
     ),
-    failureSource: _sanitizeStartupEnum(
+    failureSource: StartupTelemetrySupport.sanitizeEnum(
       json['failureSource']?.toString() ?? '',
-      _startupTelemetryFailureSources,
+      StartupTelemetrySupport.failureSources,
       fallback: '',
     ),
-    deadlineOrigin: _sanitizeStartupEnum(
+    deadlineOrigin: StartupTelemetrySupport.sanitizeEnum(
       json['deadlineOrigin']?.toString() ?? '',
-      _startupTelemetryDeadlineOrigins,
+      StartupTelemetrySupport.deadlineOrigins,
       fallback: '',
     ),
   );
 }
-
-bool _isValidProof(String value) =>
-    RegExp(r'^[A-Za-z0-9_-]{24,192}$').hasMatch(value);
-
-bool _isValidAttemptId(String value) =>
-    RegExp(r'^[A-Za-z0-9_-]{16,128}$').hasMatch(value);
-
-String _randomUrlSafeToken(int bytes) {
-  final random = Random.secure();
-  final values = List<int>.generate(bytes, (_) => random.nextInt(256));
-  return base64UrlEncode(values).replaceAll('=', '');
-}
-
-String _sanitizeStartupAppVersion(String value) {
-  final normalized = value.trim();
-  if (normalized.isEmpty) {
-    return '';
-  }
-  return RegExp(
-        r'^v?[0-9]+(?:\.[0-9]+){1,3}(?:[-.][A-Za-z0-9]+)*$',
-      ).hasMatch(normalized)
-      ? normalized
-      : '';
-}
-
-String _sanitizeStartupEnum(
-  String value,
-  Set<String> allowed, {
-  required String fallback,
-}) {
-  final normalized = value.trim();
-  return allowed.contains(normalized) ? normalized : fallback;
-}
-
-const Set<String> _startupTelemetryOutcomes = <String>{
-  'observed',
-  'started',
-  'validated',
-  'skipped',
-  'painted',
-  'ready',
-  'retry',
-  'failed',
-  'entered',
-  'degraded',
-  'usable',
-  'success',
-  'recovery',
-  'shown',
-  'bootstrap_failure',
-  'native_first_frame_timeout',
-  'bootstrap_error',
-  'unhandled_rejection',
-  'pagehide_before_first_frame',
-  'journal_drop',
-  'unknown',
-};
-
-const Set<String> _startupTelemetryPlatforms = <String>{
-  'android',
-  'ios',
-  'ohos',
-  'web',
-  'desktop',
-  'unknown',
-};
-
-const Set<String> _startupTelemetryRuntimeEnvs = <String>{
-  'alpha',
-  'beta',
-  'gamma',
-  'prod',
-  'unknown',
-};
-
-const Set<String> _startupTelemetryNetworkClasses = <String>{
-  '',
-  'offline',
-  'wifi',
-  'cellular',
-  'ethernet',
-  'unknown',
-};
-
-const Set<String> _startupTelemetryRecoverySurfaces = <String>{
-  '',
-  'flutter_recovery',
-  'safe_recovery',
-  'native_recovery',
-};
-
-const Set<String> _startupTelemetryFailureCodes = <String>{
-  '',
-  'OPS.SYSTEM.startup_configuration_invalid',
-  'OPS.SYSTEM.startup_initialization_failed',
-  'OPS.SYSTEM.startup_router_unavailable',
-  'OPS.SYSTEM.startup_native_first_frame_timeout',
-};
-
-const Set<String> _startupTelemetryFailureSources = <String>{
-  '',
-  'bootstrap',
-  'router',
-  'startup_deadline',
-  'native_watchdog',
-  'web_error',
-  'web_unhandled_rejection',
-  'web_pagehide',
-};
-
-const Set<String> _startupTelemetryDeadlineOrigins = <String>{
-  '',
-  'fallbackDart',
-  'android_process',
-  'ios_process',
-  'web_bootstrap',
-};

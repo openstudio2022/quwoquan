@@ -79,6 +79,7 @@ public class MainActivity extends FlutterFragmentActivity {
   protected void onCreate(Bundle savedInstanceState) {
     activityOnCreateElapsedMs = SystemClock.elapsedRealtime() - processStartElapsedMs;
     Log.i(STARTUP_TAG, "android_activity_on_create elapsedMs=" + activityOnCreateElapsedMs);
+    initializeDartJniClassLoader();
     super.onCreate(savedInstanceState);
     startupTelemetryJournal = new StartupNativeTelemetryJournal(this);
     startupTelemetryJournal.record(
@@ -93,6 +94,20 @@ public class MainActivity extends FlutterFragmentActivity {
     // 首帧预算必须从进程最早可得的 monotonic 时钟开始，而不是 onResume 后重新给 6 秒。
     foregroundStartedElapsedMs = processStartElapsedMs;
     armFlutterFirstFrameWatchdog();
+  }
+
+  /**
+   * dart_jni 的 FFI class lookup 可在 Flutter 首帧前由传递依赖触发。该库的
+   * JNIEnv/class loader 只会在 JniPlugin 的静态初始化中建立，因此必须在 Dart
+   * executor 启动前显式加载；不能把它放进 post-first-frame 延迟插件组。
+   */
+  private void initializeDartJniClassLoader() {
+    try {
+      Class.forName("com.github.dart_lang.jni.JniPlugin");
+      Log.i(STARTUP_TAG, "android_dart_jni_class_loader_initialized");
+    } catch (ClassNotFoundException | LinkageError error) {
+      Log.e(STARTUP_TAG, "android_dart_jni_class_loader_initialization_failed", error);
+    }
   }
 
   @Override
